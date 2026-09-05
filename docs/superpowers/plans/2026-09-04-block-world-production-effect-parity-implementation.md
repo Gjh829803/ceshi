@@ -43,6 +43,12 @@ It does not bypass source-commit verification or make untrusted error text an ad
 Real Capture must run from a clean committed tree; tracked status documentation is written only
 after execution reaches a terminal state. No source regeneration or stricter quality gate is added.
 
+Real recovery evidence: clean `dc643d55`, 054 `run-20260905072747-72050`, Host epoch 2,
+ordinary production passed/published and cleanup completed with unchanged Source, generation
+identities, Package and Capture Request. Original failures remain in the append-only journal.
+Evaluation and strict diagnostics remain failed and do not veto ordinary production; this is not
+full visual parity or the complete recovery fault matrix. Live outcome details remain in `docs/18`.
+
 ### CF-29 local pre-promotion rejection evidence
 
 Main-agent-only, dependent on the existing local router and CF-31B dispatch identity. The local

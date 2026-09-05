@@ -1464,7 +1464,7 @@ CF-31 工作树分步记录（2026-09-05，仍未提交/合并）：
 |---|---|---|---|
 | `BWMI-CF-31A`：Native 阶段入口 | CF-09；`run-world-agent` + Native launcher；main-agent-only/sequential | `agent:world --plan-only` 完成 Planner、既有 Case freeze 后返回 `plan-ready`，不运行 Builder；`--build-only` 读取已准入 Case/Planner receipt，不重跑 Planner，也不读取原上传路径。缺少计划直接报告 `NATIVE_WORLD_PLAN_REQUIRED`，不偷偷启动付费规划 | public/Native entry + real Planner checker/Case 合同的 synthetic staged-flow 回归通过；code/focused，不是模型或完整生产证据 |
 | `BWMI-CF-31B`：Builder 清理后保留完整输入 | CF-31A、CF-29；`generation-request.ts`；main-agent-only/sequential | durable `attempt/inputs` 与 `.task/inputs` 从同一份完整字节快照写出，包含 Brief、instruction、Skill/checker、全部参考及 prior-attempt repair evidence；持久化相同 `context/` 与 `generation-dispatch.json`（backend、原 Request/Attempt Hash、router id/payload Hash/arguments、frozen owner identities）。不保存 token，不改 Source/Generation Receipt 或成功标准 | `.task` 清理后的普通与 repair Attempt 逐文件 Hash、dispatch 身份回归；code/focused，不代表恢复调度器已经接入 |
-| `BWMI-CF-31C`：显式 Host-only 恢复 | CF-31B、CF-23/26/29；唯一 Production/Run/Attempt/journal + ports owner；main-agent-only/sequential | 当前工作树已接入原 Run/Attempt 的显式恢复、no-submit generation restore、immutable checkpoint、独立 Host output epoch、verifier/publisher 引用解析及追加式恢复记录；仍禁止伪造生成 receipt、提升 rejected-source 或覆盖历史失败产物 | code/focused；最新证据见下方执行更新。丢失 checkpoint 与多次中断/已发布响应丢失的完整故障矩阵仍须闭合，未获得真实生产恢复/效果验收；`--build-only` 仍不是此恢复入口 |
+| `BWMI-CF-31C`：显式 Host-only 恢复 | CF-31B、CF-23/26/29；唯一 Production/Run/Attempt/journal + ports owner；main-agent-only/sequential | 当前工作树已接入原 Run/Attempt 的显式恢复、no-submit generation restore、immutable checkpoint、独立 Host output epoch、verifier/publisher 引用解析及追加式恢复记录；仍禁止伪造生成 receipt、提升 rejected-source 或覆盖历史失败产物 | code/focused + `dc643d55` 上 054 同 Package 真实恢复 published；最新证据见下方执行更新。丢失 checkpoint 与多次中断/已发布响应丢失的完整故障矩阵仍须闭合，完整效果验收未完成；`--build-only` 仍不是此恢复入口 |
 
 本批改变的是 CLI 阶段控制与 durable input inventory，未改变模型、prompt、质量门禁、修复预算、
 Runtime 或发布成功标准。首轮 public/Native entry + Generation Request + staged-flow 四文件 56/56；
@@ -1706,6 +1706,30 @@ CF-29 Run allowlist 同步保留 SDK owner dirty/unavailable 原因，未放松 
 受影响 request/Run/production ports 112/112、typecheck、3C migration 通过；其中修复了该
 request fixture 尚未同步 CF-24 viewRequirements 的旧输入。下一步从干净提交恢复原 Run，
 不重新调用 Planner/Builder；恢复结果待真实执行，不预先勾选。
+
+Host-only 恢复终态（2026-09-05，干净 `dc643d556fa55c0a9f0a1032abbc7a9a83050743`）：
+
+- 同一 `paper-moon-054-cf29-local-0905/run-20260905072747-72050`，恢复输出在
+  `attempts/0/host-recoveries/2`；正式 Capture、Evaluation、发布和清理均已执行结束。
+  `productionOutcome: passed`、`publicationOutcome: published`、`cleanupOutcome: completed`，
+  第三人称入口验证 passed。Run receipt 落盘 `2026-09-05T08:18:30.683Z`；本次恢复约 2 分钟，
+  没有新的 Planner/Builder 调用，Attempt count 仍为 1，恢复锁已释放。
+- 原三份 Source、Generation Request/Dispatch/Receipt、Package integrity 和 Capture Request
+  的 SHA256 全部与恢复前一致；Package root 仍为上述 `802a6e2b…`，Capture Request
+  `5e8643c0…`。原失败 journal 保留，恢复与发布追加到 sequence 19–36；未覆盖失败事实。
+- 正式 Capture Receipt hash
+  `sha256:e42b990cc5efbb396d8be5d3b4d2125e715b5b1a87449cc8625de6834ff9c464`；
+  Run Receipt hash `sha256:b05f11eac3cb3ca2cc106e898e98e9ce33b274cde1670f99870acdd7aea36bd4`。
+  正式产物位于 Case 的 `final/`，Opening 为 `final/capture/opening.png`。
+- **普通生产通过不等于效果/严格验收通过**：Evaluation failed，5 个 opening-composition
+  和 7 个 semantic-silhouette drift；其余五维在该 Evaluation 中 passed，并非完整 NBR-70 证明。
+  strict diagnostic failed，代码 `NBR70_BLOCKER_IDENTITY_MISMATCH`、`NBR70_EVALUATION_NOT_PASSED`，
+  strict cleanup not-started。这些不反转普通生产成功，也不触发隐式新生成。
+  构图/语义组比例偏差继续归现有 CF-24 效果证据；strict identity 原因待 CF-13/NBR-70
+  独立核查，不在本次恢复中伪装消除，不新增普通生产门禁。
+- 本次解决的是脏工作树 Capture 阻断、CF-31C 已有 Request 恢复缺口和 CF-29 错误码丢失；
+  不是“全部旧分支效果已对齐”。112/112 focused、typecheck、3C migration 已通过；
+  尚未合 main，既有 workspace-boundaries CI 失败和独立 review 要求仍需解决。
 
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 
