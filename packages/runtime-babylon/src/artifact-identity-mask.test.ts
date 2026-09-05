@@ -4,6 +4,7 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -15,7 +16,7 @@ class Canvas {
   width = 8;
   height = 8;
   getContext() {
-    return { drawImage: vi.fn(), getImageData: () => ({ data: new Uint8ClampedArray(this.width * this.height * 4) }) };
+    return { drawImage: vi.fn(), putImageData: vi.fn(), getImageData: () => ({ data: new Uint8ClampedArray(this.width * this.height * 4) }) };
   }
   toDataURL() { return "data:image/png;base64,fixture"; }
 }
@@ -40,6 +41,10 @@ function fixture() {
     return mesh;
   });
   vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(new Canvas() as unknown as HTMLCanvasElement);
+  vi.spyOn(RenderTargetTexture.prototype, "_readPixelsSync").mockImplementation(function (this: RenderTargetTexture) {
+    const { width, height } = this.getSize();
+    return new Uint8Array(width * height * 4);
+  });
   return { scene, engine, camera, material, meshes,
     dispose() { scene.dispose(); engine.dispose(); } };
 }
@@ -49,11 +54,13 @@ describe("same-view identity mask capture", () => {
     "keeps display pixels and exact %s camera while rendering opaque unlit identities", (kind) => {
       const f = fixture();
       const beforeMaterials = [...f.scene.materials];
+      const beforeTextures = [...f.scene.textures];
       const beforeClearColor = f.scene.clearColor.clone();
       const render = vi.spyOn(f.scene, "render");
-      const renders: { camera: object; transform: number[]; colors: number[][]; unlit: boolean[] }[] = [];
+      const renders: { camera: object; transform: number[]; colors: number[][]; unlit: boolean[]; samples: number | undefined }[] = [];
       f.scene.onBeforeRenderObservable.add(() => {
         renders.push({ camera: f.scene.activeCamera!, transform: [...f.scene.activeCamera!.getTransformationMatrix().asArray()],
+          samples: f.scene.activeCamera!.outputRenderTarget?.samples,
           colors: f.meshes.map((mesh) => (mesh.material as StandardMaterial).emissiveColor.asArray()),
           unlit: f.meshes.map((mesh) => (mesh.material as StandardMaterial).disableLighting) });
       });
@@ -76,11 +83,15 @@ describe("same-view identity mask capture", () => {
         expect(renders[0]!.unlit).toEqual([false, false, false]);
         expect(renders[2]!.colors).toEqual([[1,0,0], [0,1,0], [0,0,0]]);
         expect(renders[2]!.unlit).toEqual([true, true, true]);
+        expect(renders.slice(2, 4).map(({ samples }) => samples)).toEqual([1, 1]);
+        expect(renders[0]!.samples).toBeUndefined();
         expect(renders[2]!.camera).toBe(renders[0]!.camera);
         expect(renders[2]!.transform).toEqual(renders[0]!.transform);
         expect(render.mock.calls.slice(2, 4)).toEqual([[false, true], [false, true]]);
         expect(f.scene.postProcessesEnabled).toBe(true);
         expect(f.scene.materials).toEqual(beforeMaterials);
+        expect(f.scene.textures).toEqual(beforeTextures);
+        expect(f.camera.outputRenderTarget).toBeNull();
         expect(f.scene.clearColor).toEqual(beforeClearColor);
         expect(f.scene.activeCamera).toBe(f.camera);
         expect(f.meshes.every((mesh) => mesh.material === f.material)).toBe(true);
@@ -92,6 +103,7 @@ describe("same-view identity mask capture", () => {
     const f = fixture();
     const failure = new Error("identity render failed");
     const beforeMaterials = [...f.scene.materials];
+    const beforeTextures = [...f.scene.textures];
     f.scene.onBeforeRenderObservable.add(() => {
       if ((f.meshes[0]!.material as StandardMaterial).disableLighting) throw failure;
     });
@@ -101,8 +113,48 @@ describe("same-view identity mask capture", () => {
         identityMaskColorsByMesh: () => new Map([[f.meshes[0]!, "#FF0000"]]),
       } })).toThrow(failure);
       expect(f.scene.materials).toEqual(beforeMaterials);
+      expect(f.scene.textures).toEqual(beforeTextures);
+      expect(f.camera.outputRenderTarget).toBeNull();
       expect(f.scene.activeCamera).toBe(f.camera);
       expect(f.meshes.every((mesh) => mesh.material === f.material)).toBe(true);
+    } finally { f.dispose(); }
+  });
+
+  it("reads bottom-up identity bytes without filtering and restores a prior camera target", () => {
+    const f = fixture();
+    const priorTarget = new RenderTargetTexture("prior", { width: 8, height: 8 }, f.scene);
+    f.camera.outputRenderTarget = priorTarget;
+    const beforeTextures = [...f.scene.textures];
+    const bytes = new Uint8Array(8 * 8 * 4);
+    bytes.set([170, 0, 1, 255], 0);
+    bytes.set([170, 0, 5, 255], 7 * 8 * 4);
+    vi.mocked(RenderTargetTexture.prototype._readPixelsSync).mockReturnValue(bytes);
+    try {
+      const result = captureBabylonArtifactViewV1({ ...f, request: {
+        kind: "opening-frame", widthPixels: 8, heightPixels: 8,
+        identityMaskColorsByMesh: () => new Map([[f.meshes[0]!, "#AA0001"]]),
+      } });
+      expect([...result.identityMask!.pixelsRgba.slice(0, 4)]).toEqual([170, 0, 5, 255]);
+      expect([...result.identityMask!.pixelsRgba.slice(7 * 8 * 4, 7 * 8 * 4 + 4)]).toEqual([170, 0, 1, 255]);
+      expect(f.camera.outputRenderTarget).toBe(priorTarget);
+      expect(f.scene.textures).toEqual(beforeTextures);
+    } finally { f.dispose(); }
+  });
+
+  it.each(["null", "truncated"] as const)("rejects %s readback and disposes the temporary target", (mode) => {
+    const f = fixture();
+    const beforeTextures = [...f.scene.textures];
+    const beforeMaterials = [...f.scene.materials];
+    vi.mocked(RenderTargetTexture.prototype._readPixelsSync).mockReturnValue(mode === "null" ? null : new Uint8Array(4));
+    try {
+      expect(() => captureBabylonArtifactViewV1({ ...f, request: {
+        kind: "opening-frame", widthPixels: 8, heightPixels: 8,
+        identityMaskColorsByMesh: () => new Map([[f.meshes[0]!, "#AA0001"]]),
+      } })).toThrow("BABYLON_ARTIFACT_IDENTITY_PIXELS_UNAVAILABLE");
+      expect(f.camera.outputRenderTarget).toBeNull();
+      expect(f.scene.textures).toEqual(beforeTextures);
+      expect(f.scene.materials).toEqual(beforeMaterials);
+      expect(f.meshes.every(({ material }) => material === f.material)).toBe(true);
     } finally { f.dispose(); }
   });
 

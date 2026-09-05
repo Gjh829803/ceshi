@@ -405,6 +405,15 @@ smoothing, Collider budgets or production policy. Capture validates and colors
 these explicit handles; mixed semantic and ungrouped Blocks within one Collider
 remain supported, with ungrouped partitions black rather than a new rejection.
 
+The identity attachment must be single-sample RGBA bytes, without multisample
+resolve or image filtering: averaging two valid identity colors can create a third
+valid identity color, so exact palette membership alone cannot reject the artifact.
+Use Babylon's existing same-Camera render-target attachment with depth and the same
+raster size, geometry, viewport and projection. Restore any prior camera output target,
+dispose the temporary target on success/failure, and normalize framebuffer row order
+without interpolation. Do not disable anti-aliasing for the user's display or change
+production palette acceptance to hide this rendering defect.
+
 ### CF-11 source-authored ground exploration
 
 Legacy `9e35ab53` Block Builder Skill requires real middle/remote exploration

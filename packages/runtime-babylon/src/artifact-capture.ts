@@ -7,6 +7,8 @@ import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration.js";
+import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture.js";
+import { Constants } from "@babylonjs/core/Engines/constants.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
@@ -159,6 +161,29 @@ function readCanvas(canvas: HTMLCanvasElement): BabylonArtifactCapturedPixelsV1 
     heightPixels: output.height,
     pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
   };
+}
+
+function readIdentityTarget(target: RenderTargetTexture): BabylonArtifactCapturedPixelsV1 {
+  const { width, height } = target.getSize();
+  // Babylon 9.23's synchronous readback keeps this existing capture transaction
+  // synchronous and returns framebuffer rows bottom-to-top, unlike a 2D canvas.
+  const bytes = target._readPixelsSync();
+  if (!(bytes instanceof Uint8Array) || bytes.length !== width * height * 4) {
+    throw new Error("BABYLON_ARTIFACT_IDENTITY_PIXELS_UNAVAILABLE");
+  }
+  const output = document.createElement("canvas");
+  output.width = width;
+  output.height = height;
+  const context = output.getContext("2d");
+  if (context === null) throw new Error("BABYLON_ARTIFACT_2D_CANVAS_UNAVAILABLE");
+  const image = context.getImageData(0, 0, width, height);
+  const rowBytes = width * 4;
+  for (let y = 0; y < height; y += 1) {
+    image.data.set(bytes.subarray((height - y - 1) * rowBytes, (height - y) * rowBytes), y * rowBytes);
+  }
+  context.putImageData(image, 0, 0);
+  return { dataUrl: output.toDataURL("image/png"), widthPixels: width, heightPixels: height,
+    pixelsRgba: image.data };
 }
 
 function meshesForEntity(scene: Scene, entityId: string): readonly AbstractMesh[] {
@@ -582,11 +607,28 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         }
         mesh.material = material;
       }
-      // Use the same active camera, viewport and live geometry as the display pass.
-      // Babylon 9.23 render(false, true) skips camera input and animation advances.
-      scene.render(false, true);
-      scene.render(false, true);
-      identityMask = readCanvas(renderingCanvas(engine));
+      // The display framebuffer has MSAA: averaging adjacent identities can
+      // invent a third *valid* identity color. Render the same camera into an
+      // exact single-sample byte target, without changing the display context.
+      const identityCamera = scene.activeCamera!;
+      const previousOutputTarget = identityCamera.outputRenderTarget;
+      const identityTarget = new RenderTargetTexture("worldkit.artifact.identity-pixels",
+        { width: request.widthPixels, height: request.heightPixels }, scene, {
+          generateMipMaps: false, doNotChangeAspectRatio: true,
+          type: Constants.TEXTURETYPE_UNSIGNED_BYTE, format: Constants.TEXTUREFORMAT_RGBA,
+          samplingMode: Constants.TEXTURE_NEAREST_SAMPLINGMODE, samples: 1,
+          generateDepthBuffer: true, generateStencilBuffer: true, useSRGBBuffer: false,
+        });
+      temporaryTextures.add(identityTarget);
+      try {
+        identityCamera.outputRenderTarget = identityTarget;
+        // Babylon 9.23 skips camera input and animation advances here.
+        scene.render(false, true);
+        scene.render(false, true);
+        identityMask = readIdentityTarget(identityTarget);
+      } finally {
+        identityCamera.outputRenderTarget = previousOutputTarget;
+      }
     }
     return {
       ...captured,

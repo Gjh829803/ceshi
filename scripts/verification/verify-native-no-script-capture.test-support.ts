@@ -129,6 +129,8 @@ try {
   console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
   const topDown = identityProjections.find(({ viewId }) => viewId === "world-top-down");
   assert(topDown !== undefined);
+  const openingPixels = identityProjections.find(({ viewId }) => viewId === "opening")!;
+  const semanticViews = parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json")));
   for (const target of receipt.formalRequest.semanticCaptureMap.bindings) {
     assert(identityProjections.some(({ targets }) => targets.some((projection) =>
       projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible")),
@@ -139,6 +141,21 @@ try {
     assert(topDown.targets.some((projection) =>
       projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible"),
     `Fixture target ${target.acceptanceTargetRef} must have visible top-down identity pixels`);
+    if (target.acceptanceTargetRef === "worldkit://acceptance-target/gate-mass@1" ||
+      target.acceptanceTargetRef === "worldkit://acceptance-target/mountain-cliff-layers@1") {
+      const pixels = openingPixels.targets.find((projection) => projection.acceptanceTargetRef === target.acceptanceTargetRef)!;
+      const structure = semanticViews.views.find(({ viewId }) => viewId === "opening")!
+        .targets.find(({ acceptanceTargetRef }) => acceptanceTargetRef === target.acceptanceTargetRef)!.structuralProjection;
+      assert(pixels.outcome === "visible" && structure.outcome === "projected");
+      // These two fixture targets are individual solid Blocks without overlays.
+      // MSAA must not manufacture their adjacent palette color on the ground.
+      for (const axis of ["X", "Y"] as const) {
+        const tolerance = Math.ceil(20000 / (axis === "X" ? images[0]!.widthPixels! : images[0]!.heightPixels!));
+        assert(pixels.normalizedBounds[`min${axis}BasisPoints`] >= structure.normalizedBounds[`min${axis}BasisPoints`] - tolerance &&
+          pixels.normalizedBounds[`max${axis}BasisPoints`] <= structure.normalizedBounds[`max${axis}BasisPoints`] + tolerance,
+        `Fixture ${target.acceptanceTargetRef} identity pixels must not leak outside its solid projected ${axis} bounds`);
+      }
+    }
   }
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
