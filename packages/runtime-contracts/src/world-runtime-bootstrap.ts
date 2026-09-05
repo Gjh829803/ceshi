@@ -17,6 +17,7 @@ import {
   type GroundHumanoidActionIdV1,
   type HumanoidAnimationSemanticFamilyV1,
   type SubjectBodyTopologyV2,
+  type SubjectPresentationPolicyV1,
 } from "@whitebox-world/subject-contracts";
 import type {
   GaitV2,
@@ -366,12 +367,7 @@ export interface RuntimeSubjectDescriptorV1 {
   readonly forwardDirection: "-z";
   readonly visualParts: readonly RuntimeSubjectVisualPartV1[];
   readonly visualBinding: RuntimeSubjectVisualBindingV1;
-  readonly presentationPolicy?:
-    | Readonly<{ kind: "automatic" }>
-    | Readonly<{
-        kind: "fixed-locomotion";
-        presentationKey: AutomaticLocomotionPresentationKeyV1;
-      }>;
+  readonly presentationPolicy?: SubjectPresentationPolicyV1;
   readonly sockets: readonly RuntimeSubjectSocketV1[];
   readonly mountSlots: readonly RuntimeSubjectMountSlotV1[];
   readonly collider: RuntimeSubjectColliderV1;
@@ -590,6 +586,15 @@ function validateRuntimeVocabularies(
     ) invalid();
     const presentationPolicy = subject.presentationPolicy;
     const visualBinding = subject.visualBinding;
+    if (presentationPolicy?.kind === "fixed-action") {
+      if (visualBinding.mode !== "rigged") invalid();
+      const animationSet = visualBinding.mode === "rigged"
+        ? source.animationSets.find(({ animationSetRef }) =>
+            animationSetRef === visualBinding.animationSetRef)
+        : undefined;
+      if (!animationSet?.animationBindings.some(({ actionId }) =>
+        actionId === presentationPolicy.actionId)) invalid();
+    }
     if (presentationPolicy?.kind === "fixed-locomotion" &&
         visualBinding.mode === "rigged") {
       const animationSet = source.animationSets.find(({ animationSetRef }) =>

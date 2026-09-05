@@ -1,3 +1,5 @@
+import { createSubjectSetup } from "../../.codex/skills/worldkit-block-builder/scripts/subject-setup.mjs";
+
 const {
   BoxGeometry,
   Mesh,
@@ -43,44 +45,13 @@ export function buildBlockWorld() {
   return {
     scene,
     world: { id: "flying-sword-assembly", seed: 1024 },
-    controlledSubject: {
-      kind: "assembly",
-      entityId: "player",
-      visualTargetId: "visual-target-1",
-      yawQuarterTurnsY: 0,
-      assembly: {
-        id: "flying-sword-rider",
-        baseSubject: {
-          kind: "subject-pack",
-          subjectPackId: "humanoid.g-bot",
-        },
-        attachments: [{ subjectMeshBindingId: "flying-sword" }],
-        motion: { motionPackId: "flight.powered-standard" },
-        presentation: {
-          kind: "fixed-locomotion",
-          presentationKey: "locomotion.idle",
-        },
-      },
-    },
-    camera: {
-      kind: "pack",
-      entityId: "camera-main",
-      cameraPackId: "third-person.standard",
-      target: {
-        kind: "base-subject-socket",
-        socketId: "ThirdPersonTarget",
-      },
-      aspectRatio: 16 / 9,
-    },
-    subjectTraversalProfile: {
-      clearanceHeightMeters: 1.8,
-      footprintRadiusMetersXZ: 0.35,
-      maximumStepUpMeters: 0.3,
-      maximumStepDownMeters: 0.3,
-      maximumAutoSmoothHeightDeltaMeters: 1,
-      maximumAdjacentWalkableHeightDeltaMeters: 2,
-      canStandOnCloud: false,
-    },
+    ...createSubjectSetup({
+      subjectPackId: "humanoid.g-bot",
+      assemblyId: "flying-sword-rider",
+      attachments: [{ subjectMeshBindingId: "flying-sword" }],
+      motionPackId: "flight.powered-standard",
+      presentation: { kind: "fixed-action", actionId: "idle" },
+    }),
     spawnStandPositionMetersXYZ: [0, 0.5, 0],
     requiredTargets: [],
     requiredGroundTraversalBands: [],

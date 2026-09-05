@@ -744,6 +744,13 @@
         },
         "presentationPolicy": {
           "oneOf": [
+            {
+              "type": "object", "additionalProperties": false, "required": ["kind", "actionId"],
+              "properties": {
+                "kind": { "const": "fixed-action" },
+                "actionId": { "type": "string", "minLength": 1, "maxLength": 80 }
+              }
+            },
             { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "const": "automatic" } } },
             {
               "type": "object", "additionalProperties": false, "required": ["kind", "presentationKey"],

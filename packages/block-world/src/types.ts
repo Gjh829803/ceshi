@@ -153,6 +153,10 @@ export type BlockSubjectPresentationPolicyV1 =
   | Readonly<{
       kind: "fixed-locomotion";
       presentationKey: BlockLocomotionPresentationKeyV1;
+    }>
+  | Readonly<{
+      kind: "fixed-action";
+      actionId: string;
     }>;
 
 export type BlockSubjectAssemblyBaseV1 =

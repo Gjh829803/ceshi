@@ -1375,10 +1375,29 @@ export async function captureFile(
     triviewOutputPath?: string;
     implementationMapPath?: string;
     receiptSigningPrivateKeyPath?: string;
+    allowUnvalidatedPreview?: boolean;
+    startupHardTimeoutMilliseconds?: number;
+    startupStallTimeoutMilliseconds?: number;
     port?: number;
   } = {},
 ): Promise<WorldkitCommandResult> {
-  const validation = await validateFile(inputPath);
+  if (options.allowUnvalidatedPreview === true && (
+    options.receiptPath !== undefined ||
+    options.triviewOutputPath !== undefined ||
+    options.implementationMapPath !== undefined
+  )) {
+    return cliFailure(
+      "CLI_UNVALIDATED_PREVIEW_EVIDENCE_FORBIDDEN",
+      "An unvalidated preview cannot publish a receipt or tri-view evidence.",
+    );
+  }
+  const validation = options.allowUnvalidatedPreview === true
+    ? {
+        ok: true as const,
+        exitCode: 0 as const,
+        diagnostics: [] as const,
+      }
+    : await validateFile(inputPath);
   if (!validation.ok) return validation;
   const absoluteOutputPath = path.resolve(outputPath);
   const absoluteSnapshotPath =
@@ -1567,7 +1586,20 @@ export async function captureFile(
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
-    await waitForWorldkitCaptureStartup(page);
+    await waitForWorldkitCaptureStartup(page, {
+      ...(options.startupHardTimeoutMilliseconds === undefined
+        ? {}
+        : {
+            hardTimeoutMilliseconds:
+              options.startupHardTimeoutMilliseconds,
+          }),
+      ...(options.startupStallTimeoutMilliseconds === undefined
+        ? {}
+        : {
+            stallTimeoutMilliseconds:
+              options.startupStallTimeoutMilliseconds,
+          }),
+    });
     await page.evaluate(async () => {
       const api = window.__WORLDKIT__;
       if (api === undefined) {
@@ -1731,7 +1763,20 @@ export async function captureFile(
       capture = await captureOperation();
     } catch (error) {
       if (!isTransientCaptureNavigationError(error)) throw error;
-      await waitForWorldkitCaptureStartup(page);
+      await waitForWorldkitCaptureStartup(page, {
+        ...(options.startupHardTimeoutMilliseconds === undefined
+          ? {}
+          : {
+              hardTimeoutMilliseconds:
+                options.startupHardTimeoutMilliseconds,
+            }),
+        ...(options.startupStallTimeoutMilliseconds === undefined
+          ? {}
+          : {
+              stallTimeoutMilliseconds:
+                options.startupStallTimeoutMilliseconds,
+            }),
+      });
       capture = await captureOperation();
     }
     const pngDataUrlPrefix = "data:image/png;base64,";

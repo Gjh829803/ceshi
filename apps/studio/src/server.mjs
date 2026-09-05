@@ -5593,6 +5593,12 @@ export function createStudio(options = {}) {
           : definition.visualReviewProxy.boundsMaximumMetersXYZ.map((value, axis) =>
               value - definition.visualReviewProxy.boundsMinimumMetersXYZ[axis]),
         compatibleMotionPackIds: definition.compatibleMotionPackIds ?? [],
+        recommendedMotionPackIds: definition.recommendedMotionPackIds ?? [],
+        recommendedSetup: definition.recommendedSetup ?? null,
+        visualKind: definition.visualKind ?? null,
+        usageNotes: definition.usageNotes ?? [],
+        presentation: definition.presentation ?? null,
+        sockets: definition.sockets ?? [],
         bodyTopology: definition.bodyTopology,
         selectionPolicy: definition.selectionPolicy,
       }));

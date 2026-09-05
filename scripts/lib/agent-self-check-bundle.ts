@@ -5,6 +5,7 @@ export async function assertAgentSelfCheckBundleParity(input: {
     | "planner"
     | "builder"
     | "block-builder"
+    | "subject-setup"
     | "block-builder-visual-review";
   readonly generatedBundlePath: string;
   readonly trackedBundlePath: string;

@@ -3,6 +3,12 @@ import type {
   BlockMotionPackIdV1,
 } from "./types.js";
 
+export const BLOCK_CAMERA_TUNING_LIMITS_V1 = Object.freeze({
+  distanceMeters: Object.freeze({ minimum: 0.5, maximum: 20 }),
+  pitchRadians: Object.freeze({ minimum: -1.2, maximum: 1.2 }),
+  fovDegrees: Object.freeze({ minimum: 35, maximum: 100 }),
+});
+
 export interface BlockMotionPackDefinitionV1 {
   readonly id: BlockMotionPackIdV1;
   readonly displayName: string;

@@ -144,6 +144,27 @@ describe("Babylon geometry generation conformance", () => {
       scene,
     )[0]!;
     expect(surface.isVerticesDataPresent(VertexBuffer.ColorKind)).toBe(false);
+    const surfaceUvs = surface.getVerticesData(VertexBuffer.UVKind);
+    expect(surfaceUvs).toHaveLength(positions.length / 3 * 2);
+    for (let vertexIndex = 0; vertexIndex < positions.length / 3; vertexIndex += 1) {
+      expect(surfaceUvs![vertexIndex * 2]).toBeCloseTo(
+        positions[vertexIndex * 3]!,
+        8,
+      );
+      expect(surfaceUvs![vertexIndex * 2 + 1]).toBeCloseTo(
+        positions[vertexIndex * 3 + 2]!,
+        8,
+      );
+    }
+    const surfaceMaterial = surface.material as WhiteboxMaterials["terrain"];
+    expect(surfaceMaterial).not.toBe(
+      materials.blockBySemanticClassId.get("block.walkable"),
+    );
+    expect(surfaceMaterial.diffuseTexture).toMatchObject({
+      name: "worldkit.texture.block-ground-grid",
+      uScale: 0.25,
+      vScale: 0.25,
+    });
   });
 
   it("adds the ground-boundary bit only for ground motion kernels", () => {
@@ -334,7 +355,7 @@ describe("Babylon geometry generation conformance", () => {
       "#060606",
     );
     expect((mesh.material as typeof materials.object).ambientColor.toHexString()).toBe(
-      "#494A49",
+      "#464746",
     );
     expect((mesh.material as typeof materials.object).disableLighting).toBe(false);
     expect((mesh.material as typeof materials.object).metadata).toEqual({
@@ -422,6 +443,7 @@ describe("Babylon geometry generation conformance", () => {
   });
 
   it("renders normal, ice, and mud with distinct fixed surface colors", () => {
+    expect(BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1.walkable).toBe("#E8EEE9");
     const colors = ["walkable", "walkable-ice", "walkable-mud"].map(
       (name) => materials.blockBySemanticClassId.get(`block.${name}`)!
         .diffuseColor.toHexString(),
@@ -432,6 +454,23 @@ describe("Babylon geometry generation conformance", () => {
       BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1["walkable-mud"],
     ]);
     expect(new Set(colors).size).toBe(3);
+    const surfaceMaterials = ["walkable", "walkable-ice", "walkable-mud"].map(
+      (name) => materials.blockWalkableSurfaceBySemanticClassId.get(`block.${name}`)!,
+    );
+    expect(surfaceMaterials.map(({ diffuseColor }) => diffuseColor.toHexString()))
+      .toEqual(colors);
+    expect(new Set(surfaceMaterials.map(({ diffuseTexture }) => diffuseTexture)))
+      .toEqual(new Set([surfaceMaterials[0]!.diffuseTexture]));
+    expect(surfaceMaterials[0]!.metadata).toMatchObject({
+      blockGroundGridDisplay: {
+        minorSpacingMeters: 1,
+        majorSpacingMeters: 4,
+        minorLineContrastRatio: 0.045,
+        majorLineContrastRatio: 0.075,
+      },
+    });
+    expect(materials.blockWalkableSurfaceBySemanticClassId.get("block.cloud-walkable"))
+      .toMatchObject({ diffuseTexture: null });
   });
 
   it("expands mixed-shape clusters with their exact base dimensions", () => {

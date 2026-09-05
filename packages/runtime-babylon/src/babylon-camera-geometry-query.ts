@@ -14,7 +14,11 @@ import {
   type CameraGeometryQueryRequestV2,
 } from "@whitebox-world/camera";
 
+import { BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1 } from "./block-ground-boundary";
+
 const QUERY_DISTANCE_TOLERANCE_METERS_V2 = 1e-6;
+const CAMERA_GEOMETRY_QUERY_COLLIDE_MASK_V2 =
+  (~BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1) >>> 0;
 
 const HAVOK_CAMERA_GEOMETRY_CAPABILITY_V2 = Object.freeze({
   shape: "sphere",
@@ -301,6 +305,10 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
     const cached = this.sphereShapesByRadiusMeters.get(radiusMeters);
     if (cached !== undefined) return cached;
     const created = new PhysicsShapeSphere(Vector3.Zero(), radiusMeters, this.scene);
+    // Ground boundaries are derived movement guards, not visible camera-hard
+    // geometry. Let movement bodies opt into them while every camera probe
+    // continues to collide with authored terrain, structures, and obstacles.
+    created.filterCollideMask = CAMERA_GEOMETRY_QUERY_COLLIDE_MASK_V2;
     this.sphereShapesByRadiusMeters.set(radiusMeters, created);
     return created;
   }

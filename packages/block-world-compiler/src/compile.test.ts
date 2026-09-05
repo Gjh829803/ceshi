@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BLOCK_PRESET_REFS_V1,
+  BLOCK_CAMERA_PACKS_V1,
+  BLOCK_MOTION_PACKS_V1,
   blockWorldSpaceTransitionDestinationAnchorEntityIdV2,
   createBlockWorldManifestV2,
   type CheckBlockWorldInputV2,
@@ -85,6 +87,80 @@ function input(reverse = false): CheckBlockWorldInputV2 {
 }
 
 describe("Block World internal compiler", () => {
+  it("allows all published cameras on reused and custom bases, with all published custom motions", () => {
+    for (const cameraPackId of Object.keys(BLOCK_CAMERA_PACKS_V1) as Array<keyof typeof BLOCK_CAMERA_PACKS_V1>) {
+      for (const custom of [false, true]) {
+        const result = compileBlockWorldV2({
+          ...input(),
+          controlledSubject: { kind: "assembly", entityId: "player", visualTargetId: "visual-target-1", yawQuarterTurnsY: 0,
+            assembly: { id: "camera-composition-test",
+              baseSubject: custom
+                ? { kind: "custom-mesh", subjectMeshBindingIds: ["body-mesh"], category: "custom", bodyTopology: "custom", semanticClassId: "subject.custom.shape", displayName: "Shape", description: "Rigid shape" }
+                : { kind: "subject-pack", subjectPackId: "humanoid.g-bot" },
+              attachments: [], motion: { motionPackId: "ground.root-standard" }, presentation: { kind: "automatic" },
+            },
+          },
+          subjectMeshParts: custom ? [{ id: "body-mesh", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.5, 0.8, 0.5] }, positionMetersXYZ: [0, 0.4, 0], colliderContribution: "include", semanticTags: ["body"] }] : [],
+          camera: { kind: "pack", entityId: "camera-main", cameraPackId,
+            target: { kind: "subject-local-point", positionMetersXYZ: [0, 0.6, -0.2] }, aspectRatio: 16 / 9 },
+        });
+        expect(result.ok, `${cameraPackId} custom=${custom}: ${JSON.stringify(result.diagnostics)}`).toBe(true);
+      }
+    }
+    for (const motionPackId of Object.keys(BLOCK_MOTION_PACKS_V1) as Array<keyof typeof BLOCK_MOTION_PACKS_V1>) {
+      const result = compileBlockWorldV2({
+        ...input(),
+        controlledSubject: { kind: "assembly", entityId: "player", visualTargetId: "visual-target-1", yawQuarterTurnsY: 0,
+          assembly: { id: "custom-motion-test", baseSubject: { kind: "custom-mesh", subjectMeshBindingIds: ["body-mesh"], category: "custom", bodyTopology: "custom", semanticClassId: "subject.custom.shape", displayName: "Shape", description: "Rigid shape" },
+            attachments: [], motion: { motionPackId }, presentation: { kind: "automatic" },
+          },
+        },
+        subjectMeshParts: [{ id: "body-mesh", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.5, 0.8, 0.5] }, positionMetersXYZ: [0, 0.4, 0], colliderContribution: "include", semanticTags: ["body"] }],
+        camera: { kind: "pack", entityId: "camera-main", cameraPackId: "third-person.standard", target: { kind: "assembly-bounds", heightRatio: 0.65 }, aspectRatio: 16 / 9 },
+        requireSingleReachableComponent: motionPackId !== "flight.powered-standard",
+      });
+      expect(result.ok, `${motionPackId}: ${JSON.stringify(result.diagnostics)}`).toBe(true);
+    }
+  });
+
+  it.each(["sit.idle", "fly", "emote.salute"])("preserves fixed action %s through the real compiler and runtime contract", (actionId) => {
+    const source = input();
+    const result = compileBlockWorldV2({
+      ...source,
+      controlledSubject: { kind: "assembly", entityId: "player", visualTargetId: "visual-target-1", yawQuarterTurnsY: 0,
+        assembly: { id: "fixed-action-player", baseSubject: { kind: "subject-pack", subjectPackId: "humanoid.g-bot" },
+          attachments: [], motion: { motionPackId: "flight.powered-standard" },
+          presentation: { kind: "fixed-action", actionId },
+        },
+      },
+      camera: { kind: "pack", entityId: "camera-main", cameraPackId: "third-person.standard",
+        target: { kind: "base-subject-bounds", heightRatio: 0.65 }, aspectRatio: 16 / 9 },
+      requireSingleReachableComponent: false,
+    });
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    if (result.ok) expect(result.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]?.presentationPolicy)
+      .toEqual({ kind: "fixed-action", actionId });
+  });
+
+  it.each([
+    ["humanoid.g-bot", "not-a-registered-action"],
+    ["xier120.quadruped-animal", "walk"],
+  ])("rejects unavailable fixed action for %s rather than silently choosing idle", (subjectPackId, actionId) => {
+    const result = compileBlockWorldV2({
+      ...input(),
+      controlledSubject: { kind: "assembly", entityId: "player", visualTargetId: "visual-target-1", yawQuarterTurnsY: 0,
+        assembly: { id: "fixed-action-player", baseSubject: { kind: "subject-pack", subjectPackId },
+          attachments: [], motion: { motionPackId: "ground.root-standard" },
+          presentation: { kind: "fixed-action", actionId },
+        },
+      },
+      camera: { kind: "pack", entityId: "camera-main", cameraPackId: "third-person.standard",
+        target: { kind: "base-subject-bounds", heightRatio: 0.65 }, aspectRatio: 16 / 9 },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some(({ code }) => code === "SUBJECT_ASSET_PROFILE_INCOMPATIBLE")).toBe(true);
+  });
+
   it("compiles one checked Manifest into the retained runtime transport", () => {
     const result = compileBlockWorldV2(input());
     expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);

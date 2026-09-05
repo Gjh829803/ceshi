@@ -86,6 +86,19 @@ export const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
 export type AutomaticLocomotionPresentationKeyV1 =
   typeof AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1[number];
 
+/** A visual policy; movement and committed gameplay actions keep their owners. */
+export type SubjectPresentationPolicyV1 =
+  | Readonly<{ kind: "automatic" }>
+  | Readonly<{
+      kind: "fixed-locomotion";
+      presentationKey: AutomaticLocomotionPresentationKeyV1;
+    }>
+  | Readonly<{
+      kind: "fixed-action";
+      /** Exact action published by the base Animation Set. */
+      actionId: string;
+    }>;
+
 export const BIPED_BONE_IDS_V1 = Object.freeze([
   "hips",
   "spine",

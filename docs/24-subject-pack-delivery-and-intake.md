@@ -620,7 +620,10 @@ pnpm check:agent-self-check
 新主体随后会进入 `agent-authoring-catalog.json.subjectPacks`。Catalog 会自动给出：
 
 - Agent 使用的 `subjectPackId`；
-- 与真实编译器兼容的 Motion Pack；
+- 与真实编译器兼容的 Motion Pack，以及单独的推荐 Motion Pack；
+- `recommendedSetup`：默认移动、表现与 Camera/target 组合；
+- `visualKind`：带骨骼模型、静态模型或旧几何原型；
+- `presentation.actions`：可固定播放的已注册动作、循环方式和语义类别；
 - 可固定的 locomotion presentation key；
 - 可绑定的 Socket；
 - Host 从 Runtime collider 推导的 traversal envelope；
@@ -628,11 +631,31 @@ pnpm check:agent-self-check
 
 若它进入 `unavailableSubjectPacks`，必须修 Registry/Compiler 诊断，不能手改生成的 JSON 把它伪装成可用。
 
-对于随主体一起交付的专属手感，Catalog 还必须证明 Subject Pack 与对应 Motion Pack 的
-兼容关系。不能因为车辆 Motion Kernel 已注册，就让所有人物、动物和自定义主体默认获得
-该车辆手感。
+对于随主体一起交付的专属手感，Catalog 会匹配 Definition 的默认 Motion Profile 和
+Control Feel，生成对应的推荐搭配。普通人形默认地面角色移动，静态主体默认刚性地面
+预览；STK 保留交付的驾驶手感及追车镜头。`compatibleMotionPackIds` 只表示能编译的
+显式组合，`recommendedMotionPackIds` 才表示常规推荐。允许 Agent 有意让人物按车辆
+方式移动，并不意味着所有人物都应该默认获得卡丁车手感。
 
 ## 10. Agent 最终如何使用新套餐
+
+现在可优先使用 Skill 随附的 `createSubjectSetup`，一次展开默认组合：
+
+```js
+import { createSubjectSetup } from "../../../.codex/skills/worldkit-block-builder/scripts/subject-setup.mjs";
+
+const setup = createSubjectSetup({ subjectPackId: "kart-control-lab.stk-kart" });
+// 在 buildBlockWorld() 的返回对象中使用 ...setup。
+```
+
+上面的相对路径适用于 `artifacts/scenes/<scene-id>/world.mjs`。返回值就是原有的
+`controlledSubject`、`camera`、`subjectTraversalProfile` 和地面连通性选择；没有新增
+第二种世界描述。传入 `motionPackId`、`presentation`、`attachments` 或 `camera` 可覆盖
+相应默认值。自绘基础主体继续直接声明 Assembly，并可复用 `createCameraSetup`。
+
+G Bot 的已注册动作可用 `presentation: { kind: "fixed-action", actionId: "sit.idle" }`
+固定播放。循环动作循环，一次性动作播完停在最后一帧；Reset 恢复开头。该选项只改视觉，
+不会增加游泳/飞行能力、改变碰撞体或自动调整镜头绑定点。静态主体没有骨骼动作。
 
 接入完成后，Agent 不再碰 GLB 路径、骨名和 Registry Ref，只使用 Catalog 中的 Pack ID：
 

@@ -5,10 +5,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { BLOCK_PRESET_REFS_V1, createBlockWorldManifestV2 } from "@whitebox-world/block-world";
+import { compileBlockWorldV2 } from "@whitebox-world/block-world-compiler";
 
 import { runBlockBuilderSelfCheck } from "./agent-block-builder-self-check.js";
+import { createRuntimePreviewReportV1 } from "./agent-runtime-preview.js";
 import { verifyBlockBuilderHostResume } from "./verify-block-builder-host-resume.js";
 import { createAgentAuthoringCatalogV2 } from "../lib/agent-authoring-catalog.js";
+import { createSubjectSetup, createCameraSetup, getSubjectPack } from "./agent-subject-setup.js";
 
 const BRIEF = `# WorldKit Scene Brief
 
@@ -59,6 +63,100 @@ function paths(root: string, suffix: string) {
 }
 
 describe("Block Builder skill", () => {
+  it("compiles every recommended setup and keeps explicit combinations independent of recommendations", () => {
+    const catalog = createAgentAuthoringCatalogV2();
+    const floor = createBlockWorldManifestV2(Array.from({ length: 81 }, (_, index) => ({
+      id: `floor-${index}`, presetRef: BLOCK_PRESET_REFS_V1.walkable, shape: "full" as const,
+      positionMetersXYZ: [index % 9 - 4, 0, Math.floor(index / 9) - 4] as const,
+      rotationQuarterTurnsY: 0,
+    })));
+    for (const pack of catalog.subjectPacks) {
+      const result = compileBlockWorldV2({
+        manifest: floor, world: { id: "default-setup-test", seed: 1 },
+        ...createSubjectSetup({ subjectPackId: pack.id }),
+        spawnStandPositionMetersXYZ: [0, 0.5, 0], requiredTargets: [],
+        requiredGroundTraversalBands: [], visualTargetFacings: [], spaceTransitions: [],
+      });
+      expect(result.ok, `${pack.id}: ${JSON.stringify(result.diagnostics)}`).toBe(true);
+      expect(pack.compatibleMotionPackIds).toContain(pack.recommendedSetup.motion.motionPackId);
+    }
+    expect(getSubjectPack("humanoid.g-bot").recommendedMotionPackIds).not.toContain("vehicle.stk-kart.arcade");
+    expect(createSubjectSetup({ subjectPackId: "kart-control-lab.stk-kart" })).toMatchObject({
+      controlledSubject: { assembly: { motion: { motionPackId: "vehicle.stk-kart.arcade" } } },
+      camera: { cameraPackId: "third-person.kart-chase" },
+    });
+    expect(createSubjectSetup({ subjectPackId: "humanoid.g-bot", motionPackId: "vehicle.stk-kart.arcade" }))
+      .toMatchObject({ controlledSubject: { assembly: { motion: { motionPackId: "vehicle.stk-kart.arcade" } } } });
+    expect(catalog.subjectPacks.filter(({ visualKind }) => visualKind === "primitive-proxy")
+      .every(({ selectionPolicy }) => selectionPolicy === "explicit-only")).toBe(true);
+  });
+
+  it("targets attachments, first-person eyes and custom points without changing explicit choices", () => {
+    const setup = createSubjectSetup({ subjectPackId: "humanoid.g-bot",
+      attachments: [{ subjectMeshBindingId: "sword" }], motionPackId: "flight.powered-standard",
+      presentation: { kind: "fixed-action", actionId: "sit.idle" },
+    });
+    expect(setup).toMatchObject({ requireSingleReachableComponent: false,
+      camera: { target: { kind: "assembly-bounds", heightRatio: 0.65 } },
+      controlledSubject: { assembly: { presentation: { kind: "fixed-action", actionId: "sit.idle" } } },
+    });
+    expect(createSubjectSetup({ subjectPackId: "humanoid.g-bot", camera: { cameraPackId: "first-person.standard" } }))
+      .toMatchObject({ camera: { target: { kind: "base-subject-socket", socketId: "FirstPersonView" } } });
+    expect(createCameraSetup({ cameraPackId: "first-person.standard", target: { kind: "subject-local-point", positionMetersXYZ: [0, 0.8, -0.5] } }))
+      .toMatchObject({ target: { kind: "subject-local-point", positionMetersXYZ: [0, 0.8, -0.5] } });
+    expect(() => createCameraSetup({ cameraPackId: "first-person.standard", subjectPackId: "xier120.snake-animal" }))
+      .toThrow("explicit target point");
+    const first = createSubjectSetup({ subjectPackId: "humanoid.g-bot" });
+    Object.assign(first.subjectTraversalProfile, { footprintRadiusMetersXZ: 99 });
+    expect(createSubjectSetup({ subjectPackId: "humanoid.g-bot" }).subjectTraversalProfile.footprintRadiusMetersXZ).toBe(0.35);
+  });
+
+  it("reports the real Runtime camera state as Agent feedback without turning it into a visual gate", () => {
+    const report = createRuntimePreviewReportV1({
+      worldId: "preview-world",
+      worldModuleHash: `sha256:${"a".repeat(64)}`,
+      openingFramePath: "/tmp/runtime-preview.png",
+      runtimeSnapshotPath: "/tmp/runtime-preview.snapshot.json",
+      snapshot: {
+        runtime: { phase: "ready", isPaused: true },
+        resources: { meshCount: 9, physicsBodyCount: 4 },
+        world: {
+          simulationTick: 0,
+          subjectStatesByEntityId: {
+            player: { entityState: { positionMetersXYZ: [0, 1, 2] } },
+          },
+        },
+        view: {
+          camera: {
+            mode: "tracking",
+            targetEntityId: "player",
+            selectedTargetSocketId: "AssemblyCameraTarget",
+            actualTargetPositionMetersXYZ: [0, 2, 2],
+            actualPositionMetersXYZ: [0, 3, 9],
+            requestedArmLengthMeters: 8,
+            safeArmLengthMeters: 2,
+            effectiveArmLengthMeters: 2,
+            isCollisionRetracted: true,
+            decollisionPhase: "constrained",
+            collisionHitEntityId: "real-wall",
+          },
+        },
+      } as unknown as Parameters<typeof createRuntimePreviewReportV1>[0]["snapshot"],
+    });
+
+    expect(report).toMatchObject({
+      status: "captured",
+      runtime: { phase: "ready", isPaused: true, simulationTick: 0 },
+      camera: {
+        mode: "tracking",
+        targetEntityId: "player",
+        subjectPositionMetersXYZ: [0, 1, 2],
+        isCollisionRetracted: true,
+        collisionHitEntityId: "real-wall",
+      },
+    });
+  });
+
   it("uses the Host-owned Canonical build artifact producer", async () => {
     const launcher = await readFile(
       "scripts/agents/run-spatial-world-agent.sh",
@@ -223,22 +321,32 @@ describe("Block Builder skill", () => {
     expect(launcher).toContain("Every visible staircase must connect its real lower and upper levels");
   });
 
-  it("requires Builder to inspect Skill-rendered Planner comparisons", async () => {
-    const [skill, launcher, visualReviewBundle] = await Promise.all([
+  it("gives Codex a real Runtime preview while retaining portable Planner comparisons", async () => {
+    const [skill, launcher, visualReviewBundle, packageSource] = await Promise.all([
       readFile(".codex/skills/worldkit-block-builder/SKILL.md", "utf8"),
       readFile("scripts/agents/run-spatial-world-agent.sh", "utf8"),
       readFile(
         ".codex/skills/worldkit-block-builder/scripts/render-visual-review.mjs",
       ),
+      readFile("package.json", "utf8"),
     ]);
     expect(visualReviewBundle.byteLength).toBeGreaterThan(1_000);
+    expect(JSON.parse(packageSource).scripts["agent:world:preview"]).toContain(
+      "agent-runtime-preview.ts",
+    );
+    expect(skill).toContain("pnpm agent:world:preview");
+    expect(skill).toContain("real Babylon / Havok opening frame");
+    expect(skill).toContain("not\na second Agent, a similarity scorer, or a publication Gate");
+    expect(skill).toContain("target `assembly-bounds` or a deliberate");
     expect(skill).toContain("render-visual-review.mjs");
     expect(skill).toContain("Planner intent is on the left");
     expect(skill).toContain("Actually open and inspect both PNGs");
     expect(skill).toContain("not an automatic visual-similarity Gate");
+    expect(skill).toContain("Its camera projection is approximate");
     expect(launcher).toContain("builder-top-down-comparison.png");
     expect(launcher).toContain("builder-entry-comparison.png");
     expect(launcher).toContain("agent-block-builder-visual-review.ts");
+    expect(launcher).toContain("approximate portable Builder feedback images");
     expect(launcher).toContain("compares exact decoded RGBA pixels");
     expect(launcher).toContain("verify-png-raster-equality.ts");
   });

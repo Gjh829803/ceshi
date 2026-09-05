@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const BUNDLES = [
+  "worldkit-block-builder/scripts/subject-setup.mjs",
   "worldkit-spatial-planner/scripts/self-check.mjs",
   "worldkit-block-builder/scripts/self-check.mjs",
   "worldkit-block-builder/scripts/render-visual-review.mjs",

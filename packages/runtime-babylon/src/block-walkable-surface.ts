@@ -557,6 +557,10 @@ export function createBlockWalkableSurfaceMeshesV1(
       positions[offset] = positions[offset]! + VISUAL_SURFACE_OFFSET_METERS;
     }
     const normals: number[] = [];
+    const uvs: number[] = [];
+    for (let offset = 0; offset < positions.length; offset += 3) {
+      uvs.push(positions[offset]!, positions[offset + 2]!);
+    }
     VertexData.ComputeNormals(positions, topology.triangleIndices, normals);
     for (let normalIndex = 0; normalIndex < normals.length; normalIndex += 1) {
       normals[normalIndex] = -normals[normalIndex]!;
@@ -566,12 +570,13 @@ export function createBlockWalkableSurfaceMeshesV1(
     data.positions = positions;
     data.indices = [...topology.triangleIndices];
     data.normals = normals;
+    data.uvs = uvs;
     data.applyToMesh(mesh, false);
     mesh.overrideMaterialSideOrientation = Mesh.DOUBLESIDE;
-    const material = materials.blockBySemanticClassId.get(topology.materialSemanticClassId) ??
+    const material = materials.blockWalkableSurfaceBySemanticClassId.get(
+      topology.materialSemanticClassId,
+    ) ?? materials.blockBySemanticClassId.get(topology.materialSemanticClassId) ??
       materials.terrain;
-    material.backFaceCulling = false;
-    material.twoSidedLighting = true;
     mesh.material = material;
     mesh.metadata = {
       worldkitEntityId: topology.sourceEntityIds[0],

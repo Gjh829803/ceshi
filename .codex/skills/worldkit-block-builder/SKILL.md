@@ -14,6 +14,22 @@ only world-geometry authority. Do not create a second JSON world description,
 an implementation map, or Host compilation artifacts; the self-check derives
 those from `world.mjs`.
 
+## Subject and Camera quick start
+
+For an ordinary reusable subject, call the bundled `createSubjectSetup` with
+one `subjectPackId` and spread its result into the world return value. It supplies
+the recommended movement, automatic presentation, Camera, and exact traversal
+envelope. It creates no geometry. For custom concepts, explicitly override
+movement, presentation, attachments, Camera Pack, and target independently.
+See [subject-camera.md](references/subject-camera.md) for runnable recipes.
+
+The generated catalog distinguishes `visualKind`, `recommendedSetup`,
+`recommendedMotionPackIds`, and `compatibleMotionPackIds`. Compatibility means
+the combination compiles; it is not a recommendation or proof of native
+animal/vehicle animation. Prefer model packs over `primitive-proxy` entries.
+Fixed animation choices come from `presentation.actions`; static shapes have
+none. A fixed `fly` or `swim.surface` action changes pose, not movement ability.
+
 ## Inputs and authority
 
 Read the validated `scene-brief.md`, `visual-identity-palette.json`,
@@ -31,7 +47,8 @@ their shared geography. If the inputs conflict, stop with a clear diagnostic;
 do not invent a fourth layout, sample arbitrary RGB values, or silently move a
 visible landmark.
 
-Read all three maintained references before writing the module:
+Consult these maintained references before writing the module; the catalog can
+be queried through the helper rather than reading every row:
 
 1. [references/block-api.md](references/block-api.md) for the exact direct-Mesh
    API, immutable presets, connectivity rules, and visual grouping.
@@ -151,7 +168,7 @@ Read all three maintained references before writing the module:
   while jumping), and does not block true air or water motion.
 - Choose the Subject in this order: first match the Brief's body topology, then
   reuse the closest complete registered Subject Pack, and only then use a
-  custom Mesh base. A coarse registered proxy is correct even when it does not
+  custom Mesh base when requested or when no existing pack fits. A coarse registered proxy is correct even when it does not
   resemble the reference closely. Subject appearance fidelity is not a
   whitebox goal; correct Motion and Camera framing are.
 - A reusable base must appear in `agent-authoring-catalog.json.subjectPacks`.
@@ -181,6 +198,10 @@ Read all three maintained references before writing the module:
   base bounds, assembly bounds, or an explicit local point. Optional Pack
   tuning may change distance, pitch, and FOV within the closed safety ranges.
   Third-person Packs all retain the Runtime Spring Arm hard-collision path.
+  For an extended, asymmetric, mounted, or attachment-heavy controlled whole,
+  target `assembly-bounds` or a deliberate `subject-local-point` near the full
+  assembly's visual center. Use a base Socket only when the intended shot truly
+  follows the reusable base rather than the complete composed silhouette.
 - The primary Subject uses the Brief's `primary-subject` visual-target ID.
   Every other selected target is one complete `visualGroupId`. All blocks of a
   multi-block landmark or important non-controlled person, animal, creature,
@@ -232,6 +253,35 @@ Never edit the derived outputs to hide a failure. Finish only with a passing,
 fresh `builder-self-check.json`; the trusted Host replays the same checker and
 compares the receipt without launching a separate Repair Agent.
 
+When Codex is working in a full SDK checkout, generate a true Runtime preview
+from the current `world.mjs` before judging opening composition:
+
+```bash
+pnpm agent:world:preview -- \
+  --world artifacts/scenes/<scene-id>/world.mjs \
+  --authoring artifacts/scenes/<scene-id>/authoring.json \
+  --output artifacts/scenes/<scene-id>/runtime-preview.png \
+  --snapshot artifacts/scenes/<scene-id>/runtime-preview.snapshot.json \
+  --camera-report artifacts/scenes/<scene-id>/runtime-preview.camera.json
+```
+
+Run it immediately after the passing self-check so `--authoring` is its fresh
+derived output; omit `--authoring` when the command should compile `world.mjs`
+itself. The command captures the real Babylon / Havok opening frame. It is an
+executable feedback tool for this same Agent, not
+a second Agent, a similarity scorer, or a publication Gate. Actually open the
+Planner entry target and `runtime-preview.png` together, then read the compact
+camera report. Repair `world.mjs` when the Camera angle, complete Subject framing,
+foreground/middle/background composition, or landmark screen positions differ;
+restore terrain and structure shapes as closely as Block World resolution
+allows. An expected Spring Arm collision with a real wall is information, not a
+failure. An unexpectedly tiny effective arm is a prompt to inspect the scene.
+Regenerate and inspect the preview after each material Camera or geometry edit.
+
+The standalone hosted Builder workspace may not contain the full Babylon /
+Havok runtime. In that environment, use the portable comparison below as rough
+layout feedback; never describe its software render as the actual Runtime view.
+
 After every passing structural self-check, render the Skill-owned visual review:
 
 ```bash
@@ -251,15 +301,17 @@ geography, ground-only traversable coloring, landmark placement, and elevation
 mass. Also compare important route centerlines, bend order, junctions, and
 approaches to landmarks. In the entry comparison, check centered rear framing, foreground/middle/
 background order, landmark scale, stair/bridge rise, thickness, and occlusion.
-Treat these left/right comparisons as the primary repair feedback, not as files
-to acknowledge and move past. Before adding decorative detail, identify and fix
+Treat these left/right comparisons as portable layout feedback, not as files to
+acknowledge and move past. When the true Runtime preview is available, it owns
+Camera composition and the software render does not override it. Before adding decorative detail, identify and fix
 the largest visible mismatch in this order: complete landmark position, landmark
 front/travel direction, footprint and scale, then depth order and occlusion.
 Preserve the Planner side's left/right and near/far relationships; do not accept
 "the same objects are present" when their spatial arrangement differs.
 The software render is deterministic Builder feedback, not Runtime evidence and
-not an automatic visual-similarity Gate. Its four Camera values are nevertheless
-the same authored tuning that the trusted Babylon opening capture applies.
+not an automatic visual-similarity Gate. Its camera projection is approximate;
+only `runtime-preview.png` or the trusted Host opening capture shows the actual
+Babylon Camera, full Subject asset/assembly, Spring Arm result, and occlusion.
 
 If either comparison is materially wrong, repair only `world.mjs`, rerun the
 structural self-check, regenerate both comparison images, and inspect again.

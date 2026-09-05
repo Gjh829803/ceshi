@@ -4,13 +4,17 @@ import {
   BLOCK_SURFACE_PROFILE_REFS_V1,
   BLOCK_CAMERA_PACKS_V1,
   BLOCK_MOTION_PACKS_V1,
+  BLOCK_CAMERA_TUNING_LIMITS_V1,
   createBlockWorldManifestV2,
+  type BlockSubjectAssemblyDefinitionV1,
+  type BlockWorldPackCameraV1,
   type BlockSubjectTraversalProfileV2,
   type BlockWorldControlledSubjectV2,
   resolveBlockSurfaceProfileV1,
 } from "@whitebox-world/block-world";
 import { compileBlockWorldV2 } from "@whitebox-world/block-world-compiler";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { cameraTuningBoundsV1 } from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
   type RegistrySubjectDefinitionV3,
@@ -36,10 +40,24 @@ export interface AgentAuthoringSubjectPackV2 {
   readonly bodyTopology: RegistrySubjectDefinitionV3["bodyTopology"];
   readonly semanticTags: readonly string[];
   readonly selectionPolicy: "default" | "explicit-only";
+  readonly visualKind: "rigged-model" | "static-model" | "primitive-proxy";
+  readonly usageNotes: readonly string[];
+  readonly recommendedMotionPackIds: readonly string[];
+  readonly recommendedSetup: Readonly<{
+    motion: BlockSubjectAssemblyDefinitionV1["motion"];
+    presentation: BlockSubjectAssemblyDefinitionV1["presentation"];
+    camera: Pick<BlockWorldPackCameraV1, "cameraPackId" | "target">;
+  }>;
   readonly compatibleMotionPackIds: readonly string[];
   readonly presentation: Readonly<{
     automatic: true;
     fixedLocomotionPresentationKeys: readonly string[];
+    actions: readonly Readonly<{
+      actionId: string;
+      semanticFamily: string;
+      loopMode: "repeat" | "once";
+      automaticPresentationKeys: readonly string[];
+    }>[];
   }>;
   readonly sockets: readonly Readonly<{
     id: string;
@@ -65,12 +83,17 @@ export interface AgentAuthoringCatalogV2 {
     displayName: string;
     description: string;
     movementModes: readonly SceneBriefMovementModeV1[];
+    inputDescription: string;
   }>[];
   readonly cameraPacks: readonly Readonly<{
     id: string;
     displayName: string;
     description: string;
     mode: "first-person" | "third-person";
+    defaults: Readonly<{ distanceMeters: number; pitchRadians: number; fovDegrees: number }>;
+    tuningRanges: Readonly<Record<"distanceMeters" | "pitchRadians" | "fovDegrees", Readonly<{ minimum: number; maximum: number }>>>;
+    recommendedTarget: "eye-socket-or-point" | "visual-center";
+    centeredRearCompatible: boolean;
     supportedTargetKinds: readonly [
       "base-subject-socket",
       "base-subject-bounds",
@@ -92,6 +115,8 @@ export interface AgentAuthoringCatalogV2 {
     supportsRigging: false;
     attachmentDefaultColliderContribution: "exclude";
     maximumMeshPartCount: 48;
+    compatibleMotionPackIds: readonly string[];
+    recommendedMotionPackId: "ground.root-standard";
   }>;
   readonly unavailableSubjectPacks: readonly Readonly<{
     subjectDefinitionRef: string;
@@ -405,23 +430,69 @@ export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
     )].sort((left, right) => left.localeCompare(right));
     const admission = successfulAdmissions[0]!.result;
     if (!admission.ok) throw new Error("unreachable");
+    const visualKind = definition.visualBinding.mode === "rigged"
+      ? "rigged-model"
+      : definition.visualParts.some(({ kind }) => kind === "asset")
+        ? "static-model"
+        : "primitive-proxy";
+    // Retain the registered default behavior when it has an explicit Agent pack.
+    // Generic ground previews use the rigid-root name for static visuals.
+    const defaultMotionPackId = successfulAdmissions.find(({ motionPackId }) =>
+      !motionPackId.startsWith("ground.") &&
+      BLOCK_MOTION_PACKS_V1[motionPackId].controlFeelProfileRef === definition.profiles.controlFeelProfileRef &&
+      BLOCK_MOTION_PACKS_V1[motionPackId].defaultMotionProfileRef === definition.profiles.motion.defaultMotionProfileRef
+    )?.motionPackId ?? (visualKind === "rigged-model"
+      ? "ground.character-standard" : "ground.root-standard");
+    const targetSocket = ["ThirdPersonTarget", "CameraTarget3D"].find((id) =>
+      definition.sockets.some((socket) => socket.id === id));
+    const usageNotes = visualKind === "rigged-model"
+      ? ["Automatic gait animation or fixed playback of a published action; movement is selected independently."]
+      : ["Static shape moves as one rigid whole; no gait, wheel, limb, or independent rider animation."];
+    if (visualKind === "primitive-proxy") usageNotes.push(
+      "Legacy geometry proxy. Select explicitly when a coarse proxy is wanted; prefer a reusable model otherwise.",
+    );
+    if (defaultMotionPackId === "ground.root-standard" &&
+        ["vehicle", "composite"].includes(definition.category)) usageNotes.push(
+      "Default setup is a ground preview, not a claim of native driving, riding, or gliding. Choose another compatible Motion Pack explicitly for the intended behavior.",
+    );
     subjectPacks.push({
       id: subjectPackId,
       subjectDefinitionRef: definition.resourceRef,
       displayName: definition.aiMetadata.displayName,
-      description: definition.aiMetadata.description,
+      description: visualKind === "primitive-proxy"
+        ? `${definition.aiMetadata.displayName}: legacy geometric proxy; choose movement explicitly.`
+        : visualKind === "static-model"
+          ? `${definition.aiMetadata.displayName}: reusable static model; whole-body motion comes from the selected Motion Pack, not from the model's name.`
+          : definition.aiMetadata.description,
       authoringAvailability: definition.authoringAvailability,
       category: definition.category,
       bodyTopology: definition.bodyTopology,
       semanticTags: definition.aiMetadata.semanticTags,
-      selectionPolicy: definition.authoringAvailability === "experimental"
+      selectionPolicy: visualKind === "primitive-proxy" || definition.authoringAvailability === "experimental"
         ? "explicit-only"
         : "default",
+      visualKind,
+      usageNotes,
+      recommendedMotionPackIds: [defaultMotionPackId],
+      recommendedSetup: {
+        motion: { motionPackId: defaultMotionPackId },
+        presentation: structuredClone(definition.presentationPolicy ?? { kind: "automatic" }),
+        camera: {
+          cameraPackId: defaultMotionPackId === "vehicle.stk-kart.arcade"
+            ? "third-person.kart-chase" : "third-person.standard",
+          target: targetSocket === undefined
+            ? { kind: "base-subject-bounds", heightRatio: 0.65 }
+            : { kind: "base-subject-socket", socketId: targetSocket },
+        },
+      },
       compatibleMotionPackIds: successfulAdmissions.map(({ motionPackId }) =>
         motionPackId),
       presentation: {
         automatic: true,
         fixedLocomotionPresentationKeys,
+        actions: animationSet?.animationBindings.map(({ actionId, semanticFamily, loopMode, automaticPresentationKeys }) => ({
+          actionId, semanticFamily, loopMode, automaticPresentationKeys,
+        })) ?? [],
       },
       sockets: definition.sockets.map(({ id, kind, semanticTags }) => ({
         id,
@@ -448,21 +519,40 @@ export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
         displayName,
         description,
         movementModes,
+        inputDescription: builtInSubjectResourceRegistry.resolveControlProfile(
+          BLOCK_MOTION_PACKS_V1[id].controlProfileRef,
+        )!.aiMetadata.description,
       })),
     cameraPacks: Object.values(BLOCK_CAMERA_PACKS_V1)
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map(({ id, displayName, description, mode }) => ({
-        id,
-        displayName,
-        description,
-        mode,
-        supportedTargetKinds: [
-          "base-subject-socket",
-          "base-subject-bounds",
-          "assembly-bounds",
-          "subject-local-point",
-        ],
-      })),
+      .map(({ id, displayName, description, mode, defaults, cameraRigProfileRef }) => {
+        const parameters = builtInSubjectResourceRegistry.resolveCameraRigProfile(cameraRigProfileRef)!.parameters;
+        const ranges = Object.fromEntries(
+          (["distanceMeters", "pitchRadians", "fovDegrees"] as const).map((name) => {
+            const runtime = cameraTuningBoundsV1(name === "fovDegrees" ? "baseFovDegrees" : name, parameters);
+            const authoring = BLOCK_CAMERA_TUNING_LIMITS_V1[name];
+            return [name, mode === "first-person" && name === "distanceMeters"
+              ? { minimum: 0, maximum: 0 }
+              : { minimum: Math.max(runtime.minimum, authoring.minimum), maximum: Math.min(runtime.maximum, authoring.maximum) }];
+          }),
+        ) as AgentAuthoringCatalogV2["cameraPacks"][number]["tuningRanges"];
+        return {
+          id,
+          displayName,
+          description,
+          mode,
+          defaults,
+          tuningRanges: ranges,
+          recommendedTarget: mode === "first-person" ? "eye-socket-or-point" as const : "visual-center" as const,
+          centeredRearCompatible: mode === "third-person" && id !== "third-person.over-shoulder",
+          supportedTargetKinds: [
+            "base-subject-socket",
+            "base-subject-bounds",
+            "assembly-bounds",
+            "subject-local-point",
+          ] as const,
+        };
+      }),
     surfacePacks: AGENT_SURFACE_PACK_ROWS_V1.map((row) => {
       const profile = resolveBlockSurfaceProfileV1(row.surfaceProfileRef)!;
       return {
@@ -477,6 +567,8 @@ export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
       supportsRigging: false,
       attachmentDefaultColliderContribution: "exclude",
       maximumMeshPartCount: 48,
+      compatibleMotionPackIds: Object.keys(BLOCK_MOTION_PACKS_V1).sort(),
+      recommendedMotionPackId: "ground.root-standard",
     },
     unavailableSubjectPacks,
   };

@@ -570,6 +570,7 @@ export async function createSubjectVisual(
       animationPlayer = new SubjectAnimationPlayer({
         animationGroups: assetInstance.animationGroups,
         animationSet,
+        presentationPolicy: subject.presentationPolicy,
         actionPresentationRegistry,
         authorityTransformNode: root,
         ownedVisualAnimationTargets: ownedVisualAnimationTargets(assetInstance),

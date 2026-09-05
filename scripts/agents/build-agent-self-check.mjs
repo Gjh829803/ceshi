@@ -20,6 +20,11 @@ if (arguments_.length === 0) {
 
 const targets = [
   {
+    sourceFileName: "agent-subject-setup.ts",
+    skillName: "worldkit-block-builder",
+    outputFileName: "subject-setup.mjs",
+  },
+  {
     sourceFileName: "agent-planner-self-check.ts",
     skillName: "worldkit-spatial-planner",
     outputFileName: "self-check.mjs",

@@ -1,3 +1,5 @@
+import { createSubjectSetup } from "../../.codex/skills/worldkit-block-builder/scripts/subject-setup.mjs";
+
 const {
   BoxGeometry,
   Mesh,
@@ -40,41 +42,7 @@ export function buildBlockWorld() {
   return {
     scene,
     world: { id: "stk-kart-world", seed: 904 },
-    controlledSubject: {
-      kind: "assembly",
-      entityId: "player",
-      visualTargetId: "visual-target-1",
-      yawQuarterTurnsY: 0,
-      assembly: {
-        id: "stk-kart-player",
-        baseSubject: {
-          kind: "subject-pack",
-          subjectPackId: "kart-control-lab.stk-kart",
-        },
-        attachments: [],
-        motion: { motionPackId: "vehicle.stk-kart.arcade" },
-        presentation: { kind: "automatic" },
-      },
-    },
-    camera: {
-      kind: "pack",
-      entityId: "camera-main",
-      cameraPackId: "third-person.kart-chase",
-      target: {
-        kind: "base-subject-socket",
-        socketId: "CameraTarget3D",
-      },
-      aspectRatio: 16 / 9,
-    },
-    subjectTraversalProfile: {
-      clearanceHeightMeters: 2,
-      footprintRadiusMetersXZ: 1,
-      maximumStepUpMeters: 0.3,
-      maximumStepDownMeters: 0.3,
-      maximumAutoSmoothHeightDeltaMeters: 1,
-      maximumAdjacentWalkableHeightDeltaMeters: 2,
-      canStandOnCloud: false,
-    },
+    ...createSubjectSetup({ subjectPackId: "kart-control-lab.stk-kart", assemblyId: "stk-kart-player" }),
     spawnStandPositionMetersXYZ: [0, 0.5, 8],
     requiredTargets: [],
     requiredGroundTraversalBands: [],

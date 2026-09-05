@@ -5,7 +5,7 @@ import type {
   RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
 import type {
-  AutomaticLocomotionPresentationKeyV1,
+  SubjectPresentationPolicyV1,
   SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
 
@@ -291,12 +291,7 @@ export interface RegistrySubjectDefinitionInputV3 {
   visualBinding: SubjectVisualBindingV1;
   sockets: readonly SubjectSocketDefinitionV2[];
   colliderPolicy: SubjectColliderPolicyV2;
-  presentationPolicy?:
-    | Readonly<{ kind: "automatic" }>
-    | Readonly<{
-        kind: "fixed-locomotion";
-        presentationKey: AutomaticLocomotionPresentationKeyV1;
-      }>;
+  presentationPolicy?: SubjectPresentationPolicyV1;
   capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;

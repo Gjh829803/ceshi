@@ -836,12 +836,19 @@ async function selectCodexBackend(backendValue) {
 }
 
 function renderSubjectCatalog() {
-  capabilityCount.textContent = `${state.subjectCatalog.length} PRESETS`;
-  subjectCatalog.innerHTML = state.subjectCatalog.map((preset) => `
+  const proxyCount = state.subjectCatalog.filter(({ visualKind }) => visualKind === "primitive-proxy").length;
+  capabilityCount.textContent = `${state.subjectCatalog.length - proxyCount} 个模型 · ${proxyCount} 个几何原型`;
+  const visualLabels = { "rigged-model": "带骨骼模型", "static-model": "静态模型", "primitive-proxy": "几何原型" };
+  const presets = [...state.subjectCatalog].sort((left, right) =>
+    Number(left.visualKind === "primitive-proxy") - Number(right.visualKind === "primitive-proxy"));
+  subjectCatalog.innerHTML = presets.map((preset) => `
     <article class="capability-item">
       <div><b>${escapeHtml(preset.label)}</b><span class="maturity ${escapeHtml(preset.maturity)}">${escapeHtml(preset.maturity)}</span></div>
-      <code>${escapeHtml(preset.ref)}</code>
+      <code>${escapeHtml(preset.packId ?? preset.ref)}</code>
+      <small>${escapeHtml(visualLabels[preset.visualKind] ?? "主体")} · ${preset.selectionPolicy === "explicit-only" ? "明确指定时使用" : "普通候选"}</small>
       <p>${escapeHtml(preset.description)}</p>
+      ${preset.recommendedSetup ? `<p>默认移动：${escapeHtml(preset.recommendedSetup.motion.motionPackId)}<br>默认镜头：${escapeHtml(preset.recommendedSetup.camera.cameraPackId)}</p>` : ""}
+      <small>可固定动作：${preset.presentation?.actions?.length ?? 0} · 支持显式更换移动与镜头</small>
       <small>${Array.isArray(preset.planningBounds)
         ? "规划尺寸 W×H×D " + preset.planningBounds.map((value) => Number(value).toFixed(2)).join(" × ") + "m · 1S = " + Number(preset.planningBounds[1]).toFixed(2) + "m"
         : "规划尺寸由参考图推断"}</small>

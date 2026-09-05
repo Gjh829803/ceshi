@@ -15,6 +15,7 @@ import {
 import {
   resolveBlockCameraPackV1,
   resolveBlockMotionPackV1,
+  BLOCK_CAMERA_TUNING_LIMITS_V1,
 } from "./packs.js";
 import type {
   BlockSubjectAssemblyDefinitionV1,
@@ -136,6 +137,9 @@ function validSubjectAssembly(
 ): boolean {
   if (!ID.test(definition.id) ||
       resolveBlockMotionPackV1(definition.motion.motionPackId) === undefined ||
+      !["automatic", "fixed-locomotion", "fixed-action"].includes(definition.presentation.kind) ||
+      (definition.presentation.kind === "fixed-action" &&
+        !/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,79}$/.test(definition.presentation.actionId)) ||
       (definition.presentation.kind === "fixed-locomotion" &&
         !PRESENTATION_KEYS.has(definition.presentation.presentationKey))) return false;
   const base = definition.baseSubject;
@@ -186,12 +190,14 @@ function validPackCamera(camera: Extract<
   const distance = tuning.distanceMeters ?? pack.defaults.distanceMeters;
   const pitch = tuning.pitchRadians ?? pack.defaults.pitchRadians;
   const fov = tuning.fovDegrees ?? pack.defaults.fovDegrees;
+  const within = (value: number, bounds: { minimum: number; maximum: number }) =>
+    Number.isFinite(value) && value >= bounds.minimum && value <= bounds.maximum;
   const distanceValid = pack.mode === "first-person"
     ? distance === 0
-    : Number.isFinite(distance) && distance >= 0.5 && distance <= 20;
+    : within(distance, BLOCK_CAMERA_TUNING_LIMITS_V1.distanceMeters);
   return distanceValid &&
-    Number.isFinite(pitch) && pitch >= -1.2 && pitch <= 1.2 &&
-    Number.isFinite(fov) && fov >= 35 && fov <= 100;
+    within(pitch, BLOCK_CAMERA_TUNING_LIMITS_V1.pitchRadians) &&
+    within(fov, BLOCK_CAMERA_TUNING_LIMITS_V1.fovDegrees);
 }
 
 function primitiveHalfHeightMeters(

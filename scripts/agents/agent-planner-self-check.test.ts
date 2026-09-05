@@ -391,6 +391,9 @@ describe("source-generated Planner self-check parity", () => {
       const trackedSkillsRoot = path.join(root, "skills");
       const relativePaths = {
         planner: "worldkit-spatial-planner/scripts/self-check.mjs",
+        subjectSetup: "worldkit-block-builder/scripts/subject-setup.mjs",
+        builder: "worldkit-block-builder/scripts/self-check.mjs",
+        visualReview: "worldkit-block-builder/scripts/render-visual-review.mjs",
       } as const;
       try {
         for (const relativePath of Object.values(relativePaths)) {

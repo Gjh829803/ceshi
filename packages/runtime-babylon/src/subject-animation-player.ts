@@ -4,7 +4,7 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { RuntimeAnimationSetV1 } from "@whitebox-world/runtime-contracts";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
-import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
+import type { GroundHumanoidActionIdV1, SubjectPresentationPolicyV1 } from "@whitebox-world/subject-contracts";
 import {
   ACTION_PRESENTATION_BLEND_DURATION_TICKS_MAX_V1,
   ACTION_PRESENTATION_PLAYBACK_SPEED_RATIO_MAX_V1,
@@ -20,6 +20,7 @@ import { SubjectAssetRuntimeErrorV1 } from "./subject-asset-cache";
 interface SubjectAnimationPlayerOptionsV1 {
   animationGroups: readonly AnimationGroup[];
   animationSet: RuntimeAnimationSetV1;
+  presentationPolicy?: SubjectPresentationPolicyV1 | undefined;
   actionPresentationRegistry: ActionPresentationRegistryV1;
   authorityTransformNode: TransformNode;
   ownedVisualAnimationTargets: ReadonlySet<object>;
@@ -154,6 +155,11 @@ export class SubjectAnimationPlayer {
   }
 
   get activeActionId(): GroundHumanoidActionIdV1 {
+    if (this.options.presentationPolicy?.kind === "fixed-action" &&
+        this.current.presentation.source === "locomotion") {
+      return this.options.animationSet.animationBindings.find(({ sourceClipName }) =>
+        sourceClipName === this.current.animation.sourceClipName)!.actionId;
+    }
     const key = this.current.animation.presentationKey;
     if (key === "locomotion.walk") return "walk";
     if (key === "locomotion.run") return "run";
@@ -426,6 +432,7 @@ export class SubjectAnimationPlayer {
       result.set(presentationKey, { presentationKey, ...clip });
     };
     const seenLegacyActionIds = new Set<GroundHumanoidActionIdV1>();
+    const clipsByActionId = new Map<string, Omit<ValidatedPresentationAnimationV1, "presentationKey">>();
     for (const binding of this.options.animationSet.animationBindings) {
       if (
         !Number.isFinite(binding.playbackSpeedRatio) ||
@@ -455,6 +462,7 @@ export class SubjectAnimationPlayer {
         binding.playbackSpeedRatio,
         blendDurationTicks,
       );
+      clipsByActionId.set(binding.actionId, clip);
       for (const key of binding.automaticPresentationKeys) {
         if (!AUTOMATIC_PRESENTATION_KEYS.has(key)) incompatible();
         const expectedFamily = GROUND_AUTOMATIC_PRESENTATION_KEYS.has(key)
@@ -478,6 +486,15 @@ export class SubjectAnimationPlayer {
       ));
     }
     if (!result.has("locomotion.idle")) incompatible();
+    if (this.options.presentationPolicy?.kind === "fixed-action") {
+      const clip = clipsByActionId.get(this.options.presentationPolicy.actionId);
+      if (clip === undefined) return incompatible();
+      // Replace only gait visuals. Semantic gameplay Action bindings retain priority.
+      // All gait keys share a group, so changing gait does not restart fixed playback.
+      for (const key of AUTOMATIC_PRESENTATION_KEYS) {
+        result.set(key, { presentationKey: key, ...clip });
+      }
+    }
     return Object.freeze({
       byPresentationKey: result,
       ownedGroups: Object.freeze([...ownedGroups]),

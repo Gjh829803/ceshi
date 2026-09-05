@@ -14,6 +14,7 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 
 import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
+import { BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1 } from "./block-ground-boundary";
 import { enableHavokPhysics } from "./physics";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 
@@ -142,6 +143,58 @@ describe("BabylonHavokCameraGeometryQueryV2", () => {
       expect(hit?.hitPointMetersXYZ.every(Number.isFinite)).toBe(true);
     } finally {
       query.dispose();
+      wallAggregate.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("ignores derived ground-only boundaries but still hits real camera-hard geometry", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
+    const groundBoundary = MeshBuilder.CreateBox("derived-ground-boundary", {
+      width: 4,
+      height: 4,
+      depth: 0.1,
+    }, scene);
+    groundBoundary.position.z = 2;
+    const groundBoundaryAggregate = new PhysicsAggregate(
+      groundBoundary,
+      PhysicsShapeType.BOX,
+      { mass: 0 },
+      scene,
+    );
+    groundBoundaryAggregate.shape.filterMembershipMask =
+      BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1;
+    groundBoundaryAggregate.shape.filterCollideMask = 0xffffffff;
+    const wall = MeshBuilder.CreateBox("real-wall", {
+      width: 4,
+      height: 4,
+      depth: 0.1,
+    }, scene);
+    wall.position.z = 5;
+    wall.metadata = { worldkitEntityId: "real-wall" };
+    const wallAggregate = new PhysicsAggregate(
+      wall,
+      PhysicsShapeType.BOX,
+      { mass: 0 },
+      scene,
+    );
+    const query = new BabylonHavokCameraGeometryQueryV2(scene, plugin);
+
+    try {
+      const hit = query.query(request({ radiusMeters: 0.2 }));
+
+      expect(hit).toMatchObject({
+        hitEntityId: "real-wall",
+        startedOverlapping: false,
+      });
+      expect(hit!.travelDistanceMeters).toBeGreaterThan(2);
+      expect(hit!.travelDistanceMeters).toBeLessThan(5);
+    } finally {
+      query.dispose();
+      groundBoundaryAggregate.dispose();
       wallAggregate.dispose();
       scene.dispose();
       engine.dispose();

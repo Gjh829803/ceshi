@@ -2837,15 +2837,23 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
       packId === "animal.quadruped.forward-steer.v1"));
     assert.ok(!payload.presets.some(({ ref }) =>
       ref === "worldkit://subject-definition/humanoid.third-person@1"));
+    const human = payload.presets.find(({ packId }) => packId === "humanoid.g-bot");
+    assert.equal(human.visualKind, "rigged-model");
+    assert.ok(human.presentation.actions.some(({ actionId }) => actionId === "sit.idle"));
+    assert.ok(!human.recommendedMotionPackIds.includes("vehicle.stk-kart.arcade"));
+    const kart = payload.presets.find(({ packId }) => packId === "kart-control-lab.stk-kart");
+    assert.equal(kart.recommendedSetup.motion.motionPackId, "vehicle.stk-kart.arcade");
+    assert.equal(kart.recommendedSetup.camera.cameraPackId, "third-person.kart-chase");
     assert.deepEqual(
       payload.motionPacks.map(({ id }) => id),
       [
         "flight.powered-standard",
         "ground.character-standard",
         "ground.root-standard",
+        "vehicle.stk-kart.arcade",
       ],
     );
-    assert.equal(payload.cameraPacks.length, 4);
+    assert.equal(payload.cameraPacks.length, 5);
     assert.deepEqual(
       payload.surfacePacks.map(({ id, whiteboxColorHex }) => ({
         id,

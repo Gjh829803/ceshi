@@ -283,7 +283,11 @@ describe("Block World Babylon integration", () => {
     }
   }, 30_000);
 
-  it("keeps fixed presentation independent from ground movement on a rigged base", async () => {
+  it.each([
+    { presentation: { kind: "fixed-locomotion", presentationKey: "locomotion.idle" }, expectedAction: "idle" },
+    { presentation: { kind: "fixed-action", actionId: "sit.idle" }, expectedAction: "sit.idle" },
+    { presentation: { kind: "fixed-action", actionId: "fly" }, expectedAction: "fly" },
+  ] as const)("keeps fixed $expectedAction presentation independent from ground movement on a rigged base", async ({ presentation, expectedAction }) => {
     const compiled = compileBlockWorldV2({
       manifest: createBlockWorldManifestV2(
         Array.from({ length: 81 }, (_, index) => ({
@@ -307,10 +311,7 @@ describe("Block World Babylon integration", () => {
           },
           attachments: [],
           motion: { motionPackId: "ground.character-standard" },
-          presentation: {
-            kind: "fixed-locomotion",
-            presentationKey: "locomotion.idle",
-          },
+          presentation,
         },
       },
       subjectMeshParts: [],
@@ -362,6 +363,7 @@ describe("Block World Babylon integration", () => {
     });
     try {
       await bindRuntimeTestPossession(runtime, "fixed-rider");
+      expect(runtime.snapshot().subjectStatesByEntityId["fixed-rider"]!.activeActionId).toBe(expectedAction);
       const advanced = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 45,
@@ -369,7 +371,7 @@ describe("Block World Babylon integration", () => {
       const subject = advanced.subjectStatesByEntityId["fixed-rider"]!;
       expect(Math.hypot(subject.positionMetersXYZ[0], subject.positionMetersXYZ[2]))
         .toBeGreaterThan(1);
-      expect(subject.activeActionId).toBe("idle");
+      expect(subject.activeActionId).toBe(expectedAction);
       expect(advanced.camera.activeCameraModifierRefs).toContain(
         "worldkit://camera-modifier/aim-framing@1",
       );
@@ -378,6 +380,11 @@ describe("Block World Babylon integration", () => {
       expect(effectiveCameraArmLength(advanced.camera)).toBeLessThanOrEqual(
         advanced.camera.safeArmLengthMeters! + 0.000001,
       );
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "fixed-rider");
+      expect(runtime.snapshot().subjectStatesByEntityId["fixed-rider"]!.activeActionId).toBe(expectedAction);
+      const replay = await runtime.runFixedInput({ actions: ["move-forward"], ticks: 45 });
+      expect(replay.subjectStatesByEntityId["fixed-rider"]!.positionMetersXYZ).toEqual(subject.positionMetersXYZ);
     } finally {
       await runtime.dispose();
     }

@@ -30,6 +30,8 @@
     "generate:agent-self-check": "node scripts/agents/build-agent-self-check.mjs",
     "check:agent-self-check": "tsx scripts/agents/check-agent-self-check.ts",
     "agent:world": "LC_ALL=C LANG=C bash scripts/agents/run-spatial-world-agent.sh",
+    "agent:world:whitebox": "LC_ALL=C LANG=C bash scripts/agents/run-spatial-world-agent.sh --whitebox-only",
+    "agent:world:preview": "tsx scripts/agents/agent-runtime-preview.ts",
     "agent:world:plan": "LC_ALL=C LANG=C bash scripts/agents/run-spatial-world-agent.sh --plan-only",
     "agent:world:build": "LC_ALL=C LANG=C bash scripts/agents/run-spatial-world-agent.sh --build-only",
     "agent:world:resume-host": "LC_ALL=C LANG=C bash scripts/agents/run-spatial-world-agent.sh --resume-host-only",

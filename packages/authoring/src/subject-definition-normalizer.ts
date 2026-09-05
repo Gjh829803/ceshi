@@ -1016,6 +1016,18 @@ export function normalizeSubjectDefinitionV2(
   const presentationPolicy = structuredClone(
     definition.presentationPolicy ?? { kind: "automatic" as const },
   );
+  if (presentationPolicy.kind === "fixed-action" &&
+      (definition.visualBinding.mode !== "rigged" ||
+        !visualResources?.animationSetResource?.animationBindings.some(
+          ({ actionId }) => actionId === presentationPolicy.actionId))) {
+    addError(
+      diagnostics,
+      "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/presentationPolicy/actionId`,
+      `Fixed action '${presentationPolicy.actionId}' is not published by this rigged Subject.`,
+      { actionId: presentationPolicy.actionId },
+    );
+  }
   if (presentationPolicy.kind === "fixed-locomotion" &&
       definition.visualBinding.mode === "rigged" &&
       visualResources?.animationSetResource !== undefined &&

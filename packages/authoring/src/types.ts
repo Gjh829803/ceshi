@@ -8,6 +8,7 @@ import type {
   HumanoidAnimationSemanticFamilyV1,
   SubjectBodyTopologyV2,
   SubjectResourceKindV1,
+  SubjectPresentationPolicyV1,
 } from "@whitebox-world/subject-contracts";
 import type {
   CameraContextProfileV1,
@@ -287,12 +288,7 @@ export interface PackageSubjectDefinitionV1 {
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
-  presentationPolicy?:
-    | Readonly<{ kind: "automatic" }>
-    | Readonly<{
-        kind: "fixed-locomotion";
-        presentationKey: AutomaticLocomotionPresentationKeyV1;
-      }>;
+  presentationPolicy?: SubjectPresentationPolicyV1;
   allowedOverridePaths: readonly string[];
   aiMetadata: {
     displayName: string;
@@ -523,12 +519,7 @@ export interface NormalizedSubjectDefinitionV2 {
   sockets: readonly NormalizedSubjectSocketV2[];
   mountSlots: readonly SubjectMountSlotDefinitionV1[];
   colliderPolicy: SubjectColliderPolicyV2;
-  presentationPolicy?:
-    | Readonly<{ kind: "automatic" }>
-    | Readonly<{
-        kind: "fixed-locomotion";
-        presentationKey: AutomaticLocomotionPresentationKeyV1;
-      }>;
+  presentationPolicy?: SubjectPresentationPolicyV1;
   capabilityRefs: readonly string[];
   locomotionCapabilityRef: string;
   locomotionCapabilityHash: string;

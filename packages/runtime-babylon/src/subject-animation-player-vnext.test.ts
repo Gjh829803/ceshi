@@ -177,6 +177,68 @@ const emptyRegistry = createActionPresentationRegistryV1({
 });
 
 describe("SubjectAnimationPlayer committed presentation", () => {
+  it.each([
+    ["sit.idle", "repeat", 0.5],
+    ["emote.salute", "once", 1],
+  ] as const)("keeps fixed %s playback independent of gait, reset and other instances", (actionId, loopMode, expectedTime) => {
+    const { engine, scene, root } = sceneFixture();
+    const groups = ["Idle", "Walk", "Run", "Jump", "Fixed"].map((name) => clipGroup(scene, name));
+    const fixedSet: RuntimeAnimationSetV1 = {
+      ...animationSet,
+      animationBindings: [...animationSet.animationBindings, {
+        actionId, sourceClipName: "Fixed", loopMode,
+        semanticFamily: "posture", automaticPresentationKeys: [],
+        playbackSpeedRatio: 1, blendDurationSeconds: 0, rootMotionMode: "in-place",
+      }],
+    };
+    const player = new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: fixedSet,
+      presentationPolicy: { kind: "fixed-action", actionId },
+      actionPresentationRegistry: emptyRegistry,
+      authorityTransformNode: root,
+      ownedVisualAnimationTargets: ownedTargets(groups),
+      subjectAssetRef: animationSet.subjectAssetRef,
+      artifactContentHash: `sha256:${"a".repeat(64)}`,
+    });
+    const otherGroups = ["Idle", "Walk", "Run", "Jump"].map((name) => clipGroup(scene, name));
+    const other = new SubjectAnimationPlayer({
+      animationGroups: otherGroups,
+      animationSet,
+      actionPresentationRegistry: emptyRegistry,
+      authorityTransformNode: new TransformNode("other-authority", scene),
+      ownedVisualAnimationTargets: ownedTargets(otherGroups),
+      subjectAssetRef: animationSet.subjectAssetRef,
+      artifactContentHash: `sha256:${"a".repeat(64)}`,
+    });
+    const authorityBefore = authorityPoseBytes(root);
+    try {
+      expect(player.activeActionId).toBe(actionId);
+      expect(player.debugTelemetry()).toMatchObject({ sourceClipName: "Fixed", normalizedTime: 0 });
+      for (let tick = 1; tick <= 90; tick++) {
+        const state = locomotion(tick, { gait: tick < 30 ? "walk" : "run" });
+        const presentation = resolveActionPresentationV1(committed(tick, state), emptyRegistry);
+        player.step(presentation);
+        player.applyPose();
+        other.step(presentation);
+        other.applyPose();
+      }
+      expect(player.activeActionId).toBe(actionId);
+      expect(player.debugTelemetry().normalizedTime).toBeCloseTo(expectedTime);
+      expect(other.activeActionId).toBe("run");
+      expect(authorityPoseBytes(root)).toEqual(authorityBefore);
+      player.reset();
+      expect(player.activeActionId).toBe(actionId);
+      expect(player.debugTelemetry()).toMatchObject({ sourceClipName: "Fixed", normalizedTime: 0 });
+      expect(other.activeActionId).toBe("run");
+    } finally {
+      player.dispose();
+      other.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("selects a Clip only from committed gait/verticalPhase, not contradictory velocity", () => {
     const { engine, scene, root } = sceneFixture();
     const groups = ["Idle", "Walk", "Run", "Jump"].map((name) => clipGroup(scene, name));
@@ -469,7 +531,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
     engine.dispose();
   });
 
-  it("uses a hash-locked semantic Action binding and exposes Clip state as debug telemetry only", () => {
+  it.each([false, true])("uses a hash-locked semantic Action binding even with fixed playback=%s", (fixedPlayback) => {
     const body = {
       kind: "action-presentation-binding",
       schemaVersion: 1,
@@ -499,6 +561,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
       animationGroups: groups,
       animationSet,
       actionPresentationRegistry: registry,
+      ...(fixedPlayback ? { presentationPolicy: { kind: "fixed-action" as const, actionId: "run" } } : {}),
       authorityTransformNode: root,
       ownedVisualAnimationTargets: ownedTargets(groups),
       subjectAssetRef: animationSet.subjectAssetRef,

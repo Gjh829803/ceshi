@@ -308,6 +308,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/lib/modular-subject-runtime-bundle.test.ts", lane: "contract" },
   { path: "scripts/lib/modular-subject-source.test.ts", lane: "contract" },
   { path: "scripts/lib/plan-lock.test.ts", lane: "contract" },
+  { path: "scripts/lib/playthrough-runtime-repair.test.ts", lane: "contract" },
   { path: "scripts/lib/playwright-browser-launch.test.ts", lane: "contract" },
   { path: "scripts/lib/playwright-canvas-screenshot.test.ts", lane: "contract" },
   { path: "scripts/lib/product-asset-evidence.test.ts", lane: "contract" },

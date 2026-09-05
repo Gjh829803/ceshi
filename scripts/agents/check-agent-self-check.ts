@@ -27,6 +27,10 @@ if (arguments_.length === 0) {
 }
 const targets = [
   {
+    bundleId: "subject-setup",
+    relativePath: "worldkit-block-builder/scripts/subject-setup.mjs",
+  },
+  {
     bundleId: "planner",
     relativePath: "worldkit-spatial-planner/scripts/self-check.mjs",
   },

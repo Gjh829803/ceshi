@@ -22,6 +22,24 @@ afterEach(async () => {
 });
 
 describe("worldkit rigged Subject tri-view capture", () => {
+  it("keeps unvalidated Agent previews outside trusted evidence production", async () => {
+    const result = await captureFile(
+      "unused-preview-authoring.json",
+      "unused-preview.png",
+      {
+        allowUnvalidatedPreview: true,
+        receiptPath: "forbidden-preview-receipt.json",
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: "CLI_UNVALIDATED_PREVIEW_EVIDENCE_FORBIDDEN",
+      }],
+    });
+  });
+
   it("applies authored Builder camera tuning to the real Runtime opening capture", async () => {
     const temporaryDirectory = await mkdtemp(
       path.join(tmpdir(), "worldkit-opening-camera-capture-"),
