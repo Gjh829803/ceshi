@@ -1363,6 +1363,34 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
 
 ##### 可独立推进的工程承接项
 
+**2026-09-05 合并后当前检查点（取代下文历史“未合并 / 21 项”总数，不改写历史证据）：**
+
+- PR #202 已按用户明确授权以管理员方式合并，main 为 `f35a56b2`；合并时 CI 与必需批准
+  未完成，不记作通过。用户明确 CI 后续自行处理，不能将这次绕过授权推广为后续默认策略。
+- 最新真实 Case `paper-moon-054-cf19-feedback-0905` 普通生产 passed/published、cleanup
+  completed；Evaluation/strict diagnostic failed 事实保留。真实证据属于生产实现 `e271a35c`，
+  后续测试清单/文档提交不冒充新完整 Case。不得据合并或普通生产成功关闭全部 CF。
+- 仍有实质实现工作：CF-01/03/04/05/06/07/11/12/13/14/15/16/17/20/21，另有 CF-29
+  Builder 进度可见性补充缺口。CF-03 为条件复现；CF-11/20/21 有预算/提示词切片，未关闭父任务。
+  CF-15 的旧 gate 表述须服从后续普通成功标准，不得把新增质量诊断直接升级为普通阻断。
+- CF-02/08/09/10/18/19/22/23/24/25/26/27/28/30/31/32 已有实现或明确切片；其中真实媒体、
+  WebP、严格 Corpus、CF-19/24 效果对照、CF-26B 实云与 CF-31C 故障矩阵仍按各任务分别验收。
+  CF-02/26B/31C/24/27 不再按早期表述当作完全未实现。不得累加重复 focused 数字或用单 Case
+  证明旧等价失败率。下方任务合同和逐次证据继续保留，旧候选状态必须结合此检查点阅读。
+- 后续优先级按用户确认：CF-12 开场主体/Camera → CF-11/21 完整地理与要素 → CF-20 完整
+  预算合同 → CF-14 量测一致性 → CF-16 最终视觉；其余 CF 仍属完整目标，不以有界切片代替完成。
+  main-agent-only；复用原 `block-world-effect-alignment` 目录，在最新 main 建立
+  `codex/cf-production-effect-closure`，不增加重复 worktree。
+- 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
+  worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
+  nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
+  移入 `/Users/xiateng/.Trash/worldkit-worktree-cleanup-20260905-NdyJko`，可恢复，未清空废纸篓。
+  工作区只保留上述最新生成 Case；Git 跟踪的测试 Case/fixtures 不删。最新 opening、Capture
+  receipt、Package integrity、Run receipt SHA256 清理前后相同；其余 worktree tracked diff 未变。
+  未合入分支、主 checkout、当前 Case worktree、close-prior-design-findings、nbr90-docs 的
+  四份未提交文档均保留。缺失的旧 provider-debug worktree 登记已 prune，原 `3dd926cb`
+  另存 `codex/archive-nbr-provider-debug-20260902`，没有迁移该旧调试实现。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
