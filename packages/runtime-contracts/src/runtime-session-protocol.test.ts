@@ -400,6 +400,7 @@ describe("Runtime Session V1 public DTOs", () => {
           targetEntityId: "player",
           positionMetersXYZ: [0, 4, 5],
           activeCameraProfileRef: cameraRigProfileRef,
+          authoredOpeningProfileRef: cameraRigProfileRef,
           activeCameraRigRef: "worldkit://camera-rig/orbit-follow@1",
           activeCameraModifierRefs: [],
           safeFallbackActive: true,
@@ -437,6 +438,12 @@ describe("Runtime Session V1 public DTOs", () => {
     expect(parseWorldRuntimeSnapshotV4(trackingSnapshot)).toEqual(
       trackingSnapshot,
     );
+    expect(() => parseWorldRuntimeSnapshotV4({
+      ...trackingSnapshot,
+      view: { ...trackingSnapshot.view, camera: {
+        ...trackingSnapshot.view.camera, authoredOpeningProfileRef: "",
+      } },
+    })).toThrow();
   });
 
   it("parses succeeded and rejected Receipts and verifies the derived id", () => {

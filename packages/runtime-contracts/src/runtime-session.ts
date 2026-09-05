@@ -284,6 +284,7 @@ export type WorldRuntimeCameraStateV4 =
       targetEntityId: string;
       positionMetersXYZ: RuntimeVec3V1;
       activeCameraProfileRef: string;
+      authoredOpeningProfileRef?: string;
       activeCameraRigRef: string;
       activeCameraModifierRefs: readonly string[];
       safeFallbackActive: boolean;

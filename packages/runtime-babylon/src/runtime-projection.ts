@@ -97,6 +97,7 @@ export interface BabylonRuntimeCameraProjectionV1 {
   readonly targetEntityId?: string;
   readonly positionMetersXYZ: RuntimeVec3V1;
   readonly activeCameraProfileRef: string;
+  readonly authoredOpeningProfileRef?: string;
   readonly activeCameraRigRef: string;
   readonly activeCameraModifierRefs: readonly string[];
   readonly safeFallbackActive: boolean;

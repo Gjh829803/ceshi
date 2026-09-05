@@ -632,6 +632,7 @@ function validateRuntimeCameraStateV4(
   ] as const;
   const optional = [
     "selectionDecision",
+    "authoredOpeningProfileRef",
     "selectedTargetSocketId",
     "targetSocketPositionMetersXYZ",
     "isTargetSocketFallback",
@@ -676,7 +677,7 @@ function validateRuntimeCameraStateV4(
     !isFiniteNumber(record.fixedStepDeltaSeconds) ||
     record.fixedStepDeltaSeconds <= 0
   ) return invalid(schemaName);
-  const optionalStrings = ["selectedTargetSocketId", "collisionHitEntityId"];
+  const optionalStrings = ["selectedTargetSocketId", "collisionHitEntityId", "authoredOpeningProfileRef"];
   const optionalBooleans = [
     "isTargetSocketFallback",
     "isCollisionRetracted",

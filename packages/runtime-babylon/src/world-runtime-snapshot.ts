@@ -101,6 +101,9 @@ function cameraProjection(
     positionMetersXYZ: Object.freeze([...camera.positionMetersXYZ]) as
       readonly [number, number, number],
     activeCameraProfileRef: camera.activeCameraProfileRef,
+    ...(camera.authoredOpeningProfileRef === undefined ? {} : {
+      authoredOpeningProfileRef: camera.authoredOpeningProfileRef,
+    }),
     activeCameraRigRef: camera.activeCameraRigRef,
     activeCameraModifierRefs: Object.freeze([
       ...camera.activeCameraModifierRefs,

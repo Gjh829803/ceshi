@@ -1381,6 +1381,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   预算合同 → CF-14 量测一致性 → CF-16 最终视觉；其余 CF 仍属完整目标，不以有界切片代替完成。
   main-agent-only；复用原 `block-world-effect-alignment` 目录，在最新 main 建立
   `codex/cf-production-effect-closure`，不增加重复 worktree。
+- CF-04/12 当前实现切片（2026-09-05）：已复现并修复 Runtime Director 忽略 Bootstrap
+  四项开场调参的问题。非默认输入 `5.5m / 1.1m / 0.12rad / 56°` 原先被 Profile 的
+  `5m / 1.25m / 0.22rad / 58°` 覆盖；现在按冻结旧链 `9e35ab53` 的
+  Profile → authored opening → Context Modifiers → explicit Preview 顺序消费。
+  首次选中的第三人称 Profile 绑定纳入 transaction/公开 view Snapshot，Reset 清除、失败回滚，
+  不新增质量门禁。Camera/Session protocol focused 44/44、typecheck、3C migration 通过；
+  后补首帧 query 失败及构造 Profile hint 不同的两项针对性回归通过，Snapshot 发布边界
+  5/5 通过，最终 typecheck/diff check 通过（重复用例不累计）。尚未完成 Host 目标驱动
+  参数选择、socket/真实像素对齐、多模式 Subject 与完整 CF-04/12，不冒充新的真实 Case 证据。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

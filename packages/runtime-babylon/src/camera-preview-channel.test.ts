@@ -391,6 +391,106 @@ function expectTargetAndFovRemainTransitioning(
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
+  it("projects all four authored opening values onto the selected Profile before modifiers and Preview", () => {
+    const plan = compileRuntimeTestScenePlanV1(createFlatTerrainCapabilitySpec(), {
+      subjectResourceRegistry: builtInSubjectResourceRegistry,
+    });
+    const subject = runtimeSubject(plan);
+    const context = structuredClone(subject.capabilityAssembly.cameraContext);
+    const authored = {
+      ...initialCamera(plan),
+      cameraRigProfileRef: FOLLOW_REF,
+      distanceMeters: 5.5,
+      targetHeightMeters: 1.1,
+      pitchRadians: 0.12,
+      fovDegrees: 56,
+    };
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.authored-opening", Vector3.Zero(), scene);
+    let failQuery = true;
+    const director = new CameraDirectorV1(authored, camera, scene, cameraGeometryQuery(() => {
+      if (failQuery) throw new Error("test query unavailable");
+      return undefined;
+    }));
+    const arm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId, entityId: subject.entityId,
+      targetPositionMetersXYZ: [3, 2, -7], forwardXYZ: [0, 0, -1], upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0], approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {}, movementMedium: "ground",
+      relationshipContexts: [], cameraContextTags: [],
+    };
+    let tick = 0;
+    const update = () => director.update(context, sample, 1 / 60,
+      committedCameraContextFromViewTargetV2(sample, ++tick, "idle", 0), arm);
+    try {
+      expect(() => update()).toThrow();
+      expect(director.snapshot().authoredOpeningProfileRef).toBeUndefined();
+      expect(director.captureTransactionState().values.authoredOpeningProfileRef).toBeUndefined();
+      expect(camera.position.asArray()).toEqual([0, 0, 0]);
+      failQuery = false;
+      update();
+      const opening = director.snapshot();
+      const openingRef = opening.activeCameraProfileRef;
+      expect(openingRef).not.toBe(authored.cameraRigProfileRef);
+      expect(opening.resolvedParameters).toMatchObject({
+        distanceMeters: 5.5, targetHeightMeters: 1.1, pitchRadians: 0.12, baseFovDegrees: 56,
+      });
+      expect(camera.fov).toBeCloseTo(56 * Math.PI / 180, 8);
+      expect(opening.desiredTargetPositionMetersXYZ).toEqual([3, 3.1, -7]);
+      expect(opening.desiredPositionMetersXYZ![0]).toBeCloseTo(3, 8);
+      expect(opening.desiredPositionMetersXYZ![1]).toBeCloseTo(3.1 + 5.5 * Math.sin(0.12), 8);
+      expect(opening.desiredPositionMetersXYZ![2]).toBeCloseTo(-7 + 5.5 * Math.cos(0.12), 8);
+      expect(opening.authoredOpeningProfileRef).toBe(openingRef);
+      expect(director.previewState().tuningByProfileRef).toEqual({});
+      const beforeSwitch = director.captureTransactionState();
+      const beforeSwitchArm = arm.captureTransactionState();
+      const otherProfileRef = openingRef === FOLLOW_REF ? ORBIT_REF : FOLLOW_REF;
+      const otherProfile = context.cameraRigProfiles.find((profile) => profile.resourceRef === otherProfileRef)!;
+      expect(director.setViewPreference(context, {
+        mode: "camera-rig-profile", cameraRigProfileRef: otherProfileRef,
+      }).ok).toBe(true);
+      update();
+      expect(director.snapshot().activeCameraProfileRef).toBe(otherProfileRef);
+      expect(director.snapshot().resolvedParameters).toEqual(otherProfile.parameters);
+      expect(director.snapshot().authoredOpeningProfileRef).toBe(openingRef);
+      director.restoreTransactionState(beforeSwitch);
+      arm.restoreTransactionState(beforeSwitchArm);
+      update();
+      expect(director.snapshot().resolvedParameters).toEqual(opening.resolvedParameters);
+
+      const modifier = {
+        ...context.cameraModifierProfiles[0]!,
+        resourceRef: "worldkit://camera-modifier/authored-opening-test@1",
+        parameterOverrides: { distanceMeters: 7 },
+      };
+      context.cameraModifierProfiles = [...context.cameraModifierProfiles, modifier];
+      context.rules = [...context.rules, {
+        id: "authored-opening-test", priority: 3000, when: {}, cameraModifierRefs: [modifier.resourceRef],
+      }];
+      update();
+      expect(director.snapshot().resolvedParameters?.distanceMeters).toBe(7);
+      expect(director.snapshot().resolvedParameters?.baseFovDegrees).toBe(56);
+      expect(director.applyPreview({ [openingRef]: { distanceMeters: 6 } }, context)).toBe(true);
+      update();
+      expect(director.snapshot().resolvedParameters?.distanceMeters).toBe(6);
+      director.resetViewPreference();
+      update();
+      expect(director.snapshot().resolvedParameters?.distanceMeters).toBe(7);
+
+      context.rules = context.rules.filter((rule) => rule.id !== "authored-opening-test");
+      director.reset();
+      arm.reset();
+      update();
+      expect(director.snapshot().resolvedParameters).toEqual(opening.resolvedParameters);
+      expect(director.snapshot().desiredPositionMetersXYZ).toEqual(opening.desiredPositionMetersXYZ);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
   it("rejects an invalid final Rig and Modifier composition before mutating Camera state", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       invalidCombinedCameraModifiers: true,
@@ -399,6 +499,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       setCameraProfile(runtime, ORBIT_REF);
       const before = runtime.snapshot().camera;
+      expect(before.authoredOpeningProfileRef).toBe(before.activeCameraProfileRef);
 
       await expect(runtime.runFixedInput({
         actions: ["move-forward", "run"],

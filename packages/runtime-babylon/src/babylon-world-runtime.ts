@@ -3389,6 +3389,9 @@ export class BabylonWorldRuntime {
           ...publishedCameraProjection.positionMetersXYZ,
         ]),
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
+        ...(cameraDirectorSnapshot.authoredOpeningProfileRef === undefined ? {} : {
+          authoredOpeningProfileRef: cameraDirectorSnapshot.authoredOpeningProfileRef,
+        }),
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
         activeCameraModifierRefs: cameraDirectorSnapshot.activeCameraModifierRefs,
         safeFallbackActive: cameraDirectorSnapshot.fallbackActive,

@@ -41,6 +41,7 @@ import { SpringArmComponentV1 } from "./spring-arm-component";
 
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
+  authoredOpeningProfileRef?: string;
   activeCameraRigRef: string;
   activeCameraModifierRefs: readonly string[];
   fallbackActive: boolean;
@@ -83,6 +84,7 @@ export interface CameraDirectorTransactionStateV1 {
     initialized: boolean;
     cameraViewPreference: CameraViewPreferenceV1;
     activeProfileRef: string;
+    authoredOpeningProfileRef: string | undefined;
     activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
     activeReverseHeadingPolicy:
       | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
@@ -474,6 +476,7 @@ export class CameraDirectorV1 {
   private initialized = false;
   private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
+  private authoredOpeningProfileRef: string | undefined;
   private activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
   private activeReverseHeadingPolicy:
     | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
@@ -561,6 +564,7 @@ export class CameraDirectorV1 {
         initialized: this.initialized,
         cameraViewPreference: this.cameraViewPreference,
         activeProfileRef: this.activeProfileRef,
+        authoredOpeningProfileRef: this.authoredOpeningProfileRef,
         activeHeadingSource: this.activeHeadingSource,
         activeReverseHeadingPolicy: this.activeReverseHeadingPolicy,
         activeRigRef: this.activeRigRef,
@@ -882,10 +886,45 @@ export class CameraDirectorV1 {
       baseProfile,
     );
     const lockedParameters = profile.parameters;
+    // The first selected third-person Profile owns the authored opening, just
+    // as in the frozen Block baseline. Do not spread these values to every
+    // subsequent Context/Profile, or put authored data in the Preview channel.
+    if (this.authoredOpeningProfileRef === undefined &&
+      !profile.algorithmRef.endsWith("/socket-first-person@1")) {
+      this.authoredOpeningProfileRef = profile.resourceRef;
+    }
+    const openingTuning = this.authoredOpeningProfileRef === profile.resourceRef
+      ? {
+          distanceMeters: this.initialCamera.distanceMeters,
+          targetHeightMeters: this.initialCamera.targetHeightMeters,
+          pitchRadians: this.initialCamera.pitchRadians,
+          baseFovDegrees: this.initialCamera.fovDegrees,
+        }
+      : {};
+    const openingValidation = validateCameraTuningV1(
+      { algorithmRef: baseProfile.algorithmRef, parameters: baseProfile.parameters },
+      openingTuning,
+    );
+    if (!openingValidation.ok) {
+      throw new Error(
+        "WORLDKIT_RUNTIME_CAMERA_OPENING_TUNING_INVALID: " + openingValidation.message,
+      );
+    }
+    const authoredBaseParameters = applyCameraRigParameterOverridesV1(
+      baseProfile.algorithmRef, baseProfile.parameters, openingValidation.tuning,
+    );
+    // Preserve the old precedence: Profile < opening < Context modifiers <
+    // explicit Preview. Locked movement heading remains independent of Preview.
+    const authoredParameters = selected.modifiers.reduce(
+      (current, modifier) => applyCameraRigParameterOverridesV1(
+        baseProfile.algorithmRef, current, modifier.parameterOverrides,
+      ),
+      authoredBaseParameters,
+    );
     const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
     const parameters = applyCameraRigParameterOverridesV1(
       profile.algorithmRef,
-      lockedParameters,
+      authoredParameters,
       tuning,
     );
     if (
@@ -1283,6 +1322,7 @@ export class CameraDirectorV1 {
   reset(): void {
     this.assertUsable();
     this.initialized = false;
+    this.authoredOpeningProfileRef = undefined;
     this.cameraViewPreference = Object.freeze({ mode: "auto" });
     this.activeHeadingSource = undefined;
     this.activeReverseHeadingPolicy = undefined;
@@ -1337,6 +1377,9 @@ export class CameraDirectorV1 {
     // Read-only evidence remains available after dispose for audit/teardown.
     return Object.freeze({
       activeCameraProfileRef: this.activeProfileRef,
+      ...(this.authoredOpeningProfileRef === undefined ? {} : {
+        authoredOpeningProfileRef: this.authoredOpeningProfileRef,
+      }),
       activeCameraRigRef: this.activeRigRef,
       activeCameraModifierRefs: Object.freeze([...this.activeModifierRefs]),
       fallbackActive: this.fallbackActive,

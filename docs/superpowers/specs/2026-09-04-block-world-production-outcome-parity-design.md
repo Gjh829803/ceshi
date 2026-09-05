@@ -356,3 +356,25 @@ observations, not Host execution failures. Malformed identity/camera/hash linkag
 new semantic quality diagnostics remain report-only in ordinary production and never allocate repair
 tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
 obligations, not implied by this structural evidence.
+
+### CF-04/12 authored opening Camera consumption
+
+The Host-frozen Runtime Bootstrap's four opening values (`distanceMeters`,
+`targetHeightMeters`, `pitchRadians`, and `fovDegrees`) must reach the actual
+Camera Director, not just the Native Bootstrap and Builder software review.
+As in `9e35ab53`, the first selected non-first-person Profile receives that
+authored baseline. The constructor's Profile hint does not override Camera
+Context selection. Resolution order is Profile parameters, authored opening,
+Context Modifiers, then explicit Preview tuning. A different selected Profile
+keeps its own parameters; returning to the opening Profile restores its authored
+baseline. Existing socket targeting and locked control-heading behavior remain
+unchanged. Validation uses the existing Profile-safe tuning ranges, not a new
+image-quality threshold or production gate.
+
+The Director owns the opening Profile binding. Its `authoredOpeningProfileRef`
+is included in the Camera transaction and published view Snapshot (absent before
+a successful third-person bind), restored on abort/rollback, and cleared by
+Runtime Reset. The four values remain in the hashed Bootstrap; authored tuning
+is never copied into the mutable Preview override map. This consumption repair
+does not itself select target-driven tuning, provide multi-mode Subjects, prove
+pixel parity, or close CF-04/12.
