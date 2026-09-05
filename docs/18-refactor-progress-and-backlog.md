@@ -1365,6 +1365,9 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
 
 **2026-09-05 合并后当前检查点（取代下文历史“未合并 / 21 项”总数，不改写历史证据）：**
 
+- **2026-09-06 单线程续接补充**：下方 CF-03 条件复现/生产修复未完成、CF-06/07 未集成及
+  CF-16 旧入口未实现的历史描述，由本节末尾新增集成检查点取代。三位原 worker 已交付，
+  用户最新要求不使用子智能体，本轮未启动或补位任何 worker；仍未合入 main。
 - PR #202 已按用户明确授权以管理员方式合并，main 为 `f35a56b2`；合并时 CI 与必需批准
   未完成，不记作通过。用户明确 CI 后续自行处理，不能将这次绕过授权推广为后续默认策略。
 - 最近已通过的真实 Case `paper-moon-054-cf19-feedback-0905` 普通生产 passed/published、cleanup
@@ -1792,6 +1795,13 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   `CF03/SUPPORT-REPRODUCER`（cf-integration-candidate，只做当前 zero-normal 条件复现，
   不改生产 Runtime）。三条状态均为进行中，不计完成；旧分支保留。主进程保留
   CF-16 跨域合同和最终集成，Browser/编码验证串行调度，CF-03 独占 worker Havok lane。
+- 并行交付新增：CF-06 `180e09e4` 四个 UI 文件，定向 12/12；CF-07 `e35f6e81`
+  Recorder 两文件，定向 16/16/严格类型通过；二者尚待主集成及真实 Browser/media 验收。
+  CF-03 `2b9ab6a5` 为**故意 RED 测试提交**：非穿透 86° 静态斜面实际 Havok 首 tick
+  SLIDING+零法线导致 current BodyPort 抛错；0°/5°/50° 起跳落地通过，另有 9 个 fake
+  adversarial RED。主进程已冻结唯一 begin-transaction 修正合同，生产修复尚未完成。
+  空闲 worker 已补位 CF16/FINALIZER-RED、CF13/BLOCKER-CLOSURE-AUDIT 和
+  CF06-CF07/INDEPENDENT-REVIEW；不将测试交付/静态审查当集成通过。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，
@@ -1806,6 +1816,34 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   未合入分支、主 checkout、当前 Case worktree、close-prior-design-findings、nbr90-docs 的
   四份未提交文档均保留。缺失的旧 provider-debug worktree 登记已 prune，原 `3dd926cb`
   另存 `codex/archive-nbr-provider-debug-20260902`，没有迁移该旧调试实现。
+- 单线程集成检查点（2026-09-06，`codex/cf-production-effect-closure`）：
+  - CF-03 将 RED `2b9ab6a5` 以 `31b25df7` 纳入候选，真实 86° 非穿透斜面与 9 项 fake
+    zero-normal 断言在修复前失败。`9d9208be` 仅在既有 BodyPort begin transaction 内按
+    upward departure → native unsupported → native/admitted-contact normal → unsupported
+    解析，同一 resolved 结果进入 sample、integrate 与 committed evidence，不伪造向上法线。
+    完整 BodyPort + real-Havok conformance 两文件 120/120、typecheck、`verify:3c-migration`
+    通过；未据此宣布 NBR-70、整个候选的 full gate 或独立 exact-SHA review 完成。
+  - CF-06 以 `4cc1357c` / `b61e74d0`，CF-07 以 `ad8e1b32` / `5b240005` 集成，包含
+    inspector 键盘事件隔离及 MediaRecorder.stop 同步异常清理。两个直接测试文件合计
+    29/29 通过；真实 Browser 大列表交互与媒体 CPU/frame-drop/resize 编码对照仍待，
+    不把 DOM fake 与 captureStream stub 计作真实效果证据。
+  - CF-16 Host role/target/hash closure 已由 `e4ed6938` / `f12b495b` 集成；`1cc83d98` 恢复 Visual
+    Reconstructor Skill 与单一 TypeScript 入口，删除 direct-parallel Gemini Python 路径及
+    旧专用日志消费者。正式入口只派发一次：同任务先看图接受 opening，再用其确切 PNG
+    生成/检查三视图；Host 两个 finalizer 在全部输出返回后执行，不增加独立 semantic veto。
+    只重做三视图时冻结已接受 opening/prompt，并校验 opening、user reference 及全部
+    whitebox target 的既有 Hash。输入在执行期间变化、任务失败、缺图均不发布新视觉结果；
+    原白模不变。成功/失败都保留冻结请求与路由台账，本地失败另保留 router failure evidence。
+  - CF-16 验证为入口 10/10（含 local/cloud 正式 router 无模型 smoke）、finalizer 26/26、
+    既有 visual-reconstruction 2/2、Studio 入口 2/2；typecheck 通过。Skill 标准 Python checker
+    因环境无 PyYAML 未运行成功，改用既有 Node YAML parser 完成 frontmatter/占位符检查。
+    测试清单新增本轮文件并补齐候选先前遗漏的 8 个 contract 文件；census 通过
+    466 files = 423 contract + 43 resource-heavy，这是清单检查而非运行 466 个测试文件。
+  - 上述 CF-16 仅闭合现有 Canonical 视觉入口的实现与定向证据。Native 仍未接入 declared
+    complete-target 白模三视图和 base styling requested scope；真实任务内图像检查、opening
+    到 tri-view 实际像素引用、纸雕效果及 repair 后其他通过图 Hash 不变仍待真实验收。
+    本轮没有新增模型/付费生成、Browser/media、全仓 CI 或独立审查，不关闭 CF-16/PROD-10
+    父任务。下一步先按 current Native owner 补齐目标证据与下游 scope，不新增 Runtime 真相。
 
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。

@@ -130,6 +130,19 @@ a requested base-style scope. Any new independent base semantic review is a stri
 cannot introduce a new ordinary-production veto. This differs from the per-variant Reviewer in the Episode
 visual-sample scope below, which was present in the old workflow and remains part of that requested scope.
 
+CF16's current prompt bundle retains `kind: worldkit-visual-generation-prompts`
+and only schemaVersion 2, with exact top-level keys kind/schemaVersion/sceneId/
+openingFrame/styledTriviews. Restore the old opening roles
+`[actual-whitebox-opening, user-first-frame]`, tri-view roles
+`[target-whitebox-triview, styled-opening-frame, user-first-frame]`, minimum prompt
+lengths 200/150, and exact Capture target identity/order. Do not retain the old
+schema-1 alternative. The old `provider: lwdp-codex` field is removed from this
+provider-neutral task artifact: actual local/cloud routing belongs only to the
+sole router's TaskReceipt, so a local task never claims LWDP execution. This is
+an architecture adaptation, not removal of role/target checks or a new visual
+quality gate. Producer, Skill and Host consumers activate this clean break together;
+the prompt artifact alone does not prove actual image inspection or anchor use.
+
 ### 3.2 Episode visual-sample scope
 
 The historical equivalents are blocking: reconnaissance, navigation evidence, plan, six whitebox
@@ -616,3 +629,33 @@ source files, two PNGs, shared repair budget and ordinary completion policy.
 This does not provide multi-mode Subjects, prove target-socket/pixel parity, or
 close CF-04/12. Historical Case artifacts retain their original bytes and evidence
 scope; the current-only parser does not add a bridge for older metadata shapes.
+
+### CF-03 finite zero-normal support resolution
+
+The conditional current-engine reproducer is satisfied by Babylon 9.23.0/Havok
+1.3.14: a non-penetrating capsule beside an 86-degree static plane can receive
+SLIDING with a finite zero averaged normal. The installed query assigns support
+mode before averaging only touched constraints whose upward alignment exceeds
+0.08; therefore a finite zero normal is not malformed provider data by itself.
+
+The existing BodyPort begin transaction remains the only resolution owner. Parse
+the closed native observation and finite vectors without inventing a normal. In
+the existing order, upward departure resolves unsupported; a native unsupported
+result is never promoted by contacts. Otherwise use the normalized native normal,
+or, only when it is degenerate, the normalized average of already admitted current
+manifold contacts (the existing upward alignment and support contact band). Without
+such a normal resolve unsupported. Preserve the current supported/sliding mode
+when a normal exists; do not create another slope/state classifier. BodySample,
+native integration input and committed support evidence consume that same resolved
+result. Unsupported integration receives zero normal/velocities and false dynamic
+status, never a fabricated upward vector. Non-finite, malformed, unknown and
+accessor-backed inputs still reject.
+
+No extra checkSupport call, post-contact grounding authority, Block continuity,
+ray/AABB inference, provider retry, diagnostic state machine or public schema is
+introduced. Existing Reset/abort/rollback/publication semantics retain one owner;
+the native raw observation is not a second persisted Gameplay state. This restores
+the old defensible zero-normal behavior under current ownership rather than copying
+the old Block continuity or telemetry paths. Real steep-plane RED, ordinary
+ground/slope jump-land controls, adversarial contact eligibility, integrate/sample
+coherence, Reset/abort and once-per-tick evidence are required before closure.

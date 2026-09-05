@@ -618,9 +618,9 @@ actual consumer map and RED proposals, not an implementation or new status autho
 the next contract freeze and final integration; no worker starts model/Browser/media jobs.
 Restoring the old complete workflow takes priority over adding an independent image scorer.
 
-#### Ready parallel work after CF-14 acceptance
+#### Historical parallel work after CF-14 acceptance
 
-User explicitly requests immediate refill of idle workers. Main retains CF-16 cross-cutting
+At that checkpoint the user explicitly requested immediate refill of idle workers. Main retains CF-16 cross-cutting
 contract/production integration; workers use separate existing worktrees based on `aaae92f6`.
 No worktree deletion or new live status authority. Read the actual current owner before editing.
 
@@ -633,6 +633,46 @@ No worktree deletion or new live status authority. Read the actual current owner
 Workers return exact commit, files, commands/exit codes, remaining evidence and concerns; their
 success is not integration proof. Main reuses unaffected evidence and schedules any Browser or
 media gate one at a time. Shared contract/package changes return to main before implementation.
+
+CF-03's 86-degree real-Havok zero-normal RED now activates `CF03/SUPPORT-RESOLUTION`,
+main-agent-only, dependent on the inspected reproducer commit. Only the existing
+BodyPort raw parser and begin projection/transaction wiring change, under the
+frozen zero-normal resolution section; no new state or protocol owner. Main runs
+the exact RED, directly affected BodyPort/conformance tests, typecheck and
+`verify:3c-migration`; whole-candidate final gates remain a later checkpoint.
+
+CF-07 restores old start-time raster selection: a later source-canvas resize does
+not switch streams, mutate the canvas or add a failure gate. Direct capture does
+not promise fixed encoded raster after such a resize; actual media resize/CPU/frame
+evidence remains separate from its unit implementation. After worker delivery,
+`CF17/RAW-MEDIA-ADMISSION-AUDIT` is a read-only parallel-safe refill: old/current
+raw admission, resampling/padding, finalization and requested-scope failure map,
+without encoder/Browser/provider calls. Its output is the next contract/RED proposal,
+not permission to add arbitrary duration/aspect/freeze/audio thresholds.
+
+#### Single-agent continuation after worker delivery
+
+The 2026-09-06 user direction supersedes the refill instructions above: do not start
+or refill subagents. Continue in the existing `block-world-effect-alignment`
+worktree on `codex/cf-production-effect-closure`. Main integrates the delivered
+CF-03/06/07/16 changes, retaining unrelated case artifacts and prior design edits.
+
+`CF16/SINGLE-TASK-ENTRY` owns only the post-whitebox Skill, launchers and existing
+Host finalizers/Studio consumers. It restores opening-first inspection and exact
+accepted-opening tri-view anchoring in one formal Codex task, with at most one
+image-level regeneration inside that task. Finalizers run only after complete
+delivery. Frozen inputs, request arguments and router ledgers remain available for
+reconciliation; no automatic second visual task or intermediate Host handshake.
+Tri-views-only reruns require the accepted opening/prompt and unchanged reference
+and target image hashes. The prompt artifact does not prove semantic acceptance.
+
+Required local evidence is the injected-dispatch contract suite, the local/cloud
+router smoke without model execution, finalizer regressions, Studio entry tests,
+typecheck and census. Runtime/inspector/recorder evidence follows its own unchanged
+inputs; do not repeat full gates. This is not the final whole-candidate checkpoint.
+Next, main owns Native complete-target capture and requested styling-scope wiring;
+real image self-check/repair and Browser/media acceptance remain separate work.
+The sole live status and evidence record remains `docs/18-refactor-progress-and-backlog.md`.
 
 CF-26B Cloud retries, CF-31C Host-only recovery, full CF-13/NBR strict acceptance, full multi-mode CF-12,
 general per-view CF-14/24 and full feature-scoring CF-21, inspector/performance polish, and Episode/media
