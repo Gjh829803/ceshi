@@ -1,0 +1,2393 @@
+{
+  "concurrency": {
+    "requestedRemainingCaseConcurrency": 4,
+    "observedPeakOverlappingCliLaunchers": 3,
+    "definition": "Overlap of observed launcher start/finish intervals for the remaining four cases, excluding their pre-CLI account-slot waits.",
+    "qualification": "Four case requests were dispatched concurrently; account_concurrency=1 delayed the first palace request. The account-slot correction does not imply four model processes actually overlapped in this run."
+  },
+  "schemaVersion": 1,
+  "kind": "gpt6-five-case-cloud-delivery-summary",
+  "createdAt": "2026-09-05T05:32:05.529Z",
+  "scope": "Cloud execution, real tool evidence, delivery identity and static Host artifact verification only. No visual-quality or complete-navigability approval is inferred.",
+  "model": "gpt-6-astra",
+  "reasoningEffort": "xhigh",
+  "caseCount": 5,
+  "deliveredCount": 5,
+  "failedCount": 0,
+  "runtime": {
+    "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+    "lockPath": ".codex-tmp/gpt6-five-case-eval/runtime-lock-v3.json",
+    "sourceCommit": "9dff2e91",
+    "toolkitSourceHash": "sha256:9081b07d65148515a01ffcd2dbeeb33c24ebdbd3bfb92854d0e8725a89334df3",
+    "toolkitArchiveSha256": "sha256:89223f7003f52545779a685887a77c45c1cca4f2903abe1f9dd2976c85e8cc1b",
+    "browserArchiveSha256": "sha256:4b3f79c9ab400ecf76bd64ae44aba84f1bf77a267c98876d6dae277648cd50cd",
+    "codexBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+    "maximumTaskSeconds": 2700,
+    "qualification": "Later local source fixes and platform routing adaptations are not part of these frozen V3 cloud artifacts."
+  },
+  "manifestPath": ".codex-tmp/gpt6-five-case-eval/selected-cases.json",
+  "caseInputPolicy": "Five fixed original references and effective user prompts. Palace replacement uses the same V3 runtime and original input hashes; only the task account concurrency changes from one to four after confirmed cancellation.",
+  "timingDefinitions": {
+    "cloudProcessingSecondsExcludingQueue": "Provider processing duration excluding the queue; includes account-slot wait before CLI launch.",
+    "cliLauncherWallSeconds": "Observed launcher start-to-finish interval; includes real model/tool work and launcher packaging checks.",
+    "localDeliverySeconds": "Local download phase as recorded by the coordinator.",
+    "simulationSeconds": "Actual SDK fixed-tick simulation duration, distinct from wall time."
+  },
+  "cliTokenUsageDefinition": "Raw turn.completed usage from the full Codex stream. Repeated cached context can be counted many times; these are not unique prompt sizes or a price estimate.",
+  "palaceCancelledPreCliAttempt": {
+    "jobId": "gen_bdad645aceef06e1",
+    "requestId": "wk6-53fa3e532918b55c-gpt6-eval-paper-moon-palace-a1",
+    "statusBeforeCancel": "running",
+    "eventsBeforeCancel": {
+      "exists": false,
+      "bytes": 0
+    },
+    "cancelledAt": "2026-09-05T04:42:11.068330+00:00",
+    "apiTerminalStatus": "cancelled",
+    "rayTerminalStatus": "STOPPED",
+    "rayTerminalEndTime": 1788583334071,
+    "reason": "User requested four simultaneous cases; account_concurrency=1 can wait on the shared slot-zero semaphore. Retry only after terminal with four account slots, same original inputs and V3 runtime.",
+    "evidencePath": ".codex-tmp/gpt6-five-case-eval/palace-r3-slot-cancellation.json",
+    "rayEvidencePath": ".codex-tmp/gpt6-five-case-eval/palace-r3-ray-terminal.json",
+    "replacementJobId": "gen_c18e93849298f49e"
+  },
+  "operatorVerificationCorrection": {
+    "caseId": "gpt6-eval-nine-tailed-fox",
+    "reason": "The first Host verifier invocation supplied an unprefixed expected digest, while the verifier compares sha256:-prefixed identities. Re-running with the exact prefixed receipt digest passed; no archive or payload bytes were modified.",
+    "firstReportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-nine-tailed-fox/host-artifact-verification.json",
+    "acceptedReportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-nine-tailed-fox-hash-verified/host-artifact-verification.json"
+  },
+  "cases": [
+    {
+      "caseId": "gpt6-eval-coast-lighthouse",
+      "title": "海岸灯塔",
+      "sourceTestSetId": "test-set-gvs2-e78c",
+      "sourceCaseId": "image-006-1bb0",
+      "referenceImageSha256": "sha256:3a040ef8d53706a6c08147c33a36e745660ba56af853e481dfe62d2533c587af",
+      "effectivePromptSha256": "sha256:e65e1c02074422e8095df4a45f01df05398345a0f6478491ac4e71ea6a3ed320",
+      "caseHash": "a6e8778ce6f682243b7bbbfa1a208ddb924d648e8e13c96cc087399dba61ddb1",
+      "runId": "gpt6-five-case-eval-20260905-r3",
+      "jobId": "gen_7f4f2c564a32b853",
+      "requestId": "wk6-399469d9c1cd0d61-gpt6-eval-coast-lighthouse-a1",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+      "phase": "delivered",
+      "providerStatus": "succeeded",
+      "itemStatus": "succeeded",
+      "apiBuildCommit": "c730fd0",
+      "sourceHash": "sha256:f7ba70e2b7ed8e034c05123900c13d6b6126071f6d4413c31558ddfe11edd8a2",
+      "archiveSha256": "sha256:4f1ed4da1b830f50065c0f376eec2865a148d1c2ef4407583525ff5e3a14c453",
+      "archiveBytes": 15402444,
+      "eventsSha256": "sha256:039c2c752de15a9bb941d661d49ad6d922530656e67e6208383cf30d2f5a0e7f",
+      "submitOperationId": "op-3449fed1-73ea-4d21-ad0d-186a5a8e0724",
+      "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/five-case-eval/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/a6e8778ce6f68224",
+      "timing": {
+        "queueSeconds": 6.103,
+        "startupSeconds": 0.156,
+        "cloudProcessingSecondsExcludingQueue": 1790.218,
+        "cliLauncherStartedAt": "2026-09-05T04:00:03.629Z",
+        "cliLauncherFinishedAt": "2026-09-05T04:29:52.029Z",
+        "cliLauncherWallSeconds": 1788.4,
+        "localDeliverySeconds": 41.395,
+        "playtestSimulationSeconds": 260,
+        "playtestWallSeconds": 111.38177131700003
+      },
+      "playtest": {
+        "status": "passed",
+        "requestedDurationSeconds": 260,
+        "actualSimulationSeconds": 260,
+        "wallTimeSeconds": 111.38177131700003,
+        "framesPerSecond": 2,
+        "targetCount": 19,
+        "visitedTargets": [
+          "opening-beach-turn",
+          "tide-pools",
+          "tide-pool-turn",
+          "cliff-foot",
+          "beach-east-turn",
+          "ascent-approach",
+          "east-meadow-lower",
+          "east-meadow-upper",
+          "headland-turn",
+          "lighthouse-courtyard",
+          "cliff-overlook",
+          "return-courtyard",
+          "return-headland",
+          "return-upper-meadow",
+          "return-lower-meadow",
+          "return-beach",
+          "south-beach",
+          "southern-tide-turn",
+          "return-to-start"
+        ],
+        "uniqueFiveMeterCells": 96,
+        "travelledMeters": 618.2842890245078,
+        "maximumDistanceFromSpawnMeters": 134.90396087243525,
+        "limitations": [
+          "Executed authored waypoint path only; not exhaustive navigation proof",
+          "Capture cadence is evaluation video cadence, not production realtime performance",
+          "No NPC hot edit or video model inference in this experiment"
+        ]
+      },
+      "toolEvidence": {
+        "available": true,
+        "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/creator-events.jsonl",
+        "sha256": "sha256:039c2c752de15a9bb941d661d49ad6d922530656e67e6208383cf30d2f5a0e7f",
+        "bytes": 2468631,
+        "jsonLines": 203,
+        "invalidLines": 0,
+        "mcpCallsByTool": {
+          "creator_describe_environment": 1,
+          "creator_get_authoring_schema": 1,
+          "assets_search": 2,
+          "assets_describe": 1,
+          "world_validate": 7,
+          "operations_get": 38,
+          "world_preview": 8,
+          "world_playtest": 4,
+          "world_capture_triviews": 2,
+          "world_submit": 1
+        },
+        "mcpCallCount": 65,
+        "operationCount": 22,
+        "failedOperations": [
+          {
+            "sequenceNumber": 7,
+            "operationId": "op-3e46ff13-bfac-4938-b352-9a6db287ba80",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:14:54.304Z",
+            "updatedAt": "2026-09-05T04:14:57.002Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_COLLIDER_DRIFT: Collider 'headland-lighthouse' geometry or traversal binding changed during build().",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_COLLIDER_DRIFT: Collider 'headland-lighthouse' geometry or traversal binding changed during build().",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 10,
+            "operationId": "op-a4f20e7f-8100-4808-ba0e-9b0170b72a23",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:16:49.170Z",
+            "updatedAt": "2026-09-05T04:16:55.918Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:a2f7923035f9565285314aafa74083e8e0c9d7cc520bd72507a20fd465c0aba5",
+            "error": "PLAYER_STUCK_NEAR_TARGET: tide-pools",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: tide-pools",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 25,
+              "actualSimulationSeconds": 12,
+              "wallTimeSeconds": 6.373140748000005,
+              "framesPerSecond": 2,
+              "targetCount": 18,
+              "visitedTargets": [],
+              "uniqueFiveMeterCells": 2,
+              "travelledMeters": 1.9932134177071372,
+              "maximumDistanceFromSpawnMeters": 2.9053066052031826,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: tide-pools",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 13,
+            "operationId": "op-9174fe0a-63d7-44c1-be96-2e5a25ede18d",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:19:46.160Z",
+            "updatedAt": "2026-09-05T04:19:59.507Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:587fae2c8ed048810c5a04d1e727ffe9701c3cc8c9b872864bfe234916855e3f",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 25,
+              "actualSimulationSeconds": 25,
+              "wallTimeSeconds": 12.984145447999937,
+              "framesPerSecond": 2,
+              "targetCount": 19,
+              "visitedTargets": [
+                "opening-beach-turn",
+                "tide-pools",
+                "tide-pool-turn"
+              ],
+              "uniqueFiveMeterCells": 15,
+              "travelledMeters": 58.16733071346691,
+              "maximumDistanceFromSpawnMeters": 37.572227039758495,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 17,
+            "operationId": "op-1d1a7919-cc16-41e9-9874-5e29e37f802c",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:24:23.627Z",
+            "updatedAt": "2026-09-05T04:25:26.933Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          }
+        ],
+        "mcpCallFailures": [],
+        "cliErrors": [],
+        "cliUsage": [
+          {
+            "input_tokens": 4782308,
+            "cached_input_tokens": 4675456,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 26878,
+            "reasoning_output_tokens": 9582
+          }
+        ]
+      },
+      "previewImageResponses": 6,
+      "hostVerification": {
+        "status": "static-artifacts-passed",
+        "reportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-coast-lighthouse/host-artifact-verification.json",
+        "payloadDirectory": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-coast-lighthouse/payload",
+        "checks": [
+          {
+            "name": "external-archive-sha256",
+            "status": "passed",
+            "evidence": {
+              "sha256": "sha256:4f1ed4da1b830f50065c0f376eec2865a148d1c2ef4407583525ff5e3a14c453",
+              "binding": "externally-bound"
+            },
+            "code": null
+          },
+          {
+            "name": "archive-safety",
+            "status": "passed",
+            "evidence": {
+              "files": 215,
+              "expandedBytes": 24250221
+            },
+            "code": null
+          },
+          {
+            "name": "closed-artifact-file-set",
+            "status": "passed",
+            "evidence": {
+              "payloadFileCount": 214,
+              "manifestFileCount": 1
+            },
+            "code": null
+          },
+          {
+            "name": "artifact-file-sha256",
+            "status": "passed",
+            "evidence": {
+              "verifiedFileCount": 214
+            },
+            "code": null
+          },
+          {
+            "name": "identity-and-result-bindings",
+            "status": "passed",
+            "evidence": {
+              "sceneId": "gpt6-eval-coast-lighthouse",
+              "sourceHash": "sha256:f7ba70e2b7ed8e034c05123900c13d6b6126071f6d4413c31558ddfe11edd8a2",
+              "sourceHashValidation": "cross-record-consistency"
+            },
+            "code": null
+          },
+          {
+            "name": "reported-exploration-thresholds",
+            "status": "passed",
+            "evidence": {
+              "actualSimulationSeconds": 260,
+              "targetCount": 19,
+              "reportedUniqueFiveMeterCells": 96,
+              "reportedMaximumDistanceFromSpawnMeters": 134.90396087243525,
+              "qualification": "Checks reported coverage thresholds, not independent runtime replay"
+            },
+            "code": null
+          },
+          {
+            "name": "recorded-trace-consistency",
+            "status": "passed",
+            "evidence": {
+              "traceSamples": 260,
+              "inferredInitialTick": 60,
+              "lastSampleSeconds": 259.5,
+              "fixedTicksPerSecond": 60
+            },
+            "code": null
+          },
+          {
+            "name": "opening-png",
+            "status": "passed",
+            "evidence": {
+              "path": "opening-world.png",
+              "sha256": "sha256:71f9e5d373ce7069fc750da3bcdf5c83bd4b3b53085a8d49eeeee6c1ed72df34",
+              "widthPixels": 1280,
+              "heightPixels": 720
+            },
+            "code": null
+          },
+          {
+            "name": "triview-pngs",
+            "status": "passed",
+            "evidence": {
+              "images": [
+                {
+                  "id": "player",
+                  "path": "triview-player.png",
+                  "sha256": "sha256:b7be4a21054acea09b205aacfcec472da10d1b457a1fd8d326bdf2bde0fb2179",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "headland-lighthouse",
+                  "path": "triview-headland-lighthouse.png",
+                  "sha256": "sha256:3f62a2bb8981f73908ede2ac0ccae984ffd3d9b8cf9b14fdeadae9036e85cf59",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "keepers-cottage",
+                  "path": "triview-keepers-cottage.png",
+                  "sha256": "sha256:11e01cfa00baa75bfb74605795b116d72fae038177870d01e42ebb0a1170c9a0",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "foreground-left-rock",
+                  "path": "triview-foreground-left-rock.png",
+                  "sha256": "sha256:2227167bb7d31cf71195b33e1d854648003517e9fa5476018be7301cc1b0f6b3",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                }
+              ],
+              "pngValidation": "Signature, IHDR dimensions/CRC and SHA256; visual quality not assessed"
+            },
+            "code": null
+          },
+          {
+            "name": "decoded-playtest-video",
+            "status": "passed",
+            "evidence": {
+              "path": "playtest.mp4",
+              "decodedFrames": 520,
+              "expectedFrames": 520,
+              "framesPerSecond": 2,
+              "durationSeconds": 260,
+              "formatDurationSeconds": 260,
+              "durationToleranceSeconds": 0.501,
+              "widthPixels": 1280,
+              "heightPixels": 720,
+              "validation": "ffprobe decoded frame count; not a visual-quality or realtime-performance assessment"
+            },
+            "code": null
+          }
+        ],
+        "limitations": [
+          "Static artifact integrity and decoded-media checks only; scene code was not executed.",
+          "Reported exploration metrics and recorded traces do not prove complete navigability or absence of bugs.",
+          "Independent browser replay and visual comparison with the original reference remain required.",
+          "The sourceHash is cross-bound between records, not recomputed from an unavailable runtime-lock preimage."
+        ]
+      },
+      "failure": null,
+      "priorAttempts": [
+        {
+          "runId": "gpt6-five-case-eval-20260905",
+          "jobId": "gen_9a075d23684d2efe",
+          "requestId": "wk6-1a497b4f3cf6b01f-gpt6-eval-coast-lighthouse-a1",
+          "phase": "failed",
+          "providerStatus": "completed",
+          "runtimeHash": "sha256:82aeb69c70915c30fd2b3fbf62be863bfa1443a026b552ab4f63098cd2822b70",
+          "failure": {
+            "category": "mcp-startup",
+            "message": "codex exit=1; stdout=; stderr=09297Z ERROR codex_core::session: Failed to create session: required MCP servers failed to initialize: worldkit_creator: handshaking with MCP server failed: connection closed: initialize response\nError: thread/start: thread/start failed: error creating thread: Fatal error: Failed to initialize session: required MCP servers failed to initialize: worldkit_creator: handshaking with MCP server failed: connection closed: initialize response (code -32603)\nCREATOR_LAUNCHER_FAILED: CREATOR_CODEX_EXIT_1\n"
+          },
+          "timing": {
+            "available": true,
+            "unavailable_reason": "",
+            "driver_started_at": "2026-09-05T03:29:51.140605Z",
+            "processing_started_at": "2026-09-05T03:29:51.307489Z",
+            "first_item_started_at": "2026-09-05T03:29:51.515159Z",
+            "last_item_finished_at": "2026-09-05T03:29:56.714683Z",
+            "worker_finished_at": "2026-09-05T03:29:57.111488Z",
+            "queue_seconds": 1.404,
+            "startup_seconds": 0.167,
+            "remote_run_seconds_excluding_queue": 5.804,
+            "stage_timings": [
+              {
+                "stage": "codex",
+                "attempt": 1,
+                "scope": "",
+                "started_at": "2026-09-05T03:29:51.307489Z",
+                "finished_at": "2026-09-05T03:29:57.111488Z",
+                "duration_seconds": 5.804
+              },
+              {
+                "stage": "done",
+                "attempt": 1,
+                "scope": "",
+                "started_at": "2026-09-05T03:29:57.111488Z",
+                "finished_at": "2026-09-05T03:29:57.111488Z",
+                "duration_seconds": 0
+              }
+            ]
+          },
+          "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905/gpt6-eval-coast-lighthouse",
+          "evidence": {
+            "available": true,
+            "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905/gpt6-eval-coast-lighthouse/creator-events.jsonl",
+            "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0,
+            "jsonLines": 0,
+            "invalidLines": 0,
+            "mcpCallsByTool": {},
+            "mcpCallCount": 0,
+            "operationCount": 0,
+            "failedOperations": [],
+            "mcpCallFailures": [],
+            "cliErrors": [],
+            "cliUsage": []
+          }
+        },
+        {
+          "runId": "gpt6-five-case-eval-20260905-r2",
+          "jobId": "gen_bc944f7058f0f303",
+          "requestId": "wk6-9b1109be219d3711-gpt6-eval-coast-lighthouse-a1",
+          "phase": "failed",
+          "providerStatus": "completed",
+          "runtimeHash": "sha256:aeb1f04638729c2fc12739a0d52d2972587898be170e1df4c90b0a4f4ee748bc",
+          "failure": {
+            "category": "mcp-approval",
+            "message": "codex exit=1; stdout=; stderr=Reading additional input from stdin...\nCREATOR_LAUNCHER_FAILED: CREATOR_DELIVERY_CONTRACT_FAILED\n",
+            "observedMcpFailures": [
+              {
+                "tool": "creator_describe_environment",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              },
+              {
+                "tool": "creator_get_authoring_schema",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              },
+              {
+                "tool": "assets_search",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              }
+            ]
+          },
+          "timing": {
+            "available": true,
+            "unavailable_reason": "",
+            "driver_started_at": "2026-09-05T03:46:53.854712Z",
+            "processing_started_at": "2026-09-05T03:46:53.996587Z",
+            "first_item_started_at": "2026-09-05T03:46:54.204851Z",
+            "last_item_finished_at": "2026-09-05T03:49:22.161994Z",
+            "worker_finished_at": "2026-09-05T03:49:22.581936Z",
+            "queue_seconds": 12.917,
+            "startup_seconds": 0.142,
+            "remote_run_seconds_excluding_queue": 148.585,
+            "stage_timings": [
+              {
+                "stage": "codex",
+                "attempt": 1,
+                "scope": "",
+                "started_at": "2026-09-05T03:46:53.996587Z",
+                "finished_at": "2026-09-05T03:49:22.581936Z",
+                "duration_seconds": 148.585
+              },
+              {
+                "stage": "done",
+                "attempt": 1,
+                "scope": "",
+                "started_at": "2026-09-05T03:49:22.581936Z",
+                "finished_at": "2026-09-05T03:49:22.581936Z",
+                "duration_seconds": 0
+              }
+            ]
+          },
+          "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r2/gpt6-eval-coast-lighthouse",
+          "evidence": {
+            "available": true,
+            "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r2/gpt6-eval-coast-lighthouse/creator-events.jsonl",
+            "sha256": "sha256:c17ab74011a222df57f53e4c83d0c1e45069ab98b6ef6b87599d9ccbc368d7c9",
+            "bytes": 9658,
+            "jsonLines": 25,
+            "invalidLines": 0,
+            "mcpCallsByTool": {
+              "creator_describe_environment": 1,
+              "creator_get_authoring_schema": 1,
+              "assets_search": 1
+            },
+            "mcpCallCount": 3,
+            "operationCount": 0,
+            "failedOperations": [],
+            "mcpCallFailures": [
+              {
+                "itemId": "item_1",
+                "tool": "creator_describe_environment",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              },
+              {
+                "itemId": "item_2",
+                "tool": "creator_get_authoring_schema",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              },
+              {
+                "itemId": "item_6",
+                "tool": "assets_search",
+                "error": {
+                  "message": "MCP tool call requires approval, but approval policy is never"
+                }
+              }
+            ],
+            "cliErrors": [],
+            "cliUsage": [
+              {
+                "input_tokens": 256841,
+                "cached_input_tokens": 225536,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 3337,
+                "reasoning_output_tokens": 1829
+              }
+            ]
+          }
+        }
+      ],
+      "files": {
+        "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse",
+        "state": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/state.json",
+        "launcherReport": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/creator-launcher-report.json",
+        "result": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/creator-result.json",
+        "events": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-coast-lighthouse/creator-events.jsonl"
+      },
+      "qualityAssessment": "Outside this cloud delivery report; consult independent Root visual and browser reviews."
+    },
+    {
+      "caseId": "gpt6-eval-forest-lookout",
+      "title": "森林瞭望塔",
+      "sourceTestSetId": "test-set-gvs2-e78c",
+      "sourceCaseId": "image-002-bdcc",
+      "referenceImageSha256": "sha256:3d66cb3560403547533d3f1d77841f3b7bed9a06d1d7e74da64b986968a5b691",
+      "effectivePromptSha256": "sha256:e65e1c02074422e8095df4a45f01df05398345a0f6478491ac4e71ea6a3ed320",
+      "caseHash": "8eddf12befe9ec94e355c5dd764086e894a24ac451082eb05fc92a02bdeb53af",
+      "runId": "gpt6-five-case-eval-20260905-r3",
+      "jobId": "gen_1f04dd24d1d30a8d",
+      "requestId": "wk6-5df436ed8f2e64cf-gpt6-eval-forest-lookout-a1",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+      "phase": "delivered",
+      "providerStatus": "succeeded",
+      "itemStatus": "succeeded",
+      "apiBuildCommit": "c730fd0",
+      "sourceHash": "sha256:3978fca7905450297e309f31b8fd18661da837556179fe5e5303ae88d997eb01",
+      "archiveSha256": "sha256:5d3e208d27c1a75d4910472aa55ef0e5e474c3d896df69c40b0b01292d1188bc",
+      "archiveBytes": 6894308,
+      "eventsSha256": "sha256:56c124c605dd0f1d8f651ed60ee6b74370a3de944b3882e19394e6043f59bcd6",
+      "submitOperationId": "op-921889f0-9d1c-4930-8cd6-d0f506d912ba",
+      "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/five-case-eval/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/8eddf12befe9ec94",
+      "timing": {
+        "queueSeconds": 21.948,
+        "startupSeconds": 0.147,
+        "cloudProcessingSecondsExcludingQueue": 2748.394,
+        "cliLauncherStartedAt": "2026-09-05T04:10:27.566Z",
+        "cliLauncherFinishedAt": "2026-09-05T04:53:41.090Z",
+        "cliLauncherWallSeconds": 2593.524,
+        "localDeliverySeconds": 39.937,
+        "playtestSimulationSeconds": 180,
+        "playtestWallSeconds": 51.60065898200031
+      },
+      "playtest": {
+        "status": "passed",
+        "requestedDurationSeconds": 180,
+        "actualSimulationSeconds": 180,
+        "wallTimeSeconds": 51.60065898200031,
+        "framesPerSecond": 2,
+        "targetCount": 3,
+        "visitedTargets": [
+          "approach-signs",
+          "gate-fork",
+          "tower-base"
+        ],
+        "uniqueFiveMeterCells": 36,
+        "travelledMeters": 425.5002210776792,
+        "maximumDistanceFromSpawnMeters": 36.59820867070001,
+        "limitations": [
+          "Executed authored waypoint path only; not exhaustive navigation proof",
+          "Capture cadence is evaluation video cadence, not production realtime performance",
+          "No NPC hot edit or video model inference in this experiment"
+        ]
+      },
+      "toolEvidence": {
+        "available": true,
+        "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/creator-events.jsonl",
+        "sha256": "sha256:56c124c605dd0f1d8f651ed60ee6b74370a3de944b3882e19394e6043f59bcd6",
+        "bytes": 1186318,
+        "jsonLines": 412,
+        "invalidLines": 0,
+        "mcpCallsByTool": {
+          "creator_describe_environment": 1,
+          "creator_get_authoring_schema": 1,
+          "assets_search": 4,
+          "world_validate": 24,
+          "operations_get": 84,
+          "world_preview": 20,
+          "world_playtest": 6,
+          "world_capture_triviews": 4,
+          "world_submit": 1
+        },
+        "mcpCallCount": 145,
+        "operationCount": 55,
+        "failedOperations": [
+          {
+            "sequenceNumber": 1,
+            "operationId": "op-7d5eab85-6ba8-44cf-a802-01561ea12f2e",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:12:52.464Z",
+            "updatedAt": "2026-09-05T04:13:49.556Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts (1:9): \"defineBabylonNativeScene\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts:1:9\n\n1: import { defineBabylonNativeScene, registerEntity } from '@worldkit/creator';\n            ^\n2: import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';\n3: import { Vector3 } from '@babylonjs/core/Maths/math.vector';\n",
+            "reason": "../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts (1:9): \"defineBabylonNativeScene\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/a270dcbda4a23dbd/source/scene.ts:1:9\n\n1: import { defineBabylonNativeScene, registerEntity } from '@worldkit/creator';\n            ^\n2: import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';\n3: import { Vector3 } from '@babylonjs/core/Maths/math.vector';\n",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 2,
+            "operationId": "op-280508eb-68b3-4fe9-b32a-82d2be255425",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:14:13.872Z",
+            "updatedAt": "2026-09-05T04:15:09.314Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts (1:7): \"default\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts:1:7\n\n1: import defineBabylonNativeScene, { registerEntity } from '@worldkit/creator';\n          ^\n2: import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';\n3: import { Vector3 } from '@babylonjs/core/Maths/math.vector';\n",
+            "reason": "../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts (1:7): \"default\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/4e8412241bec379e/source/scene.ts:1:7\n\n1: import defineBabylonNativeScene, { registerEntity } from '@worldkit/creator';\n          ^\n2: import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';\n3: import { Vector3 } from '@babylonjs/core/Maths/math.vector';\n",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 4,
+            "operationId": "op-5841b501-8c2d-4cac-943b-e3ed5090c6c1",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:16:50.354Z",
+            "updatedAt": "2026-09-05T04:16:52.770Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 6,
+            "operationId": "op-3486864a-27af-45a7-bcc3-1165272e8648",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:18:32.209Z",
+            "updatedAt": "2026-09-05T04:18:33.524Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 8,
+            "operationId": "op-c8811e98-16b3-4933-b8a0-bc58e6baea12",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:20:05.412Z",
+            "updatedAt": "2026-09-05T04:20:07.537Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 12,
+            "operationId": "op-c5c4eebe-ae8e-4274-ae13-ba4bb569cb71",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:23:21.790Z",
+            "updatedAt": "2026-09-05T04:23:22.874Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 14,
+            "operationId": "op-a8d727fa-5c3e-4f68-beed-a64282497234",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:25:22.465Z",
+            "updatedAt": "2026-09-05T04:25:23.462Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 16,
+            "operationId": "op-65ae8fcd-af56-4b0f-9191-8685a6ef2055",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:26:43.539Z",
+            "updatedAt": "2026-09-05T04:26:44.525Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 18,
+            "operationId": "op-669d9e8b-6bb9-49d5-8fb4-ee416e73b171",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:28:02.269Z",
+            "updatedAt": "2026-09-05T04:28:03.332Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 20,
+            "operationId": "op-d5c32a43-9e74-4cea-88f9-12f00efa3cd7",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:29:33.920Z",
+            "updatedAt": "2026-09-05T04:29:34.981Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 21,
+            "operationId": "op-96bdf53c-e46a-4d31-9905-3655d89aadea",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:30:07.996Z",
+            "updatedAt": "2026-09-05T04:30:08.350Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "[vite:esbuild] Transform failed with 1 error:\n/fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/79160e24dd92a10a/source/scene.ts:2:0: ERROR: Unexpected \"}\"\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/79160e24dd92a10a/source/scene.ts:2:0\n\nUnexpected \"}\"\n1  |   const tx=-17,tz=-28; B('tower-platform',tx,10,tz,12,.7,10,wood); B('tower-roof',tx,15.3,tz,14,.6,11,steel); B('tower...\n2  |  }};\n   |  ^\n3  |  \n",
+            "reason": "[vite:esbuild] Transform failed with 1 error:\n/fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/79160e24dd92a10a/source/scene.ts:2:0: ERROR: Unexpected \"}\"\nfile: /fsx/pipeline/lwdp_generation/gen_1f04dd24d1d30a8d/tasks/gpt6-eval-forest-lookout/.creator-evidence/79160e24dd92a10a/source/scene.ts:2:0\n\nUnexpected \"}\"\n1  |   const tx=-17,tz=-28; B('tower-platform',tx,10,tz,12,.7,10,wood); B('tower-roof',tx,15.3,tz,14,.6,11,steel); B('tower...\n2  |  }};\n   |  ^\n3  |  \n",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 25,
+            "operationId": "op-f7d0f342-4902-4240-b623-1b50be0fcce4",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:33:38.010Z",
+            "updatedAt": "2026-09-05T04:33:39.124Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 27,
+            "operationId": "op-1f28c09e-1d81-4011-964f-2f82b96ac346",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:34:56.763Z",
+            "updatedAt": "2026-09-05T04:34:57.792Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 32,
+            "operationId": "op-f8e6eded-4fb6-4b3d-a7c9-a4ee0d74966d",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:37:55.166Z",
+            "updatedAt": "2026-09-05T04:38:00.183Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:0b79e238d5bfd0d256ac764e9c60f5047af40b393cdd95715e703462ea7a02fd",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 15,
+              "actualSimulationSeconds": 15,
+              "wallTimeSeconds": 4.730759748999961,
+              "framesPerSecond": 2,
+              "targetCount": 5,
+              "visitedTargets": [
+                "approach-signs"
+              ],
+              "uniqueFiveMeterCells": 8,
+              "travelledMeters": 34.218897912741,
+              "maximumDistanceFromSpawnMeters": 29.798640228365926,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 33,
+            "operationId": "op-babcf612-2551-464e-a30d-811a669dc1af",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:38:09.170Z",
+            "updatedAt": "2026-09-05T04:39:01.235Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:0b79e238d5bfd0d256ac764e9c60f5047af40b393cdd95715e703462ea7a02fd",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 180,
+              "actualSimulationSeconds": 180,
+              "wallTimeSeconds": 51.819708352999996,
+              "framesPerSecond": 2,
+              "targetCount": 5,
+              "visitedTargets": [
+                "approach-signs",
+                "gate-fork",
+                "tower-base"
+              ],
+              "uniqueFiveMeterCells": 27,
+              "travelledMeters": 325.2852605334821,
+              "maximumDistanceFromSpawnMeters": 40.688196579887965,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 34,
+            "operationId": "op-dff6a68d-d990-4fa0-aede-38b095570ccd",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:39:14.580Z",
+            "updatedAt": "2026-09-05T04:39:14.586Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "Unexpected token ']', ...\"\":5},\n    ],\n    \"st\"... is not valid JSON",
+            "reason": "Unexpected token ']', ...\"\":5},\n    ],\n    \"st\"... is not valid JSON",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 38,
+            "operationId": "op-835f6c7a-561a-49e8-ad03-65b7fb0f52cb",
+            "type": "world.capture-triviews",
+            "createdAt": "2026-09-05T04:41:53.950Z",
+            "updatedAt": "2026-09-05T04:41:54.442Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: water-tank\n    at pee (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:31474)\n    at mee (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:122995)\n    at http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3493:4582\n    at W (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3493:4773)",
+            "reason": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: water-tank\n    at pee (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:31474)\n    at mee (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3492:122995)\n    at http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3493:4582\n    at W (http://127.0.0.1:34475/assets/index-DJ9CPC9r.js:3493:4773)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 41,
+            "operationId": "op-7127e419-99f5-490c-8c0d-b972fb609ab3",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:43:30.421Z",
+            "updatedAt": "2026-09-05T04:43:39.971Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Br (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3492:145164)\n    at async M (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3493:3340)",
+            "reason": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Br (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3492:145164)\n    at async M (http://127.0.0.1:43127/assets/index-CEWgSc6V.js:3493:3340)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 44,
+            "operationId": "op-65a8aef7-6bbc-4aec-a25b-e749155bc281",
+            "type": "world.capture-triviews",
+            "createdAt": "2026-09-05T04:45:21.958Z",
+            "updatedAt": "2026-09-05T04:45:22.490Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: water-tank\n    at pee (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:31474)\n    at mee (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:122995)\n    at http://127.0.0.1:46265/assets/index-CbhANMRC.js:3493:4582\n    at W (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3493:4773)",
+            "reason": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: water-tank\n    at pee (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:31474)\n    at mee (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3492:122995)\n    at http://127.0.0.1:46265/assets/index-CbhANMRC.js:3493:4582\n    at W (http://127.0.0.1:46265/assets/index-CbhANMRC.js:3493:4773)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 48,
+            "operationId": "op-d6d47c6d-8b61-48c1-91ad-3bfcf2a2d983",
+            "type": "world.capture-triviews",
+            "createdAt": "2026-09-05T04:48:57.948Z",
+            "updatedAt": "2026-09-05T04:48:58.770Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: gate-sign\n    at pee (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:31474)\n    at mee (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:122995)\n    at http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3493:4582\n    at W (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3493:4773)",
+            "reason": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: gate-sign\n    at pee (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:31474)\n    at mee (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:33905)\n    at kv.captureArtifactView (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3492:122995)\n    at http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3493:4582\n    at W (http://127.0.0.1:45491/assets/index-BP-LC4Xl.js:3493:4773)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 50,
+            "operationId": "op-c43039de-95a7-4059-9172-d3542ace85dc",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:50:37.080Z",
+            "updatedAt": "2026-09-05T04:50:38.706Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: TypeError: a.isReady is not a function",
+            "reason": "CREATOR_RUNTIME_FAILED: TypeError: a.isReady is not a function",
+            "reportedPlaytest": null
+          }
+        ],
+        "mcpCallFailures": [],
+        "cliErrors": [],
+        "cliUsage": [
+          {
+            "input_tokens": 20331227,
+            "cached_input_tokens": 19904256,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 27458,
+            "reasoning_output_tokens": 7220
+          }
+        ]
+      },
+      "previewImageResponses": 9,
+      "hostVerification": {
+        "status": "static-artifacts-passed",
+        "reportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-forest-lookout/host-artifact-verification.json",
+        "payloadDirectory": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-forest-lookout/payload",
+        "checks": [
+          {
+            "name": "external-archive-sha256",
+            "status": "passed",
+            "evidence": {
+              "sha256": "sha256:5d3e208d27c1a75d4910472aa55ef0e5e474c3d896df69c40b0b01292d1188bc",
+              "binding": "externally-bound"
+            },
+            "code": null
+          },
+          {
+            "name": "archive-safety",
+            "status": "passed",
+            "evidence": {
+              "files": 206,
+              "expandedBytes": 15675412
+            },
+            "code": null
+          },
+          {
+            "name": "closed-artifact-file-set",
+            "status": "passed",
+            "evidence": {
+              "payloadFileCount": 205,
+              "manifestFileCount": 1
+            },
+            "code": null
+          },
+          {
+            "name": "artifact-file-sha256",
+            "status": "passed",
+            "evidence": {
+              "verifiedFileCount": 205
+            },
+            "code": null
+          },
+          {
+            "name": "identity-and-result-bindings",
+            "status": "passed",
+            "evidence": {
+              "sceneId": "gpt6-eval-forest-lookout",
+              "sourceHash": "sha256:3978fca7905450297e309f31b8fd18661da837556179fe5e5303ae88d997eb01",
+              "sourceHashValidation": "cross-record-consistency"
+            },
+            "code": null
+          },
+          {
+            "name": "reported-exploration-thresholds",
+            "status": "passed",
+            "evidence": {
+              "actualSimulationSeconds": 180,
+              "targetCount": 3,
+              "reportedUniqueFiveMeterCells": 36,
+              "reportedMaximumDistanceFromSpawnMeters": 36.59820867070001,
+              "qualification": "Checks reported coverage thresholds, not independent runtime replay"
+            },
+            "code": null
+          },
+          {
+            "name": "recorded-trace-consistency",
+            "status": "passed",
+            "evidence": {
+              "traceSamples": 180,
+              "inferredInitialTick": 60,
+              "lastSampleSeconds": 179.5,
+              "fixedTicksPerSecond": 60
+            },
+            "code": null
+          },
+          {
+            "name": "opening-png",
+            "status": "passed",
+            "evidence": {
+              "path": "opening-world.png",
+              "sha256": "sha256:b3cae8266c6428d2b41aba6eccf7b69e05b6328f8122ca8c14b8a697814beae5",
+              "widthPixels": 1280,
+              "heightPixels": 720
+            },
+            "code": null
+          },
+          {
+            "name": "triview-pngs",
+            "status": "passed",
+            "evidence": {
+              "images": [
+                {
+                  "id": "player",
+                  "path": "triview-player.png",
+                  "sha256": "sha256:b3a4179bda4ffd3cfc59da207ab08f42020da29825153bba586fd669acd41f3a",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "tower-platform",
+                  "path": "triview-tower-platform.png",
+                  "sha256": "sha256:22714cf8957708beb89297045c1c3d9915a16acec231feb091d1aaae6df489ee",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "gate-sign",
+                  "path": "triview-gate-sign.png",
+                  "sha256": "sha256:46bbced3319baef07f7846673ce9cb791029e5439526796f5675618166adef87",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "sign-lookout",
+                  "path": "triview-sign-lookout.png",
+                  "sha256": "sha256:8ce903348c54579216d980252c9a41d0d9ccbd8d03d63eb0341c35e5c349345e",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                }
+              ],
+              "pngValidation": "Signature, IHDR dimensions/CRC and SHA256; visual quality not assessed"
+            },
+            "code": null
+          },
+          {
+            "name": "decoded-playtest-video",
+            "status": "passed",
+            "evidence": {
+              "path": "playtest.mp4",
+              "decodedFrames": 360,
+              "expectedFrames": 360,
+              "framesPerSecond": 2,
+              "durationSeconds": 180,
+              "formatDurationSeconds": 180,
+              "durationToleranceSeconds": 0.501,
+              "widthPixels": 1280,
+              "heightPixels": 720,
+              "validation": "ffprobe decoded frame count; not a visual-quality or realtime-performance assessment"
+            },
+            "code": null
+          }
+        ],
+        "limitations": [
+          "Static artifact integrity and decoded-media checks only; scene code was not executed.",
+          "Reported exploration metrics and recorded traces do not prove complete navigability or absence of bugs.",
+          "Independent browser replay and visual comparison with the original reference remain required.",
+          "The sourceHash is cross-bound between records, not recomputed from an unavailable runtime-lock preimage."
+        ]
+      },
+      "failure": null,
+      "priorAttempts": [],
+      "files": {
+        "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout",
+        "state": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/state.json",
+        "launcherReport": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/creator-launcher-report.json",
+        "result": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/creator-result.json",
+        "events": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-forest-lookout/creator-events.jsonl"
+      },
+      "qualityAssessment": "Outside this cloud delivery report; consult independent Root visual and browser reviews."
+    },
+    {
+      "caseId": "gpt6-eval-paper-moon-palace",
+      "title": "纸月宫殿",
+      "sourceTestSetId": "test-set-worldkit-reference-scenes-v1",
+      "sourceCaseId": "image-044-080d",
+      "referenceImageSha256": "sha256:080d951445bae3a8584363f0be5ef9194b5eff88e7b64da40d2a81f6a923972e",
+      "effectivePromptSha256": "sha256:7d10348e5c68bd88a3b1a4be294e097b98d5a64dc7812486e54ba40b8bc14fa4",
+      "caseHash": "34193539b7748a5303ebd3ebc7770a7bdd62bb19caceca06979cee5ff05ee4f7",
+      "runId": "gpt6-five-case-eval-20260905-r3-ac4",
+      "jobId": "gen_c18e93849298f49e",
+      "requestId": "wk6-c217760137bb4086-gpt6-eval-paper-moon-palace-a1",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+      "phase": "delivered",
+      "providerStatus": "succeeded",
+      "itemStatus": "succeeded",
+      "apiBuildCommit": "30f4e96",
+      "sourceHash": "sha256:aa40b06e3a1aa24cf54cb83ac7e70bb3edcae343325fd5f270ff0af0a1f84d19",
+      "archiveSha256": "sha256:beb5afec58851beb1758822e88a1447b272917116263b274332d09e547dc84d4",
+      "archiveBytes": 22752043,
+      "eventsSha256": "sha256:0e366469cca8741236539968e3386a7a6643e99e84da4ba989ae886aac5e9316",
+      "submitOperationId": "op-4b5480dd-4ed7-41cc-8f5e-95efda30a2e1",
+      "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/five-case-eval/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/34193539b7748a53",
+      "timing": {
+        "queueSeconds": 1.466,
+        "startupSeconds": 0.169,
+        "cloudProcessingSecondsExcludingQueue": 2505.859,
+        "cliLauncherStartedAt": "2026-09-05T04:43:51.787Z",
+        "cliLauncherFinishedAt": "2026-09-05T05:25:35.958Z",
+        "cliLauncherWallSeconds": 2504.171,
+        "localDeliverySeconds": 42.208,
+        "playtestSimulationSeconds": 240,
+        "playtestWallSeconds": 119.71214066700033
+      },
+      "playtest": {
+        "status": "passed",
+        "requestedDurationSeconds": 240,
+        "actualSimulationSeconds": 240,
+        "wallTimeSeconds": 119.71214066700033,
+        "framesPerSecond": 1,
+        "targetCount": 24,
+        "visitedTargets": [
+          "bridge-start",
+          "first-landing",
+          "west-bend",
+          "moon-gate-court",
+          "through-moon-gate",
+          "gate-west-rear",
+          "gate-west-front",
+          "gate-west-turn",
+          "west-stair-foot",
+          "west-stair-summit",
+          "west-gallery",
+          "palace-rear",
+          "east-rear",
+          "east-gallery",
+          "east-stair-foot",
+          "gate-east-turn",
+          "gate-east-front",
+          "gate-east-rear",
+          "return-through-gate",
+          "return-gate",
+          "return-west-bend",
+          "return-first-landing",
+          "return-bridge",
+          "arrival-return"
+        ],
+        "uniqueFiveMeterCells": 68,
+        "travelledMeters": 538.4875701309807,
+        "maximumDistanceFromSpawnMeters": 121.08089522638836,
+        "limitations": [
+          "Executed authored waypoint path only; not exhaustive navigation proof",
+          "Capture cadence is evaluation video cadence, not production realtime performance",
+          "No NPC hot edit or video model inference in this experiment"
+        ]
+      },
+      "toolEvidence": {
+        "available": true,
+        "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/creator-events.jsonl",
+        "sha256": "sha256:0e366469cca8741236539968e3386a7a6643e99e84da4ba989ae886aac5e9316",
+        "bytes": 6408553,
+        "jsonLines": 230,
+        "invalidLines": 0,
+        "mcpCallsByTool": {
+          "creator_describe_environment": 1,
+          "creator_get_authoring_schema": 1,
+          "assets_search": 2,
+          "assets_describe": 1,
+          "world_validate": 7,
+          "operations_get": 41,
+          "world_preview": 8,
+          "world_playtest": 9,
+          "world_capture_triviews": 2,
+          "world_submit": 1
+        },
+        "mcpCallCount": 73,
+        "operationCount": 27,
+        "failedOperations": [
+          {
+            "sequenceNumber": 2,
+            "operationId": "op-5fdba53a-5e38-4d1f-a584-c33f406829bb",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:49:49.223Z",
+            "updatedAt": "2026-09-05T04:49:51.616Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 6,
+            "operationId": "op-0170c26a-81f2-4577-ae85-cff4ed47343d",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:54:55.675Z",
+            "updatedAt": "2026-09-05T04:55:07.629Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:240fddc16f077b167e300cb10da556a5c59595e4e1bf4e61f31894ca40c99de7",
+            "error": "PLAYER_STUCK_NEAR_TARGET: first-landing",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: first-landing",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 30,
+              "actualSimulationSeconds": 24,
+              "wallTimeSeconds": 11.617126202999964,
+              "framesPerSecond": 1,
+              "targetCount": 18,
+              "visitedTargets": [
+                "bridge-start"
+              ],
+              "uniqueFiveMeterCells": 8,
+              "travelledMeters": 29.782951306956818,
+              "maximumDistanceFromSpawnMeters": 32.02295130695677,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: first-landing",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 10,
+            "operationId": "op-0a591810-668c-4456-ac24-8df6ab4ef3d3",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:02:59.957Z",
+            "updatedAt": "2026-09-05T05:04:23.726Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:967b624cae3b842d898f3ff5d9064d6893bd2d403438f971d304f189344b5a2b",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 30,
+              "actualSimulationSeconds": 30,
+              "wallTimeSeconds": 14.69375765399984,
+              "framesPerSecond": 1,
+              "targetCount": 24,
+              "visitedTargets": [
+                "bridge-start",
+                "first-landing",
+                "west-bend"
+              ],
+              "uniqueFiveMeterCells": 15,
+              "travelledMeters": 67.80930727552756,
+              "maximumDistanceFromSpawnMeters": 64.35042275372746,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 12,
+            "operationId": "op-58e4aefb-780b-4e5e-b339-a959fb1a7164",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:04:46.291Z",
+            "updatedAt": "2026-09-05T05:05:10.244Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:967b624cae3b842d898f3ff5d9064d6893bd2d403438f971d304f189344b5a2b",
+            "error": "PLAYER_STUCK_NEAR_TARGET: gate-west-front",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: gate-west-front",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 240,
+              "actualSimulationSeconds": 53,
+              "wallTimeSeconds": 23.667217846000103,
+              "framesPerSecond": 1,
+              "targetCount": 24,
+              "visitedTargets": [
+                "bridge-start",
+                "first-landing",
+                "west-bend",
+                "moon-gate-court",
+                "through-moon-gate",
+                "gate-west-rear"
+              ],
+              "uniqueFiveMeterCells": 21,
+              "travelledMeters": 99.36854400990752,
+              "maximumDistanceFromSpawnMeters": 78.78042551533551,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: gate-west-front",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 13,
+            "operationId": "op-c12f90c9-ca77-4a9a-80cf-03e45660ffa8",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:06:24.634Z",
+            "updatedAt": "2026-09-05T05:08:04.060Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:145164)\n    at async P (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3493:3340)",
+            "reason": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:145164)\n    at async P (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3493:3340)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 14,
+            "operationId": "op-bccce122-3beb-47a4-bb37-514d28cd0481",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:09:03.879Z",
+            "updatedAt": "2026-09-05T05:09:04.041Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: 3C_ROLLBACK_FAILED_CLOSED: a failed Golden Tick could not restore every transaction participant.\n    at en (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:122494)\n    at #l (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:127575)\n    at #i (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:126315)\n    at UY.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:125839)\n    at pF.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:137945)\n    at kv.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:118587)\n    at http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3493:5069",
+            "reason": "page.evaluate: Error: 3C_ROLLBACK_FAILED_CLOSED: a failed Golden Tick could not restore every transaction participant.\n    at en (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:122494)\n    at #l (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:127575)\n    at #i (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:126315)\n    at UY.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:125839)\n    at pF.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:2864:137945)\n    at kv.reset (http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3492:118587)\n    at http://127.0.0.1:43501/assets/index-DUoYovsZ.js:3493:5069",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 17,
+            "operationId": "op-6f202887-a205-4bd2-93f1-6116eaa2373c",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:11:22.427Z",
+            "updatedAt": "2026-09-05T05:11:44.741Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3492:145164)\n    at async P (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3493:3340)",
+            "reason": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3492:145164)\n    at async P (http://127.0.0.1:34497/assets/index-BGtuykoI.js:3493:3340)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 18,
+            "operationId": "op-f398e0f2-9532-41f0-a7a8-0d8023af7104",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T05:12:54.700Z",
+            "updatedAt": "2026-09-05T05:14:34.617Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3492:145164)\n    at async P (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3493:3340)",
+            "reason": "page.evaluate: Error: ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.\n    at Ur (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3492:139207)\n    at Ete.runFixedInputTick (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3492:145164)\n    at async P (http://127.0.0.1:43289/assets/index-CAu1rsIt.js:3493:3340)",
+            "reportedPlaytest": null
+          }
+        ],
+        "mcpCallFailures": [],
+        "cliErrors": [],
+        "cliUsage": [
+          {
+            "input_tokens": 7446830,
+            "cached_input_tokens": 7310976,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 42220,
+            "reasoning_output_tokens": 22366
+          }
+        ]
+      },
+      "previewImageResponses": 6,
+      "hostVerification": {
+        "status": "static-artifacts-passed",
+        "reportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-paper-moon-palace/host-artifact-verification.json",
+        "payloadDirectory": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-paper-moon-palace/payload",
+        "checks": [
+          {
+            "name": "external-archive-sha256",
+            "status": "passed",
+            "evidence": {
+              "sha256": "sha256:beb5afec58851beb1758822e88a1447b272917116263b274332d09e547dc84d4",
+              "binding": "externally-bound"
+            },
+            "code": null
+          },
+          {
+            "name": "archive-safety",
+            "status": "passed",
+            "evidence": {
+              "files": 214,
+              "expandedBytes": 31561224
+            },
+            "code": null
+          },
+          {
+            "name": "closed-artifact-file-set",
+            "status": "passed",
+            "evidence": {
+              "payloadFileCount": 213,
+              "manifestFileCount": 1
+            },
+            "code": null
+          },
+          {
+            "name": "artifact-file-sha256",
+            "status": "passed",
+            "evidence": {
+              "verifiedFileCount": 213
+            },
+            "code": null
+          },
+          {
+            "name": "identity-and-result-bindings",
+            "status": "passed",
+            "evidence": {
+              "sceneId": "gpt6-eval-paper-moon-palace",
+              "sourceHash": "sha256:aa40b06e3a1aa24cf54cb83ac7e70bb3edcae343325fd5f270ff0af0a1f84d19",
+              "sourceHashValidation": "cross-record-consistency"
+            },
+            "code": null
+          },
+          {
+            "name": "reported-exploration-thresholds",
+            "status": "passed",
+            "evidence": {
+              "actualSimulationSeconds": 240,
+              "targetCount": 24,
+              "reportedUniqueFiveMeterCells": 68,
+              "reportedMaximumDistanceFromSpawnMeters": 121.08089522638836,
+              "qualification": "Checks reported coverage thresholds, not independent runtime replay"
+            },
+            "code": null
+          },
+          {
+            "name": "recorded-trace-consistency",
+            "status": "passed",
+            "evidence": {
+              "traceSamples": 240,
+              "inferredInitialTick": 60,
+              "lastSampleSeconds": 240,
+              "fixedTicksPerSecond": 60
+            },
+            "code": null
+          },
+          {
+            "name": "opening-png",
+            "status": "passed",
+            "evidence": {
+              "path": "opening-world.png",
+              "sha256": "sha256:f13ad060127aaa50e1a055ddbf676f6c082f3a7e93978dcd31720741de056b0b",
+              "widthPixels": 1280,
+              "heightPixels": 720
+            },
+            "code": null
+          },
+          {
+            "name": "triview-pngs",
+            "status": "passed",
+            "evidence": {
+              "images": [
+                {
+                  "id": "player",
+                  "path": "triview-player.png",
+                  "sha256": "sha256:875e199c1d954c44acfa7f76dba66b1c3e8766b4fb81bcbbd083cc84792ec9a4",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "palace",
+                  "path": "triview-palace.png",
+                  "sha256": "sha256:dd3e0651e674222dfdadbf8b4d215a50474d8e55cdae6f02d1f4dd0b247bd365",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "moon-gate",
+                  "path": "triview-moon-gate.png",
+                  "sha256": "sha256:b87a1208352592155b4a88315ab802dd8980e3a88d540307b321f1273e4e18f0",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "paper-moon",
+                  "path": "triview-paper-moon.png",
+                  "sha256": "sha256:e4af90defb7ed96a1c5ce7c3f92064163a1210d2f7ca6806f6e9cd0737d9660d",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "arrival-bridge-rail-l",
+                  "path": "triview-arrival-bridge-rail-l.png",
+                  "sha256": "sha256:05eac5db59efb70235b2f99f58f7f66bd4d34d4cb6634db8d9065641e801e8a6",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                }
+              ],
+              "pngValidation": "Signature, IHDR dimensions/CRC and SHA256; visual quality not assessed"
+            },
+            "code": null
+          },
+          {
+            "name": "decoded-playtest-video",
+            "status": "passed",
+            "evidence": {
+              "path": "playtest.mp4",
+              "decodedFrames": 240,
+              "expectedFrames": 240,
+              "framesPerSecond": 1,
+              "durationSeconds": 240,
+              "formatDurationSeconds": 240,
+              "durationToleranceSeconds": 1.001,
+              "widthPixels": 1280,
+              "heightPixels": 720,
+              "validation": "ffprobe decoded frame count; not a visual-quality or realtime-performance assessment"
+            },
+            "code": null
+          }
+        ],
+        "limitations": [
+          "Static artifact integrity and decoded-media checks only; scene code was not executed.",
+          "Reported exploration metrics and recorded traces do not prove complete navigability or absence of bugs.",
+          "Independent browser replay and visual comparison with the original reference remain required.",
+          "The sourceHash is cross-bound between records, not recomputed from an unavailable runtime-lock preimage."
+        ]
+      },
+      "failure": null,
+      "priorAttempts": [
+        {
+          "runId": "gpt6-five-case-eval-20260905-r3",
+          "jobId": "gen_bdad645aceef06e1",
+          "requestId": "wk6-53fa3e532918b55c-gpt6-eval-paper-moon-palace-a1",
+          "phase": "failed",
+          "providerStatus": "cancelled",
+          "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+          "failure": {
+            "category": "unclassified",
+            "message": "Provider did not succeed: cancelled/undefined"
+          },
+          "timing": {
+            "available": false,
+            "unavailable_reason": "worker_timing_incomplete",
+            "driver_started_at": "2026-09-05T04:31:16.397755Z",
+            "processing_started_at": "2026-09-05T04:31:16.557031Z",
+            "first_item_started_at": "",
+            "last_item_finished_at": "",
+            "worker_finished_at": "",
+            "queue_seconds": 1.457,
+            "startup_seconds": 0.159,
+            "remote_run_seconds_excluding_queue": null,
+            "stage_timings": [
+              {
+                "stage": "codex",
+                "attempt": 1,
+                "scope": "",
+                "started_at": "2026-09-05T04:31:16.557031Z",
+                "finished_at": "",
+                "duration_seconds": 0
+              }
+            ]
+          },
+          "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-paper-moon-palace",
+          "evidence": {
+            "available": false,
+            "failedOperations": [],
+            "mcpCallFailures": [],
+            "cliErrors": []
+          }
+        }
+      ],
+      "files": {
+        "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace",
+        "state": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/state.json",
+        "launcherReport": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/creator-launcher-report.json",
+        "result": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/creator-result.json",
+        "events": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3-ac4/gpt6-eval-paper-moon-palace/creator-events.jsonl"
+      },
+      "qualityAssessment": "Outside this cloud delivery report; consult independent Root visual and browser reviews."
+    },
+    {
+      "caseId": "gpt6-eval-rice-terraces",
+      "title": "梯田山谷",
+      "sourceTestSetId": "test-set-gvs2-e78c",
+      "sourceCaseId": "image-009-cb8b",
+      "referenceImageSha256": "sha256:517aeb5093cd95e73278812700f01b3b4493b95c634e3f0ade4de0c2e6946684",
+      "effectivePromptSha256": "sha256:e65e1c02074422e8095df4a45f01df05398345a0f6478491ac4e71ea6a3ed320",
+      "caseHash": "ae758013e89860208bbc2ad5092dfae9d6fe4287e920e0c8603f504e7e910b1e",
+      "runId": "gpt6-five-case-eval-20260905-r3",
+      "jobId": "gen_a4e89f0e4fc94dea",
+      "requestId": "wk6-4efb847723084677-gpt6-eval-rice-terraces-a1",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+      "phase": "delivered",
+      "providerStatus": "succeeded",
+      "itemStatus": "succeeded",
+      "apiBuildCommit": "30f4e96",
+      "sourceHash": "sha256:2f19908b853268f588d303aaffd1301c162af361729440dcb7da46f64c9b0fce",
+      "archiveSha256": "sha256:0a35ddc09279d592fec520f465df4a1bcd5eb6ce12553f22bb180dd4ecd66160",
+      "archiveBytes": 7755437,
+      "eventsSha256": "sha256:c32a930bac0df4600777b54ed1360f0136f3c4d683f58c32897e2d4eeed07543",
+      "submitOperationId": "op-58b67999-7bd2-4534-b9b0-ac050c184605",
+      "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/five-case-eval/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/ae758013e8986020",
+      "timing": {
+        "queueSeconds": 1.443,
+        "startupSeconds": 0.163,
+        "cloudProcessingSecondsExcludingQueue": 939.095,
+        "cliLauncherStartedAt": "2026-09-05T04:31:18.450Z",
+        "cliLauncherFinishedAt": "2026-09-05T04:46:56.079Z",
+        "cliLauncherWallSeconds": 937.629,
+        "localDeliverySeconds": 39.977,
+        "playtestSimulationSeconds": 180,
+        "playtestWallSeconds": 36.11192795299995
+      },
+      "playtest": {
+        "status": "passed",
+        "requestedDurationSeconds": 180,
+        "actualSimulationSeconds": 180,
+        "wallTimeSeconds": 36.11192795299995,
+        "framesPerSecond": 1,
+        "targetCount": 8,
+        "visitedTargets": [
+          "start-terrace",
+          "center-paddy",
+          "left-turn",
+          "left-valley",
+          "right-step",
+          "right-high",
+          "ridge-lookout",
+          "return-center"
+        ],
+        "uniqueFiveMeterCells": 34,
+        "travelledMeters": 423.80659944298253,
+        "maximumDistanceFromSpawnMeters": 42.42272379400298,
+        "limitations": [
+          "Executed authored waypoint path only; not exhaustive navigation proof",
+          "Capture cadence is evaluation video cadence, not production realtime performance",
+          "No NPC hot edit or video model inference in this experiment"
+        ]
+      },
+      "toolEvidence": {
+        "available": true,
+        "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/creator-events.jsonl",
+        "sha256": "sha256:c32a930bac0df4600777b54ed1360f0136f3c4d683f58c32897e2d4eeed07543",
+        "bytes": 539896,
+        "jsonLines": 150,
+        "invalidLines": 0,
+        "mcpCallsByTool": {
+          "creator_describe_environment": 1,
+          "creator_get_authoring_schema": 1,
+          "assets_search": 6,
+          "assets_describe": 1,
+          "world_validate": 6,
+          "operations_get": 29,
+          "world_preview": 4,
+          "world_playtest": 6,
+          "world_capture_triviews": 3,
+          "world_submit": 1
+        },
+        "mcpCallCount": 58,
+        "operationCount": 20,
+        "failedOperations": [
+          {
+            "sequenceNumber": 4,
+            "operationId": "op-1f99a12a-5f7c-4e1c-b4d5-3af584167919",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:36:51.355Z",
+            "updatedAt": "2026-09-05T04:36:58.317Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:5e3efa923fe96cc41fd53e5d51ef5923b51c390fc91e191a0840946f9a48f144",
+            "error": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 15,
+              "actualSimulationSeconds": 11.5,
+              "wallTimeSeconds": 5.054442088000011,
+              "framesPerSecond": 2,
+              "targetCount": 8,
+              "visitedTargets": [
+                "start-terrace"
+              ],
+              "uniqueFiveMeterCells": 2,
+              "travelledMeters": 5.079999999999892,
+              "maximumDistanceFromSpawnMeters": 6.119999999999873,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 6,
+            "operationId": "op-81a80352-971a-40af-a751-fdeca1de1726",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:38:43.625Z",
+            "updatedAt": "2026-09-05T04:38:50.626Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:ff42a8a9d64226c117089161b0f72218ca61ffd1a4f74a95683e9a6b38a5d8c3",
+            "error": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 30,
+              "actualSimulationSeconds": 11.5,
+              "wallTimeSeconds": 5.181489838999987,
+              "framesPerSecond": 2,
+              "targetCount": 8,
+              "visitedTargets": [
+                "start-terrace"
+              ],
+              "uniqueFiveMeterCells": 2,
+              "travelledMeters": 5.079999999999892,
+              "maximumDistanceFromSpawnMeters": 6.119999999999873,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: center-paddy",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 8,
+            "operationId": "op-4f12b9df-d182-411c-a0e4-46458874eeb6",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:40:51.660Z",
+            "updatedAt": "2026-09-05T04:41:06.117Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:aba2209026415a5d9e434516979f28b7323ec479152761bd05a658c975f5377a",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 30,
+              "actualSimulationSeconds": 30,
+              "wallTimeSeconds": 12.583064566999907,
+              "framesPerSecond": 2,
+              "targetCount": 8,
+              "visitedTargets": [
+                "start-terrace",
+                "center-paddy",
+                "left-turn",
+                "left-valley"
+              ],
+              "uniqueFiveMeterCells": 19,
+              "travelledMeters": 70.1409228791682,
+              "maximumDistanceFromSpawnMeters": 36.262480777102624,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 11,
+            "operationId": "op-c5e4cf16-d240-4fc9-b336-9ebb2c4e906d",
+            "type": "world.capture-triviews",
+            "createdAt": "2026-09-05T04:42:05.878Z",
+            "updatedAt": "2026-09-05T04:42:06.492Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: terrace-right-high\n    at bee (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:31484)\n    at vee (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:33915)\n    at Gv.captureArtifactView (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:123005)\n    at http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3493:4582\n    at W (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3493:4773)",
+            "reason": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: terrace-right-high\n    at bee (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:31484)\n    at vee (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:33915)\n    at Gv.captureArtifactView (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3492:123005)\n    at http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3493:4582\n    at W (http://127.0.0.1:37291/assets/index-DSPoTaHv.js:3493:4773)",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 15,
+            "operationId": "op-58601c7a-cfca-45e2-a4e1-3a4760aba0b9",
+            "type": "world.capture-triviews",
+            "createdAt": "2026-09-05T04:44:16.863Z",
+            "updatedAt": "2026-09-05T04:44:19.762Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: palm-a\n    at bee (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:31484)\n    at vee (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:33915)\n    at Gv.captureArtifactView (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:123005)\n    at http://127.0.0.1:35781/assets/index-8su2d7dR.js:3493:4582\n    at W (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3493:4773)",
+            "reason": "page.evaluate: Error: BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: palm-a\n    at bee (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:31484)\n    at vee (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:33915)\n    at Gv.captureArtifactView (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3492:123005)\n    at http://127.0.0.1:35781/assets/index-8su2d7dR.js:3493:4582\n    at W (http://127.0.0.1:35781/assets/index-8su2d7dR.js:3493:4773)",
+            "reportedPlaytest": null
+          }
+        ],
+        "mcpCallFailures": [],
+        "cliErrors": [],
+        "cliUsage": [
+          {
+            "input_tokens": 6275759,
+            "cached_input_tokens": 6014720,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 12870,
+            "reasoning_output_tokens": 3400
+          }
+        ]
+      },
+      "previewImageResponses": 4,
+      "hostVerification": {
+        "status": "static-artifacts-passed",
+        "reportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-rice-terraces/host-artifact-verification.json",
+        "payloadDirectory": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-rice-terraces/payload",
+        "checks": [
+          {
+            "name": "external-archive-sha256",
+            "status": "passed",
+            "evidence": {
+              "sha256": "sha256:0a35ddc09279d592fec520f465df4a1bcd5eb6ce12553f22bb180dd4ecd66160",
+              "binding": "externally-bound"
+            },
+            "code": null
+          },
+          {
+            "name": "archive-safety",
+            "status": "passed",
+            "evidence": {
+              "files": 208,
+              "expandedBytes": 16552041
+            },
+            "code": null
+          },
+          {
+            "name": "closed-artifact-file-set",
+            "status": "passed",
+            "evidence": {
+              "payloadFileCount": 207,
+              "manifestFileCount": 1
+            },
+            "code": null
+          },
+          {
+            "name": "artifact-file-sha256",
+            "status": "passed",
+            "evidence": {
+              "verifiedFileCount": 207
+            },
+            "code": null
+          },
+          {
+            "name": "identity-and-result-bindings",
+            "status": "passed",
+            "evidence": {
+              "sceneId": "gpt6-eval-rice-terraces",
+              "sourceHash": "sha256:2f19908b853268f588d303aaffd1301c162af361729440dcb7da46f64c9b0fce",
+              "sourceHashValidation": "cross-record-consistency"
+            },
+            "code": null
+          },
+          {
+            "name": "reported-exploration-thresholds",
+            "status": "passed",
+            "evidence": {
+              "actualSimulationSeconds": 180,
+              "targetCount": 8,
+              "reportedUniqueFiveMeterCells": 34,
+              "reportedMaximumDistanceFromSpawnMeters": 42.42272379400298,
+              "qualification": "Checks reported coverage thresholds, not independent runtime replay"
+            },
+            "code": null
+          },
+          {
+            "name": "recorded-trace-consistency",
+            "status": "passed",
+            "evidence": {
+              "traceSamples": 180,
+              "inferredInitialTick": 60,
+              "lastSampleSeconds": 180,
+              "fixedTicksPerSecond": 60
+            },
+            "code": null
+          },
+          {
+            "name": "opening-png",
+            "status": "passed",
+            "evidence": {
+              "path": "opening-world.png",
+              "sha256": "sha256:1c1b0cc1ed9ce75018a315a7e1d77a9fe1e47b127285e4ceb17024c5517011dc",
+              "widthPixels": 1280,
+              "heightPixels": 720
+            },
+            "code": null
+          },
+          {
+            "name": "triview-pngs",
+            "status": "passed",
+            "evidence": {
+              "images": [
+                {
+                  "id": "player",
+                  "path": "triview-player.png",
+                  "sha256": "sha256:6956904f57390907bc0809a51cf178dbb7ac908140d35bd204ad9f7d5fede09e",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "right-terrace-2",
+                  "path": "triview-right-terrace-2.png",
+                  "sha256": "sha256:4c03ea34e5f884f8be23b665c512b095aa450bae1f02d4f84c7f2614e9b0c424",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "left-branch-1",
+                  "path": "triview-left-branch-1.png",
+                  "sha256": "sha256:21634bfd93288cc942c71ce82c2d1ff6adfe452a95d5f57df6d80ebe5cf9f9a0",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "mountain-1",
+                  "path": "triview-mountain-1.png",
+                  "sha256": "sha256:72ba412d9a5ee7598e69404ab66e39fec92fd398efccddb2185e0303d303cf4c",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "farmer-hut",
+                  "path": "triview-farmer-hut.png",
+                  "sha256": "sha256:99cba1cd312d8a1ac56b7ccb0f0634a59ddc98c98d912bc9dd634fd5cd5712e5",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "palm-a-crown",
+                  "path": "triview-palm-a-crown.png",
+                  "sha256": "sha256:7d679afb07d0a5ed564760f74025af966718452d6f2e44ae34023d29172f8c83",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                }
+              ],
+              "pngValidation": "Signature, IHDR dimensions/CRC and SHA256; visual quality not assessed"
+            },
+            "code": null
+          },
+          {
+            "name": "decoded-playtest-video",
+            "status": "passed",
+            "evidence": {
+              "path": "playtest.mp4",
+              "decodedFrames": 180,
+              "expectedFrames": 180,
+              "framesPerSecond": 1,
+              "durationSeconds": 180,
+              "formatDurationSeconds": 180,
+              "durationToleranceSeconds": 1.001,
+              "widthPixels": 1280,
+              "heightPixels": 720,
+              "validation": "ffprobe decoded frame count; not a visual-quality or realtime-performance assessment"
+            },
+            "code": null
+          }
+        ],
+        "limitations": [
+          "Static artifact integrity and decoded-media checks only; scene code was not executed.",
+          "Reported exploration metrics and recorded traces do not prove complete navigability or absence of bugs.",
+          "Independent browser replay and visual comparison with the original reference remain required.",
+          "The sourceHash is cross-bound between records, not recomputed from an unavailable runtime-lock preimage."
+        ]
+      },
+      "failure": null,
+      "priorAttempts": [],
+      "files": {
+        "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces",
+        "state": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/state.json",
+        "launcherReport": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/creator-launcher-report.json",
+        "result": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/creator-result.json",
+        "events": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-rice-terraces/creator-events.jsonl"
+      },
+      "qualityAssessment": "Outside this cloud delivery report; consult independent Root visual and browser reviews."
+    },
+    {
+      "caseId": "gpt6-eval-nine-tailed-fox",
+      "title": "九尾狐麦田",
+      "sourceTestSetId": "test-set-worldkit-reference-scenes-v1",
+      "sourceCaseId": "image-057-72c8",
+      "referenceImageSha256": "sha256:72c828ab77c20b96d93e0c02aeeae11b69d11c1df08709a7e2174f6dcd57fa78",
+      "effectivePromptSha256": "sha256:7d10348e5c68bd88a3b1a4be294e097b98d5a64dc7812486e54ba40b8bc14fa4",
+      "caseHash": "296311fb6ac10a8310ce9158c437aed5c33c2789388fdd81a40630785ad6d82e",
+      "runId": "gpt6-five-case-eval-20260905-r3",
+      "jobId": "gen_4a4f2b81c6d9ab90",
+      "requestId": "wk6-98edc2f90ae4b24b-gpt6-eval-nine-tailed-fox-a1",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "runtimeHash": "sha256:67c79376c6b19117414f20799a96dd615ddf0063ea9485b61654ab4a02fe3613",
+      "phase": "delivered",
+      "providerStatus": "succeeded",
+      "itemStatus": "succeeded",
+      "apiBuildCommit": "30f4e96",
+      "sourceHash": "sha256:c8a121714ef46685e14526f0cd88b9a81c802ce93b90b7f36fcb9982a2c342cf",
+      "archiveSha256": "sha256:57a3ceedffe1f033811d86b6094df9b94bf19a441a099b1bf1656aedaa404ac5",
+      "archiveBytes": 7845638,
+      "eventsSha256": "sha256:c6ff53bb6ead2a7719b2428bb505a732ea1b902b175196a80c51d38f5b3ca239",
+      "submitOperationId": "op-d382dbb5-af30-490d-9a9d-b7049b0ac555",
+      "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/five-case-eval/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/296311fb6ac10a83",
+      "timing": {
+        "queueSeconds": 1.433,
+        "startupSeconds": 0.138,
+        "cloudProcessingSecondsExcludingQueue": 704.921,
+        "cliLauncherStartedAt": "2026-09-05T04:31:19.150Z",
+        "cliLauncherFinishedAt": "2026-09-05T04:43:02.627Z",
+        "cliLauncherWallSeconds": 703.477,
+        "localDeliverySeconds": 40.269,
+        "playtestSimulationSeconds": 180,
+        "playtestWallSeconds": 50.69015870999999
+      },
+      "playtest": {
+        "status": "passed",
+        "requestedDurationSeconds": 180,
+        "actualSimulationSeconds": 180,
+        "wallTimeSeconds": 50.69015870999999,
+        "framesPerSecond": 2,
+        "targetCount": 6,
+        "visitedTargets": [
+          "return-start",
+          "left-field",
+          "altar-approach",
+          "altar-center",
+          "right-field",
+          "return-path"
+        ],
+        "uniqueFiveMeterCells": 30,
+        "travelledMeters": 424.85309371104137,
+        "maximumDistanceFromSpawnMeters": 34.22512881934203,
+        "limitations": [
+          "Executed authored waypoint path only; not exhaustive navigation proof",
+          "Capture cadence is evaluation video cadence, not production realtime performance",
+          "No NPC hot edit or video model inference in this experiment"
+        ]
+      },
+      "toolEvidence": {
+        "available": true,
+        "file": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/creator-events.jsonl",
+        "sha256": "sha256:c6ff53bb6ead2a7719b2428bb505a732ea1b902b175196a80c51d38f5b3ca239",
+        "bytes": 612232,
+        "jsonLines": 124,
+        "invalidLines": 0,
+        "mcpCallsByTool": {
+          "creator_describe_environment": 1,
+          "creator_get_authoring_schema": 1,
+          "assets_search": 5,
+          "assets_describe": 1,
+          "world_validate": 6,
+          "operations_get": 21,
+          "world_preview": 4,
+          "world_playtest": 3,
+          "world_capture_triviews": 1,
+          "world_submit": 1
+        },
+        "mcpCallCount": 44,
+        "operationCount": 15,
+        "failedOperations": [
+          {
+            "sequenceNumber": 1,
+            "operationId": "op-f6857d0c-0a2c-4eed-94d2-c5341a07d99b",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:33:36.005Z",
+            "updatedAt": "2026-09-05T04:33:36.049Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_IMPORT_NOT_ADMITTED: @babylonjs/core",
+            "reason": "CREATOR_IMPORT_NOT_ADMITTED: @babylonjs/core",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 2,
+            "operationId": "op-60249409-2378-4388-b613-a6aef4e58403",
+            "type": "world.validate",
+            "createdAt": "2026-09-05T04:33:53.543Z",
+            "updatedAt": "2026-09-05T04:34:51.065Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "../../../../../lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts (6:9): \"defineBabylonNativeScene\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts:6:9\n\n4: import { Color3 } from '@babylonjs/core/Maths/math.color.js';\n5: import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';\n6: import { defineBabylonNativeScene, registerEntity } from '@worldkit/creator';\n            ^\n7: \n8: const mat = (name: string, color: Color3, rough = 0.9) => {\n",
+            "reason": "../../../../../lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts (6:9): \"defineBabylonNativeScene\" is not exported by \"scripts/creator/authoring.ts\", imported by \"../../../../../lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts\".\nfile: /fsx/pipeline/lwdp_generation/gen_4a4f2b81c6d9ab90/tasks/gpt6-eval-nine-tailed-fox/.creator-evidence/291543f50a3edf60/source/scene.ts:6:9\n\n4: import { Color3 } from '@babylonjs/core/Maths/math.color.js';\n5: import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';\n6: import { defineBabylonNativeScene, registerEntity } from '@worldkit/creator';\n            ^\n7: \n8: const mat = (name: string, color: Color3, rough = 0.9) => {\n",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 4,
+            "operationId": "op-c3b7cf12-93bf-4fdf-b187-0455a43d2a85",
+            "type": "world.preview",
+            "createdAt": "2026-09-05T04:36:28.813Z",
+            "updatedAt": "2026-09-05T04:36:31.257Z",
+            "operationStatus": "failed",
+            "resultStatus": null,
+            "sourceHash": null,
+            "error": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reason": "CREATOR_RUNTIME_FAILED: Error: WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED: Native Scene Module build() failed.",
+            "reportedPlaytest": null
+          },
+          {
+            "sequenceNumber": 9,
+            "operationId": "op-4a5a5ade-b90e-4ecf-be89-11f6bd1477d8",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:39:47.808Z",
+            "updatedAt": "2026-09-05T04:39:54.244Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:367d5c2f6769908a883b05e4f75ddf68b48f440890014c44b759b901430b2604",
+            "error": null,
+            "reason": "The operation completed, but its controller report marked this round failed; see the reported duration, waypoint and coverage metrics.",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 20,
+              "actualSimulationSeconds": 20,
+              "wallTimeSeconds": 6.199840889999992,
+              "framesPerSecond": 2,
+              "targetCount": 6,
+              "visitedTargets": [
+                "return-start",
+                "left-field"
+              ],
+              "uniqueFiveMeterCells": 12,
+              "travelledMeters": 46.40294996933021,
+              "maximumDistanceFromSpawnMeters": 27.43521301807176,
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          },
+          {
+            "sequenceNumber": 10,
+            "operationId": "op-4457147f-8911-4852-b83c-7b31d5b5c034",
+            "type": "world.playtest",
+            "createdAt": "2026-09-05T04:39:59.399Z",
+            "updatedAt": "2026-09-05T04:40:09.762Z",
+            "operationStatus": "succeeded",
+            "resultStatus": "failed",
+            "sourceHash": "sha256:367d5c2f6769908a883b05e4f75ddf68b48f440890014c44b759b901430b2604",
+            "error": "PLAYER_STUCK_NEAR_TARGET: altar-center",
+            "reason": "PLAYER_STUCK_NEAR_TARGET: altar-center",
+            "reportedPlaytest": {
+              "status": "failed",
+              "requestedDurationSeconds": 180,
+              "actualSimulationSeconds": 35.5,
+              "wallTimeSeconds": 10.173339632999967,
+              "framesPerSecond": 2,
+              "targetCount": 6,
+              "visitedTargets": [
+                "return-start",
+                "left-field",
+                "altar-approach"
+              ],
+              "uniqueFiveMeterCells": 13,
+              "travelledMeters": 56.49272880486688,
+              "maximumDistanceFromSpawnMeters": 29.064919461627504,
+              "failure": "PLAYER_STUCK_NEAR_TARGET: altar-center",
+              "limitations": [
+                "Executed authored waypoint path only; not exhaustive navigation proof",
+                "Capture cadence is evaluation video cadence, not production realtime performance",
+                "No NPC hot edit or video model inference in this experiment"
+              ]
+            }
+          }
+        ],
+        "mcpCallFailures": [],
+        "cliErrors": [],
+        "cliUsage": [
+          {
+            "input_tokens": 2208343,
+            "cached_input_tokens": 2120960,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 9847,
+            "reasoning_output_tokens": 2322
+          }
+        ]
+      },
+      "previewImageResponses": 3,
+      "hostVerification": {
+        "status": "static-artifacts-passed",
+        "reportPath": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-nine-tailed-fox-hash-verified/host-artifact-verification.json",
+        "payloadDirectory": ".codex-tmp/gpt6-five-case-eval/host-verified/gpt6-eval-nine-tailed-fox-hash-verified/payload",
+        "checks": [
+          {
+            "name": "external-archive-sha256",
+            "status": "passed",
+            "evidence": {
+              "sha256": "sha256:57a3ceedffe1f033811d86b6094df9b94bf19a441a099b1bf1656aedaa404ac5",
+              "binding": "externally-bound"
+            },
+            "code": null
+          },
+          {
+            "name": "archive-safety",
+            "status": "passed",
+            "evidence": {
+              "files": 207,
+              "expandedBytes": 12812708
+            },
+            "code": null
+          },
+          {
+            "name": "closed-artifact-file-set",
+            "status": "passed",
+            "evidence": {
+              "payloadFileCount": 206,
+              "manifestFileCount": 1
+            },
+            "code": null
+          },
+          {
+            "name": "artifact-file-sha256",
+            "status": "passed",
+            "evidence": {
+              "verifiedFileCount": 206
+            },
+            "code": null
+          },
+          {
+            "name": "identity-and-result-bindings",
+            "status": "passed",
+            "evidence": {
+              "sceneId": "gpt6-eval-nine-tailed-fox",
+              "sourceHash": "sha256:c8a121714ef46685e14526f0cd88b9a81c802ce93b90b7f36fcb9982a2c342cf",
+              "sourceHashValidation": "cross-record-consistency"
+            },
+            "code": null
+          },
+          {
+            "name": "reported-exploration-thresholds",
+            "status": "passed",
+            "evidence": {
+              "actualSimulationSeconds": 180,
+              "targetCount": 6,
+              "reportedUniqueFiveMeterCells": 30,
+              "reportedMaximumDistanceFromSpawnMeters": 34.22512881934203,
+              "qualification": "Checks reported coverage thresholds, not independent runtime replay"
+            },
+            "code": null
+          },
+          {
+            "name": "recorded-trace-consistency",
+            "status": "passed",
+            "evidence": {
+              "traceSamples": 180,
+              "inferredInitialTick": 60,
+              "lastSampleSeconds": 179.5,
+              "fixedTicksPerSecond": 60
+            },
+            "code": null
+          },
+          {
+            "name": "opening-png",
+            "status": "passed",
+            "evidence": {
+              "path": "opening-world.png",
+              "sha256": "sha256:c01fe636384f3ca3f17afb2b1aa19058b8120a5e6bb6833808629f97c9dfa553",
+              "widthPixels": 1280,
+              "heightPixels": 720
+            },
+            "code": null
+          },
+          {
+            "name": "triview-pngs",
+            "status": "passed",
+            "evidence": {
+              "images": [
+                {
+                  "id": "player",
+                  "path": "triview-player.png",
+                  "sha256": "sha256:fd73b4c77a6806274af03711e3b524f78c00c7c12274b0562a0f526fb4b5e159",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "fox-nine-tails",
+                  "path": "triview-fox-nine-tails.png",
+                  "sha256": "sha256:5bd7a5dca2d568ff6b32389dd0272a2d296cff3e9a5e1a1155ddd762b2c57102",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "stone-altar",
+                  "path": "triview-stone-altar.png",
+                  "sha256": "sha256:71e4d7bf6e268879c2028c5b8376cff9f9d7b195b922f051096dde4cc1e8cd42",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "wheat-field",
+                  "path": "triview-wheat-field.png",
+                  "sha256": "sha256:b9418c8504a593a8bc5e2e658e325b98f70f476dab29522dfcc6aa7f524dfc2b",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                },
+                {
+                  "id": "altar-path",
+                  "path": "triview-altar-path.png",
+                  "sha256": "sha256:a797dca4650f1000301ce67af1fc62b9bece1c58b359363ae30d6d31a2d05a8e",
+                  "widthPixels": 1536,
+                  "heightPixels": 640
+                }
+              ],
+              "pngValidation": "Signature, IHDR dimensions/CRC and SHA256; visual quality not assessed"
+            },
+            "code": null
+          },
+          {
+            "name": "decoded-playtest-video",
+            "status": "passed",
+            "evidence": {
+              "path": "playtest.mp4",
+              "decodedFrames": 360,
+              "expectedFrames": 360,
+              "framesPerSecond": 2,
+              "durationSeconds": 180,
+              "formatDurationSeconds": 180,
+              "durationToleranceSeconds": 0.501,
+              "widthPixels": 1280,
+              "heightPixels": 720,
+              "validation": "ffprobe decoded frame count; not a visual-quality or realtime-performance assessment"
+            },
+            "code": null
+          }
+        ],
+        "limitations": [
+          "Static artifact integrity and decoded-media checks only; scene code was not executed.",
+          "Reported exploration metrics and recorded traces do not prove complete navigability or absence of bugs.",
+          "Independent browser replay and visual comparison with the original reference remain required.",
+          "The sourceHash is cross-bound between records, not recomputed from an unavailable runtime-lock preimage."
+        ]
+      },
+      "failure": null,
+      "priorAttempts": [],
+      "files": {
+        "directory": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox",
+        "state": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/state.json",
+        "launcherReport": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/creator-launcher-report.json",
+        "result": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/creator-result.json",
+        "events": ".codex-tmp/gpt6-five-case-eval/runs/gpt6-five-case-eval-20260905-r3/gpt6-eval-nine-tailed-fox/creator-events.jsonl"
+      },
+      "qualityAssessment": "Outside this cloud delivery report; consult independent Root visual and browser reviews."
+    }
+  ]
+}
