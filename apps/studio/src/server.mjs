@@ -680,6 +680,15 @@ export function createStudio(options = {}) {
     throw new Error("Studio readiness nonce must contain 32 to 128 lowercase hexadecimal characters.");
   }
   const autoRunJobs = options.autoRunJobs ?? true;
+  const autoRecoverVisualDeliveries = options.autoRecoverVisualDeliveries ?? autoRunJobs;
+  const configuredVisualRecoveryIntervalMs = Number(options.visualRecoveryIntervalMs ??
+    process.env.WORLDKIT_STUDIO_VISUAL_RECOVERY_INTERVAL_MS ?? 60_000);
+  const visualRecoveryIntervalMs = Number.isSafeInteger(configuredVisualRecoveryIntervalMs) &&
+    configuredVisualRecoveryIntervalMs >= 1_000 ? configuredVisualRecoveryIntervalMs : 60_000;
+  const visualRecoveryTimers = options.visualRecoveryTimers ?? { setInterval, clearInterval };
+  let visualRecoveryTimer = null;
+  let visualRecoveryPromise = null;
+  const visualRecoveryLogKeys = new Map();
   const configuredConcurrency = Number(
     options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 4,
   );
@@ -3723,13 +3732,32 @@ export function createStudio(options = {}) {
   }
 
   async function recoverGeneratedStyledOutputs(record) {
+    return runRecordMutation(record.id, async () => {
+      const current = await readRecord(record.id);
+      if (!current || shuttingDown || activeJobs.has(record.id) ||
+          queue.some(item => parseQueueItem(item)?.id === record.id) ||
+          current.attempt !== record.attempt || current.startedAt !== record.startedAt) return false;
+      const recovered = await recoverGeneratedStyledOutputsUnlocked(current);
+      if (recovered) visualRecoveryLogKeys.delete(current.id);
+      return recovered;
+    });
+  }
+
+  async function recoverGeneratedStyledOutputsUnlocked(record) {
+    const native = effectiveSceneSourceKind(record) === "babylon-native";
+    const recoverableNativeFailure = native && record.status === "failed" &&
+      (/^STUDIO_NATIVE_VISUAL_FAILED: child exited with code (?:-1|1)$/.test(record.error ?? "") ||
+       record.error === "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE");
     if (
       record.workflowPolicyVersion !== workflowPolicyVersion ||
-      !["interrupted", "running"].includes(record.status) ||
+      record.outcome === "cancelled" ||
+      (!["interrupted", "running"].includes(record.status) && !recoverableNativeFailure) ||
       /alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(record.error ?? "") ||
       ![record.failedStage, record.stage].some((stage) =>
         ["visual-prompt-synthesis", "visual-imagegen"].includes(stage))
     ) return false;
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    if (/alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(rawLog)) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const startedAtMs = Date.parse(record.startedAt ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
@@ -3741,7 +3769,7 @@ export function createStudio(options = {}) {
       evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
       evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
     ) return false;
-    if (effectiveSceneSourceKind(record) === "babylon-native") {
+    if (native) {
       const closure = record.nativeProductionClosure;
       if (record.referenceImage === null || closure?.kind !== "studio-native-production-closure" ||
           closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
@@ -3751,7 +3779,7 @@ export function createStudio(options = {}) {
         // Ordinary generations retain the old freshness rule. An interrupted
         // explicit resume may reuse original pixels only through the same
         // request/delivery owner, with model dispatch disabled.
-        if (evaluationRun.executionMode !== "visual-resume") return false;
+        if (evaluationRun.executionMode !== "visual-resume" && !recoverableNativeFailure) return false;
         try {
           const resume = await prepareNativeVisualResume(record);
           if (!resume) return false;
@@ -3761,12 +3789,18 @@ export function createStudio(options = {}) {
             userFramePath: resume.userFramePath, backend: effectiveCodexBackend(record), scope: "all" });
           if (!await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, 0)) return false;
         } catch (error) {
-          await appendJobLog(record.id, `\nNative visual delivery replay remains interrupted: ${error instanceof Error ? error.message : String(error)}\n`);
+          const message = error instanceof Error ? error.message : String(error);
+          const key = `${record.attempt}:${record.startedAt}:${message}`;
+          if (visualRecoveryLogKeys.get(record.id) !== key) {
+            await appendJobLog(record.id, `\nNative visual delivery replay remains interrupted: ${message}\n`);
+            visualRecoveryLogKeys.set(record.id, key);
+          }
           return false;
         }
       }
       const finishedAt = new Date().toISOString();
-      await updateRecord(record.id, {
+      if (shuttingDown) return false;
+      await writeRecordUnlocked({ ...record,
         status: "ready", stage: "ready", failedStage: null, finishedAt, error: null,
         outcome: "passed", whiteboxOutcome: "passed", captureStatus: "passed", captureRequired: false,
         productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
@@ -3839,7 +3873,8 @@ export function createStudio(options = {}) {
       }
     }
     const finishedAt = new Date().toISOString();
-    await updateRecord(record.id, {
+    if (shuttingDown) return false;
+    await writeRecordUnlocked({ ...record,
       status: "ready",
       stage: "ready",
       failedStage: null,
@@ -3877,6 +3912,22 @@ export function createStudio(options = {}) {
     return true;
   }
 
+  function reconcileVisualDeliveries() {
+    if (shuttingDown || !autoRecoverVisualDeliveries) return Promise.resolve();
+    if (visualRecoveryPromise) return visualRecoveryPromise;
+    const operation = (async () => {
+      for (const record of await listRecords()) {
+        if (shuttingDown) break;
+        if (["failed", "interrupted"].includes(record.status) && record.outcome !== "cancelled")
+          await recoverGeneratedStyledOutputs(record);
+      }
+    })();
+    visualRecoveryPromise = operation;
+    const clear = () => { if (visualRecoveryPromise === operation) visualRecoveryPromise = null; };
+    void operation.then(clear, clear);
+    return operation;
+  }
+
   async function initialize() {
     await Promise.all([
       mkdir(worldsRoot, { recursive: true }),
@@ -3911,6 +3962,13 @@ export function createStudio(options = {}) {
       }
     }
     pumpQueue();
+    if (autoRecoverVisualDeliveries && visualRecoveryTimer === null) {
+      visualRecoveryTimer = visualRecoveryTimers.setInterval(() => {
+        runBackgroundTask("visual-recovery", "reconcile-delivered-visuals", reconcileVisualDeliveries);
+      }, visualRecoveryIntervalMs);
+      visualRecoveryTimer.unref?.();
+      runBackgroundTask("visual-recovery", "initial-reconcile-delivered-visuals", reconcileVisualDeliveries);
+    }
   }
 
   async function handleApi(request, response, url) {
@@ -4468,50 +4526,52 @@ export function createStudio(options = {}) {
 
     const retryMatch = /^\/api\/worlds\/([a-z0-9-]+)\/retry$/.exec(url.pathname);
     if (request.method === "POST" && retryMatch) {
-      const record = await readRecord(retryMatch[1]);
-      if (!record) {
-        sendError(response, 404, "没有找到这个世界。");
+      return runRecordMutation(retryMatch[1], async () => {
+        const record = await readRecord(retryMatch[1]);
+        if (!record) {
+          sendError(response, 404, "没有找到这个世界。");
+          return true;
+        }
+        if (!["failed", "interrupted"].includes(record.status)) {
+          sendError(response, 409, "只有失败或中断的任务可以重试。");
+          return true;
+        }
+        const styledOutputsRequired = record.referenceImage !== null;
+        let visualResume;
+        try { visualResume = await prepareNativeVisualResume(record); }
+        catch (error) {
+          sendError(response, 409, error instanceof Error ? error.message : String(error));
+          return true;
+        }
+        await writeRecordUnlocked({ ...record,
+          status: "queued",
+          stage: "queued",
+          failedStage: null,
+          error: null,
+          captureRequired: true,
+          captureStatus: "pending",
+          outcome: null,
+          productionOutcome: null,
+          publicationOutcome: null,
+          evaluationOutcome: null,
+          strictDiagnosticOutcome: null,
+          strictDiagnosticCodes: [],
+          strictDiagnosticCleanupOutcome: null,
+          nativeProductionClosure: null,
+          nativeLaunch: null,
+          styledOpeningFrameRequired: styledOutputsRequired,
+          styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
+          styledTriviewsRequired: styledOutputsRequired,
+          styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
+          ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
+        });
+        await appendTrajectoryEvent(record.id, "queued", visualResume
+          ? "用户发起视觉恢复：复用原请求与已发布白膜，不重新运行 Planner 或 Builder。"
+          : "用户发起重试，任务重新进入队列。", { kind: "queued" });
+        enqueue(record.id, effectiveCodexBackend(record));
+        sendJson(response, 202, { ok: true });
         return true;
-      }
-      if (!["failed", "interrupted"].includes(record.status)) {
-        sendError(response, 409, "只有失败或中断的任务可以重试。");
-        return true;
-      }
-      const styledOutputsRequired = record.referenceImage !== null;
-      let visualResume;
-      try { visualResume = await prepareNativeVisualResume(record); }
-      catch (error) {
-        sendError(response, 409, error instanceof Error ? error.message : String(error));
-        return true;
-      }
-      await updateRecord(record.id, {
-        status: "queued",
-        stage: "queued",
-        failedStage: null,
-        error: null,
-        captureRequired: true,
-        captureStatus: "pending",
-        outcome: null,
-        productionOutcome: null,
-        publicationOutcome: null,
-        evaluationOutcome: null,
-        strictDiagnosticOutcome: null,
-        strictDiagnosticCodes: [],
-        strictDiagnosticCleanupOutcome: null,
-        nativeProductionClosure: null,
-        nativeLaunch: null,
-        styledOpeningFrameRequired: styledOutputsRequired,
-        styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
-        styledTriviewsRequired: styledOutputsRequired,
-        styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
-        ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
       });
-      await appendTrajectoryEvent(record.id, "queued", visualResume
-        ? "用户发起视觉恢复：复用原请求与已发布白膜，不重新运行 Planner 或 Builder。"
-        : "用户发起重试，任务重新进入队列。", { kind: "queued" });
-      enqueue(record.id, effectiveCodexBackend(record));
-      sendJson(response, 202, { ok: true });
-      return true;
     }
 
     const referenceMatch = /^\/api\/worlds\/([a-z0-9-]+)\/reference$/.exec(url.pathname);
@@ -4688,10 +4748,15 @@ export function createStudio(options = {}) {
 
   async function shutdown() {
     shuttingDown = true;
+    if (visualRecoveryTimer !== null) {
+      visualRecoveryTimers.clearInterval(visualRecoveryTimer);
+      visualRecoveryTimer = null;
+    }
     for (const child of activeChildren.values()) {
       terminateChild(child);
     }
     await Promise.all([
+      visualRecoveryPromise?.catch(() => {}),
       recordingWorkbench.shutdown(),
       nativeRecordingPreviews.shutdown(),
       ...[...activeJobs].map((id) => runRecordMutation(id, async () => {
@@ -4709,6 +4774,7 @@ export function createStudio(options = {}) {
     server,
     initialize,
     shutdown,
+    reconcileVisualDeliveries,
     get activeJob() { return activeJobs.values().next().value ?? null; },
     get activeJobs() { return [...activeJobs]; },
   };

@@ -1365,6 +1365,32 @@ async function writeNativeStyledFixture(fakeRepoRoot, id) {
   return root;
 }
 
+for (const [enabled, interval, expected] of [[undefined, undefined, null], [true, undefined, 60_000], [true, 500, 60_000], [true, 1_000, 1_000]]) {
+  test(`visual delivery polling lifecycle enabled=${enabled} interval=${interval}`, async () => {
+    const root = await temporaryRoot(".visual-polling-");
+    const calls = [];
+    const handle = { unref() { calls.push("unref"); } };
+    let tick;
+    const studio = createStudio({ repoRoot: root, dataRoot: path.join(root, "data"), autoRunJobs: false,
+      autoRecoverVisualDeliveries: enabled, visualRecoveryIntervalMs: interval,
+      importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false,
+      visualRecoveryTimers: {
+        setInterval(callback, delay) { tick = callback; calls.push(delay); return handle; },
+        clearInterval(value) { assert.equal(value, handle); calls.push("clear"); },
+      },
+    });
+    await listen(studio);
+    try {
+      assert.deepEqual(calls, expected === null ? [] : [expected, "unref"]);
+      tick?.();
+      await studio.reconcileVisualDeliveries();
+    } finally { await studio.shutdown(); }
+    assert.deepEqual(calls, expected === null ? [] : [expected, "unref", "clear"]);
+    tick?.();
+    await studio.reconcileVisualDeliveries();
+  });
+}
+
 for (const mutation of ["png", "manifest", "extra-directory"]) {
   test(`rejects Native complete-target capture ${mutation} mutation`, async () => {
     const dataRoot = await temporaryRoot(".native-target-tamper-data-");
@@ -1539,6 +1565,7 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "interrupted-r
           if (retryMode === "interrupted-stale-input") await writeFile(path.join(root, "inputs/reference-0.png"), VALID_EMPTY_OPENING_PNG);
           let replayCount = 0;
           const next = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
+            autoRecoverVisualDeliveries: false,
             importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false,
             nativeVisualRecoveryImplementation: async input => {
               replayCount++;
@@ -1602,11 +1629,11 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "interrupted-r
   });
 }
 
-for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-run", "stale-capture", "explicit-failure"]) {
+for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-run", "stale-capture", "explicit-failure", "late-exit-one", "late-host-finalization", "late-alignment", "late-poll-retry", "late-poll-shutdown", "cancelled"]) {
   test(`Native visual restart ${recoveryMode} uses retained whitebox without launching tasks`, async () => {
     const dataRoot = await temporaryRoot(".native-restart-data-");
     const fakeRepoRoot = await temporaryRoot(".native-restart-repo-");
-    const config = { repoRoot: fakeRepoRoot, dataRoot, importExistingArtifacts: false,
+    const config = { repoRoot: fakeRepoRoot, dataRoot, importExistingArtifacts: false, autoRecoverVisualDeliveries: false,
       importBuiltinTestSets: false, importBuiltinResults: false, lwdpConfigured: true };
     let productionResult;
     let child;
@@ -1614,6 +1641,7 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
       beforeWorldSpawn: async id => {
         productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
           strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
+          withFrozenAppearanceReference: true,
         });
         await writeNativeStyledFixture(fakeRepoRoot, id);
       },
@@ -1666,21 +1694,65 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
     if (recoveryMode === "stale-capture") await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
     if (recoveryMode === "explicit-failure") await writeFile(recordPath, JSON.stringify({ ...stopped,
       status: "failed", stage: "failed", error: "visual generation failed", failedStage: "visual-imagegen" }));
+    if (recoveryMode.startsWith("late-")) {
+      await writeFile(recordPath, JSON.stringify({ ...stopped, status: "failed", stage: "failed",
+        failedStage: "visual-imagegen", error: recoveryMode === "late-host-finalization"
+          ? "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE" : "STUDIO_NATIVE_VISUAL_FAILED: child exited with code 1" }));
+      if (recoveryMode === "late-host-finalization" || recoveryMode.startsWith("late-poll")) await rm(path.join(root, "styled-triviews-report.json"));
+      if (recoveryMode === "late-alignment") await writeFile(path.join(dataRoot, "worlds", created.id, "agent.log"), "alignment failed\n");
+    }
+    if (recoveryMode === "cancelled") await writeFile(recordPath, JSON.stringify({ ...stopped, outcome: "cancelled" }));
     const receiptPath = path.join(root, "final/capture/formal-world-capture-receipt.json");
     const receiptBefore = await readFile(receiptPath);
     let dispatchCount = 0;
+    let replayCount = 0;
+    let allowDelivery = !recoveryMode.startsWith("late-poll");
+    let entered;
+    let release;
+    const enteredReplay = new Promise(resolve => { entered = resolve; });
+    const releaseReplay = new Promise(resolve => { release = resolve; });
     const second = createStudio({ ...config, autoRunJobs: true,
+      autoRecoverVisualDeliveries: recoveryMode.startsWith("late-poll"),
+      nativeVisualRecoveryImplementation: async input => {
+        replayCount++;
+        if (!allowDelivery) throw new Error("VISUAL_TASK_NOT_DELIVERED");
+        if (recoveryMode.startsWith("late-poll")) { entered(); await releaseReplay; }
+        assert.equal(input.sceneId, created.id);
+        await writeNativeStyledFixture(fakeRepoRoot, created.id);
+      },
       worldSpawnImplementation: () => { dispatchCount++; throw new Error("recovery must not launch a task"); } });
     const nextOrigin = await listen(second);
     try {
+      if (recoveryMode.startsWith("late-poll")) {
+        await second.reconcileVisualDeliveries();
+        allowDelivery = true;
+        const sweep = second.reconcileVisualDeliveries();
+        await enteredReplay;
+        assert.equal(second.reconcileVisualDeliveries(), sweep, "sweeps must not overlap");
+        if (recoveryMode === "late-poll-shutdown") {
+          const shutdown = second.shutdown();
+          release();
+          await shutdown;
+          assert.equal(JSON.parse(await readFile(recordPath, "utf8")).status, "failed");
+          assert.equal(dispatchCount, 0);
+          assert.deepEqual(await readFile(receiptPath), receiptBefore);
+          return;
+        }
+        const retry = fetch(`${nextOrigin}/api/worlds/${created.id}/retry`, { method: "POST" });
+        release();
+        await sweep;
+        assert.equal((await retry).status, 409, "recovery completed before retry; do not start a second attempt");
+      }
       const { world } = await (await fetch(`${nextOrigin}/api/worlds/${created.id}`)).json();
-      assert.equal(world.status, recoveryMode === "complete" ? "ready" : recoveryMode === "explicit-failure" ? "failed" : "interrupted", world.error);
+      assert.equal(world.status, ["complete", "late-exit-one", "late-host-finalization", "late-poll-retry"].includes(recoveryMode) ? "ready" :
+        ["explicit-failure", "late-alignment"].includes(recoveryMode) ? "failed" : "interrupted", world.error);
+      if (recoveryMode !== "late-poll-retry") assert.equal(replayCount, recoveryMode === "late-host-finalization" ? 1 : 0);
       assert.equal(world.productionOutcome, "passed");
       assert.equal(world.strictDiagnosticOutcome, "failed");
       assert.equal(dispatchCount, 0);
       assert.equal(world.attempt, 1);
       assert.deepEqual(await readFile(receiptPath), receiptBefore);
-    } finally { await second.shutdown(); }
+    } finally { release(); await second.shutdown(); }
   });
 }
 

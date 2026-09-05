@@ -850,6 +850,25 @@ and prove that completed delivery is recovered without new POST while explicit
 visual/alignment failure remains failure. This is existing CF16 work, not a new
 production gate or a new main CF task.
 
+#### CF16-LATE-DELIVERY-PARITY
+
+Main-agent-only, sequential after interrupted-delivery replay. Studio owns the
+existing recovery classification and record transaction; visual owner retains
+request/delivery validation and finalization. Restore old 60s default / 1s
+minimum recovery polling and initial reconciliation, with one in-flight sweep,
+active/queued/cancelled exclusion and shutdown cleanup. Serialize recovery with
+user retry on the existing per-record executor. Map old exit -1/1 late-delivery
+and Host finalization failures to current Native failure codes, excluding
+explicit visual/alignment failure; do not revive removed provider state aliases.
+
+First close already-local delivered bytes (including Host partial promotion).
+Remote completed output retrieval is still required separately through the
+existing router's exact request/job owner; never describe local replay as Cloud
+retrieval, submit a new POST, or copy old credential/routing code into Studio.
+Required evidence: complete/incomplete late delivery, finalizer replay,
+alignment and cancellation rejection, normal exit classification, unchanged
+whitebox, timer no-overlap/cleanup, active/queued isolation, recovery/retry race.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

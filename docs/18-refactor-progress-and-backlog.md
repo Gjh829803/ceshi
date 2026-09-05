@@ -2225,6 +2225,26 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Host 收尾错误具有恢复分类，且不只在启动时恢复；current 主要在启动时恢复并统一
   排除 failed。该范围继续归 CF-16，需逐条件对齐，不把本批局部恢复当作整个 CF-16 完成。
 
+- CF16-LATE-DELIVERY-PARITY 的本地交付恢复（main-agent-only，接 `f6b5e318`）：
+  对照旧 `9e35ab53` 的恢复分类和调用点，Studio 恢复默认 60s、最短配置 1s 的单一
+  轮询与初次对账；未启用自动执行时默认不启用轮询。当前使用 source-neutral 配置
+  `autoRecoverVisualDeliveries`/`WORLDKIT_STUDIO_VISUAL_RECOVERY_INTERVAL_MS`，
+  不恢复旧 provider-specific 状态别名。每次 sweep 排除 active/queued/cancelled，
+  复用现有按 record 串行 owner，与用户 retry 同序；关闭时清理 timer、等待当前
+  本地重放结束且不再发布 ready。同一失败原因不按分钟重复写日志。
+  Native 的现有 exit -1/1 或 `STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE` 映射到
+  可检查迟到交付/Host 收尾的类别；显式视觉/alignment 失败仍拒绝。已有完整 Hash
+  闭包可恢复；缺少收尾时只调用同一 delivered-only visual owner，不创建任务。
+  RED 复现两种迟到恢复失败及取消被误恢复，现已 GREEN。新增迟到/取消/竞争测试
+  首组 5/5，轮询与既有 Native 重试/重启 25/25，队列/停止/原子写/Canonical 恢复
+  7/7；补充 shutdown 在途恢复后两项 2/2（其中 retry race 是重复项，共 38 个不同
+  用例）。最终只调整缩进，Node 语法/diff 检查；本批仅 MJS 和文档，不重跑未失效的
+  root typecheck、Browser、模型/视频 Case、全仓 CI 或独立审查。
+  **尚未完成远端交付下载**：当前只重放已经在本地的不可变交付。已定位现有
+  `run-codex-task → run-lwdp-codex-task --reconcile-only`，它保留原 request/attempt
+  owner 且不创建替代 POST；下一步须核对精确参数/台账以及 pending/shutdown 取消后
+  接入，而不是把本地产物恢复冒充完整 Cloud parity。CF-16 与整个 CF 保持开放。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
