@@ -355,7 +355,9 @@ function primaryAcceptanceTargetRef(
 ): string {
   if (dimensionId === "collider") return reconstructionCase.expected.colliders[0]!.acceptanceTargetRef;
   if (dimensionId === "critical-traversal") {
-    return reconstructionCase.expected.criticalTraversalChecks[0]!.acceptanceTargetRef;
+    const checks = reconstructionCase.expected.criticalTraversalChecks;
+    return checks.length === 0 ? reconstructionCase.expected.spawnSupport.acceptanceTargetRef
+      : checks[0]!.acceptanceTargetRef;
   }
   if (dimensionId === "deterministic-build") {
     return reconstructionCase.expected.deterministicBuild.acceptanceTargetRef;
@@ -1099,6 +1101,10 @@ function evaluateCriticalTraversal(
   reconstructionCase: WorldReconstructionCaseV1,
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
+  if (reconstructionCase.expected.criticalTraversalChecks.length === 0) {
+    return missingEvidenceDraft("critical-traversal",
+      reconstructionCase.expected.spawnSupport.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "critical-traversal-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft(

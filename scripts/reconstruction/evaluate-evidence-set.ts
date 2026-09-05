@@ -443,7 +443,8 @@ export function buildWorldReconstructionEvidenceSetV1(
     [semanticViewObservationSet, "semantic views", "receipt-ready"],
     [spawn, "spawn support", "receipt-ready"],
     [overlay, "collider overlay", "receipt-ready"],
-    [traversal, "traversal", "independent-reset"],
+    [traversal, "traversal", formalRequest.scriptedTraversal.checks.length === 0
+      ? "receipt-ready" : "independent-reset"],
   ] as const) {
     assertObservationIdentity(
       observation,
@@ -453,19 +454,13 @@ export function buildWorldReconstructionEvidenceSetV1(
     );
   }
   const firstTraversalCheck = traversal.checks[0];
-  if (firstTraversalCheck === undefined) {
-    stale("traversal evidence contains no independently reset check");
+  if (formalRequest.scriptedTraversal.checks.length > 0) {
+    if (firstTraversalCheck === undefined) stale("traversal evidence contains no independently reset check");
+    exact(traversal.resetReadySnapshotHash, firstTraversalCheck.resetReadySnapshotHash,
+      "traversal identity Snapshot does not match its first reset check");
+    sameCanonical(traversal.resetReadySnapshot, firstTraversalCheck.resetReadySnapshot,
+      "traversal identity Snapshot payload does not match its first reset check");
   }
-  exact(
-    traversal.resetReadySnapshotHash,
-    firstTraversalCheck.resetReadySnapshotHash,
-    "traversal identity Snapshot does not match its first reset check",
-  );
-  sameCanonical(
-    traversal.resetReadySnapshot,
-    firstTraversalCheck.resetReadySnapshot,
-    "traversal identity Snapshot payload does not match its first reset check",
-  );
   exact(captureReceipt.openingObservationContentHash,
     hashFormalOpeningObservationV1(opening),
     "opening observation content hash does not match Capture Receipt");

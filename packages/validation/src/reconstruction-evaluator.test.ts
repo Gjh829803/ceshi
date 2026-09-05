@@ -422,6 +422,27 @@ describe("evaluateWorldReconstructionV1", () => {
     );
   });
 
+  it("reports undeclared traversal as incomplete instead of a vacuous strict pass", () => {
+    const result = evaluateBound({
+      case(draft) {
+        draft.expected.criticalTraversalChecks = [];
+        Object.assign(draft.expected.groundConnectivity, {
+          mode: "source-authored", requiredTraversalBands: [],
+        });
+      },
+      evidence(draft) {
+        const row = observedRow(draft, "critical-traversal");
+        if (row.observed.kind !== "critical-traversal-observed") throw new Error("wrong fixture kind");
+        row.observed.checks = [];
+      },
+    });
+    expect(dimension(result, "critical-traversal").status).toBe("incomplete");
+    expect(result.outcome).toBe("incomplete");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING", dimensionId: "critical-traversal",
+    }));
+  });
+
   it("accepts an outside-viewport structural row for a presence-required view", () => {
     const result = evaluateBound({
       evidence: (draft) => {

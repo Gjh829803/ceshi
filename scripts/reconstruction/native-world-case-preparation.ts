@@ -389,8 +389,8 @@ async function measurePaletteTargets(
 
 /**
  * Derives the deliberately small report-only Case that replaces the former
- * model-authored Native Case Mapping stage. The Host owns this fixed frame;
- * the Builder still owns all scene geometry inside it.
+ * model-authored Native Case Mapping stage. The Host freezes evidence policy;
+ * the Builder owns actual geometry and exploration intent, not a template route.
  */
 export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   sceneId: string;
@@ -431,24 +431,11 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     .map(({ target }) => target.compositionTargetRef);
   const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
   const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
-  const traversalCheckId = "entry-to-remote-ground-pass";
-  const checkpointId = "remote-ground-arrival";
-  const entryToRemoteStandPositions = Object.freeze([
-    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: 0 }),
-    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -4 }),
-    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -8 }),
-    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -12 }),
-  ]);
-  const remoteStandPosition = entryToRemoteStandPositions.at(-1)!;
   const expected = Object.freeze({
     topology: Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
       nodeIds: sortBy(visualTargets.map(({ topologyNodeId }) => topologyNodeId)),
-      relations: Object.freeze([Object.freeze({
-        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
-        relation: "connects-to" as const,
-        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
-      })]),
+      relations: Object.freeze([]),
       layerIds: Object.freeze(semanticLayerIds),
     }),
     semanticSilhouetteTargets: Object.freeze(visualTargets.map((target) =>
@@ -512,18 +499,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       requireSingleReachableComponent: true,
       requiredTraversalBands: Object.freeze([]),
     }),
-    criticalTraversalChecks: Object.freeze([Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
-      id: traversalCheckId,
-      evidenceKind: "scripted-fixed-input" as const,
-      expectation: "pass" as const,
-      checkpointIds: Object.freeze([checkpointId]),
-      fixedInputSequence: Object.freeze([Object.freeze({
-        actions: Object.freeze(["move-forward"]),
-        axes: Object.freeze({ moveYRatio: 1 }),
-        ticks: 300,
-      })]),
-    })]),
+    criticalTraversalChecks: Object.freeze([]),
     deterministicBuild: Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
       requiresCandidateReplay: true as const,
@@ -554,24 +530,8 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
           semanticLayerId: target.semanticLayerId,
           blockVisualGroupId: target.visualGroupId,
         }))),
-      topologyRelations: Object.freeze([Object.freeze({
-        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
-        relation: "connects-to" as const,
-        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
-        measurementSource: "scripted-traversal" as const,
-        traversalCheckId,
-      })]),
-      checkpointSpatialCriteria: Object.freeze([Object.freeze({
-        kind: "reach-position" as const,
-        standPositionMetersXYZ: Object.freeze([
-          remoteStandPosition.xMeters, remoteStandPosition.yMeters, remoteStandPosition.zMeters,
-        ] as const),
-        checkpointId,
-        expectation: "reach" as const,
-        sourceVisualGroupId: BASELINE_REMOTE_GROUND.visualGroupId,
-        capsuleRadiusMeters: 0.35,
-        toleranceMeters: 0.05,
-      })]),
+      topologyRelations: Object.freeze([]),
+      checkpointSpatialCriteria: Object.freeze([]),
     }),
     worldBoundsPolicy: Object.freeze({ mode: "checked-block-layout" }),
   });

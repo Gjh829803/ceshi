@@ -1411,7 +1411,7 @@ function parseTopology(value: unknown, contract: string, path: string, allowEmpt
     parseTopologyRelation(entry, contract, `${path}/relations/${index}`)
   );
   const relationKeys = relations.map(({ fromNodeId, relation, toNodeId }) => `${fromNodeId}\0${relation}\0${toNodeId}`);
-  if ((!allowEmpty && relations.length === 0) || relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key)) {
+  if (relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key)) {
     fail(contract, `${path}/relations`, "must be unique and strictly sorted");
   }
   if (relations.some(({ fromNodeId, toNodeId }) => !nodeIds.includes(fromNodeId) || !nodeIds.includes(toNodeId))) {
@@ -1442,8 +1442,8 @@ function parseTraversalChecks(value: unknown, contract: string, path: string, de
       fixedInputSequence: Object.freeze(fixedInputSequence),
     });
   });
-  if (checks.length === 0 || checks.some((row, index) => index > 0 && checks[index - 1]!.id >= row.id)) {
-    fail(contract, path, "must be non-empty, unique, and sorted by id");
+  if (checks.some((row, index) => index > 0 && checks[index - 1]!.id >= row.id)) {
+    fail(contract, path, "must be unique and sorted by id");
   }
   const checkpointIds = checks.flatMap((check) => check.checkpointIds);
   if (new Set(checkpointIds).size !== checkpointIds.length) {

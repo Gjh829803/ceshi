@@ -436,7 +436,8 @@ function assertObservationMatchesCapture(
   exact(observation.formalRequestHash, captureReceipt.formalRequestHash);
   exact(observation.semanticCaptureMapHash, captureReceipt.semanticCaptureMapHash);
   exact(observation.runtimeSessionId, captureReceipt.runtimeSessionId);
-  if (observation.kind === "formal-scripted-traversal-observation") {
+  if (observation.kind === "formal-scripted-traversal-observation" &&
+      captureReceipt.formalRequest.scriptedTraversal.checks.length > 0) {
     const firstCheck = observation.checks[0];
     if (firstCheck === undefined) fail("NBR70_IDENTITY_MISMATCH");
     exact(observation.resetReadySnapshotHash, firstCheck.resetReadySnapshotHash);
@@ -1484,14 +1485,17 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   if (runReceipt.cleanupOutcome !== "completed") {
     fail("NBR70_CLEANUP_INCOMPLETE");
   }
-  if (mode === "strict-acceptance" && runReceipt.outcome !== "passed") {
-    fail("NBR70_CLEANUP_INCOMPLETE");
-  }
   const reconstructionCase = parseWorldReconstructionCaseV1(json(await requiredFile(
     runRoot,
     "inputs/case.json",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   )));
+  if (mode === "strict-acceptance" && reconstructionCase.expected.criticalTraversalChecks.length === 0) {
+    fail("NBR70_SCRIPTED_TRAVERSAL_REQUIRED");
+  }
+  if (mode === "strict-acceptance" && runReceipt.outcome !== "passed") {
+    fail("NBR70_CLEANUP_INCOMPLETE");
+  }
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(json(
     await requiredFile(
       runRoot,

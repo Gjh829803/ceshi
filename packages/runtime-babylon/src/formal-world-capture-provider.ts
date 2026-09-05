@@ -956,6 +956,7 @@ async function captureTraversalChecks(
 
 async function captureTraversal(
   request: FormalWorldCaptureRequestV1,
+  captureReadySnapshot: WorldRuntimeSnapshotV4,
   runtimeSessionId: string,
   subjectEntityId: string,
   sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
@@ -967,9 +968,9 @@ async function captureTraversal(
     subjectEntityId,
     ports,
   );
-  const identitySnapshot = checks[0]?.resetReadySnapshot ?? fail(
-    "BABYLON_FORMAL_CAPTURE_TRAVERSAL_EMPTY",
-  );
+  const identitySnapshot = request.scriptedTraversal.checks.length === 0
+    ? captureReadySnapshot
+    : checks[0]?.resetReadySnapshot ?? fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_EMPTY");
   return parseFormalScriptedTraversalObservationV1({
     kind: "formal-scripted-traversal-observation",
     schemaVersion: 1,
@@ -986,6 +987,7 @@ async function captureTraversal(
 
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
+  captureTraversal,
   assertFormalSupportContactContributionIdentityV1,
   captureTraversalChecks,
   controlledSubjectProjection,
@@ -1237,6 +1239,7 @@ export async function executeFormalWorldCaptureProviderV1(
   });
   const scriptedTraversal = await captureTraversal(
     request,
+    initialReadySnapshot,
     input.runtimeSessionId,
     subjectEntityId,
     sdkOwnerIdentities,

@@ -1484,6 +1484,32 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   分轮重复测试不累加为 aggregate。当前严格样例 Intent 多余末尾换行已按 canonical bytes
   规范化，语义与已记录 Hash 不变，未修改任何历史运行。CF-11/21 父任务仍 open：generic Capture topology/300-tick/12m
   模板、两个 generic ground groups、完整要素量测和严格路线消费者尚未闭合；没有新 054 效果证据。
+- CF-11/R5 删除虚构 Capture 路线（2026-09-05，`ff649597` 后候选）：对照冻结旧
+  `9e35ab53` Builder Skill 86–108 行，实际 middle/remote anchors 与 honest-width bands
+  来自生成世界，不要求任意场景变成 12m 直线。普通 baseline producer 已删除
+  `entry-to-remote-ground-pass`、300 Tick forward、`[0,0,-12]` checkpoint 和 synthetic
+  connects-to；R3 的真实 Spawn/支撑/单一连通分量/探索锚点与通行带检查仍保留。
+  必需数组表示精确请求集合，允许显式 `[]`，不允许缺字段、补造一 Tick 或兼容 fallback：
+  Case → Intent → verified Package semantic binding → Request → traversal observation
+  全部对齐；非空集合仍要求完整 input/criterion、独立 reset、Tick 与身份闭包。
+  Provider 对空集合不执行路线 reset/input，观察值绑定原 Capture ready Snapshot；Opening、
+  top、side、Collider overlay、Spawn、所有 immutable observations/Receipt 仍按原流程产生。
+  Evaluation 将未声明的 critical traversal 记为 `incomplete`，不是空集合自动通过；普通
+  production 仍可完成发布，显式 strict verifier 用 `NBR70_SCRIPTED_TRAVERSAL_REQUIRED`
+  拒绝无脚本路线验收，不增加普通生产门禁、模型任务、repair cycle 或终局 Browser replay。
+  `automated-contract`：9 个受影响测试文件 238/238，覆盖生产准备、共享合同、Package
+  binding、provider 路线生命周期、Evidence/Evaluation、严格 verifier 与 Final 发布；
+  追加验证发布后的 strict diagnostic 保留 incomplete，1/1；普通 Run 不完整严格评分仍
+  production passed、单次 verify/publish、单 Attempt 回归 1/1；typecheck exit 0。
+  Native Skill 全套 58/58（快照重建前）；live/frozen Skill、输出合同已同步，Native 自检
+  内嵌 SDK 图已从当前源码重建，Planner/Canonical 生成副本 byte-identical 未改。
+  重建后按失效输入补跑 source-authored、live/frozen drift、三输出、自修复类型错误和
+  relocated standalone 五项 5/5；`pnpm --filter @whitebox-world/playground build` exit 0，
+  仅有 chunk-size warning。分轮重复项不累加为 aggregate；未跑全仓 gates 或独立最终审查。
+  以上不是完整 WebGL provider Capture 或新的 054 模型 Case 证据：本批实际运行 provider
+  的空路线 observation 路径并接 synthetic Receipt/Evaluation/Final，完整 provider 的四视图
+  Browser Capture 尚待验证。R5 的 rendered/lifecycle 验收与 CF-11/21 父任务不勾完成；
+  两个 generic ground groups、完整要素/分区量测、严格 authored route 编译仍 open。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

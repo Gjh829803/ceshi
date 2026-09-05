@@ -123,7 +123,7 @@ function profileValue() {
   });
 }
 
-async function fixture(): Promise<Readonly<{
+async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
   caseRoot: string;
   input: MaterializeFormalWorldCaptureRequestInputV1;
   verifiedPackage: Extract<
@@ -170,7 +170,7 @@ async function fixture(): Promise<Readonly<{
       semanticLayerId: "upper",
       blockVisualGroupId: "ridge-group",
     }],
-    topologyRelations: [{
+    topologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "package-fixture-opening",
       relation: "connects-to",
       toNodeId: "package-fixture-secondary",
@@ -178,7 +178,7 @@ async function fixture(): Promise<Readonly<{
       fromVisualGroupId: "ground-group",
       toVisualGroupId: "ridge-group",
     }],
-    checkpointSpatialCriteria: [{
+    checkpointSpatialCriteria: withoutScriptedTraversal ? [] : [{
       kind: "reach-position",
       standPositionMetersXYZ: [0, 0, 0],
       checkpointId: "ground-checkpoint",
@@ -216,7 +216,7 @@ async function fixture(): Promise<Readonly<{
       topology: {
         acceptanceTargetRef: OPENING_TARGET,
         nodeIds: ["package-fixture-opening", "package-fixture-secondary"],
-        relations: [{
+        relations: withoutScriptedTraversal ? [] : [{
           fromNodeId: "package-fixture-opening",
           relation: "connects-to",
           toNodeId: "package-fixture-secondary",
@@ -295,9 +295,9 @@ async function fixture(): Promise<Readonly<{
         role: "ground",
         requiresOverlay: true,
       }],
-      groundConnectivity: { mode: "case-defined" as const,
+      groundConnectivity: { mode: withoutScriptedTraversal ? "source-authored" : "case-defined",
         requireSingleReachableComponent: true,
-        requiredTraversalBands: [{
+        requiredTraversalBands: withoutScriptedTraversal ? [] : [{
           acceptanceTargetRef: OPENING_TARGET,
           id: "ground-band",
           centerlineStandPositionsXYZMeters: [
@@ -307,7 +307,7 @@ async function fixture(): Promise<Readonly<{
           halfWidthMeters: 1,
         }],
       },
-      criticalTraversalChecks: [{
+      criticalTraversalChecks: withoutScriptedTraversal ? [] : [{
         acceptanceTargetRef: OPENING_TARGET,
         id: "ground-check",
         evidenceKind: "scripted-fixed-input",
@@ -336,6 +336,15 @@ async function fixture(): Promise<Readonly<{
   };
   const nativeBlockMaterializerMetadata = {
     ...baseMetadata,
+    groundExploration: withoutScriptedTraversal ? {
+      mode: "source-authored" as const,
+      requiredTargets: [
+        { id: "middle", region: "middle" as const, standPositionMetersXYZ: [0, 0, -1] as const },
+        { id: "remote", region: "remote" as const, standPositionMetersXYZ: [0, 0, -2] as const },
+      ],
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 0] as const, [0, 0, -1] as const] }],
+    } : baseMetadata.groundExploration,
     caseHash,
     contributionHash: hashBabylonNativeSceneContributionV1(nativeSceneContribution),
     blocks: [...baseMetadata.blocks, {
@@ -408,6 +417,18 @@ async function fixture(): Promise<Readonly<{
 }
 
 describe("materializeFormalWorldCaptureRequestV1", () => {
+  it("materializes and rereads exact empty traversal sets without rewriting the frozen Case", async () => {
+    const { input } = await fixture(true);
+    const caseBytes = await readFile(input.casePath);
+    const first = await materializeFormalWorldCaptureRequestV1(input);
+    expect(first.request.scriptedTraversal.checks).toEqual([]);
+    expect(first.request.semanticCaptureMap.traversalCheckBindings).toEqual([]);
+    expect(first.request.semanticCaptureMap.topologyRelations).toEqual([]);
+    const second = await materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" });
+    expect(second.request).toEqual(first.request);
+    expect(await readFile(input.casePath)).toEqual(caseBytes);
+  });
+
   it("writes one canonical request from frozen Case/Attempt/Package/Profile identities", async () => {
     const { input, verifiedPackage } = await fixture();
     const materialized = await materializeFormalWorldCaptureRequestV1(input);

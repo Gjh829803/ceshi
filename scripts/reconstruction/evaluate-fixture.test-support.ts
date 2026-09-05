@@ -123,6 +123,7 @@ export function createSemanticViewObservationSetFixtureV1(
 }
 
 export interface EvidenceSetFixtureOptionsV1 {
+  readonly withoutScriptedTraversal?: boolean;
   readonly allDimensionsPass?: boolean;
   readonly allOpeningNotRequired?: boolean;
   readonly attemptIdentity?: Readonly<{
@@ -288,6 +289,7 @@ export function createEvidenceSetFixtureInputV1(
   formalCaptureIntent: FormalWorldCaptureIntentV1;
 }> {
   const allDimensionsPass = options.allDimensionsPass === true;
+  const withoutScriptedTraversal = options.withoutScriptedTraversal === true;
   const allOpeningNotRequired = options.allOpeningNotRequired === true;
   const paletteTraversalDisagreement =
     options.includePaletteTraversalDisagreement === true;
@@ -400,14 +402,14 @@ export function createEvidenceSetFixtureInputV1(
       semanticLayerId: "ground",
       blockVisualGroupId: "upper-group",
     }],
-    topologyRelations: [{
+    topologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to",
       toNodeId: "upper",
       measurementSource: "scripted-traversal",
       traversalCheckId: "reach-ground",
     }],
-    checkpointSpatialCriteria: traversalCheckpointCriteria.map(
+    checkpointSpatialCriteria: withoutScriptedTraversal ? [] : traversalCheckpointCriteria.map(
       authoredCheckpointCriterion,
     ),
   });
@@ -433,7 +435,7 @@ export function createEvidenceSetFixtureInputV1(
       topology: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         nodeIds: ["ground", "upper"],
-        relations: [{
+        relations: withoutScriptedTraversal ? [] : [{
           fromNodeId: "ground",
           relation: "connects-to",
           toNodeId: "upper",
@@ -548,7 +550,9 @@ export function createEvidenceSetFixtureInputV1(
           requiresOverlay: false,
         }]
         : []],
-      groundConnectivity: { mode: "case-defined" as const,
+      groundConnectivity: withoutScriptedTraversal
+        ? { mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [] }
+        : { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
@@ -560,7 +564,7 @@ export function createEvidenceSetFixtureInputV1(
           halfWidthMeters: 1,
         }],
       },
-      criticalTraversalChecks: [{
+      criticalTraversalChecks: withoutScriptedTraversal ? [] : [{
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         id: "reach-ground",
         evidenceKind: "scripted-fixed-input",
@@ -591,7 +595,15 @@ export function createEvidenceSetFixtureInputV1(
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
   const authoringManifest = parseNativeBlockAuthoringManifestV1({
     kind: "native-block-authoring",
-    groundExploration: { mode: "case-defined" as const },
+    groundExploration: withoutScriptedTraversal ? {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, -1] },
+        { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, -2] },
+      ],
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 0], [0, 0, -1]] }],
+    } : { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
@@ -843,7 +855,7 @@ export function createEvidenceSetFixtureInputV1(
       layoutInventoryHash: metadata.checkedLayoutInventoryHash,
       contributionHash: metadata.contributionHash,
     }],
-    topologyRelations: [{
+    topologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to" as const,
       toNodeId: "upper",
@@ -851,7 +863,7 @@ export function createEvidenceSetFixtureInputV1(
       fromVisualGroupId: "ground-group",
       toVisualGroupId: "upper-group",
     }],
-    traversalCheckBindings: [{
+    traversalCheckBindings: withoutScriptedTraversal ? [] : [{
       traversalCheckId: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
@@ -900,7 +912,7 @@ export function createEvidenceSetFixtureInputV1(
     cameraPositionMetersXYZ: [0, 80, 0] as const,
   };
   const fixedInputSequence = [{ actions: ["move-forward"], ticks: 1 }] as const;
-  const checkpointCriteria = semanticCaptureMap.traversalCheckBindings[0]!.checkpointCriteria;
+  const checkpointCriteria = withoutScriptedTraversal ? [] : semanticCaptureMap.traversalCheckBindings[0]!.checkpointCriteria;
   const colliderOverlay = {
     kind: "formal-collider-overlay-request" as const,
     schemaVersion: 1 as const,
@@ -910,7 +922,7 @@ export function createEvidenceSetFixtureInputV1(
   const scriptedTraversal = {
     kind: "formal-scripted-traversal-request" as const,
     schemaVersion: 1 as const,
-    checks: [{
+    checks: withoutScriptedTraversal ? [] : [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
@@ -1072,7 +1084,7 @@ export function createEvidenceSetFixtureInputV1(
       cameraDepthMeters: 8,
       depthOrder: 1,
     }],
-    observedTopologyRelations: [{
+    observedTopologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to",
       toNodeId: "upper",
@@ -1114,9 +1126,10 @@ export function createEvidenceSetFixtureInputV1(
   });
   const scriptedTraversalObservation = parseFormalScriptedTraversalObservationV1({
     ...observationIdentity("formal-scripted-traversal-observation", "input"),
-    resetReadySnapshot: traversalResetSnapshot,
-    resetReadySnapshotHash: sha256CanonicalJson(traversalResetSnapshot),
-    checks: [{
+    id: `${formalRequest.id}.scripted-traversal`,
+    resetReadySnapshot: withoutScriptedTraversal ? snapshot : traversalResetSnapshot,
+    resetReadySnapshotHash: sha256CanonicalJson(withoutScriptedTraversal ? snapshot : traversalResetSnapshot),
+    checks: withoutScriptedTraversal ? [] : [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,

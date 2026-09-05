@@ -385,10 +385,10 @@ generation. Case-defined source cannot override fixed routes; source-authored so
 cannot downgrade to empty exploration or measurement-only ground.
 
 This changes ordinary Ground input ownership to the old-equivalent declaration
-pattern, not the production success authority or repair budget. Generic fixed-input
-Capture diagnostics remain strict/report-only and must not constrain source-authored
-world design. Removal of their generic topology/script template,
-full region/feature measurements and multi-medium selection remain CF-11/13/21/12;
+pattern, not the production success authority or repair budget. R5 below removes
+the ordinary generic topology/script template; explicitly declared Capture scripts
+remain exact constraints, separate from the authored Ground intent. Full region/feature
+measurements, strict authored route compilation and multi-medium selection remain CF-11/13/21/12;
 the declaration slice alone does not prove complete parity or a new real Case.
 
 ### CF-11 checked-layout world bounds
@@ -415,6 +415,29 @@ Runtime continue to consume the same verified Package manifest, not a side-file
 override. Policy changes fail existing stale-owner checks; Source changes naturally
 change checked extents and Package identity. There is no compatibility input alias,
 new model task, extra repair cycle or new ordinary production veto.
+
+### CF-11 ordinary Capture has no invented traversal script
+
+Ordinary baseline preparation does not invent a straight 12m route, 300 Tick
+input sequence, remote checkpoint or topology relation. Ground's actual authored
+anchors and bands remain mandatory and independent of Capture scripts. Explicit
+Case-declared scripts continue to mean exactly the declared work.
+
+Required arrays are exact requested sets and may explicitly be empty: Case
+criticalTraversalChecks, Intent checkpoint criteria/topology relations, semantic
+traversal bindings and Capture request/observation checks. Empty is not a missing
+field or a successful route proof. The provider performs no route reset/input for
+zero checks and binds its empty observation to the Capture ready Snapshot; all
+image/Spawn/Collider/identity outputs remain required. Nonempty declarations retain
+their complete exact observations, independent resets and unchanged Tick budgets.
+
+Evaluation marks undeclared critical traversal incomplete using the existing
+missing-evidence diagnostic attached to Spawn support. Ordinary production outcome
+is unchanged by that strict diagnostic. Explicit NBR strict acceptance requires
+declared scripted checks and cannot pass through the empty production set. No
+source rewriting, added model/reviewer task, extra repair or fresh Browser replay
+is introduced. Full region/feature coverage and strict authored route compilation
+remain separate CF-11/13/21 obligations.
 
 ### CF-11 local arrival evidence
 

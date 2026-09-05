@@ -1557,9 +1557,6 @@ function parseIntentCheckpointCriteria(
 ): readonly FormalTraversalCheckpointIntentCriterionV1[] {
   const criteria = array(value, contract, path).map((entry, index) =>
     parseTraversalCheckpointIntentCriterion(entry, contract, `${path}/${index}`));
-  if (isEmpty(criteria)) {
-    fail(contract, path, "must contain one authored criterion per checkpoint");
-  }
   if (criteria.some((criterion, index) =>
     index > 0 && criteria[index - 1]!.checkpointId >= criterion.checkpointId)) {
     fail(contract, path, "checkpoint criteria must be unique and sorted by checkpointId");
@@ -1841,10 +1838,9 @@ function parseTopologyRelationBindings(
   const keys = rows.map(({ fromNodeId, relation, toNodeId }) =>
     `${fromNodeId}\0${relation}\0${toNodeId}`);
   if (
-    isEmpty(rows) ||
     keys.some((key, index) => index > 0 && keys[index - 1]! >= key)
   ) {
-    fail(contract, path, "must be non-empty, unique, and strictly sorted");
+    fail(contract, path, "must be unique and strictly sorted");
   }
   return Object.freeze(rows);
 }
@@ -2094,7 +2090,6 @@ export function parseFormalSemanticCaptureMapV1(
     `traversalCheckBindings/${index}`,
   ));
   if (
-    isEmpty(traversalCheckBindings) ||
     traversalCheckBindings.some((binding, index) =>
       index > 0 &&
       traversalCheckBindings[index - 1]!.traversalCheckId >= binding.traversalCheckId)
@@ -2102,7 +2097,7 @@ export function parseFormalSemanticCaptureMapV1(
     fail(
       contract,
       "traversalCheckBindings",
-      "must be non-empty, unique, and sorted by traversalCheckId",
+      "must be unique and sorted by traversalCheckId",
     );
   }
   const boundGroupIds = new Set(groupIds);
@@ -2338,10 +2333,9 @@ export function parseFormalScriptedTraversalRequestV1(
   const checks = rawChecks.map((entry, index) =>
     parseScriptedTraversalCheck(entry, contract, `checks/${index}`));
   if (
-    isEmpty(checks) ||
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id)
   ) {
-    fail(contract, "checks", "must be non-empty, unique, and sorted by id");
+    fail(contract, "checks", "must be unique and sorted by id");
   }
   const totalTickCount = checks.reduce(
     (total, check) => total + check.fixedInputSequence.reduce(
@@ -3617,11 +3611,10 @@ export function parseFormalScriptedTraversalObservationV1(
     });
   });
   if (
-    isEmpty(checks) ||
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id) ||
     new Set(checks.map(({ resetReadySnapshot }) => resetReadySnapshot.worldSessionId))
       .size !== checks.length
-  ) fail(contract, "checks", "must be non-empty, id-sorted, and independently reset");
+  ) fail(contract, "checks", "must be id-sorted and independently reset");
   const measuredCheckIdentity = checks.map(({ id, acceptanceTargetRef, checkExpectation }) => ({
     id,
     acceptanceTargetRef,

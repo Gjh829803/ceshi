@@ -9,7 +9,8 @@ import {
   parseFormalWorldCaptureReceiptV1,
 } from "@whitebox-world/runtime-contracts";
 import { evaluateWorldReconstructionV1 } from "@whitebox-world/validation";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 } from "../../packages/runtime-babylon/src/formal-world-capture-provider.js";
 
 import {
   assertColliderOverlaySourceJoinClosureV1,
@@ -94,6 +95,38 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("binds a no-script Capture to its ready Snapshot and reports traversal incomplete", async () => {
+    const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true, withoutScriptedTraversal: true });
+    const ports = {
+      resetWithInitialControlBinding: vi.fn(async () => { throw new Error("unexpected route reset"); }),
+      awaitRenderReady: vi.fn(async () => { throw new Error("unexpected route render"); }),
+      runFixedInput: vi.fn(async () => { throw new Error("unexpected route input"); }),
+      snapshot: vi.fn(() => { throw new Error("unexpected Snapshot read"); }),
+      captureArtifactView: vi.fn(() => { throw new Error("unexpected route capture"); }),
+      readCommittedSupportEvidence: vi.fn(() => { throw new Error("unexpected route support query"); }),
+    };
+    const traversal = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversal(
+      fixture.captureReceipt.formalRequest, fixture.openingObservation.resetReadySnapshot,
+      fixture.captureReceipt.runtimeSessionId, "player", fixture.captureReceipt.sdkOwnerIdentities, ports,
+    );
+    expect(traversal.checks).toEqual([]);
+    expect(traversal).toEqual(fixture.scriptedTraversalObservation);
+    expect(traversal.resetReadySnapshotHash).toBe(fixture.captureReceipt.readySnapshotHash);
+    for (const port of Object.values(ports)) expect(port).not.toHaveBeenCalled();
+    // The fixture receipt is bound to the same exact empty observation bytes.
+    const evidence = buildWorldReconstructionEvidenceSetV1({ ...fixture, scriptedTraversalObservation: traversal });
+    const result = evaluateWorldReconstructionV1({ case: fixture.reconstructionCase,
+      profile: fixture.evaluationProfile, evidence });
+    expect(result.dimensions.find(({ dimensionId }) => dimensionId === "critical-traversal")?.status).toBe("incomplete");
+    expect(result.outcome).toBe("incomplete");
+    expect(() => parseFormalScriptedTraversalObservationV1({
+      ...createEvidenceSetFixtureInputV1().scriptedTraversalObservation, checks: [],
+    })).toThrow();
+    expect(() => parseFormalScriptedTraversalObservationV1({
+      ...traversal, checks: createEvidenceSetFixtureInputV1().scriptedTraversalObservation.checks,
+    })).toThrow();
+  });
+
   it("keeps an all-not-required Opening subset empty through ordinary evaluation", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,

@@ -207,7 +207,6 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
   const relationKeys = topologyRelations.map(({ fromNodeId, relation, toNodeId }) =>
     `${fromNodeId}\0${relation}\0${toNodeId}`);
   if (
-    topologyRelations.length === 0 ||
     relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key) ||
     !isEqual(
       topologyRelations.map(({ fromNodeId, relation, toNodeId }) => ({

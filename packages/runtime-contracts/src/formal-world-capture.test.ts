@@ -732,7 +732,7 @@ describe("FormalWorldCaptureIntentV1", () => {
     })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
   });
 
-  it("requires non-empty, unique, canonical collection order", () => {
+  it("requires target identities and unique canonical collection order", () => {
     const intent = formalCaptureIntentValue();
     for (const invalid of [{
       ...intent,
@@ -750,13 +750,7 @@ describe("FormalWorldCaptureIntentV1", () => {
       ),
     }, {
       ...intent,
-      topologyRelations: [],
-    }, {
-      ...intent,
       topologyRelations: [...intent.topologyRelations].reverse(),
-    }, {
-      ...intent,
-      checkpointSpatialCriteria: [],
     }, {
       ...intent,
       checkpointSpatialCriteria: [...intent.checkpointSpatialCriteria].reverse(),
@@ -764,6 +758,12 @@ describe("FormalWorldCaptureIntentV1", () => {
       expect(() => parseFormalWorldCaptureIntentV1(invalid))
         .toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
     }
+  });
+
+  it("admits explicit empty topology and checkpoint sets without inventing a script", () => {
+    const value = { ...formalCaptureIntentValue(), topologyRelations: [], checkpointSpatialCriteria: [] };
+    expect(parseFormalWorldCaptureIntentV1(value)).toMatchObject({ topologyRelations: [], checkpointSpatialCriteria: [] });
+    expect(hashFormalWorldCaptureIntentV1(value)).not.toBe(hashFormalWorldCaptureIntentV1(formalCaptureIntentValue()));
   });
 
   it("rejects relation and checkpoint proof identities outside bound targets", () => {

@@ -360,6 +360,7 @@ describe("trusted Native world Case preparation", () => {
       expected: {
         topology: {
           layerIds: readonly string[];
+          relations: readonly unknown[];
         };
         colliders: readonly {
           acceptanceTargetRef: string;
@@ -380,6 +381,7 @@ describe("trusted Native world Case preparation", () => {
         criticalTraversalChecks: readonly { id: string }[];
       };
       formalCaptureIntent: {
+        topologyRelations: readonly unknown[];
         checkpointSpatialCriteria: readonly {
           kind: string;
           standPositionMetersXYZ: readonly [number, number, number];
@@ -407,15 +409,10 @@ describe("trusted Native world Case preparation", () => {
       maxXBasisPoints: 6000,
       maxYBasisPoints: 6000,
     });
-    expect(proposal.expected.criticalTraversalChecks).toEqual([
-      expect.objectContaining({ id: "entry-to-remote-ground-pass" }),
-    ]);
-    expect(proposal.formalCaptureIntent.checkpointSpatialCriteria).toEqual([
-      expect.objectContaining({
-        kind: "reach-position",
-        standPositionMetersXYZ: [0, 0, -12],
-      }),
-    ]);
+    expect(proposal.expected.criticalTraversalChecks).toEqual([]);
+    expect(proposal.formalCaptureIntent.checkpointSpatialCriteria).toEqual([]);
+    expect(proposal.expected.topology.relations).toEqual([]);
+    expect(proposal.formalCaptureIntent.topologyRelations).toEqual([]);
     expect(proposal.expected.colliders).toEqual([
       expect.objectContaining({
         acceptanceTargetRef:
@@ -480,8 +477,7 @@ describe("trusted Native world Case preparation", () => {
     const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
       JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")),
     );
-    expect(reconstructionCase.expected.criticalTraversalChecks[0]?.id)
-      .toBe("entry-to-remote-ground-pass");
+    expect(reconstructionCase.expected.criticalTraversalChecks).toEqual([]);
     expect(reconstructionCase.expected.groundConnectivity).toEqual({
       mode: "source-authored", requireSingleReachableComponent: true,
       requiredTraversalBands: [],

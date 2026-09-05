@@ -75,8 +75,10 @@ For `case-defined`, write exactly `groundExploration: { "mode": "case-defined" }
 The frozen Case owns its metric bands and scripted constraints; do not duplicate
 or override them in the sidecar. The fixed-waypoint/fixed-input instructions below
 apply to this mode. For `source-authored`, Ground consumes the authored anchors and
-bands instead; the remaining generic fixed-input Capture template is strict
-diagnostic only and must not force a straight replacement for the Brief's geography.
+bands instead. Ordinary baseline Capture declares no scripted checks: do not invent
+a 12m straight corridor, 300 Tick approach, or remote checkpoint for it. If an explicit
+Case declares scripted checks, preserve those exact constraints; an empty declared
+set is not a successful strict traversal proof. Neither mode replaces Brief geography.
 Both modes keep the Case's single-component policy and exact registered Spawn.
 Only the existing Host Ground analyzer proves support and connectivity; the task
 self-check checks syntax and the Spawn/middle/remote policy join, not geometry.

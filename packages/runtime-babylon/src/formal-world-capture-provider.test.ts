@@ -756,6 +756,19 @@ describe("formal world capture provider", () => {
     expect(ports.awaitRenderReady).toHaveBeenCalledTimes(4);
   });
 
+  it("runs no route reset or input when Capture requests no scripted checks", async () => {
+    const runtimeSessionId = "no-script-runtime";
+    const { ports } = traversalPorts(runtimeSessionId);
+    const request = traversalRequestFixture();
+    const checks = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversalChecks({
+      ...request, scriptedTraversal: { ...request.scriptedTraversal, checks: [] },
+    }, runtimeSessionId, "player", ports);
+    expect(checks).toEqual([]);
+    expect(ports.resetWithInitialControlBinding).not.toHaveBeenCalled();
+    expect(ports.runFixedInput).not.toHaveBeenCalled();
+    expect(ports.awaitRenderReady).not.toHaveBeenCalled();
+  });
+
   it("accepts a mixed block check only when every frozen criterion has its own outcome", async () => {
     const runtimeSessionId = "runtime.formal.provider-mixed-block";
     const { ports } = traversalPorts(runtimeSessionId, false, [0, 1, 0.65]);

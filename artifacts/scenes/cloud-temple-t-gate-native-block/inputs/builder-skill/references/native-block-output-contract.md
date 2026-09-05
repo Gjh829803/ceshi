@@ -204,9 +204,10 @@ Multiple anchors/bands can diagnose the same Case ground obligation; do not crea
 acceptance refs or visual groups for them. No distance or chunk minimum is imposed.
 
 In source-authored mode the Case freezes policy and has an empty metric band list;
-the following sidecar supplies the actual validation coordinates. The generic fixed-input
-Capture template remains a strict diagnostic, not a world-design constraint. In case-defined
-mode the fixed-band/fixed-input sections above remain mandatory. Never write accepted intent
+the sidecar supplies the actual validation coordinates. Ordinary Capture has no invented
+fixed-input script or remote checkpoint; an explicit empty check set is not strict route
+acceptance. Explicit Case-declared checks still retain their exact inputs and criteria;
+in case-defined mode the fixed-band/fixed-input sections above remain mandatory. Never write accepted intent
 back to the Case, Bootstrap or Generation Request. Any source intent edit requires fresh
 self-check and both comparison PNGs in the same shared repair budget.
 

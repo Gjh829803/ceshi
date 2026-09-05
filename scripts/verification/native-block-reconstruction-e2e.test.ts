@@ -727,12 +727,16 @@ async function completeRunFixture(
   if (
     !forgePassedEvaluation &&
     evaluationPasses &&
+    !evidenceOptions.withoutScriptedTraversal &&
     evaluation.outcome !== "passed"
   ) {
     throw new Error("fixture evidence must earn a passed evaluation");
   }
   if (!evaluationPasses && evaluation.outcome === "passed") {
     throw new Error("fixture evidence must retain a non-passing evaluation");
+  }
+  if (evidenceOptions.withoutScriptedTraversal && evaluation.outcome !== "incomplete") {
+    throw new Error("fixture without scripts must retain incomplete traversal evidence");
   }
   await writeJson(path.join(attemptDirectoryPath, "evidence-set.json"), evidence);
   await writeJson(path.join(attemptDirectoryPath, "evaluation.json"), evaluation);
@@ -797,10 +801,10 @@ async function completeRunFixture(
     worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
     captureReceiptHash,
     evaluationResultHash: evaluationHash,
-    outcome: strictDiagnosticFails ? "failed" : "passed",
+    outcome: strictDiagnosticFails ? "failed" : evidenceOptions.withoutScriptedTraversal ? "incomplete" : "passed",
     diagnosticCodes: strictDiagnosticFails
       ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
-      : [],
+      : evidenceOptions.withoutScriptedTraversal ? ["NBR70_EVALUATION_NOT_PASSED"] : [],
     cleanupOutcome: strictDiagnosticFails ? "not-started" : "completed",
   });
   await writeJson(
@@ -912,6 +916,29 @@ describe("Native Block reconstruction final artifact publisher integration", () 
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
+
+  it("publishes a no-script production Capture but rejects it as strict traversal acceptance", async () => {
+    const fixture = await completeRunFixture({ withoutScriptedTraversal: true });
+    try {
+      await expect(verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      })).resolves.toMatchObject({ outcome: "verified", playability: { mode: "skipped" },
+        strictDiagnosticCodes: expect.arrayContaining(["NBR70_EVALUATION_NOT_PASSED"]),
+      });
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: Object.freeze({ mode: "skipped" }),
+      })).rejects.toThrow("NBR70_SCRIPTED_TRAVERSAL_REQUIRED");
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture, launch: await finalLaunchFixture(fixture),
+      })).resolves.toMatchObject({ outcome: "published" });
+      expect(parseWorldReconstructionStrictDiagnosticReceiptV1(JSON.parse(await readFile(
+        path.join(fixture.caseDirectoryPath, "final/strict-diagnostic.json"), "utf8",
+      )))).toMatchObject({ outcome: "incomplete", diagnosticCodes: ["NBR70_EVALUATION_NOT_PASSED"] });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   it("publishes the exact statically verified candidate and bound diagnostic", async () => {
     const fixture = await completeRunFixture();

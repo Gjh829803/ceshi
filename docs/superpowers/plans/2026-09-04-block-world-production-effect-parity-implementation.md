@@ -278,6 +278,38 @@ live/frozen drift and typecheck. Ordinary success and repair budgets stay unchan
 Generic Capture templates, complete feature/region measurement and strict routes
 remain under CF-11/13/21; R4 alone does not close those parent tasks.
 
+#### CF-11/R5 Capture without invented traversal
+
+Main-agent-only/sequential, after R3/R4. The old `9e35ab53` Builder authors
+actual middle/remote anchors and honest ground bands; it is not instructed to
+replace geography with a Host-invented 12m straight route. Remove the ordinary
+baseline's `entry-to-remote-ground-pass`, 300 Tick input, remote `[0,0,-12]`
+criterion and synthetic connects-to relation together. Ground still validates
+the Package-bound authored exploration intent and exact Spawn.
+
+Existing required collections explicitly encode the requested work: no declared
+scripted checks means empty Case checks, Intent criteria, semantic bindings,
+Capture request checks and observation checks. No missing-field fallback, dummy
+one-Tick success, new model task or Source repair is allowed. Nonempty checks
+retain exact criterion/input identity, reset, Tick and complete observation joins.
+An empty traversal observation binds the ordinary Capture ready Snapshot, not an
+invented independent route reset. Capture still produces all images, Collider
+overlay, Spawn support, immutable observations and Receipt.
+
+The evaluator reports critical traversal as incomplete when no checks are declared;
+it cannot obtain a vacuous pass. Attach that diagnostic to the existing Spawn
+acceptance obligation. Ordinary production still publishes completed valid output
+with strict diagnostics, while explicit NBR strict acceptance rejects a Case with
+no scripted checks before starting Browser verification. Current required Case
+Ground bands cannot be deleted or reinterpreted by this change.
+
+Required evidence: baseline RED/GREEN; no-script Case→Intent→Package binding→Request
+and full provider Capture→Receipt→Evaluation→ordinary publication; zero route
+Ticks/resets beyond ordinary Capture; stale/missing/extra requested checks reject;
+strict no-script rejection and existing fixed-script controls. Update live/frozen
+Skill, consumer contracts and docs/18. Full scene-feature/ground-group coverage
+and authored strict route compilation remain CF-11/13/21, not implied complete.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,
