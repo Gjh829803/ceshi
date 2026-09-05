@@ -1540,8 +1540,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   通过；Native Skill 全文件检查中 58/59 通过（包含新 portable Builder 空组实源码
   回归与生成副本 drift），唯一旧文案断言更新为当前显式身份合同后定向 1/1 通过。
   live/frozen Skill、输出合同、checker 三组逐字节比较通过，diff check 通过。
-  实际无组 Check/Ground/Package/Browser Capture 尚待冻结提交后执行；未启动新 054
-  模型 Case、全仓 gates 或独立最终审查。完整要素/分区覆盖、严格 authored route
+  实际无组 Browser 收尾（`b315ae241c95606d6c903d1e357c86cb3ea3b102`）：
+  `pnpm verify:native-no-script-capture --without-semantic-targets` exit 0。
+  Planner/generation 为测试桩，无模型调用；真实 Native Check/Ground/Package 和 Babylon/Havok
+  Capture 完成，metadata/Intent/live observation 语义目标为空但真实 Blocks 保留，SDK Subject
+  opening coverage 为 684 basis points。四图均 1280×720，Browser/Vite cleanup completed，
+  Case/Generation Request 原字节未改。Package root
+  `sha256:c3db1a89b988b7754c0bdf25c5224926fedc041009c6efc14471a94f0b449e0d`。
+  spawn-support、deterministic-build、opening-composition passed；semantic-silhouette/topology/
+  critical-traversal incomplete，夹具 collider 诊断 failed，整体 Evaluation incomplete；
+  这些诊断不反转普通 Capture publication。已实际打开 opening/top/side/overlay：真实地面、
+  SDK Subject、未分组方块和显式碰撞均有画面；side 的容器余量取景问题仍由 CF-14/24 承接，
+  不是本批效果通过声明。证据目录
+  `/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-aTeROn/`
+  保留四图/正式收据/Evaluation/evidence.json，临时生成 workspace 已清理，最新 054 未改。
+  R6 模板删除与空集合实际 Capture 闭环已完成；未启动新 054 模型 Case、全仓 gates
+  或独立最终审查。完整要素/分区覆盖、严格 authored route
   验收及真实参考效果继续由 CF-11/13/21 承接，父任务不关闭。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
