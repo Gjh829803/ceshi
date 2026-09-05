@@ -17,20 +17,24 @@ import { materializeFormalWorldCaptureRequestV1 } from "../reconstruction/formal
 import { captureProductionHostedWorldPackageV1 } from "../reconstruction/formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "../reconstruction/evaluate.js";
 import { measureFormalIdentityMaskV1 } from "../reconstruction/formal-identity-mask-measurement.js";
+import { NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 } from "../reconstruction/native-semantic-geometry.test-support.js";
 
 // Explicit Browser lane, not part of default Vitest. No model/provider task is submitted.
 // Reuse the Package-owner fixture: generation is synthetic, Host Check/Ground/Package,
 // Babylon/Havok Capture, observation parsing and Evaluation are actual implementations.
 const json = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, "utf8"));
 const arguments_ = process.argv.slice(2);
-assert(arguments_.length === 0 || (arguments_.length === 1 && arguments_[0] === "--without-semantic-targets"),
-  "Usage: verify:native-no-script-capture [--without-semantic-targets]");
-const withoutSemanticTargets = arguments_.length === 1;
+const withoutSemanticTargets = arguments_.length === 1 && arguments_[0] === "--without-semantic-targets";
+const hasGeometryFixture = arguments_.length === 2 && arguments_[0] === "--semantic-geometry" &&
+  Object.hasOwn(NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1, arguments_[1]!);
+assert(arguments_.length === 0 || withoutSemanticTargets || hasGeometryFixture,
+  "Usage: verify:native-no-script-capture [--without-semantic-targets | --semantic-geometry <fixture-id>]");
+const geometryFixtureId = hasGeometryFixture ? arguments_[1] as keyof typeof NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 : undefined;
 const evidenceRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-no-script-capture-evidence-"));
 let fixture: Awaited<ReturnType<typeof createNativeBlockPackageAttemptFixtureV1>> | undefined;
 try {
   console.log("native-no-script-capture: prepare deterministic fixture");
-  fixture = await createNativeBlockPackageAttemptFixtureV1({
+  fixture = await createNativeBlockPackageAttemptFixtureV1(geometryFixtureId === undefined ? {
     withoutScriptedTraversal: true,
     withoutSemanticTargets,
     worldBoundsPolicy: { mode: "checked-block-layout" },
@@ -43,7 +47,7 @@ try {
       requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     },
-  });
+  } : NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1[geometryFixtureId].options);
   const caseBytes = await readFile(fixture.casePath);
   const requestBytes = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
   console.log("native-no-script-capture: real Native Check/Ground/Package");
@@ -141,8 +145,9 @@ try {
     assert(topDown.targets.some((projection) =>
       projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible"),
     `Fixture target ${target.acceptanceTargetRef} must have visible top-down identity pixels`);
-    if (target.acceptanceTargetRef === "worldkit://acceptance-target/gate-mass@1" ||
-      target.acceptanceTargetRef === "worldkit://acceptance-target/mountain-cliff-layers@1") {
+    if (geometryFixtureId === undefined &&
+      (target.acceptanceTargetRef === "worldkit://acceptance-target/gate-mass@1" ||
+       target.acceptanceTargetRef === "worldkit://acceptance-target/mountain-cliff-layers@1")) {
       const pixels = openingPixels.targets.find((projection) => projection.acceptanceTargetRef === target.acceptanceTargetRef)!;
       const structure = semanticViews.views.find(({ viewId }) => viewId === "opening")!
         .targets.find(({ acceptanceTargetRef }) => acceptanceTargetRef === target.acceptanceTargetRef)!.structuralProjection;
@@ -158,6 +163,7 @@ try {
     }
   }
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
+    ...(geometryFixtureId === undefined ? {} : { geometryFixtureId }),
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
     cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",
     semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, identityProjections, evidenceRoot };
