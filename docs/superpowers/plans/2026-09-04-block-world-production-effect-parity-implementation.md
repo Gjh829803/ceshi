@@ -409,6 +409,32 @@ The main agent integrates worker commits only after inspecting their actual diff
 closure depends on both the mask implementation and inspected geometry fixtures; neither worker
 success nor single-fixture display invariance alone closes CF-14.
 
+#### CF-11/21 legacy generation guidance restoration
+
+Ready parallel-safe implementation after CF-21/NEXT-COVERAGE-AUDIT. Frozen legacy reference:
+`9e35ab53` Planner Skill navigation/visual-target selection and Block Builder required outcome.
+Restore the complete-world creative instruction: one continuous world, explorable footprint at
+least four times the reference-visible geographic area (normally twice its width and depth),
+with real middle/side/rear/remote geography; empty padding does not count. It is not a new
+Host-measured image-area gate. Planner records conservative extension as inference, not user
+fact; Native Builder follows the frozen Brief/World Plan and cannot silently rewrite it.
+Preserve exact current Block budgets, Source/Runtime ownership and shared repair limits.
+
+Restore the old priority when more than four non-Subject identity-critical wholes compete:
+scene-defining person/animal/creature/important object, then primary architecture/natural landmark,
+then secondary/repeated formations. Keep one Subject and at most four selected non-Subjects;
+ordinary filler stays unselected, and visual identity creates no NPC/Gameplay capability.
+
+Worker ownership: Planner Skill, its block-whitebox-images and scene-brief-template references;
+Native Builder Skill and its existing byte-frozen copy; actual native-world-case-preparation
+task instruction and focused Planner/preparation/Skill tests. No public schema, parser threshold,
+Runtime, Capture, Case artifact or live status mutation. Main owns this contract and integration.
+Evidence must inspect the actual frozen instruction/Skill delivery, not merely docs wording,
+plus existing max-five/single-Subject parser boundaries and Skill drift. Model effect claims
+require later comparable Cases; these tests alone prove instruction delivery, not output quality.
+Complete-feature inventory/coverage remains a separate CF-21 diagnostic contract, not an old
+field that was lost during migration or a reason to invent a production completeness veto.
+
 #### User-authorized parallel batch at 65d3c2bb (2026-09-05)
 
 The user explicitly authorized subagents while the local 054 Case runs. Two independent
