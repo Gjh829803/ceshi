@@ -21,6 +21,7 @@ async function baseline() {
   const source = createEvidenceSetFixtureInputV1({ withoutScriptedTraversal: true });
   const value = JSON.parse(JSON.stringify(source.captureReceipt));
   value.formalRequest.semanticCaptureMap.bindings[0].acceptanceTargetRef = targetRef;
+  value.formalRequest.semanticCaptureMap.bindings[0].compositionTargetRef = "worldkit://composition-target/gate-mass@1";
   value.formalRequest.semanticCaptureMapHash = hashFormalSemanticCaptureMapV1(value.formalRequest.semanticCaptureMap);
   value.semanticCaptureMapHash = value.formalRequest.semanticCaptureMapHash;
   value.formalRequestHash = hashFormalWorldCaptureRequestV1(value.formalRequest);
@@ -74,13 +75,28 @@ describe("test-only explicit semantic reference consumption", () => {
     expect(gate.viewRequirements).toEqual(reference.semanticReferenceProjections[0]!.viewRequirements);
     expect(updated.expected.semanticSilhouetteTargets.filter(({ acceptanceTargetRef }) => acceptanceTargetRef !== targetRef))
       .toEqual(original.expected.semanticSilhouetteTargets.filter(({ acceptanceTargetRef }) => acceptanceTargetRef !== targetRef));
-    expect({ ...updated, expected: { ...updated.expected, semanticSilhouetteTargets: [] } })
-      .toEqual({ ...original, expected: { ...original.expected, semanticSilhouetteTargets: [] } });
+    const openingReference = gate.viewRequirements[0]!;
+    expect(openingReference.mode).toBe("reference-projection-required");
+    if (openingReference.mode !== "reference-projection-required") throw new Error("missing opening reference");
+    const compositionTargetRef = "worldkit://composition-target/gate-mass@1";
+    expect(updated.expected.openingComposition.regions.find(({ targetRef }) => targetRef === compositionTargetRef)?.normalizedBounds)
+      .toEqual(openingReference.normalizedBounds);
+    expect(updated.expected.openingComposition.anchors.find(({ targetRef }) => targetRef === compositionTargetRef)?.normalizedCenter)
+      .toEqual(openingReference.normalizedCenter);
+    for (const rows of ["regions", "anchors"] as const) {
+      expect(updated.expected.openingComposition[rows].filter(({ targetRef }) => targetRef !== compositionTargetRef))
+        .toEqual(original.expected.openingComposition[rows].filter(({ targetRef }) => targetRef !== compositionTargetRef));
+    }
+    expect({ ...updated, expected: { ...updated.expected, semanticSilhouetteTargets: [],
+      openingComposition: { ...updated.expected.openingComposition, regions: [], anchors: [] } } })
+      .toEqual({ ...original, expected: { ...original.expected, semanticSilhouetteTargets: [],
+        openingComposition: { ...original.expected.openingComposition, regions: [], anchors: [] } } });
     expect(hashWorldReconstructionCaseV1(updated)).not.toBe(hashWorldReconstructionCaseV1(original));
     expect(withNativeSemanticReferenceProjectionsV1(original, [])).toEqual(original);
     expect(() => withNativeSemanticReferenceProjectionsV1(original, [...reference.semanticReferenceProjections, ...reference.semanticReferenceProjections])).toThrow("duplicate");
     expect(() => withNativeSemanticReferenceProjectionsV1(original, [{ ...reference.semanticReferenceProjections[0]!, acceptanceTargetRef: "absent" }])).toThrow("unknown");
-    expect(() => withNativeSemanticReferenceProjectionsV1(original, [{ acceptanceTargetRef: targetRef, viewRequirements: [] }])).toThrow();
+    expect(() => withNativeSemanticReferenceProjectionsV1(original, [{ ...reference.semanticReferenceProjections[0]!, viewRequirements: [] }])).toThrow();
+    expect(() => withNativeSemanticReferenceProjectionsV1(original, [{ ...reference.semanticReferenceProjections[0]!, compositionTargetRef: "absent" }])).toThrow("unknown opening");
   });
 
   it.each(["wrong-fixture", "wrong-world-hash", "png-hash", "png-dimensions", "invisible", "missing-view"])("rejects invalid retained baseline %s", async (mode) => {

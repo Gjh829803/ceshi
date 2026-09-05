@@ -47,7 +47,8 @@ export async function loadNativeSemanticReferenceV1(evidenceRoot: string) {
   const receipt = parseFormalWorldCaptureReceiptV1(JSON.parse(receiptBytes.toString("utf8")));
   assert.equal(receipt.worldPackageRootHash, evidence.worldPackageRootHash);
   const targets = receipt.formalRequest.semanticCaptureMap.bindings;
-  assert(targets.some(({ acceptanceTargetRef }) => acceptanceTargetRef === targetRef), "baseline gate binding missing");
+  const gateBinding = targets.find(({ acceptanceTargetRef }) => acceptanceTargetRef === targetRef);
+  assert(gateBinding, "baseline gate binding missing");
   const views = await Promise.all(viewIds.map(async (viewId) => {
     const view = receipt.views.find((entry) => entry.viewId === viewId);
     assert(view, `baseline ${viewId} missing`);
@@ -60,7 +61,8 @@ export async function loadNativeSemanticReferenceV1(evidenceRoot: string) {
       requirement: { viewId, mode: "reference-projection-required", ...referenceProjection } satisfies WorldReconstructionViewRequirementV1 };
   }));
   return {
-    semanticReferenceProjections: [{ acceptanceTargetRef: targetRef, viewRequirements: views.map(({ requirement }) => requirement) }],
+    semanticReferenceProjections: [{ acceptanceTargetRef: targetRef, compositionTargetRef: gateBinding.compositionTargetRef,
+      viewRequirements: views.map(({ requirement }) => requirement) }],
     source: { fixtureId: "solid-wall", evidenceRoot: path.resolve(evidenceRoot),
       evidenceContentHash: sha256Bytes(evidenceBytes), captureReceiptContentHash: sha256Bytes(receiptBytes),
       worldPackageRootHash: receipt.worldPackageRootHash, views },

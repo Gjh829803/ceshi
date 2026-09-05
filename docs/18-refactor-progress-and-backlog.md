@@ -1738,6 +1738,14 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   tsc 首次暴露只读投影类型，改为冻结只读输出后最终 exit 0。Skill drift gate 66/66
   通过，live/frozen 副本一致。最终三视图真实 Evaluation 验收尚待；不是 CF-14
   已正式完成或新 054 模型 Case 成功。
+- CF-14/R2-E 三视图消费工具已从 worker `b116b244` 集成为 `010c0420`，主树纯测试
+  16/16 和 typecheck 通过；首次真实调用完成 Package 后，在 Browser 启动前由现有
+  semantic binding 拒绝：测试夹具只换了 semantic reference，没同步同一目标的
+  opening region/anchor。该失败不是生产门禁过严，不删 identity 检查。新增 RED 已复现，
+  fixture 改为使用 baseline Receipt 的显式 composition binding 同步两处参考，冻结
+  前完成，其他目标、depth/order、Profile 与阈值不变；修复后 16/16 通过。
+  最终实际三视图消费验收仍待。`010c0420` 的独立静态审查未发现生产 R2-F 问题，
+  但未覆盖上述真实 fixture 失败；工具修复需补充复核，不作整项通过声明。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，

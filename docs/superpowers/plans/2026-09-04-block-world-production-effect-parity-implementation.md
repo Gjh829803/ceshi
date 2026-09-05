@@ -488,7 +488,10 @@ not Opening/Runtime/production consumers. An explicit
 `--semantic-geometry-reference rear-depth-wall <solid-wall-evidence-root>` mode
 uses the retained receipt-bound gate-mass PNG projections as three-view Case
 references, through the ordinary Case parser/hash chain. Default presence policy
-and all thresholds remain untouched. Save EvidenceSet before assertions; require
+and all thresholds remain untouched. The receipt's explicit composition binding
+also updates that same target's opening region/anchor before freezing the fixture;
+the existing Host identity check requires both Case representations to agree.
+This only constructs test input and never mutates a production Case. Save EvidenceSet before assertions; require
 same Camera inputs and dimensions, per-view decoded projection equality through
 Evidence, opening semantic match and side/top semantic drift. Worker runs only
 pure input tests/typecheck in an isolated tree; main owns the single real Browser

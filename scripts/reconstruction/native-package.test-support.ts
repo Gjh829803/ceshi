@@ -249,6 +249,7 @@ type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
   worldBoundsPolicy?: NativeSceneWorldBoundsPolicyV1;
   semanticReferenceProjections?: readonly Readonly<{
     acceptanceTargetRef: string;
+    compositionTargetRef: string;
     viewRequirements: readonly WorldReconstructionViewRequirementV1[];
   }>[];
 }>;
@@ -265,8 +266,27 @@ export function withNativeSemanticReferenceProjectionsV1(
     assert(reconstructionCase.expected.semanticSilhouetteTargets.some(
       ({ acceptanceTargetRef }) => acceptanceTargetRef === targetRef), "unknown semantic reference target");
   }
+  const openingByTarget = new Map(references.map((reference) => {
+    const opening = reference.viewRequirements.find(({ viewId }) => viewId === "opening");
+    assert(opening?.mode === "reference-projection-required", "opening pixel reference required");
+    assert(reconstructionCase.expected.openingComposition.regions.some(({ targetRef }) => targetRef === reference.compositionTargetRef) &&
+      reconstructionCase.expected.openingComposition.anchors.some(({ targetRef }) => targetRef === reference.compositionTargetRef),
+    "unknown opening composition target");
+    return [reference.compositionTargetRef, opening] as const;
+  }));
+  assert.equal(openingByTarget.size, references.length, "duplicate opening composition target");
   return parseWorldReconstructionCaseV1({ ...reconstructionCase,
     expected: { ...reconstructionCase.expected,
+      openingComposition: { ...reconstructionCase.expected.openingComposition,
+        regions: reconstructionCase.expected.openingComposition.regions.map((region) => {
+          const reference = openingByTarget.get(region.targetRef);
+          return reference === undefined ? region : { ...region, normalizedBounds: reference.normalizedBounds };
+        }),
+        anchors: reconstructionCase.expected.openingComposition.anchors.map((anchor) => {
+          const reference = openingByTarget.get(anchor.targetRef);
+          return reference === undefined ? anchor : { ...anchor, normalizedCenter: reference.normalizedCenter };
+        }),
+      },
       semanticSilhouetteTargets: reconstructionCase.expected.semanticSilhouetteTargets.map((target) => {
         const reference = byTarget.get(target.acceptanceTargetRef);
         return reference === undefined ? target : { ...target, viewRequirements: reference.viewRequirements };
@@ -479,9 +499,9 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     },
   ].sort((left, right) => left.inputRef.localeCompare(right.inputRef));
   if (options.semanticReferenceProjections !== undefined) {
-    caseValue.expected.semanticSilhouetteTargets = withNativeSemanticReferenceProjectionsV1(
+    caseValue.expected = withNativeSemanticReferenceProjectionsV1(
       parseWorldReconstructionCaseV1(caseValue), options.semanticReferenceProjections,
-    ).expected.semanticSilhouetteTargets;
+    ).expected;
   }
   await Promise.all([
     writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`),
