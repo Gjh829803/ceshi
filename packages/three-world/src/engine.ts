@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DEFAULT_CHARACTER_OPTIONS, ThreePhysics } from './physics.js';
 import { ThreeNavigation } from './navigation.js';
 import { ThreeCameraRig, type CameraRigInput } from './camera.js';
+import { ownViewport } from './viewport.js';
 import { WorldKeyboard } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
@@ -71,6 +72,7 @@ export class WorldEngine {
   private readonly ownsRenderer: boolean;
   private observer: WorldObservation | undefined;
   private resetHandler:(()=>void)|undefined;
+  private releaseViewport:(()=>void)|undefined;
 
   private constructor(options: WorldOptions, physics: ThreePhysics, navigation: ThreeNavigation | undefined) {
     this.scene = options.scene ?? new THREE.Scene();
@@ -82,7 +84,7 @@ export class WorldEngine {
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
-    if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.installPointer(this.renderer.domElement); }
+    if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.installPointer(this.renderer.domElement);if(this.ownsRenderer)this.releaseViewport=ownViewport(this.renderer,this.camera,this.renderer.domElement); }
   }
   static async create(options: WorldOptions = {}): Promise<WorldEngine> {
     const physics = await ThreePhysics.create(options.physics);
@@ -468,7 +470,7 @@ export class WorldEngine {
   }
   private recordError(code: string, error: unknown, entityId?: string): void { if (this.failures.length < 128) this.failures.push({ code, message: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown failure', simulationTick: this.tick, ...(entityId ? { entityId } : {}) }); }
   dispose(): void {
-    if (this.disposed) return; this.stop(); this.disposed = true; this.keyboard.detach(); this.pointerAbort?.abort();
+    if (this.disposed) return; this.stop(); this.disposed = true; this.keyboard.detach(); this.pointerAbort?.abort();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }

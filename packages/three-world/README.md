@@ -25,6 +25,8 @@ Group passed as `addCharacter({id,object,body:{heightMeters,radiusMeters}})`.
 Its tails, clothes and other visual descendants move with the root; keep their
 collisions out of the character body.
 
+An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
+
 Terrain/obstacle default to fixed collision; decoration has no collision. Use
 kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
 Register small visual stones as decoration when they should not impede walking.
