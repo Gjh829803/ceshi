@@ -23,14 +23,11 @@ import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
 
 const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
-  kind: "reach-bounds" as const,
+  kind: "reach-position" as const,
   checkpointId: "approach",
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
-  sourceBoundsMeters: {
-    minimumMetersXYZ: [-5, -1, -5] as const,
-    maximumMetersXYZ: [5, 0, 5] as const,
-  },
+  standPositionMetersXYZ: [0, 0, 0] as const,
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
 }, {

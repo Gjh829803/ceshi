@@ -186,6 +186,31 @@ or test-shaped geometry. Completing an R1 slice does not close its parent CF tas
 
 ### When and how to rerun
 
+#### CF-11/R2 local arrival evidence
+
+Execution is main-agent-only, sequential; depends on the existing frozen Case,
+Formal Capture intent and verified Block metadata, with no model-stage change.
+The Host Case/Intent author owns each metric stand endpoint; the Block identity
+binder preserves it while joining the declared visual group; the existing
+Runtime Capture measurement alone observes arrival at that endpoint.
+
+Replace `reach-bounds` with current-only `reach-position` in authored and resolved
+checkpoint contracts. Require finite `standPositionMetersXYZ`; retain the frozen
+Capsule radius and existing tolerance as the local acceptance margin. Group
+bounds must no longer define a reach region. Plane criteria retain their existing
+group/Collider face proof. No old-kind alias or missing-position fallback is kept.
+The production baseline derives its endpoint from the same local stand position
+as its Ground band; fixture and direct consumer updates land together. Original
+historical Case artifacts remain untouched and do not prove this new contract.
+
+Required evidence: a huge cross-region group cannot make Spawn count as arrival;
+asymmetric endpoints, wrong elevation and outside-margin samples reject; a local
+valid sample passes; parser requires the endpoint; Hashes bind it; Host binding
+preserves it regardless of unrelated group extent; Capture publication and
+ordinary/strict outcome separation remain unchanged. This closes the endpoint
+slice only. Full Builder-authored geography, non-fixed bounds/routes, region
+coverage and CF-21 salient-feature closure remain open under their parent tasks.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

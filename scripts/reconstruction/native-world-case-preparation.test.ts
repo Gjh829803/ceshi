@@ -380,6 +380,10 @@ describe("trusted Native world Case preparation", () => {
         criticalTraversalChecks: readonly { id: string }[];
       };
       formalCaptureIntent: {
+        checkpointSpatialCriteria: readonly {
+          kind: string;
+          standPositionMetersXYZ: readonly [number, number, number];
+        }[];
         semanticCaptureTargetBindings: readonly {
           acceptanceTargetRef: string;
           semanticLayerId: string;
@@ -405,6 +409,12 @@ describe("trusted Native world Case preparation", () => {
     });
     expect(proposal.expected.criticalTraversalChecks).toEqual([
       expect.objectContaining({ id: "entry-to-remote-ground-pass" }),
+    ]);
+    expect(proposal.formalCaptureIntent.checkpointSpatialCriteria).toEqual([
+      expect.objectContaining({
+        kind: "reach-position",
+        standPositionMetersXYZ: [0, 0, -12],
+      }),
     ]);
     expect(proposal.expected.colliders).toEqual([
       expect.objectContaining({

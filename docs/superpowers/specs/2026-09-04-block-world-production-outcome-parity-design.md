@@ -357,6 +357,27 @@ new semantic quality diagnostics remain report-only in ordinary production and n
 tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
 obligations, not implied by this structural evidence.
 
+### CF-11 local arrival evidence
+
+The frozen Formal Capture intent declares `reach-position` with an exact
+`standPositionMetersXYZ`, checkpoint id, source visual-group id, Capsule radius
+and tolerance. Host binding verifies the visual-group identity and preserves the
+authored position. It must never substitute the whole group's AABB: a group may
+span entry, middle and remote space. Runtime Capture and the explicit strict
+verifier use the same existing measurement function, checking each coordinate
+inside the local endpoint plus/minus the existing radius-and-tolerance margin.
+`pass-plane` and `block-plane` retain their group/Collider-bound plane semantics.
+
+This is a current-only replacement of `reach-bounds`, not an alias or optional
+fallback. Endpoint bytes participate in the existing Intent/Case/Request Hash
+chain. Generated baseline Ground and Capture use one endpoint definition; the
+committed strict Case input binds its spawn and upper-platform checkpoints to
+its frozen stand positions. Historical run receipts remain unchanged. Accurate
+arrival diagnostics do not reverse ordinary production success or enable a
+fresh Browser replay in the interactive workflow. Full authored geography,
+coverage and removal of the fixed baseline remain CF-11/21 work, not proven by
+this local measurement change.
+
 ### CF-04/12 authored opening Camera consumption
 
 The four opening values (`distanceMeters`, `targetHeightMeters`, `pitchRadians`,

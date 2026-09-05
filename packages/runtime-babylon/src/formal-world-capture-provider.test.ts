@@ -49,14 +49,11 @@ function traversalSnapshot(
 
 function traversalRequestFixture() {
   const criterion = {
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "spawn",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-1, 0, -1] as const,
-      maximumMetersXYZ: [1, 2, 1] as const,
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   };
@@ -241,6 +238,34 @@ describe("formal world capture provider", () => {
     }
   });
 
+  it("does not count the start of a cross-region ground group as arrival at its frozen endpoint", () => {
+    const criterion = {
+      kind: "reach-position" as const,
+      checkpointId: "remote-arrival",
+      expectation: "reach" as const,
+      sourceVisualGroupId: "long-ground",
+      standPositionMetersXYZ: [8, 1.25, -30] as const,
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    };
+    const measure = (positionMetersXYZ: readonly [number, number, number]) =>
+      measureFormalTraversalCheckpointV1({
+        criterion,
+        startPositionMetersXYZ: [0, 0, 0],
+        positionMetersXYZ,
+        tick: 7,
+        isFinalTick: false,
+      });
+    expect(measure([0, 0, 0])).toBeUndefined();
+    expect(measure([8, 0, -30])).toBeUndefined();
+    expect(measure([8, 1.25, -29])).toBeUndefined();
+    expect(measure([8.2, 1.25, -30])).toEqual({
+      checkpointId: "remote-arrival", outcome: "reached", observedAtTick: 7,
+    });
+    expect(measure([8.4, 1.25, -30])?.outcome).toBe("reached");
+    expect(measure([8.4001, 1.25, -30])).toBeUndefined();
+  });
+
   it("derives asymmetric pass and block checkpoints only from frozen spatial criteria", () => {
     // This catches treating one sign convention as symmetric or copying a
     // Case expectation into the observed outcome.
@@ -292,14 +317,11 @@ describe("formal world capture provider", () => {
 
     expect(measureFormalTraversalCheckpointV1({
       criterion: {
-        kind: "reach-bounds",
+        kind: "reach-position",
         checkpointId: "blocked-platform",
         expectation: "reach",
         sourceVisualGroupId: "platform",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: [-1, 0, -4],
-          maximumMetersXYZ: [1, 2, -2],
-        },
+        standPositionMetersXYZ: [0, 1, -3] as const,
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       },
@@ -752,14 +774,11 @@ describe("formal world capture provider", () => {
           checkExpectation: "block" as const,
           fixedInputSequence: [{ actions: ["move-forward" as const], ticks: 1 }],
           checkpointCriteria: [{
-            kind: "reach-bounds" as const,
+            kind: "reach-position" as const,
             checkpointId: "approach",
             expectation: "reach" as const,
             sourceVisualGroupId: "route",
-            sourceBoundsMeters: {
-              minimumMetersXYZ: [-1, 0, -1] as const,
-              maximumMetersXYZ: [1, 2, 1] as const,
-            },
+            standPositionMetersXYZ: [0, 1, 0.65] as const,
             capsuleRadiusMeters: 0.35,
             toleranceMeters: 0.05,
           }, {

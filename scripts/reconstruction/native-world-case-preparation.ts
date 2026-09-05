@@ -439,6 +439,13 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
   const traversalCheckId = "entry-to-remote-ground-pass";
   const checkpointId = "remote-ground-arrival";
+  const entryToRemoteStandPositions = Object.freeze([
+    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: 0 }),
+    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -4 }),
+    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -8 }),
+    Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -12 }),
+  ]);
+  const remoteStandPosition = entryToRemoteStandPositions.at(-1)!;
   const expected = Object.freeze({
     topology: Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
@@ -511,12 +518,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       requiredTraversalBands: Object.freeze([Object.freeze({
         acceptanceTargetRef: remoteAcceptanceTargetRef,
         id: "entry-to-remote-ground-band",
-        centerlineStandPositionsXYZMeters: Object.freeze([
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: 0 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -4 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -8 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -12 }),
-        ]),
+        centerlineStandPositionsXYZMeters: entryToRemoteStandPositions,
         halfWidthMeters: 1.5,
       })]),
     }),
@@ -570,7 +572,10 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         traversalCheckId,
       })]),
       checkpointSpatialCriteria: Object.freeze([Object.freeze({
-        kind: "reach-bounds" as const,
+        kind: "reach-position" as const,
+        standPositionMetersXYZ: Object.freeze([
+          remoteStandPosition.xMeters, remoteStandPosition.yMeters, remoteStandPosition.zMeters,
+        ] as const),
         checkpointId,
         expectation: "reach" as const,
         sourceVisualGroupId: BASELINE_REMOTE_GROUND.visualGroupId,

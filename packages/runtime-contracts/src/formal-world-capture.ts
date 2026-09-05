@@ -54,10 +54,11 @@ export interface FormalWorldBoundsMetersV1 {
 
 export type FormalTraversalCheckpointIntentCriterionV1 =
   | Readonly<{
-      kind: "reach-bounds";
+      kind: "reach-position";
       checkpointId: string;
       expectation: "reach";
       sourceVisualGroupId: string;
+      standPositionMetersXYZ: readonly [number, number, number];
       capsuleRadiusMeters: number;
       toleranceMeters: number;
     }>
@@ -87,11 +88,11 @@ export type FormalTraversalCheckpointIntentCriterionV1 =
 
 export type FormalTraversalCheckpointSpatialCriterionV1 =
   | Readonly<{
-      kind: "reach-bounds";
+      kind: "reach-position";
       checkpointId: string;
       expectation: "reach";
       sourceVisualGroupId: string;
-      sourceBoundsMeters: FormalWorldBoundsMetersV1;
+      standPositionMetersXYZ: readonly [number, number, number];
       capsuleRadiusMeters: number;
       toleranceMeters: number;
     }>
@@ -662,17 +663,21 @@ const TRAVERSAL_BINDING_FIELDS = [
   "fixedInputSequenceHash",
   "checkpointCriteria",
 ] as const;
-const REACH_CRITERION_FIELDS = [
+const CHECKPOINT_CRITERION_FIELDS = [
   "kind",
   "checkpointId",
   "expectation",
   "sourceVisualGroupId",
-  "sourceBoundsMeters",
   "capsuleRadiusMeters",
   "toleranceMeters",
 ] as const;
+const REACH_CRITERION_FIELDS = [
+  ...CHECKPOINT_CRITERION_FIELDS,
+  "standPositionMetersXYZ",
+] as const;
 const PASS_PLANE_CRITERION_FIELDS = [
-  ...REACH_CRITERION_FIELDS,
+  ...CHECKPOINT_CRITERION_FIELDS,
+  "sourceBoundsMeters",
   "axis",
   "sourceFace",
   "planeMeters",
@@ -682,16 +687,9 @@ const BLOCK_PLANE_CRITERION_FIELDS = [
   ...PASS_PLANE_CRITERION_FIELDS,
   "colliderId",
 ] as const;
-const INTENT_REACH_CRITERION_FIELDS = [
-  "kind",
-  "checkpointId",
-  "expectation",
-  "sourceVisualGroupId",
-  "capsuleRadiusMeters",
-  "toleranceMeters",
-] as const;
+const INTENT_REACH_CRITERION_FIELDS = REACH_CRITERION_FIELDS;
 const INTENT_PASS_PLANE_CRITERION_FIELDS = [
-  ...INTENT_REACH_CRITERION_FIELDS,
+  ...CHECKPOINT_CRITERION_FIELDS,
   "axis",
   "sourceFace",
   "expectedCenterSide",
@@ -1357,15 +1355,18 @@ function parseTraversalCheckpointIntentCriterion(
   assertAccessorFree(value, contract, path);
   const source = object(value, contract, path);
   const kind = source.kind;
-  if (kind === "reach-bounds") {
+  if (kind === "reach-position") {
     exactFields(source, INTENT_REACH_CRITERION_FIELDS, contract, path);
     if (source.expectation !== "reach") {
-      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+      fail(contract, `${path}/expectation`, "reach-position must expect reach");
     }
     return freeze({
       kind,
       checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
       expectation: "reach" as const,
+      standPositionMetersXYZ: metersXYZ(
+        source.standPositionMetersXYZ, contract, `${path}/standPositionMetersXYZ`,
+      ),
       sourceVisualGroupId: text(
         source.sourceVisualGroupId,
         contract,
@@ -1375,7 +1376,7 @@ function parseTraversalCheckpointIntentCriterion(
     });
   }
   if (kind !== "pass-plane" && kind !== "block-plane") {
-    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+    fail(contract, `${path}/kind`, "expected reach-position, pass-plane, or block-plane");
   }
   exactFields(
     source,
@@ -1429,10 +1430,10 @@ function parseTraversalCheckpointSpatialCriterion(
   assertAccessorFree(value, contract, path);
   const source = object(value, contract, path);
   const kind = source.kind;
-  if (kind === "reach-bounds") {
+  if (kind === "reach-position") {
     exactFields(source, REACH_CRITERION_FIELDS, contract, path);
     if (source.expectation !== "reach") {
-      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+      fail(contract, `${path}/expectation`, "reach-position must expect reach");
     }
     return freeze({
       kind,
@@ -1443,16 +1444,16 @@ function parseTraversalCheckpointSpatialCriterion(
         contract,
         `${path}/sourceVisualGroupId`,
       ),
-      sourceBoundsMeters: parseSpatialBounds(
-        source.sourceBoundsMeters,
+      standPositionMetersXYZ: metersXYZ(
+        source.standPositionMetersXYZ,
         contract,
-        `${path}/sourceBoundsMeters`,
+        `${path}/standPositionMetersXYZ`,
       ),
       ...parseCapsuleTolerance(source, contract, path),
     });
   }
   if (kind !== "pass-plane" && kind !== "block-plane") {
-    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+    fail(contract, `${path}/kind`, "expected reach-position, pass-plane, or block-plane");
   }
   exactFields(
     source,

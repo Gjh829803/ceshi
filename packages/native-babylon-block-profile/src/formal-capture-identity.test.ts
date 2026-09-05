@@ -182,7 +182,7 @@ function caseValue() {
           id: "central-ascent-band",
           centerlineStandPositionsXYZMeters: [
             { xMeters: 0, yMeters: 1, zMeters: 0 },
-            { xMeters: 0, yMeters: 1, zMeters: -1 },
+            { xMeters: 0, yMeters: 2, zMeters: -2 },
           ],
           halfWidthMeters: 1,
         }],
@@ -318,14 +318,11 @@ function checkedLayoutValue() {
 
 function resolvedCheckpointSpatialCriteria() {
   return [{
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "junction",
     expectation: "reach",
     sourceVisualGroupId: "upper-t-junction-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-0.5, 1, -2.5],
-      maximumMetersXYZ: [0.5, 2, -1.5],
-    },
+    standPositionMetersXYZ: [0, 2, -2] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }, {
@@ -348,7 +345,8 @@ function resolvedCheckpointSpatialCriteria() {
 
 function authoredCheckpointSpatialCriteria() {
   return [{
-    kind: "reach-bounds",
+    kind: "reach-position",
+    standPositionMetersXYZ: [0, 2, -2] as const,
     checkpointId: "junction",
     expectation: "reach",
     sourceVisualGroupId: "upper-t-junction-group",
@@ -703,10 +701,42 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
-  it("resolves reach and pass criteria from verified visual-group bounds", () => {
+  it("preserves authored reach endpoints and resolves pass criteria from verified visual-group bounds", () => {
     expect(bind().traversalCheckBindings[0]?.checkpointCriteria).toEqual(
       resolvedCheckpointSpatialCriteria(),
     );
+  });
+
+  it("does not replace a frozen local endpoint with an expanded cross-region visual-group AABB", () => {
+    const input = bindInput();
+    const template = input.materializerMetadata.blocks.find(({ visualGroupId }) =>
+      visualGroupId === "upper-t-junction-group")!;
+    const distantBlocks = [[-19.5, -0.5, -39.5], [19.5, 1.5, 4.5]].map(
+      (centerMetersXYZ, index) => ({
+        ...structuredClone(template),
+        blockId: `upper-t-junction-distant-${index}`,
+        runtimeEntityId: `native-block:upper-t-junction-distant-${index}`,
+        centerMetersXYZ,
+      }),
+    );
+    const expanded = parseBabylonNativeBlockMaterializerMetadataV1({
+      ...input.materializerMetadata,
+      blocks: [...input.materializerMetadata.blocks, ...distantBlocks],
+      visualGroups: input.materializerMetadata.visualGroups.map((group) =>
+        group.visualGroupId === "upper-t-junction-group" ? {
+          ...group,
+          blockIds: [...group.blockIds, ...distantBlocks.map(({ blockId }) => blockId)],
+          minimumMetersXYZ: [-20, -1, -40],
+          maximumMetersXYZ: [20, 2, 5],
+        } : group),
+    });
+    const result = bindBlockMaterializerMetadataToSemanticCaptureTargetsV1({
+      ...input,
+      materializerMetadata: expanded,
+      materializerMetadataHash: hashBabylonNativeBlockMaterializerMetadataV1(expanded),
+    });
+    expect(result.traversalCheckBindings[0]!.checkpointCriteria[0])
+      .toEqual(authoredCheckpointSpatialCriteria()[0]);
   });
 
   it("rejects a plane criterion when Spawn already starts on its expected crossed side", () => {
@@ -775,7 +805,8 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       }, {
-        kind: "reach-bounds",
+        kind: "reach-position",
+        standPositionMetersXYZ: [0, 0, 0] as const,
         checkpointId: "upper-support",
         expectation: "reach",
         sourceVisualGroupId: "upper-t-junction-group",
@@ -864,7 +895,8 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       }, authoredCheckpointSpatialCriteria()[1], {
-        kind: "reach-bounds",
+        kind: "reach-position",
+        standPositionMetersXYZ: [0, 0, 0] as const,
         checkpointId: "upper-support",
         expectation: "reach",
         sourceVisualGroupId: "upper-t-junction-group",

@@ -206,14 +206,11 @@ function formalRequestFixture(
     maximumMetersXYZ: [8, 6, 8],
   } as const;
   const criterion = {
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "checkpoint",
     expectation: "reach",
     sourceVisualGroupId: "route",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-1, 0, -1],
-      maximumMetersXYZ: [1, 2, 1],
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   } as const;

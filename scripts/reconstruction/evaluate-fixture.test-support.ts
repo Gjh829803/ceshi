@@ -155,9 +155,8 @@ const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
 function authoredCheckpointCriterion(
   criterion: FormalTraversalCheckpointSpatialCriterionV1,
 ): FormalTraversalCheckpointIntentCriterionV1 {
-  if (criterion.kind === "reach-bounds") {
-    const { sourceBoundsMeters: _resolvedBounds, ...authored } = criterion;
-    return authored;
+  if (criterion.kind === "reach-position") {
+    return criterion;
   }
   const {
     sourceBoundsMeters: _resolvedBounds,
@@ -296,26 +295,20 @@ export function createEvidenceSetFixtureInputV1(
   const needsBlockerCollider = paletteTraversalDisagreement ||
     traversalCheckExpectation === "block";
   const traversalCheckpointCriteria = options.traversalCheckpointCriteria ?? [{
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "ground",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-5, -1, -5] as const,
-      maximumMetersXYZ: [5, 0, 5] as const,
-    },
+    standPositionMetersXYZ: [0, 0, -1] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }];
   const supportTraversalCheckpointCriteria = [{
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "support-ground",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-5, -1, -5] as const,
-      maximumMetersXYZ: [5, 0, 5] as const,
-    },
+    standPositionMetersXYZ: [0, 0, -1] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }];

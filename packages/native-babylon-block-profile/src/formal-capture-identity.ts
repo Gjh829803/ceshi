@@ -235,11 +235,10 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         minimumMetersXYZ: group.minimumMetersXYZ,
         maximumMetersXYZ: group.maximumMetersXYZ,
     });
-    if (criterion.kind === "reach-bounds") {
-      return Object.freeze({
-        ...criterion,
-        sourceBoundsMeters: groupBounds,
-      }) satisfies FormalTraversalCheckpointSpatialCriterionV1;
+    if (criterion.kind === "reach-position") {
+      // The frozen intent owns a local endpoint. A visual group can span the
+      // whole route and must not turn every point on it into arrival evidence.
+      return criterion;
     }
     let sourceBoundsMeters = groupBounds;
     if (criterion.kind === "block-plane") {

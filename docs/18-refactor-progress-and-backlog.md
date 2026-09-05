@@ -1425,6 +1425,20 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   其余本批匹配的 Camera Reset 回归通过。未提交 possession 不提供 pose telemetry，不能以
   该时点的物理 Camera 残留值冒充 committed opening 证据。最终 Skill 57/57、3C migration
   和 typecheck 通过；没有跑全仓 gate 或独立审查，不关闭完整 CF-04/12。
+- CF-11/R2 局部到达证据更新（2026-09-05）：RED 已复现跨区大 ground group 的 AABB
+  让 Spawn 被记作远端 reached。现在以 current-only `reach-position` 替换 `reach-bounds`，
+  必须声明冻结 `standPositionMetersXYZ`；既有 Capsule 半径与 tolerance 决定局部容差，
+  不再从整组 AABB 生成到达区域。Host 保留局部端点及原 visual-group 身份 join；Formal
+  Capture 与显式 NBR verifier 继续调用同一个量测函数。Plane 检查不变，没有 alias、
+  缺字段 fallback、新付费任务或普通生产质量 veto。baseline Ground/Capture 从同一站立点
+  定义绑定 endpoint；固定 `128m` 世界与 `12m` 路线尚未删除，不据此关闭完整 CF-11/21。
+  committed strict Case 的可复用输入已更新 spawn/upper-platform 端点及 Intent Hash；
+  `runs/g-20260904` 的历史输入、收据和截图均不修改，也不冒充新合同通过证据。
+  已通过：Capture 合同/量测/身份/Request/发布/Evaluation/isolated runtime 7 文件 152/152；
+  Case preparation + metadata binding 21/21；严格 verifier 的合成完整 Run/repair/Final/混合
+  blocker 回归 4/4（非真实 Browser E2E）；typecheck。端点变化改变 Hash、错误高度/远离端点
+  拒绝、扩大组不改变端点、容差边界不过严均有回归。生成的三套 portable checker 与 Native
+  冻结副本已同源刷新，renderer 重建字节未变；Native Builder Skill 最终 gate 57/57。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

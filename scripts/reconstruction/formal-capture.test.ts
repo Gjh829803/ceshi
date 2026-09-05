@@ -119,14 +119,11 @@ function packageAndRequest(): Readonly<{
   const secondaryGroup = metadata.visualGroups[1]!;
   const fixedInputSequence = [{ actions: [], ticks: 1 }] as const;
   const checkpointCriteria = [{
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "ground-checkpoint",
     expectation: "reach",
     sourceVisualGroupId: group.visualGroupId,
-    sourceBoundsMeters: {
-      minimumMetersXYZ: group.minimumMetersXYZ,
-      maximumMetersXYZ: group.maximumMetersXYZ,
-    },
+    standPositionMetersXYZ: [0, 0, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }] as const;

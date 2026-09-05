@@ -17,14 +17,11 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
   const fixedInputSequence = [{ actions: [], ticks: 1 }] as const;
   const fixedInputSequenceHash = sha256CanonicalJson(fixedInputSequence);
   const checkpointCriteria = [{
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "fixture-checkpoint",
     expectation: "reach",
     sourceVisualGroupId: "fixture-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-2, 0, -2],
-      maximumMetersXYZ: [2, 2, 2],
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }] as const;

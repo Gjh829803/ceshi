@@ -3507,31 +3507,6 @@ function parseCameraContextRuleValueV2(input, schemaName) {
 function parseCameraContextRuleV2(input) {
   return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
 }
-const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
-  "gameplay-command.execute",
-  "fixed-input.run",
-  "snapshot.get",
-  "events.get",
-  "session.reset",
-  "subject-support.get",
-  "session.close"
-]);
-new Set(
-  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
-);
-new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
-  "kind",
-  "schemaVersion",
-  "id",
-  "resourceRef",
-  "trustMode",
-  "requiredIsolationCapabilityIds"
-]);
-Object.freeze([
-  ...TRUST_PROFILE_BODY_FIELDS,
-  "contentHash"
-]);
 const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
   "distanceMeters",
   "targetHeightMeters",
@@ -3615,6 +3590,31 @@ function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides)
   }
   return applied;
 }
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.reset",
+  "subject-support.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
+  "kind",
+  "schemaVersion",
+  "id",
+  "resourceRef",
+  "trustMode",
+  "requiredIsolationCapabilityIds"
+]);
+Object.freeze([
+  ...TRUST_PROFILE_BODY_FIELDS,
+  "contentHash"
+]);
 function invalid(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }

@@ -282,11 +282,11 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
   observedAtTick: number;
 }> | undefined {
   const criterion = input.criterion;
-  if (criterion.kind === "reach-bounds") {
+  if (criterion.kind === "reach-position") {
     const margin = criterion.capsuleRadiusMeters + criterion.toleranceMeters;
     const inside = input.positionMetersXYZ.every((value, axis) =>
-      value >= criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - margin &&
-      value <= criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + margin);
+      value >= criterion.standPositionMetersXYZ[axis]! - margin &&
+      value <= criterion.standPositionMetersXYZ[axis]! + margin);
     if (inside) {
       return Object.freeze({
         checkpointId: criterion.checkpointId,

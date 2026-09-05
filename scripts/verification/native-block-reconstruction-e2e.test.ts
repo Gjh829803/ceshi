@@ -114,14 +114,11 @@ async function entryPng(left = 43, right = 56): Promise<Uint8Array> {
   }).png().toBuffer());
 }
 const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
-  kind: "reach-bounds" as const,
+  kind: "reach-position" as const,
   checkpointId: "gate-approach",
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
-  sourceBoundsMeters: {
-    minimumMetersXYZ: [-2, -1, -5.1] as const,
-    maximumMetersXYZ: [2, 1, -4.2] as const,
-  },
+  standPositionMetersXYZ: [0, 0, -4.65] as const,
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
 }, {

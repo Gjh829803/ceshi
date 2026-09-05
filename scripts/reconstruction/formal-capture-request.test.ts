@@ -179,7 +179,8 @@ async function fixture(): Promise<Readonly<{
       toVisualGroupId: "ridge-group",
     }],
     checkpointSpatialCriteria: [{
-      kind: "reach-bounds",
+      kind: "reach-position",
+      standPositionMetersXYZ: [0, 0, 0],
       checkpointId: "ground-checkpoint",
       expectation: "reach",
       sourceVisualGroupId: "ground-group",

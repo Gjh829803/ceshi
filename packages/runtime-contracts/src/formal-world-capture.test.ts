@@ -209,11 +209,11 @@ const MINIMAL_FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(
 function resolvedTraversalCheckpointCriteria() {
   return [
     {
-      kind: "reach-bounds",
+      kind: "reach-position",
       checkpointId: "junction",
       expectation: "reach",
       sourceVisualGroupId: "upper-t-junction-group",
-      sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS,
+      standPositionMetersXYZ: [0, 1, -2],
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
     },
@@ -236,10 +236,11 @@ function resolvedTraversalCheckpointCriteria() {
 function authoredTraversalCheckpointCriteria() {
   return [
     {
-      kind: "reach-bounds",
+      kind: "reach-position",
       checkpointId: "junction",
       expectation: "reach",
       sourceVisualGroupId: "upper-t-junction-group",
+      standPositionMetersXYZ: [0, 1, -2],
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
     },
@@ -542,11 +543,11 @@ function minimalScriptedTraversalRequest(checkCount: number) {
       fixedInputSequence: MINIMAL_FIXED_INPUT_SEQUENCE,
       fixedInputSequenceHash: MINIMAL_FIXED_INPUT_SEQUENCE_HASH,
       checkpointCriteria: [{
-        kind: "reach-bounds",
+        kind: "reach-position",
         checkpointId: "checkpoint",
         expectation: "reach",
         sourceVisualGroupId: "central-ascent-group",
-        sourceBoundsMeters: CENTRAL_ASCENT_BOUNDS,
+        standPositionMetersXYZ: [0, 0, 0],
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       }],
@@ -627,6 +628,30 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 }
 
 describe("FormalWorldCaptureIntentV1", () => {
+  it("requires and hashes a local stand endpoint without a group-bounds compatibility path", () => {
+    const original = formalCaptureIntentValue();
+    const reach = original.checkpointSpatialCriteria[0]!;
+    const changed = {
+      ...original,
+      checkpointSpatialCriteria: [{ ...reach, standPositionMetersXYZ: [8, 1.25, -30] },
+        ...original.checkpointSpatialCriteria.slice(1)],
+    };
+    expect(hashFormalWorldCaptureIntentV1(parseFormalWorldCaptureIntentV1(changed)))
+      .not.toBe(hashFormalWorldCaptureIntentV1(parseFormalWorldCaptureIntentV1(original)));
+    for (const override of [
+      { standPositionMetersXYZ: undefined },
+      { standPositionMetersXYZ: [0, 1] },
+      { standPositionMetersXYZ: [0, Number.NaN, 1] },
+      { kind: "reach-bounds", sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS },
+    ]) {
+      expect(() => parseFormalWorldCaptureIntentV1({
+        ...original,
+        checkpointSpatialCriteria: [{ ...reach, ...override },
+          ...original.checkpointSpatialCriteria.slice(1)],
+      })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    }
+  });
+
   it("parses, freezes, canonicalizes, and hashes one closed Scheme A intent", () => {
     const intent = parseFormalWorldCaptureIntentV1(formalCaptureIntentValue());
 

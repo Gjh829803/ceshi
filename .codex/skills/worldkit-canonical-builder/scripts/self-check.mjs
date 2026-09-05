@@ -1678,51 +1678,6 @@ function baseUniq(array2, iteratee, comparator) {
 function uniq(array2) {
   return array2 && array2.length ? baseUniq(array2) : [];
 }
-function invalidContractDataV1(code2) {
-  throw new TypeError(code2);
-}
-function snapshotContractDataV1(input, code2) {
-  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
-    return input;
-  }
-  if (typeof input === "number") {
-    if (!Number.isFinite(input) || Object.is(input, -0)) {
-      return invalidContractDataV1(code2);
-    }
-    return input;
-  }
-  if (Array.isArray(input)) {
-    try {
-      if (Reflect.getPrototypeOf(input) !== Array.prototype || Reflect.ownKeys(input).some((key) => typeof key === "symbol") || Object.getOwnPropertyNames(input).length !== input.length + 1) return invalidContractDataV1(code2);
-      const snapshot = [];
-      for (let index = 0; index < input.length; index += 1) {
-        const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
-        if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
-        snapshot.push(snapshotContractDataV1(descriptor.value, code2));
-      }
-      return snapshot;
-    } catch {
-      return invalidContractDataV1(code2);
-    }
-  }
-  if (typeof input !== "object" || isNil(input)) {
-    return invalidContractDataV1(code2);
-  }
-  try {
-    if (Reflect.getPrototypeOf(input) !== Object.prototype) {
-      return invalidContractDataV1(code2);
-    }
-    const snapshot = {};
-    for (const key of Reflect.ownKeys(input)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
-      snapshot[key] = snapshotContractDataV1(descriptor.value, code2);
-    }
-    return snapshot;
-  } catch {
-    return invalidContractDataV1(code2);
-  }
-}
 function invalid$5(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
@@ -2651,31 +2606,6 @@ function parseCameraContextRuleValueV2(input, schemaName) {
 function parseCameraContextRuleV2(input) {
   return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
 }
-const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
-  "gameplay-command.execute",
-  "fixed-input.run",
-  "snapshot.get",
-  "events.get",
-  "session.reset",
-  "subject-support.get",
-  "session.close"
-]);
-new Set(
-  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
-);
-new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
-  "kind",
-  "schemaVersion",
-  "id",
-  "resourceRef",
-  "trustMode",
-  "requiredIsolationCapabilityIds"
-]);
-Object.freeze([
-  ...TRUST_PROFILE_BODY_FIELDS,
-  "contentHash"
-]);
 const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
   "distanceMeters",
   "targetHeightMeters",
@@ -2759,6 +2689,76 @@ function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides)
   }
   return applied;
 }
+function invalidContractDataV1(code2) {
+  throw new TypeError(code2);
+}
+function snapshotContractDataV1(input, code2) {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
+    return input;
+  }
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || Object.is(input, -0)) {
+      return invalidContractDataV1(code2);
+    }
+    return input;
+  }
+  if (Array.isArray(input)) {
+    try {
+      if (Reflect.getPrototypeOf(input) !== Array.prototype || Reflect.ownKeys(input).some((key) => typeof key === "symbol") || Object.getOwnPropertyNames(input).length !== input.length + 1) return invalidContractDataV1(code2);
+      const snapshot = [];
+      for (let index = 0; index < input.length; index += 1) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
+        if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+        snapshot.push(snapshotContractDataV1(descriptor.value, code2));
+      }
+      return snapshot;
+    } catch {
+      return invalidContractDataV1(code2);
+    }
+  }
+  if (typeof input !== "object" || isNil(input)) {
+    return invalidContractDataV1(code2);
+  }
+  try {
+    if (Reflect.getPrototypeOf(input) !== Object.prototype) {
+      return invalidContractDataV1(code2);
+    }
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(input)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+      snapshot[key] = snapshotContractDataV1(descriptor.value, code2);
+    }
+    return snapshot;
+  } catch {
+    return invalidContractDataV1(code2);
+  }
+}
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.reset",
+  "subject-support.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
+  "kind",
+  "schemaVersion",
+  "id",
+  "resourceRef",
+  "trustMode",
+  "requiredIsolationCapabilityIds"
+]);
+Object.freeze([
+  ...TRUST_PROFILE_BODY_FIELDS,
+  "contentHash"
+]);
 const ROOT_MOTION_RESOURCE_REF_PATTERN_V1 = /^worldkit:\/\/root-motion\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
 function invalid$3(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
