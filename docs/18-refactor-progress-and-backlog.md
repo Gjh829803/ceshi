@@ -1586,6 +1586,18 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本批 scoped D2-D6 复核覆盖 Request→Package join→actual render，删除重复范围推导，
   Runtime 动作/输入/物理状态未改；不是独立最终审查。CF-14/24/R1 取景修复已闭环，
   未跑新模型 Case或全仓 gates；CF-14 visible pixels、CF-21 全要素覆盖仍 open。
+- CF-11/21 下一次真实效果检查准备（2026-09-05）：核对 preparation→generation，完整 Brief
+  仍以原始 bytes/Hash 交付，不能把“目前仅少量语义目标有量测”误报为 Brief 输入被截断。
+  Host task-instruction 残留的 generic entry/remote checks 模板措辞已同步 R3/R6：
+  从实际地理写探索 anchors/bands，不发明地面视觉组、第二地面 Collider 或直线路线。
+  Case preparation 全文件 10/10、diff check 通过；这只改文字指令，未重跑全仓 gates。
+  新本地 Case ID `paper-moon-054-cf11-geography-0905` 已确认未使用，沿用上一真实 Case
+  的用户 prompt 和原始 054 图片，SHA256
+  `080d951445bae3a8584363f0be5ef9194b5eff88e7b64da40d2a81f6a923972e`。
+  使用当前已量测的 8,000 Block 上限、同任务四参 Camera 调整、实际世界/探索意图和
+  完整世界 inspection Capture；本地 Codex 登录及 LWDP 文件存在/0600 已检查，
+  不记录凭据内容。准备冻结后从 Planner 开始普通生产，不重启末尾严格 replay。
+  新结果尚待；CF-21 的全要素/分区合同及实际还原效果仍未验收，旧 054 保留作对照。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

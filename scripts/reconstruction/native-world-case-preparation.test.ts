@@ -913,6 +913,8 @@ describe("trusted Native world Case preparation", () => {
       "task-instruction.md",
     ), "utf8");
     expect(taskInstruction).toContain("two Host-declared advisory comparison PNGs");
+    expect(taskInstruction).toContain("Author middle/remote exploration anchors and honest-width bands from the actual Brief geography");
+    expect(taskInstruction).not.toContain("generic Case entry/remote checks");
     expect(taskInstruction).toContain("actually open both comparison PNGs");
     expect(taskInstruction).toContain("inputs/builder-skill/SKILL.md");
     expect(taskInstruction).toContain("inputs/builder-skill/references/native-block-output-contract.md");
