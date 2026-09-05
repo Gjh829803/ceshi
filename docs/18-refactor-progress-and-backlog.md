@@ -1690,6 +1690,18 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   用户再次授权并发：`CF-14/R2-E-FIXTURES` worker 在隔离目录补纯几何对抗夹具，
   `CF-21/NEXT-COVERAGE-AUDIT` worker 只读核查真实旧行为差异和下一批消费者合同；
   主进程独占 Runtime、Browser、跨域合同、最终集成。完整任务图见既有生产效果实施计划。
+- 2026-09-05 本批集成检查点：主会话分支 `codex/cf-production-effect-closure` 已在
+  `9c44fd70` 集成候选至 `161a0ec5`（含 CF-01、CF-29、CF-19 补强、CF-14 R2-A–D
+  与 single-sample 修复）。合并仅需按语义合并实施计划的 A/B 与 C/D/E 段，生产代码
+  与已测候选逐文件一致；没有合入 main、push 或声称完整 Cloud/独立审查通过。
+  CF-14 对抗夹具 worker 的首版 `fbf9ffe7` 复核发现小数 Block ID 无法通过真正 Session
+  parser，纯 layout checker 不足以证明准入；已由 `f47ceb3e` 改为整数索引 ID 并逐块
+  调用公共 createBlock 验证。修复前 6 个准入 RED，修复后 12/12 及定向 tsc 通过；
+  主集成候选复验 12/12 和 typecheck 通过，实际六变体 Package/Browser 对拍尚待。
+  CF-21 只读审查确认两处真实旧生成指令缺失：至少四倍 reference-visible 地理覆盖；
+  超四个非 Subject 候选时的签名人/动物/物件→主地标→次要/重复群组优先级。
+  已冻结并交 worker 恢复实际 Planner/Builder 指令及 Skill，不新增面积门禁或目标数量。
+  完整普通 feature inventory 是另一个 CF-21 诊断建设，不冒充旧字段漏搬或效果已提升。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，
