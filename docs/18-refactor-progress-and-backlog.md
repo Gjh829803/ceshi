@@ -1937,6 +1937,19 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   尚未交付这些对象三视图，Native styling 与 Studio requested scope 仍待接线**。
   没有增加普通生产 gate、另一个 Runtime 状态或付费任务；无新真实 Browser/模型 Case，
   最后本地 Case 仍须等待全部 CF 实现及旧分支对齐完成。
+- CF16-NATIVE-CAPTURE-IDENTITY（main-agent-only）：正式交付接线检查复现共享
+  `VisualCaptureGroupV1` / `WhiteboxTriviewManifestV1` 拒绝合法 `native-block:<id>`
+  的 `HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID`。现清单与 capture groups 携带 Native
+  materializer 的精确 Runtime ID，不改名为 Canonical Entity，也不接受其他未声明 namespace。
+  保留稳定 Block ID 格式、跨组唯一性、原 role/front/color 与目标文件路径约束；Canonical
+  authoring mapping 仍只接自己的 ID 合同，不能拿虚构 authoringSpecId 包装 Native。
+  合同/metadata/视觉 finalizer 首轮三文件 64/64；补充直接 Native 下游场景后，两个
+  existing finalizer 所在文件 28/28，证明清单不再因 Native ID 格式被拒绝，并保持原
+  opening/tri-view role、顺序与 Hash closure。数字包含重跑，不累计为全仓覆盖。
+  生成 checker 与代表性 Case 冻结副本已机械同步；Native Skill 67/67、Planner/Canonical
+  checker drift、最终 typecheck/diff check 通过。历史 runs 的 Source/Receipt 未改写。
+  **这仍不是 Formal Request/payload/receipt/publication 已接通**；也未生成新图片、
+  启动付费任务或最后本地 Case。Native Subject/目标绑定及完整 styled scope 继续开放。
 
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。

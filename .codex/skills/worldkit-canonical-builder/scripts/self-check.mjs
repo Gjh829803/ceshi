@@ -5238,8 +5238,9 @@ function exactKeys(value, allowedKeys, instancePath) {
     `Unknown Hosted visual contract field '${key}'.`
   ));
 }
-function validIdArray(value) {
-  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID.test(item)) && new Set(value).size === value.length;
+function validIdArray(value, isNativeCaptureAllowed = false) {
+  const nativePrefix = "native-block:";
+  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && (ID.test(item) || isNativeCaptureAllowed && item.startsWith(nativePrefix) && ID.test(item.slice(nativePrefix.length)))) && new Set(value).size === value.length;
 }
 function isValidVisualTargetFrontDirectionWorldXZV1(value) {
   return Array.isArray(value) && value.length === 2 && [[0, -1], [-1, 0], [0, 1], [1, 0]].some(

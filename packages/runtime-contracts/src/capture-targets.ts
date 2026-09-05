@@ -251,9 +251,15 @@ function exactKeys(
     ));
 }
 
-function validIdArray(value: unknown): value is readonly string[] {
+function validIdArray(value: unknown, isNativeCaptureAllowed = false): value is readonly string[] {
+  // Native materializer metadata publishes this exact namespace over the same
+  // stable Block ID grammar. Capture carries those identities unchanged; it
+  // does not rename Blocks to Canonical authoring entities. Live membership is
+  // still checked by the owning Host/Runtime, not inferred from this spelling.
+  const nativePrefix = "native-block:";
   return Array.isArray(value) && value.length > 0 &&
-    value.every((item) => typeof item === "string" && ID.test(item)) &&
+    value.every((item) => typeof item === "string" && (ID.test(item) ||
+      (isNativeCaptureAllowed && item.startsWith(nativePrefix) && ID.test(item.slice(nativePrefix.length))))) &&
     new Set(value).size === value.length;
 }
 
@@ -376,7 +382,7 @@ function validateVisualCaptureGroup(
       "visualTargetId is invalid.",
     ));
   }
-  if (!validIdArray(group.runtimeEntityIds)) {
+  if (!validIdArray(group.runtimeEntityIds, true)) {
     diagnostics.push(diagnostic(
       "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID",
       `${instancePath}/runtimeEntityIds`,
@@ -442,7 +448,7 @@ export function validateVisualCaptureGroupsV1(
     if (typeof source?.visualTargetId === "string" && ID.test(source.visualTargetId)) {
       visualTargetIds.push(source.visualTargetId);
     }
-    if (validIdArray(source?.runtimeEntityIds)) runtimeEntityIds.push(...source.runtimeEntityIds);
+    if (validIdArray(source?.runtimeEntityIds, true)) runtimeEntityIds.push(...source.runtimeEntityIds);
     if (source?.role === "primary-subject") primarySubjectCount += 1;
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {

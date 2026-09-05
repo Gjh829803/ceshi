@@ -45,6 +45,44 @@ function finalMap(): SceneBriefImplementationMapV1 {
 }
 
 describe("hosted visual capture contracts", () => {
+  it("carries Native Runtime identities in source-neutral capture groups and tri-view manifests", () => {
+    const nativeGroup: VisualCaptureGroupV1 = {
+      ...group("visual-target-2", ["native-block:palace-front", "native-block:palace-rear"]),
+      role: "primary-landmark", semanticClassId: "visual.palace", identityColor: "#F28E2B",
+      frontDirectionWorldXZ: [1, 0],
+    };
+    const groups = [group(), nativeGroup];
+    expect(validateVisualCaptureGroupsV1(groups)).toEqual([]);
+    const manifest: WhiteboxTriviewManifestV1 = {
+      kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1, worldBuildIdentityHash: hash,
+      whiteboxTriviews: groups.map(target => ({ ...target, views: ["front", "right", "back"],
+        imageUri: `${target.visualTargetId}/whitebox-triview.png` })),
+    };
+    expect(validateWhiteboxTriviewManifestV1(manifest)).toEqual([]);
+    expect(validateVisualCaptureGroupsV1([...groups, {
+      ...nativeGroup, visualTargetId: "visual-target-3",
+    }])).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_REUSED" }));
+    // Native identity must not be used as a filesystem target ID or fabricated
+    // into a Canonical authoring mapping just to pass its producer contract.
+    expect(validateVisualCaptureGroupsV1([{ ...group(), visualTargetId: "native-block:palace-front" }]))
+      .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_TARGET_ID_INVALID" }));
+    expect(validateSceneBriefImplementationMapDraftV1({
+      kind: "worldkit-scene-brief-implementation-map-draft", schemaVersion: 1,
+      sceneId: "paper-moon-palace", authoringSpecId: "paper-moon-palace-world",
+      visualTargetMappings: [{ visualTargetId: nativeGroup.visualTargetId,
+        runtimeEntityIds: nativeGroup.runtimeEntityIds, frontDirectionWorldXZ: [1, 0] }],
+    })).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID" }));
+  });
+
+  it.each(["native-block:", "native-block:ab", "native-block:UPPER", "native-block:a/b",
+    "native-block:../outside", "native-block:has space", "native-block:native-block:palace",
+    "other-provider:palace", `native-block:${"a".repeat(81)}`])(
+    "rejects malformed or unknown Runtime identity %s", runtimeEntityId => {
+      expect(validateVisualCaptureGroupsV1([group("visual-target-1", [runtimeEntityId])]))
+        .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID" }));
+    },
+  );
+
   it("preserves the old declared cardinal front in mapping and capture groups", () => {
     for (const frontDirectionWorldXZ of [[0, -1], [-1, 0], [0, 1], [1, 0]]) {
       const map = finalMap();

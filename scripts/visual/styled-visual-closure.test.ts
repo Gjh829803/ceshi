@@ -41,7 +41,7 @@ function validBundle() {
   };
 }
 
-async function fixture() {
+async function fixture(sceneSourceKind: "canonical" | "babylon-native" = "canonical") {
   const root = await mkdtemp(path.join(tmpdir(), "styled-visual-closure-"));
   roots.push(root);
   const sceneRoot = path.join(root, "scene");
@@ -55,7 +55,9 @@ async function fixture() {
     worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
     whiteboxTriviews: targetIds.map((visualTargetId, index) => ({
       visualTargetId,
-      runtimeEntityIds: [visualTargetId], frontDirectionWorldXZ: [0, -1],
+      runtimeEntityIds: sceneSourceKind === "babylon-native" && index > 0
+        ? ["native-block:palace-front", "native-block:palace-rear"] : [visualTargetId],
+      frontDirectionWorldXZ: [0, -1],
       role: index === 0 ? "primary-subject" : "primary-landmark",
       semanticClassId: index === 0 ? "subject.traveler" : "landmark.palace",
       identityColor: index === 0 ? "#E85D5D" : "#5D9FE8",
@@ -113,8 +115,8 @@ const finalizers = [
 
 for (const finalizer of finalizers) {
   describe(`${finalizer.name} prompt-bundle closure`, () => {
-    it("accepts the exact current roles/target order and minimum prompt lengths", async () => {
-      const input = await fixture();
+    it.each(["canonical", "babylon-native"] as const)("accepts %s identities with exact roles/target order and minimum prompt lengths", async sceneSourceKind => {
+      const input = await fixture(sceneSourceKind);
       await finalizer.finalize(input);
       const manifestBytes = await readFile(path.join(input.sceneRoot, `${finalizer.prefix}-manifest.json`));
       const manifest = JSON.parse(manifestBytes.toString("utf8"));
