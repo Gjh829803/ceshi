@@ -26,6 +26,7 @@ import {
   createBabylonNativeWorldPackageTestInputV1,
 } from "@whitebox-world/world-package/testing";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -224,6 +225,7 @@ async function fixture(): Promise<Readonly<{
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: OPENING_TARGET,
         visualGroupId: "ground-group",
+        viewRequirements: [{ viewId: "opening", mode: "reference-projection-required",
         normalizedBounds: {
           minXBasisPoints: 100,
           minYBasisPoints: 200,
@@ -232,9 +234,12 @@ async function fixture(): Promise<Readonly<{
         },
         normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
         coverageBasisPoints: 4_800,
+        }, { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" }],
       }, {
         acceptanceTargetRef: SECONDARY_TARGET,
         visualGroupId: "ridge-group",
+        viewRequirements: [{ viewId: "opening", mode: "reference-projection-required",
         normalizedBounds: {
           minXBasisPoints: 400,
           minYBasisPoints: 100,
@@ -243,6 +248,8 @@ async function fixture(): Promise<Readonly<{
         },
         normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
         coverageBasisPoints: 400,
+        }, { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" }],
       }],
       openingComposition: {
         acceptanceTargetRef: OPENING_TARGET,
@@ -388,6 +395,7 @@ async function fixture(): Promise<Readonly<{
     caseRoot,
     verifiedPackage,
     input: Object.freeze({
+      outputMode: "create",
       casePath: path.join(caseRoot, "case.json"),
       evaluationProfilePath: path.join(caseRoot, "evaluation-profile.json"),
       sceneAuthoringAttemptPath: path.join(attemptDirectoryPath, "attempt.json"),
@@ -630,6 +638,41 @@ describe("materializeFormalWorldCaptureRequestV1", () => {
     );
     expect((await readdir(path.dirname(input.outputPath)))
       .filter((name) => name.startsWith("."))).toEqual([]);
+  });
+
+  it("revalidates and reuses an identical request on Host-only recovery without replacing bytes", async () => {
+    const { input } = await fixture();
+    const first = await materializeFormalWorldCaptureRequestV1(input);
+    const bytes = await readFile(input.outputPath);
+    const before = await lstat(input.outputPath);
+    const recovered = await materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" });
+    expect(recovered.formalRequestHash).toBe(first.formalRequestHash);
+    expect(await readFile(input.outputPath)).toEqual(bytes);
+    const after = await lstat(input.outputPath);
+    expect([after.ino, after.mtimeMs]).toEqual([before.ino, before.mtimeMs]);
+  });
+
+  it("rejects changed and symlinked recovery requests without replacing prior evidence", async () => {
+    const { input } = await fixture();
+    await materializeFormalWorldCaptureRequestV1(input);
+    const bytes = await readFile(input.outputPath);
+    await writeFile(input.outputPath, "{}\n");
+    await expect(materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" }))
+      .rejects.toThrow("FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH");
+    expect(await readFile(input.outputPath, "utf8")).toBe("{}\n");
+    await rm(input.outputPath);
+    const savedPath = path.join(path.dirname(input.outputPath), "saved-request.json");
+    await writeFile(savedPath, bytes);
+    await symlink(savedPath, input.outputPath);
+    await expect(materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" }))
+      .rejects.toThrow("FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID");
+    expect(await readFile(savedPath)).toEqual(bytes);
+  });
+
+  it("creates a missing request on recovery using the same identity checks", async () => {
+    const { input } = await fixture();
+    const result = await materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" });
+    expect(await readFile(input.outputPath)).toEqual(Buffer.from(result.requestBytes));
   });
 
   it("cleans partial staging after a failed publication", async () => {

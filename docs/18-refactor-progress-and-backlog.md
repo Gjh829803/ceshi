@@ -1694,6 +1694,19 @@ Capture 根因复现（2026-09-05）：同一 Package 单独调用 production Ca
 约 2m29s，Capture request 到失败约 4.5s；Builder 正常交付而非 timeout，但未保留的
 细分模型活动不能事后编造为确定的思考、工具或自检耗时。
 
+清除 dirty-tree 后，同一未修改 Package 的独立 production Capture 已成功，全部清理 completed，
+证据 `/private/tmp/worldkit-cf29-capture-F2wWjE/capture`，Package root
+`sha256:802a6e2be3915164e5d67aa1456276f7c2a63c14afe698f313205793aeddf028`。
+这证明 Capture 本身可执行，不等同原 Run 已发布。
+第一次 Host-only 恢复又暴露 CF-31C 缺口：materializer 对原 Attempt 已存在的 Capture Request
+再次新建，报 `FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID`。现已在唯一 materializer 接入
+required `outputMode`：fresh 用 `create`，Host recovery 用 `verify-or-create`；重算全部冻结
+identity 后只复用字节完全相同的 canonical regular Request，不覆盖、不接受漂移。
+CF-29 Run allowlist 同步保留 SDK owner dirty/unavailable 原因，未放松 source-commit 校验。
+受影响 request/Run/production ports 112/112、typecheck、3C migration 通过；其中修复了该
+request fixture 尚未同步 CF-24 viewRequirements 的旧输入。下一步从干净提交恢复原 Run，
+不重新调用 Planner/Builder；恢复结果待真实执行，不预先勾选。
+
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 
 - Planner 经三轮修复通过；Generation receipt `completed`、Host Builder self-check `ok: true`，

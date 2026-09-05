@@ -29,6 +29,20 @@ integration proof; each task merges only after its focused contract is green.
 
 ## 2026-09-05 candidate checkpoint
 
+### CF-31C Capture Request recovery and CF-29 owner-state diagnostics
+
+Main-agent-only, sequential: the existing materializer owns a required closed `outputMode`
+(`create` or `verify-or-create`); only Host recovery selects the latter. Recompute the entire
+Case/Profile/Attempt/Package/Intent join before comparing exact existing request bytes, reuse only
+an identical regular canonical file, and never overwrite it. Fresh duplicate writes still reject.
+Required evidence: identical bytes/inode/mtime, changed/symlinked input rejection, missing-file
+creation, and real same-Package recovery with no Planner/Builder dispatch.
+
+CF-29 preserves the two existing SDK-owner source dirty/unavailable codes through the Run allowlist.
+It does not bypass source-commit verification or make untrusted error text an admission authority.
+Real Capture must run from a clean committed tree; tracked status documentation is written only
+after execution reaches a terminal state. No source regeneration or stricter quality gate is added.
+
 ### CF-29 local pre-promotion rejection evidence
 
 Main-agent-only, dependent on the existing local router and CF-31B dispatch identity. The local

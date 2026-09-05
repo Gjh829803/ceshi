@@ -1544,6 +1544,7 @@ describe("runWorldReconstructionV1", () => {
       captureOutcomeByAttempt: ["failed"],
       captureDiagnosticCodesByAttempt: [[
         "WORLDKIT_SERVER_START_TIMEOUT",
+        "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY",
         "WORLDKIT_CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED",
         "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ]],
@@ -1556,6 +1557,7 @@ describe("runWorldReconstructionV1", () => {
       diagnosticCodes: [
         "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
         "WORLDKIT_SERVER_START_TIMEOUT",
+        "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY",
         "WORLDKIT_CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED",
         "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ],

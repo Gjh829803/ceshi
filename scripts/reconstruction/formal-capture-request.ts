@@ -67,6 +67,7 @@ const WRITE_INVALID = "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID";
 const IDENTITY_MISMATCH = "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH";
 
 const INPUT_FIELDS = [
+  "outputMode",
   "casePath",
   "evaluationProfilePath",
   "sceneAuthoringAttemptPath",
@@ -76,6 +77,7 @@ const INPUT_FIELDS = [
 ] as const;
 
 export interface MaterializeFormalWorldCaptureRequestInputV1 {
+  readonly outputMode: "create" | "verify-or-create";
   readonly casePath: string;
   readonly evaluationProfilePath: string;
   readonly sceneAuthoringAttemptPath: string;
@@ -439,6 +441,9 @@ export async function materializeFormalWorldCaptureRequestV1(
 ): Promise<MaterializedFormalWorldCaptureRequestV1> {
   assertAccessorFree(input, "input");
   const source = exactPlainRecord(input, INPUT_FIELDS, "input");
+  if (source.outputMode !== "create" && source.outputMode !== "verify-or-create") {
+    writeInvalid("outputMode");
+  }
   const formalCaptureIntent = parseFormalWorldCaptureIntentV1(
     source.formalCaptureIntent,
   );
@@ -485,7 +490,7 @@ export async function materializeFormalWorldCaptureRequestV1(
     "packageDirectoryPath",
   );
   relativeWithin(caseRoot.realPath, packageRoot.realPath, "packageDirectoryPath");
-  if (!(await missing(outputPath))) writeInvalid("outputPath duplicate");
+  if (source.outputMode === "create" && !(await missing(outputPath))) writeInvalid("outputPath duplicate");
 
   const caseBytes = await freezeRegularFile(caseRoot, casePath, "casePath");
   const profileBytes = await freezeRegularFile(
@@ -626,6 +631,11 @@ export async function materializeFormalWorldCaptureRequestV1(
   }
 
   const parentDirectoryPath = path.dirname(outputPath);
+  if (source.outputMode === "verify-or-create" && !(await missing(outputPath))) {
+    const existing = await freezeRegularFile(caseRoot, outputPath, "outputPath");
+    if (!Buffer.from(existing).equals(Buffer.from(requestBytes))) identityMismatch("existing request bytes");
+    return Object.freeze({ request, formalRequestHash, outputPath, requestBytes });
+  }
   await mkdir(parentDirectoryPath, { recursive: true, mode: 0o700 });
   if (!(await missing(outputPath))) writeInvalid("outputPath duplicate");
   const stagingDirectoryPath = await mkdtemp(path.join(
