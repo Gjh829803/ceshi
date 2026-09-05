@@ -37,8 +37,8 @@ const stageLabels = {
   "change-requested": "Agent 请求修改冻结计划",
   "runtime-capture": "捕获真实白膜运行结果",
   "entry-alignment-validation": "校验第三人称进入构图",
-  "visual-prompt-synthesis": "可配置视觉提供方合成首帧与三视图提示词",
-  "visual-imagegen": "可配置图片提供方生成可选视觉结果",
+  "visual-prompt-synthesis": "同一视觉重建任务内固化提示词",
+  "visual-imagegen": "先检查首帧，再以该图为外观锚重建三视图",
 };
 const statusLabels = {
   queued: "QUEUED",
@@ -875,7 +875,7 @@ const phaseTitles = {
   evaluation: "重建评测",
   "entry-alignment-validation": "进入构图校验",
   "visual-prompt-synthesis": "视觉提示词合成",
-  "visual-imagegen": "并发视觉生成",
+  "visual-imagegen": "视觉重建",
 };
 
 const trajectoryStatusLabels = {

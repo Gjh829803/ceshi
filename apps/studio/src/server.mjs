@@ -164,15 +164,15 @@ const workflowStageDefinitions = [
   {
     id: "visual-prompt-synthesis",
     title: "视觉提示词合成",
-    owner: "Configured Visual Prompt Provider",
-    description: "可选：读取用户参考、真实 Babylon 白模捕获和三视图，生成共享视觉约束与逐目标提示词。",
+    owner: "Codex Visual Reconstructor",
+    description: "可选视觉任务内固化提示词：真实白模约束空间，用户参考约束外观；不单独派发提示词任务。",
     required: ["visual-generation-prompts"],
   },
   {
     id: "visual-imagegen",
     title: "可选视觉生成",
-    owner: "Configured Image Provider",
-    description: "可选：根据提示词和真实白模结构生成新首帧与样式三视图。该结果不改变几何、碰撞或 Canonical World State。",
+    owner: "Codex Visual Reconstructor",
+    description: "一个任务先生成并检查新首帧，再以该图为外观锚生成和检查全部三视图；返回后由 Host 校验文件与引用，不改变几何、碰撞或 World State。",
     required: ["styled-opening-frame", "styled-triviews-manifest"],
   },
 ];
@@ -2745,36 +2745,6 @@ export function createStudio(options = {}) {
         }
         continue;
       }
-      const promptBundle = /^WORLDKIT_GEMINI_PROMPTS_READY ([a-z0-9.-]+)$/.exec(line.trim());
-      if (promptBundle) {
-        runBackgroundTask(id, "append-prompt-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-prompt-synthesis",
-          `视觉提示词提供方已生成共享视觉约束、新首帧提示词和全部三视图提示词：${promptBundle[1]}。`,
-          { kind: "completed" },
-        ));
-        continue;
-      }
-      const directImage = /^WORLDKIT_DIRECT_IMAGEGEN_IMAGE (.+)$/.exec(line.trim());
-      if (directImage) {
-        runBackgroundTask(id, "append-image-progress", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片提供方已完成 ${directImage[1]}。`,
-          { kind: "progress" },
-        ));
-        continue;
-      }
-      const directImageReady = /^WORLDKIT_DIRECT_IMAGEGEN_READY count=([0-9]+)$/.exec(line.trim());
-      if (directImageReady) {
-        runBackgroundTask(id, "append-image-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片生成任务已完成，共 ${directImageReady[1]} 张图片。`,
-          { kind: "completed", itemCount: Number(directImageReady[1]) },
-        ));
-        continue;
-      }
       const usage = /^WORLDKIT_STAGE_USAGE ([a-z-]+) ([0-9]+)$/.exec(line.trim());
       if (usage) {
         const tokenCount = Number(usage[2]);
@@ -3293,10 +3263,10 @@ export function createStudio(options = {}) {
       await appendTrajectoryEvent(id, "runtime-capture", "进入首帧、运行快照与实体白膜三视图均已生成。", { kind: "completed" });
       await appendTrajectoryEvent(id, "entry-alignment-validation", "真实首帧与 Runtime Snapshot V4 的第三人称进入构图校验已通过。", { kind: "completed" });
       if (styledOpeningFrameRequired) {
-        await appendTrajectoryEvent(id, "visual-prompt-synthesis", "视觉提示词提供方已依据用户首帧、真实白模首帧和白模三视图固化共享视觉约束。", { kind: "completed" });
+        await appendTrajectoryEvent(id, "visual-prompt-synthesis", "同一 Codex 视觉重建任务已固化首帧和逐目标提示词，Host 已校验引用角色。", { kind: "completed" });
       }
       if (styledTriviewsRequired) {
-        await appendTrajectoryEvent(id, "visual-imagegen", "图片提供方已生成新首帧和全部视觉组的渲染后三视图。", { kind: "completed" });
+        await appendTrajectoryEvent(id, "visual-imagegen", "Codex 视觉重建任务已交付新首帧和全部目标三视图，Host 已校验文件、哈希与引用。", { kind: "completed" });
       }
       return;
     }

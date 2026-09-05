@@ -1840,7 +1840,7 @@ test("build-only accepts an empty reference-image list before validating frozen 
   }
 });
 
-test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
+test("routes Planner, Builder and post-whitebox visuals through the selected Codex backend", async () => {
   const [scripts, codexRouter] = await Promise.all([Promise.all([
     "scripts/agents/run-canonical-world-agent.sh",
     "scripts/visual/run-styled-opening-frame-agent.sh",
@@ -1856,8 +1856,8 @@ test("routes Planner and Builder through the selected Codex backend while keepin
   assert.match(codexRouter, /backend === "cloud"/);
   assert.match(codexRouter, /run-lwdp-codex-task\.mjs/);
   assert.match(codexRouter, /run-local-codex-task\.mjs/);
-  assert.match(scripts[1], /run-gemini-visual-pipeline\.py/);
-  assert.match(scripts[2], /run-gemini-visual-pipeline\.py/);
+  assert.match(scripts[1], /run-styled-visual-agent\.ts/);
+  assert.match(scripts[2], /run-styled-visual-agent\.ts/);
   assert.doesNotMatch(scripts[1], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
   assert.doesNotMatch(scripts[2], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
   assert.match(scripts[3], /run-codex-task\.mjs --backend "\$codex_backend"/);
@@ -1928,42 +1928,41 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.doesNotMatch(launcher, /plan:freeze/);
 });
 
-test("synthesizes prompts then directly generates the opening and tri-views concurrently", async () => {
+test("routes one visual task with opening-first inspection and a frozen tri-view anchor", async () => {
   const result = spawnSync(
     "bash",
     [path.join(repoRoot, "scripts/visual/run-styled-opening-frame-agent.sh"), "--", "--scene-id", "prompt-smoke"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /WORLDKIT_FIRST_FRAME_SMOKE_OK gemini-prompt-synthesis direct-parallel-imagegen whitebox-opening user-first-frame runtime-triviews/);
+  assert.match(result.stdout, /WORLDKIT_FIRST_FRAME_SMOKE_OK single-codex-task opening-first inspected-anchor formal/);
   const triViewSmoke = spawnSync(
     "bash",
     [path.join(repoRoot, "scripts/visual/run-styled-triviews-agent.sh"), "--", "--scene-id", "prompt-smoke"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(triViewSmoke.status, 0, triViewSmoke.stderr || triViewSmoke.stdout);
-  assert.match(triViewSmoke.stdout, /WORLDKIT_STYLED_TRIVIEWS_SMOKE_OK styled-opening-frame whitebox-triviews no-playtest/);
+  assert.match(triViewSmoke.stdout, /WORLDKIT_STYLED_TRIVIEWS_SMOKE_OK single-codex-task opening-first inspected-anchor formal/);
   const [worldRunner, firstFrameRunner, styledTriviewRunner, visualPipeline, server] = await Promise.all([
     readFile(path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, "scripts/visual/run-styled-opening-frame-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, "scripts/visual/run-styled-triviews-agent.sh"), "utf8"),
-    readFile(path.join(repoRoot, "scripts/visual/run-gemini-visual-pipeline.py"), "utf8"),
+    readFile(path.join(repoRoot, "scripts/visual/run-styled-visual-agent.ts"), "utf8"),
     readFile(path.join(repoRoot, "apps/studio/src/server.mjs"), "utf8"),
   ]);
   assert.match(worldRunner, /run-styled-opening-frame-agent\.sh/);
-  assert.match(firstFrameRunner, /WORLDKIT_STAGE visual-prompt-synthesis/);
-  assert.match(firstFrameRunner, /--prompt-only/);
-  assert.match(firstFrameRunner, /--generate-only/);
-  assert.match(firstFrameRunner, /--only all/);
+  assert.match(firstFrameRunner, /--scope all/);
   assert.doesNotMatch(firstFrameRunner, /run-styled-triviews-agent\.sh/);
-  assert.match(styledTriviewRunner, /--only triviews/);
-  assert.match(visualPipeline, /The actual Babylon opening whitebox image fixes the complete visible projection/);
-  assert.match(visualPipeline, /full back faces the camera/);
-  assert.match(visualPipeline, /50% image-width vertical centerline/);
-  assert.match(visualPipeline, /ThreadPoolExecutor/);
+  assert.match(styledTriviewRunner, /--scope triviews/);
+  assert.match(visualPipeline, /Generate and visually inspect the opening first/);
+  assert.match(visualPipeline, /Never generate the opening and tri-views concurrently/);
+  assert.match(visualPipeline, /Keep it and the prompt bundle byte-for-byte unchanged/);
+  assert.match(visualPipeline, /left=Front \/ center=Right \/ right=Back/);
+  assert.match(visualPipeline, /run-codex-task\.mjs/);
+  assert.match(visualPipeline, /"--execution-profile", "formal"/);
+  assert.equal((visualPipeline.match(/await dispatch\(/g) ?? []).length, 1);
   assert.match(visualPipeline, /visual-generation-prompts\.json/);
-  assert.match(visualPipeline, /gemini-3-flash-preview/);
-  assert.match(visualPipeline, /gemini-3\.1-flash-image/);
+  assert.doesNotMatch(visualPipeline, /gemini|ThreadPoolExecutor/);
   assert.doesNotMatch(visualPipeline, /leap_flow/);
   assert.doesNotMatch(styledTriviewRunner, /whitebox-video|contact-sheet|video-prompt/);
   assert.doesNotMatch(firstFrameRunner, /validate-visual-alignment-report|WORLDKIT_STAGE visual-alignment/);
