@@ -1,5 +1,4 @@
 import type { CanvasRecordingResult } from "./canvas-recorder.js";
-import type { PlaygroundRuntimeRouteV1 } from "./playground-runtime-route.js";
 
 interface StyledTriviewAsset {
   visualTargetId: string;
@@ -59,14 +58,6 @@ export interface RecordingWorkbench {
   uploadRecording(result: CanvasRecordingResult): Promise<RecordingListItem>;
   refresh(): Promise<void>;
   dispose(): void;
-}
-
-export function recordingWorkbenchSceneId(
-  runtimeRoute: PlaygroundRuntimeRouteV1,
-): string | undefined {
-  return runtimeRoute.mode === "viewer"
-    ? runtimeRoute.studioWorldId
-    : undefined;
 }
 
 export function formatWorkbenchDuration(durationMs: number): string {

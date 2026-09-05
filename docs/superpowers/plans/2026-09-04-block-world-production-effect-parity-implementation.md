@@ -903,6 +903,14 @@ are not closed by API/asset wiring alone.
 
 #### CF16-RECORDING-VIEWER
 
+Sequential slices, all main-agent-only:
+
+| ID | Depends on | Exclusive owner / output | Evidence |
+|---|---|---|---|
+| CF16-RECORDING-SHARED | CF16-RECORDING-ASSETS | `packages/browser-recording` is the sole browser CanvasRecorder/workbench implementation and scoped stylesheet owner; Canonical route selection stays in Playground. Existing consumers use explicit package exports; no old re-export shims. | Recorder/tests and panel logic/scoped CSS byte comparisons against pre-move `d01e50ab`, direct recorder/consumer tests, census, typecheck, affected production build and workspace dependency checks. |
+| CF16-RECORDING-TRANSPORT | CF16-RECORDING-SHARED | Native browser adapter owns exact-session media delivery between the existing hosted frame and trusted shell, separately from deterministic Runtime requests. Reuse CanvasRecorder, no Studio access in the frame. | Cross-origin/source/session/nonce identity, lifecycle and asynchronous recording completion; preserved Runtime request handling and original encoding behavior. Resolve the bounded media delivery contract before editing the bridge. |
+| CF16-RECORDING-STUDIO-BINDING | CF16-RECORDING-TRANSPORT | Host launcher/shell binds the exact loaded Package to the existing Studio Native publication; scoped upload/list/media and shared UI, no arbitrary API proxy. | Correct/wrong Package/destination, invalidated publication, upload failure and local backup, repeated recordings and teardown; Native formal Capture/probe routes unchanged. |
+
 Main-agent-only, sequential after CF16-RECORDING-ASSETS. Current inspection:
 `startHostedFrame` owns the actual Canvas; `startHostedShell` embeds it through
 the credentialless cross-origin Runtime bridge. The bridge accepts only the

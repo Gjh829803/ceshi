@@ -1,4 +1,5 @@
 import "./style.css";
+import "@whitebox-world/browser-recording/workbench.css";
 import { createFormalCaptureStartupReporterV1, type FormalCaptureStartupStageV1 } from "@whitebox-world/runtime-babylon";
 
 import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
@@ -19,12 +20,10 @@ import type {
 import { CAMERA_TUNING_SAFETY_LIMITS_V1 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
-import { CanvasRecorder } from "./canvas-recorder.js";
+import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
 import { installFeatureListWindow } from "./feature-list-window.js";
-import {
-  installRecordingWorkbench,
-  recordingWorkbenchSceneId,
-} from "./recording-workbench.js";
+import { installRecordingWorkbench } from "@whitebox-world/browser-recording/workbench";
+import { recordingWorkbenchSceneId } from "./recording-workbench-route.js";
 import type {
   FeatureInspection,
   OpeningCompositionReport,

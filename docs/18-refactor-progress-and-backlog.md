@@ -2137,6 +2137,30 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   浏览器端录制/上传、旧时间戳中断自动恢复及剩余 CF 继续开放；本次不是 Browser/媒体
   效果、真实模型 Case 或全分支验收。全部 CF 实施与旧链对齐完成后再跑最后本地生产 Case。
 
+- CF16-RECORDING-SHARED（main-agent-only，接 `d01e50ab`）：为跨源 Native Viewer
+  复用建立唯一 `@whitebox-world/browser-recording` owner，将 CanvasRecorder、Recording
+  面板和专属 CSS 从 Playground 迁出。Canonical consumer 改用明确 package exports，
+  自己的 Host route→Studio world 选择留在 Playground；旧实现路径删除，无 alias/re-export
+  shim，也未把 Recording 混入 deterministic control-capture 或 Runtime authority。
+  Recorder 和原测试逐字未变；面板只移除应用专属 route helper，余下逻辑及专属 CSS 与
+  `d01e50ab` 字节对比通过。回读固定旧 `9e35ab53` 的 1280×720、24fps、12Mbps 和 MIME
+  候选顺序确认保持不变。本轮不修改录制/上传/生成条件、计时、编码或生产门禁。
+  Recorder/现有消费者 22/22、typecheck、Playground production build 通过；build 保留
+  已有 large-chunk warning，不是 Browser 交互/像素证明。依赖仅新增本地 workspace link，
+  offline install 未下载/升级外部依赖。测试登记先修本轮移位排序，再补齐此前漏登记的
+  hosted-formal-capture-protocol.test.ts（纯传输合同，不运行 Browser），其 2/2 通过；
+  census 最终通过：467 files = 424 contract + 43 resource-heavy。
+  workspace-boundaries 未通过：仍有 8 个跨包私有导入，位于既有
+  packages/runtime-contracts/src/babylon-native-scene-bootstrap.test.ts、
+  scripts/native-scene/world-bounds-policy.test.ts、
+  scripts/reconstruction/evaluate-evidence-set.test.ts、
+  scripts/reconstruction/native-semantic-geometry.test-support.ts 和
+  scripts/reconstruction/native-semantic-geometry.test.ts。这些文件、相关被导入包的 exports
+  与 debt 清单相对 `d01e50ab` 均未改；未增加 debt/放宽 checker，保留候选集成清理待办。
+  后续 CF16-RECORDING-TRANSPORT/STUDIO-BINDING 仍须完成实际 frame Canvas→shell→Studio
+  交付、录制控件、失败备份和完整生命周期；本次未改变 Native bridge/CSP/Runtime，
+  不宣称 Native Viewer 录制已可用。不运行真实模型 Case；仍等待全部 CF 开发和旧链对齐。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

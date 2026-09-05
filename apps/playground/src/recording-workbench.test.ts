@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   formatWorkbenchDuration,
   recordingStatusLabel,
-  recordingWorkbenchSceneId,
   renderAssetStrip,
-} from "./recording-workbench.js";
+} from "@whitebox-world/browser-recording/workbench";
+import { recordingWorkbenchSceneId } from "./recording-workbench-route.js";
 
 describe("recording workbench presentation", () => {
   it("renders current visualTargetId assets without an id alias", () => {
