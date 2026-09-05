@@ -10,6 +10,7 @@ import {
   hashFormalColliderOverlayObservationV1,
   hashFormalColliderOverlayRequestV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalScriptedTraversalRequestV1,
   hashFormalSemanticCaptureMapV1,
@@ -19,12 +20,16 @@ import {
   parseBabylonNativeBlockMaterializerMetadataV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
   type FormalWorldCaptureIntentV1,
+  type FormalOpeningObservationV1,
+  type FormalSemanticViewObservationSetV1,
+  type FormalWorldCaptureReceiptV1,
   type FormalTraversalCheckpointIntentCriterionV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
@@ -55,8 +60,71 @@ const H = (character: string) => `sha256:${character.repeat(64)}` as const;
 const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
   "worldkit://traversal-surface-profile/ground.static@1" as const;
 
+/**
+ * Test-only structural fixture. It deliberately reuses each Opening AABB
+ * projection for all three synthetic views; production observations must come
+ * from the actual after-render Camera transaction for each PNG.
+ */
+export function createSemanticViewObservationSetFixtureV1(
+  openingObservationInput: FormalOpeningObservationV1,
+  views: FormalWorldCaptureReceiptV1["views"],
+): FormalSemanticViewObservationSetV1 {
+  const openingObservation = parseFormalOpeningObservationV1(
+    openingObservationInput,
+  );
+  const {
+    kind: _kind,
+    schemaVersion: _schemaVersion,
+    controlledSubjectProjection: _controlledSubjectProjection,
+    visualGroups: _visualGroups,
+    observedTopologyRelations: _observedTopologyRelations,
+    ...identity
+  } = openingObservation;
+  const openingGroupByTargetRef = new Map(
+    openingObservation.visualGroups.map((group) =>
+      [group.acceptanceTargetRef, group] as const),
+  );
+  return parseFormalSemanticViewObservationSetV1({
+    ...identity,
+    kind: "formal-semantic-view-observation-set",
+    schemaVersion: 1,
+    id: `${openingObservation.id}.semantic-views`,
+    views: views.map((view, viewIndex) => ({
+      viewId: view.viewId,
+      viewRequestHash: view.requestHash,
+      pngContentHash: view.pngContentHash,
+      targets: openingObservation.formalRequest.semanticCaptureMap.bindings.map(
+        (binding) => {
+          const group = openingGroupByTargetRef.get(binding.acceptanceTargetRef);
+          const mode = binding.viewRequirements[viewIndex]!.mode;
+          return {
+            acceptanceTargetRef: binding.acceptanceTargetRef,
+            blockVisualGroupId: binding.blockVisualGroupId,
+            mode,
+            sourceBoundsMeters: group?.sourceBoundsMeters ?? {
+              minimumMetersXYZ: [0, 0, 0],
+              maximumMetersXYZ: [1, 1, 1],
+            },
+            structuralProjection: group === undefined
+              ? { outcome: "outside-viewport" }
+              : {
+                  outcome: "projected",
+                  normalizedBounds: group.normalizedBounds,
+                  normalizedCenter: group.normalizedCenter,
+                  coverageBasisPoints: group.coverageBasisPoints,
+                  cameraDepthMeters: group.cameraDepthMeters,
+                  depthOrder: group.depthOrder,
+                },
+          };
+        },
+      ),
+    })),
+  });
+}
+
 export interface EvidenceSetFixtureOptionsV1 {
   readonly allDimensionsPass?: boolean;
+  readonly allOpeningNotRequired?: boolean;
   readonly attemptIdentity?: Readonly<{
     readonly attemptIndex: 1;
     readonly generationRequestRef: string;
@@ -221,6 +289,7 @@ export function createEvidenceSetFixtureInputV1(
   formalCaptureIntent: FormalWorldCaptureIntentV1;
 }> {
   const allDimensionsPass = options.allDimensionsPass === true;
+  const allOpeningNotRequired = options.allOpeningNotRequired === true;
   const paletteTraversalDisagreement =
     options.includePaletteTraversalDisagreement === true;
   const traversalCheckExpectation = options.traversalCheckExpectation ?? "pass";
@@ -263,7 +332,9 @@ export function createEvidenceSetFixtureInputV1(
       "spawn-support",
       "topology",
     ],
-    qualityGateMode: "required-for-publication",
+    qualityGateMode: allOpeningNotRequired
+      ? "report-only"
+      : "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
@@ -272,29 +343,27 @@ export function createEvidenceSetFixtureInputV1(
         maximumBoundsDriftBasisPoints: 100,
         maximumCenterDriftBasisPoints: 100,
         maximumCoverageDriftBasisPoints: 100,
-      }, ...allDimensionsPass
-        ? [{
-          acceptanceTargetRef: UPPER_TARGET_REF,
-          maximumBoundsDriftBasisPoints: 100,
-          maximumCenterDriftBasisPoints: 100,
-          maximumCoverageDriftBasisPoints: 100,
-        }]
-        : []],
+      }, {
+        acceptanceTargetRef: UPPER_TARGET_REF,
+        maximumBoundsDriftBasisPoints: 100,
+        maximumCenterDriftBasisPoints: 100,
+        maximumCoverageDriftBasisPoints: 100,
+      }],
       openingComposition: {
-        regions: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
-          ...allDimensionsPass
-            ? [{
-              targetRef: UPPER_COMPOSITION_TARGET_REF,
-              maximumDriftBasisPoints: 100,
-            }]
-            : []],
-        anchors: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
-          ...allDimensionsPass
-            ? [{
-              targetRef: UPPER_COMPOSITION_TARGET_REF,
-              maximumDriftBasisPoints: 100,
-            }]
-            : []],
+        regions: allOpeningNotRequired ? [] : [
+          { targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
+          {
+            targetRef: UPPER_COMPOSITION_TARGET_REF,
+            maximumDriftBasisPoints: 100,
+          },
+        ],
+        anchors: allOpeningNotRequired ? [] : [
+          { targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
+          {
+            targetRef: UPPER_COMPOSITION_TARGET_REF,
+            maximumDriftBasisPoints: 100,
+          },
+        ],
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 100,
@@ -364,10 +433,7 @@ export function createEvidenceSetFixtureInputV1(
     evaluationProfileHash,
     formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
     formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(formalCaptureIntent),
-    acceptanceTargetRefs: [
-      ACCEPTANCE_TARGET_REF,
-      ...allDimensionsPass ? [UPPER_TARGET_REF] : [],
-    ],
+    acceptanceTargetRefs: [ACCEPTANCE_TARGET_REF, UPPER_TARGET_REF],
     requiredEvidenceProfileRefs: evaluationProfile.requiredEvidenceByDimension
       .flatMap((entry) => entry.evidenceProfileRefs),
     expected: {
@@ -384,33 +450,60 @@ export function createEvidenceSetFixtureInputV1(
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         visualGroupId: "ground-group",
-        normalizedBounds: {
-          minXBasisPoints: 100,
-          minYBasisPoints: 200,
-          maxXBasisPoints: 900,
-          maxYBasisPoints: 800,
-        },
-        normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
-        coverageBasisPoints: 4_800,
-      }, ...allDimensionsPass
-        ? [{
-          acceptanceTargetRef: UPPER_TARGET_REF,
-          visualGroupId: "upper-group",
-          normalizedBounds: {
-            minXBasisPoints: 400,
-            minYBasisPoints: 100,
-            maxXBasisPoints: 600,
-            maxYBasisPoints: 300,
-          },
-          normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
-          coverageBasisPoints: 400,
-        }]
-        : []],
+        viewRequirements: [{
+          viewId: "opening",
+          ...allOpeningNotRequired
+            ? { mode: "not-required" as const }
+            : {
+                mode: "reference-projection-required" as const,
+                normalizedBounds: {
+                  minXBasisPoints: 100,
+                  minYBasisPoints: 200,
+                  maxXBasisPoints: 900,
+                  maxYBasisPoints: 800,
+                },
+                normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
+                coverageBasisPoints: 4_800,
+              },
+        }, {
+          viewId: "world-side",
+          mode: "presence-required",
+        }, {
+          viewId: "world-top-down",
+          mode: "presence-required",
+        }],
+      }, {
+        acceptanceTargetRef: UPPER_TARGET_REF,
+        visualGroupId: "upper-group",
+        viewRequirements: [{
+          viewId: "opening",
+          ...allOpeningNotRequired
+            ? { mode: "not-required" as const }
+            : {
+                mode: "reference-projection-required" as const,
+                normalizedBounds: {
+                  minXBasisPoints: 400,
+                  minYBasisPoints: 100,
+                  maxXBasisPoints: 600,
+                  maxYBasisPoints: 300,
+                },
+                normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
+                coverageBasisPoints: 400,
+              },
+        }, {
+          viewId: "world-side" as const,
+          mode: "presence-required" as const,
+        }, {
+          viewId: "world-top-down" as const,
+          mode: "presence-required" as const,
+        }],
+      }],
       openingComposition: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
-        targetRefs: [COMPOSITION_TARGET_REF,
-          ...allDimensionsPass ? [UPPER_COMPOSITION_TARGET_REF] : []],
-        regions: [{
+        targetRefs: allOpeningNotRequired
+          ? []
+          : [COMPOSITION_TARGET_REF, UPPER_COMPOSITION_TARGET_REF],
+        regions: allOpeningNotRequired ? [] : [{
           targetRef: COMPOSITION_TARGET_REF,
           normalizedBounds: {
             minXBasisPoints: 100,
@@ -418,28 +511,27 @@ export function createEvidenceSetFixtureInputV1(
             maxXBasisPoints: 900,
             maxYBasisPoints: 800,
           },
-        }, ...allDimensionsPass
-          ? [{
-            targetRef: UPPER_COMPOSITION_TARGET_REF,
-            normalizedBounds: {
-              minXBasisPoints: 400,
-              minYBasisPoints: 100,
-              maxXBasisPoints: 600,
-              maxYBasisPoints: 300,
-            },
-          }]
-          : []],
-        anchors: [{
+        }, {
+          targetRef: UPPER_COMPOSITION_TARGET_REF,
+          normalizedBounds: {
+            minXBasisPoints: 400,
+            minYBasisPoints: 100,
+            maxXBasisPoints: 600,
+            maxYBasisPoints: 300,
+          },
+        }],
+        anchors: allOpeningNotRequired ? [] : [{
           targetRef: COMPOSITION_TARGET_REF,
           normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
-        }, ...allDimensionsPass
-          ? [{
-            targetRef: UPPER_COMPOSITION_TARGET_REF,
-            normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
-          }]
-          : []],
-        orderedTargetRefs: [COMPOSITION_TARGET_REF,
-          ...allDimensionsPass ? [UPPER_COMPOSITION_TARGET_REF] : []],
+        }, {
+          targetRef: UPPER_COMPOSITION_TARGET_REF,
+          normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
+        }],
+        orderedTargetRefs: allOpeningNotRequired
+          ? []
+          : allDimensionsPass
+            ? [COMPOSITION_TARGET_REF, UPPER_COMPOSITION_TARGET_REF]
+            : [UPPER_COMPOSITION_TARGET_REF, COMPOSITION_TARGET_REF],
       },
       spawnSupport: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
@@ -616,10 +708,7 @@ export function createEvidenceSetFixtureInputV1(
           generationRequestHash: options.attemptIdentity.generationRequestHash,
         },
       }),
-    acceptanceTargetRefs: [
-      ACCEPTANCE_TARGET_REF,
-      ...allDimensionsPass ? [UPPER_TARGET_REF] : [],
-    ],
+    acceptanceTargetRefs: [ACCEPTANCE_TARGET_REF, UPPER_TARGET_REF],
   };
   const packageSceneAuthoringAttemptResult = {
     ...packageInput.sceneAuthoringAttemptResult,
@@ -723,7 +812,16 @@ export function createEvidenceSetFixtureInputV1(
       semanticClassId: "ground.fixture",
       identityColor: "#AA0001" as const,
       projectedBoundsSource: "checked-layout-visual-group" as const,
-      requiredWorldViewIds: ["opening", "world-side", "world-top-down"] as const,
+      viewRequirements: [
+        {
+          viewId: "opening",
+          mode: allOpeningNotRequired
+            ? "not-required" as const
+            : "reference-projection-required" as const,
+        },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
+      ] as const,
       authoringManifestHash,
       layoutInventoryHash: metadata.checkedLayoutInventoryHash,
       contributionHash: metadata.contributionHash,
@@ -736,7 +834,16 @@ export function createEvidenceSetFixtureInputV1(
       semanticClassId: "upper.fixture",
       identityColor: "#AA0002" as const,
       projectedBoundsSource: "checked-layout-visual-group" as const,
-      requiredWorldViewIds: ["opening", "world-side", "world-top-down"] as const,
+      viewRequirements: [
+        {
+          viewId: "opening",
+          mode: allOpeningNotRequired
+            ? "not-required" as const
+            : "reference-projection-required" as const,
+        },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
+      ] as const,
       authoringManifestHash,
       layoutInventoryHash: metadata.checkedLayoutInventoryHash,
       contributionHash: metadata.contributionHash,
@@ -929,7 +1036,7 @@ export function createEvidenceSetFixtureInputV1(
       heightBasisPoints: 4_000,
       coverageBasisPoints: 600,
     },
-    visualGroups: [{
+    visualGroups: allOpeningNotRequired ? [] : [{
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       compositionTargetRef: COMPOSITION_TARGET_REF,
       topologyNodeId: "ground",
@@ -1063,6 +1170,11 @@ export function createEvidenceSetFixtureInputV1(
     pngArtifactRef: `artifact://case/package-fixture/capture/${request.viewId}.png`,
     pngContentHash: H(String(index + 6)),
   }));
+  const semanticViewObservationSet =
+    createSemanticViewObservationSetFixtureV1(
+      openingObservation,
+      viewRecords,
+    );
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     kind: "formal-world-capture-receipt",
     schemaVersion: 1,
@@ -1104,6 +1216,10 @@ export function createEvidenceSetFixtureInputV1(
     openingObservationArtifactRef:
       "artifact://case/package-fixture/capture/opening-observation.json",
     openingObservationContentHash: hashFormalOpeningObservationV1(openingObservation),
+    semanticViewObservationSetArtifactRef:
+      "artifact://case/package-fixture/capture/semantic-view-observation-set.json",
+    semanticViewObservationSetContentHash:
+      hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
     spawnSupportObservationArtifactRef:
       "artifact://case/package-fixture/capture/spawn-support-observation.json",
     spawnSupportObservationContentHash:
@@ -1136,6 +1252,7 @@ export function createEvidenceSetFixtureInputV1(
       `artifact://case/package-fixture/attempts/${attemptIndex}/capture-receipt.json`,
     captureReceipt,
     openingObservation,
+    semanticViewObservationSet,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversalObservation,

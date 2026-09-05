@@ -1,15 +1,18 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureReceiptV1,
   hashNativeSceneCheckResultV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -19,6 +22,7 @@ import {
   type BabylonNativeStaticColliderContributionV1,
   type FormalColliderOverlayObservationV1,
   type FormalOpeningObservationV1,
+  type FormalSemanticViewObservationSetV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
@@ -61,6 +65,7 @@ export interface BuildWorldReconstructionEvidenceSetInputV1 {
   readonly captureReceiptRef: string;
   readonly captureReceipt: FormalWorldCaptureReceiptV1;
   readonly openingObservation: FormalOpeningObservationV1;
+  readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
   readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
   readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
   readonly scriptedTraversalObservation: FormalScriptedTraversalObservationV1;
@@ -255,6 +260,7 @@ function candidateReplayOutcomeFromCheckResult(
 
 function assertObservationIdentity(
   observation: FormalOpeningObservationV1 |
+    FormalSemanticViewObservationSetV1 |
     FormalSpawnSupportObservationV1 |
     FormalColliderOverlayObservationV1 |
     FormalScriptedTraversalObservationV1,
@@ -333,6 +339,9 @@ export function buildWorldReconstructionEvidenceSetV1(
   );
   const captureReceipt = parseFormalWorldCaptureReceiptV1(rawInput.captureReceipt);
   const opening = parseFormalOpeningObservationV1(rawInput.openingObservation);
+  const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1(
+    rawInput.semanticViewObservationSet,
+  );
   const spawn = parseFormalSpawnSupportObservationV1(
     rawInput.spawnSupportObservation,
   );
@@ -431,6 +440,7 @@ export function buildWorldReconstructionEvidenceSetV1(
 
   for (const [observation, role, resetIdentity] of [
     [opening, "opening", "receipt-ready"],
+    [semanticViewObservationSet, "semantic views", "receipt-ready"],
     [spawn, "spawn support", "receipt-ready"],
     [overlay, "collider overlay", "receipt-ready"],
     [traversal, "traversal", "independent-reset"],
@@ -459,6 +469,14 @@ export function buildWorldReconstructionEvidenceSetV1(
   exact(captureReceipt.openingObservationContentHash,
     hashFormalOpeningObservationV1(opening),
     "opening observation content hash does not match Capture Receipt");
+  exact(captureReceipt.semanticViewObservationSetContentHash,
+    hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
+    "semantic view observation content hash does not match Capture Receipt");
+  assertFormalSemanticViewObservationSetMatchesReceiptV1({
+    observationSet: semanticViewObservationSet,
+    receipt: captureReceipt,
+    openingObservation: opening,
+  });
   exact(captureReceipt.spawnSupportObservationContentHash,
     hashFormalSpawnSupportObservationV1(spawn),
     "spawn observation content hash does not match Capture Receipt");
@@ -473,6 +491,10 @@ export function buildWorldReconstructionEvidenceSetV1(
     group.visualGroupId,
     group,
   ]));
+  const caseTargetByAcceptanceRef = new Map(
+    reconstructionCase.expected.semanticSilhouetteTargets.map((target) =>
+      [target.acceptanceTargetRef, target] as const),
+  );
   for (const binding of semanticMap.bindings) {
     const group = metadataGroups.get(binding.blockVisualGroupId);
     if (group === undefined) stale("semantic target group is absent from trusted Block metadata");
@@ -482,7 +504,22 @@ export function buildWorldReconstructionEvidenceSetV1(
       "semantic target class does not match trusted Block metadata");
     exact(binding.identityColor, group.identityColorHex,
       "semantic target color does not match trusted Block metadata");
+    const caseTarget = caseTargetByAcceptanceRef.get(
+      binding.acceptanceTargetRef,
+    );
+    if (caseTarget === undefined) {
+      stale("semantic target is absent from Case");
+    }
+    exact(binding.blockVisualGroupId, caseTarget.visualGroupId,
+      "semantic target group does not match Case");
+    sameCanonical(
+      binding.viewRequirements,
+      caseTarget.viewRequirements.map(({ viewId, mode }) => ({ viewId, mode })),
+      "semantic target view requirements do not match Case",
+    );
   }
+  exact(semanticMap.bindings.length, caseTargetByAcceptanceRef.size,
+    "semantic map does not contain the exact Case target set");
   const metadataBlocks = new Map(metadata.blocks.map((block) => [block.blockId, block]));
   const colliderJoins = new Map(metadata.colliderJoins.map((join) => [
     join.colliderId,
@@ -539,12 +576,18 @@ export function buildWorldReconstructionEvidenceSetV1(
     scriptedTraversalObservation: traversal,
   });
 
-  const openingGroups = [...opening.visualGroups].sort((left, right) =>
+  const openingTargetRefs = new Set(
+    reconstructionCase.expected.openingComposition.targetRefs,
+  );
+  const openingGroups = opening.visualGroups
+    .filter(({ compositionTargetRef }) =>
+      openingTargetRefs.has(compositionTargetRef))
+    .sort((left, right) =>
     compareText(left.compositionTargetRef, right.compositionTargetRef));
-  const depthOrderedGroups = [...opening.visualGroups].sort((left, right) =>
+  const depthOrderedGroups = [...openingGroups].sort((left, right) =>
     left.depthOrder - right.depthOrder ||
     compareText(left.compositionTargetRef, right.compositionTargetRef));
-  const distances = projectOpeningCompositionDistancesV1(opening.visualGroups);
+  const distances = projectOpeningCompositionDistancesV1(openingGroups);
   const overlayColliderIds = new Set(overlay.colliders.map(({ colliderId }) => colliderId));
   const colliderContributions = [...verified.nativeSceneContribution.staticColliders]
     .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
@@ -681,19 +724,25 @@ export function buildWorldReconstructionEvidenceSetV1(
       },
       {
         dimensionId: "semantic-silhouette",
-        evidenceRefs: [captureReceipt.openingObservationArtifactRef],
+        evidenceRefs: [captureReceipt.semanticViewObservationSetArtifactRef],
         observed: {
           kind: "semantic-silhouette-observed",
-          targets: [...opening.visualGroups]
-            .sort((left, right) => compareText(left.acceptanceTargetRef, right.acceptanceTargetRef))
-            .map((group) => ({
-              acceptanceTargetRef: group.acceptanceTargetRef,
-              visualGroupId: group.blockVisualGroupId,
-              isSemanticTargetPresent: true,
-              normalizedBounds: group.normalizedBounds,
-              normalizedCenter: group.normalizedCenter,
-              coverageBasisPoints: group.coverageBasisPoints,
+          views: semanticViewObservationSet.views.map((view) => ({
+            viewId: view.viewId,
+            targets: view.targets.map((target) => ({
+              acceptanceTargetRef: target.acceptanceTargetRef,
+              visualGroupId: target.blockVisualGroupId,
+              structuralProjection: target.structuralProjection.outcome === "projected"
+                ? {
+                    outcome: target.structuralProjection.outcome,
+                    normalizedBounds: target.structuralProjection.normalizedBounds,
+                    normalizedCenter: target.structuralProjection.normalizedCenter,
+                    coverageBasisPoints:
+                      target.structuralProjection.coverageBasisPoints,
+                  }
+                : { outcome: target.structuralProjection.outcome },
             })),
+          })),
         },
       },
       {

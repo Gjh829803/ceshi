@@ -189,14 +189,18 @@ export interface FormalSemanticCaptureTargetBindingV1 {
   readonly semanticClassId: string;
   readonly identityColor: `#${string}`;
   readonly projectedBoundsSource: typeof FORMAL_SEMANTIC_CAPTURE_PROJECTED_BOUNDS_SOURCE_V1;
-  readonly requiredWorldViewIds: readonly [
-    "opening",
-    "world-side",
-    "world-top-down",
-  ];
+  readonly viewRequirements: readonly FormalSemanticCaptureViewRequirementV1[];
   readonly authoringManifestHash: Sha256HashV1;
   readonly layoutInventoryHash: Sha256HashV1;
   readonly contributionHash: Sha256HashV1;
+}
+
+export interface FormalSemanticCaptureViewRequirementV1 {
+  readonly viewId: FormalWorldCaptureViewIdV1;
+  readonly mode:
+    | "not-required"
+    | "presence-required"
+    | "reference-projection-required";
 }
 
 export const FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1 = Object.freeze([
@@ -387,6 +391,47 @@ export interface FormalOpeningObservationV1
   readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
 }
 
+export type FormalSemanticStructuralProjectionV1 =
+  | Readonly<{ outcome: "outside-viewport" | "outside-depth-range" }>
+  | Readonly<{
+      outcome: "projected";
+      normalizedBounds: Readonly<{
+        minXBasisPoints: number;
+        minYBasisPoints: number;
+        maxXBasisPoints: number;
+        maxYBasisPoints: number;
+      }>;
+      normalizedCenter: Readonly<{
+        xBasisPoints: number;
+        yBasisPoints: number;
+      }>;
+      coverageBasisPoints: number;
+      cameraDepthMeters: number;
+      depthOrder: number;
+    }>;
+
+export interface FormalSemanticTargetViewObservationV1 {
+  readonly acceptanceTargetRef: string;
+  readonly blockVisualGroupId: string;
+  readonly mode: FormalSemanticCaptureViewRequirementV1["mode"];
+  readonly sourceBoundsMeters: FormalWorldBoundsMetersV1;
+  readonly structuralProjection: FormalSemanticStructuralProjectionV1;
+}
+
+export interface FormalSemanticViewObservationV1 {
+  readonly viewId: FormalWorldCaptureViewIdV1;
+  readonly viewRequestHash: Sha256HashV1;
+  readonly pngContentHash: Sha256HashV1;
+  readonly targets: readonly FormalSemanticTargetViewObservationV1[];
+}
+
+export interface FormalSemanticViewObservationSetV1
+  extends FormalMeasuredObservationIdentityV1 {
+  readonly kind: "formal-semantic-view-observation-set";
+  readonly schemaVersion: 1;
+  readonly views: readonly FormalSemanticViewObservationV1[];
+}
+
 export interface FormalSpawnSupportObservationV1
   extends FormalMeasuredObservationIdentityV1 {
   readonly kind: "formal-spawn-support-observation";
@@ -492,6 +537,8 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly views: readonly FormalWorldCaptureViewRecordV1[];
   readonly openingObservationArtifactRef: string;
   readonly openingObservationContentHash: Sha256HashV1;
+  readonly semanticViewObservationSetArtifactRef: string;
+  readonly semanticViewObservationSetContentHash: Sha256HashV1;
   readonly spawnSupportObservationArtifactRef: string;
   readonly spawnSupportObservationContentHash: Sha256HashV1;
   readonly colliderOverlayPngArtifactRef: string;
@@ -573,7 +620,7 @@ const BINDING_FIELDS = [
   "semanticClassId",
   "identityColor",
   "projectedBoundsSource",
-  "requiredWorldViewIds",
+  "viewRequirements",
   "authoringManifestHash",
   "layoutInventoryHash",
   "contributionHash",
@@ -741,6 +788,8 @@ const RECEIPT_FIELDS = [
   "views",
   "openingObservationArtifactRef",
   "openingObservationContentHash",
+  "semanticViewObservationSetArtifactRef",
+  "semanticViewObservationSetContentHash",
   "spawnSupportObservationArtifactRef",
   "spawnSupportObservationContentHash",
   "colliderOverlayPngArtifactRef",
@@ -784,6 +833,21 @@ const OPENING_VISUAL_GROUP_FIELDS = [
   "acceptanceTargetRef", "compositionTargetRef", "topologyNodeId",
   "semanticLayerId", "blockVisualGroupId", "normalizedBounds",
   "sourceBoundsMeters", "normalizedCenter", "coverageBasisPoints",
+  "cameraDepthMeters", "depthOrder",
+] as const;
+const SEMANTIC_VIEW_OBSERVATION_SET_FIELDS = [
+  ...OBSERVATION_IDENTITY_FIELDS, "views",
+] as const;
+const SEMANTIC_VIEW_OBSERVATION_FIELDS = [
+  "viewId", "viewRequestHash", "pngContentHash", "targets",
+] as const;
+const SEMANTIC_TARGET_VIEW_OBSERVATION_FIELDS = [
+  "acceptanceTargetRef", "blockVisualGroupId", "mode", "sourceBoundsMeters",
+  "structuralProjection",
+] as const;
+const STRUCTURAL_PROJECTION_OUTSIDE_FIELDS = ["outcome"] as const;
+const STRUCTURAL_PROJECTION_PROJECTED_FIELDS = [
+  "outcome", "normalizedBounds", "normalizedCenter", "coverageBasisPoints",
   "cameraDepthMeters", "depthOrder",
 ] as const;
 const NORMALIZED_BOUNDS_FIELDS = [
@@ -1229,19 +1293,38 @@ export function hashFormalArtifactViewRequestV1(value: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseFormalArtifactViewRequestV1(value)) as Sha256HashV1;
 }
 
-function parseRequiredWorldViewIds(
+function parseSemanticCaptureViewRequirements(
   value: unknown,
   contract: string,
   path: string,
-): readonly ["opening", "world-side", "world-top-down"] {
-  const parsed = array(value, contract, path);
+): readonly FormalSemanticCaptureViewRequirementV1[] {
+  const rows = array(value, contract, path);
   if (
-    parsed.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length ||
-    parsed.some((entry, index) => entry !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1[index])
+    rows.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length
   ) {
-    fail(contract, path, "must be opening, world-side, world-top-down");
+    fail(contract, path, "must contain exactly one requirement for every formal view");
   }
-  return FORMAL_WORLD_CAPTURE_VIEW_IDS_V1;
+  return Object.freeze(FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, index) => {
+    const rowPath = `${path}/${index}`;
+    const source = object(rows[index], contract, rowPath);
+    exactFields(source, ["viewId", "mode"], contract, rowPath);
+    if (source.viewId !== viewId) {
+      fail(contract, `${rowPath}/viewId`, `expected ${viewId}`);
+    }
+    return Object.freeze({
+      viewId,
+      mode: enumValue(
+        source.mode,
+        [
+          "not-required",
+          "presence-required",
+          "reference-projection-required",
+        ] as const,
+        contract,
+        `${rowPath}/mode`,
+      ),
+    });
+  }));
 }
 
 function parseCapsuleTolerance(
@@ -1620,10 +1703,10 @@ function parseBinding(
       contract,
       `${path}/projectedBoundsSource`,
     ),
-    requiredWorldViewIds: parseRequiredWorldViewIds(
-      source.requiredWorldViewIds,
+    viewRequirements: parseSemanticCaptureViewRequirements(
+      source.viewRequirements,
       contract,
-      `${path}/requiredWorldViewIds`,
+      `${path}/viewRequirements`,
     ),
     authoringManifestHash,
     layoutInventoryHash,
@@ -2907,7 +2990,6 @@ export function parseFormalOpeningObservationV1(
       });
     });
   if (
-    isEmpty(visualGroups) ||
     visualGroups.some((row, index) =>
       index > 0 && visualGroups[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef) ||
     new Set(visualGroups.map(({ depthOrder }) => depthOrder)).size !==
@@ -2923,24 +3005,23 @@ export function parseFormalOpeningObservationV1(
       fail(contract, "visualGroups", `${key} must be one-to-one`);
     }
   }
-  const measuredBindingIdentity = visualGroups.map((row) => ({
-    acceptanceTargetRef: row.acceptanceTargetRef,
-    compositionTargetRef: row.compositionTargetRef,
-    topologyNodeId: row.topologyNodeId,
-    semanticLayerId: row.semanticLayerId,
-    blockVisualGroupId: row.blockVisualGroupId,
-  }));
-  const requestedBindingIdentity = identity.formalRequest.semanticCaptureMap.bindings
-    .map((row) => ({
-      acceptanceTargetRef: row.acceptanceTargetRef,
-      compositionTargetRef: row.compositionTargetRef,
-      topologyNodeId: row.topologyNodeId,
-      semanticLayerId: row.semanticLayerId,
-      blockVisualGroupId: row.blockVisualGroupId,
-    }));
-  if (sha256CanonicalJson(measuredBindingIdentity) !==
-      sha256CanonicalJson(requestedBindingIdentity)) {
-    fail(contract, "visualGroups", "must measure every explicit semantic mapping once");
+  const requestedBindingByTargetRef = new Map(
+    identity.formalRequest.semanticCaptureMap.bindings.map((row) =>
+      [row.acceptanceTargetRef, row] as const),
+  );
+  for (const measured of visualGroups) {
+    const requested = requestedBindingByTargetRef.get(
+      measured.acceptanceTargetRef,
+    );
+    if (
+      requested === undefined ||
+      measured.compositionTargetRef !== requested.compositionTargetRef ||
+      measured.topologyNodeId !== requested.topologyNodeId ||
+      measured.semanticLayerId !== requested.semanticLayerId ||
+      measured.blockVisualGroupId !== requested.blockVisualGroupId
+    ) {
+      fail(contract, "visualGroups", "each projected group must match one explicit semantic mapping");
+    }
   }
   return freeze({
     kind: "formal-opening-observation",
@@ -2960,6 +3041,197 @@ export function parseFormalOpeningObservationV1(
 
 export function hashFormalOpeningObservationV1(value: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseFormalOpeningObservationV1(value)) as Sha256HashV1;
+}
+
+export function parseFormalSemanticViewObservationSetV1(
+  value: unknown,
+): FormalSemanticViewObservationSetV1 {
+  const contract = "FORMAL_SEMANTIC_VIEW_OBSERVATION_SET_INVALID";
+  const source = begin(value, contract, SEMANTIC_VIEW_OBSERVATION_SET_FIELDS);
+  if (
+    source.kind !== "formal-semantic-view-observation-set" ||
+    source.schemaVersion !== 1
+  ) fail(contract, "", "unexpected kind or schemaVersion");
+  const identity = parseObservationIdentity(source, contract, "camera");
+  const rawViews = array(source.views, contract, "views");
+  if (rawViews.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length) {
+    fail(contract, "views", "must contain exactly one row for every formal view");
+  }
+  const requestedBindings = identity.formalRequest.semanticCaptureMap.bindings;
+  const views = FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, viewIndex) => {
+    const viewPath = `views/${viewIndex}`;
+    const viewSource = object(rawViews[viewIndex], contract, viewPath);
+    exactFields(
+      viewSource,
+      SEMANTIC_VIEW_OBSERVATION_FIELDS,
+      contract,
+      viewPath,
+    );
+    if (viewSource.viewId !== viewId) {
+      fail(contract, `${viewPath}/viewId`, `expected ${viewId}`);
+    }
+    const requestedView = identity.formalRequest.views[viewIndex]!;
+    const viewRequestHash = hash(
+      viewSource.viewRequestHash,
+      contract,
+      `${viewPath}/viewRequestHash`,
+    );
+    if (viewRequestHash !== hashFormalArtifactViewRequestV1(requestedView)) {
+      fail(contract, `${viewPath}/viewRequestHash`, "must bind the exact formal view request");
+    }
+    const targets = array(viewSource.targets, contract, `${viewPath}/targets`)
+      .map((entry, targetIndex) => {
+        const targetPath = `${viewPath}/targets/${targetIndex}`;
+        const targetSource = object(entry, contract, targetPath);
+        exactFields(
+          targetSource,
+          SEMANTIC_TARGET_VIEW_OBSERVATION_FIELDS,
+          contract,
+          targetPath,
+        );
+        const binding = requestedBindings[targetIndex];
+        if (binding === undefined) {
+          fail(contract, targetPath, "contains an undeclared semantic target");
+        }
+        const acceptanceTargetRef = text(
+          targetSource.acceptanceTargetRef,
+          contract,
+          `${targetPath}/acceptanceTargetRef`,
+        );
+        const blockVisualGroupId = text(
+          targetSource.blockVisualGroupId,
+          contract,
+          `${targetPath}/blockVisualGroupId`,
+        );
+        const mode = enumValue(
+          targetSource.mode,
+          [
+            "not-required",
+            "presence-required",
+            "reference-projection-required",
+          ] as const,
+          contract,
+          `${targetPath}/mode`,
+        );
+        const requiredMode = binding.viewRequirements[viewIndex]?.mode;
+        if (
+          acceptanceTargetRef !== binding.acceptanceTargetRef ||
+          blockVisualGroupId !== binding.blockVisualGroupId ||
+          mode !== requiredMode
+        ) fail(contract, targetPath, "must match the semantic map target and view requirement");
+        const projectionSource = object(
+          targetSource.structuralProjection,
+          contract,
+          `${targetPath}/structuralProjection`,
+        );
+        const outcome = enumValue(
+          projectionSource.outcome,
+          ["projected", "outside-viewport", "outside-depth-range"] as const,
+          contract,
+          `${targetPath}/structuralProjection/outcome`,
+        );
+        let structuralProjection: FormalSemanticStructuralProjectionV1;
+        if (outcome === "projected") {
+          exactFields(
+            projectionSource,
+            STRUCTURAL_PROJECTION_PROJECTED_FIELDS,
+            contract,
+            `${targetPath}/structuralProjection`,
+          );
+          const normalizedBounds = parseNormalizedBounds(
+            projectionSource.normalizedBounds,
+            contract,
+            `${targetPath}/structuralProjection/normalizedBounds`,
+          );
+          structuralProjection = Object.freeze({
+            outcome,
+            normalizedBounds,
+            normalizedCenter: parseNormalizedCenter(
+              projectionSource.normalizedCenter,
+              normalizedBounds,
+              contract,
+              `${targetPath}/structuralProjection/normalizedCenter`,
+            ),
+            coverageBasisPoints: integer(
+              projectionSource.coverageBasisPoints,
+              1,
+              10_000,
+              contract,
+              `${targetPath}/structuralProjection/coverageBasisPoints`,
+            ),
+            cameraDepthMeters: finiteNumber(
+              projectionSource.cameraDepthMeters,
+              0,
+              1_000_000,
+              contract,
+              `${targetPath}/structuralProjection/cameraDepthMeters`,
+            ),
+            depthOrder: integer(
+              projectionSource.depthOrder,
+              0,
+              100_000,
+              contract,
+              `${targetPath}/structuralProjection/depthOrder`,
+            ),
+          });
+        } else {
+          exactFields(
+            projectionSource,
+            STRUCTURAL_PROJECTION_OUTSIDE_FIELDS,
+            contract,
+            `${targetPath}/structuralProjection`,
+          );
+          structuralProjection = Object.freeze({ outcome });
+        }
+        return Object.freeze({
+          acceptanceTargetRef,
+          blockVisualGroupId,
+          mode,
+          sourceBoundsMeters: parseSpatialBounds(
+            targetSource.sourceBoundsMeters,
+            contract,
+            `${targetPath}/sourceBoundsMeters`,
+          ),
+          structuralProjection,
+        });
+      });
+    if (targets.length !== requestedBindings.length) {
+      fail(contract, `${viewPath}/targets`, "must observe every semantic map target exactly once");
+    }
+    const projectedDepthOrders = targets.flatMap(({ structuralProjection }) =>
+      structuralProjection.outcome === "projected"
+        ? [structuralProjection.depthOrder]
+        : []);
+    if (
+      new Set(projectedDepthOrders).size !== projectedDepthOrders.length ||
+      projectedDepthOrders.some((depthOrder) =>
+        depthOrder >= projectedDepthOrders.length)
+    ) fail(contract, `${viewPath}/targets`, "projected targets must have one contiguous depth rank");
+    return Object.freeze({
+      viewId,
+      viewRequestHash,
+      pngContentHash: hash(
+        viewSource.pngContentHash,
+        contract,
+        `${viewPath}/pngContentHash`,
+      ),
+      targets: Object.freeze(targets),
+    });
+  });
+  return freeze({
+    kind: "formal-semantic-view-observation-set",
+    schemaVersion: 1,
+    ...identity,
+    views: Object.freeze(views),
+  });
+}
+
+export function hashFormalSemanticViewObservationSetV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalSemanticViewObservationSetV1(value),
+  ) as Sha256HashV1;
 }
 
 export function parseFormalSpawnSupportObservationV1(
@@ -3593,6 +3865,16 @@ export function parseFormalWorldCaptureReceiptV1(
       contract,
       "openingObservationContentHash",
     ),
+    semanticViewObservationSetArtifactRef: text(
+      source.semanticViewObservationSetArtifactRef,
+      contract,
+      "semanticViewObservationSetArtifactRef",
+    ),
+    semanticViewObservationSetContentHash: hash(
+      source.semanticViewObservationSetContentHash,
+      contract,
+      "semanticViewObservationSetContentHash",
+    ),
     spawnSupportObservationArtifactRef: text(
       source.spawnSupportObservationArtifactRef,
       contract,
@@ -3637,6 +3919,7 @@ export function parseFormalWorldCaptureReceiptV1(
   const artifactRefs = [
     ...parsedViews.map(({ pngArtifactRef }) => pngArtifactRef),
     artifactBindings.openingObservationArtifactRef,
+    artifactBindings.semanticViewObservationSetArtifactRef,
     artifactBindings.spawnSupportObservationArtifactRef,
     artifactBindings.colliderOverlayPngArtifactRef,
     artifactBindings.colliderOverlayObservationArtifactRef,
@@ -3737,4 +4020,100 @@ export function formalWorldCaptureReceiptCanonicalBytesV1(
 
 export function hashFormalWorldCaptureReceiptV1(value: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseFormalWorldCaptureReceiptV1(value)) as Sha256HashV1;
+}
+
+export function assertFormalSemanticViewObservationSetMatchesReceiptV1(
+  input: Readonly<{
+    observationSet: FormalSemanticViewObservationSetV1;
+    receipt: FormalWorldCaptureReceiptV1;
+    openingObservation: FormalOpeningObservationV1;
+  }>,
+): void {
+  const contract = "FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID";
+  const observationSet = parseFormalSemanticViewObservationSetV1(
+    input.observationSet,
+  );
+  const receipt = parseFormalWorldCaptureReceiptV1(input.receipt);
+  const openingObservation = parseFormalOpeningObservationV1(
+    input.openingObservation,
+  );
+  if (
+    hashFormalSemanticViewObservationSetV1(observationSet) !==
+      receipt.semanticViewObservationSetContentHash
+  ) fail(contract, "observationSet", "content hash does not match Capture Receipt");
+  if (
+    hashFormalOpeningObservationV1(openingObservation) !==
+      receipt.openingObservationContentHash
+  ) fail(contract, "openingObservation", "content hash does not match Capture Receipt");
+  for (const [field, actual, expected] of [
+    ["formalRequestHash", observationSet.formalRequestHash, receipt.formalRequestHash],
+    ["semanticCaptureMapHash", observationSet.semanticCaptureMapHash, receipt.semanticCaptureMapHash],
+    ["runtimeSessionId", observationSet.runtimeSessionId, receipt.runtimeSessionId],
+    ["worldPackageRootHash", observationSet.worldPackageRootHash, receipt.worldPackageRootHash],
+    ["worldBuildIdentityHash", observationSet.worldBuildIdentityHash, receipt.worldBuildIdentityHash],
+    ["resetReadySnapshotHash", observationSet.resetReadySnapshotHash, receipt.readySnapshotHash],
+    ["opening.formalRequestHash", openingObservation.formalRequestHash, receipt.formalRequestHash],
+    ["opening.runtimeSessionId", openingObservation.runtimeSessionId, receipt.runtimeSessionId],
+    ["opening.resetReadySnapshotHash", openingObservation.resetReadySnapshotHash, receipt.readySnapshotHash],
+  ] as const) {
+    if (actual !== expected) fail(contract, field, "identity does not match Capture Receipt");
+  }
+  const cameraOwnerIdentity = receipt.sdkOwnerIdentities.find(
+    ({ ownerId }) => ownerId === "camera",
+  );
+  if (cameraOwnerIdentity === undefined) {
+    fail(contract, "receipt/sdkOwnerIdentities", "camera owner identity is missing");
+  }
+  requireSameCanonicalValue(
+    observationSet.domainOwnerIdentity,
+    cameraOwnerIdentity,
+    contract,
+    "observationSet/domainOwnerIdentity",
+  );
+  requireSameCanonicalValue(
+    openingObservation.domainOwnerIdentity,
+    cameraOwnerIdentity,
+    contract,
+    "openingObservation/domainOwnerIdentity",
+  );
+  observationSet.views.forEach((view, index) => {
+    const receiptView = receipt.views[index]!;
+    if (
+      view.viewId !== receiptView.viewId ||
+      view.viewRequestHash !== receiptView.requestHash ||
+      view.pngContentHash !== receiptView.pngContentHash
+    ) fail(contract, `views/${index}`, "must bind the exact Receipt view and PNG");
+  });
+  const openingView = observationSet.views[0]!;
+  const bindingByAcceptanceTargetRef = new Map(
+    observationSet.formalRequest.semanticCaptureMap.bindings.map((binding) =>
+      [binding.acceptanceTargetRef, binding] as const),
+  );
+  const semanticOpeningGroups = openingView.targets.flatMap((target) => {
+    const projection = target.structuralProjection;
+    if (projection.outcome !== "projected") return [];
+    const binding = bindingByAcceptanceTargetRef.get(target.acceptanceTargetRef);
+    if (binding === undefined) {
+      fail(contract, "openingObservation", "contains an undeclared semantic target");
+    }
+    return [Object.freeze({
+      acceptanceTargetRef: target.acceptanceTargetRef,
+      compositionTargetRef: binding.compositionTargetRef,
+      topologyNodeId: binding.topologyNodeId,
+      semanticLayerId: binding.semanticLayerId,
+      blockVisualGroupId: target.blockVisualGroupId,
+      sourceBoundsMeters: target.sourceBoundsMeters,
+      normalizedBounds: projection.normalizedBounds,
+      normalizedCenter: projection.normalizedCenter,
+      coverageBasisPoints: projection.coverageBasisPoints,
+      cameraDepthMeters: projection.cameraDepthMeters,
+      depthOrder: projection.depthOrder,
+    })];
+  });
+  requireSameCanonicalValue(
+    openingObservation.visualGroups,
+    semanticOpeningGroups,
+    contract,
+    "openingObservation/visualGroups",
+  );
 }

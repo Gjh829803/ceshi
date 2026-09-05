@@ -837,7 +837,10 @@ export async function packageNativeBlockAttemptV1(
     input.outputDirectoryPath,
     "output-directory",
   );
-  if (outputDirectoryPath !== path.join(attemptDirectoryPath, "world-package")) {
+  const hostOutputDirectoryPath = path.dirname(outputDirectoryPath);
+  const hostRelative = path.relative(attemptDirectoryPath, hostOutputDirectoryPath).split(path.sep).join("/");
+  if (path.basename(outputDirectoryPath) !== "world-package" ||
+    (hostRelative !== "" && !/^host-recoveries\/[1-9][0-9]*$/.test(hostRelative))) {
     return fail("output-location-invalid");
   }
   if (await realpath(attemptDirectoryPath) !== attemptDirectoryPath) {
@@ -1041,6 +1044,7 @@ export async function packageNativeBlockAttemptV1(
 
   const parentDirectoryPath = path.dirname(outputDirectoryPath);
   await mkdir(parentDirectoryPath, { recursive: true });
+  if (await realpath(parentDirectoryPath) !== parentDirectoryPath) return fail("output-location-invalid");
   const checkDirectoryPath = await mkdtemp(
     path.join(parentDirectoryPath, ".native-block-check-"),
   );
@@ -1065,7 +1069,7 @@ export async function packageNativeBlockAttemptV1(
       checkDirectoryPath,
     );
     const nativeCheckResultPath = path.join(
-      attemptDirectoryPath,
+      hostOutputDirectoryPath,
       "native-check-result.json",
     );
     await writeCanonicalJsonFresh(nativeCheckResultPath, formalCheck);
@@ -1096,11 +1100,11 @@ export async function packageNativeBlockAttemptV1(
         Object.freeze([]);
       await Promise.all([
         writeTextFresh(
-          path.join(attemptDirectoryPath, "native-explain.txt"),
+          path.join(hostOutputDirectoryPath, "native-explain.txt"),
           explainNativeSceneCheckResultV1(formalCheck),
         ),
         writeCanonicalJsonFresh(
-          path.join(attemptDirectoryPath, "attempt-result.json"),
+          path.join(hostOutputDirectoryPath, "attempt-result.json"),
           attemptResult,
         ),
       ]);
@@ -1267,12 +1271,12 @@ export async function packageNativeBlockAttemptV1(
       groundModelEvidenceRef,
     });
     const groundAnalysisReportPath = path.join(
-      attemptDirectoryPath,
+      hostOutputDirectoryPath,
       "ground-analysis-report.json",
     );
     await Promise.all([
       writeCanonicalJsonFresh(
-        path.join(attemptDirectoryPath, "logical-ground-model.json"),
+        path.join(hostOutputDirectoryPath, "logical-ground-model.json"),
         checkedEpochEvidence.logicalGroundModel,
       ),
       writeCanonicalJsonFresh(
@@ -1280,18 +1284,18 @@ export async function packageNativeBlockAttemptV1(
         analyzedGround.report,
       ),
       writeCanonicalJsonFresh(
-        path.join(attemptDirectoryPath, "ground-analysis-diagnostics.json"),
+        path.join(hostOutputDirectoryPath, "ground-analysis-diagnostics.json"),
         analyzedGround.repairDiagnostics,
       ),
     ]);
     if (analyzedGround.report.admissionOutcome !== "passed") {
       await Promise.all([
         writeTextFresh(
-          path.join(attemptDirectoryPath, "native-explain.txt"),
+          path.join(hostOutputDirectoryPath, "native-explain.txt"),
           explainNativeSceneCheckResultV1(formalCheck),
         ),
         writeCanonicalJsonFresh(
-          path.join(attemptDirectoryPath, "attempt-result.json"),
+          path.join(hostOutputDirectoryPath, "attempt-result.json"),
           attemptResult,
         ),
       ]);
@@ -1319,11 +1323,11 @@ export async function packageNativeBlockAttemptV1(
     // attempt-result.json is the commit marker for the complete verifier-owned
     // Attempt output pair, so publish the deterministic explanation first.
     await writeTextFresh(
-      path.join(attemptDirectoryPath, "native-explain.txt"),
+      path.join(hostOutputDirectoryPath, "native-explain.txt"),
       explainNativeSceneCheckResultV1(formalCheck),
     );
     await writeCanonicalJsonFresh(
-      path.join(attemptDirectoryPath, "attempt-result.json"),
+      path.join(hostOutputDirectoryPath, "attempt-result.json"),
       attemptResult,
     );
     const receipt = verified.receipt;

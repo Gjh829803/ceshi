@@ -16,6 +16,7 @@ import { deflateSync } from "node:zlib";
 
 import { afterEach, describe, expect, it } from "vitest";
 import sharp from "sharp";
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 
 import {
   babylonNativeBlockCenterAlignsToGridV1,
@@ -23,6 +24,7 @@ import {
 } from "@whitebox-world/native-babylon-block-profile/testing";
 import {
   sha256CanonicalJson,
+  sha256Bytes,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 
@@ -168,10 +170,26 @@ export default defineBabylonNativeScene({
       }),
     ),
   ]);
+  const brief = await readFile(path.resolve(
+    "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md",
+  ), "utf8");
+  const parsedBrief = parseSceneBriefV1(brief);
+  if (!parsedBrief.ok) throw new Error("fixture Brief must parse");
+  const casePath = path.join(workspace, "context/case.json");
+  const palettePath = path.join(workspace, "inputs/visual-identity-palette.json");
+  const caseValue = JSON.parse(await readFile(casePath, "utf8"));
+  const palette = JSON.parse(await readFile(palettePath, "utf8"));
+  caseValue.sceneBriefHash = sha256Bytes(Buffer.from(brief));
+  palette.sceneBriefHash = parsedBrief.sceneBriefHash;
+  await Promise.all([
+    writeFile(path.join(workspace, "inputs/scene-brief.md"), brief),
+    writeFile(casePath, JSON.stringify(caseValue)),
+    writeFile(palettePath, JSON.stringify(palette)),
+  ]);
   return workspace;
 }
 
-async function runSelfCheck(workspace: string): Promise<Readonly<{
+async function runSelfCheck(workspace: string, checkerPath = CHECKER): Promise<Readonly<{
   exitCode: number;
   stdout: string;
   stderr: string;
@@ -180,11 +198,13 @@ async function runSelfCheck(workspace: string): Promise<Readonly<{
   try {
     const canonicalWorkspace = await realpath(workspace);
     const result = await execFileAsync(process.execPath, [
-      CHECKER,
+      checkerPath,
       "--workspace",
       canonicalWorkspace,
       "--case",
       path.join(canonicalWorkspace, "context", "case.json"),
+      "--scene-brief",
+      path.join(canonicalWorkspace, "inputs", "scene-brief.md"),
       "--visual-identity-palette",
       path.join(
         canonicalWorkspace,
@@ -371,7 +391,8 @@ afterEach(async () => {
     rm(directory, { recursive: true, force: true })));
 });
 
-describe("Native Block Builder Skill", () => {
+// This suite now runs a real semantic compiler (often twice per repair fixture).
+describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
   it("states the closed outputs and keeps all product authorities with the Host", async () => {
     const [agentsRules, skill, outputContract, nativeDesign] = await Promise.all([
       readFile(path.resolve("AGENTS.md"), "utf8"),
@@ -397,6 +418,10 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("self-check reports only");
     expect(skill).toContain("at most three combined self-repair cycles");
     expect(skill).toContain("Mandatory visual feedback");
+    expect(skill).toContain("construction inventory against both images");
+    expect(skill).toContain("including important scenery that has no visual-target");
+    expect(skill).toContain("never erase a major region or flatten a required rise to free budget");
+    expect(skill).toContain("Mere target presence is");
     expect(skill).toContain(
       "`WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED` is advisory only",
     );
@@ -404,7 +429,7 @@ describe("Native Block Builder Skill", () => {
       "Do not spend repair budget solely to eliminate that warning",
     );
     expect(skill).toContain("actually open and inspect both PNGs");
-    expect(skill).toContain("Structural and visual feedback share this one counter");
+    expect(skill).toContain("Type, structural and visual feedback share this one counter");
     expect(skill).toContain("never author a parallel block list or review manifest");
     expect(skill).toContain("Host may replay the same renderer after Native Check");
     expect(skill).toContain("neither the renderer nor the Host may score semantic similarity");
@@ -414,12 +439,20 @@ describe("Native Block Builder Skill", () => {
     );
     expect(skill).toContain("fresh identity-bearing Native generation Attempt");
     expect(skill).toContain("new request and task ID");
+    expect(skill).toContain("Ordinary Scene production has no external diagnostic-repair Attempts");
+    expect(skill).toContain("Provider-task retry accounting is separate");
+    expect(skill).toContain("available only to explicit strict-acceptance runs");
+    expect(skill).toContain("A stricter Profile alone is not authorization for external repair");
     expect(agentsRules).toContain(
-      "Automatic Planner and Canonical Builder work runs through exactly one Codex task per stage",
+      "Automatic Planner and Canonical Builder work has one logical Codex task per stage",
     );
     expect(agentsRules).toContain(
-      "Each Native Attempt is itself one Codex task and may perform only its own bounded checker-driven self-repair inside that task",
+      "Each Native Attempt has one logical Codex task and may perform only its own bounded checker-driven self-repair inside that task",
     );
+    expect(agentsRules).toContain("Local execution remains one physical task");
+    expect(agentsRules).toContain("Provider Task Attempts do not allocate Native source-repair Attempts or extra in-task repair cycles");
+    expect(await readFile(CHECKER, "utf8"))
+      .not.toContain("activeMotionKernelRef");
     expect(agentsRules).toContain(
       "Never describe or implement an external Native Attempt as same-task self-repair, a hidden retry, or a fallback",
     );
@@ -516,7 +549,7 @@ describe("Native Block Builder Skill", () => {
       "The Host typechecks with strict indexed access",
     );
     expect(outputContract).toContain(
-      "Prefer `for (const [xMeters, zMeters] of cells)`",
+      "prefer `for (const [xMeters, zMeters] of cells)`",
     );
     expect(outputContract).toContain(
       "check the indexed value for `undefined` before destructuring",
@@ -808,6 +841,54 @@ describe("Native Block Builder Skill", () => {
     expect(first.stdout).toBe(second.stdout);
   });
 
+  it("reports strict indexed tuple errors before delivery and rechecks repaired source", async () => {
+    const workspace = await createWorkspace();
+    const original = await readFile(path.join(workspace, "scene.ts"), "utf8");
+    const loop = `for (const [xOffset, zOffset] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+      const id = String(xOffset + 1) + String(zOffset + 1);
+      const x = 10 + xOffset;
+      const z = 10 + zOffset;
+      void id; void x; void z;
+    }`;
+    await writeFile(path.join(workspace, "scene.ts"), original.replace("void blocks;", loop));
+    const rejected = await runSelfCheck(workspace);
+    expect(rejected.exitCode).toBe(2);
+    expect(rejected.report.diagnosticCodes).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+    expect(rejected.report.typecheckDiagnostics).toHaveLength(4);
+    expect(rejected.report.typecheckDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ typescriptCode: 18048, sourcePath: "scene.ts", message: expect.stringContaining("possibly 'undefined'") }),
+    ]));
+    await writeFile(path.join(workspace, "scene.ts"), original.replace("void blocks;", loop.replace("]]) {", "]] as const) {")));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, typecheckDiagnostics: [] });
+  }, 20_000);
+
+  it.each([
+    ['blocks.createBlock({ id: "bad", shape: "cube", paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });', 2322],
+    ['blocks.createBlock({ id: "bad", shape: "full", paletteRole: "ground" });', 2345],
+    ['const count: number = "bad"; void count;', 2322],
+    ['const value: { x?: number } = { x: undefined }; void value;', 2375],
+  ])("checks actual SDK types and strict options: %s", async (statement, code) => {
+    const workspace = await createWorkspace();
+    const source = await readFile(path.join(workspace, "scene.ts"), "utf8");
+    await writeFile(path.join(workspace, "scene.ts"), source.replace("void blocks;", statement));
+    const report = (await runSelfCheck(workspace)).report;
+    expect(report.ok).toBe(false);
+    expect(report.typecheckDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ typescriptCode: code }),
+    ]));
+  }, 20_000);
+
+  it("typechecks with a relocated standalone checker and no repository dependency access", async () => {
+    const workspace = await createWorkspace();
+    const toolsRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "native-checker-only-")));
+    temporaryDirectories.push(toolsRoot);
+    const checker = path.join(toolsRoot, "self-check.mjs");
+    await writeFile(checker, await readFile(CHECKER));
+    const result = await runSelfCheck(workspace, checker);
+    expect(result.stderr).toBe("");
+    expect(result.report).toMatchObject({ ok: true, typecheckDiagnostics: [] });
+  }, 20_000);
+
   it("renders byte-stable source-derived top-down and entry comparisons without Babylon", async () => {
     const workspace = await createVisualReviewWorkspace();
     const first = await runVisualReview(workspace);
@@ -872,6 +953,39 @@ describe("Native Block Builder Skill", () => {
     expect(rendererSource).not.toContain("new Scene(");
     expect(rendererSource).not.toContain("Havok");
     expect(rendererSource).not.toContain("localeCompare");
+  });
+
+  it.each([
+    ["overlap", [0.5, -0.5, 0], "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP"],
+    ["off-grid", [0.1, 0.5, -2], "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID"],
+  ] as const)("feeds %s back before advisory images can claim completion", async (_kind, center, code) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, source.replace("centerMetersXYZ: [0, 0.5, -2]", `centerMetersXYZ: ${JSON.stringify(center)}`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(code);
+  });
+
+  it.each(["structure", "hazard", "water-like-visual", "background-mass"])(
+    "keeps ordinary ungrouped %s in same-task feedback without inventing a target (CF-19/22)", async (role) => {
+      const workspace = await createVisualReviewWorkspace();
+      const sourcePath = path.join(workspace, "scene.ts");
+      const source = await readFile(sourcePath, "utf8");
+      await writeFile(sourcePath, source.replace('paletteRole: "water-like-visual"', `paletteRole: "${role}"`));
+      expect(await runVisualReview(workspace)).toMatchObject({ exitCode: 0, stderr: "" });
+    },
+  );
+
+  it.each(["undeclared", "empty"])("rejects %s identity groups before Builder returns (CF-19/22)", async (kind) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, source.replace('visualGroupId: "central-gate",', kind === "empty" ? "" : 'visualGroupId: "unknown-gate",'));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain(kind === "empty" ? "has no captured Blocks" : "undeclared visualGroupId");
   });
 
   it("emits a Host-only canonical captured layout identity without adding a task output", async () => {
@@ -1213,9 +1327,12 @@ describe("Native Block Builder Skill", () => {
 
   it("repairs a Native target color drift inside the same Builder task", async () => {
     const workspace = await createWorkspace();
+    const brief = await readFile(path.join(workspace, "inputs/scene-brief.md"), "utf8");
+    const parsed = parseSceneBriefV1(brief);
+    if (!parsed.ok) throw new Error("fixture Brief must parse");
     const caseValue = {
       id: "valid-native-block-world",
-      sceneBriefHash: `sha256:${"a".repeat(64)}`,
+      sceneBriefHash: sha256Bytes(Buffer.from(brief)),
       expected: { semanticSilhouetteTargets: [{
         acceptanceTargetRef:
           "worldkit://acceptance-target/visual-target-3@1",
@@ -1226,7 +1343,7 @@ describe("Native Block Builder Skill", () => {
       kind: "worldkit-visual-identity-palette",
       schemaVersion: 1,
       sceneId: "valid-native-block-world",
-      sceneBriefHash: `sha256:${"a".repeat(64)}`,
+      sceneBriefHash: parsed.sceneBriefHash,
       movementMode: "ground-walk",
       movementModeLabel: "Ground walk",
       targets: [
@@ -1288,6 +1405,47 @@ describe("Native Block Builder Skill", () => {
     const result = await runSelfCheck(workspace);
     expect(result.exitCode).toBe(2);
     expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
+  });
+
+  it.each(["brief-bytes", "palette-semantic-hash", "brief-symlink"])(
+    "rejects a stale or unsafe frozen identity input: %s",
+    async (mutation) => {
+      const workspace = await createWorkspace();
+      const briefPath = path.join(workspace, "inputs/scene-brief.md");
+      if (mutation === "brief-bytes") {
+        await writeFile(briefPath, `${await readFile(briefPath, "utf8")}\n`);
+      } else if (mutation === "brief-symlink") {
+        await rm(briefPath);
+        await symlink(path.resolve(
+          "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md",
+        ), briefPath);
+      } else {
+        const palettePath = path.join(workspace, "inputs/visual-identity-palette.json");
+        const palette = JSON.parse(await readFile(palettePath, "utf8"));
+        const caseValue = JSON.parse(await readFile(path.join(workspace, "context/case.json"), "utf8"));
+        palette.sceneBriefHash = caseValue.sceneBriefHash;
+        await writeFile(palettePath, JSON.stringify(palette));
+      }
+      const result = await runSelfCheck(workspace);
+      expect(result.exitCode).toBe(2);
+      expect(result.report.diagnosticCodes).toContain(mutation === "brief-symlink"
+        ? "NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_INPUT_INVALID"
+        : "NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+    },
+  );
+
+  it.each([
+    '{ kind: "not-traversable" }',
+    '{ kind: "not-traversable", }',
+    '{ kind: "not-traversable", /* formatter comment */ }',
+    '{ kind: "not-traversable", // formatter comment\n }',
+  ])("accepts a closed not-traversable binding with legal syntax: %s", async (binding) => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, "scene.ts"), `const binding = ${binding};\n`);
+    expect((await runSelfCheck(workspace)).report).toMatchObject({
+      ok: true,
+      diagnosticCodes: [],
+    });
   });
 
   it("rejects fields from the static-surface branch on a not-traversable binding", async () => {

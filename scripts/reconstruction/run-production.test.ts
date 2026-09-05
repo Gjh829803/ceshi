@@ -67,6 +67,7 @@ import {
   type WorldReconstructionHostRoutePolicyV1,
 } from "./generation-request.js";
 import { WorldReconstructionRunClosedErrorV1 } from "./run.js";
+import { createWorldReconstructionRunJournalV1 } from "./run-journal.js";
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
 
@@ -724,6 +725,105 @@ async function runWithBackend(
 }
 
 describe("runWorldReconstructionProductionV1", () => {
+  it.each([
+    ["before-final-write", "completed"], ["after-final-write", "completed"],
+    ["before-final-write", "cleanup-joined"], ["before-final-write", "completed-before"],
+    ["before-final-write", "publication-before"], ["before-final-write", "partial-tail"],
+  ] as const)("resumes publication after %s at %s without rerunning generation or overwriting a published final", async (failurePoint, journalInterruption) => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    let publicationCalls = 0;
+    const selected = ownersFor(value, receipt, {
+      runCore: vi.fn(async (input) => {
+        const journal = await createWorldReconstructionRunJournalV1({ executionPurpose: "production", runId: input.runId,
+          caseRef: input.caseRef, evaluationProfileRef: receipt.evaluationProfileRef,
+          frozenOwnerIdentities: input.frozenOwnerIdentities, outputDirectoryPath: input.outputDirectoryPath });
+        for (const state of ["cleanup-joined", "completed"] as const) {
+          for (const boundary of ["before", "after"] as const) await journal.recordBoundary({ state, boundary,
+            operation: state, ...(state === "cleanup-joined" ? { cleanupOutcomes: COMPLETED_CLEANUP } : {}) });
+        }
+        await publishReceipt(input.outputDirectoryPath, receipt);
+        return receipt;
+      }),
+      verifyRun: vi.fn(async ({ candidate }) => ({ ...productionIntegrityFor(receipt), candidateKind: candidate.kind })),
+      publishFinal: vi.fn(async ({ launch }) => {
+        publicationCalls += 1;
+        const finalDirectoryPath = path.join(value.caseRoot, "final");
+        if (publicationCalls === 1 && failurePoint === "before-final-write") throw new Error("PUBLICATION_INTERRUPTED");
+        await mkdir(finalDirectoryPath);
+        await writeFile(path.join(finalDirectoryPath, "launch.json"), JSON.stringify(launch));
+        if (publicationCalls === 1) throw new Error("PUBLICATION_RESPONSE_LOST");
+        return { outcome: "published" as const, finalDirectoryPath, worldPackageRootHash: launch.worldPackageRootHash,
+          captureReceiptHash: launch.captureReceiptHash, evaluationHash: launch.evaluationHash,
+          strictDiagnosticHash: launch.strictDiagnosticHash, entryValidationHash: launch.entryValidationHash };
+      }),
+    });
+    expect(await run(value, selected.owners)).toMatchObject({ productionOutcome: "failed", publicationOutcome: "not-published" });
+    const receiptBefore = await readFile(path.join(value.outputDirectoryPath, "run-receipt.json"));
+    const journalPath = path.join(value.outputDirectoryPath, "journal.jsonl");
+    const originalJournal = await readFile(journalPath, "utf8");
+    const rows = originalJournal.trim().split("\n");
+    if (journalInterruption === "cleanup-joined" || journalInterruption === "completed-before") {
+      await writeFile(journalPath, `${rows.slice(0, journalInterruption === "cleanup-joined" ? -2 : -1).join("\n")}\n`);
+    } else if (journalInterruption === "publication-before") {
+      const initialRow = JSON.parse(rows[0]!);
+      const journal = await createWorldReconstructionRunJournalV1({ executionPurpose: "production", runId: RUN_ID,
+        caseRef: CASE_REF, evaluationProfileRef: receipt.evaluationProfileRef,
+        frozenOwnerIdentities: initialRow.frozenOwnerIdentities, outputDirectoryPath: value.outputDirectoryPath });
+      await journal.recordBoundary({ state: "publication-recovering", boundary: "before", operation: "resume-publication-only" });
+    }
+    const journalBefore = await readFile(journalPath, "utf8");
+    if (journalInterruption === "partial-tail") await writeFile(journalPath, `${journalBefore}{"kind":`);
+    const resumeInput = { repositoryRoot: value.repositoryRoot,
+      casePath: value.casePath, outputDirectoryPath: value.outputDirectoryPath, executionMode: "resume-host-only",
+      backend: "cloud", routePolicy: { requiredCapabilityRefs: [], requestedSourceKind: "babylon-native", nativeTrustAdmitted: true } } as const;
+    const resumed = await runWorldReconstructionProductionV1(resumeInput, selected.owners);
+    expect(resumed, JSON.stringify(resumed)).toMatchObject({ productionOutcome: "passed", publicationOutcome: "published" });
+    expect(selected.owners.runCore).toHaveBeenCalledOnce();
+    expect(selected.owners.publishFinal).toHaveBeenCalledTimes(failurePoint === "before-final-write" ? 2 : 1);
+    expect(await readFile(path.join(value.outputDirectoryPath, "run-receipt.json"))).toEqual(receiptBefore);
+    expect((await readFile(path.join(value.outputDirectoryPath, "journal.jsonl"), "utf8")).startsWith(journalBefore)).toBe(true);
+    if (failurePoint === "after-final-write") expect(selected.owners.verifyRun).toHaveBeenLastCalledWith({
+      candidate: { kind: "final", runDirectoryPath: value.outputDirectoryPath, finalDirectoryPath: path.join(value.caseRoot, "final") },
+    });
+    const finalBefore = await readFile(path.join(value.caseRoot, "final/launch.json"));
+    await writeFile(path.join(value.outputDirectoryPath, "strict-diagnostic.json"), "{}");
+    expect(await runWorldReconstructionProductionV1(resumeInput, selected.owners)).toMatchObject({
+      productionOutcome: "failed", diagnosticCodes: ["WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_ALREADY_EXISTS"],
+    });
+    expect(await readFile(path.join(value.outputDirectoryPath, "strict-diagnostic.json"), "utf8")).toBe("{}");
+    expect(await readFile(path.join(value.caseRoot, "final/launch.json"))).toEqual(finalBefore);
+    expect(selected.owners.runCore).toHaveBeenCalledOnce();
+  });
+
+  it("preserves an existing Run if Host recovery port construction fails and rejects concurrent recovery", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const first = ownersFor(value, receipt, { runCore: vi.fn(async (input) => {
+      await createWorldReconstructionRunJournalV1({ executionPurpose: "production", runId: input.runId,
+        caseRef: input.caseRef, evaluationProfileRef: receipt.evaluationProfileRef,
+        frozenOwnerIdentities: input.frozenOwnerIdentities, outputDirectoryPath: input.outputDirectoryPath });
+      throw new WorldReconstructionRunClosedErrorV1(["WORLD_RECONSTRUCTION_CAPTURE_FAILED"], "completed");
+    }) });
+    await run(value, first.owners);
+    const marker = path.join(value.outputDirectoryPath, "original-failure.json");
+    await writeFile(marker, "preserved");
+    const recovered = ownersFor(value, receipt, { createRunPorts: vi.fn(async () => { throw new Error("OWNER_SETUP_FAILED"); }) });
+    const input = { repositoryRoot: value.repositoryRoot, casePath: value.casePath, outputDirectoryPath: value.outputDirectoryPath,
+      executionMode: "resume-host-only" as const, backend: "cloud" as const,
+      routePolicy: { requiredCapabilityRefs: [], requestedSourceKind: "babylon-native" as const, nativeTrustAdmitted: true } };
+    await expect(runWorldReconstructionProductionV1(input, recovered.owners)).resolves.toMatchObject({
+      productionOutcome: "failed", cleanupOutcome: "not-started",
+    });
+    expect(await readFile(marker, "utf8")).toBe("preserved");
+    expect(recovered.owners.createRunPorts).toHaveBeenCalledWith(expect.objectContaining({ hostRecoveryIndex: 1 }));
+    expect(recovered.owners.runCore).not.toHaveBeenCalled();
+    const lock = path.join(value.outputDirectoryPath, ".host-recovery.lock");
+    await expect(lstat(lock)).rejects.toMatchObject({ code: "ENOENT" });
+    await writeFile(lock, "another-active-owner");
+    await expect(runWorldReconstructionProductionV1(input, recovered.owners)).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await readFile(lock, "utf8")).toBe("another-active-owner");
+  });
   it("keeps the representative Case acceptance envelope within the delivery baseline", async () => {
     const [caseValue, profileValue] = await Promise.all([
       readFile(path.join(REAL_CASE_ROOT, "case.json"), "utf8").then(JSON.parse),
@@ -805,6 +905,8 @@ describe("runWorldReconstructionProductionV1", () => {
     );
     expect(owners.createRunPorts).toHaveBeenCalledOnce();
     expect(owners.runCore).toHaveBeenCalledOnce();
+    expect(vi.mocked(owners.createRunPorts).mock.calls[0]![0]).toMatchObject({ executionPurpose: "production" });
+    expect(vi.mocked(owners.runCore).mock.calls[0]![0]).toMatchObject({ executionPurpose: "production" });
     expect(owners.verifyRun).toHaveBeenCalledOnce();
     expect(owners.publishFinal).toHaveBeenCalledOnce();
     expect(corePorts.rehashOwnerIdentities).toHaveBeenCalledTimes(2);
@@ -1540,6 +1642,25 @@ describe("runWorldReconstructionProductionV1", () => {
     await expect(lstat(path.join(value.caseRoot, "final"))).rejects
       .toMatchObject({ code: "ENOENT" });
   });
+
+  it.each(["self-check-failed", "task-timeout", "output-missing", "native-check-rejected"])(
+    "preserves the real owner failure %s through production serialization",
+    async (code) => {
+      const value = await fixture();
+      const receipt = await receiptFor(value);
+      const { owners } = ownersFor(value, receipt, {
+        runCore: vi.fn(async () => {
+          throw new WorldReconstructionRunClosedErrorV1([code], "completed");
+        }),
+      });
+      await expect(run(value, owners)).resolves.toMatchObject({
+        productionOutcome: "failed",
+        diagnosticCodes: [code],
+        cleanupOutcome: "completed",
+      });
+      expect(owners.publishFinal).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejoins the disk Run Receipt after verification before final publication", async () => {
     const value = await fixture();

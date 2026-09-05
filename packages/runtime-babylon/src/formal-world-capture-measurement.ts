@@ -9,8 +9,9 @@ import {
 import type {
   BabylonNativeBlockMaterializerMetadataV1,
   FormalArtifactViewRequestV1,
-  FormalOpeningObservationV1,
   FormalSemanticCaptureMapV1,
+  FormalSemanticStructuralProjectionV1,
+  FormalSemanticTargetViewObservationV1,
   FormalWorldCaptureViewIdV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -39,10 +40,20 @@ export interface FormalWorldCaptureMeasurementInputV1 {
 
 export interface FormalWorldCaptureViewMeasurementV1 {
   readonly viewId: FormalWorldCaptureViewIdV1;
-  readonly visualGroups: FormalOpeningObservationV1["visualGroups"];
+  readonly targets: readonly FormalSemanticTargetViewObservationV1[];
 }
 
-type MeasuredVisualGroupV1 = FormalOpeningObservationV1["visualGroups"][number];
+interface MeasuredTargetWithoutOrderV1 extends Omit<
+  FormalSemanticTargetViewObservationV1,
+  "structuralProjection"
+> {
+  readonly structuralProjection:
+    | Exclude<FormalSemanticStructuralProjectionV1, { outcome: "projected" }>
+    | Omit<
+        Extract<FormalSemanticStructuralProjectionV1, { outcome: "projected" }>,
+        "depthOrder"
+      >;
+}
 type FormalWorldArtifactViewRequestV1 = Extract<
   FormalArtifactViewRequestV1,
   { viewId: "world-side" | "world-top-down" }
@@ -399,10 +410,30 @@ function projectGroup(
   cameraPosition: Vector3,
   cameraForward: Vector3,
   transform: Matrix,
-): Omit<MeasuredVisualGroupV1, "depthOrder"> {
+): MeasuredTargetWithoutOrderV1 {
   const minimum = materializedGroup.minimumMetersXYZ;
   const maximum = materializedGroup.maximumMetersXYZ;
   const corners = boundsCorners(minimum, maximum);
+  const sourceBoundsMeters = Object.freeze({
+    minimumMetersXYZ: Object.freeze([...minimum]) as
+      readonly [number, number, number],
+    maximumMetersXYZ: Object.freeze([...maximum]) as
+      readonly [number, number, number],
+  });
+  const viewRequirement = binding.viewRequirements.find(({ viewId }) =>
+    viewId === input.view.viewId) ?? fail(
+      "PACKAGE_BINDING",
+      `${binding.blockVisualGroupId} has no requirement for ${input.view.viewId}`,
+    );
+  const outside = (
+    outcome: "outside-viewport" | "outside-depth-range",
+  ): MeasuredTargetWithoutOrderV1 => Object.freeze({
+    acceptanceTargetRef: binding.acceptanceTargetRef,
+    blockVisualGroupId: binding.blockVisualGroupId,
+    mode: viewRequirement.mode,
+    sourceBoundsMeters,
+    structuralProjection: Object.freeze({ outcome }),
+  });
   const center = new Vector3(
     (minimum[0] + maximum[0]) / 2,
     (minimum[1] + maximum[1]) / 2,
@@ -417,14 +448,10 @@ function projectGroup(
     fail("PROJECTION", `${binding.blockVisualGroupId} center depth is non-finite`);
   }
   if (
-    input.camera.mode !== Camera.PERSPECTIVE_CAMERA &&
-    sourceCenterDepthMeters <= input.camera.minZ
-  ) {
-    fail("PROJECTION", `${binding.blockVisualGroupId} center is behind the near plane`);
-  }
-  if (sourceCenterDepthMeters >= farPlaneMeters) {
-    fail("PROJECTION", `${binding.blockVisualGroupId} center is beyond the far plane`);
-  }
+    (input.camera.mode !== Camera.PERSPECTIVE_CAMERA &&
+      sourceCenterDepthMeters <= input.camera.minZ) ||
+    sourceCenterDepthMeters >= farPlaneMeters
+  ) return outside("outside-depth-range");
   const cameraDepthMeters = input.camera.mode === Camera.PERSPECTIVE_CAMERA
     ? Math.max(sourceCenterDepthMeters, input.camera.minZ)
     : sourceCenterDepthMeters;
@@ -453,11 +480,12 @@ function projectGroup(
     fail("PROJECTION", `${binding.blockVisualGroupId} has non-finite camera depth`);
   }
   if (cornerDepthMeters.some((depthMeters) => depthMeters >= farPlaneMeters)) {
-    fail(
-      "PROJECTION",
-      `${binding.blockVisualGroupId} crosses or is beyond the far plane`,
-    );
+    return outside("outside-depth-range");
   }
+  if (
+    input.camera.mode === Camera.PERSPECTIVE_CAMERA &&
+    cornerDepthMeters.every((depthMeters) => depthMeters <= input.camera.minZ)
+  ) return outside("outside-depth-range");
   const projectionPoints = input.camera.mode === Camera.PERSPECTIVE_CAMERA
     ? perspectiveNearClippedPoints(
       corners,
@@ -470,10 +498,7 @@ function projectGroup(
     input.camera.mode !== Camera.PERSPECTIVE_CAMERA &&
     cornerDepthMeters.some((depthMeters) => depthMeters <= input.camera.minZ)
   ) {
-    fail(
-      "PROJECTION",
-      `${binding.blockVisualGroupId} crosses or is behind the near plane`,
-    );
+    return outside("outside-depth-range");
   }
 
   const projected = projectionPoints.map((corner) => {
@@ -506,7 +531,7 @@ function projectGroup(
     projectedMaxY <= viewportMinY ||
     projectedMinY >= viewportMaxY
   ) {
-    fail("PROJECTION", `${binding.blockVisualGroupId} is outside the camera viewport`);
+    return outside("outside-viewport");
   }
 
   const visibleMinX = Math.max(projectedMinX, viewportMinX);
@@ -524,7 +549,7 @@ function projectGroup(
       .every(Number.isFinite) ||
     width <= 0 ||
     height <= 0
-  ) fail("PROJECTION", `${binding.blockVisualGroupId} has zero projected area`);
+  ) return outside("outside-viewport");
 
   const normalizedBounds = Object.freeze({
     minXBasisPoints: Math.max(0, Math.floor(minimumX * 10_000)),
@@ -535,42 +560,38 @@ function projectGroup(
   if (
     normalizedBounds.minXBasisPoints >= normalizedBounds.maxXBasisPoints ||
     normalizedBounds.minYBasisPoints >= normalizedBounds.maxYBasisPoints
-  ) fail("PROJECTION", `${binding.blockVisualGroupId} quantizes to zero area`);
+  ) return outside("outside-viewport");
 
   return Object.freeze({
     acceptanceTargetRef: binding.acceptanceTargetRef,
-    compositionTargetRef: binding.compositionTargetRef,
-    topologyNodeId: binding.topologyNodeId,
-    semanticLayerId: binding.semanticLayerId,
     blockVisualGroupId: binding.blockVisualGroupId,
-    sourceBoundsMeters: Object.freeze({
-      minimumMetersXYZ: Object.freeze([...minimum]) as
-        readonly [number, number, number],
-      maximumMetersXYZ: Object.freeze([...maximum]) as
-        readonly [number, number, number],
-    }),
-    normalizedBounds,
-    normalizedCenter: Object.freeze({
-      xBasisPoints: Math.max(
-        normalizedBounds.minXBasisPoints,
-        Math.min(
-          normalizedBounds.maxXBasisPoints,
-          Math.round(((minimumX + maximumX) / 2) * 10_000),
+    mode: viewRequirement.mode,
+    sourceBoundsMeters,
+    structuralProjection: Object.freeze({
+      outcome: "projected" as const,
+      normalizedBounds,
+      normalizedCenter: Object.freeze({
+        xBasisPoints: Math.max(
+          normalizedBounds.minXBasisPoints,
+          Math.min(
+            normalizedBounds.maxXBasisPoints,
+            Math.round(((minimumX + maximumX) / 2) * 10_000),
+          ),
         ),
-      ),
-      yBasisPoints: Math.max(
-        normalizedBounds.minYBasisPoints,
-        Math.min(
-          normalizedBounds.maxYBasisPoints,
-          Math.round(((minimumY + maximumY) / 2) * 10_000),
+        yBasisPoints: Math.max(
+          normalizedBounds.minYBasisPoints,
+          Math.min(
+            normalizedBounds.maxYBasisPoints,
+            Math.round(((minimumY + maximumY) / 2) * 10_000),
+          ),
         ),
+      }),
+      coverageBasisPoints: Math.max(
+        1,
+        Math.min(10_000, Math.floor(width * height * 10_000)),
       ),
+      cameraDepthMeters,
     }),
-    coverageBasisPoints: Math.max(
-      1,
-      Math.min(10_000, Math.floor(width * height * 10_000)),
-    ),
-    cameraDepthMeters,
   });
 }
 
@@ -623,7 +644,8 @@ export function measureFormalWorldCaptureViewV1(
       binding.layoutInventoryHash !==
         input.materializerMetadata.checkedLayoutInventoryHash ||
       binding.contributionHash !== input.materializerMetadata.contributionHash ||
-      !binding.requiredWorldViewIds.includes(input.view.viewId)
+      binding.viewRequirements.find(({ viewId }) =>
+        viewId === input.view.viewId) === undefined
     ) fail("PACKAGE_BINDING", `${binding.blockVisualGroupId} identity does not match the Package`);
   }
 
@@ -641,24 +663,38 @@ export function measureFormalWorldCaptureViewV1(
       pose.forward,
       pose.transform,
     ));
+  const projectedWithoutOrder = measuredWithoutOrder.filter((measurement) =>
+    measurement.structuralProjection.outcome === "projected");
   const depthRankByTargetRef = new Map(
-    [...measuredWithoutOrder]
+    [...projectedWithoutOrder]
       .sort((left, right) =>
-        left.cameraDepthMeters - right.cameraDepthMeters ||
+        (left.structuralProjection.outcome === "projected" &&
+            right.structuralProjection.outcome === "projected"
+          ? left.structuralProjection.cameraDepthMeters -
+            right.structuralProjection.cameraDepthMeters
+          : 0) ||
         stableCompare(left.acceptanceTargetRef, right.acceptanceTargetRef))
       .map((measurement, depthOrder) =>
         [measurement.acceptanceTargetRef, depthOrder] as const),
   );
-  const visualGroups = measuredWithoutOrder
-    .map((measurement) => Object.freeze({
-      ...measurement,
-      depthOrder: depthRankByTargetRef.get(measurement.acceptanceTargetRef)!,
-    }))
+  const targets = measuredWithoutOrder
+    .map((measurement): FormalSemanticTargetViewObservationV1 => {
+      if (measurement.structuralProjection.outcome !== "projected") {
+        return Object.freeze(measurement) as FormalSemanticTargetViewObservationV1;
+      }
+      return Object.freeze({
+        ...measurement,
+        structuralProjection: Object.freeze({
+          ...measurement.structuralProjection,
+          depthOrder: depthRankByTargetRef.get(measurement.acceptanceTargetRef)!,
+        }),
+      });
+    })
     .sort((left, right) =>
       stableCompare(left.acceptanceTargetRef, right.acceptanceTargetRef));
 
   return Object.freeze({
     viewId: input.view.viewId,
-    visualGroups: Object.freeze(visualGroups),
+    targets: Object.freeze(targets),
   });
 }

@@ -51,6 +51,7 @@ const {
   hashFormalOpeningObservationV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSemanticCaptureMapV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureReceiptV1,
   hashFormalWorldCaptureRequestV1,
@@ -58,6 +59,7 @@ const {
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSemanticCaptureMapV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureRequestV1,
@@ -223,6 +225,14 @@ async function writeNativeProductionFixture(
   const supportingPngHash = `sha256:${createHash("sha256")
     .update(VALID_EMPTY_OPENING_PNG)
     .digest("hex")}`;
+  const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1({
+    ...sourceCapture.semanticViewObservationSet,
+    ...observationIdentity,
+    views: sourceCapture.semanticViewObservationSet.views.map((view) => ({
+      ...view,
+      pngContentHash: view.viewId === "opening" ? openingPngHash : supportingPngHash,
+    })),
+  });
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     ...sourceCapture.captureReceipt,
     formalRequestRef: formalRequest.formalRequestRef,
@@ -244,6 +254,8 @@ async function writeNativeProductionFixture(
     })),
     openingObservationContentHash:
       hashFormalOpeningObservationV1(openingObservation),
+    semanticViewObservationSetContentHash:
+      hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
     spawnSupportObservationContentHash:
       hashFormalSpawnSupportObservationV1(spawnSupportObservation),
     colliderOverlayPngContentHash: supportingPngHash,
@@ -339,6 +351,10 @@ async function writeNativeProductionFixture(
     writeFile(
       path.join(attemptRoot, "capture", "opening-observation.json"),
       canonicalJson(openingObservation),
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "semantic-view-observation-set.json"),
+      canonicalJson(semanticViewObservationSet),
     ),
     writeFile(
       path.join(attemptRoot, "capture", "spawn-support-observation.json"),
@@ -441,6 +457,10 @@ async function writeNativeProductionFixture(
     writeFile(
       path.join(finalRoot, "capture", "opening-observation.json"),
       canonicalJson(openingObservation),
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "semantic-view-observation-set.json"),
+      canonicalJson(semanticViewObservationSet),
     ),
     writeFile(
       path.join(finalRoot, "capture", "spawn-support-observation.json"),
@@ -1015,6 +1035,7 @@ async function mutateNativeFinalEvidence(finalRoot, mutation) {
   }
   const observationFileByMutation = {
     "opening-observation": "opening-observation.json",
+    "semantic-view-observation-set": "semantic-view-observation-set.json",
     "spawn-observation": "spawn-support-observation.json",
     "collider-observation": "collider-overlay-observation.json",
     "traversal-observation": "scripted-traversal.json",
@@ -1034,6 +1055,7 @@ for (const mutation of [
   "package-bytes",
   "opening-png",
   "opening-observation",
+  "semantic-view-observation-set",
   "world-side-png",
   "collider-overlay-png",
   "spawn-observation",
@@ -1093,6 +1115,7 @@ for (const mutation of [
   "package-bytes",
   "opening-png",
   "opening-observation",
+  "semantic-view-observation-set",
   "world-side-png",
   "capture-directory-symlink",
 ]) {

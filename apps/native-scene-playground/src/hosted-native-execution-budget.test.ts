@@ -45,7 +45,7 @@ describe("Hosted Native execution budget", () => {
           maximumTextureBytes: 64_000_000,
         },
         runtime: {
-          maximumSceneNodeCount: 4_096,
+          maximumSceneNodeCount: 16_384,
           maximumMaterialCount: 512,
           maximumShaderCount: 512,
           maximumPhysicsBodyCount: 257,
@@ -53,7 +53,7 @@ describe("Hosted Native execution budget", () => {
         process: {
           maximumWallTimeMilliseconds: 120_000,
           maximumCpuTimeMilliseconds: 120_000,
-          maximumMemoryBytes: 1_000_000_000,
+          maximumMemoryBytes: 2_000_000_000,
           maximumProcessCount: 1,
         },
         protocol,

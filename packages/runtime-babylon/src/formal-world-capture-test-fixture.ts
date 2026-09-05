@@ -46,10 +46,10 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
       semanticClassId: "fixture.structure",
       identityColor: "#AABBCC",
       projectedBoundsSource: "checked-layout-visual-group",
-      requiredWorldViewIds: [
-        "opening",
-        "world-side",
-        "world-top-down",
+      viewRequirements: [
+        { viewId: "opening", mode: "reference-projection-required" },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
       ],
       authoringManifestHash: hash("b"),
       layoutInventoryHash: hash("c"),
@@ -63,10 +63,10 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
       semanticClassId: "fixture.structure.upper",
       identityColor: "#DDEEFF",
       projectedBoundsSource: "checked-layout-visual-group",
-      requiredWorldViewIds: [
-        "opening",
-        "world-side",
-        "world-top-down",
+      viewRequirements: [
+        { viewId: "opening", mode: "not-required" },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
       ],
       authoringManifestHash: hash("b"),
       layoutInventoryHash: hash("c"),

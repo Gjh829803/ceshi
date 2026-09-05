@@ -101,8 +101,19 @@ const caseValue = () => ({
     semanticSilhouetteTargets: [{
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       visualGroupId: "central-ascent-group",
-      normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
-      normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 }, coverageBasisPoints: 2_400,
+      viewRequirements: [{
+        viewId: "opening",
+        mode: "reference-projection-required",
+        normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+        normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        coverageBasisPoints: 2_400,
+      }, {
+        viewId: "world-side",
+        mode: "presence-required",
+      }, {
+        viewId: "world-top-down",
+        mode: "presence-required",
+      }],
     }],
     openingComposition: {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
@@ -188,7 +199,26 @@ const evidenceValue = () => ({
     { dimensionId: "critical-traversal", evidenceRefs: ["artifact://case/cloud-temple/evidence/critical-traversal.json"], observed: { kind: "critical-traversal-observed", checks: [{ id: "reach-junction", outcome: "reached", checkpointIds: ["junction", "spawn"] }] } },
     { dimensionId: "deterministic-build", evidenceRefs: ["artifact://case/cloud-temple/evidence/deterministic-build.json"], observed: { kind: "deterministic-build-observed", candidateReplayOutcome: "completed", worldPackageIdentityMatches: true, buildIdentityMatches: true, captureIdentityMatches: true } },
     { dimensionId: "opening-composition", evidenceRefs: ["artifact://case/cloud-temple/evidence/opening-composition.json"], observed: { kind: "opening-composition-observed", regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"], distances: [] } },
-    { dimensionId: "semantic-silhouette", evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"], observed: { kind: "semantic-silhouette-observed", targets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", visualGroupId: "central-ascent-group", isSemanticTargetPresent: true, normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 }, normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 }, coverageBasisPoints: 2_400 }] } },
+    {
+      dimensionId: "semantic-silhouette",
+      evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
+      observed: {
+        kind: "semantic-silhouette-observed",
+        views: ["opening", "world-side", "world-top-down"].map((viewId) => ({
+          viewId,
+          targets: [{
+            acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+            visualGroupId: "central-ascent-group",
+            structuralProjection: {
+              outcome: "projected",
+              normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+              normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+              coverageBasisPoints: 2_400,
+            },
+          }],
+        })),
+      },
+    },
     { dimensionId: "spawn-support", evidenceRefs: ["artifact://case/cloud-temple/evidence/spawn-support.json"], observed: { kind: "spawn-support-observed", spawnMarkerId: "player-spawn", supportColliderId: "spawn-ground", medium: "ground", positionXYZMeters: { xMeters: 0, yMeters: 1, zMeters: 0 }, supportGapMillimeters: 0 } },
     { dimensionId: "topology", evidenceRefs: ["artifact://case/cloud-temple/evidence/topology.json"], observed: { kind: "topology-observed", nodeIds: ["central-ascent", "upper-t-junction"], relations: [{ fromNodeId: "central-ascent", relation: "connects-to", toNodeId: "upper-t-junction" }], layerIds: ["ground", "upper"] } },
   ],
@@ -437,6 +467,67 @@ describe("world reconstruction contracts", () => {
     });
   });
 
+  it("admits an exact empty Opening subset while retaining non-Opening target identity", () => {
+    const caseDraft = caseValue();
+    Reflect.set(
+      caseDraft.expected.semanticSilhouetteTargets[0]!,
+      "viewRequirements",
+      [{ viewId: "opening", mode: "not-required" }, {
+        viewId: "world-side",
+        mode: "presence-required",
+      }, {
+        viewId: "world-top-down",
+        mode: "presence-required",
+      }],
+    );
+    for (const field of [
+      "targetRefs",
+      "regions",
+      "anchors",
+      "orderedTargetRefs",
+    ] as const) {
+      Reflect.set(caseDraft.expected.openingComposition, field, []);
+    }
+    caseDraft.requiredEvidenceProfileRefs = DIMENSIONS.map(
+      (dimensionId) => `worldkit://evidence-profile/${dimensionId}@1`,
+    );
+    const reconstructionCase = parseWorldReconstructionCaseV1(caseDraft);
+
+    const profileDraft = profileValue();
+    profileDraft.thresholds.openingComposition.regions = [];
+    profileDraft.thresholds.openingComposition.anchors = [];
+    const profile = parseWorldReconstructionEvaluationProfileV1(profileDraft);
+
+    const evidenceDraft = evidenceValue();
+    const openingRow = evidenceDraft.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    );
+    if (openingRow?.observed.kind !== "opening-composition-observed") {
+      throw new Error("opening fixture missing");
+    }
+    openingRow.observed.regions = [];
+    openingRow.observed.anchors = [];
+    openingRow.observed.orderedTargetRefs = [];
+    openingRow.observed.distances = [];
+    const evidence = parseWorldReconstructionEvidenceSetV1(evidenceDraft);
+
+    expect(reconstructionCase.expected.openingComposition.targetRefs).toEqual([]);
+    expect(profile.thresholds.openingComposition.regions).toEqual([]);
+    expect(worldReconstructionEvidenceProfileClosureMatchesV1(
+      reconstructionCase,
+      profile,
+    )).toBe(true);
+    expect(evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    )?.observed).toMatchObject({
+      kind: "opening-composition-observed",
+      regions: [],
+      anchors: [],
+      orderedTargetRefs: [],
+      distances: [],
+    });
+  });
+
   it("parses, freezes, canonicalizes, and hashes a closed Case", () => {
     const parsed = parseWorldReconstructionCaseV1(caseValue());
     expect(Object.isFrozen(parsed)).toBe(true);
@@ -597,6 +688,12 @@ describe("world reconstruction contracts", () => {
       referenceInputs: [],
     });
     expect(parsed.referenceInputs).toEqual([]);
+  });
+
+  it("preserves a WebP reference without changing its bytes hash or media type", () => {
+    const input = caseValue();
+    input.referenceInputs[0] = { inputRef: "reference-0.webp", contentHash: H("b"), mediaType: "image/webp" };
+    expect(parseWorldReconstructionCaseV1(input).referenceInputs).toEqual(input.referenceInputs);
   });
 
   it("requires traversal expectations to bind matching Collider roles", () => {
@@ -1428,7 +1525,7 @@ describe("world reconstruction contracts", () => {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       targetRef: "worldkit://acceptance-target/central-ascent@1",
       targetId: "central-ascent-group",
-      metricId: "semantic-center-x-basis-points",
+      metricId: "opening-semantic-center-x-basis-points",
       details: {
         kind: "basis-points-threshold",
         expectedBasisPoints: 300,
@@ -1448,7 +1545,7 @@ describe("world reconstruction contracts", () => {
       },
     } as const;
     expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
-      "semantic-center-x-basis-points",
+      "opening-semantic-center-x-basis-points",
     );
     expect(() => parseWorldReconstructionDiagnosticV1({
       ...semanticCenterDiagnostic,

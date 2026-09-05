@@ -10,7 +10,7 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
-import { hashBabylonNativeSceneContributionV1 } from "@whitebox-world/runtime-contracts";
+import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import {
   hashWorldReconstructionEvaluationProfileV1,
@@ -18,11 +18,12 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
+import { createProductionWorldReconstructionRunPortsV1, type ProductionWorldReconstructionRunPortOwnersV1 } from "./production-run-ports.js";
 import {
   assertProductionNativeBlockGroundTopologyCompatibleV1,
 } from
@@ -438,7 +439,7 @@ async function completedAttempt(options: Readonly<{
   });
   const runDirectoryPath = path.join(caseRoot, "runs", "test");
   await mkdir(path.dirname(runDirectoryPath), { recursive: true });
-  const prepared = await prepareNativeBlockGenerationTaskV1({
+  const generationInput = {
     case: reconstructionCase,
     profile,
     routeDecision,
@@ -469,7 +470,8 @@ async function completedAttempt(options: Readonly<{
       maximumOutputBytes: 4_000_000,
       timeoutSeconds: 30,
     },
-  });
+  } satisfies Parameters<typeof prepareNativeBlockGenerationTaskV1>[0];
+  const prepared = await prepareNativeBlockGenerationTaskV1(generationInput);
   await Promise.all([
     writeFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), sceneSource),
     writeFile(
@@ -534,7 +536,7 @@ async function completedAttempt(options: Readonly<{
       async run() {
         return {
           exitCode: 0,
-          stdout: `WORLDKIT_LOCAL_CODEX_JOB native-block-generation ${prepared.routerRequestId} pid=123 profile=formal model=gpt-5.6-sol reasoning=xhigh\n`,
+          stdout: `WORLDKIT_LOCAL_CODEX_JOB coding-agent ${prepared.routerRequestId} pid=123 profile=formal model=gpt-5.6-sol reasoning=xhigh\n`,
           stderr: "",
           taskOutcome: {
             kind: "worldkit-codex-task-outcome" as const,
@@ -561,6 +563,10 @@ async function completedAttempt(options: Readonly<{
   return {
     root,
     casePath,
+    generationInput,
+    prepared,
+    reconstructionCase,
+    profile,
     attemptDirectoryPath,
     outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
   };
@@ -687,6 +693,70 @@ describe("packageNativeBlockAttemptV1", () => {
       ],
     }));
   });
+
+  it("restores original owner receipts when generation completed before the Host checkpoint commit", async () => {
+    const fixture = await completedAttempt({ omitAdvisory: true });
+    // The reconstruction runner normally creates the advisory directory. No rendering is
+    // needed to exercise the generation receipt/checkpoint crash boundary.
+    await mkdir(path.join(fixture.attemptDirectoryPath, "advisory"));
+    const forbidden = vi.fn(async () => { throw new Error("UNEXPECTED_OWNER_REEXECUTION"); });
+    const owners: ProductionWorldReconstructionRunPortOwnersV1 = {
+      prepareGeneration: forbidden, runGeneration: forbidden, runSelfCheck: forbidden,
+      packageAttempt: forbidden, materializeCaptureRequest: forbidden,
+      capturePackage: forbidden, evaluateAttempt: forbidden, reconcileGeneration: forbidden,
+      createProcessPort: vi.fn(() => { throw new Error("UNEXPECTED_PROCESS"); }),
+      resolveFrozenOwnerIdentities: vi.fn(() => { throw new Error("UNEXPECTED_OWNER_RESOLUTION"); }),
+    };
+    const formalCaptureIntent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
+      path.dirname(fixture.casePath), "inputs/formal-world-capture-intent.json"), "utf8")));
+    const input = { executionPurpose: "production" as const, hostRecoveryIndex: 1,
+      repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
+      caseRef: `artifact://world-reconstruction-case/${fixture.reconstructionCase.id}/case.json`,
+      evaluationProfilePath: path.join(path.dirname(fixture.casePath), "evaluation-profile.json"),
+      reconstructionCase: fixture.reconstructionCase, evaluationProfile: fixture.profile,
+      generationInput: fixture.generationInput, formalCaptureIntent };
+    const stageInput = { attemptIndex: 0 as const, backend: "local" as const, runId: "test",
+      requestId: fixture.prepared.routerRequestId, frozenOwnerIdentities: fixture.prepared.frozenOwnerIdentities };
+    const receiptBefore = await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"));
+    const ports = await createProductionWorldReconstructionRunPortsV1(input, owners);
+    // A lost Host checkpoint does not allow stale owner bytes to become a new baseline.
+    for (const relativePath of ["source/scene.ts", "context/case.json"]) {
+      const target = path.join(fixture.attemptDirectoryPath, relativePath);
+      const original = await readFile(target);
+      await writeFile(target, "changed-after-generation");
+      await expect(ports.restoreGenerated!(stageInput)).rejects.toThrow("HOST_CHECKPOINT_INVALID");
+      await writeFile(target, original);
+    }
+    await expect(ports.restoreGenerated!({ ...stageInput, requestId: "foreign-request" }))
+      .rejects.toThrow("HOST_CHECKPOINT_INVALID");
+    await expect(ports.restoreGenerated!({ ...stageInput, frozenOwnerIdentities: {
+      ...stageInput.frozenOwnerIdentities, caseHash: `sha256:${"f".repeat(64)}`,
+    } })).rejects.toThrow("HOST_CHECKPOINT_INVALID");
+    const generated = await ports.restoreGenerated!(stageInput);
+    expect(generated).toMatchObject({ outcome: "completed", requestId: fixture.prepared.routerRequestId,
+      requestHash: fixture.prepared.routerTaskPayloadHash });
+    const restarted = await createProductionWorldReconstructionRunPortsV1({ ...input, hostRecoveryIndex: 2 }, owners);
+    expect(await restarted.restoreGenerated!(stageInput)).toEqual(generated);
+    expect(forbidden).not.toHaveBeenCalled();
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"))).toEqual(receiptBefore);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "host-checkpoints/generate.json"), "utf8"))
+      .toContain(fixture.prepared.routerRequestId);
+  }, 30_000);
+
+  it("packages the original generated Attempt into a recovery epoch without overwriting the failed check", async () => {
+    const fixture = await completedAttempt();
+    const originalReceipt = await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"));
+    const originalSource = await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"));
+    await writeFile(path.join(fixture.attemptDirectoryPath, "native-check-result.json"), "historical-failure");
+    const outputDirectoryPath = path.join(fixture.attemptDirectoryPath, "host-recoveries/1/world-package");
+    const result = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath, casePath: fixture.casePath, outputDirectoryPath });
+    expect(result.outcome).toBe("completed");
+    expect(result.groundAnalysisReportPath).toBe(path.join(path.dirname(outputDirectoryPath), "ground-analysis-report.json"));
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "native-check-result.json"), "utf8")).toBe("historical-failure");
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"))).toEqual(originalReceipt);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"))).toEqual(originalSource);
+  }, 60_000);
 
   it("checks and binds the generated Layout before atomically publishing one verified Package", async () => {
     const fixture = await completedAttempt();

@@ -12,11 +12,19 @@ import type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-re
 export const WORLD_RECONSTRUCTION_JOURNAL_STATES_V1 = Object.freeze([
   "created", "initial-generating", "initial-packaged", "initial-captured",
   "initial-evaluated", "repair-generating", "repair-packaged", "repair-captured",
-  "repair-evaluated", "cleanup-joined", "completed",
+  "repair-evaluated", "cleanup-joined", "completed", "host-recovering", "publication-recovering",
 ] as const);
 
 export type WorldReconstructionJournalStateV1 = (typeof WORLD_RECONSTRUCTION_JOURNAL_STATES_V1)[number];
 export type WorldReconstructionCleanupOwnerOutcomeV1 = "completed" | "failed" | "pending";
+export type WorldReconstructionExecutionPurposeV1 = "production" | "strict-acceptance";
+
+export function parseWorldReconstructionExecutionPurposeV1(value: unknown): WorldReconstructionExecutionPurposeV1 {
+  if (value !== "production" && value !== "strict-acceptance") {
+    throw new TypeError("WORLD_RECONSTRUCTION_EXECUTION_PURPOSE_INVALID");
+  }
+  return value;
+}
 
 export interface WorldReconstructionCleanupOutcomesV1 {
   readonly providerTask: WorldReconstructionCleanupOwnerOutcomeV1;
@@ -28,6 +36,7 @@ export interface WorldReconstructionCleanupOutcomesV1 {
 }
 
 export interface WorldReconstructionJournalRowV1 {
+  readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly kind: "world-reconstruction-journal-row";
   readonly schemaVersion: 1;
   readonly sequence: number;
@@ -46,6 +55,7 @@ export interface WorldReconstructionJournalRowV1 {
 }
 
 export interface CreateWorldReconstructionRunJournalInputV1 {
+  readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly runId: string;
   readonly caseRef: string;
   readonly evaluationProfileRef: string;
@@ -85,6 +95,8 @@ const NEXT_STATES = Object.freeze({
   ] as const),
   "cleanup-joined": Object.freeze(["completed"] as const),
   completed: Object.freeze([] as const),
+  "host-recovering": Object.freeze(["initial-generating", "cleanup-joined"] as const),
+  "publication-recovering": Object.freeze(["completed"] as const),
 }) satisfies Readonly<Record<WorldReconstructionJournalStateV1, readonly WorldReconstructionJournalStateV1[]>>;
 
 const STALE_FIELD_CODES = Object.freeze({
@@ -97,7 +109,7 @@ const STALE_FIELD_CODES = Object.freeze({
 } as const);
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CLEANUP_KEYS = ["providerTask", "candidate", "hostedBrowserSession", "viteServer", "temporaryDirectories", "outputPromotion"] as const;
-const REQUIRED_ROW_KEYS = ["kind", "schemaVersion", "sequence", "runId", "caseRef", "evaluationProfileRef", "state", "boundary", "operation", "frozenOwnerIdentities", "diagnosticCodes"] as const;
+const REQUIRED_ROW_KEYS = ["kind", "schemaVersion", "sequence", "runId", "executionPurpose", "caseRef", "evaluationProfileRef", "state", "boundary", "operation", "frozenOwnerIdentities", "diagnosticCodes"] as const;
 const OPTIONAL_ROW_KEYS = ["attemptIndex", "requestId", "requestHash", "cleanupOutcomes"] as const;
 
 function fail(code: string, detail = ""): never {
@@ -143,6 +155,7 @@ function parseRow(input: unknown, sequence: number): WorldReconstructionJournalR
   ) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "row values");
   const row = {
     ...input,
+    executionPurpose: parseWorldReconstructionExecutionPurposeV1(input.executionPurpose),
     frozenOwnerIdentities: parseOwnerIdentities(input.frozenOwnerIdentities),
     diagnosticCodes: Object.freeze([...(input.diagnosticCodes as string[])]),
     ...(input.cleanupOutcomes === undefined ? {} : { cleanupOutcomes: parseCleanup(input.cleanupOutcomes) }),
@@ -150,6 +163,9 @@ function parseRow(input: unknown, sequence: number): WorldReconstructionJournalR
   return Object.freeze(row);
 }
 function validateTransition(rows: readonly WorldReconstructionJournalRowV1[], row: WorldReconstructionJournalRowV1): void {
+  if (row.executionPurpose === "production" && row.attemptIndex !== undefined && row.attemptIndex !== 0) {
+    fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", "ordinary production cannot allocate an external repair Attempt");
+  }
   if (row.sequence === 0) {
     if (row.state !== "created" || row.boundary !== "after" || row.operation !== "created" || row.attemptIndex !== undefined) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "created row");
     return;
@@ -163,6 +179,23 @@ function validateTransition(rows: readonly WorldReconstructionJournalRowV1[], ro
     (!isInitialState && !isRepairState && row.attemptIndex !== undefined)
   ) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "attempt identity");
   const last = rows.at(-1);
+  if (row.state === "publication-recovering" && row.boundary === "before") {
+    if (row.executionPurpose !== "production" || row.operation !== "resume-publication-only" ||
+      last?.state !== "completed" || last.boundary !== "after") fail("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+    return;
+  }
+  if (row.state === "host-recovering") {
+    const generated = rows.find((prior) => prior.state === "initial-generating" && prior.requestId === row.requestId);
+    if (row.executionPurpose !== "production" || row.operation !== "resume-host-only" || !generated ||
+      row.attemptIndex !== undefined || row.requestId === undefined || row.requestHash === undefined ||
+      (generated.requestHash !== undefined && generated.requestHash !== row.requestHash) ||
+      (row.boundary === "before" ? last?.state !== "cleanup-joined" || last.boundary !== "after" ||
+        last.cleanupOutcomes === undefined || cleanupOwners(last.cleanupOutcomes).some((outcome) => outcome !== "completed") :
+        last?.state !== "host-recovering" || last.boundary !== "before")) {
+      fail("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+    }
+    return;
+  }
   const current = rows.filter((candidate) => candidate.boundary === "after").at(-1)?.state;
   if (isNil(last) || isNil(current)) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "missing predecessor");
   if (row.boundary === "before") {
@@ -219,6 +252,9 @@ export interface WorldReconstructionRunJournalV1 {
   states(): readonly WorldReconstructionJournalStateV1[];
   currentState(): WorldReconstructionJournalStateV1;
   beginAttempt(attemptIndex: WorldReconstructionAttemptIndexV1): void;
+  beginHostRecovery(request: Readonly<{ requestId: string; requestHash: Sha256HashV1 }>): Promise<void>;
+  /** Caller has verified the original published Run Receipt; no stage work is replayed. */
+  completePublishedReceiptBoundaries(): Promise<void>;
   recordBoundary(input: Readonly<{ state: WorldReconstructionJournalStateV1; boundary: "before" | "after"; operation: string; attemptIndex?: WorldReconstructionAttemptIndexV1; diagnosticCodes?: readonly string[]; requestId?: string; requestHash?: Sha256HashV1; cleanupOutcomes?: WorldReconstructionCleanupOutcomesV1 }>): Promise<WorldReconstructionJournalRowV1>;
   attachOrRejectRequest(requestId: string, requestHash: Sha256HashV1): "accepted" | "attached";
   recordedRequest(requestId: string): WorldReconstructionRecordedRequestV1 | undefined;
@@ -230,6 +266,7 @@ export interface WorldReconstructionRunJournalV1 {
 }
 
 export async function createWorldReconstructionRunJournalV1(input: CreateWorldReconstructionRunJournalInputV1): Promise<WorldReconstructionRunJournalV1> {
+  const executionPurpose = parseWorldReconstructionExecutionPurposeV1(input.executionPurpose);
   await mkdir(input.outputDirectoryPath, { recursive: true, mode: 0o700 });
   const metadata = await lstat(input.outputDirectoryPath);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) fail("WORLD_RECONSTRUCTION_JOURNAL_PATH_UNSAFE");
@@ -239,7 +276,7 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
   const begunAttempts = new Set<number>();
   let cleanup: WorldReconstructionCleanupOutcomesV1 | undefined;
   for (const row of rows) {
-    if (row.runId !== input.runId || row.caseRef !== input.caseRef || row.evaluationProfileRef !== input.evaluationProfileRef || !isEqual(row.frozenOwnerIdentities, input.frozenOwnerIdentities)) fail("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
+    if (row.executionPurpose !== executionPurpose || row.runId !== input.runId || row.caseRef !== input.caseRef || row.evaluationProfileRef !== input.evaluationProfileRef || !isEqual(row.frozenOwnerIdentities, input.frozenOwnerIdentities)) fail("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
     if (
       row.attemptIndex !== undefined &&
       !begunAttempts.has(row.attemptIndex)
@@ -264,9 +301,10 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
     const handle = await open(journalPath, constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW);
     try { await handle.writeFile(`${stringifyCanonicalJson(row)}\n`, "utf8"); await handle.sync(); } finally { await handle.close(); }
   };
-  const appendRow = async (rowInput: Omit<WorldReconstructionJournalRowV1, "kind" | "schemaVersion" | "sequence" | "runId" | "caseRef" | "evaluationProfileRef" | "frozenOwnerIdentities" | "diagnosticCodes"> & { readonly diagnosticCodes?: readonly string[] }): Promise<WorldReconstructionJournalRowV1> => {
+  const appendRow = async (rowInput: Omit<WorldReconstructionJournalRowV1, "kind" | "schemaVersion" | "sequence" | "runId" | "executionPurpose" | "caseRef" | "evaluationProfileRef" | "frozenOwnerIdentities" | "diagnosticCodes"> & { readonly diagnosticCodes?: readonly string[] }): Promise<WorldReconstructionJournalRowV1> => {
     const row = Object.freeze({
       kind: "world-reconstruction-journal-row" as const, schemaVersion: 1 as const, sequence: rows.length,
+      executionPurpose,
       runId: input.runId, caseRef: input.caseRef, evaluationProfileRef: input.evaluationProfileRef, ...rowInput,
       frozenOwnerIdentities: Object.freeze({ ...input.frozenOwnerIdentities }), diagnosticCodes: Object.freeze([...(rowInput.diagnosticCodes ?? [])]),
     });
@@ -281,11 +319,41 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
     id: `world-reconstruction-journal:${input.runId}`, runId: input.runId, outputDirectoryPath: input.outputDirectoryPath,
     frozenOwnerIdentities: Object.freeze({ ...input.frozenOwnerIdentities }), rows: () => Object.freeze([...rows]),
     states: () => Object.freeze(rows.filter((row) => row.boundary === "after").map((row) => row.state)), currentState: currentAfterState,
+    beginHostRecovery: async (request) => {
+      await appendRow({ state: "host-recovering", boundary: "before", operation: "resume-host-only", ...request });
+      await appendRow({ state: "host-recovering", boundary: "after", operation: "resume-host-only", ...request });
+      cleanup = undefined;
+    },
+    completePublishedReceiptBoundaries: async () => {
+      if (executionPurpose !== "production" || cleanup === undefined ||
+        cleanupOwners(cleanup).some((outcome) => outcome !== "completed")) {
+        fail("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID", "published receipt needs joined cleanup");
+      }
+      let last = rows.at(-1)!;
+      if (last.state === "publication-recovering") {
+        if (last.boundary === "before") await appendRow({ state: last.state, boundary: "after",
+          operation: last.operation, diagnosticCodes: ["WORLD_RECONSTRUCTION_PUBLICATION_INTERRUPTED"] });
+        await appendRow({ state: "completed", boundary: "before", operation: "resume-publication-completed" });
+        last = rows.at(-1)!;
+      }
+      if (last.state === "cleanup-joined" && last.boundary === "after") {
+        await appendRow({ state: "completed", boundary: "before", operation: "completed" });
+        last = rows.at(-1)!;
+      }
+      if (last.state !== "completed") fail("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID", "incomplete stage before published receipt");
+      if (last.boundary === "before") await appendRow({ state: "completed", boundary: "after", operation: last.operation });
+    },
     beginAttempt: (attemptIndex: WorldReconstructionAttemptIndexV1) => {
+      if (executionPurpose === "production" && attemptIndex !== 0) {
+        fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", "ordinary production cannot allocate an external repair Attempt");
+      }
       if (attemptIndex < 0 || attemptIndex > 3) {
         fail("WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED");
       }
-      if (begunAttempts.has(attemptIndex)) fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", `attempt ${attemptIndex} already begun`);
+      if (begunAttempts.has(attemptIndex)) {
+        if (attemptIndex === 0 && currentAfterState() === "host-recovering") return;
+        fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", `attempt ${attemptIndex} already begun`);
+      }
       if (attemptIndex !== begunAttempts.size) {
         fail(
           "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",

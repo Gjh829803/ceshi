@@ -41,6 +41,7 @@ import {
   type WorldReconstructionCleanupOutcomesV1,
   type WorldReconstructionJournalStateV1,
   type WorldReconstructionRunJournalV1,
+  type WorldReconstructionExecutionPurposeV1,
 } from "./run-journal.js";
 
 export type WorldReconstructionGenerateOutcomeV1 =
@@ -180,6 +181,10 @@ export interface WorldReconstructionEvaluatePortResultV1 {
 
 /** Core orchestration contract; concrete composition remains script-local. */
 export interface WorldReconstructionRunPortsV1 {
+  /** Restore/reconcile only: this port must never prepare or submit generation. */
+  readonly restoreGenerated?: (
+    input: WorldReconstructionGeneratePortInputV1,
+  ) => Promise<WorldReconstructionGeneratePortResultV1>;
   readonly generate: (
     input: WorldReconstructionGeneratePortInputV1,
   ) => Promise<WorldReconstructionGeneratePortResultV1>;
@@ -210,6 +215,9 @@ export interface WorldReconstructionRunPortsV1 {
 }
 
 export interface WorldReconstructionRunInputV1 {
+  readonly executionMode?: "fresh" | "resume-host-only";
+  /** Selected by the calling workflow, never inferred from the Case/Profile. */
+  readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly runId: string;
   readonly backend: "cloud" | "local";
   readonly outputDirectoryPath: string;
@@ -354,7 +362,19 @@ const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "host-closure-invalid",
   "input-file-invalid",
   "input-path-escaped",
+  "native-block-ground-evidence-missing",
+  "native-block-subject-visual-review-proxy-stale",
+  "native-block-visual-identity-palette-input-invalid",
+  "native-block-visual-review-input-stale",
+  "native-block-visual-review-layout-mismatch",
+  "native-block-visual-review-output-budget-exceeded",
+  "native-block-visual-review-output-missing",
+  "native-block-visual-review-png-invalid",
+  "native-block-visual-review-renderer-stale",
+  "native-block-visual-review-replay-failed",
+  "native-block-visual-review-rgba-mismatch",
   "native-check-rejected",
+  "native-ground-analysis-rejected",
   "native-package-internal-failed",
   "native-resources-invalid",
   "native-visual-resource-unresolved",
@@ -365,6 +385,7 @@ const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "repository-root-invalid",
   "route-invalid",
   "runtime-invalid",
+  "scene-brief-input-invalid",
   "source-admission-stale",
   "source-bundle-stale",
   "source-directory-invalid",
@@ -375,6 +396,7 @@ const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
 const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   ...BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
   "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+  "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED",
   "FORMAL_CAPTURE_ARTIFACT_BUDGET_INVALID",
   "FORMAL_CAPTURE_JSON_BUDGET_EXCEEDED",
   "FORMAL_CAPTURE_NATIVE_PACKAGE_REQUIRED",
@@ -762,6 +784,7 @@ async function runAttempt(
   journal: WorldReconstructionRunJournalV1,
   ports: WorldReconstructionRunPortsV1,
   repairInstruction: NativeBlockRepairInstructionV1 | undefined,
+  restoredGeneration?: WorldReconstructionGeneratePortResultV1,
 ): Promise<AttemptRecordV1> {
   const stages = STAGE_BY_ATTEMPT[attemptIndex];
   journal.beginAttempt(attemptIndex);
@@ -775,7 +798,7 @@ async function runAttempt(
     attemptIndex,
     requestId,
   });
-  const generate = await ports.generate({
+  const generate = restoredGeneration ?? await ports.generate({
     attemptIndex,
     backend: input.backend,
     runId: input.runId,
@@ -1232,6 +1255,7 @@ export async function runWorldReconstructionV1(
     );
   }
   const journal = await createWorldReconstructionRunJournalV1({
+    executionPurpose: input.executionPurpose,
     runId: input.runId,
     caseRef: input.caseRef,
     evaluationProfileRef: reconstructionCase.evaluationProfileRef,
@@ -1241,8 +1265,24 @@ export async function runWorldReconstructionV1(
 
   try {
     const attempts: AttemptRecordV1[] = [];
+    let restoredGeneration: WorldReconstructionGeneratePortResultV1 | undefined;
+    if (input.executionMode === "resume-host-only") {
+      if (ports.restoreGenerated === undefined || input.executionPurpose !== "production") {
+        throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+      }
+      const requestId = requestIdFor(reconstructionCase, input.runId, 0);
+      restoredGeneration = await ports.restoreGenerated({ attemptIndex: 0, backend: input.backend,
+        runId: input.runId, requestId, frozenOwnerIdentities: input.frozenOwnerIdentities });
+      if (restoredGeneration.outcome !== "completed" || restoredGeneration.requestId !== requestId) {
+        throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_GENERATION_INCOMPLETE");
+      }
+      await journal.beginHostRecovery({ requestId, requestHash: restoredGeneration.requestHash });
+    }
+    const canRepairExternally = input.executionPurpose === "strict-acceptance" &&
+      profile.qualityGateMode === "required-for-publication";
+    const maximumExternalRepairs = canRepairExternally ? profile.maximumRepairAttemptCount : 0;
     let repairInstruction: NativeBlockRepairInstructionV1 | undefined;
-    for (let rawAttemptIndex = 0; rawAttemptIndex <= profile.maximumRepairAttemptCount; rawAttemptIndex += 1) {
+    for (let rawAttemptIndex = 0; rawAttemptIndex <= maximumExternalRepairs; rawAttemptIndex += 1) {
       const attemptIndex = rawAttemptIndex as WorldReconstructionAttemptIndexV1;
       journal.assertOwnerIdentities(await ports.rehashOwnerIdentities());
       const attempt = await runAttempt(
@@ -1252,12 +1292,13 @@ export async function runWorldReconstructionV1(
         journal,
         ports,
         repairInstruction,
+        restoredGeneration,
       );
       attempts.push(attempt);
 
       if (attempt.outcome === "completed") {
         if (
-          profile.qualityGateMode === "report-only" ||
+          !canRepairExternally ||
           attempt.evaluated.outcome === "passed" ||
           !isRepairableWorldReconstructionEvaluationV1(
             attempt.evaluated.evaluation,
@@ -1276,7 +1317,7 @@ export async function runWorldReconstructionV1(
         }
       }
 
-      if (profile.qualityGateMode === "report-only") {
+      if (!canRepairExternally) {
         const stageCodes = attempt.outcome === "capture-rejected"
           ? attempt.captured.diagnosticCodes
           : attempt.packaged.diagnosticCodes;
@@ -1291,7 +1332,7 @@ export async function runWorldReconstructionV1(
         );
       }
 
-      if (attemptIndex >= profile.maximumRepairAttemptCount) {
+      if (attemptIndex >= maximumExternalRepairs) {
         if (attempt.outcome === "completed") {
           return await publishCompletedReceipt(
             input,

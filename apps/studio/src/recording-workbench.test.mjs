@@ -186,8 +186,8 @@ test("locks video, subject, opening-frame, and supplementary tri-view roles in t
   const instruction = buildRecordingPromptInstruction({
     sceneId: "demo-world",
     triViews: [
-      { id: "hero", role: "primary-subject" },
-      { id: "palace", role: "primary-landmark" },
+      { visualTargetId: "hero", role: "primary-subject" },
+      { visualTargetId: "palace", role: "primary-landmark" },
     ],
   });
   assert.match(instruction, /@视频1：浏览器直接录制的真实白膜游玩视频/);
@@ -326,6 +326,16 @@ test("freezes a local Codex backend at enqueue and stores only its local task ma
       path.basename(args[0] ?? "") === "run-codex-task.mjs");
     assert.equal(codexCalls.length, 1);
     assert.equal(codexCalls[0].args[codexCalls[0].args.indexOf("--backend") + 1], "local");
+    const imageAssets = codexCalls[0].args.filter((argument) => /^image-\d+::/.test(argument));
+    assert.equal(imageAssets.length, 3);
+    assert.match(imageAssets[0], /image-1::.*hero\/styled-triview\.png::/);
+    assert.match(imageAssets[1], /image-2::.*styled-opening-frame\.png::/);
+    assert.match(imageAssets[2], /image-3::.*tower\/styled-triview\.png::/);
+    const instructionPath = codexCalls[0].args[codexCalls[0].args.indexOf("--instruction-file") + 1];
+    const instruction = await readFile(instructionPath, "utf8");
+    assert.match(instruction, /@图片1：hero/);
+    assert.match(instruction, /@图片3：tower/);
+    assert.doesNotMatch(instruction, /undefined/);
     assert.equal(ready.prompt.backend, "local");
     assert.equal(ready.prompt.taskId, `prompt-${created.id}`);
     assert.equal(ready.prompt.jobId, null);
@@ -512,6 +522,17 @@ test("persists browser recordings, lists them, generates independently, and serv
     assert.equal(created.recording.workflowStatus, "recorded");
     assert.equal(created.recording.assets.bundleReady, true);
     assert.equal(created.recording.assets.styledTriviews.length, 2);
+    assert.deepEqual(created.recording.assets.styledTriviews.map((target) => ({
+      visualTargetId: target.visualTargetId,
+      hasLegacyId: Object.hasOwn(target, "id"),
+      url: target.url,
+      whiteboxUrl: target.whiteboxUrl,
+    })), ["hero", "tower"].map((visualTargetId) => ({
+      visualTargetId,
+      hasLegacyId: false,
+      url: `/api/worlds/${fixture.sceneId}/styled-triviews/${visualTargetId}`,
+      whiteboxUrl: `/api/worlds/${fixture.sceneId}/triviews/${visualTargetId}`,
+    })));
     assert.ok(created.recording.assets.styledTriviews.every(({ whiteboxUrl }) =>
       typeof whiteboxUrl === "string"));
 

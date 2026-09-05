@@ -15,6 +15,7 @@ import {
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { isEqual } from "lodash-es";
 
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
@@ -52,7 +53,6 @@ import {
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
-  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationRouterRequestIdV1,
   deriveNativeBlockGenerationBootstrapV1,
@@ -60,6 +60,7 @@ import {
   type WorldReconstructionHostRoutePolicyV1,
   type WorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
+import { NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 } from "./native-block-production-budget.js";
 import {
   createProductionWorldReconstructionRunPortsV1,
 } from "./production-run-ports.js";
@@ -68,6 +69,7 @@ import {
   runWorldReconstructionV1,
   type WorldReconstructionRunPortsV1,
 } from "./run.js";
+import { createWorldReconstructionRunJournalV1 } from "./run-journal.js";
 import {
   NativeBlockFinalArtifactPublicationClosedErrorV1,
   publishNativeBlockReconstructionFinalV1,
@@ -94,6 +96,7 @@ const NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export interface WorldReconstructionProductionInputV1 {
+  readonly executionMode?: "fresh" | "resume-host-only";
   readonly repositoryRoot?: string;
   readonly casePath: string;
   readonly outputDirectoryPath: string;
@@ -544,6 +547,7 @@ function createStrictDiagnosticReceipt(input: Readonly<{
 async function publishStrictDiagnosticReceipt(
   outputDirectoryPath: string,
   receipt: WorldReconstructionStrictDiagnosticReceiptV1,
+  executionMode: "fresh" | "resume-host-only",
 ): Promise<Readonly<{
   path: string;
   hash: Sha256HashV1;
@@ -556,6 +560,13 @@ async function publishStrictDiagnosticReceipt(
     `.strict-diagnostic.${randomUUID()}.tmp`,
   );
   if (await lstatOrMissing(outputPath) !== undefined) {
+    if (executionMode === "resume-host-only") {
+      const existing = await readCanonicalRegularFile(outputPath,
+        "WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_INVALID");
+      if (bytesEqual(bytes, existing)) return Object.freeze({
+        path: outputPath, hash: hashWorldReconstructionStrictDiagnosticReceiptV1(parsed),
+      });
+    }
     throw new TypeError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_ALREADY_EXISTS");
   }
   const handle = await open(temporaryPath, "wx", 0o600);
@@ -641,6 +652,27 @@ export async function runWorldReconstructionProductionV1(
   input: WorldReconstructionProductionInputV1,
   owners: WorldReconstructionProductionOwnersV1 = defaultOwners(),
 ): Promise<WorldReconstructionProductionResultV1> {
+  if (input.executionMode !== undefined && input.executionMode !== "fresh" && input.executionMode !== "resume-host-only") {
+    throw new TypeError("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+  }
+  if (input.executionMode !== "resume-host-only") return runProduction(input, owners);
+  const runRoot = await canonicalDirectory(path.resolve(input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT, input.outputDirectoryPath),
+    "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  const caseRoot = path.dirname(path.resolve(input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT, input.casePath));
+  if (path.dirname(runRoot) !== path.join(caseRoot, "runs") || !RUN_ID_PATTERN.test(path.basename(runRoot))) {
+    throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  }
+  const lockPath = path.join(runRoot, ".host-recovery.lock");
+  const lock = await open(lockPath, "wx", 0o600);
+  try { return await runProduction(input, owners); }
+  finally { await lock.close(); await unlink(lockPath); }
+}
+
+async function runProduction(
+  input: WorldReconstructionProductionInputV1,
+  owners: WorldReconstructionProductionOwnersV1,
+): Promise<WorldReconstructionProductionResultV1> {
+  const isHostRecovery = input.executionMode === "resume-host-only";
   const repositoryRoot = await canonicalDirectory(
     input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT,
     "WORLD_RECONSTRUCTION_REPOSITORY_ROOT_INVALID",
@@ -689,7 +721,7 @@ export async function runWorldReconstructionProductionV1(
     runId,
     attemptIndex: 1,
   });
-  if (await lstatOrMissing(outputDirectoryPath) !== undefined) {
+  if (!isHostRecovery && await lstatOrMissing(outputDirectoryPath) !== undefined) {
     throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_ALREADY_EXISTS");
   }
   for (const reservedPath of [
@@ -697,6 +729,7 @@ export async function runWorldReconstructionProductionV1(
     path.join(caseRoot, ".final-staging"),
     path.join(caseRoot, ".final-publish.lock"),
   ]) {
+    if (isHostRecovery && reservedPath === path.join(caseRoot, "final")) continue;
     if (await lstatOrMissing(reservedPath) !== undefined) {
       throw new TypeError("WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
     }
@@ -900,7 +933,7 @@ export async function runWorldReconstructionProductionV1(
   const canonicalProfileBytes =
     worldReconstructionEvaluationProfileCanonicalBytesV1(evaluationProfile);
   try {
-    await freezeInputs({
+    await (isHostRecovery ? assertFrozenInputsUnchanged : freezeInputs)({
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,
@@ -920,8 +953,22 @@ export async function runWorldReconstructionProductionV1(
     "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID",
   );
   let ports: Awaited<ReturnType<typeof owners.createRunPorts>>;
+  let hostRecoveryIndex: number | undefined;
+  if (isHostRecovery) {
+    const journalMetadata = await lstatOrMissing(path.join(outputDirectoryPath, "journal.jsonl"));
+    if (journalMetadata === undefined || !journalMetadata.isFile() || journalMetadata.isSymbolicLink()) {
+      throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+    }
+    // Journal decoding and interrupted-tail recovery belong to the journal owner alone.
+    const journal = await createWorldReconstructionRunJournalV1({ executionPurpose: "production",
+      runId, caseRef, evaluationProfileRef: reconstructionCase.evaluationProfileRef,
+      frozenOwnerIdentities, outputDirectoryPath });
+    hostRecoveryIndex = 1 + journal.rows().filter((row) => row.state === "host-recovering" && row.boundary === "after").length;
+  }
   try {
     ports = await owners.createRunPorts({
+      ...(hostRecoveryIndex === undefined ? {} : { hostRecoveryIndex }),
+      executionPurpose: "production",
       repositoryRoot,
       casePath: requestedCasePath,
       caseRef,
@@ -932,7 +979,7 @@ export async function runWorldReconstructionProductionV1(
       formalCaptureIntent,
     });
   } catch (error) {
-    const cleanupOutcome = await removeFreshRunDirectory(outputDirectoryPath);
+    const cleanupOutcome = isHostRecovery ? "not-started" as const : await removeFreshRunDirectory(outputDirectoryPath);
     return failedProductionResult(resultIdentity, {
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
@@ -941,7 +988,13 @@ export async function runWorldReconstructionProductionV1(
 
   let receipt: WorldReconstructionRunReceiptV1;
   try {
-    receipt = await owners.runCore({
+    const existingReceiptPath = path.join(outputDirectoryPath, "run-receipt.json");
+    receipt = isHostRecovery && await lstatOrMissing(existingReceiptPath) !== undefined
+      ? parseWorldReconstructionRunReceiptV1(parseJson(await readCanonicalRegularFile(existingReceiptPath,
+        "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"), "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"))
+      : await owners.runCore({
+      ...(isHostRecovery ? { executionMode: "resume-host-only" as const } : {}),
+      executionPurpose: "production",
       runId,
       backend: input.backend,
       outputDirectoryPath,
@@ -1098,6 +1151,7 @@ export async function runWorldReconstructionProductionV1(
     strictDiagnosticIdentity = await publishStrictDiagnosticReceipt(
       outputDirectoryPath,
       strictDiagnosticReceipt,
+      isHostRecovery ? "resume-host-only" : "fresh",
     );
   } catch (error) {
     return failedProductionResult(resultIdentity, {
@@ -1150,13 +1204,34 @@ export async function runWorldReconstructionProductionV1(
       "pnpm worldkit native run final/world-package --port 5174 --json",
   });
   let publication: Awaited<ReturnType<typeof owners.publishFinal>>;
+  const existingFinal = isHostRecovery && await lstatOrMissing(path.join(caseRoot, "final")) !== undefined;
+  const publicationJournal = !isHostRecovery ? undefined : await createWorldReconstructionRunJournalV1({
+    executionPurpose: "production", runId, caseRef, evaluationProfileRef: reconstructionCase.evaluationProfileRef,
+    frozenOwnerIdentities, outputDirectoryPath,
+  });
+  await publicationJournal?.completePublishedReceiptBoundaries();
+  if (!existingFinal) await publicationJournal?.recordBoundary({ state: "publication-recovering", boundary: "before", operation: "resume-publication-only" });
+  let publicationDiagnosticCodes: readonly string[] = [];
   try {
-    publication = await owners.publishFinal({
+    if (existingFinal) {
+      const finalDirectoryPath = await canonicalDirectory(path.join(caseRoot, "final"), "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      const existingLaunch = parseJson(await readCanonicalRegularFile(path.join(finalDirectoryPath, "launch.json"),
+        "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS"), "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      if (!isEqual(existingLaunch, launch)) {
+        throw new Error("WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      }
+      await owners.verifyRun({ candidate: { kind: "final", runDirectoryPath: outputDirectoryPath, finalDirectoryPath } });
+      // Project only verified existing publication, without invoking a writer or replacing any Receipt.
+      publication = { outcome: "published", finalDirectoryPath, worldPackageRootHash: terminal.worldPackageRootHash,
+        captureReceiptHash: terminal.captureReceiptHash, evaluationHash: terminal.evaluationResultHash,
+        strictDiagnosticHash: strictDiagnosticIdentity.hash, entryValidationHash };
+    } else publication = await owners.publishFinal({
       caseDirectoryPath: caseRoot,
       runDirectoryPath: outputDirectoryPath,
       launch,
     });
   } catch (error) {
+    publicationDiagnosticCodes = diagnosticCodesFromError(error);
     const cleanupOutcome =
       error instanceof NativeBlockFinalArtifactPublicationClosedErrorV1
         ? error.cleanupOutcome
@@ -1175,6 +1250,14 @@ export async function runWorldReconstructionProductionV1(
       strictDiagnosticCodes,
       strictDiagnosticCleanupOutcome,
     });
+  } finally {
+    if (publicationJournal !== undefined && !existingFinal) {
+      await publicationJournal.recordBoundary({ state: "publication-recovering", boundary: "after", operation: "resume-publication-only",
+        diagnosticCodes: publicationDiagnosticCodes });
+      for (const boundary of ["before", "after"] as const) await publicationJournal.recordBoundary({
+        state: "completed", boundary, operation: "resume-publication-completed", diagnosticCodes: publicationDiagnosticCodes,
+      });
+    }
   }
   const finalDirectoryPath = path.join(caseRoot, "final");
   let publicationJoined = false;

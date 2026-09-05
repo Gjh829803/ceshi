@@ -6,6 +6,25 @@ import {
 } from "./run-world-agent.js";
 
 describe("the single public world-generation entry", () => {
+  it.each(["--plan-only", "--build-only"])("preserves Native %s staging without selecting another pipeline", (flag) => {
+    const request = parseWorldAgentArgumentsV1([
+      "--scene-id", "native-staged", flag,
+      ...(flag === "--plan-only" ? ["reconstruct the palace"] : []),
+    ]);
+    expect(request.mode).toBe(flag === "--plan-only" ? "plan" : "build");
+    expect(resolveWorldAgentInvocationV1(request).arguments).toContain(flag);
+    expect(resolveWorldAgentInvocationV1(request).arguments).toContain("scripts/reconstruction/run-native-world-agent.ts");
+  });
+
+  it("does not accept new images or conflicting modes while building a frozen plan", () => {
+    for (const args of [
+      ["--build-only", "--image", "new-reference.png"],
+      ["--plan-only", "--build-only", "reconstruct"],
+      ["--plan-only"],
+    ]) expect(() => parseWorldAgentArgumentsV1(["--scene-id", "native-staged", ...args]))
+      .toThrow("WORLD_AGENT_ARGUMENTS_INVALID");
+  });
+
   it("defaults omitted Scene Source to Babylon Native", () => {
     const request = parseWorldAgentArgumentsV1([
       "--scene-id", "forest-world",

@@ -8,6 +8,7 @@ import {
   parseFormalScriptedTraversalObservationV1,
   parseFormalWorldCaptureReceiptV1,
 } from "@whitebox-world/runtime-contracts";
+import { evaluateWorldReconstructionV1 } from "@whitebox-world/validation";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -96,6 +97,59 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("keeps an all-not-required Opening subset empty through ordinary evaluation", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true,
+      allOpeningNotRequired: true,
+    });
+    const evidence = buildWorldReconstructionEvidenceSetV1(fixture);
+    const opening = evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    );
+    const silhouette = evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "semantic-silhouette",
+    );
+
+    expect(fixture.evaluationProfile.qualityGateMode).toBe("report-only");
+    expect(fixture.reconstructionCase.expected.openingComposition).toMatchObject({
+      targetRefs: [],
+      regions: [],
+      anchors: [],
+      orderedTargetRefs: [],
+    });
+    expect(opening?.observed).toEqual({
+      kind: "opening-composition-observed",
+      regions: [],
+      anchors: [],
+      orderedTargetRefs: [],
+      distances: [],
+    });
+    if (silhouette?.observed.kind !== "semantic-silhouette-observed") {
+      throw new Error("semantic silhouette fixture missing");
+    }
+    expect(silhouette.observed.views.map(({ viewId }) => viewId)).toEqual([
+      "opening",
+      "world-side",
+      "world-top-down",
+    ]);
+    expect(silhouette.observed.views[0]!.targets.map(
+      ({ structuralProjection }) => structuralProjection.outcome,
+    )).toEqual(["outside-viewport", "outside-viewport"]);
+
+    const result = evaluateWorldReconstructionV1({
+      case: fixture.reconstructionCase,
+      profile: fixture.evaluationProfile,
+      evidence,
+    });
+    expect(result.outcome).toBe("passed");
+    expect(result.dimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    )?.status).toBe("passed");
+    expect(result.dimensions.find(
+      ({ dimensionId }) => dimensionId === "semantic-silhouette",
+    )?.status).toBe("passed");
+  });
+
   it("accepts a ground boundary only without a Block metadata join", () => {
     const fixture = createEvidenceSetFixtureInputV1();
     const metadata = fixture.verifiedWorldPackage
@@ -242,9 +296,19 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
         },
       },
       { dimensionId: "opening-composition", observed: { orderedTargetRefs: ["worldkit://composition-target/package-fixture-opening@1", "worldkit://composition-target/package-fixture-upper@1"], distances: [{ distanceBasisPoints: 300 }] } },
-      { dimensionId: "semantic-silhouette", observed: { targets: [
-        { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", isSemanticTargetPresent: true },
-        { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", isSemanticTargetPresent: true },
+      { dimensionId: "semantic-silhouette", observed: { views: [
+        { viewId: "opening", targets: [
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", structuralProjection: { outcome: "projected" } },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", structuralProjection: { outcome: "projected" } },
+        ] },
+        { viewId: "world-side", targets: [
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group" },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group" },
+        ] },
+        { viewId: "world-top-down", targets: [
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group" },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group" },
+        ] },
       ] } },
       { dimensionId: "spawn-support", observed: { spawnMarkerId: "player-spawn", supportColliderId: "ground", medium: "ground", supportGapMillimeters: 0 } },
       { dimensionId: "topology", observed: { nodeIds: ["ground", "upper"], relations: [{ fromNodeId: "ground", relation: "connects-to", toNodeId: "upper" }], layerIds: ["ground", "upper"] } },

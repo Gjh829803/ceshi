@@ -6,6 +6,7 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   rm,
   unlink,
   writeFile,
@@ -25,6 +26,7 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSemanticCaptureMapV1,
   hashFormalSpawnSupportObservationV1,
@@ -58,11 +60,12 @@ import {
   getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
+  hashWorldReconstructionRunReceiptV1,
   parseWorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { buildWorldReconstructionEvidenceSetV1 } from "../reconstruction/evaluate-evidence-set.js";
-import { createEvidenceSetFixtureInputV1 } from "../reconstruction/evaluate-fixture.test-support.js";
+import { createEvidenceSetFixtureInputV1, createSemanticViewObservationSetFixtureV1 } from "../reconstruction/evaluate-fixture.test-support.js";
 import {
   createNativeBlockFinalArtifactPublisherTestAdapterV1,
   publishNativeBlockReconstructionFinalV1,
@@ -462,6 +465,10 @@ async function completeRunFixture(
   await mkdir(captureDirectoryPath, { recursive: true });
   await chmod(attemptDirectoryPath, 0o700);
   await writeJson(path.join(caseDirectoryPath, "case.json"), fixture.reconstructionCase);
+  await writeJson(path.join(caseDirectoryPath, "evaluation-profile.json"), fixture.evaluationProfile);
+  await mkdir(path.join(caseDirectoryPath, "inputs"), { recursive: true });
+  await writeFile(path.join(caseDirectoryPath, "inputs/formal-world-capture-intent.json"),
+    formalWorldCaptureIntentCanonicalBytesV1(fixture.formalCaptureIntent));
   await writeJson(path.join(runDirectoryPath, "inputs/case.json"), fixture.reconstructionCase);
   await writeJson(path.join(runDirectoryPath, "inputs/evaluation-profile.json"), fixture.evaluationProfile);
   await writeFile(
@@ -620,6 +627,10 @@ async function completeRunFixture(
     formalRequestHash,
     semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
   });
+  const views = fixture.captureReceipt.views.map((view) => ({
+    ...view, pngContentHash: view.viewId === "opening" ? openingPngHash : pngHash,
+  }));
+  const originalSemanticViewObservationSet = createSemanticViewObservationSetFixtureV1(openingObservationBase, views);
   const originalCaptureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
     caseRef,
@@ -628,16 +639,15 @@ async function completeRunFixture(
     semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
     openingObservationContentHash:
       hashFormalOpeningObservationV1(openingObservationBase),
+    readySnapshotHash: openingObservationBase.resetReadySnapshotHash,
+    semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(originalSemanticViewObservationSet),
     spawnSupportObservationContentHash:
       hashFormalSpawnSupportObservationV1(spawnSupportObservation),
     colliderOverlayObservationContentHash:
       hashFormalColliderOverlayObservationV1(colliderOverlayObservation),
     scriptedTraversalContentHash:
       hashFormalScriptedTraversalObservationV1(scriptedTraversalObservation),
-    views: fixture.captureReceipt.views.map((view) => ({
-      ...view,
-      pngContentHash: view.viewId === "opening" ? openingPngHash : pngHash,
-    })),
+    views,
     colliderOverlayPngContentHash: pngHash,
   });
   const originalEvidence = buildWorldReconstructionEvidenceSetV1({
@@ -646,6 +656,7 @@ async function completeRunFixture(
     captureReceiptRef,
     captureReceipt: originalCaptureReceipt,
     openingObservation: openingObservationBase,
+    semanticViewObservationSet: originalSemanticViewObservationSet,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversalObservation,
@@ -666,11 +677,13 @@ async function completeRunFixture(
       ),
     }
     : openingObservationBase;
+  const semanticViewObservationSet = createSemanticViewObservationSetFixtureV1(openingObservation, views);
   const captureReceipt = forgePassedEvaluation
     ? parseFormalWorldCaptureReceiptV1({
       ...originalCaptureReceipt,
       openingObservationContentHash:
         hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
     })
     : originalCaptureReceipt;
   await writeFile(path.join(captureDirectoryPath, "opening.png"), openingPng);
@@ -678,6 +691,7 @@ async function completeRunFixture(
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
   await writeJson(path.join(captureDirectoryPath, "opening-observation.json"), openingObservation);
+  await writeJson(path.join(captureDirectoryPath, "semantic-view-observation-set.json"), semanticViewObservationSet);
   await writeJson(path.join(captureDirectoryPath, "spawn-support-observation.json"), spawnSupportObservation);
   await writeJson(path.join(captureDirectoryPath, "collider-overlay-observation.json"), colliderOverlayObservation);
   await writeJson(path.join(captureDirectoryPath, "scripted-traversal.json"), scriptedTraversalObservation);
@@ -689,6 +703,7 @@ async function completeRunFixture(
     captureReceiptRef,
     captureReceipt,
     openingObservation,
+    semanticViewObservationSet,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversalObservation,
@@ -855,6 +870,35 @@ async function finalLaunchFixture(input: Readonly<{
 }
 
 describe("Native Block reconstruction final artifact publisher integration", () => {
+  it("verifies and publishes explicit recovered Package paths without replacing historical failed evidence", async () => {
+    const fixture = await completeRunFixture();
+    try {
+      const root = path.join(fixture.runDirectoryPath, "attempts/0");
+      const recovered = path.join(root, "host-recoveries/1");
+      await mkdir(recovered, { recursive: true });
+      for (const file of ["world-package", "attempt-result.json", "native-check-result.json", "native-explain.txt", "ground-analysis-report.json"]) {
+        await rename(path.join(root, file), path.join(recovered, file));
+      }
+      await writeFile(path.join(root, "native-check-result.json"), "historical-rejected-check");
+      const receiptPath = path.join(fixture.runDirectoryPath, "run-receipt.json");
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+      const attempt = receipt.attempts[0];
+      for (const field of ["sceneAuthoringAttemptResultRef", "groundAnalysisReportRef"]) {
+        attempt[field] = attempt[field].replace("/attempts/0/", "/attempts/0/host-recoveries/1/");
+      }
+      await writeJson(receiptPath, receipt);
+      const diagnosticPath = path.join(fixture.runDirectoryPath, "strict-diagnostic.json");
+      const diagnostic = JSON.parse(await readFile(diagnosticPath, "utf8"));
+      diagnostic.runReceiptHash = hashWorldReconstructionRunReceiptV1(parseWorldReconstructionRunReceiptV1(receipt));
+      await writeJson(diagnosticPath, diagnostic);
+      await expect(verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      })).resolves.toMatchObject({ outcome: "verified" });
+      await expect(publishNativeBlockReconstructionFinalV1({ ...fixture, launch: await finalLaunchFixture(fixture) }))
+        .resolves.toMatchObject({ outcome: "published" });
+      expect(await readFile(path.join(root, "native-check-result.json"), "utf8")).toBe("historical-rejected-check");
+    } finally { await rm(fixture.caseDirectoryPath, { recursive: true, force: true }); }
+  }, 15_000);
   it("rejects a Run Receipt bound to a foreign Case namespace before publication", async () => {
     const fixture = await completeRunFixture({
       caseRefOverride:
@@ -1236,12 +1280,12 @@ async function addRepairAttempt(input: Readonly<{
     groundAnalysisReport,
   );
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
+  const recoveryViews = fixture.captureReceipt.views.map((view) => ({ ...view, pngContentHash: pngHash }));
+  const semanticViewObservationSet = createSemanticViewObservationSetFixtureV1(fixture.openingObservation, recoveryViews);
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
-    views: fixture.captureReceipt.views.map((view) => ({
-      ...view,
-      pngContentHash: pngHash,
-    })),
+    views: recoveryViews,
+    semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
     colliderOverlayPngContentHash: pngHash,
   });
   for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
@@ -1249,6 +1293,7 @@ async function addRepairAttempt(input: Readonly<{
   }
   await writeJson(path.join(captureRoot, "opening-observation.json"),
     fixture.openingObservation);
+  await writeJson(path.join(captureRoot, "semantic-view-observation-set.json"), semanticViewObservationSet);
   await writeJson(path.join(captureRoot, "spawn-support-observation.json"),
     fixture.spawnSupportObservation);
   await writeJson(path.join(captureRoot, "collider-overlay-observation.json"),
@@ -1261,6 +1306,7 @@ async function addRepairAttempt(input: Readonly<{
     ...fixture,
     captureReceiptRef,
     captureReceipt,
+    semanticViewObservationSet,
   });
   const evaluation = evaluateWorldReconstructionV1({
     case: fixture.reconstructionCase,

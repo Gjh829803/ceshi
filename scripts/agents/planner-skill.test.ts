@@ -11,6 +11,14 @@ function templateFrom(markdown: string): string {
 }
 
 describe("Unified WorldKit Planner skill", () => {
+  it("pins task context and replays the dispatched checker instead of the live checkout", async () => {
+    const launcher = await readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8");
+    expect(launcher).not.toContain('node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs"');
+    expect(launcher).toContain('--workspace-context-root "$planner_execution_root/workspace"');
+    expect(launcher).toContain('scripts/agents/planner-execution.ts replay');
+    expect(launcher).toContain('--request-hash "$planner_request_hash"');
+  });
+
   it("ships a valid natural-language template with movement and bounded visual targets", async () => {
     const template = await readFile(path.resolve(
       ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md",
@@ -74,6 +82,14 @@ describe("Unified WorldKit Planner skill", () => {
     expect(skill).toContain("world-plan.png owns orientation and complete-world extent");
     expect(skill).toContain("Never copy the reference image's time of day");
     expect(skill).toContain("Babylon Native causal image sequence");
+    expect(skill).toContain("Native deterministic palette authoring");
+    expect(skill).toContain("scripts/author-palette.mjs");
+    expect(skill).toContain("--image-hash sha256:");
+    expect(skill).toMatch(/never Host\s+auto-repair/);
+    expect(skill).toContain("Pure RGB drift does not need another image-generation call");
+    expect(skill).toContain("context/native-block-production-budget.json");
+    expect(skill).toContain("Plan a complete coarse Block world inside that capacity");
+    expect(skill).toContain("support depth, meaningful side/rear areas and remote destinations");
     expect(skill).toContain("actually open and inspect that exact PNG");
     expect(skill).toContain("exact accepted entry PNG as an image input");
     expect(skill).toContain("the existing World Plan is stale");

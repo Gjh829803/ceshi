@@ -193,6 +193,7 @@ function reconstructionCase() {
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
         visualGroupId: "central-ascent-group",
+        viewRequirements: [{ viewId: "opening", mode: "reference-projection-required",
         normalizedBounds: {
           minXBasisPoints: 100,
           minYBasisPoints: 200,
@@ -201,6 +202,8 @@ function reconstructionCase() {
         },
         normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
         coverageBasisPoints: 2_400,
+        }, { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" }],
       }],
       openingComposition: {
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
@@ -697,6 +700,7 @@ function runInput(
   caseRef = CASE_REF,
 ) {
   return {
+    executionPurpose: "strict-acceptance" as const,
     runId: "formal-20260831",
     backend: "local" as const,
     outputDirectoryPath,
@@ -708,6 +712,58 @@ function runInput(
 }
 
 describe("runWorldReconstructionV1", () => {
+  it.each([
+    ["Native Check", { packageOutcomeByAttempt: ["native-check-rejected"] }],
+    ["Package", { packageOutcomeByAttempt: ["package-failed"] }],
+    ["Capture", { captureOutcomeByAttempt: ["failed"] }],
+    ["Evaluation execution", { evaluationError: new Error("EVALUATOR_PROCESS_INTERRUPTED") }],
+  ] satisfies readonly (readonly [string, FakePortOptions])[])("continues the same production Run and Attempt after %s failure while preserving journal history", async (_stage, failureOptions) => {
+    const outputDirectoryPath = await outputRoot();
+    const input = { ...runInput(outputDirectoryPath), executionPurpose: "production" as const };
+    const failed = fakePorts(failureOptions);
+    await expect(runWorldReconstructionV1(input, failed.ports)).rejects.toBeInstanceOf(WorldReconstructionRunClosedErrorV1);
+    const history = await readFile(path.join(outputDirectoryPath, "journal.jsonl"), "utf8");
+    const resumed = fakePorts({});
+    // A second Host interruption still must not allocate a second Native Attempt.
+    const interrupted = fakePorts({ captureOutcomeByAttempt: ["failed"] });
+    await expect(runWorldReconstructionV1({ ...input, executionMode: "resume-host-only" }, {
+      ...interrupted.ports, restoreGenerated: interrupted.ports.generate,
+      generate: async () => { throw new Error("paid generation must not run"); },
+    })).rejects.toBeInstanceOf(WorldReconstructionRunClosedErrorV1);
+    const receipt = await runWorldReconstructionV1({ ...input, executionMode: "resume-host-only" }, {
+      ...resumed.ports, restoreGenerated: resumed.ports.generate,
+      generate: async () => { throw new Error("paid generation must not run"); },
+    });
+    expect(receipt.attempts).toHaveLength(1);
+    expect(receipt.finalAttemptIndex).toBe(0);
+    expect(resumed.calls.generateInputs[0]?.requestId).toBe(failed.calls.generateInputs[0]?.requestId);
+    const journal = await readFile(path.join(outputDirectoryPath, "journal.jsonl"), "utf8");
+    expect(journal.startsWith(history)).toBe(true);
+    expect(journal).toContain('"operation":"resume-host-only"');
+    expect(journal).not.toContain('"state":"repair-generating"');
+  });
+  it.each([
+    ["unknown creation", { generateOutcomeByAttempt: ["unknown"] }],
+    ["missing output", { generateOutcomeByAttempt: ["no-output"] }],
+    ["empty output", { generateOutcomeByAttempt: ["empty-output"] }],
+    ["task timeout", { generateOutcomeByAttempt: ["rejected"], generateDiagnosticCodesByAttempt: [["task-timeout"]] }],
+    ["Builder self-check", { generateOutcomeByAttempt: ["rejected"], generateDiagnosticCodesByAttempt: [["self-check-failed"]] }],
+    ["Builder type preflight", { generateOutcomeByAttempt: ["rejected"], generateDiagnosticCodesByAttempt: [["self-check-failed", "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED"]] }],
+    ["Native Check", { packageOutcomeByAttempt: ["native-check-rejected"] }],
+    ["Package", { packageOutcomeByAttempt: ["package-failed"] }],
+    ["Capture", { captureOutcomeByAttempt: ["failed"] }],
+    ["Camera rollback", { captureOutcomeByAttempt: ["camera-rollback-failed"] }],
+    ["invalid Evaluation artifact", { evaluateThrows: true }],
+  ] satisfies readonly (readonly [string, FakePortOptions])[])("ordinary production ends at %s failure without repeating the paid stage", async (_stage, options) => {
+    const { ports, calls } = fakePorts(options);
+    await expect(runWorldReconstructionV1({
+      ...runInput(await outputRoot()), executionPurpose: "production",
+    }, ports)).rejects.toBeInstanceOf(WorldReconstructionRunClosedErrorV1);
+    expect(calls.generate).toEqual([0]);
+    expect(calls.generateInputs.every((request) => request.repairInstruction === undefined)).toBe(true);
+    expect(calls.cleanup).toBe(1);
+  });
+
   it("keeps the core private behind the sole production transaction CLI port", async () => {
     const [packageJson, cliSource, runSource, journalSource] = await Promise.all([
       readFile(path.resolve("package.json"), "utf8"),
@@ -811,11 +867,11 @@ describe("runWorldReconstructionV1", () => {
     );
   });
 
-  it("publishes report-only quality diagnostics without an external repair Attempt", async () => {
+  it.each(["report-only", "required-for-publication"] as const)("ordinary production with %s preserves quality diagnostics without another paid Attempt", async (qualityGateMode) => {
     const outputDirectoryPath = await outputRoot();
     const reportOnlyProfile = parseWorldReconstructionEvaluationProfileV1({
       ...profile(),
-      qualityGateMode: "report-only",
+      qualityGateMode,
     });
     const reportOnlyCase = {
       ...reconstructionCase(),
@@ -839,6 +895,7 @@ describe("runWorldReconstructionV1", () => {
     });
 
     const receipt = await runWorldReconstructionV1({
+      executionPurpose: "production",
       runId: "formal-20260831",
       backend: "local",
       outputDirectoryPath,
@@ -858,11 +915,11 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.generateInputs[0]?.repairInstruction).toBeUndefined();
   });
 
-  it("ends report-only at the first trusted Host rejection without an external repair Attempt", async () => {
+  it.each(["report-only", "required-for-publication"] as const)("ordinary production with %s ends at the first trusted Host rejection without another paid Attempt", async (qualityGateMode) => {
     const outputDirectoryPath = await outputRoot();
     const reportOnlyProfile = parseWorldReconstructionEvaluationProfileV1({
       ...profile(),
-      qualityGateMode: "report-only",
+      qualityGateMode,
     });
     const reportOnlyCase = {
       ...reconstructionCase(),
@@ -904,6 +961,7 @@ describe("runWorldReconstructionV1", () => {
     };
 
     await expect(runWorldReconstructionV1({
+      executionPurpose: "production",
       runId: "formal-20260831",
       backend: "local",
       outputDirectoryPath,
@@ -1341,6 +1399,7 @@ describe("runWorldReconstructionV1", () => {
   it.each([
     ["task-timeout"],
     ["self-check-failed"],
+    ["WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED"],
   ] as const)(
     "preserves the allowlisted generation diagnostic %s",
     async (diagnosticCode) => {
@@ -1431,6 +1490,32 @@ describe("runWorldReconstructionV1", () => {
         "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
         "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
       ],
+    });
+  });
+
+  it.each([
+    "native-block-subject-visual-review-proxy-stale",
+    "native-block-visual-identity-palette-input-invalid",
+    "native-block-visual-review-input-stale",
+    "native-block-visual-review-layout-mismatch",
+    "native-block-visual-review-output-budget-exceeded",
+    "native-block-visual-review-output-missing",
+    "native-block-visual-review-png-invalid",
+    "native-block-visual-review-renderer-stale",
+    "native-block-visual-review-replay-failed",
+    "native-block-visual-review-rgba-mismatch",
+    "native-block-ground-evidence-missing",
+    "native-ground-analysis-rejected",
+    "scene-brief-input-invalid",
+  ])("preserves the Native feedback owner diagnostic %s", async (code) => {
+    const { ports } = fakePorts({
+      packageOutcomeByAttempt: ["package-failed"],
+      packageDiagnosticCodesByAttempt: [[code, "secret-provider-trace-42"]],
+    });
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()), ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_PACKAGE_FAILED", code],
     });
   });
 

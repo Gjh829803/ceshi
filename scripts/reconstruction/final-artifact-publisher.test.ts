@@ -15,6 +15,7 @@ import path from "node:path";
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalOpeningObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -33,6 +34,7 @@ import {
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionStrictDiagnosticReceiptV1,
   parseWorldReconstructionEvaluationResultV1,
+  parseWorldReconstructionCaseV1,
   parseWorldReconstructionRunReceiptV1,
   parseWorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
@@ -51,7 +53,7 @@ import sharp from "sharp";
 
 import { buildWorldReconstructionEvidenceSetV1 } from
   "./evaluate-evidence-set.js";
-import { createEvidenceSetFixtureInputV1 } from
+import { createEvidenceSetFixtureInputV1, createSemanticViewObservationSetFixtureV1 } from
   "./evaluate-fixture.test-support.js";
 import {
   hashEntryThirdPersonValidationResultV1,
@@ -62,6 +64,7 @@ import {
   createNativeBlockFinalArtifactPublisherTestAdapterV1,
   NativeBlockFinalArtifactPublicationClosedErrorV1,
   publishNativeBlockReconstructionFinalV1,
+  verifyNativeBlockCaseOwnerInputSnapshotV1,
 } from "./final-artifact-publisher.js";
 
 const PNG = Uint8Array.from(Buffer.from(
@@ -348,12 +351,15 @@ async function createRunFixture(
   const openingPngHash = sha256Bytes(openingPng) as Sha256HashV1;
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
   const openingObservation = entryOpeningObservation(fixture.openingObservation);
+  const views = fixture.captureReceipt.views.map((view) => ({
+    ...view, pngContentHash: view.viewId === "opening" ? openingPngHash : pngHash,
+  }));
+  const semanticViewObservationSet = createSemanticViewObservationSetFixtureV1(openingObservation, views);
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
-    views: fixture.captureReceipt.views.map((view) => ({
-      ...view,
-      pngContentHash: view.viewId === "opening" ? openingPngHash : pngHash,
-    })),
+    views,
+    readySnapshotHash: openingObservation.resetReadySnapshotHash,
+    semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
     openingObservationContentHash:
       hashFormalOpeningObservationV1(openingObservation),
     colliderOverlayPngContentHash: pngHash,
@@ -364,6 +370,7 @@ async function createRunFixture(
   }
   await writeJson(path.join(captureRoot, "opening-observation.json"),
     openingObservation);
+  await writeJson(path.join(captureRoot, "semantic-view-observation-set.json"), semanticViewObservationSet);
   await writeJson(path.join(captureRoot, "spawn-support-observation.json"),
     fixture.spawnSupportObservation);
   await writeJson(path.join(captureRoot, "collider-overlay-observation.json"),
@@ -374,6 +381,7 @@ async function createRunFixture(
     captureReceipt);
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
+    semanticViewObservationSet,
     captureReceipt,
     openingObservation,
   });
@@ -422,7 +430,7 @@ async function createRunFixture(
       sceneAuthoringAttemptHash:
         hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
       sceneAuthoringAttemptResultRef:
-        captureReceipt.sceneAuthoringAttemptResultRef,
+        `${runArtifactRoot}/attempts/0/attempt-result.json`,
       sceneAuthoringAttemptResultHash:
         hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
       worldPackageRef: verified.receipt.worldPackageRef,
@@ -434,16 +442,16 @@ async function createRunFixture(
       groundAnalysisReportRef:
         `${runArtifactRoot}/attempts/0/ground-analysis-report.json`,
       groundAnalysisReportHash,
-      captureReceiptRef: fixture.captureReceiptRef,
+      captureReceiptRef: `${runArtifactRoot}/attempts/0/capture/formal-world-capture-receipt.json`,
       captureReceiptHash,
       evaluationResultRef:
-        "artifact://case/package-fixture/attempts/0/evaluation.json",
+        `${runArtifactRoot}/attempts/0/evaluation.json`,
       evaluationResultHash: evaluationHash,
       outcome: evaluation.outcome,
     }],
     finalAttemptIndex: 0,
     finalEvaluationResultRef:
-      "artifact://case/package-fixture/attempts/0/evaluation.json",
+      `${runArtifactRoot}/attempts/0/evaluation.json`,
     finalEvaluationResultHash: evaluationHash,
     cleanupOutcome: "completed",
   });
@@ -520,6 +528,7 @@ async function createRunFixture(
 
 async function installLocalCaseOwnerInputs(
   fixture: Awaited<ReturnType<typeof createRunFixture>>,
+  reference: Readonly<{ bytes: Uint8Array; mediaType: "image/png" | "image/webp" }> = { bytes: PNG, mediaType: "image/png" },
 ) {
   const inputDirectoryPath = path.join(fixture.caseDirectoryPath, "inputs");
   const sceneBriefBytes = new TextEncoder().encode("# Fixture scene brief\n");
@@ -535,9 +544,13 @@ async function installLocalCaseOwnerInputs(
     bytes: plannerReceiptBytes,
     mediaType: "application/json" as const,
   }, {
-    inputRef: "reference-0.png",
-    bytes: PNG,
-    mediaType: "image/png" as const,
+    inputRef: reference.mediaType === "image/webp" ? "reference-0.webp" : "reference-0.png",
+    bytes: reference.bytes,
+    mediaType: reference.mediaType,
+  }, {
+    inputRef: "visual-identity-palette.json",
+    bytes: new TextEncoder().encode('{"kind":"fixture-palette"}'),
+    mediaType: "application/json" as const,
   }, {
     inputRef: "world-plan.png",
     bytes: PNG,
@@ -567,6 +580,21 @@ async function installLocalCaseOwnerInputs(
 }
 
 describe("Native reconstruction final artifact publisher", () => {
+  it.each(["image/png", "image/webp"] as const)("admits the complete local Case reference inventory including Palette and %s", async (mediaType) => {
+    const fixture = await createRunFixture();
+    try {
+      const bytes = mediaType === "image/png" ? PNG : await sharp(PNG).webp().toBuffer();
+      const { inputDirectoryPath } = await installLocalCaseOwnerInputs(fixture, { bytes, mediaType });
+      const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(await readFile(
+        path.join(fixture.caseDirectoryPath, "case.json"), "utf8",
+      )));
+      const snapshot = await verifyNativeBlockCaseOwnerInputSnapshotV1(inputDirectoryPath, reconstructionCase);
+      expect(snapshot.filesByRelativePath.has("visual-identity-palette.json")).toBe(true);
+      expect(snapshot.filesByRelativePath.get(mediaType === "image/png" ? "reference-0.png" : "reference-0.webp"))
+        .toBe(sha256Bytes(bytes));
+    } finally { await rm(fixture.root, { recursive: true, force: true }); }
+  });
+
   it("atomically publishes a production-success candidate with failed strict diagnostics", async () => {
     const fixture = await createRunFixture();
     try {

@@ -151,7 +151,7 @@ Usage:
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --json
   worldkit native run <package-directory> [--port <port>] [--json]
-  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
+  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--resume-host-only] --json
   worldkit capture <file-or-package> --output <png> [--snapshot <json>]
     [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
@@ -199,6 +199,7 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | {
       command: "reconstruct-run";
+      executionMode?: "resume-host-only";
       casePath: string;
       outputDirectoryPath: string;
       backend: "cloud" | "local";
@@ -778,9 +779,11 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     if (!json) {
       throw new WorldkitUsageError("reconstruct run requires --json.");
     }
+    const resumeHostOnly = takeFlag(tokens, "--resume-host-only");
     rejectRemaining(tokens, "reconstruct run");
     return {
       command: "reconstruct-run",
+      ...(resumeHostOnly ? { executionMode: "resume-host-only" as const } : {}),
       casePath,
       outputDirectoryPath,
       backend,
@@ -2698,6 +2701,7 @@ export async function main(
         await loadRunWorldReconstructionProductionPortV1();
       const result = parseWorldReconstructionProductionResultV1(
         await runProduction({
+          ...(parsed.executionMode === undefined ? {} : { executionMode: parsed.executionMode }),
           casePath: parsed.casePath,
           outputDirectoryPath: parsed.outputDirectoryPath,
           backend: parsed.backend,

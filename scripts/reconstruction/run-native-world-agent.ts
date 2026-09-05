@@ -23,7 +23,14 @@ import {
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
 
-import { parseWorldAgentArgumentsV1 } from "../agents/run-world-agent.js";
+import { parseWorldAgentArgumentsV1, type WorldAgentRequestV1 } from "../agents/run-world-agent.js";
+import { copyAcceptedPlannerExecutionV1, verifyAcceptedPlannerExecutionV1 } from "../agents/planner-execution.js";
+import { NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1 } from "./native-block-production-budget.js";
+import {
+  nativeWorldReferenceInputRefV1,
+  nativeWorldReferenceMediaTypeV1,
+  validateNativeWorldReferenceImageV1,
+} from "./native-world-reference-media.js";
 import {
   deriveNativeWorldBaselineProposalV1,
   prepareNativeWorldCaseV1,
@@ -140,22 +147,13 @@ export async function freezeNativeWorldReferenceInputsV1(input: Readonly<{
     const references: FrozenNativeWorldPlannerReferenceV1[] = [];
     for (let index = 0; index < input.sourcePaths.length; index += 1) {
       const sourcePath = input.sourcePaths[index]!;
-      const extension = path.extname(sourcePath).toLowerCase();
-      if (
-        extension !== ".png" && extension !== ".jpg" &&
-        extension !== ".jpeg"
-      ) {
-        throw new TypeError("NATIVE_WORLD_REFERENCE_MEDIA_TYPE_INVALID");
-      }
-      const mediaType = extension === ".png"
-        ? "image/png" as const
-        : "image/jpeg" as const;
-      const inputRef =
-        `reference-${index}.${mediaType === "image/png" ? "png" : "jpg"}`;
+      const mediaType = nativeWorldReferenceMediaTypeV1(sourcePath);
+      const inputRef = nativeWorldReferenceInputRefV1(index, mediaType);
       const bytes = await readStableRegularFileNoFollow(
         sourcePath,
         "NATIVE_WORLD_REFERENCE_FILE_INVALID",
       );
+      await validateNativeWorldReferenceImageV1(bytes, mediaType);
       const contentHash = sha256Bytes(bytes) as Sha256HashV1;
       const plannerImagePath = path.join(
         input.snapshotDirectoryPath,
@@ -201,25 +199,36 @@ async function assertFrozenPlannerReferencesUnchanged(
   }
 }
 
-async function main(): Promise<void> {
-  const request = parseWorldAgentArgumentsV1(process.argv.slice(2));
+export type NativeWorldAgentResultV1 = Readonly<{
+  kind: "native-world-plan-result";
+  schemaVersion: 1;
+  sceneId: string;
+  sceneSourceKind: "babylon-native";
+  casePath: string;
+  phase: "plan-ready";
+  exitCode: 0;
+}> | Readonly<{
+  kind: "native-world-agent-result";
+  schemaVersion: 1;
+  sceneId: string;
+  sceneSourceKind: "babylon-native";
+  casePath: string;
+  outputDirectoryPath: string;
+  exitCode: number;
+}>;
+
+export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, options: Readonly<{
+  repositoryRoot: string;
+  backend: "cloud" | "local";
+  runProcess: typeof run;
+}>): Promise<NativeWorldAgentResultV1> {
   if (request.sceneSourceKind !== "babylon-native") {
     throw new TypeError("NATIVE_WORLD_AGENT_SOURCE_INVALID");
   }
-  if (process.env.WORLDKIT_PROMPT_SMOKE === "1") {
-    process.stdout.write(
-      "WORLDKIT_NATIVE_WORLD_SMOKE_OK unified-planning native-generation native-check package runtime capture evaluation final-publication\n",
-    );
-    return;
-  }
-  const backend = process.env.WORLDKIT_CODEX_BACKEND ?? "cloud";
+  const { backend, repositoryRoot, runProcess } = options;
   if (backend !== "cloud" && backend !== "local") {
     throw new TypeError("WORLDKIT_CODEX_BACKEND must be cloud or local.");
   }
-  const repositoryRoot = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "../..",
-  );
   const artifactRoot = path.join(repositoryRoot, "artifacts/scenes", request.sceneId);
   const publicPlanRoot = path.join(
     repositoryRoot,
@@ -231,9 +240,8 @@ async function main(): Promise<void> {
   await mkdir(temporaryRoot, { recursive: true });
   const taskRoot = await mkdtemp(path.join(temporaryRoot, "native-world-agent."));
   let stagedCaseRoot: string | undefined;
-  let ownsPlannerOutputs = false;
   try {
-    const references = await freezeNativeWorldReferenceInputsV1({
+    const references = request.mode === "build" ? [] : await freezeNativeWorldReferenceInputsV1({
       sourcePaths: request.imagePaths,
       snapshotDirectoryPath: path.join(taskRoot, "reference-inputs"),
     });
@@ -256,10 +264,13 @@ async function main(): Promise<void> {
       } catch {
         throw new Error("NATIVE_WORLD_CASE_INPUT_IDENTITY_MISSING");
       }
-      if (!isEqual(frozenIdentity, inputIdentity)) {
+      // Build-only consumes the existing admitted plan and its frozen references;
+      // it must not compare them with a synthetic new prompt / empty image list.
+      if (request.mode !== "build" && !isEqual(frozenIdentity, inputIdentity)) {
         throw new Error("NATIVE_WORLD_CASE_INPUT_IDENTITY_MISMATCH");
       }
     } else {
+      if (request.mode === "build") throw new Error("NATIVE_WORLD_PLAN_REQUIRED");
       if (await pathExists(artifactRoot) || await pathExists(publicPlanRoot)) {
         throw new Error("NATIVE_WORLD_CASE_PARTIAL_EXISTS");
       }
@@ -269,7 +280,6 @@ async function main(): Promise<void> {
         artifactParent,
         `.${request.sceneId}.native-case-`,
       ));
-      ownsPlannerOutputs = true;
       const plannerArguments = [
         "scripts/agents/run-canonical-world-agent.sh",
         "--scene-source",
@@ -283,7 +293,7 @@ async function main(): Promise<void> {
         plannerArguments.push("--image", plannerImagePath);
       }
       plannerArguments.push(request.prompt);
-      const plannerExit = await run("bash", plannerArguments, repositoryRoot);
+      const plannerExit = await runProcess("bash", plannerArguments, repositoryRoot);
       if (plannerExit !== 0) {
         throw new Error(`NATIVE_WORLD_UNIFIED_PLANNING_FAILED:${plannerExit}`);
       }
@@ -340,6 +350,14 @@ async function main(): Promise<void> {
         plannerSelfCheckPath,
         outputCaseRoot: stagedCaseRoot,
       });
+      await copyAcceptedPlannerExecutionV1({
+        artifactRoot,
+        destinationArtifactRoot: stagedCaseRoot,
+        sceneId: request.sceneId,
+        sceneSourceKind: "babylon-native",
+        sourcePlannerSelfCheckPath: plannerSelfCheckPath,
+        destinationPlannerSelfCheckPath: path.join(stagedCaseRoot, "inputs/planner-self-check.json"),
+      });
       for (const fileName of [
         "scene-brief.md",
         "visual-identity-palette.json",
@@ -358,17 +376,31 @@ async function main(): Promise<void> {
       await rm(artifactRoot, { recursive: true, force: true });
       await rename(stagedCaseRoot, artifactRoot);
       stagedCaseRoot = undefined;
-      ownsPlannerOutputs = false;
     }
 
+    await verifyAcceptedPlannerExecutionV1({
+      artifactRoot,
+      sceneId: request.sceneId,
+      sceneSourceKind: "babylon-native",
+      plannerSelfCheckPath: path.join(artifactRoot, "inputs/planner-self-check.json"),
+      requiredNativeProductionContext: NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1,
+    });
     await validateNativeWorldPlannerInputClosureV1({
       reconstructionCase: JSON.parse(await readFile(casePath, "utf8")),
       inputDirectoryPath: path.join(artifactRoot, "inputs"),
     });
 
+    if (request.mode === "plan") {
+      return Object.freeze({
+        kind: "native-world-plan-result", schemaVersion: 1,
+        sceneId: request.sceneId, sceneSourceKind: "babylon-native",
+        casePath, phase: "plan-ready", exitCode: 0,
+      });
+    }
+
     const runId = `run-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${process.pid}`;
     const outputDirectoryPath = path.join(artifactRoot, "runs", runId);
-    const exitCode = await run(
+    const exitCode = await runProcess(
       "pnpm",
       [
         "worldkit",
@@ -383,8 +415,7 @@ async function main(): Promise<void> {
       ],
       repositoryRoot,
     );
-    if (exitCode !== 0) process.exitCode = exitCode;
-    process.stdout.write(`${stringifyCanonicalJson({
+    return Object.freeze({
       kind: "native-world-agent-result",
       schemaVersion: 1,
       sceneId: request.sceneId,
@@ -392,19 +423,36 @@ async function main(): Promise<void> {
       casePath,
       outputDirectoryPath,
       exitCode,
-    })}\n`);
+    });
   } finally {
     if (stagedCaseRoot !== undefined) {
       await rm(stagedCaseRoot, { recursive: true, force: true });
     }
-    if (ownsPlannerOutputs) {
-      await Promise.all([
-        rm(artifactRoot, { recursive: true, force: true }),
-        rm(publicPlanRoot, { recursive: true, force: true }),
-      ]);
-    }
+    // Keep paid Planner delivery and its frozen execution record on failure.
+    // A partial directory is not an admitted Case; the existing PARTIAL_EXISTS
+    // guard prevents silent regeneration/overwrite until explicit stage resume.
     await rm(taskRoot, { recursive: true, force: true });
   }
+}
+
+async function main(): Promise<void> {
+  const request = parseWorldAgentArgumentsV1(process.argv.slice(2));
+  if (process.env.WORLDKIT_PROMPT_SMOKE === "1") {
+    process.stdout.write(
+      "WORLDKIT_NATIVE_WORLD_SMOKE_OK unified-planning native-generation native-check package runtime capture evaluation final-publication\n",
+    );
+    return;
+  }
+  const backend = process.env.WORLDKIT_CODEX_BACKEND ?? "cloud";
+  if (backend !== "cloud" && backend !== "local") throw new TypeError("WORLDKIT_CODEX_BACKEND must be cloud or local.");
+  const result = await runNativeWorldAgentV1(request, {
+    repositoryRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
+    backend,
+    runProcess: run,
+  });
+  if (result.kind === "native-world-plan-result") process.stdout.write("WORLDKIT_STAGE plan-ready\n");
+  process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+  if (result.exitCode !== 0) process.exitCode = result.exitCode;
 }
 
 if (!isNil(process.argv[1]) &&

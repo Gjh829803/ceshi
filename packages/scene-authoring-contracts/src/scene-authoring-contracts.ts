@@ -75,7 +75,7 @@ export interface DecideSceneAuthoringRouteV1Input {
 export interface NativeBlockGenerationReferenceInputV1 {
   readonly inputRef: string;
   readonly contentHash: Sha256HashV1;
-  readonly mediaType: "image/png" | "image/jpeg";
+  readonly mediaType: "image/png" | "image/jpeg" | "image/webp";
 }
 
 export interface NativeBlockGenerationContextInputV1 {
@@ -617,7 +617,7 @@ function parseGenerationReferenceInputs(
       GENERATION_REFERENCE_INPUT_FIELDS,
       "generation-request",
     );
-    if (record.mediaType !== "image/png" && record.mediaType !== "image/jpeg") {
+    if (record.mediaType !== "image/png" && record.mediaType !== "image/jpeg" && record.mediaType !== "image/webp") {
       return invalidContract("generation-request");
     }
     return Object.freeze({

@@ -52,8 +52,6 @@ import {
 } from "./native-block-subject-visual-review-proxy.js";
 import { validateNativeWorldPlannerInputClosureV1 } from
   "./native-world-case-preparation.js";
-import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
-  "../native-scene/admission-budget.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 const BUILDER_ADVISORY_OUTPUTS = Object.freeze([
@@ -138,13 +136,6 @@ function repairTaskProtocol(priorAttemptIndex: 0 | 1 | 2): string {
 - Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;
 }
 
-export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
-export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
-  maximumBlockCount: 2_000,
-  ...BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
-  maximumOutputBytes: 4_000_000,
-  timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
-} satisfies NativeBlockGenerationBudgetV1);
 export const NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1 =
   "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
 
@@ -1112,7 +1103,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       "NATIVE_BLOCK_VISUAL_REVIEW_RENDERER_MISSING: the exact frozen Builder renderer is required.",
     );
   }
-  const visualReviewReferences = BUILDER_VISUAL_REVIEW_REFERENCE_PATHS.map(
+  BUILDER_VISUAL_REVIEW_REFERENCE_PATHS.forEach(
     (relativePath) => {
       const matches = generationReferences.filter((reference) =>
         reference.relativePath === relativePath
@@ -1127,7 +1118,6 @@ export async function prepareNativeBlockGenerationTaskV1(
           `NATIVE_BLOCK_VISUAL_REVIEW_INPUT_MISSING: ${relativePath} must be one exact PNG Case reference.`,
         );
       }
-      return matches[0]!;
     },
   );
   const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBounds, hostClosureFile, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
@@ -1194,7 +1184,7 @@ export async function prepareNativeBlockGenerationTaskV1(
   });
   const routerArguments = [
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
-    "--stage", "native-block-generation", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
+    "--stage", "coding-agent", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
@@ -1237,24 +1227,16 @@ export async function prepareNativeBlockGenerationTaskV1(
         throw new TypeError(`Frozen context hash mismatch: ${name}`);
       }
     }));
-    const durableInputs = [
-      nativeSceneApi,
-      nativeSceneProfile,
-      blockProfile,
-      registryLockSource,
-      bootstrap,
-      gameplay,
-      runtime,
-      subjectVisualReviewProxyFile,
-      worldBounds,
-      hostClosureFile,
-      visualReviewRenderer,
-      ...visualReviewReferences,
-      ...caseContextReferenceFiles,
-    ];
-    await Promise.all(durableInputs.map((file) => writeFrozenFileExclusive(
+    // The disposable task and durable replay record use the same complete byte
+    // snapshot. Cleanup must not discard the Brief, instruction, checker, or
+    // prior-attempt repair evidence needed to replay this exact dispatch.
+    await Promise.all(taskInputFiles.map((file) => writeFrozenFileExclusive(
       path.join(publicationStagingPath, "inputs"),
       file,
+    )));
+    await Promise.all(contextFiles.map(([name, value]) => writeFrozenFileExclusive(
+      path.join(publicationStagingPath, "context"),
+      frozenCanonicalFile(name, new TextEncoder().encode(stringifyCanonicalJson(value))),
     )));
     await Promise.all([
       writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
@@ -1268,6 +1250,16 @@ export async function prepareNativeBlockGenerationTaskV1(
       writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
         "attempt.json",
         new TextEncoder().encode(stringifyCanonicalJson(attempt)),
+      )),
+      writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
+        "generation-dispatch.json",
+        new TextEncoder().encode(stringifyCanonicalJson({
+          kind: "native-block-generation-dispatch", schemaVersion: 1,
+          backend: input.backend, generationRequestHash,
+          attemptHash: hashSceneAuthoringAttemptV1(attempt),
+          routerRequestId, routerTaskPayloadHash, routerArguments,
+          frozenOwnerIdentities,
+        })),
       )),
     ]);
     if (await pathExists(attemptRoot)) {

@@ -20,6 +20,7 @@ import {
   pollGenerationJob,
   submittedJobId,
 } from "../lib/lwdp-generation-client.mjs";
+import { confirmedTerminalTaskFailure } from "./lwdp-codex-task-retry.mjs";
 
 export const LWDP_CODEX_PENDING_JOURNAL_KIND = "worldkit-lwdp-codex-pending-journal";
 
@@ -512,7 +513,7 @@ function unexpectedRemoteOutputs(itemsPayload, taskId, declaredOutputUris) {
   return !sameStringSet(outputUris, declaredOutputUris);
 }
 
-async function prepareOutputDestination(repoRoot, destination, fs) {
+async function prepareOutputDestination(repoRoot, destination, fs, allowExistingMatchingOutputs = false) {
   const root = await resolvedSafeRoot(repoRoot, fs);
   const lexicalRoot = resolve(repoRoot);
   const lexicalDestination = resolve(destination);
@@ -527,8 +528,10 @@ async function prepareOutputDestination(repoRoot, destination, fs) {
   const directory = await ensureSafeDirectory(root, parts, fs);
   const directoryMetadata = await fs.lstat(directory);
   try {
-    await fs.lstat(absolute);
-    fail(`LWDP same-request-id recovery output already exists: ${absolute}`);
+    const existing = await fs.lstat(absolute);
+    if (!allowExistingMatchingOutputs || existing.isSymbolicLink() || !existing.isFile()) {
+      fail(`LWDP same-request-id recovery output already exists: ${absolute}`);
+    }
   } catch (error) {
     if (!isNotFound(error)) throw error;
   }
@@ -582,6 +585,7 @@ async function downloadDeclaredOutputs(input) {
     taskId,
     downloadImplementation,
     fileSystem,
+    allowExistingMatchingOutputs = false,
   } = input;
   const fs = fileSystem;
   const expected = new Set(declaredOutputUris);
@@ -589,7 +593,7 @@ async function downloadDeclaredOutputs(input) {
   const destinations = [];
   try {
     for (const output of outputSpecs) {
-      destinations.push(await prepareOutputDestination(repoRoot, output.localPath, fs));
+      destinations.push(await prepareOutputDestination(repoRoot, output.localPath, fs, allowExistingMatchingOutputs));
     }
     for (const output of outputSpecs) {
       const destinationState = destinations[staged.length];
@@ -641,8 +645,16 @@ async function downloadDeclaredOutputs(input) {
           fs,
         );
         try {
-          await fs.lstat(entry.destination);
-          fail(`LWDP same-request-id recovery output already exists: ${entry.destination}`);
+          const existing = await fs.lstat(entry.destination);
+          if (!allowExistingMatchingOutputs || existing.isSymbolicLink() || !existing.isFile()) {
+            fail(`LWDP same-request-id recovery output already exists: ${entry.destination}`);
+          }
+          const existingHash = await hashRegularOutput(entry.destination, entry.destinationState, fs);
+          const downloadedHash = await hashRegularOutput(entry.temporaryPath, entry.destinationState, fs);
+          if (existingHash !== downloadedHash) {
+            fail("LWDP same-request-id recovery existing output Hash differs from the exact remote output.");
+          }
+          continue;
         } catch (error) {
           if (!isNotFound(error)) throw error;
         }
@@ -683,6 +695,26 @@ async function downloadDeclaredOutputs(input) {
   }
 }
 
+async function hashRegularOutput(path, directoryState, fs) {
+  await assertDirectoryIdentity(directoryState.directory, directoryState.directoryMetadata,
+    directoryState.root, fs);
+  const handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) fail("LWDP recovery output is not a regular file.");
+    const hash = createHash("sha256").update(await handle.readFile()).digest("hex");
+    const after = await handle.stat();
+    const current = await fs.lstat(path);
+    if (!sameInode(before, after) || !sameInode(after, current) || current.isSymbolicLink() ||
+        before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
+      fail("LWDP recovery output changed during exact Hash comparison.");
+    }
+    await assertDirectoryIdentity(directoryState.directory, directoryState.directoryMetadata,
+      directoryState.root, fs);
+    return hash;
+  } finally { await handle.close(); }
+}
+
 export async function reconcileLwdpCodexSameRequestId({
   repoRoot,
   current,
@@ -695,6 +727,8 @@ export async function reconcileLwdpCodexSameRequestId({
   fileSystem,
   intervalMs = 100,
   timeoutMs = Number(process.env.WORLDKIT_LWDP_JOB_TIMEOUT_MS || 3_600_000),
+  onCompleted,
+  allowExistingMatchingOutputs = false,
 } = {}) {
   const fs = asFileSystem(fileSystem);
   const parsedCurrent = parsePendingJournal(current);
@@ -774,7 +808,40 @@ export async function reconcileLwdpCodexSameRequestId({
   }
 
   const items = await itemsImplementation(jobId, { config, fetchImplementation });
-  assertSuccessfulJob(job, items, [parsedCurrent.taskId]);
+  try {
+    assertSuccessfulJob(job, items, [parsedCurrent.taskId]);
+  } catch (cause) {
+    // A retry may only be authorized by this identity-checked terminal job, never
+    // by polling/network exceptions or text emitted by a local checker.
+    let deterministicStop = false;
+    const rows = items?.items ?? items?.data ?? [];
+    const item = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+    const expectedLogUri = joinS3Uri(parsedCurrent.outputS3Prefix, "tasks", parsedCurrent.taskId,
+      "logs", "codex_attempt.json");
+    if (item?.item_id === parsedCurrent.taskId && item.status === "failed" &&
+        /missing required outputs:/i.test(String(item.error ?? "")) && item.metadata?.log_uri === expectedLogUri) {
+      const staging = await createLwdpCodexStagingDirectory(repoRoot,
+        `terminal-proof-${randomBytes(12).toString("hex")}`, { fileSystem: fs });
+      try {
+        const path = join(staging, "codex-attempt.json");
+        await downloadImplementation(expectedLogUri, path);
+        const directoryState = { root: await resolvedSafeRoot(repoRoot, fs), directory: staging,
+          metadata: await fs.lstat(staging) };
+        const metadata = await fs.lstat(path);
+        if (metadata.size >= 2 && metadata.size <= 1024 * 1024) {
+          const log = JSON.parse((await readFileNoFollow(path, directoryState, fs)).raw);
+          deterministicStop = log?.item_id === parsedCurrent.taskId && log?.status === "missing_outputs" &&
+            /BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED/.test(`${log.stdout_tail ?? ""}\n${log.stderr_tail ?? ""}`);
+        }
+      } catch {
+        // Same as the frozen old probe: unavailable/malformed optional logs are
+        // not evidence of a deterministic stop. No log text is published.
+      } finally { await removeLwdpCodexStagingDirectory(repoRoot, staging, { fileSystem: fs }); }
+    }
+    throw confirmedTerminalTaskFailure({ job, itemsPayload: items,
+      requestId: parsedCurrent.requestId, taskId: parsedCurrent.taskId,
+      outputS3Prefix: parsedCurrent.outputS3Prefix, deterministicStop, cause });
+  }
   if (unexpectedRemoteOutputs(items, parsedCurrent.taskId, parsedCurrent.declaredOutputUris)) {
     fail("LWDP same-request-id recovery observed unexpected outputs.");
   }
@@ -787,12 +854,16 @@ export async function reconcileLwdpCodexSameRequestId({
     taskId: parsedCurrent.taskId,
     downloadImplementation,
     fileSystem: fs,
+    allowExistingMatchingOutputs,
   });
-  await removePendingJournal(repoRoot, parsedCurrent.requestId, { fileSystem: fs });
-  return Object.freeze({
+  const result = Object.freeze({
     status: "recovered",
     jobId,
     requestId: parsedCurrent.requestId,
     outputs: Object.freeze(outputs),
   });
+  // Commit the durable successful Task Attempt before deleting recovery identity.
+  if (onCompleted) await onCompleted(result);
+  await removePendingJournal(repoRoot, parsedCurrent.requestId, { fileSystem: fs });
+  return result;
 }

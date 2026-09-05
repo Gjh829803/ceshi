@@ -52,6 +52,18 @@ Skill and its portable checker. The images remain untrusted Builder proposals;
 their colors never create Runtime, Physics, Collider, Support, or Gameplay
 truth.
 
+For Native production, also read the Host-frozen
+`context/native-block-production-budget.json` before making either image. It contains the actual
+generation limits and shape dimensions from the same owners used by Native Builder; it is read-only
+implementation feasibility context, not permission to write metric coordinates or another output.
+Plan a complete coarse Block world inside that capacity: preserve large structural masses, important
+routes and level changes, support depth, meaningful side/rear areas and remote destinations before small
+decorative pieces. Do not draw an unbounded high-detail concept diorama and assume Builder can discard
+most of the world later. Simplify repeated ornament and exposed micro-detail first, keeping visible
+geography, complete landmarks and negative space. Restore paper/material/clothing detail only in the
+later visual stage. The ceiling is neither a target count nor a new image-similarity gate; historical
+Planner hard thresholds and the one-task repair budget are unchanged.
+
 ## Babylon Native causal image sequence
 
 For the Babylon Native Source, the two planning images are one causal proposal and must be made in
@@ -79,6 +91,38 @@ This Native sequence does not introduce another model task, Planning authority, 
 Compiler, or Physics authority. Its Block World colors are image-only Builder intent.
 
 ## Required decisions
+
+### Native deterministic palette authoring
+
+For Babylon Native only, use the bundled `scripts/author-palette.mjs` after inspecting each
+generated PNG and before accepting it. If inspection confirms an existing selected target but its
+lighting/shading produced the wrong RGB, select a tight image-pixel rectangle around that target's
+existing non-functional colored silhouette. This is explicit Planner image authoring, never Host
+auto-repair. It recolors only opaque, saturated pixels in the target's hue family within that
+selection; it cannot add, move, enlarge, or unocclude geometry. Do not select an unrelated same-hue
+object or use a functional surface as a substitute for a missing target. A missing or undersized
+target requires real image regeneration, not a painted marker to force a checker pass.
+
+Compute SHA-256 from the exact current PNG. Invoke the portable helper in the same task:
+
+```bash
+node .codex/skills/worldkit-spatial-planner/scripts/author-palette.mjs \
+  --image apps/playground/public/scene-plans/<scene-id>/world-plan.png \
+  --image-hash sha256:<exact-current-png-sha256> \
+  --brief artifacts/scenes/<scene-id>/scene-brief.md \
+  --target visual-target-1 \
+  --region-pixels <left,top,width,height>
+```
+
+The rectangle is integer image-pixel authoring input, not metric world coordinates or a Scene Brief
+field. The helper edits only the named existing PNG and prints source/result hashes and changed
+pixel counts; it does not create a new semantic output, acceptance receipt, or Runtime evidence.
+Inspect the result, then run the unchanged self-check. Apply the same operation to other selected
+targets only where actually visible; never require opening-absent landmarks to appear. If the entry
+changes, regenerate the dependent World Plan from that exact accepted entry as required above.
+Pure RGB drift does not need another image-generation call. These edits stay inside the existing
+three self-repair cycles; they do not grant more retries. Never edit the frozen Host palette, alter
+checker thresholds, or use this operation on Canonical Height Intent.
 
 ### Movement mode
 

@@ -36,8 +36,9 @@ async function journalRoot(): Promise<string> {
   return root;
 }
 
-async function openJournal(root: string) {
+async function openJournal(root: string, executionPurpose: "production" | "strict-acceptance" = "strict-acceptance") {
   return createWorldReconstructionRunJournalV1({
+    executionPurpose,
     runId: "formal-20260831",
     caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
@@ -61,6 +62,56 @@ const REPAIR_PATH: readonly WorldReconstructionJournalStateV1[] = [
 ];
 
 describe("world reconstruction run journal", () => {
+  it("appends production Host recovery after joined cleanup without erasing failure or allocating another Attempt", async () => {
+    const root = await journalRoot();
+    const journal = await openJournal(root, "production");
+    journal.beginAttempt(0);
+    await expect(journal.beginHostRecovery({ requestId: "request-a", requestHash: H("a") })).rejects.toThrow("HOST_RECOVERY_INVALID");
+    for (const boundary of ["before", "after"] as const) await journal.recordBoundary({
+      state: "initial-generating", operation: "initial-generating", boundary, attemptIndex: 0,
+      requestId: "request-a", requestHash: H("a"),
+    });
+    for (const boundary of ["before", "after"] as const) await journal.recordBoundary({
+      state: "cleanup-joined", operation: "cleanup-joined", boundary, diagnosticCodes: ["CAPTURE_FAILED"],
+      cleanupOutcomes: { providerTask: "completed", candidate: "completed", hostedBrowserSession: "completed",
+        viteServer: "completed", temporaryDirectories: "completed", outputPromotion: "completed" },
+    });
+    const original = await readFile(path.join(root, "journal.jsonl"), "utf8");
+    const resumed = await openJournal(root, "production");
+    await resumed.beginHostRecovery({ requestId: "request-a", requestHash: H("a") });
+    resumed.beginAttempt(0);
+    expect(() => resumed.beginAttempt(1)).toThrow();
+    expect((await readFile(path.join(root, "journal.jsonl"), "utf8")).startsWith(original)).toBe(true);
+    expect((await openJournal(root, "production")).currentState()).toBe("host-recovering");
+    expect(resumed.recordedRequest("request-a")).toEqual({ requestId: "request-a", requestHash: H("a"), outcome: "completed" });
+  });
+  it("records a publication-only recovery after completion and retains the original terminal rows", async () => {
+    const root = await journalRoot();
+    const journal = await openJournal(root, "production");
+    for (const state of ["cleanup-joined", "completed"] as const) {
+      for (const boundary of ["before", "after"] as const) await journal.recordBoundary({ state, boundary, operation: state });
+    }
+    const original = await readFile(path.join(root, "journal.jsonl"), "utf8");
+    for (const boundary of ["before", "after"] as const) await journal.recordBoundary({
+      state: "publication-recovering", boundary, operation: "resume-publication-only", diagnosticCodes: ["PUBLICATION_FAILED"],
+    });
+    for (const boundary of ["before", "after"] as const) await journal.recordBoundary({
+      state: "completed", boundary, operation: "resume-publication-completed",
+    });
+    expect((await readFile(path.join(root, "journal.jsonl"), "utf8")).startsWith(original)).toBe(true);
+    expect((await openJournal(root, "production")).currentState()).toBe("completed");
+  });
+  it("persists execution purpose and rejects changing a production Run into an external repair workflow", async () => {
+    const root = await journalRoot();
+    const journal = await openJournal(root, "production");
+    expect(journal.rows()[0]).toMatchObject({ executionPurpose: "production" });
+    const original = await readFile(path.join(root, "journal.jsonl"));
+    journal.beginAttempt(0);
+    expect(() => journal.beginAttempt(1)).toThrow("ordinary production cannot allocate an external repair Attempt");
+    await expect(openJournal(root, "strict-acceptance")).rejects.toThrow("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
+    expect(await readFile(path.join(root, "journal.jsonl"))).toEqual(original);
+    expect((await openJournal(root, "production")).rows()).toEqual(journal.rows());
+  });
   it("records an initial and repair state machine around every external boundary", async () => {
     const journal = await openJournal(await journalRoot());
     expect(journal.currentState()).toBe("created");
@@ -224,6 +275,7 @@ describe("world reconstruction run journal", () => {
     const root = await journalRoot();
     await openJournal(root);
     await expect(createWorldReconstructionRunJournalV1({
+      executionPurpose: "strict-acceptance",
       runId: "different-run",
       caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
@@ -231,6 +283,7 @@ describe("world reconstruction run journal", () => {
       outputDirectoryPath: root,
     })).rejects.toThrowError("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
     await expect(createWorldReconstructionRunJournalV1({
+      executionPurpose: "strict-acceptance",
       runId: "formal-20260831",
       caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",

@@ -50,6 +50,24 @@ The top-down comparison is exactly `1544x768`; the entry comparison is exactly `
 
 ## Reconstruction method
 
+Before authoring, make one internal construction-and-budget inventory from the complete Brief,
+uploaded reference and both planning views. Include important non-target scenery as well as the
+selected visual targets: for each complete form or repeated formation, retain its geographic region,
+footprint/course, elevation, supporting mass, and neighboring openings/negative space. The Case's
+generic entry/remote ground checks are minimum evidence anchors, not a replacement world-design brief.
+Do not reduce a complete bridge/stair network to the one straight scripted approach, or omit planned
+side/rear/remote regions because the fixed check does not visit them. Do not invent forms absent from
+this Case, promote ordinary decoration to identity targets, or output this internal inventory as a
+second geometry file.
+
+Read the exact Generation Request budget before allocating geometry. Reserve and count Blocks for
+the complete floor/support volume, major terrain, complete landmarks and actual connecting courses
+before spending the remainder on exposed detail. Use deterministic loops/Grid counts to check that
+allocation, and keep reserve for the existing shared repair cycles. A maximum is not a target: do not
+add filler to reach it, and do not reuse a remembered 2,000-Block cap. If detail would crowd out the
+world, simplify repeated ornament first while retaining meaningful complete forms, thickness, scale
+and geography. This does not relax overlap, explicit Collider, support, lattice or output-byte limits.
+
 1. Establish the complete metric footprint before detail. Reconstruct the reference as coherent volumes seen from opening, top, side, and exploration views—not camera-facing facades.
 2. Use the fixed Block Profile shapes and palette. One block is metric geometry; keep the fixed lattice, undeformed meshes, Y-only quarter turns, stable IDs, and deterministic insertion order. Read the exact shape dimensions, shape-specific legal center residues, occupancy grid, support rule, route adjacency rule, and safe stair recipe in the output contract before choosing any coordinates; never infer a Minecraft-like 2 m block scale. A center that is merely a multiple of the broad `[0.25, 0.125, 0.25]` lattice is not automatically valid for every shape.
 3. Use `context.random` and the frozen seed for every variation. Never use ambient randomness, wall-clock time, locale-sensitive ordering, or network input.
@@ -63,6 +81,12 @@ The top-down comparison is exactly `1544x768`; the entry comparison is exactly `
    Formal opening depth order is measured from each declared visual group's complete checked bounds center. Extending a midground ridge or landmark group toward Spawn changes that measurement even when its distant mass remains in place. Keep support connections in the ground/route group and preserve the complete footprint of every composition target during every repair.
    Resolve evidence in this order when inputs are incomplete: uploaded reference evidence, frozen entry composition, frozen top-down continuation, then the smallest coherent hidden geometry consistent with all three. Do not let a convenient scripted route override stronger visible or planned structure.
 6. Give every row of `context/case.json.expected.semanticSilhouetteTargets` exactly its declared `visualGroupId`, with no additional visual group. Never reconstruct the controlled Subject as Native Block geometry, even when the Scene Brief or planning image shows a rider, mount, avatar, character, or body parts; RuntimeHost creates the SDK Subject and keeps it visible in Capture. A Case that asks for a Subject visual group is invalid rather than permission to duplicate that authority. Do not split a complete gate, building, mountain mass, or repeated identity into decorative part groups. Acceptance targets used only by Spawn support, Collider, traversal, topology, or deterministic evidence remain evidence bindings and must not become visual groups.
+   Identity grouping is not required for every functional Block. Ordinary non-target structure,
+   support, water, hazard and background scenery may omit `visualGroupId` and retain their Profile
+   colors. Do not invent a Case target, add a manifest row, or attach unrelated scenery to a landmark
+   just to color/group it. Every declared target still needs actual member Blocks carrying its exact
+   group, and every used visual group must be declared. Collider Groups remain independent explicit
+   membership; an ungrouped visual Block never receives automatic collision or Gameplay identity.
 7. Register the Host-declared Spawn Marker explicitly at a ground-supported Spawn with clearance. The marker identifies the support-top position; it does not create a Character or control state.
 8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
    Preserve the validated block-world solid-landmark behavior at this explicit authoring boundary: every non-Subject semantic target represented with `paletteRole: "structure"` is a solid world landmark. Put every solid Block of that target in one stable `colliderGroupId`, and bind that complete group to the target's required `role: "blocker"` Case Collider using exactly `{ kind: "not-traversable" }` and `exposedEdgePolicy: "none"`. A doorway remains passable by leaving its opening empty, not by making the surrounding pillars visual-only. If a mass is intentionally non-colliding or unreachable scenery, classify it as `background-mass` or another honest visual-only role instead of `structure`. This rule produces an explicit Frozen Contribution; it never authorizes the Host or Runtime to infer physics from palette color.
@@ -86,6 +110,12 @@ node <resolved-bundled-renderer-path> \
 
 The renderer performs a source-only restricted mock capture of the Block Profile calls. It reads the frozen Native Bootstrap, Host-owned `subject-visual-review-proxy.json`, `native-block-authoring.json`, World Plan, and Entry Whitebox Target; it never derives the Subject from Native Source or reinterprets Runtime resources, and it does not instantiate Babylon, Engine, Scene, Runtime, Physics, Camera, Package, or Formal Capture. A passing renderer report proves only that the current source produced deterministic advisory pixels.
 
+Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
+functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and
+the occupied cell. Repair that geometry inside this task using the same shared repair counter;
+do not ignore a renderer failure or return stale PNGs. This is disposable authoring feedback, not
+full Native admission, support/Collider validation or a Runtime collision owner.
+
 You must actually open and inspect both PNGs with the available image-viewing tool. Do not infer visual success from exit status, hashes, file size, or the fact that the renderer produced images. In each comparison the Planner target is on the left and the current Builder projection is on the right.
 
 Inspect in this priority order:
@@ -94,9 +124,16 @@ Inspect in this priority order:
 2. entry-frame subject-to-world scale, main-target screen footprint and silhouette, left/right and near/far placement, opening visibility, depth order, occlusion, structural thickness, and visible supporting mass; then
 3. exposed detail only after both structural readings agree with the frozen planning images and uploaded reference evidence.
 
+Use these comparisons as the primary repair feedback, not as files to acknowledge. Check the
+construction inventory against both images, including important scenery that has no visual-target
+identity. Within the largest geographic mismatch, repair complete landmark position and semantic
+front/course first, then footprint and scale, then depth order and occlusion. Mere target presence is
+not alignment. Before each source repair, recount its Block cost and remove low-value ornament if
+needed; never erase a major region or flatten a required rise to free budget.
+
 If either comparison is materially wrong, repair only `scene.ts`, `native-block-authoring.json`, or `native-resources.json`; do not edit the frozen inputs, Bootstrap, Case, Planner images, thresholds, renderer, or task protocol. Then rerun both the structural self-check and both comparisons and inspect the fresh pixels again. A source edit invalidates both prior reports.
 
-Host TypeScript checking is strict. When an `as const` tuple supplies a mutable numeric loop bound, explicitly widen the loop variable to `number`; otherwise literal-union inference can make later valid numeric comparisons fail admission.
+Host TypeScript checking is strict. Coordinate rows must be fixed tuples (`as const` on a literal table, or `readonly [number, number]` rows); destructuring an inferred `number[][]` does not prove its members exist. Never silence diagnostics with `any`, `@ts-ignore`, `@ts-nocheck`, or unchecked non-null assertions. When an `as const` tuple supplies a mutable numeric loop bound, explicitly widen the loop variable to `number`; otherwise literal-union inference can make later valid numeric comparisons fail admission.
 
 Before returning, verify this closure:
 
@@ -115,15 +152,26 @@ Import exactly `@whitebox-world/native-babylon` and `@whitebox-world/native-baby
 
 ## Completion and one shared frozen repair budget
 
-Resolve `scripts/self-check.mjs` relative to this exact `SKILL.md` copy and run the bundled advisory output-shape checker inside this same Builder task:
+Resolve `scripts/self-check.mjs` relative to this exact `SKILL.md` copy and run the bundled advisory source preflight checker inside this same Builder task:
 
 ```bash
 node <resolved-bundled-self-check-path> \
   --workspace . \
   --case context/case.json \
+  --scene-brief inputs/scene-brief.md \
   --visual-identity-palette inputs/visual-identity-palette.json
 ```
 
-The checker verifies the three declared Native Source root outputs, file safety, JSON plain-data shape, sorted unique visual resource refs, obvious forbidden authority tokens, and the portable Case visual-group/identity-color join. For every Case `acceptanceTargetRef` that identifies `visual-target-N`, copy the exact `visualGroupId`, `semanticClassId`, and Native fixed color from `inputs/visual-identity-palette.json`; target 3 is `#D9A514`, not the Canonical-lane purple. A palette target omitted from the Case is not permission to invent a visual group or opening bounds. It ignores the task runner's reserved root entries `context/`, `inputs/`, `attempts/`, and `.codex-last-message.txt`; the trusted Host promotes the three Native Source files separately from the two declared advisory PNGs and rejects every other output. The portable self-check reports only and can trigger repair inside this one Builder task; Host admission independently repeats the identity join and remains the sole trusted gate. The checker does not edit generated files, retry the Builder, typecheck Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
+Case and Request bind the raw Scene Brief file bytes; the identity palette binds
+the shared parser's semantic Scene Brief hash. These hashes need not be equal.
+Use the frozen Brief with the bundled checker; never rewrite either hash to make
+them match. The portable checker is built from the Host's current Brief/Palette
+parsers, not an independently maintained schema copy.
 
-Obey the frozen Request/Profile `builderSelfRepairAttemptCount`; never invent a retry budget. The representative NBR Profile freezes `builderSelfRepairAttemptCount` to `3`. Structural and visual feedback share this one counter: after the initial output, any source repair consumes one cycle, and there are at most three combined self-repair cycles inside this same Builder task. Do not allocate separate structural and visual retry budgets. Every edit invalidates both preceding reports. Stop only when a fresh structural report passes and both freshly rendered comparisons have been opened and judged aligned; if the frozen budget is exhausted, return the current structural diagnostics or unresolved visual mismatch without claiming success. These in-task source repairs do not allocate a Package or Runtime Candidate and do not replace the separate Host-owned bounded external repair Attempts. A Host-owned external repair is never another self-repair cycle: when the frozen Profile admits it, the Host creates a fresh identity-bearing Native generation Attempt with a new request and task ID plus exactly the preceding trusted evidence. Only a passing fresh structural report plus inspected advisory comparisons may proceed to trusted `worldkit native check`. Only after that Native Check passes may the Host replay the same renderer and compare decoded RGBA identity; both steps run before any Package or Runtime Candidate exists.
+The checker runs semantic TypeScript checking with the exact Host compiler policy and a build-generated frozen SDK/type-library graph; it does not use transpilation as a substitute. It reports bounded `typecheckDiagnostics` with the TypeScript code, concrete message and source location. Fix these inside this same task and rerun after every source edit. The checker also verifies the three declared Native Source root outputs, file safety, JSON plain-data shape, sorted unique visual resource refs, obvious forbidden authority tokens, and the portable Case visual-group/identity-color join. For every Case `acceptanceTargetRef` that identifies `visual-target-N`, copy the exact `visualGroupId`, `semanticClassId`, and Native fixed color from `inputs/visual-identity-palette.json`; target 3 is `#D9A514`, not the Canonical-lane purple. A palette target omitted from the Case is not permission to invent a visual group or opening bounds. It ignores the task runner's reserved root entries `context/`, `inputs/`, `attempts/`, and `.codex-last-message.txt`; the trusted Host promotes the three Native Source files separately from the two declared advisory PNGs and rejects every other output. The portable self-check reports only and can trigger repair inside this one Builder task; Host admission independently repeats the identity join and remains the sole trusted gate. The checker does not edit generated files, retry the Builder, execute Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
+
+Obey the frozen Request/Profile `builderSelfRepairAttemptCount`; never invent a retry budget. The representative NBR Profile freezes `builderSelfRepairAttemptCount` to `3`. Type, structural and visual feedback share this one counter: after the initial output, any source repair consumes one cycle, and there are at most three combined self-repair cycles inside this same Builder task. Do not allocate separate structural and visual retry budgets. Every edit invalidates both preceding reports. Stop only when a fresh structural report passes and both freshly rendered comparisons have been opened and judged aligned; if the frozen budget is exhausted, return the current structural diagnostics or unresolved visual mismatch without claiming success.
+
+Ordinary Scene production has no external diagnostic-repair Attempts, independent of the Evaluation Profile's `qualityGateMode`. A failed Host replay ends that production execution; it never implicitly buys another source-repair task. These in-task source repairs do not allocate a Package or Runtime Candidate and do not replace the separate Host-owned bounded external repair Attempts available only to explicit strict-acceptance runs. A Host-owned external repair is never another self-repair cycle: only that explicit workflow, within the frozen Profile budget, creates a fresh identity-bearing Native generation Attempt with a new request and task ID plus exactly the preceding trusted evidence. A stricter Profile alone is not authorization for external repair. Provider-task retry accounting is separate from this structural/visual self-repair budget and belongs to the task router; the Builder never requests or implements provider retries.
+
+Only a passing fresh structural report plus inspected advisory comparisons may proceed to trusted `worldkit native check`. After that Native Check passes, the Host replays the same renderer and compares decoded RGBA identity before WorldPackage publication. Native Check itself owns its isolated Host replay Candidates; the Builder never creates a Candidate.

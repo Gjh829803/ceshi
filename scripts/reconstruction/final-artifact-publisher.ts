@@ -10,6 +10,7 @@ import {
   unlink,
 } from "node:fs/promises";
 import path from "node:path";
+import { resolveHostAttemptArtifactV1 } from "./host-checkpoint.js";
 
 import {
   sha256Bytes,
@@ -27,6 +28,8 @@ import {
   hashFormalWorldCaptureReceiptV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureIntentV1,
@@ -46,6 +49,11 @@ import {
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1 } from "./native-world-case-preparation.js";
+import {
+  nativeWorldReferenceMediaTypeV1,
+  validateNativeWorldReferenceImageV1,
+} from "./native-world-reference-media.js";
 import { verifyPassedGroundAnalysisReportV1 } from
   "./passed-ground-analysis-report.js";
 import {
@@ -161,12 +169,10 @@ const LOCAL_SCENE_BRIEF_REF = "scene-brief.md";
 const REQUIRED_LOCAL_REFERENCE_INPUTS: ReadonlyMap<
   string,
   "image/png" | "application/json"
-> = Object.freeze(new Map([
-  ["entry-whitebox-target.png", "image/png"],
-  ["planner-self-check.json", "application/json"],
-  ["world-plan.png", "image/png"],
-] as const));
-const LOCAL_REFERENCE_INPUT_PATTERN = /^reference-(0|[1-9][0-9]*)\.(png|jpg)$/;
+> = Object.freeze(new Map(NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1.map(
+  ({ inputRef, mediaType }) => [inputRef, mediaType],
+)));
+const LOCAL_REFERENCE_INPUT_PATTERN = /^reference-(0|[1-9][0-9]*)\.(png|jpg|webp)$/;
 const ABSOLUTE_RESOURCE_REF_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//;
 const NON_CASE_OWNER_INPUT_PATHS = Object.freeze(new Set([
   "block-profile.json",
@@ -286,27 +292,17 @@ function localCaseInputRelativePath(
   return ref;
 }
 
-function assertReferenceMedia(
+async function assertReferenceMedia(
   bytes: Uint8Array,
-  mediaType: "image/png" | "image/jpeg" | "application/json",
+  mediaType: "image/png" | "image/jpeg" | "image/webp" | "application/json",
   inputRef: string,
-): void {
-  if (mediaType === "image/png") {
-    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-    if (
-      bytes.byteLength < signature.length ||
-      signature.some((value, index) => bytes[index] !== value)
-    ) invalid(`Case reference input '${inputRef}' media does not match image/png`);
-    return;
-  }
-  if (mediaType === "image/jpeg") {
-    if (
-      bytes.byteLength < 4 ||
-      bytes[0] !== 0xff ||
-      bytes[1] !== 0xd8 ||
-      bytes[bytes.byteLength - 2] !== 0xff ||
-      bytes[bytes.byteLength - 1] !== 0xd9
-    ) invalid(`Case reference input '${inputRef}' media does not match image/jpeg`);
+): Promise<void> {
+  if (mediaType !== "application/json") {
+    try {
+      await validateNativeWorldReferenceImageV1(bytes, mediaType);
+    } catch {
+      invalid(`Case reference input '${inputRef}' media does not match ${mediaType}`);
+    }
     return;
   }
   parseJson(bytes, `Case reference input '${inputRef}'`);
@@ -316,11 +312,11 @@ async function readVerifiedCaseOwnerInput(
   caseInputsRoot: string,
   relativePath: string,
   expectedHash: Sha256HashV1,
-  mediaType?: "image/png" | "image/jpeg" | "application/json",
+  mediaType?: "image/png" | "image/jpeg" | "image/webp" | "application/json",
 ): Promise<readonly [string, Sha256HashV1]> {
   const bytes = await requiredRegularFile(caseInputsRoot, relativePath);
   if (mediaType !== undefined) {
-    assertReferenceMedia(bytes, mediaType, relativePath);
+    await assertReferenceMedia(bytes, mediaType, relativePath);
   }
   const contentHash = sha256Bytes(bytes) as Sha256HashV1;
   exact(
@@ -351,7 +347,7 @@ async function assertNoUndeclaredLocalCaseOwnerPaths(
   }
 }
 
-async function verifiedCaseOwnerInputSnapshot(
+export async function verifyNativeBlockCaseOwnerInputSnapshotV1(
   caseInputsRoot: string,
   reconstructionCase: ReturnType<typeof parseWorldReconstructionCaseV1>,
 ): Promise<CaseOwnerInputSnapshotV1> {
@@ -412,7 +408,7 @@ async function verifiedCaseOwnerInputSnapshot(
     if (match === null) {
       invalid(`extra Case reference input '${row.relativePath}' is forbidden`);
     }
-    const expectedMediaType = match[2] === "png" ? "image/png" : "image/jpeg";
+    const expectedMediaType = nativeWorldReferenceMediaTypeV1(row.relativePath!);
     exact(
       row.mediaType,
       expectedMediaType,
@@ -584,6 +580,7 @@ function assertCaptureInventory(
     ...viewIds.map((viewId) => `${viewId}.png`),
     "collider-overlay.png",
     "opening-observation.json",
+    "semantic-view-observation-set.json",
     "spawn-support-observation.json",
     "collider-overlay-observation.json",
     "scripted-traversal.json",
@@ -722,11 +719,11 @@ async function publish(
       "Case",
     ));
     const caseOwnerInputAdmissionBefore =
-      await verifiedCaseOwnerInputSnapshot(
+      await verifyNativeBlockCaseOwnerInputSnapshotV1(
         caseInputsRoot,
         reconstructionCase,
       );
-    const caseInputsSnapshot = await verifiedCaseOwnerInputSnapshot(
+    const caseInputsSnapshot = await verifyNativeBlockCaseOwnerInputSnapshotV1(
       caseInputsRoot,
       reconstructionCase,
     );
@@ -836,23 +833,26 @@ async function publish(
     );
     await requireCanonicalDirectory(attemptRoot, "terminal Attempt directory");
     const runArtifactRoot = runReceipt.caseRef.slice(0, -"/case.json".length);
+    const hostArtifact = (artifactRef: string, fileName: string) => resolveHostAttemptArtifactV1({
+      runRoot: runDirectoryPath, caseRef: runReceipt.caseRef, attemptIndex: finalAttempt.attemptIndex,
+      artifactRef, fileName,
+    });
+    const packageStageRoot = path.dirname(hostArtifact(finalAttempt.sceneAuthoringAttemptResultRef, "attempt-result.json"));
+    const evaluationStageRoot = path.dirname(hostArtifact(finalAttempt.evaluationResultRef, "evaluation.json"));
     verifyPassedGroundAnalysisReportV1({
       reportBytes: await requiredRegularFile(
-        attemptRoot,
+        packageStageRoot,
         "ground-analysis-report.json",
       ),
       reportRef: finalAttempt.groundAnalysisReportRef,
-      expectedReportRef:
-        `${runArtifactRoot}/runs/${path.basename(runDirectoryPath)}/attempts/${
-          finalAttempt.attemptIndex
-        }/ground-analysis-report.json`,
+      expectedReportRef: `${runArtifactRoot}/${path.relative(path.dirname(path.dirname(runDirectoryPath)), packageStageRoot).split(path.sep).join("/")}/ground-analysis-report.json`,
       reportHash: finalAttempt.groundAnalysisReportHash,
       expectedCaseHash: runReceipt.caseHash,
       expectedWorldPackageRootHash: finalAttempt.worldPackageRootHash,
     });
 
     const packageRoot = await requireCanonicalDirectory(
-      path.join(attemptRoot, "world-package"),
+      path.join(packageStageRoot, "world-package"),
       "terminal WorldPackage directory",
     );
     const packageSnapshot = await snapshotTree(packageRoot);
@@ -869,7 +869,7 @@ async function publish(
       "terminal Package Root is stale");
 
     const captureRoot = await requireCanonicalDirectory(
-      path.join(attemptRoot, "capture"),
+      path.dirname(hostArtifact(finalAttempt.captureReceiptRef, "capture/formal-world-capture-receipt.json")),
       "terminal Capture directory",
     );
     const captureSnapshot = await snapshotTree(captureRoot);
@@ -913,6 +913,12 @@ async function publish(
       openingPngBytes: await requiredRegularFile(captureRoot, "opening.png"),
       openingObservation,
     });
+    const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1(parseJson(
+      await requiredRegularFile(captureRoot, "semantic-view-observation-set.json"),
+      "semantic-view-observation-set.json",
+    ));
+    assertFormalSemanticViewObservationSetMatchesReceiptV1({ observationSet: semanticViewObservationSet,
+      receipt: captureReceipt, openingObservation });
     if (entryValidation.status !== "passed") {
       invalid(
         `terminal entry validation failed: ${entryValidation.diagnostics
@@ -958,7 +964,7 @@ async function publish(
       "Capture observation 'scripted-traversal.json' is stale",
     );
 
-    const evaluationBytes = await requiredRegularFile(attemptRoot, "evaluation.json");
+    const evaluationBytes = await requiredRegularFile(evaluationStageRoot, "evaluation.json");
     const evaluation = parseWorldReconstructionEvaluationResultV1(parseJson(
       evaluationBytes,
       "Evaluation",
@@ -1128,7 +1134,7 @@ async function publish(
     );
     await syncTree(stagingDirectoryPath, hooks);
     exact(
-      sha256Bytes(await requiredRegularFile(attemptRoot, "evaluation.json")),
+      sha256Bytes(await requiredRegularFile(evaluationStageRoot, "evaluation.json")),
       sha256Bytes(evaluationBytes),
       "terminal Evaluation source changed during publication",
     );
@@ -1164,7 +1170,7 @@ async function publish(
       "Formal Capture Intent owner snapshot changed during publication",
     );
     assertCaseOwnerInputSnapshotEqual(
-      await verifiedCaseOwnerInputSnapshot(
+      await verifyNativeBlockCaseOwnerInputSnapshotV1(
         caseInputsRoot,
         reconstructionCase,
       ),

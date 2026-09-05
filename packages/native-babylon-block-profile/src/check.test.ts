@@ -198,6 +198,19 @@ function withScene(run: (scene: Scene) => void): void {
 }
 
 describe("Babylon Native block profile structural check", () => {
+  it("allows ordinary functional scenery without inventing semantic identity groups (legacy parity)", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), { maximumBlockCount: 4 });
+      for (const [index, paletteRole] of (["structure", "hazard", "water-like-visual", "background-mass"] as const).entries()) {
+        session.createBlock({ id: `ordinary-scenery-${index}`, shape: "full", paletteRole, centerMetersXYZ: [index, 0.5, 0] });
+      }
+      const checked = session.finalize().checkResult;
+      expect(checked.outcome).toBe("passed");
+      expect(checked.diagnostics).toEqual([]);
+      expect(checked.visualGroups).toEqual([]);
+    });
+  });
   it("publishes one closed diagnostic-code vocabulary", async () => {
     const profile = await loadProfile();
 
@@ -209,7 +222,6 @@ describe("Babylon Native block profile structural check", () => {
       "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
       "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
-      "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
       "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
     ]);
     expect(Object.isFrozen(
@@ -556,11 +568,6 @@ describe("Babylon Native block profile structural check", () => {
           severity: "error",
           code: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
           location: { kind: "block", blockId: "overlap-first" },
-        },
-        {
-          severity: "error",
-          code: "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
-          location: { kind: "block", blockId: "ungrouped-structure" },
         },
       ]);
       expect(result.metrics.structuralRouteComponentCount).toBe(2);

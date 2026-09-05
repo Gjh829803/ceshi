@@ -61,8 +61,16 @@ describe("single-job Planner and Builder self-check bundles", () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-bundles-"));
     const bundles = [
       {
+        id: "native-builder",
+        relativePath: "worldkit-native-block-builder/scripts/self-check.mjs",
+      },
+      {
         id: "planner",
         relativePath: "worldkit-spatial-planner/scripts/self-check.mjs",
+      },
+      {
+        id: "planner-palette-authoring",
+        relativePath: "worldkit-spatial-planner/scripts/author-palette.mjs",
       },
       {
         id: "builder",
@@ -94,7 +102,7 @@ describe("single-job Planner and Builder self-check bundles", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 180_000); // Includes building the frozen SDK type graph and semantic compiler.
 
   it("runs without a repository dependency graph and produces replayable receipts", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-self-check-"));

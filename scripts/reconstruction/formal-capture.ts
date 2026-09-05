@@ -1,12 +1,15 @@
 import {
   formalWorldCaptureReceiptCanonicalBytesV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -52,6 +55,10 @@ import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
+  parseWorldReconstructionExecutionPurposeV1,
+  type WorldReconstructionExecutionPurposeV1,
+} from "./run-journal.js";
+import {
   CaptureOnlyHostedSessionClosedErrorV1,
   createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
@@ -82,6 +89,7 @@ export interface FormalCaptureArtifactBytesV1 {
   readonly worldTopDownPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservationJson: Uint8Array;
+  readonly semanticViewObservationSetJson: Uint8Array;
   readonly spawnSupportObservationJson: Uint8Array;
   readonly colliderOverlayObservationJson: Uint8Array;
   readonly scriptedTraversalJson: Uint8Array;
@@ -126,6 +134,7 @@ export interface CaptureHostedWorldPackageInputV1 {
   readonly budget?: FormalCaptureArtifactBudgetV1;
   /** Required by the production reconstruction owner; omitted only by low-level transport tests. */
   readonly openingGate?: Readonly<{
+    readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
     readonly reconstructionCase: WorldReconstructionCaseV1;
     readonly evaluationProfile: WorldReconstructionEvaluationProfileV1;
   }>;
@@ -161,15 +170,18 @@ export interface FormalCaptureCommandResultV1 {
 }
 
 /**
- * Report-only profiles observe opening composition without turning visual
- * quality drift into a transport/publication failure. Structural and Runtime
+ * Ordinary production observes opening composition regardless of Profile.
+ * Only explicit strict acceptance may turn its quality drift into rejection.
+ * Structural and Runtime
  * failures are handled before this policy boundary and remain fail-closed.
  */
 export function openingCompositionGateBlocksPublicationV1(input: Readonly<{
+  readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly qualityGateMode: WorldReconstructionEvaluationProfileV1["qualityGateMode"];
   readonly gateStatus: OpeningCompositionHostGateResultV1["status"];
 }>): boolean {
-  return input.qualityGateMode === "required-for-publication" &&
+  return parseWorldReconstructionExecutionPurposeV1(input.executionPurpose) === "strict-acceptance" &&
+    input.qualityGateMode === "required-for-publication" &&
     input.gateStatus === "failed";
 }
 
@@ -424,6 +436,9 @@ function assertPayloadArtifactHashes(
       receipt.colliderOverlayPngContentHash ||
     hashFormalOpeningObservationV1(payload.openingObservation) !==
       receipt.openingObservationContentHash ||
+    hashFormalSemanticViewObservationSetV1(
+      payload.semanticViewObservationSet,
+    ) !== receipt.semanticViewObservationSetContentHash ||
     hashFormalSpawnSupportObservationV1(payload.spawnSupportObservation) !==
       receipt.spawnSupportObservationContentHash ||
     hashFormalColliderOverlayObservationV1(payload.colliderOverlayObservation) !==
@@ -447,6 +462,9 @@ function validateHostedPayload(
   const openingObservation = parseFormalOpeningObservationV1(
     payload.openingObservation,
   );
+  const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1(
+    payload.semanticViewObservationSet,
+  );
   const spawnSupportObservation = parseFormalSpawnSupportObservationV1(
     payload.spawnSupportObservation,
   );
@@ -466,6 +484,11 @@ function validateHostedPayload(
       joined.verifiedPackage.receipt.worldPackageRootHash
   ) mismatch("receipt/formalRequest");
   assertPayloadArtifactHashes(payload, receipt);
+  assertFormalSemanticViewObservationSetMatchesReceiptV1({
+    observationSet: semanticViewObservationSet,
+    receipt,
+    openingObservation,
+  });
   return Object.freeze({
     artifacts: Object.freeze({
       openingPng: new Uint8Array(payload.openingPng),
@@ -473,6 +496,8 @@ function validateHostedPayload(
       worldTopDownPng: new Uint8Array(payload.worldTopDownPng),
       colliderOverlayPng: new Uint8Array(payload.colliderOverlayPng),
       openingObservationJson: canonicalJsonBytes(openingObservation),
+      semanticViewObservationSetJson:
+        canonicalJsonBytes(semanticViewObservationSet),
       spawnSupportObservationJson: canonicalJsonBytes(spawnSupportObservation),
       colliderOverlayObservationJson:
         canonicalJsonBytes(colliderOverlayObservation),
@@ -521,6 +546,9 @@ export async function captureHostedWorldPackageV1(
   let rejectedOutputDirectoryPath: string | undefined;
   let joined: JoinedFormalCapturePackageRequestV1;
   try {
+    if (!isNil(input.openingGate)) {
+      parseWorldReconstructionExecutionPurposeV1(input.openingGate.executionPurpose);
+    }
     packageDirectoryPath = exactAbsolutePath(
       input.packageDirectoryPath,
       "packageDirectoryPath",
@@ -610,6 +638,7 @@ export async function captureHostedWorldPackageV1(
         expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
       });
       if (openingCompositionGateBlocksPublicationV1({
+        executionPurpose: input.openingGate.executionPurpose,
         qualityGateMode: input.openingGate.evaluationProfile.qualityGateMode,
         gateStatus: openingGateResult.status,
       })) {
@@ -720,6 +749,7 @@ export async function publishRejectedCaptureDirectoryV1(
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
+    ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],
     ["spawn-support-observation.json", input.artifacts.spawnSupportObservationJson, "json"],
     ["collider-overlay-observation.json", input.artifacts.colliderOverlayObservationJson, "json"],
     ["scripted-traversal.json", input.artifacts.scriptedTraversalJson, "json"],
@@ -790,6 +820,7 @@ export async function publishFormalCaptureDirectoryV1(
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
+    ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],
     ["spawn-support-observation.json", input.artifacts.spawnSupportObservationJson, "json"],
     ["collider-overlay-observation.json", input.artifacts.colliderOverlayObservationJson, "json"],
     ["scripted-traversal.json", input.artifacts.scriptedTraversalJson, "json"],

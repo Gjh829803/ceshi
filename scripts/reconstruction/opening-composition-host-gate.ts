@@ -300,8 +300,12 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
   );
   diagnostics.push(...controlledSubjectDiagnostics(input.openingObservation));
   const expected = input.reconstructionCase.expected.openingComposition;
+  const expectedTargetRefs = new Set(expected.targetRefs);
   const observedByTargetRef = new Map(
-    input.openingObservation.visualGroups.map((group) =>
+    input.openingObservation.visualGroups
+      .filter(({ compositionTargetRef }) =>
+        expectedTargetRefs.has(compositionTargetRef))
+      .map((group) =>
       [group.compositionTargetRef, group] as const),
   );
   for (const region of expected.regions) {
@@ -365,6 +369,8 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
     }
   }
   const observedOrder = [...input.openingObservation.visualGroups]
+    .filter(({ compositionTargetRef }) =>
+      expectedTargetRefs.has(compositionTargetRef))
     .sort((left, right) => left.depthOrder - right.depthOrder)
     .map(({ compositionTargetRef }) => compositionTargetRef);
   if (

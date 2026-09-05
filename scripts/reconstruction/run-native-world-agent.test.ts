@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 
 import { sha256Bytes } from "@whitebox-world/protocol";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,6 +41,10 @@ describe("Native-default world agent Host route", () => {
     expect(source).toContain("sceneBriefSemanticHash:");
     expect(source).toContain("sceneBrief.sceneBriefHash");
     expect(source).toContain("validateNativeWorldPlannerInputClosureV1");
+    expect(source).toContain("copyAcceptedPlannerExecutionV1({");
+    expect(source).toContain("verifyAcceptedPlannerExecutionV1({");
+    expect(source).not.toContain("rm(publicPlanRoot");
+    expect(source).not.toContain("ownsPlannerOutputs");
     expect(source).toContain('plannerArguments.push("--image", plannerImagePath)');
     expect(source).toContain("uploadedReferenceInputs: references.map");
     expect(source).not.toContain('plannerArguments.push("--image", sourcePath)');
@@ -80,9 +85,12 @@ describe("Native-default world agent Host route", () => {
     const replacedPath = path.join(root, "replace.png");
     const deletedPath = path.join(root, "delete.jpg");
     const snapshotDirectoryPath = path.join(root, "private-snapshots");
+    const image = () => sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } });
+    const png = await image().png().toBuffer();
+    const jpeg = await image().jpeg().toBuffer();
     await Promise.all([
-      writeFile(replacedPath, "original-png"),
-      writeFile(deletedPath, "original-jpeg"),
+      writeFile(replacedPath, png),
+      writeFile(deletedPath, jpeg),
     ]);
 
     const references = await freezeNativeWorldReferenceInputsV1({
@@ -104,23 +112,52 @@ describe("Native-default world agent Host route", () => {
       mediaType,
     }))).toEqual([{
       inputRef: "reference-0.png",
-      contentHash: sha256Bytes(Buffer.from("original-png")),
+      contentHash: sha256Bytes(png),
       mediaType: "image/png",
     }, {
       inputRef: "reference-1.jpg",
-      contentHash: sha256Bytes(Buffer.from("original-jpeg")),
+      contentHash: sha256Bytes(jpeg),
       mediaType: "image/jpeg",
     }]);
-    await expect(readFile(references[0]!.plannerImagePath, "utf8"))
-      .resolves.toBe("original-png");
-    await expect(readFile(references[1]!.plannerImagePath, "utf8"))
-      .resolves.toBe("original-jpeg");
+    await expect(readFile(references[0]!.plannerImagePath)).resolves.toEqual(png);
+    await expect(readFile(references[1]!.plannerImagePath)).resolves.toEqual(jpeg);
     expect(references[0]!.plannerImagePath.startsWith(
       `${snapshotDirectoryPath}${path.sep}`,
     )).toBe(true);
     expect(Number((await lstat(references[0]!.plannerImagePath, {
       bigint: true,
     })).mode & 0o777n)).toBe(0o400);
+  });
+
+  it.each([true, false])("freezes original WebP bytes without conversion (lossless=%s)", async (lossless) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-webp-"));
+    temporaryRoots.push(root);
+    const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
+      .webp({ lossless }).toBuffer();
+    const sourcePath = path.join(root, "reference.WEBP");
+    await writeFile(sourcePath, bytes);
+    const [reference] = await freezeNativeWorldReferenceInputsV1({
+      sourcePaths: [sourcePath], snapshotDirectoryPath: path.join(root, "snapshots"),
+    });
+    expect(reference).toMatchObject({ inputRef: "reference-0.webp", mediaType: "image/webp", contentHash: sha256Bytes(bytes) });
+    expect(await readFile(reference!.plannerImagePath)).toEqual(bytes);
+    expect(Buffer.from(reference!.bytes)).toEqual(bytes);
+  });
+
+  it.each(["wrong-extension", "malformed", "animated"])("rejects %s WebP before Planner dispatch", async (kind) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-invalid-webp-"));
+    temporaryRoots.push(root);
+    const bytes = kind === "malformed" ? Buffer.from("RIFFxxxxWEBP")
+      : kind === "animated"
+        ? await sharp(Buffer.from([255, 0, 0, 0, 255, 0]), { raw: { width: 1, height: 2, channels: 3, pageHeight: 1 } })
+          .webp({ loop: 0, delay: [100, 100] }).toBuffer()
+        : await sharp({ create: { width: 1, height: 1, channels: 3, background: "red" } }).png().toBuffer();
+    const sourcePath = path.join(root, "reference.webp");
+    await writeFile(sourcePath, bytes);
+    const snapshotDirectoryPath = path.join(root, "snapshots");
+    await expect(freezeNativeWorldReferenceInputsV1({ sourcePaths: [sourcePath], snapshotDirectoryPath }))
+      .rejects.toThrow("NATIVE_WORLD_REFERENCE_IMAGE_INVALID");
+    await expect(lstat(snapshotDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("rejects a final-component symlink without leaving a partial snapshot", async () => {

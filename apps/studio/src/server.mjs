@@ -41,6 +41,8 @@ const {
   hashFormalWorldCaptureReceiptV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -1047,6 +1049,7 @@ export function createStudio(options = {}) {
       ...viewIds.map((viewId) => `${viewId}.png`),
       "collider-overlay.png",
       "opening-observation.json",
+      "semantic-view-observation-set.json",
       "spawn-support-observation.json",
       "collider-overlay-observation.json",
       "scripted-traversal.json",
@@ -1144,12 +1147,14 @@ export function createStudio(options = {}) {
     );
 
     let openingObservation;
+    let semanticViewObservationSet;
     let spawnSupportObservation;
     let colliderOverlayObservation;
     let scriptedTraversalObservation;
     try {
       [
         openingObservation,
+        semanticViewObservationSet,
         spawnSupportObservation,
         colliderOverlayObservation,
         scriptedTraversalObservation,
@@ -1158,6 +1163,8 @@ export function createStudio(options = {}) {
           captureRoot,
           "opening-observation.json",
         )).then(parseFormalOpeningObservationV1),
+        readNativeJsonArtifact(path.join(captureRoot, "semantic-view-observation-set.json"))
+          .then(parseFormalSemanticViewObservationSetV1),
         readNativeJsonArtifact(path.join(
           captureRoot,
           "spawn-support-observation.json",
@@ -1171,6 +1178,8 @@ export function createStudio(options = {}) {
           "scripted-traversal.json",
         )).then(parseFormalScriptedTraversalObservationV1),
       ]);
+      assertFormalSemanticViewObservationSetMatchesReceiptV1({ observationSet: semanticViewObservationSet,
+        receipt: captureReceipt, openingObservation });
     } catch {
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }

@@ -74,10 +74,10 @@ const bindings = Object.freeze([
     semanticClassId: alphaGroup.semanticClassId,
     identityColor: alphaGroup.identityColorHex,
     projectedBoundsSource: "checked-layout-visual-group",
-    requiredWorldViewIds: Object.freeze([
-      "opening",
-      "world-side",
-      "world-top-down",
+    viewRequirements: Object.freeze([
+      { viewId: "opening", mode: "reference-projection-required" },
+      { viewId: "world-side", mode: "presence-required" },
+      { viewId: "world-top-down", mode: "presence-required" },
     ] as const),
     authoringManifestHash: HASH_A,
     layoutInventoryHash: HASH_B,
@@ -92,10 +92,10 @@ const bindings = Object.freeze([
     semanticClassId: zetaGroup.semanticClassId,
     identityColor: zetaGroup.identityColorHex,
     projectedBoundsSource: "checked-layout-visual-group",
-    requiredWorldViewIds: Object.freeze([
-      "opening",
-      "world-side",
-      "world-top-down",
+    viewRequirements: Object.freeze([
+      { viewId: "opening", mode: "reference-projection-required" },
+      { viewId: "world-side", mode: "presence-required" },
+      { viewId: "world-top-down", mode: "presence-required" },
     ] as const),
     authoringManifestHash: HASH_A,
     layoutInventoryHash: HASH_B,
@@ -271,52 +271,54 @@ describe("formal world capture projection measurement", () => {
 
     expect(measureFormalWorldCaptureViewV1(fixture.input)).toEqual({
       viewId: "world-top-down",
-      visualGroups: [{
+      targets: [{
         acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
-        compositionTargetRef: "worldkit://composition-target/alpha@1",
-        topologyNodeId: "alpha-node",
-        semanticLayerId: "route-layer",
         blockVisualGroupId: "alpha-group",
+        mode: "presence-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [-2, -2, 2],
           maximumMetersXYZ: [0, 2, 4],
         },
-        normalizedBounds: {
-          minXBasisPoints: 4_999,
-          minYBasisPoints: 3_750,
-          maxXBasisPoints: 6_250,
-          maxYBasisPoints: 6_250,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 4_999,
+            minYBasisPoints: 3_750,
+            maxXBasisPoints: 6_250,
+            maxYBasisPoints: 6_250,
+          },
+          normalizedCenter: {
+            xBasisPoints: 5_625,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 312,
+          cameraDepthMeters: 19,
+          depthOrder: 1,
         },
-        normalizedCenter: {
-          xBasisPoints: 5_625,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 312,
-        cameraDepthMeters: 19,
-        depthOrder: 1,
       }, {
         acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
-        compositionTargetRef: "worldkit://composition-target/zeta@1",
-        topologyNodeId: "zeta-node",
-        semanticLayerId: "structure-layer",
         blockVisualGroupId: "zeta-group",
+        mode: "presence-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [2, -1, -4],
           maximumMetersXYZ: [4, 1, -2],
         },
-        normalizedBounds: {
-          minXBasisPoints: 2_500,
-          minYBasisPoints: 4_375,
-          maxXBasisPoints: 3_750,
-          maxYBasisPoints: 5_625,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 2_500,
+            minYBasisPoints: 4_375,
+            maxXBasisPoints: 3_750,
+            maxYBasisPoints: 5_625,
+          },
+          normalizedCenter: {
+            xBasisPoints: 3_125,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 156,
+          cameraDepthMeters: 13,
+          depthOrder: 0,
         },
-        normalizedCenter: {
-          xBasisPoints: 3_125,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 156,
-        cameraDepthMeters: 13,
-        depthOrder: 0,
       }],
     });
   });
@@ -429,52 +431,54 @@ describe("formal world capture projection measurement", () => {
     expect(fixture.camera.position.asArray()).toEqual([16, 0, 0]);
     expect(measureFormalWorldCaptureViewV1(fixture.input)).toEqual({
       viewId: "world-side",
-      visualGroups: [{
+      targets: [{
         acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
-        compositionTargetRef: "worldkit://composition-target/alpha@1",
-        topologyNodeId: "alpha-node",
-        semanticLayerId: "route-layer",
         blockVisualGroupId: "alpha-group",
+        mode: "presence-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [-2, -2, 2],
           maximumMetersXYZ: [0, 2, 4],
         },
-        normalizedBounds: {
-          minXBasisPoints: 2_500,
-          minYBasisPoints: 3_750,
-          maxXBasisPoints: 3_750,
-          maxYBasisPoints: 6_250,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 2_500,
+            minYBasisPoints: 3_750,
+            maxXBasisPoints: 3_750,
+            maxYBasisPoints: 6_250,
+          },
+          normalizedCenter: {
+            xBasisPoints: 3_125,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 312,
+          cameraDepthMeters: 17,
+          depthOrder: 1,
         },
-        normalizedCenter: {
-          xBasisPoints: 3_125,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 312,
-        cameraDepthMeters: 17,
-        depthOrder: 1,
       }, {
         acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
-        compositionTargetRef: "worldkit://composition-target/zeta@1",
-        topologyNodeId: "zeta-node",
-        semanticLayerId: "structure-layer",
         blockVisualGroupId: "zeta-group",
+        mode: "presence-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [2, -1, -4],
           maximumMetersXYZ: [4, 1, -2],
         },
-        normalizedBounds: {
-          minXBasisPoints: 6_250,
-          minYBasisPoints: 4_375,
-          maxXBasisPoints: 7_500,
-          maxYBasisPoints: 5_625,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 6_250,
+            minYBasisPoints: 4_375,
+            maxXBasisPoints: 7_500,
+            maxYBasisPoints: 5_625,
+          },
+          normalizedCenter: {
+            xBasisPoints: 6_875,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 156,
+          cameraDepthMeters: 13,
+          depthOrder: 0,
         },
-        normalizedCenter: {
-          xBasisPoints: 6_875,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 156,
-        cameraDepthMeters: 13,
-        depthOrder: 0,
       }],
     });
     expect(fixture.scene.cameras).toHaveLength(cameraCount);
@@ -496,52 +500,54 @@ describe("formal world capture projection measurement", () => {
 
     expect(measureFormalWorldCaptureViewV1(fixture.input)).toEqual({
       viewId: "opening",
-      visualGroups: [{
+      targets: [{
         acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
-        compositionTargetRef: "worldkit://composition-target/alpha@1",
-        topologyNodeId: "alpha-node",
-        semanticLayerId: "route-layer",
         blockVisualGroupId: "alpha-group",
+        mode: "reference-projection-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [-2, -2, 2],
           maximumMetersXYZ: [0, 2, 4],
         },
-        normalizedBounds: {
-          minXBasisPoints: 5_000,
-          minYBasisPoints: 4_444,
-          maxXBasisPoints: 5_556,
-          maxYBasisPoints: 5_556,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 5_000,
+            minYBasisPoints: 4_444,
+            maxXBasisPoints: 5_556,
+            maxYBasisPoints: 5_556,
+          },
+          normalizedCenter: {
+            xBasisPoints: 5_278,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 61,
+          cameraDepthMeters: 19,
+          depthOrder: 1,
         },
-        normalizedCenter: {
-          xBasisPoints: 5_278,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 61,
-        cameraDepthMeters: 19,
-        depthOrder: 1,
       }, {
         acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
-        compositionTargetRef: "worldkit://composition-target/zeta@1",
-        topologyNodeId: "zeta-node",
-        semanticLayerId: "structure-layer",
         blockVisualGroupId: "zeta-group",
+        mode: "reference-projection-required",
         sourceBoundsMeters: {
           minimumMetersXYZ: [2, -1, -4],
           maximumMetersXYZ: [4, 1, -2],
         },
-        normalizedBounds: {
-          minXBasisPoints: 3_333,
-          minYBasisPoints: 4_583,
-          maxXBasisPoints: 4_286,
-          maxYBasisPoints: 5_417,
+        structuralProjection: {
+          outcome: "projected",
+          normalizedBounds: {
+            minXBasisPoints: 3_333,
+            minYBasisPoints: 4_583,
+            maxXBasisPoints: 4_286,
+            maxYBasisPoints: 5_417,
+          },
+          normalizedCenter: {
+            xBasisPoints: 3_810,
+            yBasisPoints: 5_000,
+          },
+          coverageBasisPoints: 79,
+          cameraDepthMeters: 13,
+          depthOrder: 0,
         },
-        normalizedCenter: {
-          xBasisPoints: 3_810,
-          yBasisPoints: 5_000,
-        },
-        coverageBasisPoints: 79,
-        cameraDepthMeters: 13,
-        depthOrder: 0,
       }],
     });
   });
@@ -571,8 +577,12 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    )
       .toMatchObject({
+        outcome: "projected",
         normalizedBounds: {
           minXBasisPoints: 0,
           minYBasisPoints: 0,
@@ -583,7 +593,7 @@ describe("formal world capture projection measurement", () => {
       });
   });
 
-  it("uses the canonical formal Capture diagnostic when an opening AABB is fully behind the near plane", () => {
+  it("records a fully near-clipped opening AABB without vetoing capture", () => {
     const behindGroup = {
       ...alphaGroup,
       minimumMetersXYZ: [-1, -1, -20],
@@ -605,9 +615,10 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input)).toThrow(
-      /^BABYLON_FORMAL_CAPTURE_MEASUREMENT_INVALID: PROJECTION:/,
-    );
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    ).toEqual({ outcome: "outside-depth-range" });
   });
 
   it("uses the camera viewport and conservative floor/ceil basis-point bounds", () => {
@@ -627,8 +638,12 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    )
       .toMatchObject({
+        outcome: "projected",
         normalizedBounds: {
           minXBasisPoints: 5_000,
           minYBasisPoints: 4_375,
@@ -656,9 +671,13 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups.map(
-      ({ acceptanceTargetRef, depthOrder }) =>
-        ({ acceptanceTargetRef, depthOrder }),
+    expect(measureFormalWorldCaptureViewV1(fixture.input).targets.map(
+      ({ acceptanceTargetRef, structuralProjection }) => ({
+        acceptanceTargetRef,
+        depthOrder: structuralProjection.outcome === "projected"
+          ? structuralProjection.depthOrder
+          : undefined,
+      }),
     )).toEqual([{
       acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
       depthOrder: 0,
@@ -766,7 +785,10 @@ describe("formal world capture projection measurement", () => {
       minimumMetersXYZ: [20, -1, 0],
       maximumMetersXYZ: [22, 1, 2],
     }],
-  ] as const)("fails closed when one AABB is %s", (_name, group) => {
+  ] as const)("records the structural outside outcome when one AABB is %s", (
+    name,
+    group,
+  ) => {
     // These catch trusting Vector3.Project alone: Babylon performs the
     // homogeneous divide even for behind/near-clipped points and returns
     // coordinates outside the viewport without rejecting them.
@@ -784,13 +806,19 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
-      .toThrow(/PROJECTION/);
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    ).toEqual({
+      outcome: name === "outside viewport"
+        ? "outside-viewport"
+        : "outside-depth-range",
+    });
   });
 
-  it("fails closed on a zero-area projected AABB", () => {
-    // This catches publishing parser-invalid normalized bounds after a
-    // degenerate or stale projection matrix.
+  it("records a zero-area projected AABB as outside the viewport", () => {
+    // A structurally valid but non-visible projection remains evidence, not
+    // an integrity failure or an ordinary-production veto.
     const fixture = createFixture({ groups: [alphaGroup] });
     fixture.camera.freezeProjectionMatrix(Matrix.FromValues(
       0, 0, 0, 0,
@@ -810,8 +838,10 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
-      .toThrow(/PROJECTION/);
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    ).toEqual({ outcome: "outside-viewport" });
   });
 
   it("rejects a camera projection mode that does not match the formal view", () => {
@@ -837,7 +867,10 @@ describe("formal world capture projection measurement", () => {
       minimumMetersXYZ: [20, -1, 2],
       maximumMetersXYZ: [22, 1, 4],
     }],
-  ] as const)("fails closed when an opening AABB is %s", (_name, group) => {
+  ] as const)("records the opening structural outside outcome when an AABB is %s", (
+    name,
+    group,
+  ) => {
     const fixture = createFixture({ view: openingView, groups: [group] });
     fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
     fixture.camera.fov = Math.PI / 2;
@@ -854,8 +887,14 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
-      .toThrow(/PROJECTION/);
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    ).toEqual({
+      outcome: name === "outside viewport"
+        ? "outside-viewport"
+        : "outside-depth-range",
+    });
   });
 
   it("clamps a partially visible opening AABB to the live viewport", () => {
@@ -880,8 +919,10 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    const measured = measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0];
+    const measured = measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+      ?.structuralProjection;
     expect(measured).toMatchObject({
+      outcome: "projected",
       normalizedBounds: {
         minXBasisPoints: 0,
         minYBasisPoints: 4_722,
@@ -894,7 +935,10 @@ describe("formal world capture projection measurement", () => {
       },
       coverageBasisPoints: 138,
     });
-    expect(measured?.cameraDepthMeters).toBeCloseTo(19, 10);
+    if (measured?.outcome !== "projected") {
+      throw new Error("expected a projected partial opening target");
+    }
+    expect(measured.cameraDepthMeters).toBeCloseTo(19, 10);
   });
 
   it("clamps a partially visible AABB to the live viewport", () => {
@@ -918,8 +962,12 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
+    expect(
+      measureFormalWorldCaptureViewV1(fixture.input).targets[0]
+        ?.structuralProjection,
+    )
       .toMatchObject({
+        outcome: "projected",
         normalizedBounds: {
           minXBasisPoints: 0,
           minYBasisPoints: 4_375,

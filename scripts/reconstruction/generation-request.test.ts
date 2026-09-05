@@ -11,6 +11,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import sharp from "sharp";
 
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { createGameplayBootstrapV1, parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
@@ -22,11 +24,13 @@ import {
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationBootstrapV1,
   deriveNativeBlockSubjectVisualReviewProxyV1,
-  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
-  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
   prepareNativeBlockGenerationTaskV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
+import {
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+} from "./native-block-production-budget.js";
 import {
   parseNativeBlockSubjectVisualReviewProxyV1,
 } from "./native-block-subject-visual-review-proxy.js";
@@ -205,12 +209,16 @@ async function fixture(): Promise<Readonly<{
 }>> {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-request-"));
   const inputDirectory = path.join(root, "inputs");
-  const sceneBriefBytes = new TextEncoder().encode("# Cloud Temple\n");
+  const sceneBriefBytes = await readFile(path.resolve(
+    "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md",
+  ));
+  const sceneBrief = parseSceneBriefV1(sceneBriefBytes.toString("utf8"));
+  if (!sceneBrief.ok) throw new Error("Invalid committed Scene Brief fixture");
   const entryBytes = new TextEncoder().encode("entry");
   const worldPlanBytes = new TextEncoder().encode("plan");
   const sceneBriefHash = sha256Bytes(sceneBriefBytes) as Sha256HashV1;
   const visualIdentityPaletteText = nativeVisualIdentityPaletteText(
-    sceneBriefHash,
+    sceneBrief.sceneBriefHash as Sha256HashV1,
   );
   const visualIdentityPaletteHash = sha256Bytes(
     new TextEncoder().encode(visualIdentityPaletteText),
@@ -322,7 +330,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     ], evaluationProfileRef: "evaluation-profile.json", evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile), formalCaptureIntentRef: "inputs/formal-world-capture-intent.json", formalCaptureIntentHash: sha256Bytes(new TextEncoder().encode("intent")), acceptanceTargetRefs: ["worldkit://acceptance-target/gate@1"], requiredEvidenceProfileRefs,
     expected: {
       topology: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", nodeIds: ["gate", "spawn"], relations: [{ fromNodeId: "gate", relation: "connects-to", toNodeId: "spawn" }], layerIds: ["main"] },
-      semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", visualGroupId: "gate", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 }, normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 }, coverageBasisPoints: 5_000 }],
+      semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", visualGroupId: "gate", viewRequirements: [{ viewId: "opening", mode: "reference-projection-required", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 }, normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 }, coverageBasisPoints: 5_000 }, { viewId: "world-side", mode: "presence-required" }, { viewId: "world-top-down", mode: "presence-required" }] }],
       openingComposition: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", targetRefs: ["worldkit://composition-target/opening@1"], regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"] },
       spawnSupport: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", spawnMarkerId: "spawn", supportColliderId: "ground", expectedMedium: "ground", expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
       colliders: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", contributionId: "ground-contribution", colliderId: "ground", role: "ground", requiresOverlay: true }],
@@ -568,6 +576,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         blockProfileHash: BLOCK_PROFILE_HASH,
       });
       expect(prepared.routerRequestId).toMatch(/^native-block-generation-/);
+      expect(prepared.routerArguments[prepared.routerArguments.indexOf("--stage") + 1]).toBe("coding-agent");
       expect(prepared.routerArguments).not.toContain(value.root);
       expect(prepared.attempt.sourceInput.kind).toBe("babylon-native");
       expect(prepared.generationRequest.bootstrapInputHash).toBe(
@@ -666,6 +675,29 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         worldRuntimeBootstrapHash: prepared.hostClosure.worldRuntimeBootstrapHash,
       });
       await rm(prepared.taskWorkspacePath, { recursive: true, force: false });
+      // Cleanup may remove the disposable task, but not any frozen input needed
+      // for an explicit Host replay of this same dispatch.
+      for (const frozenInput of [
+        ...prepared.generationRequest.contextInputs,
+        ...prepared.generationRequest.referenceInputs.map((reference) => ({ ...reference, inputRef: `inputs/${reference.inputRef}` })),
+        { inputRef: `inputs/${prepared.generationRequest.sceneBriefRef}`, contentHash: prepared.generationRequest.sceneBriefHash },
+        { inputRef: prepared.generationRequest.taskInstructionRef, contentHash: prepared.generationRequest.taskInstructionHash },
+        { inputRef: prepared.generationRequest.workspaceContextManifestRef, contentHash: prepared.generationRequest.workspaceContextManifestHash },
+      ]) {
+        expect(sha256Bytes(await readFile(path.join(attemptRoot, frozenInput.inputRef))))
+          .toBe(frozenInput.contentHash);
+      }
+      expect(JSON.parse(await readFile(path.join(attemptRoot, "generation-dispatch.json"), "utf8")))
+        .toEqual({
+          kind: "native-block-generation-dispatch", schemaVersion: 1,
+          backend: prepared.backend,
+          generationRequestHash: prepared.generationRequestHash,
+          attemptHash: prepared.attemptHash,
+          routerRequestId: prepared.routerRequestId,
+          routerTaskPayloadHash: prepared.routerTaskPayloadHash,
+          routerArguments: prepared.routerArguments,
+          frozenOwnerIdentities: prepared.frozenOwnerIdentities,
+        });
       for (const [name, expectedRef, expectedHash] of [
         ["native-scene-api.json", prepared.generationRequest.nativeSceneApiRef, prepared.generationRequest.nativeSceneApiHash],
         ["native-scene-profile.json", prepared.generationRequest.nativeSceneProfileRef, prepared.generationRequest.nativeSceneProfileHash],
@@ -872,6 +904,16 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(attempt1.generationRequest.declaredOutputPaths).toEqual([
         "scene.ts", "native-block-authoring.json", "native-resources.json",
       ]);
+      await rm(attempt1.taskWorkspacePath, { recursive: true });
+      const durableAttemptRoot = path.dirname(attempt1.taskWorkspacePath);
+      for (const frozenInput of attempt1.generationRequest.contextInputs) {
+        expect(sha256Bytes(await readFile(path.join(durableAttemptRoot, frozenInput.inputRef))))
+          .toBe(frozenInput.contentHash);
+      }
+      expect(await readFile(path.join(durableAttemptRoot, attempt1.generationRequest.taskInstructionRef), "utf8"))
+        .toBe(repairTaskInstruction);
+      expect(JSON.parse(await readFile(path.join(durableAttemptRoot, "generation-dispatch.json"), "utf8")))
+        .toMatchObject({ routerRequestId: attempt1.routerRequestId, routerTaskPayloadHash: attempt1.routerTaskPayloadHash });
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }
@@ -1351,6 +1393,33 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "reference-0::attempts/0/.task/inputs/reference-0.png::image::image/png",
         "world-plan::attempts/0/.task/inputs/world-plan.png::image::image/png",
       ]));
+    } finally { await rm(value.root, { recursive: true, force: true }); }
+  });
+
+  it.each(["cloud", "local"] as const)("freezes the same WebP bytes and image role for the %s router", async (backend) => {
+    const value = await fixture();
+    try {
+      const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).webp().toBuffer();
+      await writeFile(path.join(value.inputDirectory, "reference-0.webp"), bytes);
+      await rm(path.join(value.inputDirectory, "reference-0.png"));
+      const initial = input(value);
+      const { cloudOutputS3Root, ...common } = initial;
+      const prepared = await prepareNativeBlockGenerationTaskV1({
+        ...common,
+        backend,
+        ...(backend === "cloud" ? { cloudOutputS3Root } : {}),
+        case: parseWorldReconstructionCaseV1({
+          ...initial.case,
+          referenceInputs: initial.case.referenceInputs.map((reference) => reference.inputRef === "reference-0.png"
+            ? { inputRef: "reference-0.webp", contentHash: sha256Bytes(bytes), mediaType: "image/webp" }
+            : reference),
+        }),
+      });
+      expect(prepared.routerArguments).toContain("reference-0::attempts/0/.task/inputs/reference-0.webp::image::image/webp");
+      expect(prepared.generationRequest.referenceInputs).toContainEqual({
+        inputRef: "reference-0.webp", contentHash: sha256Bytes(bytes), mediaType: "image/webp",
+      });
+      expect(await readFile(path.join(prepared.taskWorkspacePath, "inputs/reference-0.webp"))).toEqual(bytes);
     } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 

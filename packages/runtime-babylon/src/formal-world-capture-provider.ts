@@ -15,6 +15,7 @@ import {
   hashFormalColliderOverlayObservationV1,
   hashFormalColliderOverlayRequestV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalScriptedTraversalRequestV1,
   hashFormalSemanticCaptureMapV1,
@@ -22,6 +23,7 @@ import {
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -32,6 +34,7 @@ import {
   type FormalColliderOverlayObservationV1,
   type FormalMeasuredObservationIdentityV1,
   type FormalOpeningObservationV1,
+  type FormalSemanticViewObservationSetV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
@@ -76,6 +79,7 @@ export interface FormalHostedWorldCapturePayloadV1 {
   readonly worldTopDownPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservation: FormalOpeningObservationV1;
+  readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
   readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
   readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
   readonly scriptedTraversal: FormalScriptedTraversalObservationV1;
@@ -465,6 +469,9 @@ function controlledSubjectProjection(
 
 function worldArtifactRequest(
   view: Exclude<FormalArtifactViewRequestV1, { viewId: "opening" }>,
+  measureAfterRender: NonNullable<
+    BabylonArtifactCaptureRequestV1["measureAfterRender"]
+  >,
 ): BabylonArtifactCaptureRequestV1 {
   return {
     kind: view.viewId === "world-side"
@@ -475,6 +482,7 @@ function worldArtifactRequest(
     worldBoundsMeters: view.worldBoundsMeters,
     cameraPositionMetersXYZ: view.cameraPositionMetersXYZ,
     targetMetersXYZ: view.targetMetersXYZ,
+    measureAfterRender,
   } as BabylonArtifactCaptureRequestV1;
 }
 
@@ -1060,12 +1068,30 @@ export async function executeFormalWorldCaptureProviderV1(
     fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
   }
 
+  const measureWorldView = (
+    view: Exclude<FormalArtifactViewRequestV1, { viewId: "opening" }>,
+  ): NonNullable<BabylonArtifactCaptureRequestV1["measureAfterRender"]> =>
+    ({ camera }) => measureFormalWorldCaptureViewV1({
+      view,
+      camera,
+      materializerMetadata: metadata,
+      semanticCaptureMap: request.semanticCaptureMap,
+      liveHandleRegistry: visualRegistry!,
+    });
   const worldSideCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[1]),
+    worldArtifactRequest(request.views[1], measureWorldView(request.views[1])),
   );
   const worldTopDownCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[2]),
+    worldArtifactRequest(request.views[2], measureWorldView(request.views[2])),
   );
+  if (
+    worldSideCapture.measurement === undefined ||
+    worldTopDownCapture.measurement === undefined
+  ) fail("BABYLON_FORMAL_CAPTURE_WORLD_MEASUREMENT_MISSING");
+  const worldSideMeasurement = worldSideCapture.measurement as
+    FormalWorldCaptureViewMeasurementV1;
+  const worldTopDownMeasurement = worldTopDownCapture.measurement as
+    FormalWorldCaptureViewMeasurementV1;
   if (
     sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore
   ) fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
@@ -1117,6 +1143,29 @@ export async function executeFormalWorldCaptureProviderV1(
     supportContact.pointMetersXYZ,
   );
 
+  const semanticBindingByTargetRef = new Map(
+    request.semanticCaptureMap.bindings.map((binding) =>
+      [binding.acceptanceTargetRef, binding] as const),
+  );
+  const openingVisualGroups = openingMeasurement.targets.flatMap((target) => {
+    const projection = target.structuralProjection;
+    if (projection.outcome !== "projected") return [];
+    const binding = semanticBindingByTargetRef.get(target.acceptanceTargetRef) ??
+      fail("BABYLON_FORMAL_CAPTURE_SEMANTIC_BINDING_MISSING");
+    return [Object.freeze({
+      acceptanceTargetRef: target.acceptanceTargetRef,
+      compositionTargetRef: binding.compositionTargetRef,
+      topologyNodeId: binding.topologyNodeId,
+      semanticLayerId: binding.semanticLayerId,
+      blockVisualGroupId: target.blockVisualGroupId,
+      sourceBoundsMeters: target.sourceBoundsMeters,
+      normalizedBounds: projection.normalizedBounds,
+      normalizedCenter: projection.normalizedCenter,
+      coverageBasisPoints: projection.coverageBasisPoints,
+      cameraDepthMeters: projection.cameraDepthMeters,
+      depthOrder: projection.depthOrder,
+    })];
+  });
   const openingObservation = parseFormalOpeningObservationV1({
     kind: "formal-opening-observation",
     schemaVersion: 1,
@@ -1131,7 +1180,7 @@ export async function executeFormalWorldCaptureProviderV1(
       openingCapture,
       subjectEntityId,
     ),
-    visualGroups: openingMeasurement.visualGroups,
+    visualGroups: openingVisualGroups,
     observedTopologyRelations: measuredPackageRelations(request, metadata),
   });
   const foot = support.sampledFootPointMetersXYZ;
@@ -1204,6 +1253,34 @@ export async function executeFormalWorldCaptureProviderV1(
     ["world-side", worldSidePng],
     ["world-top-down", worldTopDownPng],
   ] as const);
+  const semanticViewObservationSet =
+    parseFormalSemanticViewObservationSetV1({
+      kind: "formal-semantic-view-observation-set",
+      schemaVersion: 1,
+      ...observationIdentity(
+        request,
+        initialReadySnapshot,
+        sdkOwnerIdentities,
+        "camera",
+        "semantic-view-observation-set",
+      ),
+      views: [
+        [request.views[0], openingMeasurement],
+        [request.views[1], worldSideMeasurement],
+        [request.views[2], worldTopDownMeasurement],
+      ].map(([view, measurement]) => {
+        const typedView = view as FormalArtifactViewRequestV1;
+        const typedMeasurement = measurement as FormalWorldCaptureViewMeasurementV1;
+        return Object.freeze({
+          viewId: typedView.viewId,
+          viewRequestHash: hashFormalArtifactViewRequestV1(typedView),
+          pngContentHash: sha256Bytes(
+            viewPngById.get(typedView.viewId)!,
+          ) as Sha256HashV1,
+          targets: typedMeasurement.targets,
+        });
+      }),
+    });
   const receiptWithoutCleanup: Omit<FormalWorldCaptureReceiptV1, "cleanupOutcome"> =
     Object.freeze({
       kind: "formal-world-capture-receipt",
@@ -1255,6 +1332,10 @@ export async function executeFormalWorldCaptureProviderV1(
       openingObservationArtifactRef: `${captureBase}/opening-observation.json`,
       openingObservationContentHash:
         hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetArtifactRef:
+        `${captureBase}/semantic-view-observation-set.json`,
+      semanticViewObservationSetContentHash:
+        hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
       spawnSupportObservationArtifactRef:
         `${captureBase}/spawn-support-observation.json`,
       spawnSupportObservationContentHash:
@@ -1287,6 +1368,7 @@ export async function executeFormalWorldCaptureProviderV1(
     worldTopDownPng,
     colliderOverlayPng,
     openingObservation,
+    semanticViewObservationSet,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversal,

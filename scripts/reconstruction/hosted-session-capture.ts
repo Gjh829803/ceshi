@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { CAPTURE_STARTUP_BUDGET_V1, waitForCaptureStartupV1 } from "./capture-startup-watchdog.js";
 
 import {
   hashFormalWorldCaptureRequestV1,
@@ -28,7 +29,6 @@ import {
 import { resolveFormalWorldCaptureSdkOwnerIdentitiesV1 } from
   "./sdk-owner-identities.js";
 
-const DEFAULT_READY_TIMEOUT_MILLISECONDS = 30_000;
 const DEFAULT_CAPTURE_TIMEOUT_MILLISECONDS = 120_000;
 
 export interface CaptureOnlyHostedTransportV1<Payload, Request = unknown> {
@@ -89,6 +89,7 @@ export interface StartConcreteCaptureOnlyHostedTransportInputV1 {
   readonly request: FormalWorldCaptureRequestV1;
   readonly port?: number;
   readonly readyTimeoutMilliseconds?: number;
+  readonly startupStallTimeoutMilliseconds?: number;
   readonly captureTimeoutMilliseconds?: number;
 }
 
@@ -198,6 +199,7 @@ export async function startCaptureOnlyHostedTransportV1(
   let disposePromise: Promise<CaptureOnlyHostedCleanupOutcomesV1> | undefined;
   let hasExecuted = false;
   let fatalError: Error | undefined;
+  const startupAbort = new AbortController();
   let signalFatal!: () => void;
   const fatalSignal = new Promise<void>((resolve) => {
     signalFatal = resolve;
@@ -209,6 +211,8 @@ export async function startCaptureOnlyHostedTransportV1(
   };
   const onBrowserDisconnected = () => fail("BROWSER_EXITED");
   const onPageClosed = () => fail("PAGE_CLOSED");
+  const onPageError = () => fail("PAGE_ERROR");
+  const onPageCrashed = () => fail("PAGE_CRASHED");
   const onFrameDetached = (frame: Frame) => {
     if (page !== undefined && frame !== page.mainFrame()) fail("FRAME_REMOVED");
   };
@@ -218,8 +222,11 @@ export async function startCaptureOnlyHostedTransportV1(
   const cleanup = (): Promise<CaptureOnlyHostedCleanupOutcomesV1> => {
     if (disposePromise !== undefined) return disposePromise;
     isDisposing = true;
+    startupAbort.abort();
     browser?.off("disconnected", onBrowserDisconnected);
     page?.off("close", onPageClosed);
+    page?.off("pageerror", onPageError);
+    page?.off("crash", onPageCrashed);
     page?.off("framedetached", onFrameDetached);
     page?.off("framenavigated", onFrameNavigated);
     disposePromise = cleanupOwnedResources({
@@ -253,25 +260,48 @@ export async function startCaptureOnlyHostedTransportV1(
     context = await browser.newContext({ serviceWorkers: "block" });
     page = await context.newPage();
     page.on("close", onPageClosed);
-    await page.goto(captureRouteUrl({
+    page.on("pageerror", onPageError);
+    page.on("crash", onPageCrashed);
+    const captureUrl = captureRouteUrl({
       serverUrl: server.url,
       runtimeSessionId,
       sessionNonce,
       formalRequestId: request.id,
       formalRequestHash,
-    }), { waitUntil: "domcontentloaded" });
+    });
+    const startupPage = page;
+    const navigation = page.goto(captureUrl, { waitUntil: "commit", timeout:
+      input.readyTimeoutMilliseconds ?? CAPTURE_STARTUP_BUDGET_V1.hardTimeoutMilliseconds });
+    // The watchdog owns the entire navigation/bootstrap wait, including a hung
+    // evaluate. A successful navigation never resets its absolute deadline.
+    let hasCommitted = false;
+    const navigated = navigation.then(() => { hasCommitted = true; });
+    const startup = waitForCaptureStartupV1({
+      signal: startupAbort.signal,
+      budget: { ...CAPTURE_STARTUP_BUDGET_V1,
+        hardTimeoutMilliseconds: input.readyTimeoutMilliseconds ?? CAPTURE_STARTUP_BUDGET_V1.hardTimeoutMilliseconds,
+        stallTimeoutMilliseconds: input.startupStallTimeoutMilliseconds ?? CAPTURE_STARTUP_BUDGET_V1.stallTimeoutMilliseconds },
+      probe: async () => {
+        if (!hasCommitted) return { isReady: false, isTerminal: false };
+        const phase = await startupPage.evaluate(() => window.__WORLDKIT_HOSTED_FORMAL_CAPTURE__?.phase());
+        const frame = startupPage.frames().find((candidate) => {
+          if (candidate === startupPage.mainFrame()) return false;
+          try {
+            const url = new URL(candidate.url());
+            return url.protocol === "http:" && url.hostname === "127.0.0.1" &&
+              url.searchParams.get("hosted-formal-capture-frame") === "1" &&
+              url.searchParams.get("runtimeSessionId") === runtimeSessionId &&
+              url.searchParams.get("sessionNonce") === sessionNonce &&
+              url.searchParams.get("formalRequestHash") === formalRequestHash;
+          } catch { return false; }
+        });
+        const runtime = await frame?.evaluate(() => window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__);
+        return { isReady: phase === "ready", isTerminal: phase === "terminated" || phase === "disposed",
+          ...(runtime === undefined ? {} : { runtime }) };
+      },
+    });
     await Promise.race([
-      page.waitForFunction(() => {
-        const capture = (globalThis as unknown as Readonly<{
-          __WORLDKIT_HOSTED_FORMAL_CAPTURE__?: Readonly<{
-            phase(): string;
-          }>;
-        }>).__WORLDKIT_HOSTED_FORMAL_CAPTURE__;
-        return capture?.phase() === "ready";
-      }, undefined, {
-        timeout: input.readyTimeoutMilliseconds ??
-          DEFAULT_READY_TIMEOUT_MILLISECONDS,
-      }),
+      Promise.all([navigated, startup]),
       fatalSignal.then(() => {
         throw fatalError ?? transportError("TERMINATED");
       }),
@@ -357,6 +387,7 @@ export function createCaptureOnlyHostedTransportStarterV1(
     packageDirectoryPath: string;
     port?: number;
     readyTimeoutMilliseconds?: number;
+    startupStallTimeoutMilliseconds?: number;
     captureTimeoutMilliseconds?: number;
   }>,
   ports: CaptureOnlyHostedTransportPortsV1 = defaultPorts,

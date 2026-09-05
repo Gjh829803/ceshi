@@ -479,6 +479,8 @@ function evaluateSemanticSilhouette(
   let maximumCenterDrift = 0;
   let maximumCoverageDrift = 0;
   let hasIdentityMismatch = false;
+  let hasRequiredProjectionMissing = false;
+  let hasReferenceProjectionDrift = false;
   for (const expected of expectedTargets) {
     const threshold = profile.thresholds.semanticSilhouetteTargets.find(
       (entry) => entry.acceptanceTargetRef === expected.acceptanceTargetRef,
@@ -486,124 +488,129 @@ function evaluateSemanticSilhouette(
     if (isNil(threshold)) {
       return staleDraft("semantic-silhouette", expected.acceptanceTargetRef, row.evidenceRefs);
     }
-    const observedTarget = observed.targets.find(
-      (entry) => entry.acceptanceTargetRef === expected.acceptanceTargetRef,
-    );
-    if (
-      isNil(observedTarget)
-      || observedTarget.isSemanticTargetPresent !== true
-      || observedTarget.visualGroupId !== expected.visualGroupId
-    ) {
-      hasIdentityMismatch = true;
-      const actualValue = isNil(observedTarget)
-        ? "missing"
-        : observedTarget.visualGroupId;
-      diagnostics.push({
-        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
-        acceptanceTargetRef: expected.acceptanceTargetRef,
-        targetRef: expected.acceptanceTargetRef,
-        targetId: expected.visualGroupId,
-        metricId: "semantic-target-binding",
-        details: stateMismatchDetails(expected.visualGroupId, actualValue),
-        evidenceRefs: row.evidenceRefs,
-        message: `Semantic silhouette target ${expected.acceptanceTargetRef} expected visual group ${expected.visualGroupId}, observed ${actualValue}.`,
-        repairAction: sourceRepairAction(
-          "visual-group",
-          expected.visualGroupId,
-          "bind",
-          `Create or bind visual group ${expected.visualGroupId} to acceptance target ${expected.acceptanceTargetRef}; do not edit the Case or thresholds.`,
-        ),
-      });
-      continue;
-    }
-    const nextBoundsDrift = boundsDrift(expected.normalizedBounds, observedTarget.normalizedBounds);
-    const nextCenterDrift = centerDrift(expected.normalizedCenter, observedTarget.normalizedCenter);
-    const nextCoverageDrift = Math.abs(
-      expected.coverageBasisPoints - observedTarget.coverageBasisPoints,
-    );
-    maximumBoundsDrift = Math.max(maximumBoundsDrift, nextBoundsDrift);
-    maximumCenterDrift = Math.max(maximumCenterDrift, nextCenterDrift);
-    maximumCoverageDrift = Math.max(maximumCoverageDrift, nextCoverageDrift);
-    const boundsMetrics = [
-      ["semantic-bounds-min-x-basis-points", "minimum screen X edge", expected.normalizedBounds.minXBasisPoints, observedTarget.normalizedBounds.minXBasisPoints],
-      ["semantic-bounds-min-y-basis-points", "minimum screen Y edge", expected.normalizedBounds.minYBasisPoints, observedTarget.normalizedBounds.minYBasisPoints],
-      ["semantic-bounds-max-x-basis-points", "maximum screen X edge", expected.normalizedBounds.maxXBasisPoints, observedTarget.normalizedBounds.maxXBasisPoints],
-      ["semantic-bounds-max-y-basis-points", "maximum screen Y edge", expected.normalizedBounds.maxYBasisPoints, observedTarget.normalizedBounds.maxYBasisPoints],
-    ] as const;
-    for (const [metricId, label, expectedValue, actualValue] of boundsMetrics) {
-      if (Math.abs(actualValue - expectedValue) <= threshold.maximumBoundsDriftBasisPoints) continue;
-      const details = basisPointsThresholdDetails(
-        expectedValue,
-        actualValue,
-        threshold.maximumBoundsDriftBasisPoints,
+    for (const requirement of expected.viewRequirements) {
+      if (requirement.mode === "not-required") continue;
+      const observedView = observed.views.find(({ viewId }) =>
+        viewId === requirement.viewId);
+      const observedTarget = observedView?.targets.find(
+        (entry) => entry.acceptanceTargetRef === expected.acceptanceTargetRef,
       );
-      diagnostics.push({
-        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
-        acceptanceTargetRef: expected.acceptanceTargetRef,
-        targetRef: expected.acceptanceTargetRef,
-        targetId: expected.visualGroupId,
-        metricId,
-        details,
-        evidenceRefs: row.evidenceRefs,
-        message: `Visual group ${expected.visualGroupId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
-        repairAction: sourceRepairAction(
-          "visual-group",
-          expected.visualGroupId,
-          "resize",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; keep drift within ${threshold.maximumBoundsDriftBasisPoints} and do not edit thresholds.`,
-        ),
-      });
-    }
-    const centerMetrics = [
-      ["semantic-center-x-basis-points", "screen X center", expected.normalizedCenter.xBasisPoints, observedTarget.normalizedCenter.xBasisPoints],
-      ["semantic-center-y-basis-points", "screen Y center", expected.normalizedCenter.yBasisPoints, observedTarget.normalizedCenter.yBasisPoints],
-    ] as const;
-    for (const [metricId, label, expectedValue, actualValue] of centerMetrics) {
-      if (Math.abs(actualValue - expectedValue) <= threshold.maximumCenterDriftBasisPoints) continue;
-      const details = basisPointsThresholdDetails(
-        expectedValue,
-        actualValue,
-        threshold.maximumCenterDriftBasisPoints,
+      if (isNil(observedTarget) || observedTarget.visualGroupId !== expected.visualGroupId) {
+        hasIdentityMismatch = true;
+        const actualValue = isNil(observedTarget)
+          ? "missing"
+          : observedTarget.visualGroupId;
+        diagnostics.push({
+          code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+          acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId: expected.visualGroupId,
+          metricId: `${requirement.viewId}-semantic-target-binding`,
+          details: stateMismatchDetails(expected.visualGroupId, actualValue),
+          evidenceRefs: row.evidenceRefs,
+          message: `Semantic target ${expected.acceptanceTargetRef} expected visual group ${expected.visualGroupId} in ${requirement.viewId}, observed ${actualValue}.`,
+          repairAction: sourceRepairAction(
+            "visual-group",
+            expected.visualGroupId,
+            "bind",
+            `Create or bind visual group ${expected.visualGroupId} to acceptance target ${expected.acceptanceTargetRef}; do not edit the Case or thresholds.`,
+          ),
+        });
+        continue;
+      }
+      if (requirement.mode !== "reference-projection-required") continue;
+      const projection = observedTarget.structuralProjection;
+      if (projection.outcome !== "projected") {
+        hasRequiredProjectionMissing = true;
+        diagnostics.push({
+          code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+          acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId: expected.visualGroupId,
+          metricId: `${requirement.viewId}-reference-projection`,
+          details: stateMismatchDetails("projected", projection.outcome),
+          evidenceRefs: row.evidenceRefs,
+          message: `Visual group ${expected.visualGroupId} has no structural projection in required view ${requirement.viewId}.`,
+          repairAction: sourceRepairAction(
+            "visual-group",
+            expected.visualGroupId,
+            "move",
+            `Move visual group ${expected.visualGroupId} into the ${requirement.viewId} reference projection without editing the Case or thresholds.`,
+          ),
+        });
+        continue;
+      }
+      const nextBoundsDrift = boundsDrift(
+        requirement.normalizedBounds,
+        projection.normalizedBounds,
       );
-      diagnostics.push({
-        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
-        acceptanceTargetRef: expected.acceptanceTargetRef,
-        targetRef: expected.acceptanceTargetRef,
-        targetId: expected.visualGroupId,
-        metricId,
-        details,
-        evidenceRefs: row.evidenceRefs,
-        message: `Visual group ${expected.visualGroupId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
-        repairAction: sourceRepairAction(
-          "visual-group",
-          expected.visualGroupId,
-          "move",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; keep drift within ${threshold.maximumCenterDriftBasisPoints} and do not edit thresholds.`,
-        ),
-      });
-    }
-    if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {
-      const details = basisPointsThresholdDetails(
-        expected.coverageBasisPoints,
-        observedTarget.coverageBasisPoints,
-        threshold.maximumCoverageDriftBasisPoints,
+      const nextCenterDrift = centerDrift(
+        requirement.normalizedCenter,
+        projection.normalizedCenter,
       );
-      diagnostics.push({
-        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
-        acceptanceTargetRef: expected.acceptanceTargetRef,
-        targetRef: expected.acceptanceTargetRef,
-        targetId: expected.visualGroupId,
-        metricId: "semantic-coverage-basis-points",
-        details,
-        evidenceRefs: row.evidenceRefs,
-        message: `Visual group ${expected.visualGroupId} coverage is ${observedTarget.coverageBasisPoints} basis points; target ${expected.coverageBasisPoints}, allowed drift ${threshold.maximumCoverageDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
-        repairAction: sourceRepairAction(
-          "visual-group",
-          expected.visualGroupId,
-          "resize",
-          `${details.correctionDirection === "increase" ? "Enlarge" : "Shrink"} visual group ${expected.visualGroupId} toward ${expected.coverageBasisPoints} coverage basis points; keep drift within ${threshold.maximumCoverageDriftBasisPoints} and do not edit thresholds.`,
-        ),
-      });
+      const nextCoverageDrift = Math.abs(
+        requirement.coverageBasisPoints - projection.coverageBasisPoints,
+      );
+      maximumBoundsDrift = Math.max(maximumBoundsDrift, nextBoundsDrift);
+      maximumCenterDrift = Math.max(maximumCenterDrift, nextCenterDrift);
+      maximumCoverageDrift = Math.max(maximumCoverageDrift, nextCoverageDrift);
+      const boundsMetrics = [
+        ["min-x", "minimum screen X edge", requirement.normalizedBounds.minXBasisPoints, projection.normalizedBounds.minXBasisPoints],
+        ["min-y", "minimum screen Y edge", requirement.normalizedBounds.minYBasisPoints, projection.normalizedBounds.minYBasisPoints],
+        ["max-x", "maximum screen X edge", requirement.normalizedBounds.maxXBasisPoints, projection.normalizedBounds.maxXBasisPoints],
+        ["max-y", "maximum screen Y edge", requirement.normalizedBounds.maxYBasisPoints, projection.normalizedBounds.maxYBasisPoints],
+      ] as const;
+      for (const [edgeId, label, expectedValue, actualValue] of boundsMetrics) {
+        if (Math.abs(actualValue - expectedValue) <= threshold.maximumBoundsDriftBasisPoints) continue;
+        hasReferenceProjectionDrift = true;
+        const details = basisPointsThresholdDetails(expectedValue, actualValue, threshold.maximumBoundsDriftBasisPoints);
+        diagnostics.push({
+          code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+          acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId: expected.visualGroupId,
+          metricId: `${requirement.viewId}-semantic-bounds-${edgeId}-basis-points`,
+          details,
+          evidenceRefs: row.evidenceRefs,
+          message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}.`,
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+        });
+      }
+      const centerMetrics = [
+        ["x", "screen X center", requirement.normalizedCenter.xBasisPoints, projection.normalizedCenter.xBasisPoints],
+        ["y", "screen Y center", requirement.normalizedCenter.yBasisPoints, projection.normalizedCenter.yBasisPoints],
+      ] as const;
+      for (const [axis, label, expectedValue, actualValue] of centerMetrics) {
+        if (Math.abs(actualValue - expectedValue) <= threshold.maximumCenterDriftBasisPoints) continue;
+        hasReferenceProjectionDrift = true;
+        const details = basisPointsThresholdDetails(expectedValue, actualValue, threshold.maximumCenterDriftBasisPoints);
+        diagnostics.push({
+          code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+          acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId: expected.visualGroupId,
+          metricId: `${requirement.viewId}-semantic-center-${axis}-basis-points`,
+          details,
+          evidenceRefs: row.evidenceRefs,
+          message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}.`,
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "move", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+        });
+      }
+      if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {
+        hasReferenceProjectionDrift = true;
+        const details = basisPointsThresholdDetails(requirement.coverageBasisPoints, projection.coverageBasisPoints, threshold.maximumCoverageDriftBasisPoints);
+        diagnostics.push({
+          code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+          acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId: expected.visualGroupId,
+          metricId: `${requirement.viewId}-semantic-coverage-basis-points`,
+          details,
+          evidenceRefs: row.evidenceRefs,
+          message: `Visual group ${expected.visualGroupId} ${requirement.viewId} coverage is ${projection.coverageBasisPoints} basis points; target ${requirement.coverageBasisPoints}.`,
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Enlarge" : "Shrink"} visual group ${expected.visualGroupId} toward ${requirement.coverageBasisPoints} coverage basis points; do not edit thresholds.`),
+        });
+      }
     }
   }
   const driftMetrics = [
@@ -615,7 +622,13 @@ function evaluateSemanticSilhouette(
     return failedDraft(
       "semantic-silhouette",
       row.evidenceRefs,
-      [failurePresence(), hasIdentityMismatch ? failureMatch() : successMatch(), ...driftMetrics],
+      [
+        hasRequiredProjectionMissing ? failurePresence() : successPresence(),
+        hasIdentityMismatch || hasReferenceProjectionDrift
+          ? failureMatch()
+          : successMatch(),
+        ...driftMetrics,
+      ],
       diagnostics,
     );
   }

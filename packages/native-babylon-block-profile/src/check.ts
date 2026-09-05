@@ -26,7 +26,6 @@ export const BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 = Object.freeze([
   "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
   "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
   "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
-  "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
   "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
 ] as const);
 
@@ -79,12 +78,6 @@ export interface BabylonNativeBlockProfileCheckResultV1 {
   readonly visualGroups: readonly BabylonNativeBlockVisualGroupInventoryV1[];
 }
 
-const GROUP_REQUIRED_ROLES = new Set<BabylonNativeBlockPaletteRoleV1>([
-  "structure",
-  "hazard",
-  "water-like-visual",
-  "background-mass",
-]);
 const GEOMETRY_EPSILON = 1e-8;
 
 function stableCompare(left: string, right: string): number {
@@ -348,22 +341,10 @@ export function createBabylonNativeBlockProfileCheckResultV1(
       repairHint: text.repairHint,
     }));
   }
-  for (const block of layout.blocks) {
-    if (
-      GROUP_REQUIRED_ROLES.has(block.paletteRole) &&
-      block.visualGroupId === undefined
-    ) {
-      pendingDiagnostics.push(Object.freeze({
-        kind: "babylon-native-block-profile-diagnostic",
-        schemaVersion: 1,
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
-        location: blockLocation(block.id),
-        message: `Block '${block.id}' uses grouped visual role '${block.paletteRole}' without visualGroupId.`,
-        repairHint: "Assign the complete visual target one stable visualGroupId.",
-      }));
-    }
-  }
+  // Functional palette roles do not imply semantic identity. Ordinary scenery
+  // keeps its Profile color without a group, as in legacy non-landmark presets.
+  // The authoring binding owns exact Case/manifest/actual-group joins and still
+  // rejects undeclared groups and targets with no actual Blocks.
   for (const blockId of layout.unsupportedBlockIds) {
     pendingDiagnostics.push(Object.freeze({
       kind: "babylon-native-block-profile-diagnostic",

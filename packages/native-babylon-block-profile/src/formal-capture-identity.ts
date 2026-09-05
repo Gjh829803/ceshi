@@ -153,12 +153,21 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
       blockVisualGroupId,
     }),
   );
+  const caseTargetByAcceptanceRef = new Map(
+    reconstructionCase.expected.semanticSilhouetteTargets.map((target) =>
+      [target.acceptanceTargetRef, target] as const),
+  );
+  const openingReferenceCompositionTargetRefs = semanticCaptureTargetBindings
+    .filter(({ acceptanceTargetRef }) =>
+      caseTargetByAcceptanceRef.get(acceptanceTargetRef)?.viewRequirements[0]
+        ?.mode === "reference-projection-required")
+    .map(({ compositionTargetRef }) => compositionTargetRef)
+    .sort();
   if (
     !isEqual(explicitTargetGroupPairs, packageTargetGroupPairs) ||
     !isEqual(explicitTargetGroupPairs, caseSilhouettePairs) ||
     !isEqual(
-      semanticCaptureTargetBindings.map(({ compositionTargetRef }) => compositionTargetRef)
-        .sort(),
+      openingReferenceCompositionTargetRefs,
       [...reconstructionCase.expected.openingComposition.targetRefs].sort(),
     ) ||
     !isEqual(
@@ -176,6 +185,23 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
       "semanticCaptureTargetBindings",
       "must explicitly cover every Case target and Package visual group exactly once",
     );
+  }
+  for (const binding of semanticCaptureTargetBindings) {
+    const target = caseTargetByAcceptanceRef.get(binding.acceptanceTargetRef)!;
+    const openingRequirement = target.viewRequirements[0]!;
+    if (openingRequirement.mode !== "reference-projection-required") continue;
+    const region = reconstructionCase.expected.openingComposition.regions.find(
+      ({ targetRef }) => targetRef === binding.compositionTargetRef,
+    );
+    const anchor = reconstructionCase.expected.openingComposition.anchors.find(
+      ({ targetRef }) => targetRef === binding.compositionTargetRef,
+    );
+    if (
+      region === undefined ||
+      anchor === undefined ||
+      !isEqual(region.normalizedBounds, openingRequirement.normalizedBounds) ||
+      !isEqual(anchor.normalizedCenter, openingRequirement.normalizedCenter)
+    ) fail("semanticCaptureTargetBindings", "Opening composition must match the Case reference projection");
   }
   const topologyRelations = formalCaptureIntent.topologyRelations;
   const relationKeys = topologyRelations.map(({ fromNodeId, relation, toNodeId }) =>
@@ -308,7 +334,9 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         semanticClassId: group.semanticClassId,
         identityColor: group.identityColorHex,
         projectedBoundsSource: "checked-layout-visual-group",
-        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        viewRequirements: caseTargetByAcceptanceRef.get(
+          semanticBinding.acceptanceTargetRef,
+        )!.viewRequirements.map(({ viewId, mode }) => ({ viewId, mode })),
         authoringManifestHash: metadata.authoringManifestHash,
         layoutInventoryHash: metadata.checkedLayoutInventoryHash,
         contributionHash: metadata.contributionHash,

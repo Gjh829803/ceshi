@@ -4,9 +4,26 @@ import {
   formatWorkbenchDuration,
   recordingStatusLabel,
   recordingWorkbenchSceneId,
+  renderAssetStrip,
 } from "./recording-workbench.js";
 
 describe("recording workbench presentation", () => {
+  it("renders current visualTargetId assets without an id alias", () => {
+    const html = renderAssetStrip({
+      ready: true,
+      bundleReady: true,
+      styledOpeningFrameUrl: "/opening.png",
+      styledTriviews: [{
+        visualTargetId: "palace",
+        role: "primary-landmark",
+        semanticClassId: "visual.landmark",
+        url: "/styled-triviews/palace",
+      }],
+    });
+    expect(html).toContain('alt="palace"');
+    expect(html).toContain('href="/styled-triviews/palace"');
+    expect(html).not.toContain("undefined");
+  });
   it("formats recording duration without losing minute boundaries", () => {
     expect(formatWorkbenchDuration(0)).toBe("00:00");
     expect(formatWorkbenchDuration(61_900)).toBe("01:01");

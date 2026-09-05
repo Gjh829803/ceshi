@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { inflateSync } from "node:zlib";
+import { decodePlannerPngV1 } from "./planner-png.js";
 import path from "node:path";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
@@ -222,86 +222,6 @@ function contentHash(bytes: Uint8Array): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function paeth(left: number, above: number, upperLeft: number): number {
-  const prediction = left + above - upperLeft;
-  const leftDistance = Math.abs(prediction - left);
-  const aboveDistance = Math.abs(prediction - above);
-  const upperLeftDistance = Math.abs(prediction - upperLeft);
-  return leftDistance <= aboveDistance && leftDistance <= upperLeftDistance
-    ? left
-    : aboveDistance <= upperLeftDistance ? above : upperLeft;
-}
-
-function decodePng(bytes: Buffer): PlannerDecodedPngV4 {
-  if (bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
-    throw new Error("Image must be PNG.");
-  }
-  let offset = 8;
-  let width: number | undefined;
-  let height: number | undefined;
-  let channels: number | undefined;
-  const compressed: Buffer[] = [];
-  while (offset + 12 <= bytes.length) {
-    const length = bytes.readUInt32BE(offset);
-    const type = bytes.subarray(offset + 4, offset + 8).toString("ascii");
-    const data = bytes.subarray(offset + 8, offset + 8 + length);
-    offset += 12 + length;
-    if (type === "IHDR") {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      const bitDepth = data[8];
-      const colorType = data[9];
-      if (bitDepth !== 8 || data[12] !== 0 || (colorType !== 2 && colorType !== 6)) {
-        throw new Error(
-          "Planner self-check supports non-interlaced 8-bit RGB/RGBA PNG files.",
-        );
-      }
-      channels = colorType === 6 ? 4 : 3;
-    } else if (type === "IDAT") {
-      compressed.push(data);
-    } else if (type === "IEND") {
-      break;
-    }
-  }
-  if (
-    width === undefined ||
-    height === undefined ||
-    channels === undefined ||
-    !Number.isSafeInteger(width) ||
-    !Number.isSafeInteger(height) ||
-    compressed.length === 0
-  ) {
-    throw new Error("PNG structure is incomplete.");
-  }
-  const scanlines = inflateSync(Buffer.concat(compressed));
-  const stride = width * channels;
-  if (scanlines.length !== (stride + 1) * height) {
-    throw new Error("PNG scanline size is invalid.");
-  }
-  const pixels = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; y += 1) {
-    const filter = scanlines[y * (stride + 1)]!;
-    for (let x = 0; x < stride; x += 1) {
-      const raw = scanlines[y * (stride + 1) + 1 + x]!;
-      const left = x >= channels ? pixels[y * stride + x - channels]! : 0;
-      const above = y > 0 ? pixels[(y - 1) * stride + x]! : 0;
-      const upperLeft = y > 0 && x >= channels
-        ? pixels[(y - 1) * stride + x - channels]!
-        : 0;
-      const reconstructed = filter === 0 ? raw
-        : filter === 1 ? raw + left
-        : filter === 2 ? raw + above
-        : filter === 3 ? raw + Math.floor((left + above) / 2)
-        : filter === 4 ? raw + paeth(left, above, upperLeft)
-        : Number.NaN;
-      if (!Number.isFinite(reconstructed)) {
-        throw new Error(`Unsupported PNG filter ${filter}.`);
-      }
-      pixels[y * stride + x] = reconstructed & 0xff;
-    }
-  }
-  return { width, height, channels, pixels };
-}
 
 function rgbHueSaturation(red: number, green: number, blue: number) {
   const r = red / 255;
@@ -781,7 +701,7 @@ function nearestRank(sorted: readonly number[], ratio: number): number {
 }
 
 function terrainIntentMeasurement(bytes: Buffer): TerrainIntentMeasurement {
-  const image = decodePng(bytes);
+  const image = decodePlannerPngV1(bytes);
   if (image.width !== image.height) {
     throw new Error("Height Intent PNG must be square.");
   }
@@ -876,8 +796,8 @@ export async function runPlannerSelfCheck(options: PlannerSelfCheckOptions): Pro
     entryWhiteboxTarget: NativePlannerBlockPaletteMeasurement;
   }> | null = null;
   try {
-    const worldPlanImage = decodePng(worldPlanBytes);
-    const entryImage = decodePng(entryBytes);
+    const worldPlanImage = decodePlannerPngV1(worldPlanBytes);
+    const entryImage = decodePlannerPngV1(entryBytes);
     const nativeEntryAnalysis = options.sceneSourceKind === "babylon-native"
       ? analyzeNativeEntryIdentityImageV4(
         entryImage,

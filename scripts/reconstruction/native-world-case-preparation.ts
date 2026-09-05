@@ -28,6 +28,11 @@ import {
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 import { isNil, sortBy } from "lodash-es";
 import sharp from "sharp";
+import {
+  nativeWorldReferenceInputRefV1,
+  nativeWorldReferenceMediaTypeV1,
+  validateNativeWorldReferenceImageV1,
+} from "./native-world-reference-media.js";
 
 import { analyzeNativeEntryIdentityImageV4 } from
   "../agents/agent-planner-self-check.js";
@@ -68,14 +73,11 @@ const BASELINE_ENTRY_GROUND = Object.freeze({
   visualGroupId: "entry-ground-group",
   topologyNodeId: "entry-ground",
   semanticLayerId: "foreground",
-  normalizedBounds: Object.freeze({
-    minXBasisPoints: 0,
-    minYBasisPoints: 6800,
-    maxXBasisPoints: 10000,
-    maxYBasisPoints: 10000,
-  }),
-  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 8400 }),
-  coverageBasisPoints: 3200,
+  viewRequirements: Object.freeze([
+    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
+    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
+    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
+  ]),
 });
 
 const BASELINE_REMOTE_GROUND = Object.freeze({
@@ -84,14 +86,11 @@ const BASELINE_REMOTE_GROUND = Object.freeze({
   visualGroupId: "remote-ground-group",
   topologyNodeId: "remote-ground",
   semanticLayerId: "middle",
-  normalizedBounds: Object.freeze({
-    minXBasisPoints: 800,
-    minYBasisPoints: 3600,
-    maxXBasisPoints: 9200,
-    maxYBasisPoints: 8800,
-  }),
-  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 6200 }),
-  coverageBasisPoints: 4368,
+  viewRequirements: Object.freeze([
+    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
+    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
+    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
+  ]),
 });
 
 const NATIVE_PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
@@ -212,17 +211,27 @@ interface NativeWorldBaselineVisualTargetV1 {
   readonly visualGroupId: string;
   readonly topologyNodeId: string;
   readonly semanticLayerId: "foreground" | "middle" | "remote";
-  readonly normalizedBounds: Readonly<{
-    minXBasisPoints: number;
-    minYBasisPoints: number;
-    maxXBasisPoints: number;
-    maxYBasisPoints: number;
-  }>;
-  readonly normalizedCenter: Readonly<{
-    xBasisPoints: number;
-    yBasisPoints: number;
-  }>;
-  readonly coverageBasisPoints: number;
+  readonly viewRequirements: readonly (
+    | Readonly<{
+        viewId: "opening" | "world-side" | "world-top-down";
+        mode: "not-required" | "presence-required";
+      }>
+    | Readonly<{
+        viewId: "opening" | "world-side" | "world-top-down";
+        mode: "reference-projection-required";
+        normalizedBounds: Readonly<{
+          minXBasisPoints: number;
+          minYBasisPoints: number;
+          maxXBasisPoints: number;
+          maxYBasisPoints: number;
+        }>;
+        normalizedCenter: Readonly<{
+          xBasisPoints: number;
+          yBasisPoints: number;
+        }>;
+        coverageBasisPoints: number;
+      }>
+  )[];
 }
 
 function targetLayerFromCenterY(
@@ -231,6 +240,40 @@ function targetLayerFromCenterY(
   if (yBasisPoints >= 6500) return "foreground";
   if (yBasisPoints <= 3500) return "remote";
   return "middle";
+}
+
+function targetViewRequirements(
+  openingProjection?: Readonly<{
+    normalizedBounds: Readonly<{
+      minXBasisPoints: number;
+      minYBasisPoints: number;
+      maxXBasisPoints: number;
+      maxYBasisPoints: number;
+    }>;
+    normalizedCenter: Readonly<{
+      xBasisPoints: number;
+      yBasisPoints: number;
+    }>;
+    coverageBasisPoints: number;
+  }>,
+): NativeWorldBaselineVisualTargetV1["viewRequirements"] {
+  return Object.freeze([
+    Object.freeze(openingProjection === undefined
+      ? { viewId: "opening" as const, mode: "not-required" as const }
+      : {
+          viewId: "opening" as const,
+          mode: "reference-projection-required" as const,
+          ...openingProjection,
+        }),
+    Object.freeze({
+      viewId: "world-side" as const,
+      mode: "presence-required" as const,
+    }),
+    Object.freeze({
+      viewId: "world-top-down" as const,
+      mode: "presence-required" as const,
+    }),
+  ]);
 }
 
 async function measurePaletteTargets(
@@ -300,9 +343,14 @@ async function measurePaletteTargets(
       measuredTarget.largestComponentPixelCount <
         minimumReliableComponentPixelCount
     ) {
-      // This omits only an unreliable opening-derived Evaluation/Capture
-      // baseline. The complete target remains in the frozen Brief, palette,
-      // World Plan, and Generation Request consumed by Builder.
+      landmarkTargets.push(Object.freeze({
+        acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
+        compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
+        visualGroupId: `${target.id}-group`,
+        topologyNodeId: target.id,
+        semanticLayerId: "middle",
+        viewRequirements: targetViewRequirements(),
+      }));
       continue;
     }
     if (pixelCount !== measuredTarget.exclusivelyAdmittedPixelCount) {
@@ -332,12 +380,14 @@ async function measurePaletteTargets(
       visualGroupId: `${target.id}-group`,
       topologyNodeId: target.id,
       semanticLayerId: targetLayerFromCenterY(normalizedCenter.yBasisPoints),
-      normalizedBounds,
-      normalizedCenter,
-      coverageBasisPoints: Math.max(
-        1,
-        Math.round(pixelCount * 10000 / (info.width * info.height)),
-      ),
+      viewRequirements: targetViewRequirements({
+        normalizedBounds,
+        normalizedCenter,
+        coverageBasisPoints: Math.max(
+          1,
+          Math.round(pixelCount * 10000 / (info.width * info.height)),
+        ),
+      }),
     }));
   }
   return Object.freeze(landmarkTargets);
@@ -371,17 +421,20 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     BASELINE_REMOTE_GROUND,
     ...landmarkTargets,
   ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
-  const targetRefs = visualTargets.map(({ compositionTargetRef }) =>
-    compositionTargetRef);
+  const openingTargets = visualTargets.flatMap((target) => {
+    const requirement = target.viewRequirements[0]!;
+    return requirement.mode === "reference-projection-required"
+      ? [Object.freeze({ target, requirement })]
+      : [];
+  });
+  const targetRefs = sortBy(openingTargets.map(({ target }) =>
+    target.compositionTargetRef));
   const semanticLayerIds = sortBy([
     ...new Set(visualTargets.map(({ semanticLayerId }) => semanticLayerId)),
   ]);
-  const orderedTargetRefs = [
-    BASELINE_ENTRY_GROUND,
-    BASELINE_REMOTE_GROUND,
-    ...sortBy(landmarkTargets, ({ normalizedCenter }) =>
-      -normalizedCenter.yBasisPoints),
-  ].map(({ compositionTargetRef }) => compositionTargetRef);
+  const orderedTargetRefs = sortBy(openingTargets, ({ requirement }) =>
+    -requirement.normalizedCenter.yBasisPoints)
+    .map(({ target }) => target.compositionTargetRef);
   const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
   const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
   const traversalCheckId = "entry-to-remote-ground-pass";
@@ -401,21 +454,19 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       Object.freeze({
         acceptanceTargetRef: target.acceptanceTargetRef,
         visualGroupId: target.visualGroupId,
-        normalizedBounds: target.normalizedBounds,
-        normalizedCenter: target.normalizedCenter,
-        coverageBasisPoints: target.coverageBasisPoints,
+        viewRequirements: target.viewRequirements,
       }))),
     openingComposition: Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
       targetRefs: Object.freeze(targetRefs),
-      regions: Object.freeze(visualTargets.map((target) => Object.freeze({
+      regions: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
-        normalizedBounds: target.normalizedBounds,
-      }))),
-      anchors: Object.freeze(visualTargets.map((target) => Object.freeze({
+        normalizedBounds: requirement.normalizedBounds,
+      })), ({ targetRef }) => targetRef)),
+      anchors: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
-        normalizedCenter: target.normalizedCenter,
-      }))),
+        normalizedCenter: requirement.normalizedCenter,
+      })), ({ targetRef }) => targetRef)),
       orderedTargetRefs: Object.freeze(orderedTargetRefs),
     }),
     spawnSupport: Object.freeze({
@@ -803,6 +854,13 @@ async function readClosedPlannerInput(
   return readFile(filePath);
 }
 
+export const NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1 = Object.freeze([
+  { inputRef: "entry-whitebox-target.png", mediaType: "image/png" },
+  { inputRef: "planner-self-check.json", mediaType: "application/json" },
+  { inputRef: "visual-identity-palette.json", mediaType: "application/json" },
+  { inputRef: "world-plan.png", mediaType: "image/png" },
+] as const);
+
 export async function validateNativeWorldPlannerInputClosureV1(
   input: Readonly<{
     reconstructionCase: unknown;
@@ -815,23 +873,10 @@ export async function validateNativeWorldPlannerInputClosureV1(
   if (reconstructionCase.sceneBriefRef !== "scene-brief.md") {
     throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
   }
-  const requiredRows = [{
-    inputRef: "entry-whitebox-target.png",
-    mediaType: "image/png",
-  }, {
-    inputRef: "planner-self-check.json",
-    mediaType: "application/json",
-  }, {
-    inputRef: "visual-identity-palette.json",
-    mediaType: "application/json",
-  }, {
-    inputRef: "world-plan.png",
-    mediaType: "image/png",
-  }] as const;
   const jsonRows = reconstructionCase.referenceInputs.filter(
     ({ mediaType }) => mediaType === "application/json",
   );
-  const rows = requiredRows.map(({ inputRef, mediaType }) => {
+  const rows = NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1.map(({ inputRef, mediaType }) => {
     const matches = reconstructionCase.referenceInputs.filter((row) =>
       row.inputRef === inputRef && row.mediaType === mediaType
     );
@@ -906,13 +951,6 @@ export async function validateNativeWorldPlannerInputClosureV1(
   });
 }
 
-function mediaType(filePath: string): "image/png" | "image/jpeg" {
-  const extension = path.extname(filePath).toLowerCase();
-  if (extension === ".png") return "image/png";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  throw new TypeError("NATIVE_WORLD_REFERENCE_MEDIA_TYPE_INVALID");
-}
-
 function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
   try {
     return parseWorldPackageWorldBoundsV1(value);
@@ -948,7 +986,7 @@ export interface PreparedNativeWorldCaseV1 {
 export interface FrozenNativeWorldReferenceInputV1 {
   readonly inputRef: string;
   readonly contentHash: Sha256HashV1;
-  readonly mediaType: "image/png" | "image/jpeg";
+  readonly mediaType: "image/png" | "image/jpeg" | "image/webp";
   readonly bytes: Uint8Array;
 }
 
@@ -1102,16 +1140,15 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       evidenceProfileRefs: [EVIDENCE_PROFILE_REF_BY_DIMENSION[dimensionId]],
     })),
   });
-  const uploadedReferenceInputs = input.uploadedReferenceInputs.map(
-    (reference, index) => {
+  const uploadedReferenceInputs = await Promise.all(input.uploadedReferenceInputs.map(
+    async (reference, index) => {
       if (
         reference.mediaType !== "image/png" &&
-        reference.mediaType !== "image/jpeg"
+        reference.mediaType !== "image/jpeg" && reference.mediaType !== "image/webp"
       ) {
         throw new TypeError("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
       }
-      const expectedInputRef =
-        `reference-${index}.${reference.mediaType === "image/png" ? "png" : "jpg"}`;
+      const expectedInputRef = nativeWorldReferenceInputRefV1(index, reference.mediaType);
       if (
         !(reference.bytes instanceof Uint8Array) ||
         reference.inputRef !== expectedInputRef ||
@@ -1120,6 +1157,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
         throw new TypeError("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
       }
       const bytes = new Uint8Array(reference.bytes);
+      await validateNativeWorldReferenceImageV1(bytes, reference.mediaType);
       return Object.freeze({
         bytes,
         row: Object.freeze({
@@ -1129,7 +1167,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
         }),
       });
     },
-  );
+  ));
   const planningReferenceInputs = await Promise.all([{
     sourcePath: input.planningImagePaths.entryWhiteboxTargetPath,
     inputRef: "entry-whitebox-target.png",
@@ -1137,7 +1175,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     sourcePath: input.planningImagePaths.worldPlanPath,
     inputRef: "world-plan.png",
   }].map(async ({ sourcePath, inputRef }) => {
-    if (mediaType(sourcePath) !== "image/png") {
+    if (nativeWorldReferenceMediaTypeV1(sourcePath) !== "image/png") {
       throw new TypeError("NATIVE_WORLD_PLANNING_IMAGE_MEDIA_TYPE_INVALID");
     }
     const bytes = await readFile(sourcePath);
@@ -1258,11 +1296,13 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "# Native Block generation request",
       "",
       "Build the complete playable world described by the frozen Scene Brief, visual-identity-palette.json, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
+      "Before detail, follow the Skill construction-and-budget inventory: allocate the actual Request budget across complete floor/support, terrain, landmarks and real connecting courses; do not reuse a remembered 2,000-Block cap or sacrifice major geography for ornament.",
+      "The generic Case entry/remote checks are evidence anchors, not the world design. Preserve all significant reference/Brief formations, actual bridge and staircase courses, elevation changes, negative space and meaningful side/rear/remote continuation in both visual comparisons.",
       "Write exactly scene.ts, native-block-authoring.json, and native-resources.json as the Native Source, plus the two Host-declared advisory comparison PNGs under attempts/advisory/; write no other outputs.",
       "Run the frozen Builder self-check and visual-review renderer, actually open both comparison PNGs, and keep structural and visual repairs inside the one shared three-cycle Builder budget.",
       "Derive advisory pixels only from scene.ts and frozen inputs; never author a review manifest or second geometry list.",
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
-      "For each Case visual group whose acceptanceTargetRef identifies visual-target-N, copy that target's exact semanticClassId and Native identityColor from visual-identity-palette.json. A palette target without a Case visual group is not authorization to add a visual group or invent opening bounds.",
+      "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
       "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",

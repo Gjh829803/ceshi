@@ -9,6 +9,12 @@ import { deflateSync, inflateSync } from "node:zlib";
 
 import ts from "typescript";
 import {
+  BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 as SHAPE_SIZE_BY_KIND,
+  babylonNativeBlockCenterAlignsToGridV1,
+  babylonNativeBlockOccupiedMicroCellKeysV1,
+  effectiveBabylonNativeBlockSizeMetersXYZV1 as effectiveSize,
+} from "../../../../packages/native-babylon-block-profile/src/shapes.js";
+import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
@@ -28,14 +34,6 @@ const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 const MAXIMUM_PLANNING_PNG_ENCODED_BYTES = 16 * 1024 * 1024;
 const MAXIMUM_PLANNING_PNG_DIMENSION_PIXELS = 8_192;
 const MAXIMUM_PLANNING_PNG_PIXEL_COUNT = 16_777_216;
-
-const SHAPE_SIZE_BY_KIND = Object.freeze({
-  full: Object.freeze([1, 1, 1]),
-  half: Object.freeze([1, 0.5, 1]),
-  quarter: Object.freeze([0.5, 0.5, 1]),
-  small: Object.freeze([0.5, 0.5, 0.5]),
-  step: Object.freeze([1, 0.25, 1]),
-});
 
 const COLOR_BY_PALETTE_ROLE = Object.freeze({
   ground: "#7F956E",
@@ -360,16 +358,6 @@ function text(value: unknown, fieldName: string): string {
   return value;
 }
 
-function effectiveSize(
-  shape: keyof typeof SHAPE_SIZE_BY_KIND,
-  rotationQuarterTurnsY: number,
-): Vec3 {
-  const size = SHAPE_SIZE_BY_KIND[shape];
-  return rotationQuarterTurnsY % 2 === 0
-    ? size as Vec3
-    : Object.freeze([size[2], size[1], size[0]]) as Vec3;
-}
-
 function createRandom(seedInput: unknown): Readonly<{
   nextRatio(): number;
   range(minimum: number, maximum: number): number;
@@ -432,6 +420,7 @@ function captureSource(
   const blocks: CapturedBlock[] = [];
   const blockIds = new Set<string>();
   let maximumBlockCount: number | undefined;
+  const blockIdByMicroCellKey = new Map<string, string>();
   let displayGapMeters = DEFAULT_DISPLAY_GAP_METERS;
   let finalized = false;
   let sessionCreated = false;
@@ -472,6 +461,21 @@ function captureSource(
     const colliderGroupId = row.colliderGroupId === undefined
       ? undefined
       : text(row.colliderGroupId, "block.colliderGroupId");
+    const centerMetersXYZ = vec3(row.centerMetersXYZ, "block.centerMetersXYZ");
+    const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation as number };
+    if (!babylonNativeBlockCenterAlignsToGridV1(placement)) {
+      return fail("WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID", `Block '${id}' is off its shape-specific grid`);
+    }
+    // Disposable feedback only. Use the Profile's exact occupied cells, not a
+    // second bounds/intersection approximation or a Runtime collision inference.
+    const keys = babylonNativeBlockOccupiedMicroCellKeysV1(placement);
+    for (const key of keys) {
+      const occupant = blockIdByMicroCellKey.get(key);
+      if (occupant !== undefined) {
+        return fail("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP", `block '${id}' overlaps '${occupant}' at cell ${key}`);
+      }
+    }
+    for (const key of keys) blockIdByMicroCellKey.set(key, id);
     blockIds.add(id);
     blocks.push(Object.freeze({
       id,
@@ -479,7 +483,7 @@ function captureSource(
       paletteRole,
       ...(visualGroupId === undefined ? {} : { visualGroupId }),
       ...(colliderGroupId === undefined ? {} : { colliderGroupId }),
-      centerMetersXYZ: vec3(row.centerMetersXYZ, "block.centerMetersXYZ"),
+      centerMetersXYZ,
       rotationQuarterTurnsY: rotation as 0 | 1 | 2 | 3,
     }));
     return Object.freeze({});

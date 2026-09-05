@@ -1,7 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { verifyNativeBlockCaseOwnerInputSnapshotV1 } from "./final-artifact-publisher.js";
+import { nativeWorldReferenceInputRefV1, nativeWorldReferenceMediaTypeV1 } from "./native-world-reference-media.js";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
@@ -19,6 +21,9 @@ import {
 } from "./native-world-case-preparation.js";
 
 const temporaryRoots: string[] = [];
+const REFERENCE_PNG = await sharp({ create: {
+  width: 8, height: 8, channels: 3, background: "red",
+} }).png().toBuffer();
 
 const BABYLON_NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
   "#E85D5D",
@@ -260,11 +265,9 @@ async function frozenReferenceInputs(
 ): Promise<readonly FrozenNativeWorldReferenceInputV1[]> {
   return Promise.all(referenceImagePaths.map(async (referenceImagePath, index) => {
     const bytes = new Uint8Array(await readFile(referenceImagePath));
-    const mediaType = path.extname(referenceImagePath).toLowerCase() === ".png"
-      ? "image/png" as const
-      : "image/jpeg" as const;
+    const mediaType = nativeWorldReferenceMediaTypeV1(referenceImagePath);
     return Object.freeze({
-      inputRef: `reference-${index}.${mediaType === "image/png" ? "png" : "jpg"}`,
+      inputRef: nativeWorldReferenceInputRefV1(index, mediaType),
       contentHash: sha256Bytes(bytes) as FrozenNativeWorldReferenceInputV1["contentHash"],
       mediaType,
       bytes,
@@ -368,7 +371,11 @@ describe("trusted Native world Case preparation", () => {
         semanticSilhouetteTargets: readonly {
           acceptanceTargetRef: string;
           visualGroupId: string;
-          normalizedBounds: unknown;
+          viewRequirements: readonly {
+            viewId: string;
+            mode: string;
+            normalizedBounds?: unknown;
+          }[];
         }[];
         criticalTraversalChecks: readonly { id: string }[];
       };
@@ -389,7 +396,8 @@ describe("trusted Native world Case preparation", () => {
     ]);
     expect(proposal.expected.semanticSilhouetteTargets.find(
       ({ visualGroupId }) => visualGroupId === "visual-target-2-group",
-    )?.normalizedBounds).toEqual({
+    )?.viewRequirements.find(({ viewId }) => viewId === "opening")
+      ?.normalizedBounds).toEqual({
       minXBasisPoints: 4000,
       minYBasisPoints: 4000,
       maxXBasisPoints: 6000,
@@ -494,27 +502,11 @@ describe("trusted Native world Case preparation", () => {
     ]);
     expect(evaluationProfile.thresholds.openingComposition.regions).toEqual([
       {
-        targetRef: "worldkit://composition-target/entry-ground@1",
-        maximumDriftBasisPoints: 10_000,
-      },
-      {
-        targetRef: "worldkit://composition-target/remote-ground@1",
-        maximumDriftBasisPoints: 10_000,
-      },
-      {
         targetRef: "worldkit://composition-target/visual-target-2@1",
         maximumDriftBasisPoints: 1600,
       },
     ]);
     expect(evaluationProfile.thresholds.openingComposition.anchors).toEqual([
-      {
-        targetRef: "worldkit://composition-target/entry-ground@1",
-        maximumDriftBasisPoints: 10_000,
-      },
-      {
-        targetRef: "worldkit://composition-target/remote-ground@1",
-        maximumDriftBasisPoints: 10_000,
-      },
       {
         targetRef: "worldkit://composition-target/visual-target-2@1",
         maximumDriftBasisPoints: 1000,
@@ -596,7 +588,7 @@ describe("trusted Native world Case preparation", () => {
       "worldkit://acceptance-target/mountain-cliff-layers@1";
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
-      writeFile(referencePath, "reference-bytes"),
+      writeFile(referencePath, REFERENCE_PNG),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
         schemaVersion: 1,
@@ -651,7 +643,7 @@ describe("trusted Native world Case preparation", () => {
     });
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
-      writeFile(referencePath, "reference-bytes"),
+      writeFile(referencePath, REFERENCE_PNG),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
         schemaVersion: 1,
@@ -692,7 +684,7 @@ describe("trusted Native world Case preparation", () => {
     ]);
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
-      writeFile(referencePath, "reference-bytes"),
+      writeFile(referencePath, REFERENCE_PNG),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
         schemaVersion: 1,
@@ -744,7 +736,7 @@ describe("trusted Native world Case preparation", () => {
       "collider-central-steps-parallel";
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
-      writeFile(referencePath, "reference-bytes"),
+      writeFile(referencePath, REFERENCE_PNG),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
         schemaVersion: 1,
@@ -775,13 +767,16 @@ describe("trusted Native world Case preparation", () => {
     );
   });
 
-  it("binds an untrusted semantic proposal to Host profiles and immutable inputs", async () => {
+  it.each(["png", "webp"] as const)("binds an untrusted proposal to Host profiles and immutable %s inputs through Publisher admission", async (format) => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-case-"));
     temporaryRoots.push(root);
     const proposalPath = path.join(root, "proposal.json");
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
+    const uploadedReferencePath = path.join(root, `upload.${format}`);
+    const uploadedReferenceBytes = format === "png" ? REFERENCE_PNG : await sharp(REFERENCE_PNG).webp().toBuffer();
+    const uploadedReferenceRef = `reference-0.${format}`;
     const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
@@ -789,7 +784,8 @@ describe("trusted Native world Case preparation", () => {
     ]);
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
-      writeFile(referencePath, "reference-bytes"),
+      writeFile(referencePath, REFERENCE_PNG),
+      writeFile(uploadedReferencePath, uploadedReferenceBytes),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
         schemaVersion: 1,
@@ -808,7 +804,7 @@ describe("trusted Native world Case preparation", () => {
       sceneId: "prepared-native-world",
       proposalPath,
       sceneBriefPath: briefPath,
-      referenceImagePaths: [referencePath],
+      referenceImagePaths: [uploadedReferencePath],
       planningImagePaths: {
         worldPlanPath: referencePath,
         entryWhiteboxTargetPath: referencePath,
@@ -830,32 +826,33 @@ describe("trusted Native world Case preparation", () => {
       .toEqual([
         "entry-whitebox-target.png",
         "planner-self-check.json",
-        "reference-0.png",
+        uploadedReferenceRef,
         "visual-identity-palette.json",
         "world-plan.png",
       ]);
     expect(profile.qualityGateMode).toBe("report-only");
     await expect(readFile(
       path.join(outputCaseRoot, "inputs", "world-plan.png"),
-      "utf8",
-    )).resolves.toBe("reference-bytes");
+    )).resolves.toEqual(REFERENCE_PNG);
     await expect(readFile(
       path.join(outputCaseRoot, "inputs", "entry-whitebox-target.png"),
-      "utf8",
-    )).resolves.toBe("reference-bytes");
-    const uploadedReferenceBytes = Buffer.from("reference-bytes");
+    )).resolves.toEqual(REFERENCE_PNG);
     expect(reconstructionCase.referenceInputs.find(
-      ({ inputRef }) => inputRef === "reference-0.png",
+      ({ inputRef }) => inputRef === uploadedReferenceRef,
     )).toEqual({
-      inputRef: "reference-0.png",
+      inputRef: uploadedReferenceRef,
       contentHash: sha256Bytes(uploadedReferenceBytes),
-      mediaType: "image/png",
+      mediaType: `image/${format}`,
     });
     await expect(readFile(path.join(
       outputCaseRoot,
       "inputs",
-      "reference-0.png",
+      uploadedReferenceRef,
     ))).resolves.toEqual(uploadedReferenceBytes);
+    const publisherSnapshot = await verifyNativeBlockCaseOwnerInputSnapshotV1(
+      await realpath(path.join(outputCaseRoot, "inputs")), reconstructionCase,
+    );
+    expect(publisherSnapshot.filesByRelativePath.get(uploadedReferenceRef)).toBe(sha256Bytes(uploadedReferenceBytes));
     const plannerReceiptBytes = await readFile(
       path.join(outputCaseRoot, "inputs", "planner-self-check.json"),
     );
@@ -907,7 +904,7 @@ describe("trusted Native world Case preparation", () => {
     expect(taskInstruction).toContain("actually open both comparison PNGs");
     expect(taskInstruction).toContain("never author a review manifest or second geometry list");
     expect(taskInstruction).toContain(
-      "A palette target without a Case visual group is not authorization",
+      "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group",
     );
 
     await expect(prepareNativeWorldCaseV1({
@@ -933,14 +930,14 @@ describe("trusted Native world Case preparation", () => {
     })).rejects.toThrow("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
   });
 
-  it("omits a missing non-subject mask instead of rejecting old success or inventing bounds", async () => {
+  it("retains a missing non-subject mask without inventing Opening bounds", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-mask-"));
     temporaryRoots.push(root);
-    const sceneBriefHash = sha256Bytes(
-      Buffer.from("missing-native-mask-brief"),
-    ) as Sha256HashV1;
+    const sceneBriefBytes = new TextEncoder().encode(VALID_SCENE_BRIEF);
+    const sceneBriefHash = sceneBriefSemanticHash(sceneBriefBytes);
     const palettePath = path.join(root, "visual-identity-palette.json");
     const entryPath = path.join(root, "entry-whitebox-target.png");
+    const briefPath = path.join(root, "scene-brief.md");
     await Promise.all([
       writeFile(palettePath, JSON.stringify({
         kind: "worldkit-visual-identity-palette",
@@ -988,6 +985,7 @@ describe("trusted Native world Case preparation", () => {
         left: 45,
         top: 70,
       }]).png().toFile(entryPath),
+      writeFile(briefPath, sceneBriefBytes),
     ]);
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
@@ -997,17 +995,73 @@ describe("trusted Native world Case preparation", () => {
       entryWhiteboxTargetPath: entryPath,
     }) as {
       expected: {
+        openingComposition: {
+          targetRefs: readonly string[];
+          regions: readonly unknown[];
+          anchors: readonly unknown[];
+          orderedTargetRefs: readonly string[];
+        };
         semanticSilhouetteTargets: readonly {
           acceptanceTargetRef: string;
+          viewRequirements: readonly {
+            viewId: string;
+            mode: string;
+          }[];
         }[];
       };
+      formalCaptureIntent: unknown;
+      worldBounds: unknown;
     };
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     )).toEqual([
       "worldkit://acceptance-target/entry-ground@1",
       "worldkit://acceptance-target/remote-ground@1",
+      "worldkit://acceptance-target/visual-target-2@1",
     ]);
+    expect(proposal.expected.semanticSilhouetteTargets.find(
+      ({ acceptanceTargetRef }) =>
+        acceptanceTargetRef ===
+          "worldkit://acceptance-target/visual-target-2@1",
+    )?.viewRequirements).toEqual([
+      { viewId: "opening", mode: "not-required" },
+      { viewId: "world-side", mode: "presence-required" },
+      { viewId: "world-top-down", mode: "presence-required" },
+    ]);
+    expect(proposal.expected.openingComposition).toMatchObject({
+      targetRefs: [],
+      regions: [],
+      anchors: [],
+      orderedTargetRefs: [],
+    });
+
+    const proposalPath = path.join(root, "proposal.json");
+    const outputCaseRoot = path.join(root, "prepared-case");
+    await writeFile(proposalPath, JSON.stringify(proposal));
+    const prepared = await prepareWithPassedPlannerReceipt({
+      repositoryRoot: process.cwd(),
+      sceneId: "missing-native-mask",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      referenceImagePaths: [entryPath],
+      planningImagePaths: {
+        worldPlanPath: entryPath,
+        entryWhiteboxTargetPath: entryPath,
+      },
+      visualIdentityPalettePath: palettePath,
+      outputCaseRoot,
+    });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(
+      await readFile(prepared.casePath, "utf8"),
+    ));
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
+      JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")),
+    );
+    expect(reconstructionCase.expected.openingComposition.targetRefs).toEqual([]);
+    expect(evaluationProfile.thresholds.openingComposition).toEqual({
+      regions: [],
+      anchors: [],
+    });
   });
 
   it("accepts historical Native target-3 yellow and rejects the Canonical target-3 purple", async () => {

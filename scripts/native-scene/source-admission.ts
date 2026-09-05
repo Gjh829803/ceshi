@@ -12,6 +12,8 @@ import type { NativeSceneDiagnosticV1 } from
   "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
 import ts from "typescript";
+import { BABYLON_NATIVE_SOURCE_COMPILER_OPTIONS_V1 } from "./source-typecheck.js";
+export { BABYLON_NATIVE_SOURCE_COMPILER_OPTIONS_V1 } from "./source-typecheck.js";
 
 import {
   createNativeWorkspaceDiagnosticV1,
@@ -239,20 +241,6 @@ const FORBIDDEN_STRUCTURAL_CAPABILITY_MEMBER_NAMES = new Set([
   ...FORBIDDEN_BABYLON_METHODS,
   ...FORBIDDEN_BABYLON_PROPERTIES,
 ]);
-
-export const BABYLON_NATIVE_SOURCE_COMPILER_OPTIONS_V1 = Object.freeze({
-  allowImportingTsExtensions: false,
-  exactOptionalPropertyTypes: true,
-  lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
-  module: ts.ModuleKind.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
-  noEmit: true,
-  noUncheckedIndexedAccess: true,
-  skipLibCheck: true,
-  strict: true,
-  target: ts.ScriptTarget.ES2022,
-  useDefineForClassFields: true,
-} satisfies ts.CompilerOptions);
 
 export interface AdmittedBabylonNativeAuthoringWorkspaceV1
   extends BabylonNativeAuthoringWorkspaceRootV1 {

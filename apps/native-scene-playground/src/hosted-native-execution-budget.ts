@@ -21,7 +21,9 @@ export function createHostedNativeExecutionBudgetV1(input: Readonly<{
       maximumTextureBytes: 64_000_000,
     }),
     runtime: Object.freeze({
-      maximumSceneNodeCount: 4_096,
+      // CF-20/R1: the measured 8k Block workload creates 8,492 Host scene nodes.
+      // Keep a bounded Host allowance for blocks, batched meshes and the Subject.
+      maximumSceneNodeCount: 16_384,
       maximumMaterialCount: 512,
       maximumShaderCount: 512,
       maximumPhysicsBodyCount: 257,
@@ -29,7 +31,7 @@ export function createHostedNativeExecutionBudgetV1(input: Readonly<{
     process: Object.freeze({
       maximumWallTimeMilliseconds: 120_000,
       maximumCpuTimeMilliseconds: 120_000,
-      maximumMemoryBytes: 1_000_000_000,
+      maximumMemoryBytes: 2_000_000_000,
       maximumProcessCount: 1,
     }),
     protocol: Object.freeze(isFormalCapture

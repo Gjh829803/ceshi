@@ -174,7 +174,14 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   planner_prompt_file="$task_tmp/planner.prompt.txt"
   printf '%s\n' "$planner_prompt" > "$planner_prompt_file"
   planner_task_id="planner-$codex_run_nonce"
-  planner_context_args=(--context ".codex/skills/worldkit-spatial-planner")
+  planner_request_id="$scene_id-planner-$codex_run_nonce"
+  planner_execution_root="$artifact_root/planner-executions/$planner_task_id"
+  planner_request_hash="$("$pnpm_bin" exec tsx scripts/agents/planner-execution.ts prepare \
+    --repository-root "$project_root" \
+    --artifact-root "$artifact_root" \
+    --scene-source "$scene_source" --scene-id "$scene_id" \
+    --task-id "$planner_task_id" --request-id "$planner_request_id" \
+    --instruction "$planner_prompt_file")"
   planner_output_args=(
     --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown"
     --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json"
@@ -182,7 +189,6 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --output "apps/playground/public/scene-plans/$scene_id/world-plan.png::$public_plan_root/world-plan.png::image/png"
   )
   if [[ "$scene_source" == "canonical" ]]; then
-    planner_context_args+=(--context "assets/terrain-height-intent")
     planner_output_args+=(
       --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown"
       --output "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png::$public_plan_root/terrain-height-intent.png::image/png"
@@ -192,34 +198,17 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --task-id "$planner_task_id" \
     --stage planner \
     --job-name "WorldKit Planner · $scene_id" \
-    --request-id "$scene_id-planner-$codex_run_nonce" \
+    --request-id "$planner_request_id" \
     --output-s3-prefix "$codex_output_prefix/planner" \
-    --instruction-file "$planner_prompt_file" \
-    "${planner_context_args[@]}" \
+    --instruction-file "$planner_execution_root/instruction.md" \
+    --workspace-context-root "$planner_execution_root/workspace" \
     "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
     "${planner_output_args[@]}" \
     2>&1 | /usr/bin/tee "$planner_log"
-  "$pnpm_bin" worldkit brief validate "$artifact_root/scene-brief.md" --json
-  planner_host_receipt="$task_tmp/planner-self-check.host.json"
-  planner_check_args=(
-    --scene-source "$scene_source"
-    --scene-id "$scene_id"
-    --brief "$artifact_root/scene-brief.md"
-    --world-plan "$public_plan_root/world-plan.png"
-    --entry "$public_plan_root/entry-whitebox-target.png"
-    --report "$planner_host_receipt"
-  )
-  if [[ "$scene_source" == "canonical" ]]; then
-    planner_check_args+=(
-      --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md"
-      --terrain-intent "$public_plan_root/terrain-height-intent.png"
-    )
-  fi
-  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" "${planner_check_args[@]}"
-  /usr/bin/cmp -s "$planner_host_receipt" "$artifact_root/planner-self-check.json" || {
-    echo "Planner self-check receipt does not match trusted Host replay." >&2
-    exit 2
-  }
+  "$pnpm_bin" exec tsx scripts/agents/planner-execution.ts replay \
+    --artifact-root "$artifact_root" --public-plan-root "$public_plan_root" \
+    --scene-source "$scene_source" --scene-id "$scene_id" \
+    --task-id "$planner_task_id" --request-hash "$planner_request_hash"
 
   visual_identity_palette="$artifact_root/visual-identity-palette.json"
   "$pnpm_bin" exec tsx scripts/visual/write-visual-identity-palette.ts \
@@ -242,20 +231,9 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
 fi
 
 if [[ "$mode" == "build" ]]; then
-  planner_host_receipt="$task_tmp/planner-self-check.host.json"
-  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" \
-    --scene-source canonical \
-    --scene-id "$scene_id" \
-    --brief "$artifact_root/scene-brief.md" \
-    --world-plan "$public_plan_root/world-plan.png" \
-    --entry "$public_plan_root/entry-whitebox-target.png" \
-    --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md" \
-    --terrain-intent "$public_plan_root/terrain-height-intent.png" \
-    --report "$planner_host_receipt"
-  /usr/bin/cmp -s "$planner_host_receipt" "$artifact_root/planner-self-check.json" || {
-    echo "Planner self-check receipt does not match trusted Host replay." >&2
-    exit 2
-  }
+  "$pnpm_bin" exec tsx scripts/agents/planner-execution.ts replay-accepted \
+    --artifact-root "$artifact_root" --public-plan-root "$public_plan_root" \
+    --scene-source canonical --scene-id "$scene_id"
 fi
 
 authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"

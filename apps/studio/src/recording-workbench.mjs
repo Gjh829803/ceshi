@@ -168,9 +168,9 @@ export function buildRecordingPromptInstruction({ sceneId, triViews }) {
   const primary = triViews.find(({ role }) => role === "primary-subject");
   if (!primary) throw new Error("渲染后三视图缺少 primary-subject，无法建立 @图片1。 ");
   const supplements = triViews
-    .filter(({ id }) => id !== primary.id)
+    .filter(({ visualTargetId }) => visualTargetId !== primary.visualTargetId)
     .map((target, index) =>
-      `- @图片${index + 3}：${target.id}（${target.role || "landmark"}）的完整 Front / Right / Back 外观参考；只约束该完整标识物的身份、轮廓、材质与细节，不改变@视频1的空间布局。`)
+      `- @图片${index + 3}：${target.visualTargetId}（${target.role || "landmark"}）的完整 Front / Right / Back 外观参考；只约束该完整标识物的身份、轮廓、材质与细节，不改变@视频1的空间布局。`)
     .join("\n");
   return `你是 WorldKit 的 Seedance 2.5 Prompt Synthesis Agent。
 
@@ -178,7 +178,7 @@ export function buildRecordingPromptInstruction({ sceneId, triViews }) {
 
 附件角色已经固定：
 - @视频1：浏览器直接录制的真实白膜游玩视频，是唯一运动、镜头、时序和空间调度权威。
-- @图片1：${primary.id} 的渲染后三视图，是主角最终身份、服装、材质和完整外观权威。
+- @图片1：${primary.visualTargetId} 的渲染后三视图，是主角最终身份、服装、材质和完整外观权威。
 - @图片2：最终样式化首帧，是环境、灯光、色调、建筑材质及开场视觉构图权威。
 ${supplements || "- 没有额外标识物三视图。"}
 
@@ -546,13 +546,13 @@ export function createRecordingWorkbenchService(options = {}) {
           ? `/api/worlds/${record.sceneId}/deliverables/styled-opening-frame`
           : null,
         styledTriviews: assets.triViews.map((target) => ({
-          id: target.id,
+          visualTargetId: target.visualTargetId,
           role: target.role,
           semanticClassId: target.semanticClassId,
           whiteboxUrl: target.whiteboxPath === null
             ? null
-            : `/api/worlds/${record.sceneId}/triviews/${target.id}`,
-          url: `/api/worlds/${record.sceneId}/styled-triviews/${target.id}`,
+            : `/api/worlds/${record.sceneId}/triviews/${target.visualTargetId}`,
+          url: `/api/worlds/${record.sceneId}/styled-triviews/${target.visualTargetId}`,
         })),
       },
     };
@@ -576,7 +576,7 @@ export function createRecordingWorkbenchService(options = {}) {
     const assets = await resolveSceneAssets(sceneId);
     if (!assets.ready) throw new Error("最终样式化首帧或主角渲染后三视图尚未准备完成。");
     const primary = assets.triViews.find(({ role }) => role === "primary-subject");
-    const remaining = assets.triViews.filter(({ id }) => id !== primary.id);
+    const remaining = assets.triViews.filter(({ visualTargetId }) => visualTargetId !== primary.visualTargetId);
     const referenceImages = [
       primary.styledPath,
       assets.openingFramePath,

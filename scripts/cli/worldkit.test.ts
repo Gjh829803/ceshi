@@ -442,7 +442,7 @@ describe("worldkit CLI", () => {
       json: true,
     });
     expect(HELP).toContain(
-      "worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json",
+      "worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--resume-host-only] --json",
     );
   });
 
@@ -520,6 +520,12 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown reconstruct operation 'build'.");
   });
 
+  it("parses explicit Host-only recovery without selecting a different Run or source", () => {
+    expect(parseWorldkitArgs(["reconstruct", "run", "case.json", "--output", "runs/original",
+      "--backend", "local", "--resume-host-only", "--json"])).toMatchObject({
+      command: "reconstruct-run", executionMode: "resume-host-only", outputDirectoryPath: "runs/original",
+    });
+  });
   it("delegates reconstruct run once to one transaction port and prints canonical JSON", async () => {
     const calls: unknown[] = [];
     let stdout = "";

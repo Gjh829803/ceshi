@@ -62,6 +62,11 @@ Repeated targets share one ordered color across their actual instances.
 
 ## `world-plan.png`
 
+For lighting-only identity-color drift, follow the Skill's **Native deterministic palette
+authoring** step before accepting the PNG. The explicit region must refer to the actual intended
+target, not merely any nearby same-hue pixels. The helper never establishes semantic presence;
+inspection establishes the selection and the unchanged final checker measures its result.
+
 Generate the World Plan only after accepting and inspecting the exact entry
 image. Supply that exact PNG, the uploaded references, and the completed Brief
 to the same generation call. Produce one continuous orthographic or near-top-

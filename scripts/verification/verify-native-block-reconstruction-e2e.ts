@@ -1,5 +1,6 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { resolveHostAttemptArtifactV1 } from "../reconstruction/host-checkpoint.js";
 import { isNil } from "lodash-es";
 
 import {
@@ -31,6 +32,8 @@ import {
   hashNativeSceneCheckResultV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
@@ -669,6 +672,11 @@ async function verifyAllRunAttempts(input: Readonly<{
       input.runRoot,
       `attempts/${runAttempt.attemptIndex}`,
     );
+    const hostArtifact = (artifactRef: string, fileName: string) => resolveHostAttemptArtifactV1({
+      runRoot: input.runRoot, caseRef: input.runReceipt.caseRef, attemptIndex: runAttempt.attemptIndex,
+      artifactRef, fileName,
+    });
+    const packageStageRoot = path.dirname(hostArtifact(runAttempt.sceneAuthoringAttemptResultRef, "attempt-result.json"));
     const generationRequest = parseNativeBlockGenerationRequestV1(json(
       await requiredFile(
         attemptRoot,
@@ -743,7 +751,7 @@ async function verifyAllRunAttempts(input: Readonly<{
     )));
     const attemptResult = parseSceneAuthoringAttemptResultV1(json(
       await requiredFile(
-        attemptRoot,
+        packageStageRoot,
         "attempt-result.json",
         "NBR70_REQUIRED_ARTIFACT_MISSING",
       ),
@@ -776,12 +784,12 @@ async function verifyAllRunAttempts(input: Readonly<{
     );
 
     const checkResult = parseNativeSceneCheckResultV1(json(await requiredFile(
-      attemptRoot,
+      packageStageRoot,
       "native-check-result.json",
       "NBR70_REQUIRED_ARTIFACT_MISSING",
     )));
     const explain = new TextDecoder().decode(await requiredFile(
-      attemptRoot,
+      packageStageRoot,
       "native-explain.txt",
       "NBR70_REQUIRED_ARTIFACT_MISSING",
     ));
@@ -803,7 +811,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       exact(runAttempt.authoredSourceRef, attemptResult.authoredSourceRef);
       exact(runAttempt.authoredSourceHash, attemptResult.authoredSourceHash);
       const groundAnalysisReportBytes = await requiredFile(
-        attemptRoot,
+        packageStageRoot,
         "ground-analysis-report.json",
         "NBR70_REQUIRED_ARTIFACT_MISSING",
       );
@@ -820,7 +828,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       );
       continue;
     }
-    const packageDirectoryPath = path.join(attemptRoot, "world-package");
+    const packageDirectoryPath = path.join(packageStageRoot, "world-package");
     const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
     if (
       verified.kind !== "babylon-native-scene" ||
@@ -831,9 +839,9 @@ async function verifyAllRunAttempts(input: Readonly<{
     exact(runAttempt.worldPackageBuildReceiptHash, sha256CanonicalJson(verified.receipt));
     exact(runAttempt.worldBuildIdentityHash, verified.receipt.worldBuildIdentityHash);
     await verifyPassedGroundAnalysisReport({
-      attemptRoot,
+      attemptRoot: packageStageRoot,
       attemptArtifactRoot:
-        `${runArtifactRoot}/attempts/${runAttempt.attemptIndex}`,
+        runAttempt.sceneAuthoringAttemptResultRef.slice(0, -"/attempt-result.json".length),
       expectedCaseHash: input.runReceipt.caseHash,
       expectedWorldPackageRootHash: runAttempt.worldPackageRootHash,
       groundAnalysisReportRef: runAttempt.groundAnalysisReportRef,
@@ -864,7 +872,8 @@ async function verifyAllRunAttempts(input: Readonly<{
       continue;
     }
 
-    const captureRoot = path.join(attemptRoot, "capture");
+    const captureRoot = path.dirname(hostArtifact(runAttempt.captureReceiptRef, "capture/formal-world-capture-receipt.json"));
+    const evaluationStageRoot = path.dirname(hostArtifact(runAttempt.evaluationResultRef, "evaluation.json"));
     const captureReceipt = parseFormalWorldCaptureReceiptV1(json(
       await requiredFile(
         captureRoot,
@@ -935,6 +944,11 @@ async function verifyAllRunAttempts(input: Readonly<{
       "spawn-support-observation.json",
       "NBR70_CAPTURE_ARTIFACT_MISSING",
     )));
+    const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1(json(await requiredFile(
+      captureRoot, "semantic-view-observation-set.json", "NBR70_CAPTURE_ARTIFACT_MISSING",
+    )));
+    assertFormalSemanticViewObservationSetMatchesReceiptV1({ observationSet: semanticViewObservationSet,
+      receipt: captureReceipt, openingObservation: opening });
     const overlay = parseFormalColliderOverlayObservationV1(json(await requiredFile(
       captureRoot,
       "collider-overlay-observation.json",
@@ -973,7 +987,7 @@ async function verifyAllRunAttempts(input: Readonly<{
     ));
     const storedEvidence = parseWorldReconstructionEvidenceSetV1(json(
       await requiredFile(
-        attemptRoot,
+        evaluationStageRoot,
         "evidence-set.json",
         "NBR70_REQUIRED_ARTIFACT_MISSING",
       ),
@@ -989,6 +1003,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       captureReceiptRef: runAttempt.captureReceiptRef,
       captureReceipt,
       openingObservation: opening,
+      semanticViewObservationSet,
       spawnSupportObservation: spawn,
       colliderOverlayObservation: overlay,
       scriptedTraversalObservation: scripted,
@@ -999,7 +1014,7 @@ async function verifyAllRunAttempts(input: Readonly<{
     ) fail("NBR70_EVALUATION_EVIDENCE_MISMATCH");
     const storedEvaluation = parseWorldReconstructionEvaluationResultV1(json(
       await requiredFile(
-        attemptRoot,
+        evaluationStageRoot,
         "evaluation.json",
         "NBR70_REQUIRED_ARTIFACT_MISSING",
       ),
@@ -1118,6 +1133,10 @@ async function verifyFinalPromotion(input: Readonly<{
     input.runRoot,
     `attempts/${finalAttempt.attemptIndex}`,
   );
+  const hostArtifact = (artifactRef: string, fileName: string) => resolveHostAttemptArtifactV1({
+    runRoot: input.runRoot, caseRef: input.runReceipt.caseRef, attemptIndex: finalAttempt.attemptIndex,
+    artifactRef, fileName,
+  });
   const packageDirectoryPath = path.join(finalRoot, "world-package");
   const finalVerified = await verifyCheckedOutWorldPackageV1(
     packageDirectoryPath,
@@ -1126,11 +1145,11 @@ async function verifyFinalPromotion(input: Readonly<{
   exact(finalVerified.receipt.worldPackageRootHash, finalAttempt.worldPackageRootHash);
   await assertDirectoriesByteEqual(
     packageDirectoryPath,
-    path.join(attemptRoot, "world-package"),
+    path.join(path.dirname(hostArtifact(finalAttempt.sceneAuthoringAttemptResultRef, "attempt-result.json")), "world-package"),
   );
   await assertDirectoriesByteEqual(
     path.join(finalRoot, "capture"),
-    path.join(attemptRoot, "capture"),
+    path.dirname(hostArtifact(finalAttempt.captureReceiptRef, "capture/formal-world-capture-receipt.json")),
   );
   const finalEvaluationBytes = await requiredFile(
     finalRoot,
@@ -1138,7 +1157,7 @@ async function verifyFinalPromotion(input: Readonly<{
     "NBR70_FINAL_ARTIFACT_MISSING",
   );
   const attemptEvaluationBytes = await requiredFile(
-    attemptRoot,
+    path.dirname(hostArtifact(finalAttempt.evaluationResultRef, "evaluation.json")),
     "evaluation.json",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   );
@@ -1517,6 +1536,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
 
   const runAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
   const attemptRoot = path.join(runRoot, `attempts/${runAttempt.attemptIndex}`);
+  const hostArtifact = (artifactRef: string, fileName: string) => resolveHostAttemptArtifactV1({
+    runRoot, caseRef: runReceipt.caseRef, attemptIndex: runAttempt.attemptIndex, artifactRef, fileName,
+  });
+  const packageStageRoot = path.dirname(hostArtifact(runAttempt.sceneAuthoringAttemptResultRef, "attempt-result.json"));
   const generationRequest = parseNativeBlockGenerationRequestV1(json(
     await requiredFile(attemptRoot, "generation-request.json", "NBR70_REQUIRED_ARTIFACT_MISSING"),
   ));
@@ -1563,7 +1586,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   )));
   const attemptResult = parseSceneAuthoringAttemptResultV1(json(await requiredFile(
-    attemptRoot,
+    packageStageRoot,
     "attempt-result.json",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   )));
@@ -1588,13 +1611,13 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   );
 
   const checkResult = parseNativeSceneCheckResultV1(json(await requiredFile(
-    attemptRoot,
+    packageStageRoot,
     "native-check-result.json",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   )));
   if (checkResult.outcome !== "passed") fail("NBR70_IDENTITY_MISMATCH");
   const explain = new TextDecoder().decode(await requiredFile(
-    attemptRoot,
+    packageStageRoot,
     "native-explain.txt",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   ));
@@ -1602,7 +1625,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     fail("NBR70_IDENTITY_MISMATCH");
   }
 
-  const packageDirectoryPath = path.join(attemptRoot, "world-package");
+  const packageDirectoryPath = path.join(packageStageRoot, "world-package");
   const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
   if (
     verified.kind !== "babylon-native-scene" ||
@@ -1623,7 +1646,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     sourceCheck: checkResult,
     replayCheck: verified.nativeSceneCheckResult,
   });
-  const captureRoot = path.join(attemptRoot, "capture");
+  const captureRoot = path.dirname(hostArtifact(runAttempt.captureReceiptRef, "capture/formal-world-capture-receipt.json"));
   const captureReceipt = parseFormalWorldCaptureReceiptV1(json(await requiredFile(
     captureRoot,
     "formal-world-capture-receipt.json",
@@ -1705,6 +1728,11 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "spawn-support-observation.json",
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
+  const semanticViewObservationSet = parseFormalSemanticViewObservationSetV1(json(await requiredFile(
+    captureRoot, "semantic-view-observation-set.json", "NBR70_CAPTURE_ARTIFACT_MISSING",
+  )));
+  assertFormalSemanticViewObservationSetMatchesReceiptV1({ observationSet: semanticViewObservationSet,
+    receipt: captureReceipt, openingObservation: opening });
   const overlay = parseFormalColliderOverlayObservationV1(json(await requiredFile(
     captureRoot,
     "collider-overlay-observation.json",
@@ -1755,7 +1783,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
 
   const evaluation = parseWorldReconstructionEvaluationResultV1(json(
     await requiredFile(
-      attemptRoot,
+      path.dirname(hostArtifact(runAttempt.evaluationResultRef, "evaluation.json")),
       "evaluation.json",
       "NBR70_REQUIRED_ARTIFACT_MISSING",
     ),
