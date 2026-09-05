@@ -1548,7 +1548,7 @@ describe("runWorldReconstructionProductionV1", () => {
       evaluationProfileHash: H("b"),
       gameplayBootstrapHash: H("c"),
       worldRuntimeBootstrapHash: H("d"),
-      worldBoundsHash: H("e"),
+      worldBoundsPolicyHash: H("e"),
       bootstrapInputHash: H("f"),
     }));
 

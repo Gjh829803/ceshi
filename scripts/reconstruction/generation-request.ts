@@ -34,10 +34,10 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
-  hashWorldPackageWorldBoundsV1,
-  parseWorldPackageWorldBoundsV1,
-  type WorldPackageWorldBoundsV1,
-} from "@whitebox-world/world-package";
+  hashNativeSceneWorldBoundsPolicyV1,
+  parseNativeSceneWorldBoundsPolicyV1,
+  type NativeSceneWorldBoundsPolicyV1,
+} from "../native-scene/world-bounds-policy.js";
 import { isEqual, isNil, sortBy } from "lodash-es";
 
 import {
@@ -219,8 +219,8 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly gameplayBootstrapPath: string;
   readonly worldRuntimeBootstrapPath: string;
   readonly worldRuntimeBootstrapRef: string;
-  readonly worldBoundsPath: string;
-  readonly worldBounds: WorldPackageWorldBoundsV1;
+  readonly worldBoundsPolicyPath: string;
+  readonly worldBoundsPolicy: NativeSceneWorldBoundsPolicyV1;
   readonly bootstrapId: string;
   readonly sceneModuleRef: string;
   readonly seed: number;
@@ -248,7 +248,7 @@ export interface PreparedNativeBlockGenerationTaskV1 {
   readonly worldRuntimeBootstrapBytes: Uint8Array;
   readonly subjectVisualReviewProxy: NativeBlockSubjectVisualReviewProxyV1;
   readonly subjectVisualReviewProxyBytes: Uint8Array;
-  readonly worldBoundsBytes: Uint8Array;
+  readonly worldBoundsPolicyBytes: Uint8Array;
   readonly hostClosure: NativeBlockGenerationHostClosureV1;
   readonly hostClosureBytes: Uint8Array;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
@@ -259,7 +259,7 @@ export interface WorldReconstructionFrozenOwnerIdentitiesV1 {
   readonly evaluationProfileHash: Sha256HashV1;
   readonly gameplayBootstrapHash: Sha256HashV1;
   readonly worldRuntimeBootstrapHash: Sha256HashV1;
-  readonly worldBoundsHash: Sha256HashV1;
+  readonly worldBoundsPolicyHash: Sha256HashV1;
   readonly bootstrapInputHash: Sha256HashV1;
 }
 
@@ -268,14 +268,14 @@ export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonl
   evaluationProfile: unknown;
   gameplayBootstrap: unknown;
   worldRuntimeBootstrap: unknown;
-  worldBounds: unknown;
+  worldBoundsPolicy: unknown;
   bootstrap: unknown;
 }>): WorldReconstructionFrozenOwnerIdentitiesV1 {
   const reconstructionCase = parseWorldReconstructionCaseV1(input.reconstructionCase);
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(input.evaluationProfile);
   const gameplayBootstrap = parseGameplayBootstrapV1(input.gameplayBootstrap);
   const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
-  const worldBounds = parseWorldPackageWorldBoundsV1(input.worldBounds);
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(input.worldBoundsPolicy);
   const bootstrap = parseBabylonNativeSceneBootstrapV1(input.bootstrap);
   const evaluationProfileHash = hashWorldReconstructionEvaluationProfileV1(evaluationProfile);
   if (
@@ -304,7 +304,7 @@ export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonl
     evaluationProfileHash,
     gameplayBootstrapHash: gameplayBootstrap.contentHash,
     worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
-    worldBoundsHash: hashWorldPackageWorldBoundsV1(worldBounds),
+    worldBoundsPolicyHash: hashNativeSceneWorldBoundsPolicyV1(worldBoundsPolicy),
     bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(bootstrap),
   });
 }
@@ -496,7 +496,7 @@ export interface NativeBlockGenerationHostClosureV1 {
   readonly worldRuntimeBootstrapRef: string;
   readonly worldRuntimeBootstrapResolvedVersion: string;
   readonly worldRuntimeBootstrapHash: Sha256HashV1;
-  readonly worldBoundsHash: Sha256HashV1;
+  readonly worldBoundsPolicyHash: Sha256HashV1;
   readonly initialControlledEntityId: string;
 }
 
@@ -590,7 +590,7 @@ export function parseNativeBlockGenerationHostClosureV1(
     "worldRuntimeBootstrapRef",
     "worldRuntimeBootstrapResolvedVersion",
     "worldRuntimeBootstrapHash",
-    "worldBoundsHash",
+    "worldBoundsPolicyHash",
     "initialControlledEntityId",
   ], "Native Block generation Host closure");
   if (
@@ -607,8 +607,8 @@ export function parseNativeBlockGenerationHostClosureV1(
     !SHA256_PATTERN.test(record.gameplayBootstrapHash) ||
     typeof record.worldRuntimeBootstrapHash !== "string" ||
     !SHA256_PATTERN.test(record.worldRuntimeBootstrapHash) ||
-    typeof record.worldBoundsHash !== "string" ||
-    !SHA256_PATTERN.test(record.worldBoundsHash) ||
+    typeof record.worldBoundsPolicyHash !== "string" ||
+    !SHA256_PATTERN.test(record.worldBoundsPolicyHash) ||
     typeof record.initialControlledEntityId !== "string" ||
     record.initialControlledEntityId.length === 0
   ) throw new TypeError("Invalid Native Block generation Host closure.");
@@ -620,7 +620,7 @@ export function parseNativeBlockGenerationHostClosureV1(
     worldRuntimeBootstrapRef: record.worldRuntimeBootstrapRef,
     worldRuntimeBootstrapResolvedVersion: record.worldRuntimeBootstrapResolvedVersion,
     worldRuntimeBootstrapHash: record.worldRuntimeBootstrapHash as Sha256HashV1,
-    worldBoundsHash: record.worldBoundsHash as Sha256HashV1,
+    worldBoundsPolicyHash: record.worldBoundsPolicyHash as Sha256HashV1,
     initialControlledEntityId: record.initialControlledEntityId,
   });
 }
@@ -629,7 +629,7 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
   reconstructionCase: WorldReconstructionCaseV1;
   gameplayBootstrap: unknown;
   worldRuntimeBootstrap: unknown;
-  worldBounds: unknown;
+  worldBoundsPolicy: unknown;
   bootstrapId: string;
   sceneModuleRef: string;
   nativeSceneApiRef: string;
@@ -637,12 +637,12 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
   seed: number;
 }>): Readonly<{
   bootstrap: BabylonNativeSceneBootstrapV1;
-  worldBounds: WorldPackageWorldBoundsV1;
+  worldBoundsPolicy: NativeSceneWorldBoundsPolicyV1;
 }> {
   const reconstructionCase = parseWorldReconstructionCaseV1(input.reconstructionCase);
   const gameplay = parseGameplayBootstrapV1(input.gameplayBootstrap);
   const runtime = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
-  const worldBounds = parseWorldPackageWorldBoundsV1(input.worldBounds);
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(input.worldBoundsPolicy);
   const controlledRuntimeSubjects = runtime.subjectRuntimeDescriptors.filter(
     (subject) => subject.entityId === runtime.initialControlledEntityId,
   );
@@ -679,7 +679,7 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
     seed: input.seed,
     spawnMarkerId: reconstructionCase.expected.spawnSupport.spawnMarkerId,
   });
-  return Object.freeze({ bootstrap, worldBounds });
+  return Object.freeze({ bootstrap, worldBoundsPolicy });
 }
 
 function relativeWithin(root: string, candidate: string, description: string): string {
@@ -1002,7 +1002,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     reconstructionCase,
     gameplayBootstrap,
     worldRuntimeBootstrap,
-    worldBounds: input.worldBounds,
+    worldBoundsPolicy: input.worldBoundsPolicy,
     bootstrapId: input.bootstrapId,
     sceneModuleRef: input.sceneModuleRef,
     nativeSceneApiRef: nativeSceneApiResolution.resourceRef,
@@ -1031,12 +1031,12 @@ export async function prepareNativeBlockGenerationTaskV1(
     SUBJECT_VISUAL_REVIEW_PROXY_PATH,
     new TextEncoder().encode(stringifyCanonicalJson(subjectVisualReviewProxy)),
   );
-  const worldBounds = frozenCanonicalFile(
-    "world-bounds.json",
-    new TextEncoder().encode(stringifyCanonicalJson(derived.worldBounds)),
+  const worldBoundsPolicy = frozenCanonicalFile(
+    "world-bounds-policy.json",
+    new TextEncoder().encode(stringifyCanonicalJson(derived.worldBoundsPolicy)),
   );
-  if (worldBounds.hash !== hashWorldPackageWorldBoundsV1(derived.worldBounds)) {
-    throw new TypeError("Canonical World Bounds materialization hash mismatch.");
+  if (worldBoundsPolicy.hash !== hashNativeSceneWorldBoundsPolicyV1(derived.worldBoundsPolicy)) {
+    throw new TypeError("Canonical World Bounds Policy materialization hash mismatch.");
   }
   const hostClosure = parseNativeBlockGenerationHostClosureV1({
     kind: "native-block-generation-host-closure",
@@ -1046,7 +1046,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
     worldRuntimeBootstrapResolvedVersion: admittedRuntimeRows[0]!.resolvedVersion,
     worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
-    worldBoundsHash: worldBounds.hash,
+    worldBoundsPolicyHash: worldBoundsPolicy.hash,
     initialControlledEntityId: worldRuntimeBootstrap.initialControlledEntityId,
   });
   const hostClosureFile = frozenCanonicalFile(
@@ -1058,7 +1058,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     evaluationProfile: profile,
     gameplayBootstrap,
     worldRuntimeBootstrap,
-    worldBounds: derived.worldBounds,
+    worldBoundsPolicy: derived.worldBoundsPolicy,
     bootstrap: derived.bootstrap,
   });
   if (
@@ -1120,7 +1120,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       }
     },
   );
-  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBounds, hostClosureFile, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
+  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBoundsPolicy, hostClosureFile, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const repairInstructionFile = repairInstruction === undefined
     ? undefined
@@ -1128,7 +1128,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       "repair-instruction.json",
       new TextEncoder().encode(stringifyCanonicalJson(repairInstruction)),
     );
-  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBounds, hostClosureFile, builderSkill, ...builderBundle, ...caseContextReferenceFiles, ...repairContextFiles]
+  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBoundsPolicy, hostClosureFile, builderSkill, ...builderBundle, ...caseContextReferenceFiles, ...repairContextFiles]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
@@ -1294,7 +1294,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     worldRuntimeBootstrapBytes: runtime.bytes,
     subjectVisualReviewProxy,
     subjectVisualReviewProxyBytes: subjectVisualReviewProxyFile.bytes,
-    worldBoundsBytes: worldBounds.bytes,
+    worldBoundsPolicyBytes: worldBoundsPolicy.bytes,
     hostClosure,
     hostClosureBytes: hostClosureFile.bytes,
     frozenOwnerIdentities,

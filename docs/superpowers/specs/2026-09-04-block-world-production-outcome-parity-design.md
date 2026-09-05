@@ -387,9 +387,34 @@ cannot downgrade to empty exploration or measurement-only ground.
 This changes ordinary Ground input ownership to the old-equivalent declaration
 pattern, not the production success authority or repair budget. Generic fixed-input
 Capture diagnostics remain strict/report-only and must not constrain source-authored
-world design. Removal of their generic topology/script template, fixed 128m bounds,
+world design. Removal of their generic topology/script template,
 full region/feature measurements and multi-medium selection remain CF-11/13/21/12;
 the declaration slice alone does not prove complete parity or a new real Case.
+
+### CF-11 checked-layout world bounds
+
+The frozen legacy `9e35ab53` `boundsForBlocks` is the numeric baseline: union all
+actual Block bounds (not just semantic targets or collision selections), use the
+XZ midpoint, `max(16m, span + 9m)` horizontal size and vertical range
+`[minimumY - 65m, maximumY + 16m]`. These are container margins only. The old
+foundation is not restored and no floor, Collider or quality threshold is derived
+from the margin. Real Brief geography and existing resource budgets still apply.
+
+Native Host freezes one exact world-bounds policy in `world-bounds-policy.json`:
+ordinary generation selects `checked-block-layout`; explicit fixed inputs select
+`fixed` with concrete `worldBounds`. This replaces the former unqualified bounds
+input current-only, independently of the Case's ground policy. Builder cannot edit
+it or emit Package bounds. The Host resolves the checked-layout policy only after
+the existing Native replay/evidence joins, before validating contributed geometry
+and building the Package. Fixed generic Native does not require Block evidence.
+
+Original Request, Host closure, journal, repair and resume bind
+`worldBoundsPolicyHash`; final Package root binds the concrete computed bounds.
+They are different identities, not interchangeable receipts. Ground, Capture and
+Runtime continue to consume the same verified Package manifest, not a side-file
+override. Policy changes fail existing stale-owner checks; Source changes naturally
+change checked extents and Package identity. There is no compatibility input alias,
+new model task, extra repair cycle or new ordinary production veto.
 
 ### CF-11 local arrival evidence
 

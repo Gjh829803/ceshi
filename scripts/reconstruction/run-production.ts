@@ -48,8 +48,8 @@ import {
   type WorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import {
-  parseWorldPackageWorldBoundsV1,
-} from "@whitebox-world/world-package";
+  parseNativeSceneWorldBoundsPolicyV1,
+} from "../native-scene/world-bounds-policy.js";
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
@@ -643,7 +643,7 @@ function assertFrozenOwnerIdentitiesMatch(
     actual.evaluationProfileHash !== expected.evaluationProfileHash ||
     actual.gameplayBootstrapHash !== expected.gameplayBootstrapHash ||
     actual.worldRuntimeBootstrapHash !== expected.worldRuntimeBootstrapHash ||
-    actual.worldBoundsHash !== expected.worldBoundsHash ||
+    actual.worldBoundsPolicyHash !== expected.worldBoundsPolicyHash ||
     actual.bootstrapInputHash !== expected.bootstrapInputHash
   ) throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_OWNER_INVALID");
 }
@@ -800,13 +800,13 @@ async function runProduction(
     "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID",
   );
   const inputDirectoryPath = path.join(caseRoot, "inputs");
-  const worldBoundsPath = path.join(inputDirectoryPath, "world-bounds.json");
-  const worldBounds = parseWorldPackageWorldBoundsV1(parseJson(
+  const worldBoundsPolicyPath = path.join(inputDirectoryPath, "world-bounds-policy.json");
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(parseJson(
     await readCanonicalRegularFile(
-      worldBoundsPath,
-      "WORLD_RECONSTRUCTION_WORLD_BOUNDS_INVALID",
+      worldBoundsPolicyPath,
+      "WORLD_RECONSTRUCTION_WORLD_BOUNDS_POLICY_INVALID",
     ),
-    "WORLD_RECONSTRUCTION_WORLD_BOUNDS_INVALID",
+    "WORLD_RECONSTRUCTION_WORLD_BOUNDS_POLICY_INVALID",
   ));
   const hostClosureRootPath = await canonicalDirectory(
     path.join(repositoryRoot, HOST_CLOSURE_RELATIVE_PATH),
@@ -869,7 +869,7 @@ async function runProduction(
     reconstructionCase,
     gameplayBootstrap,
     worldRuntimeBootstrap,
-    worldBounds,
+    worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     nativeSceneApiRef: NATIVE_SCENE_API_REF,
@@ -882,7 +882,7 @@ async function runProduction(
       evaluationProfile,
       gameplayBootstrap,
       worldRuntimeBootstrap,
-      worldBounds: derived.worldBounds,
+      worldBoundsPolicy: derived.worldBoundsPolicy,
       bootstrap: derived.bootstrap,
     });
   const profilePath = path.join(
@@ -920,8 +920,8 @@ async function runProduction(
     gameplayBootstrapPath,
     worldRuntimeBootstrapPath,
     worldRuntimeBootstrapRef,
-    worldBoundsPath,
-    worldBounds: derived.worldBounds,
+    worldBoundsPolicyPath,
+    worldBoundsPolicy: derived.worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed,

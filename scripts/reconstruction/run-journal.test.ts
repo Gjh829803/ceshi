@@ -19,7 +19,7 @@ const OWNER = Object.freeze({
   evaluationProfileHash: H("2"),
   gameplayBootstrapHash: H("3"),
   worldRuntimeBootstrapHash: H("4"),
-  worldBoundsHash: H("5"),
+  worldBoundsPolicyHash: H("5"),
   bootstrapInputHash: H("6"),
 });
 
@@ -372,8 +372,8 @@ describe("world reconstruction run journal", () => {
     })).toThrowError("WORLD_RECONSTRUCTION_STALE_WORLD_RUNTIME_BOOTSTRAP");
     expect(() => journal.assertOwnerIdentities({
       ...OWNER,
-      worldBoundsHash: H("9"),
-    })).toThrowError("WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS");
+      worldBoundsPolicyHash: H("9"),
+    })).toThrowError("WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS_POLICY");
     expect(() => journal.assertOwnerIdentities({
       ...OWNER,
       bootstrapInputHash: H("9"),

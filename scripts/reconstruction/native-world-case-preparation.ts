@@ -25,7 +25,7 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
   type WorldReconstructionDimensionIdV1,
 } from "@whitebox-world/validation";
-import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
+import { parseNativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import { isNil, sortBy } from "lodash-es";
 import sharp from "sharp";
 import {
@@ -60,12 +60,6 @@ const EVIDENCE_PROFILE_REF_BY_DIMENSION = Object.freeze({
   "spawn-support": "worldkit://evidence-profile/native-block-spawn@1",
   topology: "worldkit://evidence-profile/native-block-topology@1",
 } as const);
-
-const BASELINE_WORLD_BOUNDS = Object.freeze({
-  centerMetersXZ: Object.freeze([0, -32] as const),
-  sizeMetersXZ: Object.freeze([128, 128] as const),
-  heightRangeMeters: Object.freeze([-16, 64] as const),
-});
 
 const BASELINE_ENTRY_GROUND = Object.freeze({
   acceptanceTargetRef: "worldkit://acceptance-target/entry-ground@1",
@@ -579,7 +573,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         toleranceMeters: 0.05,
       })]),
     }),
-    worldBounds: BASELINE_WORLD_BOUNDS,
+    worldBoundsPolicy: Object.freeze({ mode: "checked-block-layout" }),
   });
 }
 
@@ -952,9 +946,9 @@ export async function validateNativeWorldPlannerInputClosureV1(
   });
 }
 
-function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
+function parseNativeWorldCaseWorldBoundsPolicyV1(value: unknown) {
   try {
-    return parseWorldPackageWorldBoundsV1(value);
+    return parseNativeSceneWorldBoundsPolicyV1(value);
   } catch (error) {
     const receivedFields = isNil(value) || typeof value !== "object" ||
         Array.isArray(value) || Reflect.getPrototypeOf(value) !== Object.prototype
@@ -962,9 +956,9 @@ function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
       : sortBy(Object.keys(value as Record<string, unknown>)).join(", ") ||
         "<none>";
     throw new TypeError(
-      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly " +
-        "centerMetersXZ, sizeMetersXZ, heightRangeMeters; received " +
-        `${receivedFields}; Formal Capture AABB fields are not Package worldBounds`,
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_POLICY_INVALID: expected " +
+        "mode checked-block-layout or fixed with WorldPackage worldBounds; received " +
+        receivedFields,
       { cause: error },
     );
   }
@@ -1010,7 +1004,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
   }
   const proposal = record(
     JSON.parse(await readFile(input.proposalPath, "utf8")),
-    ["kind", "schemaVersion", "sceneId", "expected", "formalCaptureIntent", "worldBounds"],
+    ["kind", "schemaVersion", "sceneId", "expected", "formalCaptureIntent", "worldBoundsPolicy"],
     "NATIVE_WORLD_CASE_PROPOSAL_INVALID",
   );
   if (proposal.kind !== "native-world-case-proposal" ||
@@ -1024,7 +1018,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     `${input.sceneId}.formal-world-capture-intent`) {
     throw new TypeError("NATIVE_WORLD_CAPTURE_INTENT_IDENTITY_INVALID");
   }
-  const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
+  const worldBoundsPolicy = parseNativeWorldCaseWorldBoundsPolicyV1(proposal.worldBoundsPolicy);
   const briefBytes = await readFile(input.sceneBriefPath);
   const sceneBriefHash = sha256Bytes(briefBytes) as Sha256HashV1;
   const sceneBriefIdentityHash = sceneBriefSemanticHash(briefBytes);
@@ -1286,7 +1280,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     writeCanonicalExclusive(casePath, reconstructionCase),
     writeCanonicalExclusive(evaluationProfilePath, evaluationProfile),
     writeCanonicalExclusive(formalCaptureIntentPath, formalCaptureIntent),
-    writeCanonicalExclusive(path.join(inputRoot, "world-bounds.json"), worldBounds),
+    writeCanonicalExclusive(path.join(inputRoot, "world-bounds-policy.json"), worldBoundsPolicy),
     writeFile(path.join(inputRoot, "scene-brief.md"), briefBytes, { flag: "wx" }),
     writeFile(
       path.join(input.outputCaseRoot, "planner-self-check.json"),

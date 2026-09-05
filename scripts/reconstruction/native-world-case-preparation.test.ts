@@ -389,7 +389,7 @@ describe("trusted Native world Case preparation", () => {
           semanticLayerId: string;
         }[];
       };
-      worldBounds: unknown;
+      worldBoundsPolicy: unknown;
     };
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
@@ -450,10 +450,8 @@ describe("trusted Native world Case preparation", () => {
       [...new Set(proposal.formalCaptureIntent.semanticCaptureTargetBindings
         .map(({ semanticLayerId }) => semanticLayerId))].sort(),
     );
-    expect(proposal.worldBounds).toEqual({
-      centerMetersXZ: [0, -32],
-      sizeMetersXZ: [128, 128],
-      heightRangeMeters: [-16, 64],
+    expect(proposal.worldBoundsPolicy).toEqual({
+      mode: "checked-block-layout",
     });
 
     const proposalPath = path.join(root, "host-derived-baseline-case.json");
@@ -590,10 +588,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.criticalTraversalChecks[0].acceptanceTargetRef =
       "worldkit://acceptance-target/mountain-cliff-layers@1";
@@ -609,7 +607,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-pass-target.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -637,10 +635,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.groundConnectivity.requiredTraversalBands[0]
       .centerlineStandPositionsXYZMeters[0].zMeters = 17;
@@ -664,7 +662,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-ground-connectivity.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -705,7 +703,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-world-bounds.formal-world-capture-intent",
         },
-        worldBounds: {
+        worldBoundsPolicy: {
           minimumMetersXYZ: [-20, -2, -30],
           maximumMetersXYZ: [20, 24, 30],
         },
@@ -724,7 +722,7 @@ describe("trusted Native world Case preparation", () => {
       },
       outputCaseRoot,
     })).rejects.toThrow(
-      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly centerMetersXZ, sizeMetersXZ, heightRangeMeters; received maximumMetersXYZ, minimumMetersXYZ; Formal Capture AABB fields are not Package worldBounds",
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_POLICY_INVALID: expected mode checked-block-layout or fixed with WorldPackage worldBounds; received maximumMetersXYZ, minimumMetersXYZ",
     );
   });
 
@@ -738,10 +736,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.colliders[0].contributionId =
       "collider-central-steps-parallel";
@@ -757,7 +755,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-collider-identity.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -788,10 +786,10 @@ describe("trusted Native world Case preparation", () => {
     const uploadedReferencePath = path.join(root, `upload.${format}`);
     const uploadedReferenceBytes = format === "png" ? REFERENCE_PNG : await sharp(REFERENCE_PNG).webp().toBuffer();
     const uploadedReferenceRef = `reference-0.${format}`;
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
@@ -806,7 +804,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "prepared-native-world.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -1029,7 +1027,7 @@ describe("trusted Native world Case preparation", () => {
         }[];
       };
       formalCaptureIntent: unknown;
-      worldBounds: unknown;
+      worldBoundsPolicy: unknown;
     };
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,

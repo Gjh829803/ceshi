@@ -94,7 +94,7 @@ async function fixture() {
   );
   const gameplayBootstrapPath = path.join(root, "gameplay.json");
   const worldRuntimeBootstrapPath = path.join(root, "runtime.json");
-  const worldBoundsPath = path.join(root, "world-bounds.json");
+  const worldBoundsPolicyPath = path.join(root, "world-bounds-policy.json");
   const repositoryRoot = path.resolve(import.meta.dirname, "../..");
   const [gameplayBootstrap, worldRuntimeBootstrap] = await Promise.all([
     readFile(path.join(
@@ -106,10 +106,13 @@ async function fixture() {
       "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json",
     ), "utf8").then((contents) => JSON.parse(contents) as unknown),
   ]);
-  const worldBounds = {
+  const worldBoundsPolicy = {
+    mode: "fixed" as const,
+    worldBounds: {
     centerMetersXZ: [0, -15],
     sizeMetersXZ: [180, 180],
     heightRangeMeters: [-40, 90],
+    },
   };
   await mkdir(path.dirname(intentPath), { recursive: true, mode: 0o700 });
   await Promise.all([
@@ -123,14 +126,14 @@ async function fixture() {
       worldRuntimeBootstrapPath,
       stringifyCanonicalJson(worldRuntimeBootstrap),
     ),
-    writeFile(worldBoundsPath, stringifyCanonicalJson(worldBounds)),
+    writeFile(worldBoundsPolicyPath, stringifyCanonicalJson(worldBoundsPolicy)),
   ]);
   const frozenOwnerIdentities = Object.freeze({
     caseHash: H("1"),
     evaluationProfileHash: H("2"),
     gameplayBootstrapHash: H("3"),
     worldRuntimeBootstrapHash: H("4"),
-    worldBoundsHash: H("5"),
+    worldBoundsPolicyHash: H("5"),
     bootstrapInputHash: H("6"),
   });
   const prepared = Object.freeze({
@@ -155,7 +158,7 @@ async function fixture() {
     bootstrapBytes: new Uint8Array(),
     gameplayBootstrapBytes: new Uint8Array(),
     worldRuntimeBootstrapBytes: new Uint8Array(),
-    worldBoundsBytes: new Uint8Array(),
+    worldBoundsPolicyBytes: new Uint8Array(),
     hostClosure: {},
     hostClosureBytes: new Uint8Array(),
     frozenOwnerIdentities,
@@ -253,8 +256,8 @@ async function fixture() {
       runDirectoryPath,
       gameplayBootstrapPath,
       worldRuntimeBootstrapPath,
-      worldBoundsPath,
-      worldBounds,
+      worldBoundsPolicyPath,
+      worldBoundsPolicy,
       bootstrapId: "package-fixture.case-native",
       sceneModuleRef: "worldkit://native-scene/package-fixture.case@1",
       seed: 20260901,
@@ -274,10 +277,10 @@ async function fixture() {
     input,
     gameplayBootstrapPath,
     worldRuntimeBootstrapPath,
-    worldBoundsPath,
+    worldBoundsPolicyPath,
     gameplayBootstrap,
     worldRuntimeBootstrap,
-    worldBounds,
+    worldBoundsPolicy,
   };
 }
 
@@ -458,17 +461,22 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     expect(Object.isFrozen(baseline)).toBe(true);
     expect(ownerPorts.resolveFrozenOwnerIdentities).toHaveBeenCalledOnce();
 
-    await writeFile(value.worldBoundsPath, stringifyCanonicalJson({
-      ...value.worldBounds,
-      centerMetersXZ: [1, -15],
+    await writeFile(value.worldBoundsPolicyPath, stringifyCanonicalJson({
+      ...value.worldBoundsPolicy,
+      worldBounds: { ...value.worldBoundsPolicy.worldBounds, centerMetersXZ: [1, -15] },
     }));
     const changedBounds = await ports.rehashOwnerIdentities();
-    expect(changedBounds.worldBoundsHash).not.toBe(baseline.worldBoundsHash);
+    expect(changedBounds.worldBoundsPolicyHash).not.toBe(baseline.worldBoundsPolicyHash);
     expect(changedBounds.bootstrapInputHash).toBe(baseline.bootstrapInputHash);
 
+    await writeFile(value.worldBoundsPolicyPath, stringifyCanonicalJson({ mode: "checked-block-layout" }));
+    const changedPolicy = await ports.rehashOwnerIdentities();
+    expect(changedPolicy.worldBoundsPolicyHash).not.toBe(baseline.worldBoundsPolicyHash);
+    expect(changedPolicy.bootstrapInputHash).toBe(baseline.bootstrapInputHash);
+
     await writeFile(
-      value.worldBoundsPath,
-      stringifyCanonicalJson(value.worldBounds),
+      value.worldBoundsPolicyPath,
+      stringifyCanonicalJson(value.worldBoundsPolicy),
     );
     await writeFile(value.worldRuntimeBootstrapPath, stringifyCanonicalJson({
       ...(value.worldRuntimeBootstrap as Record<string, unknown>),
@@ -498,13 +506,13 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       value.gameplayBootstrapPath,
       stringifyCanonicalJson(value.gameplayBootstrap),
     );
-    const linkedBoundsTarget = path.join(value.root, "linked-world-bounds.json");
+    const linkedBoundsTarget = path.join(value.root, "linked-world-bounds-policy.json");
     await writeFile(
       linkedBoundsTarget,
-      stringifyCanonicalJson(value.worldBounds),
+      stringifyCanonicalJson(value.worldBoundsPolicy),
     );
-    await unlink(value.worldBoundsPath);
-    await symlink(linkedBoundsTarget, value.worldBoundsPath);
+    await unlink(value.worldBoundsPolicyPath);
+    await symlink(linkedBoundsTarget, value.worldBoundsPolicyPath);
     await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
       "WORLD_RECONSTRUCTION_INPUT_INVALID",
     );

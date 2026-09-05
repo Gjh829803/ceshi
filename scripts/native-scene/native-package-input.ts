@@ -64,6 +64,11 @@ import {
   finalizeBabylonNativeSceneModuleBundleManifestV1,
 } from "./module-bundle.js";
 import { admitBabylonNativeSourceGraphV1 } from "./source-admission.js";
+import {
+  parseNativeSceneWorldBoundsPolicyV1,
+  resolveNativeSceneWorldBoundsV1,
+  type NativeSceneWorldBoundsPolicyV1,
+} from "./world-bounds-policy.js";
 
 export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly repositoryRoot: string;
@@ -72,7 +77,7 @@ export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly shared: WorldPackageSharedBuildContextV1;
   readonly packageId: string;
   readonly worldId: string;
-  readonly worldBounds: WorldPackageWorldBoundsV1;
+  readonly worldBoundsPolicy: NativeSceneWorldBoundsPolicyV1;
   readonly resourceBudget: WorldPackageResourceBudgetV1;
   readonly nativeSceneBootstrap: unknown;
   readonly nativeSceneBootstrapInputRef: string;
@@ -149,25 +154,6 @@ function resourceVersion(resourceRef: string): string {
   const match = /@([1-9][0-9]*)$/.exec(resourceRef);
   if (match?.[1] === undefined) return fail();
   return match[1];
-}
-
-function parsedBounds(input: WorldPackageWorldBoundsV1): WorldPackageWorldBoundsV1 {
-  const center = input.centerMetersXZ;
-  const size = input.sizeMetersXZ;
-  const height = input.heightRangeMeters;
-  if (
-    !Array.isArray(center) || center.length !== 2 ||
-    !Array.isArray(size) || size.length !== 2 ||
-    !Array.isArray(height) || height.length !== 2 ||
-    [...center, ...size, ...height].some((value) =>
-      typeof value !== "number" || !Number.isFinite(value) || Object.is(value, -0)) ||
-    size[0] <= 0 || size[1] <= 0 || height[0] >= height[1]
-  ) return fail();
-  return Object.freeze({
-    centerMetersXZ: Object.freeze([center[0], center[1]] as const),
-    sizeMetersXZ: Object.freeze([size[0], size[1]] as const),
-    heightRangeMeters: Object.freeze([height[0], height[1]] as const),
-  });
 }
 
 function parsedBudget(
@@ -403,7 +389,7 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
     resourceVersion(input.sceneAuthoringAttemptResultRef);
     identity(input.packageId);
     identity(input.worldId);
-    const worldBounds = parsedBounds(input.worldBounds);
+    const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(input.worldBoundsPolicy);
     const resourceBudget = parsedBudget(input.resourceBudget);
 
     const admitted = await admitBabylonNativeSourceGraphV1(
@@ -582,6 +568,10 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       !isEqual(assetReplayLedgers[0], assetReplayLedgers[1]) ||
       !isEqual(assetReplayLedgers[0], expectedAssetRefs)
     ) return fail();
+    const worldBounds = resolveNativeSceneWorldBoundsV1(
+      worldBoundsPolicy,
+      firstBlockEvidence?.checkedLayout,
+    );
     assertContributionWorldFacts(
       contribution,
       bootstrap,

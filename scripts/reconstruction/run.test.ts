@@ -51,7 +51,7 @@ const OWNER = Object.freeze({
   evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile()),
   gameplayBootstrapHash: H("3"),
   worldRuntimeBootstrapHash: H("4"),
-  worldBoundsHash: H("5"),
+  worldBoundsPolicyHash: H("5"),
   bootstrapInputHash: H("6"),
 });
 
@@ -1345,7 +1345,7 @@ describe("runWorldReconstructionV1", () => {
         "worldRuntimeBootstrapHash",
         "WORLD_RECONSTRUCTION_STALE_WORLD_RUNTIME_BOOTSTRAP",
       ],
-      ["worldBoundsHash", "WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS"],
+      ["worldBoundsPolicyHash", "WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS_POLICY"],
       ["bootstrapInputHash", "WORLD_RECONSTRUCTION_STALE_BOOTSTRAP"],
     ] as const;
     for (const [field, code] of fields) {

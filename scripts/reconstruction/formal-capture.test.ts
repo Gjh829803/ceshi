@@ -12,6 +12,7 @@ import {
 import {
   createBabylonNativeWorldPackageV1,
   verifyWorldPackageDirectoryV1,
+  type WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
 import {
   createBabylonNativeBlockWorldPackageTestInputV1,
@@ -62,14 +63,15 @@ afterEach(async () => {
     rm(root, { recursive: true, force: true })));
 });
 
-function packageAndRequest(): Readonly<{
+function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
   verifiedPackage: Extract<
     ReturnType<typeof verifyWorldPackageDirectoryV1>,
     { kind: "babylon-native-scene" }
   >;
   request: FormalWorldCaptureRequestV1;
 }> {
-  const baseInput = createBabylonNativeBlockWorldPackageTestInputV1();
+  const baseInput = { ...createBabylonNativeBlockWorldPackageTestInputV1(),
+    ...(worldBounds === undefined ? {} : { worldBounds }) };
   const baseMetadata = baseInput.nativeBlockMaterializerMetadata!;
   const nativeSceneContribution = {
     ...baseInput.nativeSceneContribution,
@@ -333,6 +335,24 @@ describe("formal Package Capture preflight join", () => {
       request,
       formalRequestHash: hashFormalWorldCaptureRequestV1(request),
     });
+  });
+
+  it("binds both top and side Capture to non-template Package bounds", () => {
+    const { verifiedPackage, request } = packageAndRequest({
+      centerMetersXZ: [97.5, 20], sizeMetersXZ: [215, 130], heightRangeMeters: [-66, 50],
+    });
+    expect(() => assertFormalCaptureRequestMatchesVerifiedPackageV1({ verifiedPackage, request })).not.toThrow();
+    const staleBounds = {
+      minimumMetersXYZ: [-64, -16, -96], maximumMetersXYZ: [64, 64, 32],
+    } as const;
+    for (const views of [
+      [request.views[0], { ...request.views[1], worldBoundsMeters: staleBounds }, request.views[2]],
+      [request.views[0], request.views[1], { ...request.views[2], worldBoundsMeters: staleBounds }],
+    ] as const) {
+      expect(() => assertFormalCaptureRequestMatchesVerifiedPackageV1({ verifiedPackage,
+        request: { ...request, views },
+      })).toThrow("FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH");
+    }
   });
 
   it("rejects stale Package identity and unbound visual groups", () => {

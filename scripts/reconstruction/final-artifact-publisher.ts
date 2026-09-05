@@ -184,7 +184,7 @@ const NON_CASE_OWNER_INPUT_PATHS = Object.freeze(new Set([
   "native-scene-api.json",
   "native-scene-profile.json",
   "task-instruction.md",
-  "world-bounds.json",
+  "world-bounds-policy.json",
 ]));
 const NON_CASE_OWNER_INPUT_DIRECTORIES = Object.freeze(new Set([
   "",

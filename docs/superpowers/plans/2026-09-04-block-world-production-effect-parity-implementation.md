@@ -247,6 +247,37 @@ with no straight 12m corridor passes Ground, while unsupported or disconnected
 remote anchors fail. Verify immutable input bytes, metadata hash changes, ordinary
 outcome separation, direct Package consumers, Skill copies and typecheck.
 
+#### CF-11/R4 checked-layout world bounds
+
+Main-agent-only, sequential, after R3. Frozen legacy `9e35ab53` compiler
+`boundsForBlocks` uses all Block extents: XZ center is each min/max midpoint,
+horizontal size is `max(16m, span + 9m)`, height range is `[minY - 65m, maxY + 16m]`.
+Keep those container numbers, but never recreate the old hidden foundation geometry.
+
+Replace the current Host input with required `NativeSceneWorldBoundsPolicyV1`:
+`{mode: "checked-block-layout"}` for ordinary generation or
+`{mode: "fixed", worldBounds: WorldPackageWorldBoundsV1}` for explicit fixed inputs.
+Use only `inputs/world-bounds-policy.json`; remove the current reusable old file,
+not historical runs. This policy is independent of ground mode. Generic Native
+can use fixed bounds; checked-block-layout requires actual checked Block evidence.
+
+`scripts/native-scene/world-bounds-policy.ts` owns the closed parser/hash and
+resolution. Case preparation, Generation, Host closure, frozen owner identities,
+repair/journal/resume and publisher use policy path/bytes/hash, never pretend a
+policy hash is the final bounds hash. The existing trusted Package preparation
+resolves bounds after its two equal checked replays, before contribution containment.
+WorldPackage's concrete bounds contract stays unchanged; Ground, Runtime and
+Capture consume that verified manifest. Do not rewrite original inputs or receipts.
+
+Required evidence: exact old formula for asymmetric/translated/extensive scenes,
+ungrouped off-camera Blocks included, small worlds do not need added ground,
+empty/failed/missing checked evidence rejects, fixed containment retained,
+wrong/extra/accessor fields and stale policy identity rejected, immutable policy
+through real Native Package/Ground, direct Capture consumer consistency, Skill
+live/frozen drift and typecheck. Ordinary success and repair budgets stay unchanged.
+Generic Capture templates, complete feature/region measurement and strict routes
+remain under CF-11/13/21; R4 alone does not close those parent tasks.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

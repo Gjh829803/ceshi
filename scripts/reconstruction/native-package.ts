@@ -48,12 +48,14 @@ import {
 } from "@whitebox-world/validation";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
-  hashWorldPackageWorldBoundsV1,
-  parseWorldPackageWorldBoundsV1,
   verifyWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
+import {
+  hashNativeSceneWorldBoundsPolicyV1,
+  parseNativeSceneWorldBoundsPolicyV1,
+} from "../native-scene/world-bounds-policy.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -864,7 +866,7 @@ export async function packageNativeBlockAttemptV1(
     bootstrapBytes,
     gameplayBytes,
     runtimeBytes,
-    boundsBytes,
+    worldBoundsPolicyBytes,
     hostClosureBytes,
     registryLockBytes,
     nativeSceneApiBytes,
@@ -883,7 +885,7 @@ export async function packageNativeBlockAttemptV1(
     readFileNoFollow(attemptDirectoryPath, "inputs/native-scene.bootstrap.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/gameplay-bootstrap.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/world-runtime-bootstrap.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/world-bounds.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/world-bounds-policy.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/host-closure.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/registry-lock.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/native-scene-api.json"),
@@ -936,8 +938,8 @@ export async function packageNativeBlockAttemptV1(
   const runtime = parseWorldRuntimeBootstrapV1(
     json(runtimeBytes, "runtime-invalid"),
   );
-  const bounds = parseWorldPackageWorldBoundsV1(
-    json(boundsBytes, "world-bounds-invalid"),
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(
+    json(worldBoundsPolicyBytes, "world-bounds-policy-invalid"),
   );
   const hostClosure = parseNativeBlockGenerationHostClosureV1(
     json(hostClosureBytes, "host-closure-invalid"),
@@ -1053,7 +1055,7 @@ export async function packageNativeBlockAttemptV1(
     hostClosure.gameplayBootstrapRef !== gameplay.resourceRef ||
     hostClosure.gameplayBootstrapHash !== gameplay.contentHash ||
     hostClosure.worldRuntimeBootstrapHash !== runtime.contentHash ||
-    hostClosure.worldBoundsHash !== hashWorldPackageWorldBoundsV1(bounds) ||
+    hostClosure.worldBoundsPolicyHash !== hashNativeSceneWorldBoundsPolicyV1(worldBoundsPolicy) ||
     hostClosure.initialControlledEntityId !== runtime.initialControlledEntityId
   ) return fail("host-identity-closure-mismatch");
 
@@ -1212,7 +1214,7 @@ export async function packageNativeBlockAttemptV1(
       },
       packageId: `${reconstructionCase.id}.native.package`,
       worldId: reconstructionCase.id,
-      worldBounds: bounds,
+      worldBoundsPolicy,
       resourceBudget: {
         maximumVertices: generationRequest.budgets.maximumStaticColliderVertexCount,
         maximumTriangles: generationRequest.budgets.maximumStaticColliderTriangleCount,

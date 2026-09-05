@@ -1465,6 +1465,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   模板仍待删除/替换，后者不得继续约束 source-authored Builder 的实际地理。显式 NBR verifier
   仍要求固定 Capture/Ground endpoint 对拍，尚不能把 source-authored 的新探索意图算作已完成
   严格路线验收；该消费者迁移继续由 CF-11/13 承接。真实要素/分区量测、跨模式与效果证据仍 open。
+- CF-11/R4 实际世界范围（2026-09-05，当前工作树）：普通 Case preparation 已删除固定
+  `128m` bounds，冻结 `world-bounds-policy.json` 的 `checked-block-layout` 策略；显式固定
+  输入使用 `fixed + worldBounds`，与 Ground mode 独立。唯一 Host parser/hash/resolver 位于
+  `scripts/native-scene/world-bounds-policy.ts`，在原两次 Native replay 一致后，从所有 checked
+  Blocks 的真实 min/max 计算 Package 范围，包含无 visual group、无 Collider 的侧后远景。
+  旧 `9e35ab53` 数值逐项保留：XZ 中心为实际中点，水平为 `max(16m, span + 9m)`，Y 为
+  `[minY - 65m, maxY + 16m]`；只保留容器余量，不生成旧 hidden foundation、空地或额外 Collider。
+  原始 Request/Host closure/repair/journal/resume 改为绑定 `worldBoundsPolicyHash`，不是最终
+  Package bounds hash；原策略字节不回写，最终 manifest/root 绑定实际范围。Ground/Capture/Runtime
+  仍消费 verified Package，不新增成功门禁、模型任务或修复预算。当前 reusable fixture、发布
+  input allowlist、live/frozen Builder Skill、设计与实施合同已同步；历史 Run/最新真实 Case 未改。
+  已验证 x=200m 的无分组无碰撞背景 Block 进入真实 Native Package 范围、Ground 通过，原策略
+  和 Generation Request 字节保持不变；公式/平移/小场景/非法输入回归通过。最终直接消费者
+  六文件 150/150 通过（含 Run、Generation、journal、repair、Capture、policy）；Native Skill
+  58/58，generic Native 固定/越界/无 Block evidence 三项通过，真实 Native Package 固定/动态
+  两项通过。Capture side/top 同时拒绝旧固定范围的专项回归 1/1，最终 typecheck exit 0；
+  分轮重复测试不累加为 aggregate。当前严格样例 Intent 多余末尾换行已按 canonical bytes
+  规范化，语义与已记录 Hash 不变，未修改任何历史运行。CF-11/21 父任务仍 open：generic Capture topology/300-tick/12m
+  模板、两个 generic ground groups、完整要素量测和严格路线消费者尚未闭合；没有新 054 效果证据。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

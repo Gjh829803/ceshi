@@ -17,7 +17,7 @@ import {
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
-import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
+import { parseNativeSceneWorldBoundsPolicyV1, type NativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
@@ -269,6 +269,7 @@ async function completedAttempt(options: Readonly<{
   target3IdentityColorHex?: string;
   groundExploration?: NativeBlockGroundExplorationV1;
   maximumBlockCount?: number;
+  worldBoundsPolicy?: NativeSceneWorldBoundsPolicyV1;
 }> = {}) {
   const sceneSource = options.sceneSource ?? SCENE_SOURCE;
   const authoring = { ...(options.authoring ?? AUTHORING),
@@ -284,8 +285,12 @@ async function completedAttempt(options: Readonly<{
   const [caseValue, profileValue, boundsValue] = await Promise.all([
     readFile(casePath, "utf8").then(JSON.parse),
     readFile(path.join(caseRoot, "evaluation-profile.json"), "utf8").then(JSON.parse),
-    readFile(path.join(inputDirectoryPath, "world-bounds.json"), "utf8").then(JSON.parse),
+    readFile(path.join(inputDirectoryPath, "world-bounds-policy.json"), "utf8").then(JSON.parse),
   ]);
+  if (options.worldBoundsPolicy !== undefined) {
+    await writeFile(path.join(inputDirectoryPath, "world-bounds-policy.json"),
+      stringifyCanonicalJson(options.worldBoundsPolicy));
+  }
   const sceneBrief = parseSceneBriefV1(await readFile(
     path.join(inputDirectoryPath, caseValue.sceneBriefRef),
     "utf8",
@@ -467,8 +472,8 @@ async function completedAttempt(options: Readonly<{
     gameplayBootstrapPath: path.join(HOST_CLOSURE_ROOT, "gameplay/bootstrap.json"),
     worldRuntimeBootstrapPath: path.join(HOST_CLOSURE_ROOT, "runtime/world-runtime-bootstrap.json"),
     worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-    worldBoundsPath: path.join(inputDirectoryPath, "world-bounds.json"),
-    worldBounds: parseWorldPackageWorldBoundsV1(boundsValue),
+    worldBoundsPolicyPath: path.join(inputDirectoryPath, "world-bounds-policy.json"),
+    worldBoundsPolicy: parseNativeSceneWorldBoundsPolicyV1(options.worldBoundsPolicy ?? boundsValue),
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed: 19,
@@ -766,6 +771,28 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "native-check-result.json"), "utf8")).toBe("historical-failure");
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"))).toEqual(originalReceipt);
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"))).toEqual(originalSource);
+  }, 60_000);
+
+  it("derives real Package bounds from all checked Blocks and keeps frozen policy bytes through Ground", async () => {
+    const sceneSource = SCENE_SOURCE.replace('    session.finalize({',
+      '    session.createBlock({ id: "off-camera-background", shape: "full", paletteRole: "background-mass", centerMetersXYZ: [200, -0.5, 10] });\n    session.finalize({');
+    const fixture = await completedAttempt({ sceneSource, worldBoundsPolicy: { mode: "checked-block-layout" } });
+    const policyPath = path.join(fixture.attemptDirectoryPath, "inputs/world-bounds-policy.json");
+    const originalPolicy = await readFile(policyPath);
+    const originalRequest = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
+    const packaged = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: fixture.casePath, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      outputDirectoryPath: fixture.outputDirectoryPath });
+    expect(packaged.groundAnalysisReport.admissionOutcome).toBe("passed");
+    const bounds = packaged.verifiedWorldPackage.manifest.worldBounds;
+    expect(bounds.centerMetersXZ[0] + bounds.sizeMetersXZ[0] / 2).toBe(205);
+    expect(bounds.sizeMetersXZ[0]).toBeGreaterThan(200);
+    for (const collider of packaged.verifiedWorldPackage.nativeSceneContribution.staticColliders) {
+      const xCoordinates = collider.worldPositionsMetersXYZ.filter((_, index) => index % 3 === 0);
+      expect(Math.max(...xCoordinates)).toBeLessThan(100);
+    }
+    expect(await readFile(policyPath)).toEqual(originalPolicy);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
   }, 60_000);
 
   it("admits source-authored curved exploration and rejects unsupported or disconnected remote anchors", async () => {

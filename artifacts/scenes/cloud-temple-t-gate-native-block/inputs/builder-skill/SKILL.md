@@ -83,6 +83,14 @@ self-check checks syntax and the Spawn/middle/remote policy join, not geometry.
 
 ### Construction priorities
 
+Read immutable `inputs/world-bounds-policy.json`. In `checked-block-layout` mode,
+the trusted Host derives final Package bounds from every checked Block, including
+ungrouped off-camera scenery; there is no fixed 128m box. Preserve the actual
+Brief/World Plan extent rather than shrinking it to a remembered sample boundary.
+Legacy container margins are not required empty ground and do not authorize a
+hidden foundation. In `fixed` mode, honor the declared `worldBounds`. Never edit
+the policy or emit final bounds; the existing Block and Collider budgets still apply.
+
 Before authoring, make one internal construction-and-budget inventory from the complete Brief,
 uploaded reference and both planning views. Include important non-target scenery as well as the
 selected visual targets: for each complete form or repeated formation, retain its geographic region,
