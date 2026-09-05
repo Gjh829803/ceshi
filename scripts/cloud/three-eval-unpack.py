@@ -46,7 +46,9 @@ def main():
             listed_paths.append(name)
             assert len(listed_paths) <= 10000, 'Member limit'
             parts = PurePosixPath(name).parts
-            if any(part.lower() in {'scratch', 'codex_home', 'auth.json', 'credentials', 'aws-credentials', 'aws-config', '.aws', '.codex', '.creator-session', 'google-service-account.json'} or part.lower().startswith('codex_home_') for part in parts):
+            root_platform_scratch = tuple(part.lower() for part in parts[:3]) in {
+                ('payload', 'source', 'scratch'), ('payload', 'playable', 'scratch')}
+            if root_platform_scratch or any(part.lower() in {'codex_home', 'auth.json', 'credentials', 'aws-credentials', 'aws-config', '.aws', '.codex', '.creator-session', 'google-service-account.json'} or part.lower().startswith('codex_home_') for part in parts):
                 platform_paths.append(name)
     if platform_paths:
         output.parent.mkdir(parents=True, exist_ok=True)

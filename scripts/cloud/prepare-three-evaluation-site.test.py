@@ -172,6 +172,28 @@ class EvaluationSiteTests(unittest.TestCase):
             self.assertTrue((self.root / 'staged' / row['playable']).is_file())
         self.assertFalse(any(p.name == 'project.json' or p.suffix == '.ts' for p in (self.root / 'staged').rglob('*')))
 
+    def test_host_titles_and_history_preserve_case_inputs_and_artifact_paths(self):
+        fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]
+        original_input = (fixture.run / task / 'case-input.json').read_bytes()
+        fixture.publication['cases'][task]['displayTitle'] = 'LOCAL FIXTURE · 公开展示标题'
+        fixture.publication['historyRuns'] = [{'id': 'previous-local-run', 'label': '之前的本地轮次'}]
+        _, result = fixture.stage()
+        row = result['cases'][0]
+        self.assertEqual(row['title'], 'LOCAL FIXTURE · 公开展示标题')
+        self.assertEqual(row['id'], task)
+        self.assertEqual(row['baseCaseId'], 'local-case-01')
+        self.assertTrue((self.root / 'staged' / row['reference']).is_file())
+        self.assertTrue((self.root / 'staged' / row['playable']).is_file())
+        self.assertEqual((fixture.run / task / 'case-input.json').read_bytes(), original_input)
+        self.assertEqual(result['historyRuns'], [{'id': 'previous-local-run', 'label': '之前的本地轮次', 'href': '/creator-evals/three/runs/previous-local-run/'}])
+        fixture.publication['historyRuns'][0]['id'] = '../unsafe-run'
+        with self.assertRaisesRegex(ValueError, 'history run'):
+            fixture.stage('invalid-history')
+        fixture.publication['historyRuns'] = []
+        fixture.publication['cases'][task]['displayTitle'] = ''
+        with self.assertRaisesRegex(ValueError, 'display title'):
+            fixture.stage('invalid-title')
+
     def test_sdk_only_rejects_raw_even_when_raw_is_unselected(self):
         fixture = Fixture(self.root)
         raw = {**fixture.plan['cases'][0], 'taskId': 'local-case-01--three-raw', 'profile': 'three-raw'}
@@ -335,6 +357,30 @@ class PublisherManifestTests(unittest.TestCase):
             for change in ({'runId': 'another-run'}, {'updatedAt': '2026-09-05T09:00:00Z'}):
                 self.assertNotEqual(install({**valid, **change}).returncode, 0)
                 self.assertEqual((root / 'progress.json').read_bytes(), original)
+
+    def test_completed_archive_is_idempotent_but_never_overwrites_existing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / 'run'
+            manifest = encoded({'id': 'local-archive-run'})
+            original = {'index.html': b'original LOCAL FIXTURE page', 'assets/frame.png': png(), 'results.json': manifest}
+            def install(files):
+                buffer = io.BytesIO()
+                with tarfile.open(fileobj=buffer, mode='w') as archive:
+                    for name, data in files.items():
+                        entry = tarfile.TarInfo(name); entry.size = len(data)
+                        archive.addfile(entry, io.BytesIO(data))
+                return subprocess.run([sys.executable, '-c', publisher.INSTALL, str(root), 'archive-run', sha(files['results.json'])], input=buffer.getvalue(), capture_output=True)
+            self.assertEqual(install(original).returncode, 0)
+            mtimes = {name: (root / name).stat().st_mtime_ns for name in original}
+            self.assertEqual(install(original).returncode, 0)
+            self.assertEqual({name: (root / name).stat().st_mtime_ns for name in original}, mtimes)
+            for changed in ({**original, 'index.html': b'changed page with identical manifest'},
+                            {**original, 'new/nested.html': b'new page with identical manifest'},
+                            {'index.html': original['index.html'], 'results.json': manifest},
+                            {**original, 'results.json': encoded({'id': 'different-run'})}):
+                with self.subTest(files=list(changed)):
+                    self.assertNotEqual(install(changed).returncode, 0)
+                    self.assertEqual({p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob('*') if p.is_file()}, original)
 
 
 if __name__ == '__main__':

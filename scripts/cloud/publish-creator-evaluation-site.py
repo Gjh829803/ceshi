@@ -62,16 +62,23 @@ INSTALL = r'''
 import hashlib,json,os,pathlib,sys,tarfile,tempfile,datetime
 root=pathlib.Path(sys.argv[1]);root.mkdir(parents=True,exist_ok=True)
 progress_only=len(sys.argv)>2 and sys.argv[2]=='progress-only'
-count=0;size=0
+archive_run=len(sys.argv)>2 and sys.argv[2]=='archive-run'
+existing_archive=archive_run and (root/'results.json').exists()
+if existing_archive and hashlib.sha256((root/'results.json').read_bytes()).hexdigest()!=sys.argv[3]: raise ValueError('Completed run archive already exists with a different manifest')
+count=0;size=0;received=set()
 with tarfile.open(fileobj=sys.stdin.buffer,mode='r|') as archive:
  for member in archive:
   relative=pathlib.PurePosixPath(member.name)
   if not member.isfile() or relative.is_absolute() or '..' in relative.parts or member.size>128*1024*1024: raise ValueError('Invalid public file')
   target=root.joinpath(*relative.parts)
   if any(p.is_symlink() for p in (target,*target.parents)): raise ValueError('Symlink target')
-  target.parent.mkdir(parents=True,exist_ok=True)
   contents=archive.extractfile(member).read()
   if len(contents)!=member.size: raise ValueError('Truncated public file')
+  if existing_archive:
+   if member.name in received or not target.is_file() or target.read_bytes()!=contents: raise ValueError('Completed run archive already exists with different files')
+   received.add(member.name);count+=1;size+=len(contents)
+   continue
+  target.parent.mkdir(parents=True,exist_ok=True)
   if progress_only:
    if member.name!='progress.json' or member.size>512*1024: raise ValueError('Only a bounded progress snapshot is permitted')
    value=json.loads(contents);manifest=json.loads((root/'results.json').read_text())
@@ -83,6 +90,7 @@ with tarfile.open(fileobj=sys.stdin.buffer,mode='r|') as archive:
   temporary=target.with_name(target.name+'.upload-part')
   temporary.write_bytes(contents);temporary.chmod(0o644);os.replace(temporary,target)
   count+=1;size+=len(contents)
+if existing_archive and {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}!=received: raise ValueError('Completed run archive already exists with a different file inventory')
 print(json.dumps({'files':count,'bytes':size,'resultsSha256':hashlib.sha256((root/'results.json').read_bytes()).hexdigest()}))
 '''
 
@@ -93,10 +101,15 @@ def main():
     parser.add_argument('--pod', required=True)
     parser.add_argument('--gallery', choices=('legacy-v3', 'three'), default='legacy-v3')
     parser.add_argument('--progress-only', action='store_true', help='Atomically update this Three run status without republishing assets')
+    parser.add_argument('--archive-run', action='store_true', help='Preserve a completed Three run under /three/runs/<runId>/')
     args = parser.parse_args()
     root = args.source.resolve()
     manifest = json.loads((root / 'results.json').read_text())
     remote = validate_manifest(manifest, args.gallery)
+    if args.archive_run:
+        if args.gallery != 'three' or args.progress_only:
+            raise ValueError('Archive is a separate Three publication mode')
+        remote += '/runs/' + manifest['id']
     files = sorted(root.rglob('*'), key=lambda p: (p.name == 'results.json', str(p)))
     if args.progress_only:
         if args.gallery != 'three':
@@ -122,7 +135,7 @@ def main():
                 info.mode = 0o644
                 archive.addfile(info, io.BytesIO(contents))
         bundle.seek(0)
-        subprocess.run(['kubectl', '-n', 'ray', 'exec', '-i', args.pod, '-c', 'ray-head', '--', 'python', '-c', INSTALL, remote, 'progress-only' if args.progress_only else 'full'], stdin=bundle, check=True)
+        subprocess.run(['kubectl', '-n', 'ray', 'exec', '-i', args.pod, '-c', 'ray-head', '--', 'python', '-c', INSTALL, remote, 'progress-only' if args.progress_only else 'archive-run' if args.archive_run else 'full', hashlib.sha256((root / 'results.json').read_bytes()).hexdigest()], stdin=bundle, check=True)
     print(json.dumps({'manifestSha256': hashlib.sha256((root / 'results.json').read_bytes()).hexdigest(), 'publishedCases': sum(c['status'] in ('ready', 'issues') for c in manifest['cases'])}))
 
 

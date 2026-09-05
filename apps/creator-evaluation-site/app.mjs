@@ -1,48 +1,531 @@
-const $ = id => document.getElementById(id);
-const labels = { ready:'可试玩', issues:'可试玩 · 有问题', running:'运行中', queued:'排队中', submitted:'已提交', starting:'启动中', verifying:'待评审', delivered:'待评审', failed:'失败', unknown:'待确认' };
-const stages = { queued:'等待执行', starting:'启动 Agent', authoring:'编写与校验', preview:'预览与检查', playtest:'实际操作测试', capture:'采集对象视图', packaging:'整理交付', delivered:'技术交付完成', failed:'执行失败', unknown:'等待可确认状态' };
-const toolStatusLabels={succeeded:'调用完成',failed:'未通过',running:'进行中',queued:'等待中',completed:'已返回'};
-function operationDetail(p){const op=p?.toolSummary?.latestOperation;if(p?.failure?.message)return p.failure.message;if(op?.progress&&finite(op.progress.elapsedSeconds)&&finite(op.progress.requestedSeconds))return `${op.progress.elapsedSeconds.toFixed(1)} / ${op.progress.requestedSeconds} 秒 · 第 ${(op.progress.stepIndex??0)+1} 步`;if(op?.type)return `${op.type} · ${toolStatusLabels[op.status]||op.status||'已观测'}`;return p?.toolSummary?.latestTool||(p?.lastObservedAt?`观测于 ${formatTime(p.lastObservedAt)}`:'等待观测记录');}
-const phaseOrder = ['starting','authoring','preview','playtest','capture','packaging','delivered'];
-let data, progress, selectedId, activeTab='process', storageKey='worldkit-evaluation-reviews', reviews={}, artifactKey='', pendingRefresh=false, lastFetchAt=null, progressUnavailable=false, lastRefreshFailed=false;
-let resumePlayerOnReturn=false;
-const isPlayable = c => ['ready','issues'].includes(c?.status) && Boolean(c.playable);
-const el = (tag,text,className) => { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(className)n.className=className; return n; };
-const finite = n => typeof n==='number' && Number.isFinite(n);
-const timeMs = x => x && Number.isFinite(Date.parse(x)) ? Date.parse(x) : null;
-const formatTime = x => timeMs(x)===null ? '时间未提供' : new Date(x).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-function duration(seconds){if(!finite(seconds))return '—';seconds=Math.max(0,Math.floor(seconds));return seconds>=3600?`${Math.floor(seconds/3600)}时 ${Math.floor(seconds%3600/60)}分`:`${Math.floor(seconds/60)}分 ${String(seconds%60).padStart(2,'0')}秒`;}
-function sourceUrl(relative){const u=new URL(relative,location.href);if(u.origin!==location.origin||!u.pathname.startsWith('/creator-evals/'))throw new Error('Invalid artifact URL');return u.href;}
-function picture(relative,alt,className){const n=el('img',undefined,className);n.src=sourceUrl(relative);n.alt=alt;n.loading='lazy';return n;}
-function badge(status,text){return el('span',text||labels[status]||status,`badge ${status}`);}
-function currentProgress(id){return progress?.runId===data?.id?progress.cases?.find(c=>c.taskId===id):null;}
-function caseStatus(c,p=currentProgress(c.id)){if(isPlayable(c))return c.status;const phase=p?.phase;if(['delivered','completed','succeeded'].includes(phase))return 'verifying';if(['submitted','reserved','not-started'].includes(phase))return p?.startedAt?'running':'queued';return ['running','queued','starting','failed','unknown'].includes(phase)?phase:c.status;}
-function elapsed(p){if(!p)return null;const start=timeMs(p.submittedAt),end=timeMs(p.completedAt);if(start!==null)return ((end??Date.now())-start)/1000;return p.elapsedSeconds??null;}
-function activeElapsed(p){const start=timeMs(p?.startedAt),end=timeMs(p?.completedAt);return start===null?null:((end??Date.now())-start)/1000;}
-function activity(p,c){if(isPlayable(c))return '交付与评审已完成';if(!p)return c.status==='failed'?'查看已记录的问题':'等待过程状态';return p.stageLabel||stages[p.stage]||labels[p.phase]||'等待可确认状态';}
-function attemptCount(p){return p?.attempts?.length||1;}
-function metrics(node,values){node.replaceChildren(...values.map(([value,label])=>{const n=el('div',undefined,'metric');n.append(el('strong',value),el('span',label));return n;}));}
-function loadReviews(){try{reviews=JSON.parse(localStorage.getItem(storageKey)||'{}');if(!reviews||typeof reviews!=='object'||Array.isArray(reviews))reviews={};}catch{reviews={};}}
-function setConnection(){const active=(progress?.cases||[]).filter(c=>['running','queued','unknown'].includes(c.phase));const observed=active.map(c=>timeMs(c.lastObservedAt));const seen=progress?(active.length?(observed.every(t=>t!==null)?Math.min(...observed):null):timeMs(progress.updatedAt)):timeMs(data?.updatedAt);const age=seen===null?null:(Date.now()-seen)/1000;const stale=lastRefreshFailed||!lastFetchAt||(active.length>0&&(age===null||age>50));$('connection').classList.toggle('stale',stale);$('connection').lastElementChild.textContent=lastRefreshFailed?'更新连接中断':stale?'状态更新延迟':progressUnavailable?'产物视图 · 过程未连接':'状态已连接';$('updated').textContent=seen===null?'暂无更新时间':`最近观测 ${formatTime(new Date(seen).toISOString())}`;}
-function drawSummary(){if(!data)return;const rows=data.cases.map(c=>caseStatus(c));const values=[[data.cases.length,'本轮任务',''],[rows.filter(s=>['running','starting'].includes(s)).length,'运行中','running'],[rows.filter(s=>['queued','submitted','unknown'].includes(s)).length,'排队 / 待确认',''],[rows.filter(s=>s==='verifying').length,'待评审',''],[data.cases.filter(isPlayable).length,'可试玩','ready'],[rows.filter(s=>['failed','issues'].includes(s)).length,'异常 / 有问题','failed']];$('run-stats').replaceChildren(...values.map(([n,label,kind])=>{const card=el('div',undefined,`stat ${kind}`);card.append(el('strong',n),el('span',label));return card;}));$('evaluation-title').textContent=data.title||'云端生成评测';$('evaluation-description').textContent=data.description||'查看场景的生成过程、交付物与试玩结果。';$('run-meta').replaceChildren(...[progress?.model||'GPT-6',progress?.reasoningEffort||progress?.effort||'xhigh',data.suite==='sdk-only'?'Three SDK':'参考图生成',`${data.cases.length} 个 case`,data.id].map(t=>el('span',t,'meta-chip')));$('footer-run').textContent=data.id;$('task-count').textContent=`${data.cases.length} 个`;setConnection();}
-function drawCards(){if(!data)return;const query=$('search').value.trim().toLowerCase(),filter=$('status-filter').value;const cases=data.cases.filter(c=>{const s=caseStatus(c);return (!query||`${c.id} ${c.title}`.toLowerCase().includes(query))&&(filter==='all'||filter==='active'&&['running','queued','starting','submitted','unknown'].includes(s)||filter==='playable'&&isPlayable(c)||filter==='failed'&&['failed','issues'].includes(s));});$('empty-list').hidden=cases.length>0;const frag=document.createDocumentFragment();for(const c of cases){const p=currentProgress(c.id),s=caseStatus(c),tr=el('tr');tr.dataset.caseId=c.id;tr.setAttribute('aria-selected',String(c.id===selectedId));tr.tabIndex=0;const name=el('td'),cell=el('div',undefined,'case-cell'),copy=el('div',undefined,'case-copy');copy.append(el('strong',c.title),el('small',c.baseCaseId||c.id));cell.append(picture(c.reference,c.title),copy);name.append(cell);const state=el('td');state.append(badge(s));const current=el('td');current.append(el('span',activity(p,c),'activity-title'),el('span',operationDetail(p),'activity-detail'));const timing=el('td',duration(elapsed(p)),'duration'),attempt=el('td',`${attemptCount(p)} 次`),artifacts=el('td');artifacts.append(el('span',isPlayable(c)?'试玩 / 录像 / 三视图':s==='verifying'?'已交付 · 待评审':'等待交付',`artifact-count ${isPlayable(c)?'available':''}`));tr.append(name,state,current,timing,attempt,artifacts);tr.onclick=()=>select(c.id,true);tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(c.id,true);}};frag.append(tr);}$('cases').replaceChildren(frag);drawSummary();}
-function sourceFailure(p){const f=p?.failure;if(!f)return null;return typeof f==='string'?f:f.message||f.code||'任务执行失败，请查看运行尝试。';}
-function renderEvents(p){const list=el('ol',undefined,'event-stream');const events=p?.events||[];for(const e of events.slice(-100)){const li=el('li',undefined,e.status==='failed'?'failed':'');li.dataset.eventId=e.id||`${e.at}|${e.label}`;li.append(el('time',e.at?formatTime(e.at):'已观测'),el('i'));const copy=el('div');copy.append(el('b',e.label||stages[e.stage]||'状态更新'));if(e.status){const passed=e.resultStatus==='passed'&&e.stage!=='playtest';copy.append(badge(e.status==='succeeded'?'ready':e.status,passed?'检查通过':toolStatusLabels[e.status]||'已记录'));}if(e.progress&&finite(e.progress.elapsedSeconds)){copy.append(el('p',`最近采样：${e.progress.elapsedSeconds.toFixed(1)} / ${e.progress.requestedSeconds??'—'} 秒${finite(e.progress.stepIndex)?` · 第 ${e.progress.stepIndex+1} 步`:''}`));}if(e.detail)copy.append(el('p',typeof e.detail==='string'?e.detail:JSON.stringify(e.detail)));li.append(copy);list.append(li);}const box=$('events'),scroll=box.scrollTop;if(!events.length)box.replaceChildren(el('p',p?'尚无可公开的工具事件。已确认的启动信息会显示在左侧。':'等待任务状态连接。','empty'));else box.replaceChildren(list);box.scrollTop=$('follow-events').checked?box.scrollHeight:scroll;}
-// Same observable trajectory / event / deliverable pattern as the existing Studio.
-// Repeated Agent iterations remain visible; no fixed Planner/Builder percentage.
-function renderTrajectory(p,c){const list=el('ol',undefined,'trajectory');const seen=new Set((p?.events||[]).map(e=>e.stage).filter(Boolean));for(const a of p?.attempts||[])for(const e of a.events||[])if(e.stage)seen.add(e.stage);const counts=p?.toolSummary?.counts||p?.toolSummary?.completedMcpCalls||{};for(const [name,count] of Object.entries(counts)){if(count>0){const stage=name.includes('playtest')?'playtest':name.includes('capture')?'capture':name.includes('submit')?'packaging':/preview|inspect|command/.test(name)?'preview':/validate|schema|examples|assets/.test(name)?'authoring':null;if(stage)seen.add(stage);}}if(p?.startedAt)seen.add('starting');if(['delivered','verifying'].includes(caseStatus(c,p))||isPlayable(c))seen.add('delivered');const selected=p?.stage;for(const [index,id] of phaseOrder.entries()){let status=selected===id&&caseStatus(c,p)==='running'?'active':seen.has(id)?'complete':'pending';if(caseStatus(c,p)==='failed'&&id===(p?.lastStage||selected))status='failed';const li=el('li');li.dataset.status=status;const marker=el('div',status==='complete'?'✓':String(index+1).padStart(2,'0'),'trajectory-marker'),copy=el('div',undefined,'trajectory-copy');copy.append(el('strong',stages[id]),el('small',id==='delivered'?(isPlayable(c)?'内容评审已记录':'生成与技术交付，随后独立评审'):status==='active'?'当前可观察活动':status==='complete'?'已有实际执行记录':'尚无执行记录'));li.append(marker,copy,el('span',{active:'进行中',complete:'已记录',pending:'待执行',failed:'失败'}[status],'stage-state'));list.append(li);}$('trajectory').replaceChildren(list);}
-function renderAttempts(p){const items=p?.attempts?.length?p.attempts:[p].filter(Boolean);if(!items.length){$('attempts').replaceChildren(el('p','任务信息尚未连接。','empty'));return;}$('attempts').replaceChildren(...items.map((a,i)=>{const row=el('div',undefined,'attempt-row');const label=el('b',`尝试 ${i+1}`),copy=el('div');copy.append(el('span',a.failure?.message||a.stageLabel||stages[a.stage]||labels[a.phase]||'已提交'),el('small',a.jobId||'等待云端任务 ID','mono'));const state=el('span');state.append(badge(a.phase||'unknown'));const time=el('span',duration(elapsed(a)),'duration');row.append(label,copy,state,time);return row;}));}
-function renderProcess(){if(!data||!selectedId)return;const c=data.cases.find(x=>x.id===selectedId);if(!c)return;const p=currentProgress(c.id),s=caseStatus(c,p);$('case-status').replaceWith(Object.assign(badge(s),{id:'case-status'}));$('case-note').textContent=isPlayable(c)?c.note||'':p?.phase==='failed'?'任务已结束，原始错误与每次尝试均保留在下方。':p?.phase==='delivered'?'云端已交付，等待独立审阅原始结果。':p?.phase==='running'?'Agent 正在自主完成场景与工具检查，以下过程来自实际运行事件。':c.note||'';const message=sourceFailure(p);$('failure-banner').hidden=!message;if(message){$('failure-banner').replaceChildren(el('strong',p.failure?.category==='model-capacity'?'模型服务容量不足':'本次运行出现异常'),el('span',message));}metrics($('process-metrics'),[[duration(elapsed(p)),'总耗时'],[duration(p?.queueSeconds),'启动等待'],[duration(activeElapsed(p)),'Agent 执行'],[`${attemptCount(p)} 次`,'累计尝试'],[p?.lastObservedAt?formatTime(p.lastObservedAt):'—','最近观测']]);renderTrajectory(p,c);renderEvents(p);renderAttempts(p);$('technical').textContent=JSON.stringify({caseId:c.baseCaseId||c.id,taskId:c.id,jobId:p?.jobId||null,sourceHash:c.sourceHash||null,worldBuildHash:c.worldBuildHash||null,providerStatus:p?.providerStatus||null,itemStatus:p?.itemStatus||null,stateSource:p?.stateSource||p?.source||null,failureFacts:p?.failureFacts||[],observedAt:p?.lastObservedAt||null,note:'过程只展示可观察事件；模型推理、源码、完整命令和凭证不公开。'},null,2);}
-function renderDeliverables(c){const p=currentProgress(c.id),playable=isPlayable(c);const rows=[['reference','用户参考图',true,c.reference,'原始上传图片'],['opening','白模首帧',Boolean(c.opening),c.opening,'同一个可玩世界的首帧'],['playable','可玩世界',playable,c.playable,'保留 Agent 原始交付'],['video','真实试玩录像',Boolean(c.video),c.video,'实际按键操作与浏览器录制'],['views','完整对象三视图',Boolean(c.triviews?.length),null,`${c.triviews?.length||0} 组完整对象`]];$('deliverables').replaceChildren(...rows.map(([id,title,ready,url,detail])=>{const row=el('div',undefined,`deliverable-row ${ready?'':'pending'}`);row.append(el('span',ready?'✓':'○','deliverable-icon'));const copy=el('div');copy.append(el('span',title),el('small',detail));row.append(copy);if(url){const link=el('a','打开 ↗');link.href=sourceUrl(url);link.target='_blank';link.rel='noopener';row.append(link);}else row.append(el('span',ready?'已交付':p?.phase==='failed'?'未交付':'等待交付','muted'));return row;}));}
-function frameController(frame){const w=frame?.contentWindow;if(!w)return null;if(w.__THREE_CREATOR_HOST__)return {start:()=>w.__THREE_CREATOR_HOST__.start(),stop:()=>w.__THREE_CREATOR_HOST__.stop(),running:()=>w.__THREE_CREATOR_HOST__.read()?.isRunning};const a=w.__WORLDKIT_EVAL__||w.__WORLDKIT_CREATOR__;return a?{start:()=>a.startLive?.(),stop:()=>a.stopLive?.(),running:()=>a.snapshot?.()?.isRunning}:null;}
-function pausePlayer(){const frame=$('player').querySelector('iframe');if(!frame)return;try{const api=frameController(frame);resumePlayerOnReturn=api?.running()!==false;void Promise.resolve(api?.stop()).catch(()=>{});}catch{}}
-function mountArtifacts(c){const next=[c.id,c.sourceHash,c.playable,c.opening,c.video,JSON.stringify(c.triviews)].join('|');renderDeliverables(c);if(next===artifactKey)return;artifactKey=next;pausePlayer();resumePlayerOnReturn=false;$('player').replaceChildren();$('video').pause();$('video').removeAttribute('src');$('video').load();$('reference').src=sourceUrl(c.reference);$('reference-link').href=sourceUrl(c.reference);$('prompt').textContent=c.prompt||'';$('opening-state').textContent=c.opening?'实际交付版本':'尚未交付';$('opening-container').replaceChildren(c.opening?picture(c.opening,c.title+'白模首帧'):el('span','交付后在此对照首帧'));const playable=isPlayable(c);$('ready-content').hidden=!playable;$('play-pending').hidden=playable;$('open-play').hidden=!playable;$('media-content').hidden=!c.video&&!c.triviews?.length;$('triviews').replaceChildren(...(c.triviews||[]).map(v=>{const f=el('figure');f.append(el('figcaption',v.name),picture(v.image,v.name+'三视图'));return f;}));if(c.video){$('video').src=sourceUrl(c.video);if(c.opening)$('video').poster=sourceUrl(c.opening);$('video-note').textContent=`录像按 ${c.metrics?.captureFps??'未知'} fps 采样，用于检查游玩过程；这不是实际游戏渲染帧率。`;}if(playable){const url=new URL(sourceUrl(c.playable));url.searchParams.set('play','1');$('open-play').href=url.href;if(c.opening)$('player').append(picture(c.opening,'','play-cover'));const launch=el('button','加载场景 · 开始试玩');launch.type='button';launch.onclick=()=>{const frame=el('iframe');frame.title=c.title+'交互白模';frame.allow='fullscreen';frame.src=url.href;$('player').replaceChildren(frame);frame.onload=()=>{frame.focus();if(activeTab!=='play')pausePlayer();};};$('player').append(launch);const m=c.metrics||{};metrics($('metrics'),[[finite(m.activePlaySeconds)?`${m.activePlaySeconds.toFixed(1)} 秒`:finite(m.simulationSeconds)?`${m.simulationSeconds} 秒`:'—',finite(m.activePlaySeconds)?'主动游玩':'录制时长'],[`${m.visitedTargets??'—'} / ${m.targetCount??'—'}`,'作者路线目标'],[finite(m.travelledMeters)?`${Math.round(m.travelledMeters)} m`:'—','记录行进距离'],[finite(m.generationMinutes)?`${m.generationMinutes} 分钟`:'—','生成耗时']]);$('play-controls').textContent=c.profile==='three-sdk'?'WASD 移动 · 方向键 / 拖动转镜头 · Shift 跑步 · Space 跳跃 · 滚轮缩放 · R 重置。点击场景后操作。':'WASD 移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体操作以场景说明为准。';}}
-function select(id,reveal=false){if(!data?.cases.length)return;const c=data.cases.find(c=>c.id===id)||data.cases[0];const changed=selectedId!==c.id;selectedId=c.id;history.replaceState(null,'','#'+encodeURIComponent(c.id));$('detail').hidden=false;$('case-title').textContent=c.title;$('case-id').textContent=c.id;$('case-tags').textContent=(c.tags||[]).join(' · ');if(changed){for(const name of ['fidelity','playability','bugs','notes'])$('review').elements[name].value=reviews[c.id]?.[name]||'';$('save-status').textContent=reviews[c.id]?'已恢复此浏览器中的记录':'仅保存在当前浏览器';$('events').scrollTop=0;}mountArtifacts(c);drawCards();renderProcess();switchTab(activeTab);if(reveal)$('detail').scrollIntoView({behavior:'smooth',block:'start'});}
-function switchTab(tab){if(!['process','outputs','play','review'].includes(tab))return;const previous=activeTab;activeTab=tab;for(const name of ['process','outputs','play','review']){$('tab-'+name).hidden=name!==tab;document.querySelector(`[data-tab="${name}"]`).setAttribute('aria-selected',String(name===tab));}if(tab!=='outputs')$('video').pause();if(previous==='play'&&tab!=='play')pausePlayer();if(tab==='play'&&previous!=='play'&&resumePlayerOnReturn){try{void Promise.resolve(frameController($('player').querySelector('iframe'))?.start()).catch(()=>{});}catch{}resumePlayerOnReturn=false;}}
-for(const b of document.querySelectorAll('[data-tab]'))b.onclick=()=>switchTab(b.dataset.tab);
-$('search').oninput=drawCards;$('status-filter').onchange=drawCards;$('follow-events').onchange=()=>{if($('follow-events').checked)$('events').scrollTop=$('events').scrollHeight;};
-$('review').oninput=()=>{const c=data?.cases.find(c=>c.id===selectedId);if(!c)return;reviews[selectedId]={caseId:selectedId,title:c.title,sourceHash:c.sourceHash||null,updatedAt:new Date().toISOString(),...Object.fromEntries(new FormData($('review')))};try{localStorage.setItem(storageKey,JSON.stringify(reviews));$('save-status').textContent='已自动保存到此浏览器';}catch{$('save-status').textContent='浏览器无法保存，请导出记录';}};
-$('export').onclick=()=>{if(!data)return;const a=el('a'),url=URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1,evaluationId:data.id,exportedAt:new Date().toISOString(),reviews:Object.values(reviews)},null,2)],{type:'application/json'}));a.href=url;a.download='worldkit-evaluation-reviews.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-async function readJson(name){const response=await fetch(name,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error(String(response.status));return response.json();}
-async function refresh(){if(pendingRefresh)return;pendingRefresh=true;$('refresh').disabled=true;try{const [results,live]=await Promise.allSettled([readJson('./results.json'),readJson('./progress.json')]);if(results.status==='rejected')throw results.reason;const next=results.value;if(!Array.isArray(next.cases)||!next.cases.length)throw new Error('Empty evaluation');if(data&&data.id!==next.id){selectedId=null;artifactKey='';}const newStorage=next.reviewStorageKey||`worldkit-review-${next.id}`;if(storageKey!==newStorage){storageKey=newStorage;loadReviews();}data=next;if(live.status==='fulfilled'&&live.value.kind==='three-creator-run-progress'&&live.value.runId===data.id){progress=live.value;progressUnavailable=false;}else{progressUnavailable=true;if(progress?.runId!==data.id)progress=null;}lastFetchAt=Date.now();lastRefreshFailed=false;$('load-error').hidden=true;const selected=data.cases.find(c=>c.id===selectedId);if(!selected){let hash='';try{hash=decodeURIComponent(location.hash.slice(1));}catch{}select(hash);}else{mountArtifacts(selected);drawCards();renderProcess();}}catch{lastRefreshFailed=true;$('load-error').textContent='状态更新暂时不可用，正在重试。已打开的场景和评测输入会保留。';$('load-error').hidden=false;$('connection').classList.add('stale');$('connection').lastElementChild.textContent='更新连接中断';}finally{pendingRefresh=false;$('refresh').disabled=false;}}
-$('refresh').onclick=refresh;await refresh();setInterval(refresh,10000);setInterval(()=>{if(data){drawSummary();const c=data.cases.find(x=>x.id===selectedId),p=c&&currentProgress(c.id);if(p)metrics($('process-metrics'),[[duration(elapsed(p)),'总耗时'],[duration(p.queueSeconds),'启动等待'],[duration(activeElapsed(p)),'Agent 执行'],[`${attemptCount(p)} 次`,'累计尝试'],[p.lastObservedAt?formatTime(p.lastObservedAt):'—','最近观测']]);}},1000);
+// Read-only evaluation center. Studio-style trajectories use actual Host events;
+// result readiness, active playback and human feedback retain separate owners.
+const $ = (id) => document.getElementById(id);
+const labels = { ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "排队中", submitted: "已提交", starting: "启动中", verifying: "待评审", delivered: "待评审", failed: "失败", unknown: "待确认" };
+const stages = { queued: "等待执行", starting: "启动 Agent", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
+const toolStatusLabels = { succeeded: "调用完成", failed: "未通过", running: "进行中", queued: "等待中", completed: "已返回" };
+function operationDetail(p) {
+  const op = p?.toolSummary?.latestOperation;
+  if (p?.failure?.message)
+    return p.failure.message;
+  if (op?.progress && finite(op.progress.elapsedSeconds) && finite(op.progress.requestedSeconds))
+    return `${op.progress.elapsedSeconds.toFixed(1)} / ${op.progress.requestedSeconds} 秒 · 第 ${(op.progress.stepIndex ?? 0) + 1} 步`;
+  if (op?.type)
+    return `${op.type} · ${toolStatusLabels[op.status] || op.status || "已观测"}`;
+  return p?.toolSummary?.latestTool || (p?.lastObservedAt ? `观测于 ${formatTime(p.lastObservedAt)}` : "等待观测记录");
+}
+const phaseOrder = ["starting", "authoring", "preview", "playtest", "capture", "packaging", "delivered"];
+let data, progress, selectedId, activeTab = "process", storageKey = "worldkit-evaluation-reviews", reviews = {}, artifactKey = "", pendingRefresh = false, lastFetchAt = null, progressUnavailable = false, lastRefreshFailed = false;
+let resumePlayerOnReturn = false;
+const isPlayable = (c) => ["ready", "issues"].includes(c?.status) && Boolean(c.playable);
+const el = (tag, text, className) => {
+  const n = document.createElement(tag);
+  if (text !== void 0)
+    n.textContent = text;
+  if (className)
+    n.className = className;
+  return n;
+};
+const finite = (n) => typeof n === "number" && Number.isFinite(n);
+const timeMs = (x) => x && Number.isFinite(Date.parse(x)) ? Date.parse(x) : null;
+const formatTime = (x) => timeMs(x) === null ? "时间未提供" : new Date(x).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function duration(seconds) {
+  if (!finite(seconds))
+    return "—";
+  seconds = Math.max(0, Math.floor(seconds));
+  return seconds >= 3600 ? `${Math.floor(seconds / 3600)}时 ${Math.floor(seconds % 3600 / 60)}分` : `${Math.floor(seconds / 60)}分 ${String(seconds % 60).padStart(2, "0")}秒`;
+}
+function sourceUrl(relative) {
+  const u = new URL(relative, location.href);
+  if (u.origin !== location.origin || !u.pathname.startsWith("/creator-evals/"))
+    throw new Error("Invalid artifact URL");
+  return u.href;
+}
+function picture(relative, alt, className) {
+  const n = el("img", void 0, className);
+  n.src = sourceUrl(relative);
+  n.alt = alt;
+  n.loading = "lazy";
+  return n;
+}
+function badge(status, text) {
+  return el("span", text || labels[status] || status, `badge ${status}`);
+}
+function currentProgress(id) {
+  return progress?.runId === data?.id ? progress.cases?.find((c) => c.taskId === id) : null;
+}
+function caseStatus(c, p = currentProgress(c.id)) {
+  if (isPlayable(c))
+    return c.status;
+  const phase = p?.phase;
+  if (["delivered", "completed", "succeeded"].includes(phase))
+    return "verifying";
+  if (["submitted", "reserved", "not-started"].includes(phase))
+    return p?.startedAt ? "running" : "queued";
+  return ["running", "queued", "starting", "failed", "unknown"].includes(phase) ? phase : c.status;
+}
+function elapsed(p) {
+  if (!p)
+    return null;
+  const starts = (p.attempts || []).map((a) => timeMs(a.submittedAt)).filter((t) => t !== null);
+  const start = starts.length ? Math.min(...starts) : timeMs(p.submittedAt), end = timeMs(p.completedAt);
+  if (start !== null)
+    return ((end ?? Date.now()) - start) / 1e3;
+  return p.elapsedSeconds ?? null;
+}
+function activeElapsed(p) {
+  const start = timeMs(p?.startedAt), end = timeMs(p?.completedAt);
+  return start === null ? null : ((end ?? Date.now()) - start) / 1e3;
+}
+function activity(p, c) {
+  if (isPlayable(c))
+    return "交付与评审已完成";
+  if (!p)
+    return c.status === "failed" ? "查看已记录的问题" : "等待过程状态";
+  return p.stageLabel || stages[p.stage] || labels[p.phase] || "等待可确认状态";
+}
+function attemptCount(p) {
+  return p?.attempts?.length || 1;
+}
+function metrics(node, values) {
+  node.replaceChildren(...values.map(([value, label]) => {
+    const n = el("div", void 0, "metric");
+    n.append(el("strong", value), el("span", label));
+    return n;
+  }));
+}
+function loadReviews() {
+  try {
+    reviews = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    if (!reviews || typeof reviews !== "object" || Array.isArray(reviews))
+      reviews = {};
+  } catch {
+    reviews = {};
+  }
+}
+function setConnection() {
+  const active = (progress?.cases || []).filter((c) => ["running", "queued", "unknown"].includes(c.phase));
+  const observed = active.map((c) => timeMs(c.lastObservedAt));
+  const seen = progress ? active.length ? observed.every((t) => t !== null) ? Math.min(...observed) : null : timeMs(progress.updatedAt) : timeMs(data?.updatedAt);
+  const age = seen === null ? null : (Date.now() - seen) / 1e3;
+  const stale = lastRefreshFailed || !lastFetchAt || active.length > 0 && (age === null || age > 50);
+  $("connection").classList.toggle("stale", stale);
+  $("connection").lastElementChild.textContent = lastRefreshFailed ? "更新连接中断" : stale ? "状态更新延迟" : progressUnavailable ? "产物视图 · 过程未连接" : "状态已连接";
+  $("updated").textContent = seen === null ? "暂无更新时间" : `最近观测 ${formatTime(new Date(seen).toISOString())}`;
+}
+function drawSummary() {
+  if (!data)
+    return;
+  const rows = data.cases.map((c) => caseStatus(c));
+  const values = [[data.cases.length, "本轮任务", ""], [rows.filter((s) => ["running", "starting"].includes(s)).length, "运行中", "running"], [rows.filter((s) => ["queued", "submitted", "unknown"].includes(s)).length, "排队 / 待确认", ""], [rows.filter((s) => s === "verifying").length, "待评审", ""], [data.cases.filter(isPlayable).length, "可试玩", "ready"], [rows.filter((s) => ["failed", "issues"].includes(s)).length, "异常 / 有问题", "failed"]];
+  $("run-stats").replaceChildren(...values.map(([n, label, kind]) => {
+    const card = el("div", void 0, `stat ${kind}`);
+    card.append(el("strong", n), el("span", label));
+    return card;
+  }));
+  $("evaluation-title").textContent = data.title || "云端生成评测";
+  $("evaluation-description").textContent = data.description || "查看场景的生成过程、交付物与试玩结果。";
+  $("run-meta").replaceChildren(...[progress?.model || "GPT-6", progress?.reasoningEffort || progress?.effort || "xhigh", data.suite === "sdk-only" ? "Three SDK" : "参考图生成", `${data.cases.length} 个 case`, data.id].map((t) => el("span", t, "meta-chip")));
+  $("run-history").replaceChildren(...(data.historyRuns || []).map((run) => {
+    const a = el("a", `↗ ${run.label}`);
+    a.href = sourceUrl(run.href);
+    return a;
+  }));
+  $("footer-run").textContent = data.id;
+  $("task-count").textContent = `${data.cases.length} 个`;
+  setConnection();
+}
+function drawCards() {
+  if (!data)
+    return;
+  const query = $("search").value.trim().toLowerCase(), filter = $("status-filter").value;
+  const cases = data.cases.filter((c) => {
+    const s = caseStatus(c);
+    return (!query || `${c.id} ${c.title}`.toLowerCase().includes(query)) && (filter === "all" || filter === "active" && ["running", "queued", "starting", "submitted", "unknown"].includes(s) || filter === "playable" && isPlayable(c) || filter === "failed" && ["failed", "issues"].includes(s));
+  });
+  $("empty-list").hidden = cases.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const c of cases) {
+    const p = currentProgress(c.id), s = caseStatus(c), tr = el("tr");
+    tr.dataset.caseId = c.id;
+    tr.setAttribute("aria-selected", String(c.id === selectedId));
+    tr.tabIndex = 0;
+    const name = el("td"), cell = el("div", void 0, "case-cell"), copy = el("div", void 0, "case-copy");
+    copy.append(el("strong", c.title), el("small", c.baseCaseId || c.id));
+    cell.append(picture(c.reference, c.title), copy);
+    name.append(cell);
+    const state = el("td");
+    state.append(badge(s));
+    const current = el("td");
+    current.append(el("span", activity(p, c), "activity-title"), el("span", operationDetail(p), "activity-detail"));
+    const timing = el("td", duration(elapsed(p)), "duration"), attempt = el("td", `${attemptCount(p)} 次`), artifacts = el("td");
+    artifacts.append(el("span", isPlayable(c) ? "试玩 / 录像 / 三视图" : s === "verifying" ? "已交付 · 待评审" : "等待交付", `artifact-count ${isPlayable(c) ? "available" : ""}`));
+    tr.append(name, state, current, timing, attempt, artifacts);
+    tr.onclick = () => select(c.id, true);
+    tr.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        select(c.id, true);
+      }
+    };
+    frag.append(tr);
+  }
+  $("cases").replaceChildren(frag);
+  drawSummary();
+}
+function sourceFailure(p) {
+  const f = p?.failure;
+  if (!f)
+    return null;
+  return typeof f === "string" ? f : f.message || f.code || "任务执行失败，请查看运行尝试。";
+}
+function renderEvents(p) {
+  const list = el("ol", void 0, "event-stream");
+  const events = p?.events || [];
+  for (const e of events.slice(-100)) {
+    const li = el("li", void 0, e.status === "failed" ? "failed" : "");
+    li.dataset.eventId = e.id || `${e.at}|${e.label}`;
+    li.append(el("time", e.at ? formatTime(e.at) : "已观测"), el("i"));
+    const copy = el("div");
+    copy.append(el("b", e.label || stages[e.stage] || "状态更新"));
+    if (e.status) {
+      const passed = e.resultStatus === "passed" && e.stage !== "playtest";
+      copy.append(badge(e.status === "succeeded" ? "ready" : e.status, passed ? "检查通过" : toolStatusLabels[e.status] || "已记录"));
+    }
+    if (e.progress && finite(e.progress.elapsedSeconds)) {
+      copy.append(el("p", `最近采样：${e.progress.elapsedSeconds.toFixed(1)} / ${e.progress.requestedSeconds ?? "—"} 秒${finite(e.progress.stepIndex) ? ` · 第 ${e.progress.stepIndex + 1} 步` : ""}`));
+    }
+    if (e.detail)
+      copy.append(el("p", typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail)));
+    li.append(copy);
+    list.append(li);
+  }
+  const box = $("events"), scroll = box.scrollTop;
+  if (!events.length)
+    box.replaceChildren(el("p", p ? "尚无可公开的工具事件。已确认的启动信息会显示在左侧。" : "等待任务状态连接。", "empty"));
+  else
+    box.replaceChildren(list);
+  box.scrollTop = $("follow-events").checked ? box.scrollHeight : scroll;
+}
+function renderTrajectory(p, c) {
+  const list = el("ol", void 0, "trajectory");
+  const seen = new Set((p?.events || []).map((e) => e.stage).filter(Boolean));
+  for (const a of p?.attempts || [])
+    for (const e of a.events || [])
+      if (e.stage)
+        seen.add(e.stage);
+  const counts = p?.toolSummary?.counts || p?.toolSummary?.completedMcpCalls || {};
+  for (const [name, count] of Object.entries(counts)) {
+    if (count > 0) {
+      const stage = name.includes("playtest") ? "playtest" : name.includes("capture") ? "capture" : name.includes("submit") ? "packaging" : /preview|inspect|command/.test(name) ? "preview" : /validate|schema|examples|assets/.test(name) ? "authoring" : null;
+      if (stage)
+        seen.add(stage);
+    }
+  }
+  if (p?.startedAt)
+    seen.add("starting");
+  if (["delivered", "verifying"].includes(caseStatus(c, p)) || isPlayable(c))
+    seen.add("delivered");
+  const selected = p?.stage;
+  for (const [index, id] of phaseOrder.entries()) {
+    let status = selected === id && caseStatus(c, p) === "running" ? "active" : seen.has(id) ? "complete" : "pending";
+    if (caseStatus(c, p) === "failed" && id === (p?.lastStage || selected))
+      status = "failed";
+    const li = el("li");
+    li.dataset.status = status;
+    const marker = el("div", status === "complete" ? "✓" : String(index + 1).padStart(2, "0"), "trajectory-marker"), copy = el("div", void 0, "trajectory-copy");
+    copy.append(el("strong", stages[id]), el("small", id === "delivered" ? isPlayable(c) ? "内容评审已记录" : "生成与技术交付，随后独立评审" : status === "active" ? "当前可观察活动" : status === "complete" ? "已有实际执行记录" : "尚无执行记录"));
+    li.append(marker, copy, el("span", { active: "进行中", complete: "已记录", pending: "待执行", failed: "失败" }[status], "stage-state"));
+    list.append(li);
+  }
+  $("trajectory").replaceChildren(list);
+}
+function renderAttempts(p) {
+  const items = p?.attempts?.length ? p.attempts : [p].filter(Boolean);
+  if (!items.length) {
+    $("attempts").replaceChildren(el("p", "任务信息尚未连接。", "empty"));
+    return;
+  }
+  $("attempts").replaceChildren(...items.map((a, i) => {
+    const row = el("div", void 0, "attempt-row");
+    const label = el("b", `尝试 ${i + 1}`), copy = el("div");
+    copy.append(el("span", a.failure?.message || a.stageLabel || stages[a.stage] || labels[a.phase] || "已提交"), el("small", a.jobId || "等待云端任务 ID", "mono"));
+    const state = el("span");
+    state.append(badge(a.phase || "unknown"));
+    const time = el("span", duration(elapsed(a)), "duration");
+    row.append(label, copy, state, time);
+    return row;
+  }));
+}
+function renderProcess() {
+  if (!data || !selectedId)
+    return;
+  const c = data.cases.find((x) => x.id === selectedId);
+  if (!c)
+    return;
+  const p = currentProgress(c.id), s = caseStatus(c, p);
+  $("case-status").replaceWith(Object.assign(badge(s), { id: "case-status" }));
+  $("case-note").textContent = isPlayable(c) ? c.note || "" : p?.phase === "failed" ? "任务已结束，原始错误与每次尝试均保留在下方。" : p?.phase === "delivered" ? "云端已交付，等待独立审阅原始结果。" : p?.phase === "running" ? "Agent 正在自主完成场景与工具检查，以下过程来自实际运行事件。" : c.note || "";
+  const message = sourceFailure(p);
+  $("failure-banner").hidden = !message;
+  if (message) {
+    $("failure-banner").replaceChildren(el("strong", p.failure?.category === "model-capacity" ? "模型服务容量不足" : "本次运行出现异常"), el("span", message));
+  }
+  metrics($("process-metrics"), [[duration(elapsed(p)), "总耗时"], [duration(p?.queueSeconds), "启动等待"], [duration(activeElapsed(p)), "Agent 执行"], [`${attemptCount(p)} 次`, "累计尝试"], [p?.lastObservedAt ? formatTime(p.lastObservedAt) : "—", "最近观测"]]);
+  renderTrajectory(p, c);
+  renderEvents(p);
+  renderAttempts(p);
+  $("technical").textContent = JSON.stringify({ caseId: c.baseCaseId || c.id, taskId: c.id, jobId: p?.jobId || null, sourceHash: c.sourceHash || null, worldBuildHash: c.worldBuildHash || null, providerStatus: p?.providerStatus || null, itemStatus: p?.itemStatus || null, stateSource: p?.stateSource || p?.source || null, failureFacts: p?.failureFacts || [], observedAt: p?.lastObservedAt || null, note: "过程只展示可观察事件；模型推理、源码、完整命令和凭证不公开。" }, null, 2);
+}
+function renderDeliverables(c) {
+  const p = currentProgress(c.id), playable = isPlayable(c);
+  const rows = [["reference", "用户参考图", true, c.reference, "原始上传图片"], ["opening", "白模首帧", Boolean(c.opening), c.opening, "同一个可玩世界的首帧"], ["playable", "可玩世界", playable, c.playable, "保留 Agent 原始交付"], ["video", "真实试玩录像", Boolean(c.video), c.video, "实际按键操作与浏览器录制"], ["views", "完整对象三视图", Boolean(c.triviews?.length), null, `${c.triviews?.length || 0} 组完整对象`]];
+  $("deliverables").replaceChildren(...rows.map(([id, title, ready, url, detail]) => {
+    const row = el("div", void 0, `deliverable-row ${ready ? "" : "pending"}`);
+    row.append(el("span", ready ? "✓" : "○", "deliverable-icon"));
+    const copy = el("div");
+    copy.append(el("span", title), el("small", detail));
+    row.append(copy);
+    if (url) {
+      const link = el("a", "打开 ↗");
+      link.href = sourceUrl(url);
+      link.target = "_blank";
+      link.rel = "noopener";
+      row.append(link);
+    } else
+      row.append(el("span", ready ? "已交付" : p?.phase === "failed" ? "未交付" : "等待交付", "muted"));
+    return row;
+  }));
+}
+function frameController(frame) {
+  const w = frame?.contentWindow;
+  if (!w)
+    return null;
+  if (w.__THREE_CREATOR_HOST__)
+    return { start: () => w.__THREE_CREATOR_HOST__.start(), stop: () => w.__THREE_CREATOR_HOST__.stop(), running: () => w.__THREE_CREATOR_HOST__.read()?.isRunning };
+  const a = w.__WORLDKIT_EVAL__ || w.__WORLDKIT_CREATOR__;
+  return a ? { start: () => a.startLive?.(), stop: () => a.stopLive?.(), running: () => a.snapshot?.()?.isRunning } : null;
+}
+function pausePlayer() {
+  const frame = $("player").querySelector("iframe");
+  if (!frame)
+    return;
+  try {
+    const api = frameController(frame);
+    resumePlayerOnReturn = api?.running() !== false;
+    void Promise.resolve(api?.stop()).catch(() => {
+    });
+  } catch {
+  }
+}
+function mountArtifacts(c) {
+  const next = [c.id, c.sourceHash, c.playable, c.opening, c.video, JSON.stringify(c.triviews)].join("|");
+  renderDeliverables(c);
+  if (next === artifactKey)
+    return;
+  artifactKey = next;
+  pausePlayer();
+  resumePlayerOnReturn = false;
+  $("player").replaceChildren();
+  $("video").pause();
+  $("video").removeAttribute("src");
+  $("video").load();
+  $("reference").src = sourceUrl(c.reference);
+  $("reference-link").href = sourceUrl(c.reference);
+  $("prompt").textContent = c.prompt || "";
+  $("opening-state").textContent = c.opening ? "实际交付版本" : "尚未交付";
+  $("opening-container").replaceChildren(c.opening ? picture(c.opening, c.title + "白模首帧") : el("span", "交付后在此对照首帧"));
+  const playable = isPlayable(c);
+  $("ready-content").hidden = !playable;
+  $("play-pending").hidden = playable;
+  $("open-play").hidden = !playable;
+  $("media-content").hidden = !c.video && !c.triviews?.length;
+  $("triviews").replaceChildren(...(c.triviews || []).map((v) => {
+    const f = el("figure");
+    f.append(el("figcaption", v.name), picture(v.image, v.name + "三视图"));
+    return f;
+  }));
+  if (c.video) {
+    $("video").src = sourceUrl(c.video);
+    if (c.opening)
+      $("video").poster = sourceUrl(c.opening);
+    $("video-note").textContent = `录像按 ${c.metrics?.captureFps ?? "未知"} fps 采样，用于检查游玩过程；这不是实际游戏渲染帧率。`;
+  }
+  if (playable) {
+    const url = new URL(sourceUrl(c.playable));
+    url.searchParams.set("play", "1");
+    $("open-play").href = url.href;
+    if (c.opening)
+      $("player").append(picture(c.opening, "", "play-cover"));
+    const launch = el("button", "加载场景 · 开始试玩");
+    launch.type = "button";
+    launch.onclick = () => {
+      const frame = el("iframe");
+      frame.title = c.title + "交互白模";
+      frame.allow = "fullscreen";
+      frame.src = url.href;
+      $("player").replaceChildren(frame);
+      frame.onload = () => {
+        frame.focus();
+        if (activeTab !== "play")
+          pausePlayer();
+      };
+    };
+    $("player").append(launch);
+    const m = c.metrics || {};
+    metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.simulationSeconds) ? `${m.simulationSeconds} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
+    $("play-controls").textContent = c.profile === "three-sdk" ? "WASD 移动 · 方向键 / 拖动转镜头 · Shift 跑步 · Space 跳跃 · 滚轮缩放 · R 重置。点击场景后操作。" : "WASD 移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体操作以场景说明为准。";
+  }
+}
+function select(id, reveal = false) {
+  if (!data?.cases.length)
+    return;
+  const c = data.cases.find((c2) => c2.id === id) || data.cases[0];
+  const changed = selectedId !== c.id;
+  selectedId = c.id;
+  history.replaceState(null, "", "#" + encodeURIComponent(c.id));
+  $("detail").hidden = false;
+  $("case-title").textContent = c.title;
+  $("case-id").textContent = c.id;
+  $("case-tags").textContent = (c.tags || []).join(" · ");
+  if (changed) {
+    for (const name of ["fidelity", "playability", "bugs", "notes"])
+      $("review").elements[name].value = reviews[c.id]?.[name] || "";
+    $("save-status").textContent = reviews[c.id] ? "已恢复此浏览器中的记录" : "仅保存在当前浏览器";
+    $("events").scrollTop = 0;
+  }
+  mountArtifacts(c);
+  drawCards();
+  renderProcess();
+  switchTab(activeTab);
+  if (reveal)
+    $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function switchTab(tab) {
+  if (!["process", "outputs", "play", "review"].includes(tab))
+    return;
+  const previous = activeTab;
+  activeTab = tab;
+  for (const name of ["process", "outputs", "play", "review"]) {
+    $("tab-" + name).hidden = name !== tab;
+    document.querySelector(`[data-tab="${name}"]`).setAttribute("aria-selected", String(name === tab));
+  }
+  if (tab !== "outputs")
+    $("video").pause();
+  if (previous === "play" && tab !== "play")
+    pausePlayer();
+  if (tab === "play" && previous !== "play" && resumePlayerOnReturn) {
+    try {
+      void Promise.resolve(frameController($("player").querySelector("iframe"))?.start()).catch(() => {
+      });
+    } catch {
+    }
+    resumePlayerOnReturn = false;
+  }
+}
+for (const b of document.querySelectorAll("[data-tab]"))
+  b.onclick = () => switchTab(b.dataset.tab);
+$("search").oninput = drawCards;
+$("status-filter").onchange = drawCards;
+$("follow-events").onchange = () => {
+  if ($("follow-events").checked)
+    $("events").scrollTop = $("events").scrollHeight;
+};
+$("review").oninput = () => {
+  const c = data?.cases.find((c2) => c2.id === selectedId);
+  if (!c)
+    return;
+  reviews[selectedId] = { caseId: selectedId, title: c.title, sourceHash: c.sourceHash || null, updatedAt: (/* @__PURE__ */ new Date()).toISOString(), ...Object.fromEntries(new FormData($("review"))) };
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(reviews));
+    $("save-status").textContent = "已自动保存到此浏览器";
+  } catch {
+    $("save-status").textContent = "浏览器无法保存，请导出记录";
+  }
+};
+$("export").onclick = () => {
+  if (!data)
+    return;
+  const a = el("a"), url = URL.createObjectURL(new Blob([JSON.stringify({ schemaVersion: 1, evaluationId: data.id, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), reviews: Object.values(reviews) }, null, 2)], { type: "application/json" }));
+  a.href = url;
+  a.download = "worldkit-evaluation-reviews.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1e3);
+};
+async function readJson(name) {
+  const response = await fetch(name, { cache: "no-store", signal: AbortSignal.timeout(8e3) });
+  if (!response.ok)
+    throw new Error(String(response.status));
+  return response.json();
+}
+async function refresh() {
+  if (pendingRefresh)
+    return;
+  pendingRefresh = true;
+  $("refresh").disabled = true;
+  try {
+    const [results, live] = await Promise.allSettled([readJson("./results.json"), readJson("./progress.json")]);
+    if (results.status === "rejected")
+      throw results.reason;
+    const next = results.value;
+    if (!Array.isArray(next.cases) || !next.cases.length)
+      throw new Error("Empty evaluation");
+    if (data && data.id !== next.id) {
+      selectedId = null;
+      artifactKey = "";
+    }
+    const newStorage = next.reviewStorageKey || `worldkit-review-${next.id}`;
+    if (storageKey !== newStorage) {
+      storageKey = newStorage;
+      loadReviews();
+    }
+    data = next;
+    if (live.status === "fulfilled" && live.value.kind === "three-creator-run-progress" && live.value.runId === data.id) {
+      progress = live.value;
+      progressUnavailable = false;
+    } else {
+      progressUnavailable = true;
+      if (progress?.runId !== data.id)
+        progress = null;
+    }
+    lastFetchAt = Date.now();
+    lastRefreshFailed = false;
+    $("load-error").hidden = true;
+    const selected = data.cases.find((c) => c.id === selectedId);
+    if (!selected) {
+      let hash = "";
+      try {
+        hash = decodeURIComponent(location.hash.slice(1));
+      } catch {
+      }
+      select(hash);
+    } else {
+      $("case-title").textContent = selected.title;
+      $("case-id").textContent = selected.id;
+      $("case-tags").textContent = (selected.tags || []).join(" · ");
+      mountArtifacts(selected);
+      drawCards();
+      renderProcess();
+    }
+  } catch {
+    lastRefreshFailed = true;
+    $("load-error").textContent = "状态更新暂时不可用，正在重试。已打开的场景和评测输入会保留。";
+    $("load-error").hidden = false;
+    $("connection").classList.add("stale");
+    $("connection").lastElementChild.textContent = "更新连接中断";
+  } finally {
+    pendingRefresh = false;
+    $("refresh").disabled = false;
+  }
+}
+$("refresh").onclick = refresh;
+await refresh();
+setInterval(refresh, 1e4);
+setInterval(() => {
+  if (data) {
+    setConnection();
+    const c = data.cases.find((x) => x.id === selectedId), p = c && currentProgress(c.id);
+    if (p)
+      metrics($("process-metrics"), [[duration(elapsed(p)), "总耗时"], [duration(p.queueSeconds), "启动等待"], [duration(activeElapsed(p)), "Agent 执行"], [`${attemptCount(p)} 次`, "累计尝试"], [p.lastObservedAt ? formatTime(p.lastObservedAt) : "—", "最近观测"]]);
+  }
+}, 1e3);

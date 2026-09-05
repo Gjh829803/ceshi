@@ -373,6 +373,15 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
               'title': ('LOCAL FIXTURE · ' if local_fixture else '') + title, 'description': description, 'reviewStorageKey': storage_key,
               'evidenceScope': 'local-fixture' if local_fixture else EVIDENCE_SCOPES[suite],
               'updatedAt': datetime.now(timezone.utc).isoformat(), 'cases': []}
+    history = publication.get('historyRuns', [])
+    require(isinstance(history, list) and len(history) <= 20, 'Invalid run history')
+    result['historyRuns'] = []
+    for previous in history:
+        require(isinstance(previous, dict), 'Invalid history run')
+        previous_id = checked_id(previous.get('id'), 'history run')
+        label = previous.get('label', previous_id)
+        require(isinstance(label, str) and 0 < len(label) <= 200, 'Invalid history label')
+        result['historyRuns'].append({'id': previous_id, 'label': label, 'href': '/creator-evals/three/runs/' + previous_id + '/'})
     files = {}
     def add_file(relative, source, expected_hash):
         relative_name(relative)
@@ -408,7 +417,9 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         add_file(reference_relative, reference, reference_hash)
         note = entry.get('note', '已列入本轮 SDK 独立评测；生成和独立验证完成后开放试玩。' if sdk_only else '已列入本轮对照评测；生成和独立验证完成后开放试玩。')
         require(isinstance(note, str) and len(note) <= 10000 and isinstance(case.get('title'), str) and isinstance(case.get('selectionTags'), list), 'Invalid case presentation text')
-        row = {'id': task_id, 'baseCaseId': task['caseId'], 'profile': task['profile'], 'title': case['title'] + (' · 原生 Three' if task['profile'] == 'three-raw' else ' · Three＋SDK'),
+        display_title = entry.get('displayTitle', case['title'] + (' · 原生 Three' if task['profile'] == 'three-raw' else ' · Three＋SDK'))
+        require(isinstance(display_title, str) and 0 < len(display_title) <= 240, 'Invalid public display title')
+        row = {'id': task_id, 'baseCaseId': task['caseId'], 'profile': task['profile'], 'title': display_title,
                'status': status, 'tags': case['selectionTags'] + [task['profile']], 'reference': reference_relative, 'referenceImageSha256': reference_hash, 'prompt': prompt, 'note': note}
         if status in ('ready', 'issues'):
             add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only)

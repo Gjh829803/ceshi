@@ -35,12 +35,23 @@ Feedback is saved per evaluation in browser localStorage and can be exported as
 JSON. Videos and full-object views are lazy-loaded. Technical IDs remain in an
 expandable section, separate from the main task status.
 
+Publication may provide a Host-only `displayTitle` for a case and `historyRuns`
+for links to previous rounds. Neither field enters the model's input. The route
+counter is labeled as the author's route goals; it is not an independent finding
+that every destination is reachable. Tool completion and test acceptance retain
+separate labels, including short tests and recordings below the required duration.
+
 ## Publication
 
 Stage a new gallery directory with the existing Three stager. Publish through
 `publish-creator-evaluation-site.py --source SITE --pod RAY_HEAD --gallery three`.
 The gateway and other galleries remain unchanged. All files are atomically replaced,
 with the manifest installed last.
+
+To preserve a completed round, publish its staged directory with `--archive-run`.
+It is mounted under `/creator-evals/three/runs/<runId>/`; an existing archive is
+read-only. Identical files may be verified again, while a changed manifest, file,
+or file inventory is rejected. The current run can then be published normally.
 
 While a run is active, generate a fresh safe `progress.json` into SITE and call:
 
