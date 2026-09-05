@@ -1570,8 +1570,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   非对称无组方块测试按 exactOptionalPropertyTypes 修正后定向 1/1、typecheck exit 0。
   Native checker 临时重建后仅 Native 副本改变，Planner/Canonical 字节不变；
   受影响 Skill 定向 6/6 通过（其余 53 项未重复），live/frozen checker 字节比较通过。
-  当前仅是 scoped Request/admission 修复，实际 Browser 取景验证待冻结提交后执行，
-  未跑新模型 Case、全仓 gates 或独立最终审查。CF-14 visible pixels、CF-21 全要素覆盖仍 open。
+  冻结 `51f10039160d1767b4fd8fab67b8582c2a67ad85` 后
+  `pnpm verify:native-no-script-capture --without-semantic-targets` exit 0；
+  真实 Check/Ground/Package、Babylon/Havok Capture 与 Browser/Vite cleanup 全部完成，
+  四图均 1280×720，无模型调用。Package root
+  `sha256:58b5badc090b42199e8c2507ed42a1dd27761ba72a3b034d3c0cf94358dcde2f`。
+  实际 side/top Request 范围为 [-4.5,-2.5,0.5]..[4.5,1.5,18.5]，
+  target=[0,-0.5,9.5]，不再取容器 Y=-66..16 的中点 -25。
+  已打开实际 side/top 图确认地面与人物恢复可读、远端无组方块进入俯视。
+  与 R6 `b315ae24` 同一夹具对比，opening PNG 和 collider-overlay PNG 的 SHA256
+  完全一致；仅 side/top 取景变化。Evaluation 状态也一致：opening/spawn/deterministic
+  passed，语义/拓扑/遍历 incomplete，夹具 collider failed；没有增加普通生产否决。
+  证据目录
+  `/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-J9m8xU/`。
+  本批 scoped D2-D6 复核覆盖 Request→Package join→actual render，删除重复范围推导，
+  Runtime 动作/输入/物理状态未改；不是独立最终审查。CF-14/24/R1 取景修复已闭环，
+  未跑新模型 Case或全仓 gates；CF-14 visible pixels、CF-21 全要素覆盖仍 open。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
