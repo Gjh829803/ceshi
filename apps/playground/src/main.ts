@@ -19,6 +19,7 @@ import { CAMERA_TUNING_SAFETY_LIMITS_V1 } from "@whitebox-world/runtime-contract
 import { isNil } from "lodash-es";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
+import { installFeatureListWindow } from "./feature-list-window.js";
 import {
   installRecordingWorkbench,
   recordingWorkbenchSceneId,
@@ -2612,8 +2613,10 @@ function setupArtifactPlayground(
 ): () => void {
   const abortController = new AbortController();
   let captureTimer: number | undefined;
+  let featureListWindow: ReturnType<typeof installFeatureListWindow> | undefined;
   const rollback = (): void => {
     abortController.abort();
+    featureListWindow?.dispose();
     if (!isNil(captureTimer)) window.clearTimeout(captureTimer);
     delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     delete document.documentElement.dataset.artifactCapture;
@@ -2635,21 +2638,7 @@ function setupArtifactPlayground(
       );
     const renderFeatureList = (features: readonly FeatureInspection[]): void => {
       requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
-      featureList.replaceChildren(...features.map((feature) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
-        button.dataset.featureId = feature.id;
-        button.innerHTML = `
-          <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
-          <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
-          <em>${feature.status}</em>
-        `;
-        button.addEventListener("click", () => selectFeature(feature.id), {
-          signal: abortController.signal,
-        });
-        return button;
-      }));
+      featureListWindow!.update(features, selectedFeatureId);
     };
     const selectFeature = (featureId: string): void => {
       selectedFeatureId = featureId;
@@ -2683,6 +2672,8 @@ function setupArtifactPlayground(
         <div class="diagnostic-section"><h4>Diagnostics</h4>${diagnostics}</div>
       `;
     };
+
+    featureListWindow = installFeatureListWindow({ root: featureList, onSelect: selectFeature });
 
     const automationApi: PlaygroundArtifactAutomationApiV1 = Object.freeze({
       version: 1,
@@ -3069,6 +3060,7 @@ async function resetPlaygroundWorld(): Promise<void> {
 }
 
 let selectedFeatureId: string | null = null;
+const featureListWindow = installFeatureListWindow({ root: featureList, onSelect: selectFeature });
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -3080,21 +3072,7 @@ function resourceTotal(feature: FeatureInspection): number {
 
 function renderFeatureList(features: readonly FeatureInspection[]): void {
   requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
-  featureList.replaceChildren(
-    ...features.map((feature) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
-      button.dataset.featureId = feature.id;
-      button.innerHTML = `
-        <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
-        <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
-        <em>${feature.status}</em>
-      `;
-      button.addEventListener("click", () => selectFeature(feature.id));
-      return button;
-    }),
-  );
+  featureListWindow.update(features, selectedFeatureId);
 }
 
 function selectFeature(featureId: string): void {
@@ -3485,6 +3463,7 @@ installPageExitDisposal({
   dispose: async () => {
     if (recordingTimer !== null) window.clearInterval(recordingTimer);
     if (viewportFeedbackTimer !== undefined) window.clearTimeout(viewportFeedbackTimer);
+    featureListWindow.dispose();
     canvasRecorder.dispose();
     recordingWorkbench?.dispose();
     if (disposeBrowserRuntime === undefined) adapter.dispose();

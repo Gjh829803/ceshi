@@ -867,8 +867,24 @@ kbd,
 }
 
 .feature-list {
-  display: grid;
-  gap: 5px;
+  overflow-y: auto;
+  max-height: 40vh;
+  overflow-anchor: none;
+}
+
+.feature-list:focus-visible {
+  outline: 1px solid #68cf94;
+  outline-offset: 2px;
+}
+
+.feature-list-window {
+  position: relative;
+}
+
+.feature-list-window > .feature-item {
+  position: absolute;
+  left: 0;
+  box-sizing: border-box;
 }
 
 .feature-item {
