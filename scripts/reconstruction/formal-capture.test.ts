@@ -541,6 +541,7 @@ describe("formal Capture artifact publication", () => {
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
         semanticViewObservationSetJson: new TextEncoder().encode("{}"),
@@ -573,12 +574,15 @@ describe("formal Capture artifact publication", () => {
       "collider-overlay-observation.json",
       "collider-overlay.png",
       "opening-composition-gate-result.json",
+      "opening-identity-mask.png",
       "opening-observation.json",
       "opening.png",
       "scripted-traversal.json",
       "semantic-view-observation-set.json",
       "spawn-support-observation.json",
+      "world-side-identity-mask.png",
       "world-side.png",
+      "world-top-down-identity-mask.png",
       "world-top-down.png",
     ]);
     await expect(readFile(path.join(
@@ -612,6 +616,7 @@ describe("formal Capture artifact publication", () => {
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
         semanticViewObservationSetJson: new TextEncoder().encode("{}"),
@@ -645,7 +650,7 @@ describe("formal Capture artifact publication", () => {
     )).toEqual([]);
   });
 
-  it("publishes all ten artifacts with the receipt written last", async () => {
+  it("publishes all thirteen artifacts with the receipt written last", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
     temporaryRoots.push(root);
     const outputDirectoryPath = path.join(root, "capture");
@@ -656,6 +661,7 @@ describe("formal Capture artifact publication", () => {
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
         semanticViewObservationSetJson: new TextEncoder().encode("{}"),
@@ -680,12 +686,15 @@ describe("formal Capture artifact publication", () => {
       "collider-overlay-observation.json",
       "collider-overlay.png",
       "formal-world-capture-receipt.json",
+      "opening-identity-mask.png",
       "opening-observation.json",
       "opening.png",
       "scripted-traversal.json",
       "semantic-view-observation-set.json",
       "spawn-support-observation.json",
+      "world-side-identity-mask.png",
       "world-side.png",
+      "world-top-down-identity-mask.png",
       "world-top-down.png",
     ]);
     expect(await readFile(path.join(
@@ -704,6 +713,7 @@ describe("formal Capture artifact publication", () => {
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
         semanticViewObservationSetJson: new TextEncoder().encode("{}"),
@@ -739,6 +749,7 @@ describe("formal Capture artifact publication", () => {
         openingPng: new Uint8Array([...PNG, 0]),
         worldSidePng: PNG,
         worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
         semanticViewObservationSetJson: new TextEncoder().encode("{}"),

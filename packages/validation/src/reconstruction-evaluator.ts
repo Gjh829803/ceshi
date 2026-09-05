@@ -529,8 +529,8 @@ function evaluateSemanticSilhouette(
         continue;
       }
       if (requirement.mode !== "reference-projection-required") continue;
-      const projection = observedTarget.structuralProjection;
-      if (projection.outcome !== "projected") {
+      const projection = observedTarget.visiblePixelProjection;
+      if (projection.outcome !== "visible") {
         hasRequiredProjectionMissing = true;
         diagnostics.push({
           code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
@@ -538,14 +538,14 @@ function evaluateSemanticSilhouette(
           targetRef: expected.acceptanceTargetRef,
           targetId: expected.visualGroupId,
           metricId: `${requirement.viewId}-reference-projection`,
-          details: stateMismatchDetails("projected", projection.outcome),
+          details: stateMismatchDetails("visible", projection.outcome),
           evidenceRefs: row.evidenceRefs,
-          message: `Visual group ${expected.visualGroupId} has no structural projection in required view ${requirement.viewId}.`,
+          message: `Visual group ${expected.visualGroupId} has no admitted identity pixels in required view ${requirement.viewId}; check presence, framing and occlusion.`,
           repairAction: sourceRepairAction(
             "visual-group",
             expected.visualGroupId,
-            "move",
-            `Move visual group ${expected.visualGroupId} into the ${requirement.viewId} reference projection without editing the Case or thresholds.`,
+            "adjust-geometry",
+            `Inspect ${requirement.viewId} identity pixels and display capture for presence, framing and occlusion before changing ${expected.visualGroupId}; no pixels alone do not prove missing geometry. Preserve intended holes and do not edit the Case or thresholds.`,
           ),
         });
         continue;
@@ -583,7 +583,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. Visible bounds can change through occlusion or clipping without a size change; preserve correct holes and geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       const centerMetrics = [
@@ -603,7 +603,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "move", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. A visible center can shift through occlusion or clipping without target movement; preserve correct geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {
@@ -618,7 +618,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} coverage is ${projection.coverageBasisPoints} basis points; target ${requirement.coverageBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Enlarge" : "Shrink"} visual group ${expected.visualGroupId} toward ${requirement.coverageBasisPoints} coverage basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference before revising ${expected.visualGroupId}. Coverage alone does not distinguish size, intended holes, separated instances or occlusion; preserve correct openings and geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
     }

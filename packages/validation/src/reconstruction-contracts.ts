@@ -178,10 +178,10 @@ export type WorldReconstructionViewRequirementV1 =
       coverageBasisPoints: number;
     }>;
 
-export type WorldReconstructionStructuralProjectionV1 =
-  | Readonly<{ outcome: "outside-viewport" | "outside-depth-range" }>
+export type WorldReconstructionVisiblePixelProjectionV1 =
+  | Readonly<{ outcome: "not-visible" }>
   | Readonly<{
-      outcome: "projected";
+      outcome: "visible";
       normalizedBounds: WorldReconstructionNormalizedBoundsV1;
       normalizedCenter: WorldReconstructionNormalizedCenterV1;
       coverageBasisPoints: number;
@@ -270,7 +270,7 @@ export type WorldReconstructionObservedDimensionV1 =
         targets: readonly Readonly<{
           acceptanceTargetRef: string;
           visualGroupId: string;
-          structuralProjection: WorldReconstructionStructuralProjectionV1;
+          visiblePixelProjection: WorldReconstructionVisiblePixelProjectionV1;
         }>[];
       }>[];
     }>
@@ -520,6 +520,7 @@ export interface WorldReconstructionRepairActionV1 {
     | "bind"
     | "move"
     | "resize"
+    | "adjust-geometry"
     | "reorder"
     | "adjust-support"
     | "set-traversal-binding"
@@ -677,10 +678,7 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
         targetKind: "visual-group",
         operation: metricId.endsWith("semantic-target-binding")
           ? "bind"
-          : metricId.endsWith("reference-projection") ||
-              metricId.includes("semantic-center-")
-          ? "move"
-          : "resize",
+          : "adjust-geometry",
       },
     ] as const),
   ),
@@ -1341,19 +1339,19 @@ function parseViewRequirements(
   }));
 }
 
-function parseStructuralProjection(
+function parseVisiblePixelProjection(
   value: unknown,
   contract: string,
   path: string,
-): WorldReconstructionStructuralProjectionV1 {
+): WorldReconstructionVisiblePixelProjectionV1 {
   const source = object(value, contract, path);
   const outcome = enumValue(
     source.outcome,
-    ["projected", "outside-viewport", "outside-depth-range"] as const,
+    ["visible", "not-visible"] as const,
     contract,
     `${path}/outcome`,
   );
-  if (outcome !== "projected") {
+  if (outcome !== "visible") {
     exactFields(source, ["outcome"], contract, path);
     return Object.freeze({ outcome });
   }
@@ -1672,7 +1670,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
           exactFields(row, [
             "acceptanceTargetRef",
             "visualGroupId",
-            "structuralProjection",
+            "visiblePixelProjection",
           ], contract, itemPath);
           return Object.freeze({
             acceptanceTargetRef: text(
@@ -1685,10 +1683,10 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
               contract,
               `${itemPath}/visualGroupId`,
             ),
-            structuralProjection: parseStructuralProjection(
-              row.structuralProjection,
+            visiblePixelProjection: parseVisiblePixelProjection(
+              row.visiblePixelProjection,
               contract,
-              `${itemPath}/structuralProjection`,
+              `${itemPath}/visiblePixelProjection`,
             ),
           });
         });
@@ -2442,6 +2440,7 @@ function parseWorldReconstructionRepairActionV1(
       "bind",
       "move",
       "resize",
+      "adjust-geometry",
       "reorder",
       "adjust-support",
       "set-traversal-binding",

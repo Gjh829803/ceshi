@@ -259,40 +259,45 @@ function search(
     }
   };
 
-  const visit = (index: number, assignment: Record<string, LayoutCandidateV1>): void => {
-    if (budgetExceeded || (stopAtFirst && bestAssignment !== undefined)) return;
-    if (index === variables.length) {
-      const evaluations = constraints.map((constraint) =>
-        evaluatePlacementConstraintV1(context, constraint, assignment)
-      );
-      compareAndStore(assignment, evaluations);
-      return;
-    }
-    const variable = variables[index]!;
-    for (const candidate of domains.get(variable.id) ?? []) {
-      searchNodeCount += 1;
-      if (searchNodeCount > profile.budgets.maximumSearchNodes) {
-        budgetExceeded = true;
-        return;
-      }
-      assignment[variable.id] = candidate;
-      const readyRequired = constraints.filter((constraint) =>
-        constraint.requirement === "required" &&
-        constraintEntityIds(constraint, input).every((id) => assignment[id] !== undefined)
-      );
-      const hasViolation = readyRequired.some((constraint) =>
-        !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
-      );
-      if (!hasViolation) visit(index + 1, assignment);
-      delete assignment[variable.id];
-      if (budgetExceeded || (stopAtFirst && bestAssignment !== undefined)) return;
-    }
-  };
-
   if ([...domains.values()].some((candidates) => candidates.length === 0)) {
     return { budgetExceeded: false, searchNodeCount: 0 };
   }
-  visit(0, {});
+  const assignment: Record<string, LayoutCandidateV1> = {};
+  // Each depth retains its for-loop cursor while a child explores the next variable.
+  const nextCandidateIndices = [0];
+  while (nextCandidateIndices.length > 0 && !(stopAtFirst && bestAssignment !== undefined)) {
+    const index = nextCandidateIndices.length - 1;
+    const variable = variables[index]!;
+    const candidates = index === variables.length ? [] : domains.get(variable.id) ?? [];
+    if (index === variables.length || nextCandidateIndices[index]! >= candidates.length) {
+      if (index === variables.length) {
+        const evaluations = constraints.map((constraint) =>
+          evaluatePlacementConstraintV1(context, constraint, assignment)
+        );
+        compareAndStore(assignment, evaluations);
+      }
+      nextCandidateIndices.pop();
+      if (index > 0) delete assignment[variables[index - 1]!.id];
+      continue;
+    }
+    const candidate = candidates[nextCandidateIndices[index]!]!;
+    nextCandidateIndices[index]! += 1;
+    searchNodeCount += 1;
+    if (searchNodeCount > profile.budgets.maximumSearchNodes) {
+      budgetExceeded = true;
+      break;
+    }
+    assignment[variable.id] = candidate;
+    const readyRequired = constraints.filter((constraint) =>
+      constraint.requirement === "required" &&
+      constraintEntityIds(constraint, input).every((id) => assignment[id] !== undefined)
+    );
+    const hasViolation = readyRequired.some((constraint) =>
+      !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
+    );
+    if (hasViolation) delete assignment[variable.id];
+    else nextCandidateIndices.push(0);
+  }
   return {
     ...(bestAssignment === undefined ? {} : { bestAssignment }),
     ...(bestEvaluations === undefined ? {} : { bestEvaluations }),

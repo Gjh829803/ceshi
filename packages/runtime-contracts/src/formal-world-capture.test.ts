@@ -316,6 +316,8 @@ function viewRecord(
     requestHash: hashFormalArtifactViewRequestV1(request),
     pngArtifactRef: `artifact://case/cloud-temple/capture/${request.viewId}.png`,
     pngContentHash: Hx(pngByte),
+    identityMaskPngArtifactRef: `artifact://case/cloud-temple/capture/${request.viewId}-identity-mask.png`,
+    identityMaskPngContentHash: Hx(pngByte),
   };
 }
 
@@ -1255,6 +1257,7 @@ function semanticViewObservationSetValue() {
       viewId: view.viewId,
       viewRequestHash: view.requestHash,
       pngContentHash: view.pngContentHash,
+      identityMaskPngContentHash: view.identityMaskPngContentHash,
       targets: identity.formalRequest.semanticCaptureMap.bindings.map(
         (binding, targetIndex) => {
           const group = openingGroups[targetIndex]!;
@@ -1388,6 +1391,35 @@ describe("formal measured observation documents", () => {
       observationSet: driftedPngSet,
       receipt: driftedPngReceipt,
       openingObservation,
+    })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
+  });
+
+  it("requires identity-mask references and hashes without a display-image fallback", () => {
+    for (const field of ["identityMaskPngArtifactRef", "identityMaskPngContentHash"] as const) {
+      const value = structuredClone(receiptValue());
+      Reflect.deleteProperty(value.views[0]!, field);
+      expect(() => parseFormalWorldCaptureReceiptV1(value)).toThrow();
+    }
+    const value = structuredClone(receiptValue());
+    value.views[0]!.identityMaskPngArtifactRef = value.views[0]!.pngArtifactRef;
+    expect(() => parseFormalWorldCaptureReceiptV1(value)).toThrow();
+    const observation = structuredClone(semanticViewObservationSetValue());
+    Reflect.deleteProperty(observation.views[0]!, "identityMaskPngContentHash");
+    expect(() => parseFormalSemanticViewObservationSetV1(observation)).toThrow();
+  });
+
+  it("rejects a rehashed semantic view set bound to a different identity mask", () => {
+    const openingObservation = parseFormalOpeningObservationV1(openingObservationValue());
+    const value = structuredClone(semanticViewObservationSetValue());
+    value.views[1]!.identityMaskPngContentHash = H("9");
+    const observationSet = parseFormalSemanticViewObservationSetV1(value);
+    const receipt = parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      openingObservationContentHash: hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(observationSet),
+    });
+    expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+      observationSet, receipt, openingObservation,
     })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
   });
 
@@ -1785,6 +1817,8 @@ describe("FormalWorldCaptureReceiptV1", () => {
       requestHash: H("q"),
       pngArtifactRef: "artifact://case/cloud-temple/capture/right.png",
       pngContentHash: H("q"),
+      identityMaskPngArtifactRef: "artifact://case/cloud-temple/capture/right-identity-mask.png",
+      identityMaskPngContentHash: H("q"),
     };
     expect(() => parseFormalWorldCaptureReceiptV1(receipt)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",

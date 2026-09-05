@@ -578,6 +578,7 @@ function assertCaptureInventory(
 ): void {
   const expected = [
     ...viewIds.map((viewId) => `${viewId}.png`),
+    ...viewIds.map((viewId) => `${viewId}-identity-mask.png`),
     "collider-overlay.png",
     "opening-observation.json",
     "semantic-view-observation-set.json",
@@ -893,6 +894,11 @@ async function publish(
         sha256Bytes(await requiredRegularFile(captureRoot, `${view.viewId}.png`)),
         view.pngContentHash,
         `Capture view '${view.viewId}' is stale`,
+      );
+      exact(
+        sha256Bytes(await requiredRegularFile(captureRoot, `${view.viewId}-identity-mask.png`)),
+        view.identityMaskPngContentHash,
+        `Capture identity mask '${view.viewId}' is stale`,
       );
     }
     exact(

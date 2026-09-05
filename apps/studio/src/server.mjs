@@ -1047,6 +1047,7 @@ export function createStudio(options = {}) {
     await requireNativeDirectory(captureRoot);
     const expectedNames = [
       ...viewIds.map((viewId) => `${viewId}.png`),
+      ...viewIds.map((viewId) => `${viewId}-identity-mask.png`),
       "collider-overlay.png",
       "opening-observation.json",
       "semantic-view-observation-set.json",
@@ -1136,6 +1137,8 @@ export function createStudio(options = {}) {
         `${view.viewId}.png`,
       ));
       requireNativePngHash(bytes, view.pngContentHash);
+      requireNativePngHash(await readNativeBytesArtifact(path.join(captureRoot,
+        `${view.viewId}-identity-mask.png`)), view.identityMaskPngContentHash);
       if (view.viewId === "opening") openingPngBytes = bytes;
     }
     if (openingPngBytes === undefined) {

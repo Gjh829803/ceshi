@@ -54,6 +54,7 @@ function createTopologyMesh(input: Readonly<{
   name: string;
   positionsMetersXYZ: readonly number[];
   triangleIndices: readonly number[];
+  normals?: readonly number[];
   isVisible: boolean;
   scene: BabylonNativeSceneBuildContextV1["scene"];
 }>): Mesh {
@@ -65,14 +66,8 @@ function createTopologyMesh(input: Readonly<{
       false,
     );
     mesh.setIndices([...input.triangleIndices]);
-    if (input.isVisible) {
-      const normals: number[] = [];
-      VertexData.ComputeNormals(
-        input.positionsMetersXYZ,
-        input.triangleIndices,
-        normals,
-      );
-      mesh.setVerticesData(VertexBuffer.NormalKind, normals, false);
+    if (input.normals !== undefined) {
+      mesh.setVerticesData(VertexBuffer.NormalKind, [...input.normals], false);
     }
     mesh.isVisible = input.isVisible;
     mesh.isPickable = false;
@@ -110,7 +105,7 @@ function disposeMeshes(
 }
 
 function nonEmptySourceBlockIds(
-  geometry: BabylonNativeBlockTopologyGeometryV1,
+  geometry: Pick<BabylonNativeBlockTopologyGeometryV1, "logicalColliderId" | "sourceBlockIds">,
 ): readonly [string, ...string[]] {
   if (geometry.sourceBlockIds.length === 0) {
     return fail(
@@ -198,22 +193,32 @@ export function materializeBabylonNativeBlockWalkableTopologyV1(
         topologyHash: topology.topologyHash,
       }));
       if (geometry.proxyKind !== "continuous-walkable-surface") continue;
-      const overlayMesh = createTopologyMesh({
-        name:
-          `worldkit-block-walkable-overlay-${context.bootstrap.id}-${geometry.logicalColliderId}`,
-        positionsMetersXYZ: geometry.overlayPositionsMetersXYZ,
-        triangleIndices: geometry.triangleIndices,
-        isVisible: true,
-        scene: context.scene,
-      });
-      overlayMeshes.push(overlayMesh);
-      walkableOverlays.push(Object.freeze({
-        logicalColliderId: geometry.logicalColliderId,
-        sourceBlockIds,
-        visualGroupIds: geometry.visualGroupIds,
-        topologyHash: topology.topologyHash,
-        mesh: overlayMesh,
-      }));
+      // Shared vertices keep the original complete-surface normals at group seams.
+      const normals: number[] = [];
+      VertexData.ComputeNormals(geometry.overlayPositionsMetersXYZ, geometry.triangleIndices, normals);
+      for (const [partitionIndex, partition] of geometry.overlayPartitions.entries()) {
+        const partitionSourceBlockIds = nonEmptySourceBlockIds({
+          logicalColliderId: geometry.logicalColliderId,
+          sourceBlockIds: partition.sourceBlockIds,
+        });
+        const overlayMesh = createTopologyMesh({
+          name:
+            `worldkit-block-walkable-overlay-${context.bootstrap.id}-${geometry.logicalColliderId}-${partitionIndex}`,
+          positionsMetersXYZ: geometry.overlayPositionsMetersXYZ,
+          triangleIndices: partition.triangleIndices,
+          normals,
+          isVisible: true,
+          scene: context.scene,
+        });
+        overlayMeshes.push(overlayMesh);
+        walkableOverlays.push(Object.freeze({
+          logicalColliderId: geometry.logicalColliderId,
+          sourceBlockIds: partitionSourceBlockIds,
+          visualGroupIds: partition.visualGroupIds,
+          topologyHash: topology.topologyHash,
+          mesh: overlayMesh,
+        }));
+      }
     }
     for (let index = 0; index < geometries.length; index += 1) {
       const geometry = geometries[index]!;

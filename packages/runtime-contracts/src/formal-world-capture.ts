@@ -338,6 +338,8 @@ export interface FormalWorldCaptureViewRecordV1 {
   readonly requestHash: Sha256HashV1;
   readonly pngArtifactRef: string;
   readonly pngContentHash: Sha256HashV1;
+  readonly identityMaskPngArtifactRef: string;
+  readonly identityMaskPngContentHash: Sha256HashV1;
 }
 
 export interface FormalMeasuredObservationIdentityV1 {
@@ -423,6 +425,7 @@ export interface FormalSemanticViewObservationV1 {
   readonly viewId: FormalWorldCaptureViewIdV1;
   readonly viewRequestHash: Sha256HashV1;
   readonly pngContentHash: Sha256HashV1;
+  readonly identityMaskPngContentHash: Sha256HashV1;
   readonly targets: readonly FormalSemanticTargetViewObservationV1[];
 }
 
@@ -806,6 +809,8 @@ const VIEW_RECORD_FIELDS = [
   "requestHash",
   "pngArtifactRef",
   "pngContentHash",
+  "identityMaskPngArtifactRef",
+  "identityMaskPngContentHash",
 ] as const;
 const SDK_OWNER_FIELDS = [
   "ownerId",
@@ -837,7 +842,7 @@ const SEMANTIC_VIEW_OBSERVATION_SET_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "views",
 ] as const;
 const SEMANTIC_VIEW_OBSERVATION_FIELDS = [
-  "viewId", "viewRequestHash", "pngContentHash", "targets",
+  "viewId", "viewRequestHash", "pngContentHash", "identityMaskPngContentHash", "targets",
 ] as const;
 const SEMANTIC_TARGET_VIEW_OBSERVATION_FIELDS = [
   "acceptanceTargetRef", "blockVisualGroupId", "mode", "sourceBoundsMeters",
@@ -3209,6 +3214,8 @@ export function parseFormalSemanticViewObservationSetV1(
         `${viewPath}/pngContentHash`,
       ),
       targets: Object.freeze(targets),
+      identityMaskPngContentHash: hash(viewSource.identityMaskPngContentHash, contract,
+        `${viewPath}/identityMaskPngContentHash`),
     });
   });
   return freeze({
@@ -3692,6 +3699,8 @@ function parseViewRecord(
       `${path}/pngArtifactRef`,
     ),
     pngContentHash: hash(source.pngContentHash, contract, `${path}/pngContentHash`),
+    identityMaskPngArtifactRef: text(source.identityMaskPngArtifactRef, contract, `${path}/identityMaskPngArtifactRef`),
+    identityMaskPngContentHash: hash(source.identityMaskPngContentHash, contract, `${path}/identityMaskPngContentHash`),
   });
 }
 
@@ -3910,6 +3919,7 @@ export function parseFormalWorldCaptureReceiptV1(
   };
   const artifactRefs = [
     ...parsedViews.map(({ pngArtifactRef }) => pngArtifactRef),
+    ...parsedViews.map(({ identityMaskPngArtifactRef }) => identityMaskPngArtifactRef),
     artifactBindings.openingObservationArtifactRef,
     artifactBindings.semanticViewObservationSetArtifactRef,
     artifactBindings.spawnSupportObservationArtifactRef,
@@ -4073,7 +4083,8 @@ export function assertFormalSemanticViewObservationSetMatchesReceiptV1(
     if (
       view.viewId !== receiptView.viewId ||
       view.viewRequestHash !== receiptView.requestHash ||
-      view.pngContentHash !== receiptView.pngContentHash
+      view.pngContentHash !== receiptView.pngContentHash ||
+      view.identityMaskPngContentHash !== receiptView.identityMaskPngContentHash
     ) fail(contract, `views/${index}`, "must bind the exact Receipt view and PNG");
   });
   const openingView = observationSet.views[0]!;

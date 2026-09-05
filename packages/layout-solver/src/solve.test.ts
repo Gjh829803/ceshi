@@ -116,6 +116,22 @@ function bindProfile(
 }
 
 describe("deterministic layout solver", () => {
+  it.each([10_000, 30_000])("solves %i fixed entities without exhausting the call stack", (entityCount) => {
+    const solverProfile = profile({ maximumSearchNodes: entityCount });
+    const testInput = bindProfile({
+      ...input([]),
+      entities: Array.from({ length: entityCount }, (_, index) =>
+        fixedEntity(`fixed-${index.toString().padStart(5, "0")}`, 0)
+      ),
+    }, solverProfile);
+
+    const result = solveLayoutV1(testInput, solverProfile);
+    expect(result.status).toBe("solved");
+    expect(result.report.searchNodeCount).toBe(entityCount);
+    expect(Object.keys(result.report.placementsByEntityId)).toHaveLength(entityCount);
+    expect(result.report.placementsByEntityId["fixed-09999"]?.transform).toEqual(transform(0));
+  });
+
   it("backtracks across coupled distance and clearance constraints", () => {
     const constraints = [
       {
@@ -139,6 +155,7 @@ describe("deterministic layout solver", () => {
 
     const solved = solveLayoutV1(input(constraints), profile());
     expect(solved.status).toBe("solved");
+    expect(solved.report.searchNodeCount).toBe(6);
     expect(solved.report.placementsByEntityId).toMatchObject({
       a: { transform: { positionMetersXYZ: [0, 1, 0] } },
       b: { transform: { positionMetersXYZ: [10, 1, 0] } },
@@ -151,6 +168,96 @@ describe("deterministic layout solver", () => {
     expect(Object.isFrozen(solved)).toBe(true);
     expect(Object.isFrozen(solved.report)).toBe(true);
     expect(Object.isFrozen(solved.report.placementsByEntityId.a?.transform)).toBe(true);
+  });
+
+  it("clears exhausted branches and chooses a later equal-cost canonical signature", () => {
+    const constraints = [{
+      id: "apart",
+      kind: "distance-range",
+      requirement: "required",
+      entityId: "a",
+      referenceEntityId: "b",
+      minimumDistanceMeters: 9,
+      maximumDistanceMeters: 11,
+    }] as const satisfies readonly ResolvedPlacementConstraintV1[];
+    const testInput: ResolvedLayoutInputV1 = {
+      ...input(constraints),
+      anchorsByEntityId: {
+        a0: transform(10), a1: transform(0),
+        b0: transform(10), b1: transform(0),
+      },
+    };
+    const result = solveLayoutV1(testInput, profile());
+    expect(result.status).toBe("solved");
+    expect(result.report.searchNodeCount).toBe(6);
+    expect(result.report.placementsByEntityId).toMatchObject({
+      a: { candidateId: "a:anchor:000000", transform: transform(10) },
+      b: { candidateId: "b:anchor:000001", transform: transform(0) },
+    });
+    expect(result.layoutSolveReportHash).toBe("sha256:2487b8928ddbb8c4e0c18cb0130f7f47e30f28b9a8088e05fa3d04dd901f7af4");
+    expect(solveLayoutV1({
+      ...testInput,
+      entities: [...testInput.entities].reverse(),
+    }, profile())).toEqual(result);
+  });
+
+  it("ranks local cost before signature and preference cost before local cost", () => {
+    const testInput: ResolvedLayoutInputV1 = {
+      ...input([]),
+      entities: [{
+        ...entity("a", ["a0"], []),
+        placement: {
+          kind: "solved",
+          placementConstraintIds: [],
+          initialTransform: transform(10),
+        },
+      }, fixedEntity("left", 0)],
+    };
+    const localResult = solveLayoutV1(testInput, profile());
+    expect(localResult.report.placementsByEntityId.a?.candidateSource.kind).toBe("initial");
+    expect(localResult.report.searchNodeCount).toBe(3);
+    expect(localResult.layoutSolveReportHash).toBe("sha256:5a71963cd6910f454e8b3e893518966927c3ed8b48c71a9b52eca5b7c56c94e5");
+
+    const preferredInput: ResolvedLayoutInputV1 = {
+      ...testInput,
+      constraints: [{
+        id: "prefer-left",
+        kind: "distance-range",
+        requirement: "preferred",
+        preferenceWeightRatio: 1,
+        entityId: "a",
+        referenceEntityId: "left",
+        minimumDistanceMeters: 0,
+        maximumDistanceMeters: 1,
+      }],
+    };
+    const preferredResult = solveLayoutV1(preferredInput, profile());
+    expect(preferredResult.report.placementsByEntityId.a?.candidateSource.kind).toBe("anchor");
+    expect(preferredResult.report.totalPreferenceCostRatio).toBe(0);
+    expect(preferredResult.layoutSolveReportHash).toBe("sha256:057763500110d180ecc0f96b5787ad72a6ba3784383eeb702ba21229f74bb04b");
+  });
+
+  // Hashes below were recorded from the recursive solver before its stack-safe replacement.
+  it.each([
+    [1, "sha256:66ac7ae33664c4042d4e90e6b95c706b6854d7dece4412f004e1d35dd483da40"],
+    [2, "sha256:f4154122a5f86236ce166de0d4acec0c8d26a2e9c4d0e6da010cbf97e75cfc1b"],
+    [5, "sha256:7078c8f57780d4f5430f56e6ca69d5bfff7f7a99140ed6d57172e32bcd24bbb4"],
+    [6, "sha256:5b1e9291057d22a63348dceac8b7562145f7e115cfce10fdc30797e8baef98da"],
+  ] as const)("preserves node-budget boundary %i after partial or complete assignments", (maximumSearchNodes, expectedHash) => {
+    const solverProfile = profile({ maximumSearchNodes });
+    const result = solveLayoutV1(bindProfile(input([]), solverProfile), solverProfile);
+    expect(result.status).toBe(maximumSearchNodes < 6 ? "budget-exceeded" : "solved");
+    expect(result.report.searchNodeCount).toBe(Math.min(maximumSearchNodes + 1, 6));
+    if (maximumSearchNodes < 6) expect(result.report.placementsByEntityId).toEqual({});
+    expect(result.layoutSolveReportHash).toBe(expectedHash);
+  });
+
+  it("evaluates an empty assignment without spending a search node", () => {
+    const result = solveLayoutV1({ ...input([]), entities: [] }, profile());
+    expect(result.status).toBe("solved");
+    expect(result.report.searchNodeCount).toBe(0);
+    expect(result.report.placementsByEntityId).toEqual({});
+    expect(result.layoutSolveReportHash).toBe("sha256:e07e3fbec468832891adb686a7a200cf5805a475e2f620b2db3908898eb897dc");
   });
 
   it("optimizes preferred weights before canonical candidate tie-breaks", () => {
@@ -241,6 +348,9 @@ describe("deterministic layout solver", () => {
 
     const result = solveLayoutV1(testInput, profile());
     expect(result.status).toBe("unsatisfied");
+    expect(result.report.searchNodeCount).toBe(4);
+    expect(result.report.conflictCheckCount).toBe(2);
+    expect(result.layoutSolveReportHash).toBe("sha256:536d6710f59b9566ff78e637355ecf4b157088afc3cc127db33409695a238050");
     expect(result.report.placementsByEntityId).toEqual({});
     expect(result.report.conflictConstraintIds).toEqual(["must-left", "must-right"]);
     expect(result.report.diagnostics).toEqual([
@@ -249,6 +359,39 @@ describe("deterministic layout solver", () => {
         constraintIds: ["must-left", "must-right"],
       }),
     ]);
+  });
+
+  it.each([
+    [4, "sha256:5bf180c2e8d9cf54d16ccb9423e7459a2a4294d99df1c4d60c054fc3348c209b"],
+    [5, "sha256:1ea6b0872fd1b3621a4f7e151ccbf30e78cac6f6fb957cec37ca8afbf7bfa249"],
+  ] as const)("preserves conflict-search early exit and budget boundary %i", (maximumSearchNodes, expectedHash) => {
+    const constraints = ["left", "right"].map((side) => ({
+      id: `must-${side}`,
+      kind: "distance-range" as const,
+      requirement: "required" as const,
+      entityId: "a",
+      referenceEntityId: side,
+      minimumDistanceMeters: 0,
+      maximumDistanceMeters: 1,
+    }));
+    const solverProfile = profile({ maximumSearchNodes });
+    const testInput = bindProfile({
+      ...input(constraints),
+      entities: [
+        entity("a", ["a0", "a1"], constraints.map((row) => row.id)),
+        entity("b", ["b0", "b1", "b2"], []),
+        fixedEntity("left", 0), fixedEntity("right", 10),
+      ],
+      anchorsByEntityId: { ...input([]).anchorsByEntityId, b2: transform(20) },
+    }, solverProfile);
+    const result = solveLayoutV1(testInput, solverProfile);
+    expect(result.status).toBe(maximumSearchNodes === 4 ? "budget-exceeded" : "unsatisfied");
+    expect(result.report.searchNodeCount).toBe(maximumSearchNodes === 4 ? 9 : 4);
+    expect(result.report.conflictCheckCount).toBe(maximumSearchNodes === 4 ? 1 : 2);
+    expect(result.report.conflictConstraintIds).toEqual(
+      maximumSearchNodes === 4 ? [] : ["must-left", "must-right"],
+    );
+    expect(result.layoutSolveReportHash).toBe(expectedHash);
   });
 
   it("rejects invalid input deterministically and caps diagnostics", () => {

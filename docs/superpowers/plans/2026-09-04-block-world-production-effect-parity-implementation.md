@@ -353,6 +353,44 @@ affected Request/admission/contract tests and typecheck, then freeze before one 
 Browser four-image inspection. Record exact input SHA and residual CF-14/21 work in
 docs/18. Native generated checker graph changes use temporary rebuild and byte drift.
 
+#### CF-14/R2-A identity-pixel projection owner
+
+Main-agent-only; depends on the existing admitted Planner identity label map.
+`scripts/scenes/identity-mask-projection.ts` owns pixel-count coverage, inclusive-to-exclusive
+pixel bounds and the existing basis-point rounding. Case preparation is its first consumer,
+replacing its inline measurement with unchanged results and unchanged reliable-component policy.
+Measure all admitted pixels of a target, including separated instances; do not count the empty
+area between them or fill an arch. No mask produces `not-visible` without fabricated bounds;
+that result alone cannot distinguish occlusion, out-of-frame and omitted geometry.
+
+Focused evidence covers same-bounds solid/arch masks, separated instances, absent identities,
+exclusive pixel edges, tiny masks and invalid dimensions/labels, plus all Case preparation tests.
+This extraction is a prerequisite, not the CF-14 completion: current Formal views are lit
+whitebox displays (`babylon-visual-adapter.ts`), so their RGB values must not be silently treated
+as an exact identity pass. Subsequent work must bind actual per-view identity pixels to the same
+verified geometry, camera and Capture receipt, feed this single projection into Evaluation, and
+remove AABB-area-as-silhouette consumption. Keep structural AABB evidence for its actual purpose.
+Neither this extraction nor subsequent visual diagnostics adds a model task, ordinary publication
+veto or repair budget. Real occlusion/mask capture and complete CF-21 coverage remain open.
+
+#### CF-14/R2-B same-view identity capture
+
+Main-agent-only; the existing artifact-capture transaction owns a requested identity pass after
+its display capture and before restoring Camera/materials/canvas. The trusted Host supplies explicit
+live mesh handles and colors; never infer target identity from mesh names/tags. Ungrouped scenery and
+the SDK Subject still occlude but receive black, as does background. Shared materials must not share
+target tint; a thin-instance batch must have one validated target color. Use opaque unlit materials
+without changing geometry, instance transforms, camera, viewport or Runtime input/tick state.
+Retain the display PNG and expose the identity PNG/RGBA separately; do not replace the user's preview.
+Restore all resources on normal/throwing paths and test the exact opening/side/top camera transaction.
+
+Remaining integration consumes the explicit registry at each formal view, binds the three identity
+PNG hashes through the observation receipt, and measures their admitted pixels with R2-A. Evaluation
+must consume visible-pixel projection for silhouette and retain structural projection only for its
+actual spatial uses. No visible pixels means no visible evidence, not automatic geometry-missing
+or a newly blocking quality threshold. Runtime/Host schema and persistent consumers change together
+when this formal integration activates; the internal capture primitive alone does not close CF-14.
+
 #### CF-14/R2-C formal identity evidence consumers
 
 Main-agent-only; depends on R2-A/B. Require opening/side/top identity PNG refs and hashes

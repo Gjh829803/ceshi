@@ -985,6 +985,11 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       540,
     ]);
     const topRgba = await sharp(firstTop).ensureAlpha().raw().toBuffer();
+    const entryRgba = await sharp(firstEntry).ensureAlpha().raw().toBuffer();
+    expect({ top: sha256Bytes(topRgba), entry: sha256Bytes(entryRgba) }).toEqual({
+      top: "sha256:fd0f08013bd131e103701aa364fe0679f1d99357a1031e96750dc59abce9f4d0",
+      entry: "sha256:ec9a8b77f1ece977738a1e360fe99df4f6145f94016415f4bd6eace728300e6b",
+    });
     const hasColor = (expected: readonly [number, number, number]): boolean => {
       for (let offset = 0; offset < topRgba.byteLength; offset += 4) {
         if (
@@ -1040,6 +1045,94 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const result = await runVisualReview(workspace);
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain(code);
+  });
+
+  it.each([2, 32, 40])("reports up to 32 distinct occupancy pairs from %i independent overlaps before writing PNGs", async (pairCount) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const calls = Array.from({ length: pairCount }, (_, index) => ["base", "overlap"].map((role) =>
+      `session.createBlock({ id: "${role}-${index}", shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] });`,
+    ).join("\n")).join("\n");
+    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+      .replace("session.finalize(", `${calls}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP");
+    const pairs = [...result.stderr.matchAll(/block '([^']+)' overlaps '([^']+)' at cell ([^;\n]+)/g)];
+    expect(pairs.map(([, id, otherId, cell]) => [id, otherId, cell])).toEqual(
+      Array.from({ length: Math.min(pairCount, 32) }, (_, index) => [
+        `overlap-${index}`, `base-${index}`, `${19 + index * 4},-4,-1`,
+      ]),
+    );
+    expect(result.stderr.includes("additional overlapping Block pairs omitted (limit 32)")).toBe(pairCount > 32);
+    expect(result.stderr.length).toBeLessThan(5_000);
+    expect(await runVisualReview(workspace)).toEqual(result);
+    for (const file of ["builder-top-down-comparison.png", "builder-entry-comparison.png"]) {
+      await expect(readFile(path.join(workspace, "attempts/advisory", file))).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  });
+
+  it("deduplicates occupied microcells while retaining every pair of three coincident Blocks", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const calls = ["a", "b", "c"].map((id) =>
+      `session.createBlock({ id: "coincident-${id}", shape: "full", paletteRole: "ground", centerMetersXYZ: [10, -0.5, 0] });`,
+    ).join("\n");
+    await writeFile(sourcePath, source.replace("session.finalize(", `${calls}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect([...result.stderr.matchAll(/block '([^']+)' overlaps '([^']+)' at cell ([^;\n]+)/g)]
+      .map(([, id, otherId, cell]) => [id, otherId, cell])).toEqual([
+      ["coincident-b", "coincident-a", "19,-4,-1"],
+      ["coincident-c", "coincident-a", "19,-4,-1"],
+      ["coincident-c", "coincident-b", "19,-4,-1"],
+    ]);
+  });
+
+  it("bounds occupancy feedback for long IDs and escapes control characters without losing pair identity", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const prefix = "\u0000'\n\u001b\u0085\u2028".repeat(30);
+    const calls = Array.from({ length: 32 }, (_, index) => ["base", "overlap"].map((role) =>
+      `session.createBlock({ id: ${JSON.stringify(`${prefix}${role}-${index}`)}, shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] });`,
+    ).join("\n")).join("\n");
+    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+      .replace("session.finalize(", `${calls}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.match(/ at cell /g)).toHaveLength(32);
+    expect(result.stderr).toContain(sha256Bytes(Buffer.from(`${prefix}overlap-31`)));
+    expect(Buffer.byteLength(result.stderr)).toBeLessThan(40_000);
+    expect(result.stderr.trimEnd()).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/);
+    expect(result.stderr).toContain("\\u0027");
+    expect(result.stderr).toContain("\\n");
+  });
+
+  it.each(["later-off-grid", "caught-overflow"])("retains occupancy rejection and no PNGs despite %s", async (mode) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const pairCount = mode === "caught-overflow" ? 40 : 2;
+    const calls = Array.from({ length: pairCount }, (_, index) => ["base", "overlap"].map((role) =>
+      `try { session.createBlock({ id: "${role}-${index}", shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] }); } catch {}`,
+    ).join("\n")).join("\n");
+    const laterFailure = mode === "later-off-grid"
+      ? 'session.createBlock({ id: "off-grid", shape: "full", paletteRole: "ground", centerMetersXYZ: [0.1, 0.5, -2] });'
+      : "";
+    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+      .replace("session.finalize(", `${calls}\n${laterFailure}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP");
+    expect(result.stderr.match(/ at cell /g)).toHaveLength(Math.min(pairCount, 32));
+    expect(result.stderr.includes("additional overlapping Block pairs omitted (limit 32)")).toBe(mode === "caught-overflow");
+    for (const file of ["builder-top-down-comparison.png", "builder-entry-comparison.png"]) {
+      await expect(readFile(path.join(workspace, "attempts/advisory", file))).rejects.toMatchObject({ code: "ENOENT" });
+    }
   });
 
   it.each(["structure", "hazard", "water-like-visual", "background-mass"])(

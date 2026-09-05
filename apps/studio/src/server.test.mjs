@@ -323,6 +323,9 @@ async function writeNativeProductionFixture(
   };
   const runReceiptHash = canonicalHash(runReceipt);
   await mkdir(path.join(attemptRoot, "capture"), { recursive: true });
+  for (const mask of sourceCapture.identityMaskPngs) {
+    await writeFile(path.join(attemptRoot, "capture", `${mask.viewId}-identity-mask.png`), mask.bytes);
+  }
   await writeWorldPackageDirectoryV1({
     outputDirectoryPath: path.join(attemptRoot, "world-package"),
     directory: packageDirectory,
@@ -437,6 +440,9 @@ async function writeNativeProductionFixture(
     entryValidationHash,
     launchCommand: "pnpm worldkit native run final/world-package --port 5174 --json",
   };
+  for (const mask of sourceCapture.identityMaskPngs) {
+    await writeFile(path.join(finalRoot, "capture", `${mask.viewId}-identity-mask.png`), mask.bytes);
+  }
   await Promise.all([
     writeFile(
       path.join(finalRoot, "capture", "opening.png"),
@@ -1021,6 +1027,9 @@ async function mutateNativeFinalEvidence(finalRoot, mutation) {
   const pngFileByMutation = {
     "opening-png": "opening.png",
     "world-side-png": "world-side.png",
+    "opening-identity-mask-png": "opening-identity-mask.png",
+    "world-side-identity-mask-png": "world-side-identity-mask.png",
+    "world-top-down-identity-mask-png": "world-top-down-identity-mask.png",
     "collider-overlay-png": "collider-overlay.png",
   };
   const pngFile = pngFileByMutation[mutation];
@@ -1062,6 +1071,9 @@ for (const mutation of [
   "collider-observation",
   "traversal-observation",
   "capture-extra-file",
+  "opening-identity-mask-png",
+  "world-side-identity-mask-png",
+  "world-top-down-identity-mask-png",
   "capture-directory-symlink",
 ]) {
   test(`rejects published Native production with tampered ${mutation}`, async () => {

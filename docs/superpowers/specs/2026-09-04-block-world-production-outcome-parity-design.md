@@ -363,8 +363,56 @@ Presence checks confirm the Package/live target identity, not that a target must
 images. Only reference-projection requirements compare normalized bounds. Outside-view results are
 observations, not Host execution failures. Malformed identity/camera/hash linkage still fails integrity;
 new semantic quality diagnostics remain report-only in ordinary production and never allocate repair
-tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
-obligations, not implied by this structural evidence.
+tasks or veto publication. CF-12 camera calibration remains a separate obligation.
+
+CF-14 visible-pixel activation is a current-only extension of this same Capture, not a new
+model/review stage. Each existing opening/side/top transaction also returns an opaque unlit
+identity PNG from the same explicit live geometry and Camera, with ungrouped geometry/Subject
+as black occluders. Display PNGs remain unchanged outputs. Each view record requires distinct
+`identityMaskPngArtifactRef` and `identityMaskPngContentHash`; its semantic observation repeats
+that exact content hash. Hash joins, publication and recovery verify all three identity images.
+Missing/stale bytes are integrity errors, never a fabricated mask or AABB fallback.
+
+The Host decodes the bound identity PNGs and measures admitted target pixels using the same
+pixel bounds/count/rounding owner as reference preparation. Semantic Evaluation consumes
+`visiblePixelProjection`, with `visible` or `not-visible` outcomes, rather than rectangular
+`structuralProjection` area. No pixels alone distinguish neither absence nor occlusion; do not
+invent that causal label. Structural observations remain available for their genuine spatial
+uses. Quality differences remain diagnostic in ordinary production, with no new source-repair
+Attempt, production veto or stricter success threshold. Actual Browser evidence is required
+before claiming same-camera masks, holes, repeated instances and occlusion are verified.
+
+Pixel absence and bounds/center/coverage drift use the existing source-repair action with the
+current-only operation `adjust-geometry`, not an inferred move/enlarge/shrink.
+Its instruction requires comparing the bound identity and display pixels with
+the frozen reference and preserving intended holes, separation and occlusion.
+This does not assert a geometric cause from an aggregate pixel count. The existing
+explicit evaluation-repair task receives all three identity masks, side/top display
+images and semantic observations through its frozen input allowlist; ordinary
+production still never allocates that external repair task.
+
+CF-14/R2-D binds the actual walkable top overlays, not only the original Block
+meshes. The existing topology owner records required `overlayPartitions` on each
+geometry: deterministic partitions with exact `sourceBlockIds`, `visualGroupIds`
+(empty or one group), and triangle indices into the existing overlay positions.
+Solid geometries have no overlay partitions. Each source top-cell supplies both
+triangles and their identity; the union covers the original walkable triangles
+exactly once. No Capture consumer re-derives that identity from names or bounds.
+The existing materializer emits one explicit walkableOverlay handle per partition
+and preserves the original full-surface normals, placement and collision arrays.
+Partitions participate in geometry/topology hashes but do not change physics,
+smoothing, Collider budgets or production policy. Capture validates and colors
+these explicit handles; mixed semantic and ungrouped Blocks within one Collider
+remain supported, with ungrouped partitions black rather than a new rejection.
+
+The identity attachment must be single-sample RGBA bytes, without multisample
+resolve or image filtering: averaging two valid identity colors can create a third
+valid identity color, so exact palette membership alone cannot reject the artifact.
+Use Babylon's existing same-Camera render-target attachment with depth and the same
+raster size, geometry, viewport and projection. Restore any prior camera output target,
+dispose the temporary target on success/failure, and normalize framebuffer row order
+without interpolation. Do not disable anti-aliasing for the user's display or change
+production palette acceptance to hide this rendering defect.
 
 ### CF-11 source-authored ground exploration
 

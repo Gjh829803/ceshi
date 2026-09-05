@@ -393,12 +393,16 @@ async function verifyCaseBoundFormalCaptureIntentV1(
   return parsed;
 }
 
-async function readJsonNoFollow(filePath: string): Promise<unknown> {
+async function readBytesNoFollow(filePath: string): Promise<Uint8Array> {
   const info = await lstat(filePath);
   if (!info.isFile() || info.isSymbolicLink() || await realpath(filePath) !== filePath) {
     throw new TypeError(`WORLD_RECONSTRUCTION_INPUT_INVALID: ${filePath}`);
   }
-  return JSON.parse((await readFile(filePath)).toString("utf8"));
+  return new Uint8Array(await readFile(filePath));
+}
+
+async function readJsonNoFollow(filePath: string): Promise<unknown> {
+  return JSON.parse(Buffer.from(await readBytesNoFollow(filePath)).toString("utf8"));
 }
 
 export function runBuilderSelfCheckV1(
@@ -1038,6 +1042,9 @@ export async function createProductionWorldReconstructionRunPortsV1(
             captureReceipt,
             openingObservation,
             semanticViewObservationSet,
+            identityMaskPngs: await Promise.all(captureReceipt.views.map(async ({ viewId }) => ({
+              viewId, bytes: await readBytesNoFollow(path.join(captureDirectoryPath, `${viewId}-identity-mask.png`)),
+            }))),
             spawnSupportObservation,
             colliderOverlayObservation,
             scriptedTraversalObservation,

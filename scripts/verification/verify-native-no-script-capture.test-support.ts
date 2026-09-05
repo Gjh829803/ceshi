@@ -16,6 +16,7 @@ import { packageNativeBlockAttemptV1 } from "../reconstruction/native-package.js
 import { materializeFormalWorldCaptureRequestV1 } from "../reconstruction/formal-capture-request.js";
 import { captureProductionHostedWorldPackageV1 } from "../reconstruction/formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "../reconstruction/evaluate.js";
+import { measureFormalIdentityMaskV1 } from "../reconstruction/formal-identity-mask-measurement.js";
 
 // Explicit Browser lane, not part of default Vitest. No model/provider task is submitted.
 // Reuse the Package-owner fixture: generation is synthetic, Host Check/Ground/Package,
@@ -84,6 +85,9 @@ try {
       authoringManifest: parseNativeBlockAuthoringManifestV1(await json(path.join(fixture.attemptDirectoryPath, "source/native-block-authoring.json"))),
       captureReceiptRef: `${receipt.formalRequestRef.slice(0, -"formal-world-capture-request.json".length)}capture/formal-world-capture-receipt.json`,
       captureReceipt: receipt, scriptedTraversalObservation: traversal,
+      identityMaskPngs: await Promise.all(receipt.views.map(async ({ viewId }) => ({
+        viewId, bytes: new Uint8Array(await readFile(path.join(captureRoot, `${viewId}-identity-mask.png`))),
+      }))),
       openingObservation: parseFormalOpeningObservationV1(await json(path.join(captureRoot, "opening-observation.json"))),
       semanticViewObservationSet: parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json"))),
       spawnSupportObservation: parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json"))),
@@ -102,19 +106,61 @@ try {
   assert.deepEqual(await readFile(fixture.casePath), caseBytes);
   assert.deepEqual(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json")), requestBytes);
   const images = [];
-  for (const name of ["opening.png", "world-side.png", "world-top-down.png", "collider-overlay.png"]) {
+  for (const name of ["opening.png", "world-side.png", "world-top-down.png", "collider-overlay.png",
+    "opening-identity-mask.png", "world-side-identity-mask.png", "world-top-down-identity-mask.png"]) {
     const bytes = await readFile(path.join(captureRoot, name));
     const metadata = await sharp(bytes).metadata();
     assert.equal(metadata.width, receipt.formalRequest.views[0].widthPixels);
     assert.equal(metadata.height, receipt.formalRequest.views[0].heightPixels);
     images.push({ name, widthPixels: metadata.width, heightPixels: metadata.height, contentHash: sha256Bytes(bytes) });
   }
+  const identityProjections = [];
+  for (const view of receipt.views) {
+    const projections = measureFormalIdentityMaskV1({
+      view, pngBytes: await readFile(path.join(captureRoot, `${view.viewId}-identity-mask.png`)),
+      targets: receipt.formalRequest.semanticCaptureMap.bindings,
+    });
+    identityProjections.push({ viewId: view.viewId, targets: [...projections].map(
+      ([acceptanceTargetRef, projection]) => ({ acceptanceTargetRef, ...projection })) });
+  }
+  // Preserve actual pixels even when a fixture-specific visual assertion fails.
   await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
   await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
+  console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
+  const topDown = identityProjections.find(({ viewId }) => viewId === "world-top-down");
+  assert(topDown !== undefined);
+  const openingPixels = identityProjections.find(({ viewId }) => viewId === "opening")!;
+  const semanticViews = parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json")));
+  for (const target of receipt.formalRequest.semanticCaptureMap.bindings) {
+    assert(identityProjections.some(({ targets }) => targets.some((projection) =>
+      projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible")),
+    `Fixture target ${target.acceptanceTargetRef} must have exact admitted identity pixels in at least one real view`);
+    // All five targets in this deterministic fixture have exposed top surfaces.
+    // This catches a black walkable overlay hiding the colored Block underneath;
+    // it is not a visibility requirement on arbitrary production scenes.
+    assert(topDown.targets.some((projection) =>
+      projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible"),
+    `Fixture target ${target.acceptanceTargetRef} must have visible top-down identity pixels`);
+    if (target.acceptanceTargetRef === "worldkit://acceptance-target/gate-mass@1" ||
+      target.acceptanceTargetRef === "worldkit://acceptance-target/mountain-cliff-layers@1") {
+      const pixels = openingPixels.targets.find((projection) => projection.acceptanceTargetRef === target.acceptanceTargetRef)!;
+      const structure = semanticViews.views.find(({ viewId }) => viewId === "opening")!
+        .targets.find(({ acceptanceTargetRef }) => acceptanceTargetRef === target.acceptanceTargetRef)!.structuralProjection;
+      assert(pixels.outcome === "visible" && structure.outcome === "projected");
+      // These two fixture targets are individual solid Blocks without overlays.
+      // MSAA must not manufacture their adjacent palette color on the ground.
+      for (const axis of ["X", "Y"] as const) {
+        const tolerance = Math.ceil(20000 / (axis === "X" ? images[0]!.widthPixels! : images[0]!.heightPixels!));
+        assert(pixels.normalizedBounds[`min${axis}BasisPoints`] >= structure.normalizedBounds[`min${axis}BasisPoints`] - tolerance &&
+          pixels.normalizedBounds[`max${axis}BasisPoints`] <= structure.normalizedBounds[`max${axis}BasisPoints`] + tolerance,
+        `Fixture ${target.acceptanceTargetRef} identity pixels must not leak outside its solid projected ${axis} bounds`);
+      }
+    }
+  }
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
     cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",
-    semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, evidenceRoot };
+    semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, identityProjections, evidenceRoot };
   await writeFile(path.join(evidenceRoot, "evidence.json"), stringifyCanonicalJson(result), { flag: "wx" });
   console.log(JSON.stringify(result));
 } finally {

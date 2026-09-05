@@ -684,6 +684,9 @@ async function completeRunFixture(
     })
     : originalCaptureReceipt;
   await writeFile(path.join(captureDirectoryPath, "opening.png"), openingPng);
+  for (const { viewId, bytes } of fixture.identityMaskPngs) {
+    await writeFile(path.join(captureDirectoryPath, `${viewId}-identity-mask.png`), bytes);
+  }
   for (const name of ["world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
@@ -1314,6 +1317,9 @@ async function addRepairAttempt(input: Readonly<{
   });
   for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureRoot, `${name}.png`), PNG);
+  }
+  for (const { viewId, bytes } of fixture.identityMaskPngs) {
+    await writeFile(path.join(captureRoot, `${viewId}-identity-mask.png`), bytes);
   }
   await writeJson(path.join(captureRoot, "opening-observation.json"),
     fixture.openingObservation);

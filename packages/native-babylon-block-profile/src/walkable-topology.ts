@@ -44,6 +44,12 @@ export interface BabylonNativeBlockTopologyGeometryV1 {
   readonly collisionPositionsMetersXYZ: readonly number[];
   readonly overlayPositionsMetersXYZ: readonly number[];
   readonly triangleIndices: readonly number[];
+  readonly overlayPartitions: readonly Readonly<{
+    readonly sourceBlockIds: readonly string[];
+    readonly visualGroupIds: readonly [] | readonly [string];
+    /** Complete source-cell quads indexing overlayPositionsMetersXYZ. */
+    readonly triangleIndices: readonly number[];
+  }>[];
   readonly sourceCellCount: number;
   readonly vertexCount: number;
   readonly triangleCount: number;
@@ -99,6 +105,10 @@ interface GeometryAccumulator {
   readonly indices: number[];
   readonly vertexIndexByKey: Map<string, number>;
   readonly sourceCellKeys: Set<string>;
+  readonly overlayPartitionsByVisualGroupId: Map<string, {
+    readonly sourceBlockIds: Set<string>;
+    readonly triangleIndices: number[];
+  }>;
 }
 
 interface SupportCell {
@@ -235,6 +245,17 @@ function freezeGeometry(
         : value),
   );
   const triangleIndices = Object.freeze([...accumulator.indices]);
+  const overlayPartitions = Object.freeze(
+    [...accumulator.overlayPartitionsByVisualGroupId.entries()]
+      .sort(([left], [right]) => stableCompare(left, right))
+      .map(([visualGroupId, partition]) => Object.freeze({
+        sourceBlockIds: Object.freeze([...partition.sourceBlockIds].sort(stableCompare)),
+        visualGroupIds: visualGroupId === ""
+          ? Object.freeze([] as const)
+          : Object.freeze([visualGroupId] as const),
+        triangleIndices: Object.freeze([...partition.triangleIndices]),
+      })),
+  );
   const body = Object.freeze({
     logicalColliderId: accumulator.group.colliderId,
     sourceBlockIds: accumulator.group.sourceBlockIds,
@@ -252,6 +273,7 @@ function freezeGeometry(
     collisionPositionsMetersXYZ,
     overlayPositionsMetersXYZ,
     triangleIndices,
+    overlayPartitions,
     sourceCellCount: accumulator.sourceCellKeys.size,
     vertexCount: collisionPositionsMetersXYZ.length / 3,
     triangleCount: triangleIndices.length / 3,
@@ -328,6 +350,7 @@ function createAccumulator(
     indices: [],
     vertexIndexByKey: new Map(),
     sourceCellKeys: new Set(),
+    overlayPartitionsByVisualGroupId: new Map(),
   };
 }
 
@@ -474,6 +497,15 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
       [x1, smoothedHeight(cell, cell.x + 1, cell.z + 1), z1],
       [x0, smoothedHeight(cell, cell.x, cell.z + 1), z1],
     ]);
+    // The logical source cell owns both triangles, including an ungrouped top.
+    const visualGroupId = cell.source.visualGroupId ?? "";
+    let partition = accumulator.overlayPartitionsByVisualGroupId.get(visualGroupId);
+    if (isNil(partition)) {
+      partition = { sourceBlockIds: new Set(), triangleIndices: [] };
+      accumulator.overlayPartitionsByVisualGroupId.set(visualGroupId, partition);
+    }
+    partition.sourceBlockIds.add(cell.source.sourceBlockId);
+    partition.triangleIndices.push(...accumulator.indices.slice(-6));
   }
 
   const solidByCellKey = new Map<string,

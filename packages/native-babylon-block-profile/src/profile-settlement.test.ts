@@ -79,7 +79,7 @@ function fullBlockRecord(
   input: Readonly<{
     id: string;
     centerMetersXYZ: readonly [number, number, number];
-    visualGroupId: string;
+    visualGroupId?: string;
     colliderGroupId: string;
     paletteRole: "ground" | "structure";
   }>,
@@ -98,7 +98,7 @@ function fullBlockRecord(
       paletteRole: input.paletteRole,
       centerMetersXYZ: input.centerMetersXYZ,
       rotationQuarterTurnsY: 0 as const,
-      visualGroupId: input.visualGroupId,
+      ...(input.visualGroupId === undefined ? {} : { visualGroupId: input.visualGroupId }),
       colliderGroupId: input.colliderGroupId,
     }),
     mesh,
@@ -375,7 +375,10 @@ describe("Babylon Native block Profile settlement", () => {
     }
   });
 
-  it("settles one multi-Block walkable Collider through its identity-bound overlay", async () => {
+  it.each(["shared", "distinct", "ungrouped", "buried"] as const)(
+    "settles one multi-Block walkable Collider with %s identity partitions", async (mode) => {
+    const partitioned = mode !== "shared";
+    const westGroupId = mode === "ungrouped" ? undefined : partitioned ? "floor-west-visual" : "floor-visual";
     const engine = new NullEngine();
     const scene = new Scene(engine);
     try {
@@ -397,10 +400,17 @@ describe("Babylon Native block Profile settlement", () => {
             fullBlockRecord(scene, {
               id: "floor-west",
               centerMetersXYZ: [-1, 0.5, 0],
-              visualGroupId: "floor-visual",
+              ...(westGroupId === undefined ? {} : { visualGroupId: westGroupId }),
               colliderGroupId: "floor-source",
               paletteRole: "ground",
             }),
+            ...(mode === "buried" ? [fullBlockRecord(scene, {
+              id: "buried-floor",
+              centerMetersXYZ: [0, -0.5, 0],
+              visualGroupId: "buried-visual",
+              colliderGroupId: "floor-source",
+              paletteRole: "ground",
+            })] : []),
             fullBlockRecord(scene, {
               id: "wall-block",
               centerMetersXYZ: [1, 0.5, 0],
@@ -453,21 +463,26 @@ describe("Babylon Native block Profile settlement", () => {
             scene,
           );
           overlay.position.set(-0.5, 1.005, 0);
+          const overlays = partitioned ? [overlay, MeshBuilder.CreateBox("west-overlay", {}, scene)] : [overlay];
           const colliderInventory = Object.freeze([
             Object.freeze({
               colliderId: "floor-collider",
               sourceBlockIds: Object.freeze([
                 "floor-east",
                 "floor-west",
+                ...(mode === "buried" ? ["buried-floor"] : []),
               ] as const),
-              visualGroupIds: Object.freeze(["floor-visual"]),
+              visualGroupIds: Object.freeze([...new Set([
+                "floor-visual", ...(westGroupId === undefined ? [] : [westGroupId]),
+                ...(mode === "buried" ? ["buried-visual"] : []),
+              ])]),
               proxyKind: "continuous-walkable-surface" as const,
               traversalBinding: STATIC_SURFACE,
               exposedEdgePolicy: "none" as const,
               minimumMetersXYZ: Object.freeze([-1.5, 1, -0.5] as const),
               maximumMetersXYZ: Object.freeze([0.5, 1, 0.5] as const),
               vertexCount: 4,
-              triangleCount: 2,
+              triangleCount: overlays.reduce((sum, mesh) => sum + mesh.getTotalIndices() / 3, 0),
               topologyHash: TOPOLOGY_HASH,
             }),
             Object.freeze({
@@ -491,16 +506,15 @@ describe("Babylon Native block Profile settlement", () => {
             checkedLayout,
             displayGapMeters: 0.04,
             colliderInventory,
-            walkableOverlays: Object.freeze([Object.freeze({
+            walkableOverlays: Object.freeze(overlays.map((mesh, index) => Object.freeze({
               logicalColliderId: "floor-collider",
-              sourceBlockIds: Object.freeze([
-                "floor-east",
-                "floor-west",
-              ] as const),
-              visualGroupIds: Object.freeze(["floor-visual"]),
+              sourceBlockIds: partitioned
+                ? Object.freeze([index === 0 ? "floor-east" : "floor-west"] as const)
+                : Object.freeze(["floor-east", "floor-west"] as const),
+              visualGroupIds: Object.freeze(index === 0 ? ["floor-visual"] : westGroupId === undefined ? [] : [westGroupId]),
               topologyHash: TOPOLOGY_HASH,
-              mesh: overlay,
-            })]),
+              mesh,
+            }))),
             expectedProfileInventoryHash:
               createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1({
                 checkedLayout,
@@ -516,7 +530,7 @@ describe("Babylon Native block Profile settlement", () => {
       expect(profileInventoryHash).toMatch(/^sha256:[0-9a-f]{64}$/);
       expect(admission.contribution.profileSettlement).toMatchObject({
         kind: "host-snapshot",
-        targetCount: 4,
+        targetCount: (partitioned ? 5 : 4) + (mode === "buried" ? 1 : 0),
         profileInventoryHash,
       });
       expect(admission.contribution.staticColliders.map(({ id }) => id))

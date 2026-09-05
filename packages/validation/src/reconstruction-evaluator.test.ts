@@ -240,8 +240,8 @@ const evidenceValue = () => ({
           targets: [{
             acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
             visualGroupId: "central-ascent-group",
-            structuralProjection: {
-              outcome: "projected" as const,
+            visiblePixelProjection: {
+              outcome: "visible" as const,
               normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
               normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
               coverageBasisPoints: 2_400,
@@ -466,8 +466,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[1]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -518,8 +518,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[0]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -538,8 +538,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[0]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -622,7 +622,7 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .normalizedCenter = { xBasisPoints: 500, yBasisPoints: 500 };
       },
     });
@@ -640,14 +640,19 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .coverageBasisPoints = 2_700;
       },
     });
     expectIndependentFailure(result, "semantic-silhouette");
     expect(result.diagnostics[0]).toMatchObject({
       code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+      repairAction: {
+        operation: "adjust-geometry",
+        instruction: expect.stringContaining("occlusion"),
+      },
     });
+    expect(Reflect.get(result.diagnostics[0]!, "repairAction").instruction).not.toMatch(/Enlarge|Shrink/);
   });
 
   it("preserves each failed semantic submetric with executable correction data", () => {
@@ -657,12 +662,12 @@ describe("evaluateWorldReconstructionV1", () => {
         if (silhouette.observed.kind !== "semantic-silhouette-observed") {
           throw new Error("silhouette observed");
         }
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .normalizedCenter = {
           xBasisPoints: 500,
           yBasisPoints: 250,
         };
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .coverageBasisPoints = 2_700;
       },
     });
@@ -691,7 +696,8 @@ describe("evaluateWorldReconstructionV1", () => {
         kind: "revise-native-source",
         targetKind: "visual-group",
         targetId: "central-ascent-group",
-        operation: "move",
+        operation: "adjust-geometry",
+        instruction: expect.stringContaining("occlusion"),
       }),
     }));
   });

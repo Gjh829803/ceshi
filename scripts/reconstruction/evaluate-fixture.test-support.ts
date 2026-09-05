@@ -1,7 +1,9 @@
 import {
+  sha256Bytes,
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import { PNG } from "pngjs";
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
@@ -93,6 +95,7 @@ export function createSemanticViewObservationSetFixtureV1(
       viewId: view.viewId,
       viewRequestHash: view.requestHash,
       pngContentHash: view.pngContentHash,
+      identityMaskPngContentHash: view.identityMaskPngContentHash,
       targets: openingObservation.formalRequest.semanticCaptureMap.bindings.map(
         (binding) => {
           const group = openingGroupByTargetRef.get(binding.acceptanceTargetRef);
@@ -458,7 +461,7 @@ export function createEvidenceSetFixtureInputV1(
                   maxYBasisPoints: 800,
                 },
                 normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
-                coverageBasisPoints: 4_800,
+                coverageBasisPoints: 46,
               },
         }, {
           viewId: "world-side",
@@ -483,7 +486,7 @@ export function createEvidenceSetFixtureInputV1(
                   maxYBasisPoints: 300,
                 },
                 normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
-                coverageBasisPoints: 400,
+                coverageBasisPoints: 4,
               },
         }, {
           viewId: "world-side" as const,
@@ -1177,7 +1180,30 @@ export function createEvidenceSetFixtureInputV1(
     requestHash: hashFormalArtifactViewRequestV1(request),
     pngArtifactRef: `artifact://case/package-fixture/capture/${request.viewId}.png`,
     pngContentHash: H(String(index + 6)),
+    identityMaskPngArtifactRef: `artifact://case/package-fixture/capture/${request.viewId}-identity-mask.png`,
+    identityMaskPngContentHash: H("9"),
   }));
+  // Explicit synthetic pixels, not AABB-area evidence: upper overlaps part of ground.
+  const identityMaskPngs = viewRecords.map((view) => {
+    const image = new PNG({ width: view.request.widthPixels, height: view.request.heightPixels });
+    for (let offset = 3; offset < image.data.length; offset += 4) image.data[offset] = 255;
+    for (const group of openingObservation.visualGroups) {
+      const binding = semanticCaptureMap.bindings.find((row) => row.acceptanceTargetRef === group.acceptanceTargetRef)!;
+      const color = Number.parseInt(binding.identityColor.slice(1), 16);
+      const b = group.normalizedBounds;
+      for (let y = Math.round(b.minYBasisPoints * image.height / 10000); y < Math.round(b.maxYBasisPoints * image.height / 10000); y += 1) {
+        for (let x = Math.round(b.minXBasisPoints * image.width / 10000); x < Math.round(b.maxXBasisPoints * image.width / 10000); x += 1) {
+          const offset = (y * image.width + x) * 4;
+          image.data[offset] = color >>> 16;
+          image.data[offset + 1] = color >>> 8 & 255;
+          image.data[offset + 2] = color & 255;
+        }
+      }
+    }
+    const bytes = PNG.sync.write(image);
+    view.identityMaskPngContentHash = sha256Bytes(bytes) as Sha256HashV1;
+    return { viewId: view.viewId, bytes };
+  });
   const semanticViewObservationSet =
     createSemanticViewObservationSetFixtureV1(
       openingObservation,
@@ -1261,6 +1287,7 @@ export function createEvidenceSetFixtureInputV1(
     captureReceipt,
     openingObservation,
     semanticViewObservationSet,
+    identityMaskPngs,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversalObservation,
