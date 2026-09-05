@@ -1,7 +1,11 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import {
+  createBabylonNativeHostRandomV1,
+  type BabylonNativeSceneBuildContextV1,
+} from "@whitebox-world/native-babylon";
+import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
 import { describe, expect, it } from "vitest";
 
 import { createBabylonNativeBlockProfileCheckResultV1 } from "../../packages/native-babylon-block-profile/src/check.js";
@@ -19,6 +23,30 @@ const fixtures = NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1;
 const targetBlocks = (id: keyof typeof fixtures) => fixtures[id].blocks.filter(
   (block) => block.visualGroupId === "gate-mass-group",
 );
+
+function createContext(scene: Scene): BabylonNativeSceneBuildContextV1 {
+  return {
+    scene,
+    bootstrap: {
+      kind: "babylon-native-scene-bootstrap", schemaVersion: 1,
+      id: "semantic-geometry-test",
+      sceneModuleRef: "worldkit://native-scene/semantic-geometry-test@1",
+      nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+      nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      gameplayBootstrapRef: "worldkit://gameplay-bootstrap/semantic-geometry-test@1",
+      initialControlledEntityId: "player",
+      gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+      initialCamera: {
+        mode: "third-person", pitchRadians: 0.18, distanceMeters: 5,
+        fovDegrees: 56, targetHeightMeters: 1.2,
+      },
+      seed: 81, spawnMarkerId: "player-spawn",
+    },
+    random: createBabylonNativeHostRandomV1(81),
+    assets: { async resolve(): Promise<never> { throw new Error("No assets in this fixture test"); } },
+    registration: { registerSpawnMarker() {}, registerStaticCollider() {} },
+  };
+}
 
 describe("Native semantic geometry capture fixtures", () => {
   it("preserves Ground, Spawn, four other identities and the gate Collider", () => {
@@ -57,13 +85,17 @@ describe("Native semantic geometry capture fixtures", () => {
     }
   });
 
-  it.each(Object.keys(fixtures) as (keyof typeof fixtures)[])("passes the real pure Block checker: %s", (id) => {
+  it.each(Object.keys(fixtures) as (keyof typeof fixtures)[])("passes public Session createBlock admission and the real pure Block checker: %s", (id) => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
+    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), {
+      maximumBlockCount: fixtures[id].options.maximumBlockCount,
+    });
     try {
       const records: BabylonNativeBlockSessionRecordV1[] = fixtures[id].blocks.map((input) => {
-        const mesh = MeshBuilder.CreateBox(input.id, { size: 1 }, scene);
-        mesh.position.set(...input.centerMetersXYZ);
+        // Use the public entry point: constructing checker records directly
+        // bypasses the owning input parser's id/shape/lattice/occupancy checks.
+        const mesh = session.createBlock(input);
         return {
           input, mesh,
           localGeometrySnapshot: {
@@ -77,6 +109,24 @@ describe("Native semantic geometry capture fixtures", () => {
       expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
       expect(result.outcome).toBe("passed");
     } finally {
+      session.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rejects the previous fractional-coordinate ids through the actual owning parser", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), { maximumBlockCount: 128 });
+    try {
+      for (const id of ["wall-3-0.5", "bounds-column--0.5", "occluder-2--0.5", "rear-7-0.5"]) {
+        expect(() => session.createBlock({ ...fixtures["solid-wall"].blocks[0]!, id }))
+          .toThrow(/WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID/);
+      }
+      expect(scene.meshes).toHaveLength(0);
+    } finally {
+      session.dispose();
       scene.dispose();
       engine.dispose();
     }

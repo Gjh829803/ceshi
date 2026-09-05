@@ -23,21 +23,22 @@ function block(
   };
 }
 
-const solidWall = [3, 4, 5].flatMap((x) => [0.5, 1.5, 2.5].map((y) =>
-  block(x === 3 && y === 0.5 ? "gate" : `wall-${x}-${y}`, [x, y, 10])
+// Stable ids encode integer array indices, never fractional meter coordinates.
+const solidWall = [3, 4, 5].flatMap((x) => [0.5, 1.5, 2.5].map((y, yIndex) =>
+  block(x === 3 && yIndex === 0 ? "gate" : `wall-${x}-${yIndex}`, [x, y, 10])
 ));
 
 // The unchanged mountain/Ground provide the other extrema. This fixed ungrouped
 // column makes every variant's checked-layout bounds [-4.5,-1,0.5]..[8.5,5,18.5].
 // It is away from the gate in all three views; the ordinary worldBoundsPolicy
 // therefore derives identical side/top Camera inputs for every comparison pair.
-const boundsColumn = [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5].map((y) =>
-  block(`bounds-column-${y}`, [8, y, 2], false)
+const boundsColumn = [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5].map((y, yIndex) =>
+  block(`bounds-column-${yIndex}`, [8, y, 2], false)
 );
 
 function occluderColumns(xs: readonly number[]) {
-  return xs.flatMap((x) => [-0.5, 0.5, 1.5, 2.5, 3.5].map((y) =>
-    block(`occluder-${x}-${y}`, [x, y, 12], false)
+  return xs.flatMap((x) => [-0.5, 0.5, 1.5, 2.5, 3.5].map((y, yIndex) =>
+    block(`occluder-${x}-${yIndex}`, [x, y, 12], false)
   ));
 }
 
@@ -82,7 +83,7 @@ export const NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 = {
   // independently visible depth from +X (side) and +Y (top). Original gate
   // Collider is retained; these extra visual blocks do not add Collider intent.
   "rear-depth-wall": fixture([...solidWall, ...[7, 8, 9].flatMap((z) =>
-    [0.5, 1.5].map((y) => block(`rear-${z}-${y}`, [4, y, z]))
+    [0.5, 1.5].map((y, yIndex) => block(`rear-${z}-${yIndex}`, [4, y, z]))
   )]),
 } as const;
 
