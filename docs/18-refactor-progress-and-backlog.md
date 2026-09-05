@@ -2119,6 +2119,24 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   旧时间戳交付在重放中断后的自动恢复、Recording 下游及其余 CF 继续推进；所有 CF
   实施及旧链对齐完成后才运行最后本地生产 Case。
 
+- CF16-RECORDING-ASSETS（main-agent-only，接 `e5daf66f`）：Studio 通过现有 Native
+  publication/launch 身份验证向 Recording 提供唯一 Source 上下文，不再要求 Native
+  伪造 Canonical authoring.json。视觉失败或 strict diagnostic failed 不撤销仍有效的
+  白膜录制资格；Capture 被改动则沿用现有 launch 证据检查撤销资格。
+  Recording 消费 styled manifest 中同 Source、同 target 的真实白膜引用，复用
+  visualCapturePaths；Native 使用 final/capture/triviews 和冻结 inputs/world-plan.png，
+  不读取 Canonical 根目录占位图或另一目标的图。保留旧 role/ID 排序、primary→opening→
+  其余 tri-view 的 prompt 引用顺序、backend 冻结、生成/ZIP 所需媒体条件、视频参数和转码。
+  两种 Source 的真实 HTTP upload/list/generation dispatch/ZIP 及负向资产引用测试
+  17/17，通过实际 ZIP 解包核对 Native plan/白膜字节；模型与视频生成为 stand-in。
+  Studio Native styled 四种终态/失效撤销 4/4、既有 Playground Recording 消费者 4/4、
+  Node 语法与 diff 检查通过。仅 MJS 与文档变更，不重跑无关 typecheck/全仓重型门禁。
+  Native Viewer 尚未安装录制面板：实际 hosted Canvas 位于 credentialless 跨源 frame，
+  当前 Runtime bridge 没有视频交付合同，shell 也没有 Studio Recording 服务绑定。
+  不能通过放宽 Runtime CSP、向 frame 暴露 Studio API 或复制 CanvasRecorder 代替该接线。
+  浏览器端录制/上传、旧时间戳中断自动恢复及剩余 CF 继续开放；本次不是 Browser/媒体
+  效果、真实模型 Case 或全分支验收。全部 CF 实施与旧链对齐完成后再跑最后本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

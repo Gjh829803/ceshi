@@ -1435,10 +1435,15 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
       assert.equal(detail.world.strictDiagnosticOutcome, "failed");
       assert.ok(detail.world.nativeLaunch);
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/native-launch`)).status, 200);
+      assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`)).status, 200);
       assert.equal(detail.world.styledTriviewsRequired, true);
       assert.equal(detail.world.styledTriviewsStatus, visualMode === "passed" ? "passed" : "failed");
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/triviews/visual-target-1`)).status, 200);
       if (visualMode !== "passed") assert.equal(detail.world.failedStage, "visual-imagegen");
+      const root = path.join(fakeRepoRoot, "artifacts/scenes", created.id);
+      await writeFile(path.join(root, "authoring.json"), "Canonical decoy");
+      await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
+      assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`)).status, 404);
     } finally { await studio.shutdown(); }
   });
 }

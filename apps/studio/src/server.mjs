@@ -798,6 +798,16 @@ export function createStudio(options = {}) {
     generationRunner: options.recordingGenerationRunner,
     spawnImplementation: options.recordingSpawnImplementation,
     codexBackendProvider: () => selectedCodexBackend,
+    sceneContextProvider: async sceneId => {
+      const record = await readRecord(sceneId);
+      if (record && effectiveSceneSourceKind(record) === "babylon-native") {
+        return record.productionOutcome === "passed" && record.publicationOutcome === "published" &&
+          record.nativeProductionClosure?.caseId === sceneId && await hasNativeLaunchEvidence(record)
+          ? { sceneSourceKind: "babylon-native" } : null;
+      }
+      return await fileExists(path.join(repoRoot, "artifacts/scenes", sceneId, "authoring.json"))
+        ? { sceneSourceKind: "canonical" } : null;
+    },
   });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");

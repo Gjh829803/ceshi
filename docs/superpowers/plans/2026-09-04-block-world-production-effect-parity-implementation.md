@@ -876,6 +876,58 @@ safe path/corruption controls, Native visual full/partial restoration and repeat
 Host-only replay preserving Capture/whitebox. This does not claim model evidence,
 power-loss durability or success recovery when no complete snapshot exists.
 
+#### CF16-RECORDING-ASSETS
+
+Main-agent-only, sequential after Native styling/Studio delivery. Studio remains
+the owner of Source selection and published Native launch evidence; Recording
+receives that context, not another Native verifier or Canonical authoring alias.
+Reference-backed Native whitebox remains recordable when styling fails, while
+generation/bundle readiness retains the old required-media predicates. Canonical
+standalone availability continues to use its existing authoring artifact.
+
+Consume the current styled manifest's actual whitebox references, joined to the
+same target and existing Source capture-path helper. Native uses final/capture
+tri-views and its frozen inputs/world-plan.png; never root Canonical decoys or
+another target's image. Keep old role/ID ordering, prompt image precedence,
+normalization, audio and Seedance parameters, and ZIP layout. No new semantic
+review, media threshold or production gate is added by this path adaptation.
+
+Required evidence: both Sources through upload/list/default prompt dispatch and
+ZIP copying, original local backend freeze and ordered reference roles, Native
+frozen plan bytes and actual whitebox pair bytes, unavailable/unknown Source,
+missing/escaping/cross-source/cross-target references, and Studio's real published
+Native evidence with strict/visual failure and Capture invalidation. Test model
+and video generation are stand-ins; no real paid generation. Native Viewer-side
+Recording installation/upload, rendered/media acceptance and remaining CF work
+are not closed by API/asset wiring alone.
+
+#### CF16-RECORDING-VIEWER
+
+Main-agent-only, sequential after CF16-RECORDING-ASSETS. Current inspection:
+`startHostedFrame` owns the actual Canvas; `startHostedShell` embeds it through
+the credentialless cross-origin Runtime bridge. The bridge accepts only the
+existing Runtime request/receipt protocol and rejects unrelated bootstrap
+messages. Native launch currently returns an identity-bound CLI entry, not a
+Studio same-origin Preview route. Do not install the Canonical panel directly
+inside this isolated frame or infer Studio ownership from an arbitrary URL.
+
+Required integration: reuse the single CanvasRecorder implementation and its
+old raster/fps/bitrate/timing behavior; keep recording controls and upload/list/
+generation UI with the trusted shell; bind any media delivery to the exact
+loaded Native package/session and the existing Studio launch identity. The
+isolated frame must not gain Studio credentials or general API access. Media
+delivery must not become Runtime movement/Camera authority, add a production
+gate, or change formal Capture. Resolve shared browser-media ownership and the
+transport contract before implementation; no duplicate recorder or permissive
+global postMessage side channel.
+
+Required evidence: cross-origin start/stop/byte delivery, exact Canvas selection,
+existing encoding defaults, upload failure/local backup, repeated recording,
+teardown while recording/stopping, stale session/frame navigation, wrong Source/
+Package/Studio destination, and no controls on formal Capture/probe routes.
+Synthetic protocol/UI tests are development evidence; real browser recording
+and the final production Case remain separate acceptance layers.
+
 The latest user objective supersedes the earlier early-rerun scheduling: finish all CF
 implementation and old-branch alignment first; only then run the final local Case and
 prove the production chain completes. Do not launch a fresh production/model Case during
