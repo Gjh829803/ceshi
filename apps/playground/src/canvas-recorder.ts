@@ -133,12 +133,15 @@ export class CanvasRecorder {
     const recorder = this.mediaRecorder;
     const durationMs = Math.max(0, this.now() - this.startedAt);
     this.stateValue = "stopping";
+    let rejectStop!: (reason: unknown) => void;
+    let detachStopListeners!: () => void;
     this.stopPromise = new Promise<CanvasRecordingResult>((resolve, reject) => {
-      recorder.addEventListener("error", () => {
+      rejectStop = reject;
+      const handleError = (): void => {
         this.finish();
         reject(new Error("录屏失败，浏览器没有成功编码视频。"));
-      }, { once: true });
-      recorder.addEventListener("stop", () => {
+      };
+      const handleStop = (): void => {
         const mimeType = recorder.mimeType || this.chunks[0]?.type || "video/webm";
         const blob = new Blob(this.chunks, { type: mimeType });
         this.finish();
@@ -152,10 +155,23 @@ export class CanvasRecorder {
           extension: recordingExtension(mimeType),
           mimeType,
         });
-      }, { once: true });
-      recorder.stop();
+      };
+      recorder.addEventListener("error", handleError, { once: true });
+      recorder.addEventListener("stop", handleStop, { once: true });
+      detachStopListeners = () => {
+        recorder.removeEventListener("error", handleError);
+        recorder.removeEventListener("stop", handleStop);
+      };
     });
-    return this.stopPromise;
+    const stopPromise = this.stopPromise;
+    try {
+      recorder.stop();
+    } catch (error) {
+      detachStopListeners();
+      this.finish();
+      rejectStop(error);
+    }
+    return stopPromise;
   }
 
   dispose(): void {

@@ -232,4 +232,34 @@ describe("canvas recorder source selection and lifecycle", () => {
     expect(env.timers.size).toBe(0);
     for (const track of env.tracks) expect(track.stop).toHaveBeenCalledOnce();
   });
+
+  it.each([true, false])("cleans a synchronous stop failure and preserves its original error, direct=%s", async (isDirect) => {
+    const env = recordingEnvironment(isDirect ? 1280 : 640);
+    const recorder = new CanvasRecorder(env.canvas);
+    recorder.start();
+    const media = env.instances[0]!;
+    const originalError = new Error("synchronous stop failed");
+    media.stop.mockImplementationOnce(() => { throw originalError; });
+
+    await expect(recorder.stop()).rejects.toBe(originalError);
+    expect(recorder.state).toBe("idle");
+    expect(recorder.elapsedMs).toBe(0);
+    expect(env.timers.size).toBe(0);
+    expect(media.stop).toHaveBeenCalledOnce();
+    expect(env.construct).toHaveBeenCalledOnce();
+    for (const track of env.tracks) expect(track.stop).toHaveBeenCalledOnce();
+    recorder.dispose();
+    for (const track of env.tracks) expect(track.stop).toHaveBeenCalledOnce();
+
+    recorder.start();
+    media.dispatchEvent(new Event("stop"));
+    media.dispatchEvent(new Event("error"));
+    expect(recorder.state).toBe("recording");
+    const stopped = recorder.stop();
+    expect(recorder.stop()).toBe(stopped);
+    expect(await stopped).toMatchObject({ extension: "webm" });
+    expect(recorder.state).toBe("idle");
+    expect(env.timers.size).toBe(0);
+    for (const track of env.tracks) expect(track.stop).toHaveBeenCalledTimes(2);
+  });
 });
