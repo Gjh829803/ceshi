@@ -37,6 +37,22 @@ def main():
     assert digest(archive) == receipt['archiveSha256']
     assert archive.stat().st_size == receipt['archiveByteLength']
     output = Path(args.output).absolute()
+    # Inspect headers only before extraction or hashing any member contents.
+    # Platform-owned task scratch must never become a public world artifact.
+    listed_paths, platform_paths = [], []
+    with tarfile.open(archive, 'r|gz') as stream:
+        for member in stream:
+            name = member.name.rstrip('/')
+            listed_paths.append(name)
+            assert len(listed_paths) <= 10000, 'Member limit'
+            parts = PurePosixPath(name).parts
+            if any(part.lower() in {'scratch', 'codex_home', 'auth.json', 'credentials', 'aws-credentials', 'aws-config', '.aws', '.codex', '.creator-session', 'google-service-account.json'} or part.lower().startswith('codex_home_') for part in parts):
+                platform_paths.append(name)
+    if platform_paths:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        quarantine = {'kind': 'three-creator-artifact-quarantine', 'status': 'quarantined', 'reason': 'PLATFORM_PRIVATE_PATH_IN_ARTIFACT', 'archiveSha256': receipt['archiveSha256'], 'paths': platform_paths, 'memberContentsInspected': False, 'extracted': False}
+        output.with_name(output.name + '-quarantine.json').write_text(json.dumps(quarantine, indent=2) + '\n')
+        raise RuntimeError('PLATFORM_PRIVATE_PATH_IN_ARTIFACT: quarantined before extraction; member contents were not inspected')
     assert not output.exists(), 'Use a fresh verification output directory'
     output.mkdir(parents=True)
     assert output.resolve() == output, 'Output ancestors cannot be symlinks'
@@ -128,7 +144,7 @@ def main():
               'actualWallSeconds': played['actualWallSeconds'], 'inputWallSeconds': played['inputWallSeconds'], 'activePlaySeconds': played['activePlaySeconds'],
               'actualVideoMetadata': actual_video, 'captureTiming': capture,
               'worldBuildHash': manifest['worldBuildHash'], 'creatorRuntimeLockHash': manifest['creatorRuntimeLockHash'],
-              'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total,
+              'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total, 'platformPathPreflight': 'passed',
               'payloadPath': str(payload), 'semanticStatus': 'unreviewed', 'browserReplay': 'not-run',
               'qualification': 'Hash closure and recorded technical evidence only; independent runtime and visual review required.'}
     (output / 'host-artifact-verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')

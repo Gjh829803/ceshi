@@ -13,7 +13,7 @@ export function terminalJobHasStopped(job) {
   if (['succeeded','completed','failed','submit_failed'].includes(job?.status)) return true;
   return ['cancelled','stopped'].includes(job?.status) && job.progress?.summary?.ray_cleanup_checked === true && job.progress.summary.ray_cleanup_pending === false;
 }
-export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximumTaskSeconds,now=Date.now()}) {
+export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximumTaskSeconds,hasObservedCliActivity=false,now=Date.now()}) {
   if (job.request_id !== requestId || job.output_s3_prefix !== outputS3Prefix || job.pipeline !== 'codex') return {action:'halt-unowned',reason:'unexpected-job-identity'};
   if (job.attempt !== undefined && (!Number.isSafeInteger(job.attempt) || job.attempt < 0 || job.attempt > 1)) return {action:'stop',reason:'unexpected-provider-reattempt'};
   if (job.counters?.total !== undefined && (!Number.isSafeInteger(job.counters.total) || job.counters.total < 0 || job.counters.total > 1)) return {action:'stop',reason:'unexpected-task-fanout'};
@@ -22,7 +22,7 @@ export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximum
   if (!Number.isFinite(start)||start>now+60000) return {action:'stop',reason:'invalid-durable-start-time'};
   const elapsedSeconds=(now-start)/1000;
   if (elapsedSeconds>MAXIMUM_QUEUE_SECONDS+maximumTaskSeconds+STOP_DRAIN_SECONDS) return {action:'stop',reason:'total-wall-deadline',elapsedSeconds};
-  if (elapsedSeconds>MAXIMUM_QUEUE_SECONDS && job.counters?.queued===1 && job.counters?.running===0 && job.counters?.succeeded===0 && job.counters?.failed===0) return {action:'stop',reason:'queue-deadline',elapsedSeconds};
+  if (!hasObservedCliActivity && elapsedSeconds>MAXIMUM_QUEUE_SECONDS && job.counters?.queued===1 && job.counters?.running===0 && job.counters?.succeeded===0 && job.counters?.failed===0) return {action:'stop',reason:'queue-deadline',elapsedSeconds};
   if (['cancelled','stopped'].includes(job.status)) return {action:'stop-pending',reason:'ray-cleanup-unconfirmed',elapsedSeconds};
   return {action:'continue',elapsedSeconds};
 }

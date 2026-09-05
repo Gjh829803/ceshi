@@ -47,6 +47,13 @@ class ClosedArchiveTests(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertIn('AssertionError', error)
 
+    def test_platform_scratch_is_quarantined_by_headers_before_extraction(self):
+        for name in ['payload/source/scratch/file.ts', 'payload/source/codex_home_example/auth.json', 'payload/source/.creator-session/config.json']:
+            code, error = self.invoke([(name, b'synthetic private marker', 'file')])
+            self.assertNotEqual(code, 0)
+            self.assertIn('PLATFORM_PRIVATE_PATH_IN_ARTIFACT', error)
+            self.assertNotIn('synthetic private marker', error)
+
 
 if __name__ == '__main__':
     unittest.main()

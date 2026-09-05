@@ -1,56 +1,61 @@
-# Creator evaluation gallery
+# WorldKit evaluation center
 
-A plain static gallery for the five frozen GPT-6 experiments. It deliberately
-distinguishes delivery, browser availability and quality. It does not promote
-Native worlds into the formal WorldPackage registry or imply a production gate
-has passed.
+The read-only evaluation UI combines the existing Studio's task-list,
+observable-trajectory, event-stream and deliverable patterns with the Three
+playable gallery. The original Studio files are already present in this branch;
+its Native/Planner pipeline is not used as the Three status model.
 
-`results.json` is written by the trusted Host from the frozen selection and a
-curated `publication.json`. It contains only public reference/prompt context,
-selected media, case status and bounded metrics. Source trees, CLI events,
-credentials and private paths are not copied into the public directory.
+Public entry: `/creator-evals/three/`. Header navigation links back to the existing
+Studio and the preserved older five-case gallery. The page provides task search,
+status filters, current activity, elapsed time, attempts and failure causes;
+case details have process, artifacts, play and review tabs. Clicking a task
+reveals its detail. Mobile tables scroll within their container.
 
-Statuses:
+## Data ownership
 
-| Value | UI and admission |
-| --- | --- |
-| `running`, `queued`, `verifying` | Visible reference; no playable link |
-| `ready` | Passing static artifact check and independent browser report |
-| `issues` | Verified original delivery; Host confirms startup/controls, names independently observed content defects |
-| `failed` | No delivered playable artifact is published |
+- `results.json` is the curated gallery manifest from
+  `scripts/cloud/prepare-three-evaluation-site.py`. Playable readiness and content
+  review come from that manifest; a runtime event never grants semantic acceptance.
+- `progress.json` is `three-creator-run-progress` v1 from
+  `scripts/cloud/three-eval-progress.mjs`. It is keyed by the same run and task IDs.
+  Actual CLI/MCP observations take precedence over delayed provider queue counters.
+  Retries retain each original job and failure; missing timestamps stay unknown.
+- Only safe operation names, statuses, real times, bounded numeric progress and
+  fixed failure descriptions are public. Raw reasoning, commands, source and
+  account data are not displayed.
+- Each ten-second refresh updates status without reloading a mounted playable,
+  clearing local feedback or changing the selected tab. Event scrolling can follow
+  new entries or preserve the user's position. Source observation age, not merely
+  JSON regeneration time, determines whether live state is stale.
+- Switching away from a playing scene pauses it. Returning resumes only a scene
+  the page itself paused; a user's explicit pause is preserved. The adapter uses
+  the actual Three Host/World observer, with the existing Native observer fallback.
 
-The gallery fetches new results every 30 seconds. Unchanged cases do not reload
-an active iframe. Switching from play to video/tri-views pauses simulation;
-switching back resumes. An independent window link supports fullscreen browser
-play. Controls require a keyboard; the responsive phone layout is useful for
-comparison and review, not a touch-control implementation.
+Feedback is saved per evaluation in browser localStorage and can be exported as
+JSON. Videos and full-object views are lazy-loaded. Technical IDs remain in an
+expandable section, separate from the main task status.
 
-Feedback lives only in browser localStorage. Export downloads all reviews from
-that browser with case/source identity. It does not call an external messaging
-or evaluation-write service.
+## Publication
 
-## Prepare and publish a reviewed update
+Stage a new gallery directory with the existing Three stager. Publish through
+`publish-creator-evaluation-site.py --source SITE --pod RAY_HEAD --gallery three`.
+The gateway and other galleries remain unchanged. All files are atomically replaced,
+with the manifest installed last.
 
-From this worktree:
+While a run is active, generate a fresh safe `progress.json` into SITE and call:
 
 ```sh
-python3 scripts/cloud/prepare-creator-evaluation-site.py \
-  --evaluation-root .codex-tmp/gpt6-five-case-eval \
-  --publication .codex-tmp/gpt6-five-case-eval/publication.json \
-  --output .codex-tmp/gpt6-five-case-eval/evaluation-static
 python3 scripts/cloud/publish-creator-evaluation-site.py \
-  --source .codex-tmp/gpt6-five-case-eval/evaluation-static \
-  --pod <current-ray-head-pod>
+  --source SITE --pod RAY_HEAD --gallery three --progress-only
 ```
 
-Preparation rechecks the exact selected file hashes against the already verified
-archive manifest. Cases live under `cases/<case-id>/<source-hash-prefix>/`;
-original payload files remain unchanged. Publication writes sibling temporary
-files then renames them, with the manifest last. It does not change Kubernetes
-resources or routing. The [gateway deployment](../../deploy/creator-evaluation/README.md)
-owns those separate operations.
+This updates only the small progress snapshot. The publisher rejects a different
+run/task set and rejects stale updates against the installed run. A stopped Host
+observer is shown as stale; public clients never receive API or account credentials.
 
-Validation includes actual public HTTP iframe startup, video seeking, four
-lighthouse tri-views, tab pause/resume, score persistence, five visible cases,
-known-issue availability and disabled pending links, plus rendered desktop and
-mobile review. Evidence is in the local experiment's `host-review/platform/`.
+Validation: real local browser fixtures cover filters, task/tab selection,
+automatic-refresh iframe identity, feedback persistence, pause/resume, event
+scrolling, connection failure/recovery and 360/390px layouts. Public deployment is
+also checked in a real browser. See `.codex-tmp/evaluation-center-ui-qa/` and
+`.codex-tmp/three-sdk-v2-holdout/published-ui-check.json` for this implementation's
+actual evidence; fixtures are not model-generated scene results.

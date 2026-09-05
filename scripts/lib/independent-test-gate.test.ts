@@ -153,6 +153,7 @@ describe("independent test repository census", () => {
         "scripts/cloud/run-worldkit-cloud-scene-worker.test.mjs",
         "scripts/cloud/submit-worldkit-cloud-episode.test.mjs",
         "scripts/cloud/submit-worldkit-cloud-scene.test.mjs",
+        "scripts/cloud/three-eval-progress.test.mjs",
         "scripts/cloud/three-eval.test.mjs",
         "scripts/episodes/gemini-visual-event-director.test.mjs",
         "scripts/lib/cloud-global-work-slots.test.mjs",

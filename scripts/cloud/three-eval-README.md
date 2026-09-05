@@ -127,8 +127,8 @@ execution. SDK/browser/toolkit changes require the affected doctor again.
 ## Prepare, run and recover
 
 ```sh
-node scripts/cloud/three-eval-runner.mjs --mode prepare --suite sdk-only --experiment-revision three-sdk-v2 --run-id RUN --runtime-lock LOCK --max-concurrency 5 --account-concurrency 5
-node scripts/cloud/three-eval-runner.mjs --mode run --suite sdk-only --experiment-revision three-sdk-v2 --run-id RUN --runtime-lock LOCK --max-concurrency 5 --account-concurrency 5
+node scripts/cloud/three-eval-runner.mjs --mode prepare --manifest SELECTION --suite sdk-only --experiment-revision three-sdk-v2 --run-id RUN --runtime-lock LOCK --max-concurrency 5 --account-concurrency 5
+node scripts/cloud/three-eval-runner.mjs --mode run --manifest SELECTION --suite sdk-only --experiment-revision three-sdk-v2 --run-id RUN --runtime-lock LOCK --max-concurrency 5 --account-concurrency 5
 node scripts/cloud/three-eval-runner.mjs --mode resume --run-id RUN --runtime-lock LOCK
 node scripts/cloud/three-eval-runner.mjs --mode stats --run-id RUN
 ```
@@ -139,6 +139,12 @@ S3 prefix `.../agent-whitebox-world-sdk/three-creator/sdk-eval` (`paired-eval` f
 the explicit paired suite). Changing a
 durable payload is rejected. Failure diagnostics use the existing trusted Host
 reader of four exact files, with directory-FD/no-follow and size/hash checks.
+
+A new run requires an explicit selection manifest. Resume uses the saved manifest
+path and verifies its unchanged bytes. Model input contains the original reference,
+the uniformly normalized source request, frozen general instructions and technical
+identity only. Scene-specific acceptance hints, subject labels and reviewer policy
+remain in the Host plan; they are not attached to the generating Agent.
 
 The cloud launcher has the frozen model wall-time deadline and kills its process
 group after a 15-second TERM grace. The Host retains the original submission time

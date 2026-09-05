@@ -51,4 +51,16 @@ Physics-specific failures, native assumptions and matrix evidence are in `.codex
 
 The first installed v2 cloud doctor completed180.063s active and a36-file independently verified archive, but its real opening/video were300×150. The second doctor fixed dimensions and had no SDK/page/network errors, but completed89/91 steps with179s video despite180.132s active. Both are preserved as **NoGO**. The recording startup/budget/endpoint delta must pass a new same-source installed180s run and closure verification before five model cases start. The gate requires actual960×540 PNG/video, a complete episode and input/active/video durations each at least180s.
 
-Linux dependency prewarm, authenticated readonly service checks and concurrency admission are complete. The five-case suite uses gpt-6-astra/xhigh, SDK-only, max/account concurrency5, exact request reconciliation and distinct namespaces. Actual running concurrency, model output quality and per-case publication will be appended only after real jobs exist.
+The final119ad9b5 installed doctor passed:91/91 steps,181.855s input,181.776s active,182.927s actual MP4 with184 frames at960×540, no SDK/page errors. Fifteen MCP tools, paused commands, SDK/browser closure before and after, and independent36-file unpack with an actual ffprobe check all passed. This is toolchain evidence, not a generated scene result.
+
+The user then replaced the original five cases and required no human guidance during generation. The old suite had zero model POSTs and now has a durable submission halt. The fresh holdout was drawn once from90 valid unique PNGs, excluding the old five and the previously inspected excluded candidate. Its manifest SHA is `d1061c6707c1c12083da2baa26d8420691ae0e7dc12dac7aa0bbb889ead92afa`; selection was independently recomputed with no subject or difficulty filters. SDK/tools and the generic prompt remain frozen. Host-only change e0970a8c removes scene-specific hints and labels from model input and binds resume to the selected manifest. Root checked all five actual payloads against the exact generic instructions and original uniformly normalized user request.
+
+Run `three-sdk-v2-holdout-five-20260905-r1` submitted exactly five gpt-6-astra/xhigh SDK jobs on2026-09-05 at09:31:36–38 UTC, with max/account concurrency5. Runtime lock is `e04bcab0603230360737a752c1b312e7a8290e3497e40b2cb66a157727cc1bc2`. Initial service responses were queued; actual model execution and quality must be reported from later evidence. No human corrective messages or author-source patches are permitted in these original runs.
+
+| Source case | Job ID |
+|---|---|
+|013-grand-canyon-courier|gen_35869b59b65cf022|
+|gvs2-00007837|gen_c03aa61c0905e1d3|
+|12-lbd-00abe54cd558493dfc70621e|gen_a7b31f4991990414|
+|screenshot-20260823-193953|gen_50bd5bb2acb7bc70|
+|003-lunar-earthrise-rider|gen_e14d428ef6ccdce7|

@@ -2,8 +2,11 @@
 import hashlib
 import importlib.util
 import json
+import io
 import struct
+import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import zlib
@@ -13,6 +16,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('three_site', Path(__file__).with_name('prepare-three-evaluation-site.py'))
 site = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(site)
+publisher_spec = importlib.util.spec_from_file_location('three_publisher', Path(__file__).with_name('publish-creator-evaluation-site.py'))
+publisher = importlib.util.module_from_spec(publisher_spec)
+publisher_spec.loader.exec_module(publisher)
 
 
 def sha(value):
@@ -270,6 +276,65 @@ class EvaluationSiteTests(unittest.TestCase):
         _, result = fixture.stage()
         self.assertEqual(result['cases'][0]['semanticStatus'], 'known-issues')
         self.assertEqual(result['cases'][0]['status'], 'issues')
+
+
+class PublisherManifestTests(unittest.TestCase):
+    def manifest(self, cases):
+        return {'kind': 'three-creator-evaluation-gallery', 'id': 'local-publisher-fixture', 'cases': cases}
+
+    def test_accepts_new_three_selection_and_both_matching_profiles_at_same_remote_mount(self):
+        cases = [{'baseCaseId': f'fresh-reference-{index}', 'id': f'fresh-reference-{index}--three-sdk', 'profile': 'three-sdk'} for index in range(1, 6)]
+        self.assertEqual(publisher.validate_manifest(self.manifest(cases), 'three'), publisher.REMOTE + '/three')
+        paired = [{'baseCaseId': 'fresh-reference-1', 'id': 'fresh-reference-1--' + profile, 'profile': profile} for profile in ('three-raw', 'three-sdk')]
+        self.assertEqual(publisher.validate_manifest(self.manifest(paired), 'three'), publisher.REMOTE + '/three')
+
+    def test_rejects_bad_slugs_mismatched_base_or_profile_and_duplicate_task_ids(self):
+        base = sorted(publisher.CASE_IDS)[0]
+        valid = {'baseCaseId': base, 'id': base + '--three-sdk', 'profile': 'three-sdk'}
+        invalid = [
+            {**valid, 'baseCaseId': '../' + base}, {**valid, 'baseCaseId': 'Uppercase'},
+            {**valid, 'baseCaseId': ''}, {**valid, 'baseCaseId': None}, {**valid, 'baseCaseId': []},
+            {**valid, 'baseCaseId': 'another-safe-reference'}, {**valid, 'id': '../' + valid['id']},
+            {**valid, 'id': []}, {**valid, 'profile': 'three-raw'}, {**valid, 'profile': 'native'},
+        ]
+        for case in invalid:
+            with self.subTest(case=case), self.assertRaises(ValueError):
+                publisher.validate_manifest(self.manifest([case]), 'three')
+        with self.assertRaisesRegex(ValueError, 'Duplicate'):
+            publisher.validate_manifest(self.manifest([valid, valid]), 'three')
+
+    def test_legacy_gallery_remains_pinned_to_its_original_five_ids_and_remote(self):
+        legacy = {'id': 'gpt6-five-case-eval-20260905', 'cases': [{'id': value} for value in sorted(publisher.CASE_IDS)]}
+        self.assertEqual(publisher.validate_manifest(legacy, 'legacy-v3'), publisher.REMOTE)
+        changed = {**legacy, 'cases': [*legacy['cases'][:-1], {'id': 'fresh-reference-5'}]}
+        with self.assertRaisesRegex(ValueError, 'Unexpected legacy'):
+            publisher.validate_manifest(changed, 'legacy-v3')
+
+    def test_progress_is_bound_to_all_current_run_tasks(self):
+        manifest = self.manifest([{'id': 'fresh-reference--three-sdk'}])
+        progress = {'schemaVersion': 1, 'kind': 'three-creator-run-progress', 'runId': manifest['id'], 'cases': [{'taskId': 'fresh-reference--three-sdk'}]}
+        publisher.validate_progress(progress, manifest)
+        for change in ({'runId': 'another-run'}, {'cases': []}, {'cases': [{'taskId': 'another-task'}]}):
+            with self.assertRaises(ValueError):
+                publisher.validate_progress({**progress, **change}, manifest)
+
+    def test_atomic_progress_install_rejects_stale_or_other_run_without_replacing_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            write_json(root / 'results.json', {'id': 'local-progress-run'})
+            def install(value):
+                data = encoded(value); buffer = io.BytesIO()
+                with tarfile.open(fileobj=buffer, mode='w') as archive:
+                    entry = tarfile.TarInfo('progress.json'); entry.size = len(data)
+                    archive.addfile(entry, io.BytesIO(data))
+                return subprocess.run([sys.executable, '-c', publisher.INSTALL, str(root), 'progress-only'], input=buffer.getvalue(), capture_output=True)
+            valid = {'kind': 'three-creator-run-progress', 'runId': 'local-progress-run', 'updatedAt': '2026-09-05T10:00:00Z'}
+            result = install(valid)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            original = (root / 'progress.json').read_bytes()
+            for change in ({'runId': 'another-run'}, {'updatedAt': '2026-09-05T09:00:00Z'}):
+                self.assertNotEqual(install({**valid, **change}).returncode, 0)
+                self.assertEqual((root / 'progress.json').read_bytes(), original)
 
 
 if __name__ == '__main__':

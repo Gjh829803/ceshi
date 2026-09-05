@@ -9,6 +9,7 @@ import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs"
 import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
 import { withAdmissionDirectoryLock } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
+import { readThreeLiveStatus } from "./three-eval-live.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -192,12 +193,20 @@ async function execute(plan) {
     const remainingMilliseconds = Math.max(1000, Date.parse(state.submittedAt) + (MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS) * 1000 - Date.now());
     const job = await pollGenerationJob(state.jobId, {timeoutMs: remainingMilliseconds, fetchImplementation: (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(30000)}), completionProbeIntervalMs: 10000,
       nonTerminalFailureProbe: async current => {
-        const guard = assessOwnedJob(current, {requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix, submittedAt: state.submittedAt, maximumTaskSeconds: lock.maximumTaskSeconds});
+        if (!state.cliActivityEvidence) {
+          let observed = await optionalJson(path.join(repo, ".codex-tmp/three-creator-eval/live-cache", state.jobId + ".json"));
+          if (!observed?.job?.cliActivityObserved && Date.now()-Date.parse(state.submittedAt)>(MAXIMUM_QUEUE_SECONDS-30)*1000) {
+            try {const snapshot=await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,workDir:echo.config.options.work_dir}]);observed={observedAt:snapshot.observedAt,job:snapshot.jobs[0]};}
+            catch (error) {state.liveObservationError=error.name;}
+          }
+          if (observed?.job?.jobId===state.jobId && observed.job.taskId===plan.item.id && observed.job.requestId===plan.requestId && observed.job.cliActivityObserved===true && observed.job.launcher?.runtimeHash===lock.runtimeHash) state.cliActivityEvidence={source:"host-fixed-output-cli-events",observedAt:observed.observedAt,launcherStartedAt:observed.job.launcher.startedAt??null};
+        }
+        const guard = assessOwnedJob(current, {requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix, submittedAt: state.submittedAt, maximumTaskSeconds: lock.maximumTaskSeconds, hasObservedCliActivity:Boolean(state.cliActivityEvidence)});
         state.providerStatus = current.status; state.lastGuard = guard; state.lastObservedAt = new Date().toISOString(); await save();
         if (["stop", "halt-unowned", "stop-pending"].includes(guard.action)) { const error = new Error(`THREE_EXECUTION_GUARD: ${guard.reason}`); error.guard = guard; throw error; }
         return null;
       }, onProgress: current => { console.log(`CREATOR_EVAL_PROGRESS ${plan.item.id} ${current.status} ${JSON.stringify(current.counters ?? {})}`); }});
-    const finalGuard = assessOwnedJob(job, {requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix, submittedAt: state.submittedAt, maximumTaskSeconds: lock.maximumTaskSeconds});
+    const finalGuard = assessOwnedJob(job, {requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix, submittedAt: state.submittedAt, maximumTaskSeconds: lock.maximumTaskSeconds, hasObservedCliActivity:Boolean(state.cliActivityEvidence)});
     if (["stop", "halt-unowned"].includes(finalGuard.action)) { const error = new Error(`THREE_EXECUTION_GUARD: ${finalGuard.reason}`); error.guard = finalGuard; throw error; }
     state.providerStatus = job.status; state.rayCleanupConfirmed = terminalJobHasStopped(job); state.timing = job.timing; state.apiBuildCommit = job.build_commit;
     if (["cancelled", "stopped"].includes(job.status) && !state.rayCleanupConfirmed) { const error = new Error("THREE_EXECUTION_GUARD: ray-cleanup-unconfirmed"); error.guard = {action: "stop-pending", reason: "ray-cleanup-unconfirmed"}; throw error; }
