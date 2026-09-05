@@ -36,6 +36,7 @@ import {
 
 import { analyzeNativeEntryIdentityImageV4 } from
   "../agents/agent-planner-self-check.js";
+import { measureIdentityMaskProjectionsV1 } from "../scenes/identity-mask-projection.js";
 import {
   parseVisualIdentityPaletteV1,
   type VisualIdentityPaletteTargetV1,
@@ -258,27 +259,16 @@ async function measurePaletteTargets(
     throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
   }
   const landmarkTargets: NativeWorldBaselineVisualTargetV1[] = [];
+  const projections = measureIdentityMaskProjectionsV1({
+    widthPixels: info.width,
+    heightPixels: info.height,
+    targetCount: targets.length,
+    admittedTargetByPixel: analysis.admittedTargetByPixel,
+  });
   for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
     const target = targets[targetIndex]!;
-    let minimumX = info.width;
-    let minimumY = info.height;
-    let maximumX = -1;
-    let maximumY = -1;
-    let pixelCount = 0;
-    const admittedTarget = targetIndex + 1;
-    for (let y = 0; y < info.height; y += 1) {
-      for (let x = 0; x < info.width; x += 1) {
-        const pixelIndex = y * info.width + x;
-        if (analysis.admittedTargetByPixel[pixelIndex] !== admittedTarget) {
-          continue;
-        }
-        minimumX = Math.min(minimumX, x);
-        minimumY = Math.min(minimumY, y);
-        maximumX = Math.max(maximumX, x);
-        maximumY = Math.max(maximumY, y);
-        pixelCount += 1;
-      }
-    }
+    const projection = projections[targetIndex]!;
+    const { pixelCount } = projection;
     if (target.targetKind === "subject") {
       if (pixelCount === 0) {
         throw new TypeError(
@@ -296,7 +286,7 @@ async function measurePaletteTargets(
     );
     const measuredTarget = measuredTargets[targetIndex]!;
     if (
-      pixelCount === 0 ||
+      projection.outcome === "not-visible" ||
       measuredTarget.largestComponentPixelCount <
         minimumReliableComponentPixelCount
     ) {
@@ -315,22 +305,7 @@ async function measurePaletteTargets(
         "NATIVE_WORLD_BASELINE_PALETTE_INVALID",
       );
     }
-    const normalizedBounds = Object.freeze({
-      minXBasisPoints: Math.floor(minimumX * 10000 / info.width),
-      minYBasisPoints: Math.floor(minimumY * 10000 / info.height),
-      maxXBasisPoints: Math.ceil((maximumX + 1) * 10000 / info.width),
-      maxYBasisPoints: Math.ceil((maximumY + 1) * 10000 / info.height),
-    });
-    const normalizedCenter = Object.freeze({
-      xBasisPoints: Math.round(
-        (normalizedBounds.minXBasisPoints + normalizedBounds.maxXBasisPoints) /
-          2,
-      ),
-      yBasisPoints: Math.round(
-        (normalizedBounds.minYBasisPoints + normalizedBounds.maxYBasisPoints) /
-          2,
-      ),
-    });
+    const { normalizedBounds, normalizedCenter, coverageBasisPoints } = projection;
     landmarkTargets.push(Object.freeze({
       acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
       compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
@@ -340,10 +315,7 @@ async function measurePaletteTargets(
       viewRequirements: targetViewRequirements({
         normalizedBounds,
         normalizedCenter,
-        coverageBasisPoints: Math.max(
-          1,
-          Math.round(pixelCount * 10000 / (info.width * info.height)),
-        ),
+        coverageBasisPoints,
       }),
     }));
   }
