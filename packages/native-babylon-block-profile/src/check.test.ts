@@ -15,7 +15,7 @@ import {
   createBabylonNativeBlockProfileCheckResultV1,
 } from "./check.js";
 import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
-import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import type { BabylonNativeBlockCreateInputV1, BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
 
 type Shape = "full" | "half" | "quarter" | "small" | "step";
@@ -41,7 +41,7 @@ interface BlockProfileModule {
   createBabylonNativeBlockProfileSessionV1(
     context: BabylonNativeSceneBuildContextV1,
   ): {
-    createBlock(input: Readonly<BlockCreateInput>): Mesh;
+    createBlock(input: Readonly<BlockCreateInput>): Readonly<BlockCreateInput>;
     finalize(): Readonly<{
       kind: "babylon-native-block-checked-layout";
       schemaVersion: 1;
@@ -94,31 +94,9 @@ async function loadProfile(): Promise<BlockProfileModule> {
       const records: BabylonNativeBlockSessionRecordV1[] = [];
       return {
         createBlock(input) {
-          const [width, height, depth] =
-            BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[input.shape];
-          const mesh = MeshBuilder.CreateBox(input.id, {
-            width,
-            height,
-            depth,
-            updatable: true,
-          }, context.scene);
-          mesh.id = input.id;
-          mesh.position.set(...input.centerMetersXYZ);
-          mesh.rotation.y = (input.rotationQuarterTurnsY ?? 0) * Math.PI / 2;
-          const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-          const indices = mesh.getIndices();
-          if (positions === null || indices === null) {
-            throw new Error("test check-session could not snapshot Mesh geometry");
-          }
-          records.push(Object.freeze({
-            input: Object.freeze({ ...input }),
-            mesh,
-            localGeometrySnapshot: Object.freeze({
-              positions: Object.freeze([...positions]),
-              indices: Object.freeze(Array.from(indices)),
-            }),
-          }));
-          return mesh;
+          const intent = Object.freeze({ ...input });
+          records.push(Object.freeze({ input: intent }));
+          return intent;
         },
         finalize() {
           const frozenRecords = Object.freeze([...records]);
@@ -601,154 +579,7 @@ describe("Babylon Native block profile structural check", () => {
     },
   );
 
-  it("reports a disposed final Mesh as a closed block diagnostic", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+  // The five former raw-Mesh lifecycle/geometry cases now exercise real
+  // Session -> Host settlement in profile-settlement.test.ts (CF-20/MEM4).
 
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "disposed-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      });
-      mesh.dispose();
-
-      const result = session.finalize().checkResult;
-
-      expect(result.outcome).toBe("rejected");
-      expect(result.diagnostics).toHaveLength(1);
-      expect(result.diagnostics[0]).toMatchObject({
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
-        location: { kind: "block", blockId: "disposed-block" },
-      });
-      expect(result.metrics.blockCount).toBe(1);
-      expect(result.metrics.occupiedMicroCellCount).toBe(0);
-    });
-  });
-
-  it("rejects local geometry mutation instead of trusting the declared shape", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "mutated-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      });
-      const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
-      positions[0] = positions[0]! + 0.25;
-      mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
-
-      const result = session.finalize().checkResult;
-
-      expect(result.outcome).toBe("rejected");
-      expect(result.diagnostics).toHaveLength(1);
-      expect(result.diagnostics[0]).toMatchObject({
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
-        location: { kind: "block", blockId: "mutated-block" },
-      });
-      expect(result.metrics.occupiedMicroCellCount).toBe(0);
-    });
-  });
-
-  it("rejects a Mesh that reports thin instances absent from the session inventory", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "thin-instance-source",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      });
-      // NullEngine intentionally lacks instanced-array support, so Babylon cannot
-      // create a real thin instance here. Shadow only its public observation point
-      // while retaining a real Mesh and the production checker path.
-      Object.defineProperty(mesh, "hasThinInstances", {
-        configurable: true,
-        value: true,
-      });
-
-      const result = session.finalize().checkResult;
-
-      expect(result.outcome).toBe("rejected");
-      expect(result.diagnostics).toHaveLength(1);
-      expect(result.diagnostics[0]).toMatchObject({
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
-        location: { kind: "block", blockId: "thin-instance-source" },
-      });
-    });
-  });
-
-  it("rejects ordinary instances that are absent from the session inventory", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "instance-source",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      });
-      mesh.createInstance("untracked-instance").position.set(2, 0, 0);
-
-      const result = session.finalize().checkResult;
-
-      expect(result.outcome).toBe("rejected");
-      expect(result.diagnostics).toHaveLength(1);
-      expect(result.diagnostics[0]).toMatchObject({
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
-        location: { kind: "block", blockId: "instance-source" },
-      });
-    });
-  });
-
-  it("closes a throwing Mesh geometry observation into one diagnostic", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "throwing-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      });
-      Object.defineProperty(mesh, "hasThinInstances", {
-        configurable: true,
-        get(): never {
-          throw new Error("untrusted Mesh observation");
-        },
-      });
-
-      const result = session.finalize().checkResult;
-
-      expect(result.outcome).toBe("rejected");
-      expect(result.diagnostics).toHaveLength(1);
-      expect(result.diagnostics[0]).toMatchObject({
-        severity: "error",
-        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
-        location: { kind: "block", blockId: "throwing-block" },
-      });
-    });
-  });
 });

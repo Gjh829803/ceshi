@@ -519,7 +519,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       kind: "host-snapshot",
       profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
       // 6 Block meshes plus 6 walkable-overlay settlement targets.
-      targetCount: 12,
+      targetCount: 10,
     });
     const expectedColliderIds = Object.keys(
       EXPECTED_COLLIDER_BOUNDS_METERS,

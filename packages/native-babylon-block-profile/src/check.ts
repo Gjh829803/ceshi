@@ -1,4 +1,5 @@
 import type { BabylonNativeBlockLayoutIssueV1, BabylonNativeBlockLayoutV1 } from "./layout.js";
+import { min, max } from "lodash-es";
 import {
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
   type BabylonNativeBlockPaletteRoleV1,
@@ -162,10 +163,10 @@ function visualGroups(
       const blocks = [...unsortedBlocks].sort((left, right) =>
         stableCompare(left.id, right.id));
       const minimumMetersXYZ = Object.freeze([0, 1, 2].map((axis) =>
-        Math.min(...blocks.map((block) => block.minimumMetersXYZ[axis]!)),
+        min(blocks.map((block) => block.minimumMetersXYZ[axis]!))!,
       ) as [number, number, number]);
       const maximumMetersXYZ = Object.freeze([0, 1, 2].map((axis) =>
-        Math.max(...blocks.map((block) => block.maximumMetersXYZ[axis]!)),
+        max(blocks.map((block) => block.maximumMetersXYZ[axis]!))!,
       ) as [number, number, number]);
       return Object.freeze({
         id,

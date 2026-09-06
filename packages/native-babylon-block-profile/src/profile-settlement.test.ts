@@ -50,7 +50,7 @@ interface Session {
     centerMetersXYZ: readonly [number, number, number];
     rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
     visualGroupId?: string;
-    colliderGroupId?: string }>): Mesh;
+    colliderGroupId?: string }>): Readonly<import("./session.js").BabylonNativeBlockCreateInputV1>;
   finalize(input: Readonly<{
     staticColliders: readonly FinalizeSelection[] }>): FinalizedEpoch;
   dispose(): void;
@@ -85,11 +85,6 @@ function fullBlockRecord(
 ): BabylonNativeBlockSessionRecordV1 {
   const mesh = MeshBuilder.CreateBox(input.id, { size: 1 }, scene);
   mesh.position.set(...input.centerMetersXYZ);
-  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-  const indices = mesh.getIndices();
-  if (positions === null || indices === null) {
-    throw new Error("Block settlement fixture requires indexed geometry");
-  }
   return Object.freeze({
     input: Object.freeze({
       id: input.id,
@@ -99,11 +94,6 @@ function fullBlockRecord(
       rotationQuarterTurnsY: 0 as const,
       ...(input.visualGroupId === undefined ? {} : { visualGroupId: input.visualGroupId }),
       colliderGroupId: input.colliderGroupId,
-    }),
-    mesh,
-    localGeometrySnapshot: Object.freeze({
-      positions: Object.freeze(Array.from(positions)),
-      indices: Object.freeze(Array.from(indices)),
     }),
   });
 }
@@ -266,6 +256,58 @@ async function buildProfileInventoryHash(
 }
 
 describe("Babylon Native block Profile settlement", () => {
+  it("CF-20/MEM4 joins multiple explicit Colliders to one preallocated visual cluster", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      // Two explicit solids retain their boundary identity after coplanar merging.
+      const result = await admit(engine, scene, "cluster-colliders-test", 2, context => {
+        const session = createBabylonNativeBlockProfileSessionV1(context);
+        for (const x of [0, 1]) session.createBlock({ id: `block-${x}`, shape: "full",
+          paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
+        expect(scene.meshes).toHaveLength(0);
+        session.finalize({ staticColliders: [0, 1].map(x => frozenSelection(
+          `collider-${x}`, `block-${x}`, { notTraversable: true })) });
+      });
+      if (result.outcome !== "passed") throw new Error(JSON.stringify(result.diagnostics));
+      expect(result.outcome).toBe("passed");
+      expect(result.contribution.profileSettlement).toMatchObject({ targetCount: 1 });
+      expect(result.contribution.staticColliders.map(row => row.id)).toEqual(["collider-0", "collider-1"]);
+      expect(scene.meshes.filter(mesh => mesh.isVisible)).toHaveLength(1);
+    } finally { scene.dispose(); engine.dispose(); }
+  });
+
+  it.each(["disposed", "geometry", "thin-instance", "instance", "throwing-observation"] as const)(
+    "CF-20/MEM4 Host rejects materialized cluster tampering: %s", async mode => {
+      const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      try {
+        const result = await admit(engine, scene, "cluster-drift-test", 1, context => {
+          const session = createBabylonNativeBlockProfileSessionV1(context);
+          for (const x of [0, 1]) session.createBlock({ id: `block-${x}`, shape: "full",
+            paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
+          session.finalize({ staticColliders: [] });
+          const mesh = scene.meshes[0]! as Mesh;
+          if (mode === "disposed") mesh.dispose();
+          if (mode === "geometry") {
+            const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+            positions[0] = positions[0]! + 0.25;
+            mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
+          }
+          if (mode === "thin-instance") Object.defineProperty(mesh, "hasThinInstances", { configurable: true, value: true });
+          if (mode === "instance") mesh.createInstance("untracked-instance");
+          if (mode === "throwing-observation") Object.defineProperty(mesh, "hasThinInstances", {
+            configurable: true, get() { throw new Error("untrusted observation"); },
+          });
+        });
+        expect(result.outcome).toBe("rejected");
+        if (result.outcome !== "rejected") throw new Error("tampered cluster was admitted");
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+      } finally { scene.dispose(); engine.dispose(); }
+    });
+
   it("finalizes one Host-settled epoch with styled visuals and topology proxies", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
     const engine = new NullEngine();
@@ -312,8 +354,9 @@ describe("Babylon Native block Profile settlement", () => {
       });
       expect(admission.contribution.staticColliders[0]!.id)
         .toBe("route-collider");
-      const route = scene.getMeshById("route-block")!;
-      const structure = scene.getMeshById("structure-block")!;
+      const targets = scene.meshes.filter(mesh => mesh.isVisible && mesh.name.startsWith("block-cluster-"));
+      const route = targets.find(mesh => mesh.material?.name.endsWith(".palette.route"))!;
+      const structure = targets.find(mesh => mesh.material?.name.endsWith(".palette.structure"))!;
       const proxy = scene.getMeshByName(
         "worldkit-block-topology-collider-block-finalize-test-route-collider")!;
       expect(proxy).not.toBe(route);
@@ -324,7 +367,7 @@ describe("Babylon Native block Profile settlement", () => {
       expect(proxy.getBoundingInfo().boundingBox.maximumWorld.asArray())
         .toEqual([0.5, 1, 0.5]);
       expect(route.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
-      expect(structure.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
+      expect(structure.scaling.asArray()).toEqual([0.4925, 0.4925, 0.4925]);
     } finally {
       session?.dispose();
       scene.dispose();
@@ -501,6 +544,8 @@ describe("Babylon Native block Profile settlement", () => {
           profileInventoryHash = settleBabylonNativeBlockProfileV1({
             context,
             checkedLayout,
+            visualNodes: records.map(record => ({ id: record.input.id, sourceBlockIds: [record.input.id],
+              paletteRole: record.input.paletteRole, mesh: scene.getMeshById(record.input.id)! as Mesh })),
             colliderInventory,
             walkableOverlays: Object.freeze(overlays.map((mesh, index) => Object.freeze({
               logicalColliderId: "floor-collider",

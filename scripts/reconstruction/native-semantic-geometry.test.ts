@@ -89,14 +89,7 @@ describe("Native semantic geometry capture fixtures", () => {
       const records: BabylonNativeBlockSessionRecordV1[] = fixtures[id].blocks.map((input) => {
         // Use the public entry point: constructing checker records directly
         // bypasses the owning input parser's id/shape/lattice/occupancy checks.
-        const mesh = session.createBlock(input);
-        return {
-          input, mesh,
-          localGeometrySnapshot: {
-            positions: [...mesh.getVerticesData(VertexBuffer.PositionKind)!],
-            indices: [...mesh.getIndices()!],
-          },
-        };
+        return { input: session.createBlock(input) };
       });
       const result = createBabylonNativeBlockProfileCheckResultV1(id, records,
         deriveBabylonNativeBlockLayoutV1(scene, records));

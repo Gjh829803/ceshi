@@ -78,6 +78,8 @@ export interface BabylonNativeBlockMaterializerMetadataV1 {
   readonly contributionHash: Sha256HashV1;
   readonly profileInventoryHash: Sha256HashV1;
   readonly settledVisualHash: Sha256HashV1;
+  /** Actual Host settlement targets, not the number of logical Blocks. */
+  readonly settledVisualTargetCount: number;
   readonly blocks: readonly BabylonNativeBlockMaterializerBlockV1[];
   readonly visualGroups:
     readonly BabylonNativeBlockMaterializerVisualGroupV1[];
@@ -496,6 +498,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     "kind", "schemaVersion", "nativeSceneProfileRef", "caseHash",
     "authoringManifestHash", "checkedLayoutInventoryHash",
     "contributionHash", "profileInventoryHash", "settledVisualHash",
+    "settledVisualTargetCount",
     "blocks", "visualGroups", "colliderJoins",
     "openingCamera",
     "groundExploration",
@@ -518,6 +521,10 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     typeof source.settledVisualHash !== "string" ||
     !HASH.test(source.settledVisualHash)
   ) fail("value", "profile fingerprints must be SHA-256 hashes");
+  if (!Number.isSafeInteger(source.settledVisualTargetCount) || Object.is(source.settledVisualTargetCount, -0) ||
+      (source.settledVisualTargetCount as number) < 0) {
+    fail("settledVisualTargetCount", "must be the non-negative integer Host target count");
+  }
   const blocks = exactArray(source.blocks, "blocks").map(parseBlock);
   const visualGroups = exactArray(
     source.visualGroups,
@@ -601,6 +608,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     contributionHash: source.contributionHash as Sha256HashV1,
     profileInventoryHash: source.profileInventoryHash as Sha256HashV1,
     settledVisualHash: source.settledVisualHash as Sha256HashV1,
+    settledVisualTargetCount: source.settledVisualTargetCount as number,
     blocks: Object.freeze(blocks),
     visualGroups: Object.freeze(visualGroups),
     colliderJoins: Object.freeze(colliderJoins),

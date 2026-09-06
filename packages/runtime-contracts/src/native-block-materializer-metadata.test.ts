@@ -170,6 +170,7 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function metadataValue() {
   return {
     kind: "babylon-native-block-materializer-metadata",
+    settledVisualTargetCount: 2,
     groundExploration: { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
@@ -257,6 +258,12 @@ function metadataValue() {
 }
 
 describe("BabylonNativeBlockMaterializerMetadataV1", () => {
+  it.each([undefined, -1, -0, 1.5, Infinity, "2"])("rejects invalid Host visual target count %s", value => {
+    expect(() => parseBabylonNativeBlockMaterializerMetadataV1({
+      ...metadataValue(), settledVisualTargetCount: value,
+    })).toThrow();
+  });
+
   it("preserves declared semantic front in immutable Package identity", () => {
     const value = metadataValue();
     const parsed = parseBabylonNativeBlockMaterializerMetadataV1(value);

@@ -443,7 +443,7 @@ function captureSource(
     facingRadians: number;
   }> | undefined;
 
-  const addBlock = (input: unknown): Readonly<Record<string, never>> => {
+  const addBlock = (input: unknown): ReturnType<typeof inputParsers.parseCreateInput> => {
     if (finalized) {
       return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
         "createBlock is unavailable after finalization begins");
@@ -488,7 +488,7 @@ function captureSource(
       centerMetersXYZ,
       rotationQuarterTurnsY: rotation as 0 | 1 | 2 | 3,
     }));
-    return Object.freeze({});
+    return row;
   };
 
   const createSession = (_context: unknown) => {

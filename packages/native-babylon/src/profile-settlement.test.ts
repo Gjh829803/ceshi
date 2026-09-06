@@ -89,6 +89,22 @@ function errorCode(operation: () => unknown): string | undefined {
 }
 
 describe("Host-private Babylon Native Profile settlement", () => {
+  it.each([[], ["collider-a", "collider-a"], ["collider-b", "collider-a"]].map(colliderIds => ({ colliderIds })))(
+    "rejects noncanonical Collider joins $colliderIds", ({ colliderIds }) => {
+      const { context, engine, scene } = createHarness();
+      try {
+        const mesh = MeshBuilder.CreateBox("block", { size: 1 }, scene);
+        beginBabylonNativeProfileSettlementRecorderV1(context);
+        expect(errorCode(() => commitBabylonNativeProfileSettlementV1(context, {
+          ...batch([mesh]), targets: [{ elementId: mesh.name, mesh,
+            collisionBinding: { kind: "static-colliders", colliderIds } }],
+        } as never))).toBe("WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_INVALID");
+      } finally {
+        unbindBabylonNativeProfileSettlementRecorderV1(context);
+        scene.dispose(); engine.dispose();
+      }
+    });
+
   it("requires one active Context-bound recorder", () => {
     const { context, engine, scene } = createHarness();
     const mesh = MeshBuilder.CreateBox("block", { size: 1 }, scene);

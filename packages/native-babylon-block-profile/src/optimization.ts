@@ -405,10 +405,12 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
   const topologyColliderIds = colliders.map(({ colliderId }) => colliderId)
     .sort(stableCompare);
 
+  const authoringClusterCount = thin.groups.reduce(
+    (sum, group) => sum + group.clusters.length, thin.independentBlockIds.length);
   const baselineResources = {
-    visualMeshCount: blocks.length,
-    visualDrawUnitCount: blocks.length,
-    visualGeometryBufferSetCount: blocks.length,
+    visualMeshCount: authoringClusterCount,
+    visualDrawUnitCount: authoringClusterCount,
+    visualGeometryBufferSetCount: authoringClusterCount,
     paletteMaterialCount: new Set(blocks.map(({ paletteRole }) => paletteRole))
       .size,
     colliderProxyCount: colliders.length,

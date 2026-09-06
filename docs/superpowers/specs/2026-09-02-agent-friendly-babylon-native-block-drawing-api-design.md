@@ -50,7 +50,7 @@ That split leaves four Profile invariants to generated code and catches violatio
 - shape-specific center residue on the `[0.5, 0.25, 0.5]m` occupancy grid;
 - exact `0 | 1 | 2 | 3` Y quarter-turn selection;
 - stable repeated IDs and iteration order; and
-- pre-allocation budget, duplicate-ID, and occupied-cell closure.
+- pre-allocation input, duplicate-ID, and occupied-cell closure.
 
 The repetition appears independently in the production Builder Skill, BWB fixtures, reconstruction
 Corpus, Native Package fixtures, and the frozen v2 experiments. It is a stable mechanical problem rather
@@ -114,10 +114,10 @@ export interface BabylonNativeBlockGridCreateInputV1 {
 }
 
 export interface BabylonNativeBlockProfileSessionV1 {
-  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
+  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Readonly<BabylonNativeBlockCreateInputV1>;
   createBlockGrid(
     input: Readonly<BabylonNativeBlockGridCreateInputV1>,
-  ): readonly Mesh[];
+  ): readonly Readonly<BabylonNativeBlockCreateInputV1>[];
   finalize(
     input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
   ): BabylonNativeBlockFinalizedEpochV1;
@@ -143,7 +143,7 @@ The old input without `centerMetersXYZ` is invalid and has no overload, alias, a
 - Grid iteration order is Y outermost, then Z, with X innermost.
 - A Grid Block ID is exactly `<idPrefix>-x<xIndex>-y<yIndex>-z<zIndex>` using zero-based unpadded
   indices. Increasing a count at the positive end does not rename existing cells.
-- Returned Mesh arrays use the same canonical Y/Z/X order.
+- Returned deeply frozen canonical input arrays use the same canonical Y/Z/X order.
 
 The visual display gap remains a Finalize concern and never changes center positions, occupancy, Collider
 geometry, or traversal evidence.
@@ -152,13 +152,12 @@ geometry, or traversal evidence.
 
 ### 6.1 Single Block
 
-`createBlock()` validates the closed input, ID, finite center, quarter-turn, shape-specific lattice,
-remaining budget, and occupied micro-cells before Mesh allocation. It creates the Mesh, applies the exact
-position and rotation, snapshots local geometry, and records the declared placement as one acquisition.
-
-If Mesh creation or geometry snapshotting fails, the new Mesh is disposed and no ID, occupancy cell, record,
-or budget slot remains committed. Cleanup failure moves the Session to `failed` and preserves the original
-construction error as the primary cause.
+Under the user-approved CF-20/MEM4 amendment (2026-09-07), `createBlock()` validates
+the closed input, ID, finite canonical center, quarter-turn, shape-specific lattice
+and occupied micro-cells, then commits one deeply frozen intent record. It returns
+that canonical input, not a Mesh or fake Mesh handle, and allocates no Babylon object.
+Failed acquisition removes its IDs, cells and records; user input cannot mutate
+the committed placement. This current-only contract replaces immediate Mesh returns.
 
 ### 6.2 Grid
 
@@ -169,19 +168,27 @@ construction error as the primary cause.
 - every child ID;
 - all shape-specific centers;
 - collision with existing IDs and occupied cells;
-- collision within the proposed Grid; and
-- total Session budget.
+- collision within the proposed Grid.
 
-If preflight fails, zero Meshes are created. If construction fails after allocation begins, the method disposes
-the batch in reverse order and removes its records, IDs and cells. Successful rollback leaves the Session
-`open`; throwing cleanup moves it to `failed`.
+There is no Profile-local Block-count cap. Production resource budgets retain the
+existing source/Host owners; intent-first allocation does not introduce a new gate.
+
+Both successful and failed Grid calls allocate zero Meshes. If intent commit fails,
+the batch removes its records, IDs and cells. Successful rollback leaves the Session
+`open`; failed cleanup preserves the primary failure and closes the Session.
 
 ### 6.3 Finalize
 
-Finalize remains the trusted epoch boundary. It must verify that every live Profile Mesh still has the exact
-declared center and quarter-turn and has not been scaled, reparented, disabled, replaced, disposed, instanced,
-or geometry-mutated. Direct post-creation transform mutation is therefore not a second supported placement
-dialect; it is tampering detected by the existing checked Layout boundary.
+Finalize remains the trusted epoch boundary. It derives the same logical Layout
+from immutable intent, checks it, and clusters before the first visual allocation,
+using the pinned old branch's 32m partition, X/Z/Y cuboid coalescing and 0.985 display
+scale. Each initial Mesh represents one cluster; all logical Block IDs and explicit
+Collider selections survive unchanged. Host settlement checks the actual materialized
+Mesh geometry, transforms and lifetime, not nonexistent raw per-Block Meshes.
+Failure releases acquired cluster visuals, materials and independent Collider proxies
+in reverse order while preserving the first error. Runtime batches from these clusters;
+it never retains one hidden authoring Mesh per logical Block. Capture may isolate exact
+logical portions temporarily and restores only its owned resources.
 
 The strict `block-plane` Capture rule is unrelated and unchanged: blocker evidence still requires a supported
 approach, movement toward the frozen face, and final Capsule contact near the uncrossed face.
@@ -224,9 +231,7 @@ binding. No Mesh name, tag, material, color, visual group, or Scene scan can cre
 ## 8. AI-facing example
 
 ```ts
-const blocks = createBabylonNativeBlockProfileSessionV1(context, {
-  maximumBlockCount: 64,
-});
+const blocks = createBabylonNativeBlockProfileSessionV1(context);
 
 blocks.createBlockGrid({
   idPrefix: "entry-ground",
@@ -318,7 +323,7 @@ Focused RED/GREEN evidence must cover:
 - asymmetric rotated `quarter` X/Z residues;
 - shape-specific lattice rejection before Mesh allocation;
 - stable Grid child IDs, positions and Y/Z/X return order;
-- positive safe counts, multiplication overflow and whole-batch budget preflight;
+- positive safe counts, multiplication overflow and whole-batch occupancy preflight;
 - duplicate ID and occupied-cell conflicts with zero new Meshes;
 - mid-batch construction failure with reverse cleanup and reusable open Session;
 - cleanup failure moving the Session to `failed`;

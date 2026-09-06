@@ -186,6 +186,14 @@ fit a remembered 2,000/8,000 count. This is not a target to fill or a guarantee 
 fit memory/time. Simplify repeated ornament before complete forms, thickness, scale or geography.
 Overlap, explicit Collider, support, lattice, output-byte and task execution limits remain in force.
 
+`createBlock()` returns its canonical immutable Block input, not a Babylon Mesh.
+`createBlockGrid()` returns those immutable inputs in canonical Y/Z/X order.
+These calls record intent without allocating Meshes. Finalize checks the complete
+logical layout, merges the fixed Blocks using the shared legacy cluster rules,
+and only then creates Candidate visuals. Keep all placement in the input fields;
+do not read or mutate returned Mesh properties or create substitute Mesh handles.
+Logical IDs, explicit Collider selections and the three Source outputs are unchanged.
+
 1. Establish the complete metric footprint before detail. Reconstruct the reference as coherent volumes seen from opening, top, side, and exploration views—not camera-facing facades.
 2. Use the fixed Block Profile shapes and palette. One block is metric geometry; keep the fixed lattice, undeformed meshes, Y-only quarter turns, stable IDs, and deterministic insertion order. Read the exact shape dimensions, shape-specific legal center residues, occupancy grid, support rule, route adjacency rule, and safe stair recipe in the output contract before choosing any coordinates; never infer a Minecraft-like 2 m block scale. A center that is merely a multiple of the broad `[0.25, 0.125, 0.25]` lattice is not automatically valid for every shape.
 3. Use `context.random` and the frozen seed for every variation. Never use ambient randomness, wall-clock time, locale-sensitive ordering, or network input.

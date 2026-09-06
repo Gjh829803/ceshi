@@ -379,6 +379,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
   const nativeBlockMaterializerMetadata = profileKind === "blocks"
     ? parseBabylonNativeBlockMaterializerMetadataV1({
       kind: "babylon-native-block-materializer-metadata",
+      settledVisualTargetCount: 2,
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,

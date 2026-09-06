@@ -91,7 +91,9 @@ This is ordinary visual construction without invented identity groups, with expl
 
 `createBabylonNativeBlockProfileSessionV1(context)` takes only the Host context. Do not pass a retired `maximumBlockCount` budget argument. There is no fixed source Block-count gate; the frozen Collider, output and task execution budgets still apply.
 
-`createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. Never create a Block and then assign `position`, `rotation.y`, or `scaling` for its initial placement: the Session validates the shape-specific lattice and occupancy before allocating a Mesh, and Finalize rejects any later transform as tampering.
+`createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. It returns the canonical immutable Block input, never a Mesh. Never assign `position`, `rotation.y`, or `scaling`: the Session validates the shape-specific lattice and occupancy before committing immutable intent. Finalize checks the complete logical layout, merges Blocks with the shared legacy rules, then allocates actual cluster Meshes. Host settlement still rejects later mutation of the materialized visuals.
+
+`createBlockGrid()` returns an immutable array of canonical Block inputs in Y/Z/X order and allocates no Meshes.
 
 `createBlockGrid()` is dense mechanical repetition of one shape and palette role only. It takes `idPrefix`, `minimumCenterMetersXYZ`, and a positive `repeatCountXYZ`, spaces cells by the selected shape's effective rotated size, iterates Y outermost then Z then X, and names children `<idPrefix>-x<i>-y<j>-z<k>` with zero-based unpadded indices. It has no stride, gap, mask, or callback. An optional `colliderGroupId` assigns every generated child to one explicit logical Collider Group; it does not itself register collision. Use the Grid for ground slabs, wall runs, and solid mass; keep stairs, gates, buildings, and any semantic topology as ordinary TypeScript loops over `createBlock()`.
 

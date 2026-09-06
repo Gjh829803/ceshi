@@ -1,6 +1,7 @@
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import { min, max } from "lodash-es";
 
 import type { BabylonNativeBlockVisualGroupInventoryV1 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
@@ -97,14 +98,14 @@ function layoutBounds(layout: BabylonNativeBlockLayoutV1): Readonly<{
   diagonalMeters: number;
 }> {
   const minimum = new Vector3(
-    Math.min(...layout.blocks.map((block) => block.minimumMetersXYZ[0])),
-    Math.min(...layout.blocks.map((block) => block.minimumMetersXYZ[1])),
-    Math.min(...layout.blocks.map((block) => block.minimumMetersXYZ[2])),
+    min(layout.blocks.map((block) => block.minimumMetersXYZ[0]))!,
+    min(layout.blocks.map((block) => block.minimumMetersXYZ[1]))!,
+    min(layout.blocks.map((block) => block.minimumMetersXYZ[2]))!,
   );
   const maximum = new Vector3(
-    Math.max(...layout.blocks.map((block) => block.maximumMetersXYZ[0])),
-    Math.max(...layout.blocks.map((block) => block.maximumMetersXYZ[1])),
-    Math.max(...layout.blocks.map((block) => block.maximumMetersXYZ[2])),
+    max(layout.blocks.map((block) => block.maximumMetersXYZ[0]))!,
+    max(layout.blocks.map((block) => block.maximumMetersXYZ[1]))!,
+    max(layout.blocks.map((block) => block.maximumMetersXYZ[2]))!,
   );
   return Object.freeze({
     minimum,

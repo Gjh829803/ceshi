@@ -195,9 +195,9 @@ describe("NBR-65 current topology optimization contract", () => {
         independentVisualBlockIds: [],
         topologyColliderIds: ["wall-collider"],
         baselineResources: {
-          visualMeshCount: 2,
-          visualDrawUnitCount: 2,
-          visualGeometryBufferSetCount: 2,
+          visualMeshCount: 1,
+          visualDrawUnitCount: 1,
+          visualGeometryBufferSetCount: 1,
           paletteMaterialCount: 1,
           colliderProxyCount: 1,
         },

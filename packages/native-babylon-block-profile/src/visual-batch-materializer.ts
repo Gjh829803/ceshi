@@ -111,11 +111,11 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     input.scene.isDisposed ||
     input.liveHandles.kind !== "babylon-native-block-live-handle-registry" ||
     input.liveHandles.schemaVersion !== 1 ||
-    input.liveHandles.realization.kind !== "authoring-unbatched"
+    input.liveHandles.realization.kind !== "authoring-clustered"
   ) {
     return fail(
       CODE,
-      "Visual batching requires one live Scene and one unbatched authoring registry.",
+      "Visual batching requires one live Scene and one clustered authoring registry.",
     );
   }
   const placements = [...input.placements]
@@ -140,7 +140,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     const handle = handleByBlockId.get(placement.blockId);
     if (
       isNil(handle) ||
-      handle.kind !== "independent-mesh" ||
+      handle.kind === "thin-instance" ||
       handle.runtimeEntityId !== placement.runtimeEntityId ||
       handle.semanticCaptureClassId !== placement.semanticCaptureClassId ||
       handle.mesh.isDisposed() ||
@@ -160,6 +160,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
   );
 
   const restorable: RestorableVisualStateV1[] = [];
+  const retainedMeshes = new Set<Mesh>();
   const batchMeshes: Mesh[] = [];
   const batches: BabylonNativeBlockLiveVisualBatchV1[] = [];
   const handles: BabylonNativeBlockLiveVisualHandleV1[] = [];
@@ -167,6 +168,8 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     BabylonNativeBlockWalkableDisplayRegistrationV1[] = [];
   let materialized: BabylonNativeBlockLiveHandleRegistryV1 | undefined;
   const retain = (mesh: Mesh): void => {
+    if (retainedMeshes.has(mesh)) return;
+    retainedMeshes.add(mesh);
     restorable.push(Object.freeze({
       mesh,
       isVisible: mesh.isVisible,
@@ -314,7 +317,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
       batches: Object.freeze([...batches]),
       independentBlockIds: partition.independentBlockIds,
       resources: Object.freeze({
-        authoringVisualMeshCount: placements.length,
+        authoringVisualMeshCount: new Set(meshByBlockId.values()).size,
         thinInstanceBatchCount: batches.length,
         thinInstanceCount: batches.reduce(
           (sum, batch) => sum + batch.instances.length,
@@ -325,10 +328,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
           partition.independentBlockIds.length,
         renderedGeometryBufferSetCount: batches.length +
           partition.independentBlockIds.length,
-        hiddenAuthoringMeshCount: batches.reduce(
-          (sum, batch) => sum + batch.blockIds.length,
-          0,
-        ),
+        hiddenAuthoringMeshCount: restorable.filter(({ mesh }) => !mesh.isVisible).length,
       }),
       liveHandles: settled,
       dispose(): void {

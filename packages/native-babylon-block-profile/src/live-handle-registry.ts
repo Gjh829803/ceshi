@@ -29,6 +29,15 @@ export type BabylonNativeBlockLiveVisualHandleV1 =
       mesh: Mesh;
     }>
   | Readonly<{
+      kind: "cluster-mesh";
+      blockId: string;
+      runtimeEntityId: string;
+      semanticCaptureClassId: string;
+      clusterId: string;
+      mesh: Mesh;
+      sourceWorldMatrix: Matrix;
+    }>
+  | Readonly<{
       kind: "thin-instance";
       blockId: string;
       runtimeEntityId: string;
@@ -59,12 +68,12 @@ export interface BabylonNativeBlockLiveVisualGroupHandleV1 {
 }
 
 /**
- * Authoring materialization publishes one Mesh per Block. The trusted Host
+ * Authoring materialization clusters intent before allocating one Mesh per cluster. The trusted Host
  * Chunk realization replaces that registry after Candidate admission, so the
  * discriminator names which realization the live rows describe.
  */
 export type BabylonNativeBlockLiveVisualRealizationV1 =
-  | Readonly<{ kind: "authoring-unbatched" }>
+  | Readonly<{ kind: "authoring-clustered" }>
   | Readonly<{
       kind: "host-chunk-batched";
       chunkPolicyHash: Sha256HashV1;
@@ -85,7 +94,7 @@ export interface BabylonNativeBlockLiveHandleRegistryV1 {
 export function babylonNativeBlockLiveVisualHandleMeshV1(
   handle: BabylonNativeBlockLiveVisualHandleV1,
 ): Mesh {
-  return handle.kind === "independent-mesh" ? handle.mesh : handle.batchMesh;
+  return handle.kind === "thin-instance" ? handle.batchMesh : handle.mesh;
 }
 
 const REGISTRY_BY_SCENE = new WeakMap<

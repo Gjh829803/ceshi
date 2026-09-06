@@ -740,6 +740,7 @@ export function createEvidenceSetFixtureInputV1(
     caseHash,
     authoringManifestHash,
     contributionHash: hashBabylonNativeSceneContributionV1(nativeSceneContribution),
+    settledVisualTargetCount: nativeSceneContribution.profileSettlement.targetCount,
     blocks: [
       ...baseMetadata.blocks,
       ...extraBlocks,

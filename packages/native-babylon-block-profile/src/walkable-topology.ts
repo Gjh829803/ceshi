@@ -401,6 +401,49 @@ function solidFace(
   }
 }
 
+interface SolidFacePlane {
+  readonly axis: typeof SOLID_FACE_DIRECTIONS[number]["axis"];
+  readonly normalAxis: 0 | 1 | 2;
+  readonly uAxis: 0 | 1 | 2;
+  readonly vAxis: 0 | 1 | 2;
+  readonly plane: number;
+  readonly cells: Map<string, readonly [number, number]>;
+}
+
+// Coalesce only exposed, coplanar faces of the same explicit Collider. No face
+// crosses a hole, normal, plane or Collider boundary. Logical occupancy and the
+// walkable/smoothed surface owner are unchanged; a solid cuboid stays a cuboid
+// instead of paying for every micro-cell subdivision of each flat outer face.
+function addMergedSolidFacePlane(accumulator: GeometryAccumulator, face: SolidFacePlane): void {
+  const remaining = face.cells;
+  const sorted = [...remaining.values()].sort(([leftU, leftV], [rightU, rightV]) =>
+    leftV - rightV || leftU - rightU);
+  for (const [u, v] of sorted) {
+    if (!remaining.has(`${u},${v}`)) continue;
+    let width = 1;
+    while (remaining.has(`${u + width},${v}`)) width++;
+    let height = 1;
+    expand: while (true) {
+      for (let offset = 0; offset < width; offset++) {
+        if (!remaining.has(`${u + offset},${v + height}`)) break expand;
+      }
+      height++;
+    }
+    for (let dv = 0; dv < height; dv++) for (let du = 0; du < width; du++) {
+      remaining.delete(`${u + du},${v + dv}`);
+    }
+    const minimum: [number, number, number] = [0, 0, 0];
+    const maximum: [number, number, number] = [0, 0, 0];
+    minimum[face.normalAxis] = maximum[face.normalAxis] = face.plane * GRID[face.normalAxis];
+    minimum[face.uAxis] = u * GRID[face.uAxis];
+    minimum[face.vAxis] = v * GRID[face.vAxis];
+    maximum[face.uAxis] = (u + width) * GRID[face.uAxis];
+    maximum[face.vAxis] = (v + height) * GRID[face.vAxis];
+    const output = solidFace(face.axis, minimum, maximum);
+    addOrientedQuad(accumulator, output.corners, output.winding);
+  }
+}
+
 export function buildBabylonNativeBlockWalkableTopologyV1(
   input: BuildBabylonNativeBlockWalkableTopologyInputV1,
 ): BabylonNativeBlockWalkableTopologyV1 {
@@ -519,6 +562,7 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
     solidByCellKey.set(solid.cellKey, solid);
   }
   const solidByColliderId = new Map<string, GeometryAccumulator>();
+  const facesByAccumulator = new Map<GeometryAccumulator, Map<string, SolidFacePlane>>();
   const walkableColliderIds = new Set(walkableByColliderId.keys());
   let removedInternalFaceCount = 0;
   for (const solid of solidByCellKey.values()) {
@@ -546,12 +590,6 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
     }
     accumulator.sourceCellKeys.add(solid.cellKey);
     const [x, y, z] = cellCoordinates(solid.cellKey);
-    const minimum = [x * GRID[0], y * GRID[1], z * GRID[2]] as const;
-    const maximum = [
-      (x + 1) * GRID[0],
-      (y + 1) * GRID[1],
-      (z + 1) * GRID[2],
-    ] as const;
     for (const direction of SOLID_FACE_DIRECTIONS) {
       const neighborKey = cellKey(
         x + direction.delta[0],
@@ -561,8 +599,27 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
       if (solidByCellKey.has(neighborKey)) {
         continue;
       }
-      const face = solidFace(direction.axis, minimum, maximum);
-      addOrientedQuad(accumulator, face.corners, face.winding);
+      const normalAxis = direction.delta.findIndex(value => value !== 0) as 0 | 1 | 2;
+      const tangentAxes = ([0, 1, 2] as const).filter(axis => axis !== normalAxis);
+      const coordinate = [x, y, z];
+      const plane = coordinate[normalAxis]! + Math.max(0, direction.delta[normalAxis]!);
+      const planes = facesByAccumulator.get(accumulator) ?? new Map<string, SolidFacePlane>();
+      facesByAccumulator.set(accumulator, planes);
+      const key = `${direction.axis}:${plane}`;
+      let facePlane = planes.get(key);
+      if (isNil(facePlane)) {
+        facePlane = { axis: direction.axis, normalAxis, plane,
+          uAxis: tangentAxes[0]!, vAxis: tangentAxes[1]!, cells: new Map() };
+        planes.set(key, facePlane);
+      }
+      const u = coordinate[facePlane.uAxis]!;
+      const v = coordinate[facePlane.vAxis]!;
+      facePlane.cells.set(`${u},${v}`, [u, v]);
+    }
+  }
+  for (const [accumulator, planes] of facesByAccumulator) {
+    for (const [, plane] of [...planes].sort(([left], [right]) => stableCompare(left, right))) {
+      addMergedSolidFacePlane(accumulator, plane);
     }
   }
 

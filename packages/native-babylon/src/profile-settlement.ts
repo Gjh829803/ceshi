@@ -80,7 +80,7 @@ export function isBabylonNativeBlockProfileBuildFailureV1(
 
 export type BabylonNativeProfileSettlementCollisionBindingV1 =
   | Readonly<{ kind: "none" }>
-  | Readonly<{ kind: "static-collider"; colliderId: string }>;
+  | Readonly<{ kind: "static-colliders"; colliderIds: readonly [string, ...string[]] }>;
 
 export interface BabylonNativeProfileSettlementTargetV1 {
   readonly elementId: string;
@@ -252,11 +252,16 @@ function collisionBinding(
     exactRecord(input, ["kind"]);
     return Object.freeze({ kind: "none" });
   }
-  if (kindDescriptor.value === "static-collider") {
-    const record = exactRecord(input, ["kind", "colliderId"]);
+  if (kindDescriptor.value === "static-colliders") {
+    const record = exactRecord(input, ["kind", "colliderIds"]);
+    const colliderIds = exactArray(record.colliderIds).map(identity);
+    if (colliderIds.length === 0 || new Set(colliderIds).size !== colliderIds.length ||
+        colliderIds.some((id, index) => index > 0 && id <= colliderIds[index - 1]!)) {
+      throw invalidBatch();
+    }
     return Object.freeze({
-      kind: "static-collider",
-      colliderId: identity(record.colliderId),
+      kind: "static-colliders",
+      colliderIds: Object.freeze(colliderIds) as readonly [string, ...string[]],
     });
   }
   throw invalidBatch();

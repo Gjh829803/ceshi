@@ -264,7 +264,16 @@ from 474,001,776 after B5. Post-disposal: 40,663,224 bytes and zero Meshes/Geome
 Snapshot traversal is unchanged at 31,996,000 entries; no timing speedup is claimed.
 This still does not prove that the 158,100-Block world fits production capacity.
 
-## MEM4 representation decision — pending user confirmation
+## MEM4 representation decision — approved direction and initial checkpoint
+
+On 2026-09-07 the user explicitly approved following the old branch's pre-allocation
+clustering: “那就按照老分支来做呗”. This supersedes the pending-confirmation state.
+Development remains on `codex/cf-production-effect-closure`, main-agent-only and
+sequential. Approval covers replacing the immediate-Mesh Profile contract and its
+consumers, not a second Source, hidden foundation, new ordinary-production gate,
+reduced scene geography or a change of Runtime owners. At this historical decision
+checkpoint MEM4-A was in progress and MEM4-B/C had not been implemented or verified;
+the implementation and evidence below supersede that checkpoint.
 
 Read-only boundary inspection at `042ef1db50c8fc86fe10c74a250059ec209a5859`
 confirms a frozen-contract conflict, not merely an implementation allocation bug:
@@ -285,13 +294,12 @@ confirms a frozen-contract conflict, not merely an implementation allocation bug
 Moving to intent-first, pre-allocation clustering would be a public current-only
 contract change. It may preserve the Native Source and all sole Runtime owners,
 but must update the frozen design and the complete producer/consumer closure, not
-introduce a second authoring path or silently substitute fake Mesh handles. No such
-implementation is authorized by this note. Ask the user to confirm this direction
-before replacing the explicit immediate-Mesh contract. Remaining within that
-contract and continuing allocation optimization is still possible; current focused
-measurements do not establish full-world capacity for either unimplemented option.
+introduce a second authoring path or silently substitute fake Mesh handles. The
+direction is now authorized, but the exact replacement return type and settlement
+representation must be specified before switching the public API. Existing focused
+measurements do not establish full-world capacity for the new representation.
 
-If approved, main-agent-only tasks are sequential:
+Approved main-agent-only tasks are sequential:
 
 | Task | Dependency / owner | Contract and integration evidence |
 |---|---|---|
@@ -299,8 +307,103 @@ If approved, main-agent-only tasks are sequential:
 | CF-20/MEM4-B | MEM4-A; Profile and Host owners | Implement one current-only path preserving exact Block IDs, shape/metric layout, explicit collider intent, old clustering and display scale, rollback and one authoritative settlement; adversarial contract tests and consumer closure |
 | CF-20/MEM4-C | MEM4-B; real Host replay and final integration | Same unchanged paid source where the new source contract permits it, correctly versioned new provenance, full Native/Ground/Package/Capture and rendered inspection; fresh production Case before main integration |
 
-No new Case, test worktree, source mutation, frozen-contract rewrite, full CI or
-main merge was performed for this inspection. The original failed run remains intact.
+### Consumer closure and first full Case
+
+The public switch must include Session/input atomicity, intent-derived checked
+Layout and Profile inventory, visual materialization and live handles, Profile/Host
+settlement, Package/replay, Runtime realization, Capture isolation, Builder Skill,
+output contract, generated type/checker context, frozen copies and active fixtures.
+Do not merely defer the same per-Block Mesh allocation to Finalize or retain hidden
+authoring Meshes to satisfy the current `authoring-unbatched` prerequisite.
+
+Geometry/lifetime validation moves to the actual materialized visuals; it must not
+be dropped with `records[].mesh`. Cluster-to-Block identity and partial Capture
+portions remain exact. Explicit Collider joins must neither duplicate nor disappear
+when multiple logical Blocks share a visual allocation. Preserve independent batch
+Geometry ownership, complete-world visibility and failed-build cleanup.
+
+These are MEM4 implementation dependencies, not extra production gates. Once the
+consumer switch and affected focused/type/build/Skill checks close, freeze the
+candidate and run the ordinary full local Case. Completing every CF parent task is
+not a prerequisite to that trial. Native Check -> Ground -> Package -> Capture ->
+ordinary publication remains the required real closure; a small fixture is not it.
+
+Source-budget correspondence remains separate CF-20 work. Palace elevation, valley
+depth and complete-geography defects remain CF-11/19/21 rendered-effect work, not
+automatically fixed by clustering. Attribute any trial failure to its actual stage
+and repair under the old policy, without adding a retry, count cap or quality veto.
+Full-CI/review and main-integration evidence remain separate from a Case pass.
+
+That earlier decision-only checkpoint updated the consumer census and execution ordering.
+At that point no public API or frozen Skill had changed and no new Case, test worktree,
+full CI or main merge had run. The original failed run remains intact, and changed
+implementation must acquire correctly bound new provenance rather than rewriting
+that failed Run as successful.
+
+## MEM4 implementation and pre-Case parity checkpoint — 2026-09-07
+
+The user subsequently requested implementation, then a final comparison against
+the pinned old branch **before** starting a new Case. All work remains sequential,
+main-agent-only in the repair worktree on `codex/cf-production-effect-closure`,
+based on `df1d83508e8513399f5abb1b84816392912a73c8`.
+
+- Session returns deeply frozen canonical intent, with no per-Block Mesh allocation.
+  Finalize materializes the existing old-equivalent 32m/X-Z-Y visual clusters.
+  Logical IDs, metric layout, explicit Collider joins and Capture portions survive.
+- The original 158,100-Block source exposed a Node call-stack overflow in Layout's
+  spread-based minimum. Array reductions now use existing lodash extrema in Layout
+  and its unbounded group/manifest/capture consumers, without a new source-count cap.
+- The next unchanged-source diagnostic reached an existing Collider vertex limit:
+  79,430 / 65,536. Non-walkable exact-solid-union geometry now coalesces coplanar
+  exposed cells within one Collider/plane/normal, preserving holes, winding and
+  full source-cell identity. Walkable smoothing, explicit physics ownership and
+  production budgets are unchanged. Dense 512-cell cuboid RED: 386 vertices/768
+  triangles; GREEN: 8/12 with the same outer surface. Sixteen negative-coordinate,
+  perforated, partitioned fixtures prove exact exposed-face coverage and order.
+- Host collision binding is the current-only nonempty sorted `static-colliders`
+  array, allowing multiple explicit Colliders on one actual cluster target.
+  Package metadata carries the same Host `settledVisualTargetCount`; both build
+  and directory membership compare it to the bound Contribution instead of
+  incorrectly assuming target count equals logical Block count.
+- API, live/frozen Builder Skill and output contract, portable renderer/checker
+  context, Profile, Host, Package, replay and Capture consumers are changed together.
+  No fake Mesh handles, parallel authoring source or hidden raw per-Block Mesh set.
+
+Unchanged-source diagnostic (not a resumed Run and not a full Case): source SHA-256
+`41f226b6ded49074e31936bad34d8e93704f3f6564e98538353e8471552bdb20`;
+Node 23.11.0, Babylon 9.23.0, original Bootstrap and 256/65,536/131,072 Collider
+count/vertex/triangle budgets, default Node heap. Actual
+`admitBabylonNativeSceneCandidateV1` passed with zero diagnostics, 6,556 settled
+targets / 6,560 Scene Meshes, 66.85 seconds and peak RSS 2,718,992 KiB. Original
+failed artifacts were not edited. This does not establish Ground, Package, Capture,
+published output or equal visual effect for that full scene.
+
+### Final comparison scope (change review, not independent review)
+
+Pinned comparator: `codex/block-world-main-integration@9e35ab53c634acaef8c53a33082fff77653f7bbb`.
+Current comparison covers the modified representation and directly invoked Scene
+production chain; it is not a claim that every CF/Cloud/Episode task is complete.
+
+| ID / boundary | Old source / behavior | Current source / result |
+|---|---|---|
+| CF-10 planning order | `run-spatial-world-agent.sh:128-134`: Brief, accepted entry, dependent whole-world plan; same-task repair | Current Planner Skill and Native launcher retain the order and exact image handoff; no policy edits in MEM4 |
+| CF-19 Builder feedback | Old Builder Skill: structural check, open entry/top comparisons, combined three-cycle repair | `native-world-case-preparation.ts:1175-1180`: exact isolated commands, same shared cycles, actual inspection, no automatic similarity veto |
+| CF-20 allocation/display | Old `clusters.ts` grows X/Z/Y in center-owned 32m chunks before `compile.ts` nodes | Same existing cluster owner now precedes Native allocation; 0.985 whole-cluster scaling and all logical memberships retained |
+| CF-20 solid geometry | Old compiled solid clusters use cuboid resources, not micro-cell surface subdivisions | Native explicit union retains its boundary owner but removes redundant coplanar subdivisions; exact coverage and real unchanged-source Host admission verified |
+| CF-09/31 handoff | One completed planning task feeds world generation | Exclusive directory reservation copies absent children; EEXIST handoff repair retained; no repeated paid task or rewritten prior Run |
+| CF-26 endings | Combined in-task budget distinct from bounded provider retries; no extra automatic ordinary source repair | `run.ts:1284` restricts external source repair to explicit strict acceptance; ordinary quality findings remain advisory, required artifact failures remain real failures |
+| CF-26 provider | Three terminal attempts, timeout at most two, 30s/120s default backoff | `lwdp-codex-task-retry.mjs` retains those values and same-request reconciliation; Cloud execution itself is not retested by the planned local Case |
+| Native ownership adapter | Old Canonical compiler/physics representation is historical, not a merge target | Native Source, Host Candidate/settlement and SDK Havok/Camera/Input/Reset remain sole owners; no hidden foundation or copied old Runtime state machine |
+
+Final affected tests passed: 44 files / 685 tests; typecheck and build exited 0.
+The final `pnpm check:native-block-builder-skill` passed 106/106 in 299.11 seconds.
+Live/frozen Skill, contract and both generated tools compare byte-for-byte; diff
+check passed. New Case has not started; equal geography/composition remains unverified.
+The subsequent [parameter audit](../../reviews/2026-09-07-cf-scene-parameter-parity-audit.md)
+found an actual old/current Camera occlusion-policy difference. The representation
+fix is ready for its own commit, not a claim of complete parameter parity.
+Do not report focused/Havok or unchanged-source diagnostic evidence as final full
+CI, independent exact-SHA review, parent CF completion or authorization to merge main.
 
 ## CF-20/BUDGET-ORACLE — independent of MEM4 approval
 

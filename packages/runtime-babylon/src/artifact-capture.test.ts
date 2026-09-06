@@ -77,7 +77,7 @@ describe("Babylon artifact capture", () => {
     const registry: nativeCapture.BabylonNativeBlockLiveHandleRegistryV1 = {
       kind: "babylon-native-block-live-handle-registry", schemaVersion: 1,
       realization: realization === "thin-instance" ? { kind: "host-chunk-batched", chunkPolicyHash: `sha256:${"a".repeat(64)}`,
-        batchPlanHash: `sha256:${"b".repeat(64)}` } : { kind: "authoring-unbatched" }, blocks,
+        batchPlanHash: `sha256:${"b".repeat(64)}` } : { kind: "authoring-clustered" }, blocks,
       visualBatches: realization === "independent-mesh" ? [] : [{ batchId: "batch", visualChunkIndexXZ: [0, 0], shape: "full", paletteRole: "structure",
         semanticCaptureClassId: "landmark.fixture", blockIds: blocks.map(b => b.blockId), instances: blocks.map(b => ({ sourceBlockIds: [b.blockId] })), mesh: batch }],
       visualGroups: [], walkableOverlays: [{ logicalColliderId: "ground", sourceBlockIds: ["front-block"],

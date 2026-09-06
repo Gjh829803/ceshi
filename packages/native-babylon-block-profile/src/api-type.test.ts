@@ -46,7 +46,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlock"]>()
       .returns
-      .toEqualTypeOf<Mesh>();
+      .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["finalize"]>()
       .parameter(0)
       .toEqualTypeOf<Readonly<BabylonNativeBlockProfileFinalizeInputV1>>();
@@ -88,7 +88,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<Readonly<BabylonNativeBlockGridCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlockGrid"]>()
       .returns
-      .toEqualTypeOf<readonly Mesh[]>();
+      .toEqualTypeOf<readonly Readonly<BabylonNativeBlockCreateInputV1>[]>();
   });
 
   it("exposes one closed current-only Collider geometry source", () => {

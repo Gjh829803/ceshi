@@ -490,6 +490,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
       contributionHash,
       profileInventoryHash: frozenContribution.profileSettlement.profileInventoryHash,
       settledVisualHash: frozenContribution.profileSettlement.settledVisualHash,
+      settledVisualTargetCount: frozenContribution.profileSettlement.targetCount,
       blocks: checkedLayout.layout.blocks.map((block) => ({
         blockId: block.id,
         runtimeEntityId: `native-block:${block.id}`,

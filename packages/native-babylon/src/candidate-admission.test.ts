@@ -331,8 +331,8 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             elementId: "block-visual",
             mesh: visual,
             collisionBinding: {
-              kind: "static-collider",
-              colliderId: "block-proxy",
+              kind: "static-colliders",
+              colliderIds: ["block-proxy"],
             },
           }],
         });
@@ -433,8 +433,8 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             elementId: "block-visual",
             mesh: visual,
             collisionBinding: {
-              kind: "static-collider",
-              colliderId: "block-proxy",
+              kind: "static-colliders",
+              colliderIds: ["block-proxy"],
             },
           }],
         });
@@ -472,8 +472,8 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             elementId: "shared-block",
             mesh: shared,
             collisionBinding: {
-              kind: "static-collider",
-              colliderId: "shared-proxy",
+              kind: "static-colliders",
+              colliderIds: ["shared-proxy"],
             },
           }],
         });
@@ -517,8 +517,8 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             elementId: "ordinary-visual",
             mesh: visual,
             collisionBinding: {
-              kind: "static-collider",
-              colliderId: "subclass-proxy",
+              kind: "static-colliders",
+              colliderIds: ["subclass-proxy"],
             },
           }],
         });

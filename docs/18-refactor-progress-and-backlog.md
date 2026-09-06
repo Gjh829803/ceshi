@@ -3175,6 +3175,28 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   相同 8,000 Block 诊断现可在固定 1 GiB 堆下完成审计/销毁，但活跃分配仍约 625 MB。
   本次真实源码共 158,100 Block，完整容量问题仍开放，不能据此称生产已修复。
 
+- CF-20/MEM4 实施检查点（2026-09-07，`df1d8350` 后的当前候选）：
+  已按用户批准切换为 immutable intent → 分配前旧式 32m/X-Z-Y clustering；
+  创建 API 不再返回逐 Block Mesh，完整逻辑身份、显式 Collider、实际 Host settlement、
+  Package metadata/目录校验、Runtime 回放及 Capture 局部选择同步切换。大布局 extrema
+  删除调用栈展开；不可行走实体仅合并同 Collider/平面/法向的共面微格，保留孔洞和
+  外表面，不动行走平滑、预算或新建 gate。原失败 158,100 Block 源码保持原 SHA，
+  在当前 Host 诊断准入通过、零诊断，6,556 targets / 6,560 Meshes，66.85s，峰值
+  RSS 2,718,992 KiB；它不是原 Run 成功或完整 Case 验收。最终相关 44 文件
+  685/685、typecheck、build 通过；最终冻结 Skill 检查 106/106 通过。与旧 `9e35ab53`
+  的本轮边界对照及 RED/GREEN 见 MEM4 计划。按最新要求先完成对照，再启动新 Case；
+  完整场景高差/纵深/构图、CF 父项、最终全仓 CI、独立审查与 main 集成仍未完成。
+
+- CF-04/12 参数复核（2026-09-07，MEM4 提交前）：已静态确认生成 Camera 起点
+  `5m / 1.25m / 0.12rad / 56°`、Profile → authored opening → Context Modifiers →
+  Preview 覆盖顺序、1280×720/DPR 1，以及 1800s 正式任务超时与旧分支一致。
+  发现实际行为差异：旧 Block Runtime 在 `usesBlockWorldGeometry` 时启用 Subject
+  occlusion fade 并跳过第三人称 Spring Arm；当前 Native 使用 Hard Decollider，
+  没有旧 fade 路径。四个数值一致不能证明实际机位/像素一致。详见
+  [参数对照与未决合同](reviews/2026-09-07-cf-scene-parameter-parity-audit.md)。
+  当前防穿模冻结设计与旧策略冲突，不能默默归为允许偏差，也不能仅取消碰撞而遗漏
+  fade/Reset/Capture 消费者。新 Case 尚未启动；完整参数对齐、CF-04/12 保持开放。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

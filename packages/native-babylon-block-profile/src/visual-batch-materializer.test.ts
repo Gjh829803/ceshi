@@ -77,14 +77,6 @@ function record(
   spec: BlockSpecV1,
 ): BabylonNativeBlockSessionRecordV1 {
   const shape = spec.shape ?? "full";
-  const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[shape];
-  const mesh = MeshBuilder.CreateBox(spec.id, {
-    width: size[0],
-    height: size[1],
-    depth: size[2],
-  }, scene);
-  mesh.position.set(...spec.centerMetersXYZ);
-  mesh.rotation.y = (spec.rotationQuarterTurnsY ?? 0) * Math.PI / 2;
   return Object.freeze({
     input: Object.freeze({
       id: spec.id,
@@ -96,13 +88,7 @@ function record(
         ? {}
         : { visualGroupId: spec.visualGroupId }),
     }),
-    mesh,
-    localGeometrySnapshot: Object.freeze({
-      positions: Object.freeze(Array.from(
-        mesh.getVerticesData(VertexBuffer.PositionKind)!,
-      )),
-      indices: Object.freeze(Array.from(mesh.getIndices()!)),
-    }),
+
   });
 }
 
@@ -160,8 +146,7 @@ function createFixture(
     scene,
     liveHandles: visuals.liveHandles,
     placements,
-    meshByBlockId: new Map(records.map((entry) =>
-      [entry.input.id, entry.mesh] as const)),
+    meshByBlockId: new Map(visuals.nodes.flatMap(node => node.sourceBlockIds.map(id => [id, node.mesh] as const))),
     dispose(): void {
       visuals.dispose();
       scene.dispose();
@@ -235,13 +220,13 @@ describe("NBR-65F Native Block visual batch realization", () => {
     ]);
     expect(materialized.independentBlockIds).toEqual(["wall-single"]);
     expect(materialized.resources).toEqual({
-      authoringVisualMeshCount: 7,
+      authoringVisualMeshCount: 2,
       thinInstanceBatchCount: 1,
       thinInstanceCount: 1,
       independentVisualMeshCount: 1,
       renderedDrawUnitCount: 2,
       renderedGeometryBufferSetCount: 2,
-      hiddenAuthoringMeshCount: 6,
+      hiddenAuthoringMeshCount: 1,
     });
     expect(materialized.chunkPolicyHash)
       .toBe(BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1);
@@ -317,7 +302,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
       expect(handle.runtimeEntityId).toBe(`native-block:${handle.blockId}`);
       const displayMatrix = babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle);
       const center = Vector3.TransformCoordinates(Vector3.Zero(), displayMatrix);
-      const sourceCenter = fixture.meshByBlockId.get(handle.blockId)!.position;
+      const sourceCenter = Vector3.FromArray(fixture.placements.find(row => row.blockId === handle.blockId)!.centerMetersXYZ);
       const expectedX = handle.kind === "thin-instance"
         ? 2.5 + (sourceCenter.x - 2.5) * 0.985 : sourceCenter.x;
       expect(center.x).toBeCloseTo(expectedX, 6);

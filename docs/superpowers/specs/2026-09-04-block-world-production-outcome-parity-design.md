@@ -11,6 +11,16 @@ in [the progress ledger](../../18-refactor-progress-and-backlog.md).
 
 ## 1. Decision
 
+2026-09-07 CF-20/MEM4 amendment, explicitly approved by the user: the Native Block
+Profile records immutable intent and clusters before allocating visual Meshes, as
+the pinned old compiler does. `createBlock`/`createBlockGrid` return frozen canonical
+inputs, not immediate Mesh handles. The existing Native Source, explicit Collider
+boundary, logical Block identities and SDK Runtime owners remain. Profile/Host
+settlement binds actual cluster Meshes and every explicit Collider join; Capture
+retains exact logical membership. This replaces the former per-Block allocation
+contract, not production policy. No count cap, new gate, hidden ground, alternate
+authoring source or extra repair task is authorized by this representation change.
+
 The current Babylon Native implementation keeps its architecture, ownership, deterministic evidence,
 and atomic publication. All non-architectural production behavior follows the successful historical
 `codex/block-world-main-integration@9e35ab53` workflow, including its stage order, requested-scope

@@ -230,7 +230,7 @@ describe("formal world capture provider", () => {
           triangleCount: overlays.reduce((sum, { mesh }) => sum + mesh.getTotalIndices() / 3, 0) }],
       } as unknown as BabylonNativeBlockMaterializerMetadataV1;
       const registry = { kind: "babylon-native-block-live-handle-registry" as const, schemaVersion: 1 as const,
-        realization: { kind: "authoring-unbatched" as const }, blocks: handles, visualBatches: [],
+        realization: { kind: "authoring-clustered" as const }, blocks: handles, visualBatches: [],
         visualGroups: metadata.visualGroups.map(({ visualGroupId }) => ({ visualGroupId,
           blockHandles: handles.filter((handle) => handle.visualGroupId === visualGroupId) })),
         walkableOverlays: overlays };
@@ -297,7 +297,7 @@ describe("formal world capture provider", () => {
     const valid = {
       kind: "babylon-native-block-live-handle-registry",
       schemaVersion: 1,
-      realization: { kind: "authoring-unbatched" },
+      realization: { kind: "authoring-clustered" },
       blocks: [
         {
           kind: "independent-mesh",

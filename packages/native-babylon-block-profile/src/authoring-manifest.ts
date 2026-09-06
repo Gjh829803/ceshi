@@ -15,7 +15,7 @@ import {
   parseWorldReconstructionCaseV1,
   type WorldReconstructionCaseV1,
 } from "@whitebox-world/validation/reconstruction-contracts";
-import { isEqual, isNil } from "lodash-es";
+import { isEqual, isNil, min, max } from "lodash-es";
 
 import type {
   BabylonNativeBlockVisualGroupInventoryV1,
@@ -420,10 +420,10 @@ function derivedVisualGroups(
           sortedBlocks.map(({ paletteRole }) => paletteRole),
         )].sort(stableCompare)),
         minimumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-          Math.min(...sortedBlocks.map((block) => block.minimumMetersXYZ[axis]!)),
+          min(sortedBlocks.map((block) => block.minimumMetersXYZ[axis]!))!,
         ) as [number, number, number]),
         maximumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-          Math.max(...sortedBlocks.map((block) => block.maximumMetersXYZ[axis]!)),
+          max(sortedBlocks.map((block) => block.maximumMetersXYZ[axis]!))!,
         ) as [number, number, number]),
       });
     }));

@@ -35,74 +35,7 @@ beforeEach(() => {
   commitProfileSettlement.mockImplementation(() => {});
 });
 
-interface SessionModule {
-  createBabylonNativeBlockProfileSessionV1(
-    context: BabylonNativeSceneBuildContextV1,
-  ): {
-    createBlock(input: Readonly<{
-      id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
-      paletteRole:
-        | "ground"
-        | "route"
-        | "structure"
-        | "hazard"
-        | "water-like-visual"
-        | "background-mass";
-      centerMetersXYZ: readonly [number, number, number];
-      rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
-      visualGroupId?: string;
-      colliderGroupId?: string;
-    }>): Mesh;
-    createBlockGrid(input: Readonly<{
-      idPrefix: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
-      paletteRole:
-        | "ground"
-        | "route"
-        | "structure"
-        | "hazard"
-        | "water-like-visual"
-        | "background-mass";
-      minimumCenterMetersXYZ: readonly [number, number, number];
-      repeatCountXYZ: readonly [number, number, number];
-      rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
-      visualGroupId?: string;
-      colliderGroupId?: string;
-    }>): readonly Mesh[];
-    finalize(input: Readonly<{
-      staticColliders: readonly Readonly<{
-        id: string;
-        colliderGeometrySource:
-          | Readonly<{ kind: "block"; blockId: string }>
-          | Readonly<{ kind: "block-group"; colliderGroupId: string }>;
-        traversalBinding:
-          | Readonly<{ kind: "not-traversable" }>
-          | Readonly<{
-              kind: "static-surface";
-              surfaceEntityId: string;
-              logicalSubshapeId: string;
-              traversalSurfaceProfileRef: string;
-            }>;
-        exposedEdgePolicy: "none" | "protect-ground-subject";
-      }>[];
-    }>): Readonly<{
-      kind: "babylon-native-block-finalized-epoch";
-      schemaVersion: 1;
-      checkedLayout: Readonly<{
-        layout: Readonly<{
-          blocks: readonly Readonly<{ colliderGroupId?: string }>[];
-        }>;
-        checkResult: Readonly<{
-          kind: "babylon-native-block-profile-check-result";
-          schemaVersion: 1;
-          outcome: "passed" | "rejected";
-        }>;
-      }>;
-    }>;
-    dispose(): void;
-  };
-}
+type SessionModule = typeof import("./session.js");
 
 async function loadSession(): Promise<SessionModule> {
   const modulePath = ["./", "session.js"].join("");
@@ -175,237 +108,93 @@ function hostPublishableFailure(run: () => void): string {
 }
 
 describe("Babylon Native block profile session", () => {
-  it("CF-20 shares raw fixed-shape geometry only within its Session", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+  it("CF-20/MEM4 records immutable intent without allocating per-Block Meshes", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await import("./session.js");
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
-      const other = createBabylonNativeBlockProfileSessionV1(createContext(scene));
-      const shapes = [
-        ["full", [0, 0, 0]], ["half", [0, 0, 0]],
-        ["quarter", [0.25, 0, 0]], ["small", [0.25, 0, 0.25]],
-        ["step", [0, 0.125, 0]],
-      ] as const;
-      const geometries = new Set();
-      for (const [index, [shape, center]] of shapes.entries()) {
-        const a = session.createBlock({ id: `${shape}-a`, shape,
-          paletteRole: "ground", centerMetersXYZ: [center[0], center[1], center[2] + index * 4] });
-        const b = session.createBlock({ id: `${shape}-b`, shape,
-          paletteRole: "structure", centerMetersXYZ: [center[0] + 2, center[1], center[2] + index * 4] });
-        const independent = other.createBlock({ id: `${shape}-other`, shape,
-          paletteRole: "ground", centerMetersXYZ: [center[0], center[1], center[2] + index * 4] });
-        expect(a).not.toBe(b);
-        expect(a.geometry).not.toBeNull();
-        expect(b.geometry).toBe(a.geometry);
-        expect(independent.geometry).not.toBe(a.geometry);
-        geometries.add(a.geometry);
-        a.dispose();
-        expect(b.geometry!.isDisposed()).toBe(false);
-        expect(b.getTotalVertices()).toBe(24);
+      const allocations = vi.spyOn(MeshBuilder, "CreateBox");
+      try {
+        const blocks = session.createBlockGrid({ idPrefix: "intent", shape: "full",
+          paletteRole: "background-mass", minimumCenterMetersXYZ: [0, -0.5, 0],
+          repeatCountXYZ: [30, 3, 90] });
+        expect(blocks).toHaveLength(8100);
+        expect(scene.meshes).toHaveLength(0);
+        expect(allocations).not.toHaveBeenCalled();
+        expect(Object.isFrozen(blocks)).toBe(true);
+        expect(Object.isFrozen(blocks[0])).toBe(true);
+      } finally {
+        allocations.mockRestore();
+        session.dispose();
       }
-      expect(geometries.size).toBe(5);
-      session.dispose();
-      expect(scene.geometries).toHaveLength(5);
-      other.dispose();
-      expect(scene.geometries).toHaveLength(0);
     });
   });
 
-  it("CF-20 keeps pooled snapshots and checked identity independent of raw Geometry ownership", async () => {
+  it("CF-20/MEM4 materializes one legacy cluster while preserving every logical Block", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await import("./session.js");
-    const layouts: unknown[] = [];
-    for (const makeUnique of [false, true]) {
-      withScene((scene) => {
-        const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
-        const meshes = [0, 2, 40, 42].map((x) => session.createBlock({
-          id: `block-${x}`, shape: "full", paletteRole: "structure",
-          centerMetersXYZ: [x, 0, 0],
-        }));
-        if (makeUnique) for (const mesh of meshes) mesh.makeGeometryUnique();
-        const epoch = session.finalize({ staticColliders: [] });
-        const records = epoch.checkedLayout.records;
-        expect(records[0]!.localGeometrySnapshot).toBe(records[1]!.localGeometrySnapshot);
-        layouts.push(epoch.checkedLayout.layout);
-        const liveHandles = peekBabylonNativeBlockLiveHandleRegistryV1(scene)!;
-        const batches = materializeBabylonNativeBlockVisualBatchesV1({
-          scene, realizationId: "pooled-shape-test",
-          chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
-          liveHandles,
-          placements: epoch.checkedLayout.layout.blocks.map((block) => {
-            const handle = liveHandles.blocks.find(({ blockId }) => blockId === block.id)!;
-            return { blockId: block.id, runtimeEntityId: handle.runtimeEntityId,
-              semanticCaptureClassId: handle.semanticCaptureClassId,
-              shape: block.shape, paletteRole: block.paletteRole,
-              centerMetersXYZ: block.centerMetersXYZ,
-              rotationQuarterTurnsY: block.rotationQuarterTurnsY,
-              sizeMetersXYZ: block.sizeMetersXYZ };
-          }),
-        });
-        const displays = scene.meshes.filter((mesh) => !meshes.includes(mesh as Mesh));
-        expect(displays.length).toBeGreaterThanOrEqual(2);
-        expect(new Set(displays.map((mesh) => (mesh as Mesh).geometry)).size).toBe(displays.length);
-        for (const display of displays) {
-          for (const raw of meshes) expect((display as Mesh).geometry).not.toBe(raw.geometry);
-        }
-        batches.dispose();
-        session.dispose();
-      });
-    }
-    expect(layouts[0]).toEqual(layouts[1]);
-  });
-
-  it("CF-20 does not accept a mutated pooled shape as a new geometry baseline", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
-      const first = session.createBlock({ id: "first", shape: "full",
-        paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });
-      const positions = Array.from(first.getVerticesData("position")!);
-      positions[0] = positions[0]! + 0.125;
-      first.setVerticesData("position", positions);
-      session.createBlock({ id: "second", shape: "full",
-        paletteRole: "ground", centerMetersXYZ: [2, 0, 0] });
-      expect(() => session.finalize({ staticColliders: [] }))
-        .toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
+      session.createBlockGrid({ idPrefix: "cluster", shape: "full",
+        paletteRole: "background-mass", minimumCenterMetersXYZ: [0, -0.5, 0],
+        repeatCountXYZ: [8, 1, 1] });
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.layout.blocks).toHaveLength(8);
+      expect(scene.meshes).toHaveLength(1);
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)?.blocks).toHaveLength(8);
       session.dispose();
       expect(scene.meshes).toHaveLength(0);
-      expect(scene.geometries).toHaveLength(0);
-    });
-  });
-
-  it("CF-20 retries a pooled allocation failure without disposing pre-existing geometry", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
-      const first = session.createBlock({ id: "first", shape: "full",
-        paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });
-      const geometry = first.geometry!;
-      const apply = geometry.applyToMesh.bind(geometry);
-      const spy = vi.spyOn(geometry, "applyToMesh").mockImplementationOnce((mesh) => {
-        apply(mesh);
-        throw new Error("pooled geometry attachment failed");
-      });
-      try {
-        expect(() => session.createBlock({ id: "retry", shape: "full",
-          paletteRole: "ground", centerMetersXYZ: [2, 0, 0] }))
-          .toThrow(/pooled geometry attachment failed/);
-        expect(scene.meshes).toEqual([first]);
-        expect(geometry.isDisposed()).toBe(false);
-        const retry = session.createBlock({ id: "retry", shape: "full",
-          paletteRole: "ground", centerMetersXYZ: [2, 0, 0] });
-        expect(retry.geometry).toBe(geometry);
-      } finally {
-        spy.mockRestore();
-        session.dispose();
-      }
-      expect(scene.geometries).toHaveLength(0);
     });
   });
 
   it.each([
-    ["full", [0, 0, 0]], ["half", [0, 0, 0]],
-    ["quarter", [0.25, 0, 0]], ["small", [0.25, 0, 0.25]],
-    ["step", [0, 0.125, 0]],
-  ] as const)("CF-20 preserves the old fixed 0.985 visual ratio for %s", async (shape, centerMetersXYZ) => {
+    ["full", [0, 0.5, 0], [1, 1, 1]],
+    ["half", [0, 0.25, 0], [1, 0.5, 1]],
+    ["quarter", [0.25, 0.25, 0], [0.5, 0.5, 1]],
+    ["small", [0.25, 0.25, 0.25], [0.5, 0.5, 0.5]],
+    ["step", [0, 0.125, 0], [1, 0.25, 1]],
+  ] as const)("materializes exact %s metric intent with the fixed display scale", async (shape, center, size) => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene));
-      const mesh = session.createBlock({
-        id: "fixed-scale", shape, paletteRole: "structure", centerMetersXYZ,
-      });
-      const rawGeometry = Array.from(mesh.getVerticesData("position")!);
-      session.finalize({ staticColliders: [] });
-      expect(mesh.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
-      expect(mesh.getVerticesData("position")).toEqual(rawGeometry);
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const block = session.createBlock({ id: "shape-block", shape,
+        paletteRole: "ground", centerMetersXYZ: center });
+      expect(block).not.toBeInstanceOf(Mesh);
+      expect(Object.isFrozen(block.centerMetersXYZ)).toBe(true);
+      expect(scene.meshes).toHaveLength(0);
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.layout.blocks[0]!.sizeMetersXYZ).toEqual(size);
+      const mesh = scene.meshes[0]!;
+      expect(mesh.position.asArray()).toEqual(center);
+      expect(mesh.scaling.asArray()).toEqual(size.map(value => value * 0.985));
       session.dispose();
+      expect(scene.meshes).toHaveLength(0);
     });
   });
 
-
-  it("CF-20 releases per-allocation Scene snapshots while keeping the live session and its disposers", async () => {
-    const engine = new NullEngine();
-    const scene = new Scene(engine);
-    const bootstrap = createContext(scene).bootstrap;
-    scene.dispose();
-    engine.dispose();
-    // Isolated GC instrumentation: do not replace Set or enable GC in the
-    // shared test worker. This checks retained objects, not noisy RSS timing.
-    const script = `
-      import assert from 'node:assert/strict';
-      import { setImmediate } from 'node:timers/promises';
-      import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
-      import { Scene } from '@babylonjs/core/scene.js';
-      import { createBabylonNativeBlockProfileSessionV1 } from ${JSON.stringify(new URL("./session.ts", import.meta.url).href)};
-      const engine = new NullEngine();
-      const scene = new Scene(engine);
-      const session = createBabylonNativeBlockProfileSessionV1({scene, bootstrap: ${JSON.stringify(bootstrap)}});
-      const originalSet = globalThis.Set;
-      const snapshots = [];
-      try {
-        globalThis.Set = class extends originalSet {
-          constructor(values) {
-            super(values);
-            if (values === scene.meshes) snapshots.push(new WeakRef(this));
-          }
-        };
-        session.createBlockGrid({idPrefix:'memory',shape:'full',paletteRole:'ground',minimumCenterMetersXYZ:[0,0,0],repeatCountXYZ:[64,1,1]});
-      } finally { globalThis.Set = originalSet; }
-      assert.equal(snapshots.length, 64, 'must observe every allocation snapshot');
-      for (let round = 0; round < 4; round++) { await setImmediate(); globalThis.gc(); }
-      const retained = snapshots.filter(reference => reference.deref() !== undefined).length;
-      assert.equal(retained, 0, 'live cleanup closures must not retain quadratic Scene snapshots');
-      assert.equal(scene.meshes.length, 64, 'do not satisfy collection by destroying live Blocks');
+  it("keeps independently owned cluster and Runtime batch geometries across scenes", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 40, 42]) session.createBlock({ id: `block-${x}`,
+        shape: "full", paletteRole: "background-mass", centerMetersXYZ: [x, 0.5, 0] });
+      const epoch = session.finalize({ staticColliders: [] });
+      const originals = [...scene.meshes] as Mesh[];
+      const batches = materializeBabylonNativeBlockVisualBatchesV1({
+        scene, realizationId: "ownership-test",
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+        liveHandles: peekBabylonNativeBlockLiveHandleRegistryV1(scene)!,
+        placements: epoch.checkedLayout.layout.blocks.map(block => ({
+          ...block, blockId: block.id, runtimeEntityId: `native-block:${block.id}`,
+          semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
+        })),
+      });
+      expect(batches.batches).toHaveLength(2);
+      const displays = batches.batches.map(batch => batch.mesh);
+      expect(new Set(displays.map(mesh => mesh.geometry)).size).toBe(2);
+      for (const mesh of displays) for (const raw of originals) expect(mesh.geometry).not.toBe(raw.geometry);
+      batches.dispose();
+      expect(originals.every(mesh => mesh.isVisible)).toBe(true);
       session.dispose();
-      assert.equal(scene.meshes.length, 0, 'all live cleanup callbacks still work');
-      scene.dispose(); engine.dispose();
-    `;
-    await promisify(execFile)(process.execPath,
-      ["--expose-gc", "--import", "tsx", "--input-type=module", "--eval", script],
-      { timeout: 30_000 });
-  }, 35_000);
-
-  it("creates one real Babylon Mesh with the exact fixed shape", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "ridge-edge",
-        shape: "quarter",
-        paletteRole: "structure",
-        visualGroupId: "ridge",
-        centerMetersXYZ: [0.25, 0.25, 0],
-      });
-
-      expect(mesh).toBeInstanceOf(Mesh);
-      expect(mesh.getScene()).toBe(scene);
-      expect(mesh.name).toBe("ridge-edge");
-      expect(mesh.id).toBe("ridge-edge");
-      const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
-      expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
-        .toEqual([0.5, 0.5, 1]);
-    });
-  });
-
-  it("creates the quarter-meter step as one exact fixed Babylon Mesh", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const mesh = session.createBlock({
-        id: "route-step",
-        shape: "step",
-        paletteRole: "route",
-        centerMetersXYZ: [0, 0.125, 0],
-      });
-
-      const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
-      expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
-        .toEqual([1, 0.25, 1]);
+      expect(scene.meshes).toHaveLength(0);
     });
   });
 
@@ -433,10 +222,10 @@ describe("Babylon Native block profile session", () => {
         rotationQuarterTurnsY: 1,
       });
 
-      expect(unrotated.position.asArray()).toEqual([-0.25, 0.25, 0]);
-      expect(unrotated.rotation.y).toBe(0);
-      expect(rotated.position.asArray()).toEqual([0.5, 0.25, 0.25]);
-      expect(rotated.rotation.y).toBeCloseTo(Math.PI / 2, 12);
+      expect(unrotated.centerMetersXYZ).toEqual([-0.25, 0.25, 0]);
+      expect((unrotated.rotationQuarterTurnsY ?? 0) * Math.PI / 2).toBe(0);
+      expect(rotated.centerMetersXYZ).toEqual([0.5, 0.25, 0.25]);
+      expect((rotated.rotationQuarterTurnsY ?? 0) * Math.PI / 2).toBeCloseTo(Math.PI / 2, 12);
 
       const epoch = session.finalize({ staticColliders: [] });
       expect(epoch.checkedLayout.layout.blocks).toEqual([
@@ -470,7 +259,7 @@ describe("Babylon Native block profile session", () => {
         centerMetersXYZ: [0.5000000001, 0.5, 0.5],
       });
 
-      expect(mesh.position.asArray()).toEqual([0.5, 0.5, 0.5]);
+      expect(mesh.centerMetersXYZ).toEqual([0.5, 0.5, 0.5]);
       expect(session.finalize({ staticColliders: [] })
         .checkedLayout.layout.blocks[0]).toEqual(expect.objectContaining({
         id: "near-lattice-block",
@@ -560,34 +349,21 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("allows Babylon-native composition before requiring an ordinary unparented final Mesh", async () => {
+  it("returns closed immutable intent, not a mutable Babylon placement dialect", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      // An identity root keeps the declared placement intact so this case
-      // isolates the unparented-final-Mesh rule from transform drift.
-      const root = new TransformNode("ridge-root", scene);
-      const material = new StandardMaterial("ridge-material", scene);
-      const mesh = session.createBlock({
-        id: "ridge-core",
-        shape: "full",
-        paletteRole: "structure",
-        visualGroupId: "ridge",
-        centerMetersXYZ: [0, 0.5, 1],
-      });
-
-      mesh.parent = root;
-      mesh.material = material;
-
-      expect(mesh.parent).toBe(root);
-      expect(mesh.material).toBe(material);
-
-      expect(() => session.finalize({ staticColliders: [] })).toThrow(
-        /WORLDKIT_NATIVE_BLOCK_VISUAL_RECORD_MISMATCH/,
-      );
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const center: [number, number, number] = [0, 0.5, 0];
+      const source = { id: "immutable", shape: "full" as const, paletteRole: "ground" as const,
+        centerMetersXYZ: center };
+      const intent = session.createBlock(source);
+      center[0] = 20;
+      source.id = "changed";
+      expect(() => Reflect.set(intent, "position", {})).not.toThrow();
+      expect(Reflect.set(intent, "id", "changed")).toBe(false);
+      expect(intent).not.toHaveProperty("position");
+      expect(session.finalize({ staticColliders: [] }).checkedLayout.layout.blocks[0])
+        .toMatchObject({ id: "immutable", centerMetersXYZ: [0, 0.5, 0] });
     });
   });
 
@@ -710,47 +486,23 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("disposes Profile-owned Meshes in reverse creation order after finalization", async () => {
+  it("disposes materialized clusters in reverse order exactly once", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const disposalOrder: string[] = [];
-      for (const [index, id] of [
-        "first-block",
-        "second-block",
-        "third-block",
-      ].entries()) {
-        const mesh = session.createBlock({
-          id,
-          shape: "small",
-          paletteRole: "ground",
-          centerMetersXYZ: [index / 2 + 0.25, 0.25, 0.25],
-        });
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          disposalOrder.push(id);
-          return dispose(...arguments_);
-        };
-      }
-
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 4]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
       session.finalize({ staticColliders: [] });
+      const meshes = [...scene.meshes];
+      const order: string[] = [];
+      for (const mesh of meshes) {
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...args) => { order.push(mesh.name); dispose(...args); };
+      }
       session.dispose();
       session.dispose();
-
-      expect(disposalOrder).toEqual([
-        "third-block",
-        "second-block",
-        "first-block",
-      ]);
-      expect(() => session.createBlock({
-        id: "late-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [8, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+      expect(order).toEqual(meshes.map(mesh => mesh.name).reverse());
+      expect(scene.meshes).toHaveLength(0);
     });
   });
 
@@ -876,7 +628,8 @@ describe("Babylon Native block profile session", () => {
         displayScaleRatio: 0.4,
         staticColliders: Object.freeze([]),
       }))).toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
-      expect(full.scaling.asArray()).toEqual([1, 1, 1]);
+      expect(full).not.toHaveProperty("scaling");
+      expect(scene.meshes).toHaveLength(0);
       expect(commitProfileSettlement).not.toHaveBeenCalled();
     });
   });
@@ -949,30 +702,17 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("rejects post-creation placement mutation instead of accepting a second dialect", async () => {
+  it("freezes returned intent placement and preserves its canonical layout", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    for (const tamper of [
-      (mesh: Mesh) => mesh.position.set(2, 0.5, 0),
-      (mesh: Mesh) => { mesh.rotation.y = Math.PI / 2; },
-    ]) {
-      withScene((scene) => {
-        const session = createBabylonNativeBlockProfileSessionV1(
-          createContext(scene),
-        );
-        const mesh = session.createBlock({
-          id: "ground-block",
-          shape: "quarter",
-          paletteRole: "ground",
-          centerMetersXYZ: [0.25, 0.5, 0],
-        });
-
-        tamper(mesh);
-
-        expect(() => session.finalize({ staticColliders: [] }))
-          .toThrow(/WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED/);
-      });
-    }
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const intent = session.createBlock({ id: "ground-block", shape: "quarter",
+        paletteRole: "ground", centerMetersXYZ: [0.25, 0.5, 0] });
+      expect(Reflect.set(intent.centerMetersXYZ, "0", 3)).toBe(false);
+      expect(Reflect.set(intent, "rotationQuarterTurnsY", 1)).toBe(false);
+      expect(session.finalize({ staticColliders: [] }).checkedLayout.layout.blocks[0])
+        .toMatchObject({ centerMetersXYZ: [0.25, 0.5, 0], rotationQuarterTurnsY: 0 });
+    });
   });
 
   it("derives grid IDs, spacing, and Y/Z/X order from the selected shape", async () => {
@@ -1003,7 +743,7 @@ describe("Babylon Native block profile session", () => {
         "entry-ground-x0-y1-z1",
         "entry-ground-x1-y1-z1",
       ]);
-      expect(meshes.map((mesh) => mesh.position.asArray())).toEqual([
+      expect(meshes.map((mesh) => mesh.centerMetersXYZ)).toEqual([
         [0, 0.5, 0], [1, 0.5, 0], [0, 0.5, 1], [1, 0.5, 1],
         [0, 1.5, 0], [1, 1.5, 0], [0, 1.5, 1], [1, 1.5, 1],
       ]);
@@ -1262,11 +1002,11 @@ describe("Babylon Native block profile session", () => {
         rotationQuarterTurnsY: 1,
       });
 
-      expect(unrotated.map((mesh) => mesh.position.asArray()))
+      expect(unrotated.map((mesh) => mesh.centerMetersXYZ))
         .toEqual([[-4.25, 0.25, 0], [-3.75, 0.25, 0]]);
-      expect(rotated.map((mesh) => mesh.position.asArray()))
+      expect(rotated.map((mesh) => mesh.centerMetersXYZ))
         .toEqual([[0.5, 0.25, 0.25], [1.5, 0.25, 0.25]]);
-      expect(rotated.every((mesh) => Math.abs(mesh.rotation.y - Math.PI / 2) < 1e-12))
+      expect(rotated.every((mesh) => Math.abs((mesh.rotationQuarterTurnsY ?? 0) * Math.PI / 2 - Math.PI / 2) < 1e-12))
         .toBe(true);
     });
   });
@@ -1364,170 +1104,32 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("disposes a partially built grid in reverse and leaves the Session reusable", async () => {
+  it.each([false, true])("rolls back partial clustered allocation and retains its primary error (throwing cleanup: %s)", async (throwsOnCleanup) => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const initialMeshCount = scene.meshes.length;
-      const disposalOrder: string[] = [];
-      let createdCount = 0;
-      // Scene-scoped seam: this Session owns the Scene, so the injected
-      // failure cannot leak into another Session or test.
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        createdCount += 1;
-        if (createdCount === 3) {
-          mesh.getVerticesData = () => null;
-        } else {
-          const dispose = mesh.dispose.bind(mesh);
-          mesh.dispose = (...arguments_) => {
-            disposalOrder.push(mesh.name);
-            return dispose(...arguments_);
-          };
-        }
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlockGrid({
-        idPrefix: "entry-ground",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [4, 1, 1],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-
-      expect(disposalOrder).toEqual([
-        "entry-ground-x1-y0-z0",
-        "entry-ground-x0-y0-z0",
-      ]);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.createBlockGrid({
-        idPrefix: "entry-ground",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [2, 1, 1],
-      })).not.toThrow();
-    });
-  });
-
-  it("fails the Session when disposal of the newly failing Mesh throws", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const initialMeshCount = scene.meshes.length;
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        mesh.getVerticesData = () => null;
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          dispose(...arguments_);
-          throw new Error("new Mesh cleanup failed");
-        };
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlock({
-        id: "failing-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.createBlock({
-        id: "late-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [2, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
-    });
-  });
-
-  it("removes a Mesh when Babylon construction throws after Scene registration", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const initialMeshCount = scene.meshes.length;
+    withScene(scene => {
+      const prior = MeshBuilder.CreateBox("prior", {}, scene);
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 4]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "background-mass", centerMetersXYZ: [x, 0.5, 0] });
       const createBox = MeshBuilder.CreateBox;
-      const createBoxSpy = vi.spyOn(MeshBuilder, "CreateBox")
-        .mockImplementationOnce((...arguments_) => {
-          createBox(...arguments_);
-          throw new Error("construction failed after Scene registration");
-        });
-
-      try {
-        expect(() => session.createBlock({
-          id: "registered-then-failed",
-          shape: "full",
-          paletteRole: "ground",
-          centerMetersXYZ: [0, 0.5, 0],
-        })).toThrow(/construction failed after Scene registration/);
-        expect(scene.meshes).toHaveLength(initialMeshCount);
-        expect(() => session.createBlock({
-          id: "retry-after-cleanup",
-          shape: "full",
-          paletteRole: "ground",
-          centerMetersXYZ: [2, 0.5, 0],
-        })).not.toThrow();
-      } finally {
-        createBoxSpy.mockRestore();
-        for (const mesh of [...scene.meshes]) {
-          if (mesh.name === "registered-then-failed") mesh.dispose();
-        }
-      }
-    });
-  });
-
-  it("continues reverse rollback after one committed Mesh disposer throws", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-      );
-      const initialMeshCount = scene.meshes.length;
-      const disposalOrder: string[] = [];
-      let createdCount = 0;
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        createdCount += 1;
-        if (createdCount === 3) mesh.getVerticesData = () => null;
+      let count = 0;
+      const cleanup: string[] = [];
+      const spy = vi.spyOn(MeshBuilder, "CreateBox").mockImplementation((...args) => {
+        const mesh = createBox(...args);
         const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          disposalOrder.push(mesh.name);
-          dispose(...arguments_);
-          if (mesh.name === "rollback-grid-x2-y0-z0" ||
-              mesh.name === "rollback-grid-x1-y0-z0") {
-            throw new Error("committed Mesh cleanup failed");
-          }
+        mesh.dispose = (...disposeArgs) => {
+          cleanup.push(mesh.name); dispose(...disposeArgs);
+          if (throwsOnCleanup) throw new Error("secondary cleanup error");
         };
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlockGrid({
-        idPrefix: "rollback-grid",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [3, 1, 1],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-      expect(disposalOrder).toEqual([
-        "rollback-grid-x2-y0-z0",
-        "rollback-grid-x1-y0-z0",
-        "rollback-grid-x0-y0-z0",
-      ]);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.finalize({ staticColliders: [] }))
-        .toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+        if (++count === 3) throw new Error("primary allocation error");
+        return mesh;
+      });
+      try {
+        expect(() => session.finalize({ staticColliders: [] })).toThrow("primary allocation error");
+        expect(scene.meshes).toEqual([prior]);
+        expect(cleanup).toEqual(["block-cluster-000003", "block-cluster-000002", "block-cluster-000001"]);
+        expect(() => session.finalize({ staticColliders: [] })).toThrow("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED");
+      } finally { spy.mockRestore(); }
     });
   });
 
@@ -1548,7 +1150,7 @@ describe("Babylon Native block profile session", () => {
         blocks = session.finalize({ staticColliders: [] })
           .checkedLayout.layout.blocks
           .map((block) => ({
-            ...(block as Record<string, unknown>),
+            ...block,
             id: "normalized-id",
           }));
       });
@@ -1609,82 +1211,30 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("preserves a late commit error while visual, proxy, and source cleanup continues in reverse order", async () => {
+  it("preserves a late Host commit failure while cleaning clusters, proxies and materials", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const cleanupOrder: string[] = [];
-      const context = createContext(scene, Object.freeze({
-        registerSpawnMarker(): void {},
-        registerStaticCollider(
-          collider: Readonly<BabylonNativeStaticColliderV1>,
-        ): void {
+    withScene(scene => {
+      const cleaned: string[] = [];
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene, {
+        registerSpawnMarker() {},
+        registerStaticCollider(collider) {
           const dispose = collider.mesh.dispose.bind(collider.mesh);
-          collider.mesh.dispose = (
-            ...arguments_: Parameters<Mesh["dispose"]>
-          ) => {
-            cleanupOrder.push(`proxy:${collider.id}`);
-            dispose(...arguments_);
-            if (collider.id === "second-collider") {
-              throw new Error("proxy cleanup failed");
-            }
+          collider.mesh.dispose = (...args) => {
+            cleaned.push(collider.id); dispose(...args); throw new Error("secondary proxy cleanup");
           };
         },
       }));
-      const session = createBabylonNativeBlockProfileSessionV1(
-        context,
-      );
-      for (const [index, id] of ["first-block", "second-block"].entries()) {
-        const mesh = session.createBlock({
-          id,
-          shape: "full",
-          paletteRole: "route",
-          centerMetersXYZ: [index, 0.5, 0],
-        });
-        let assignedMaterial = mesh.material;
-        Object.defineProperty(mesh, "material", {
-          configurable: true,
-          get: () => assignedMaterial,
-          set: (value) => {
-            assignedMaterial = value;
-            if (value === null) cleanupOrder.push(`visual:${id}`);
-          },
-        });
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          cleanupOrder.push(`source:${id}`);
-          dispose(...arguments_);
-          if (id === "second-block") throw new Error("source cleanup failed");
-        };
-      }
-      commitProfileSettlement.mockImplementationOnce(() => {
-        throw new Error("late Host commit failed");
-      });
-
-      expect(() => session.finalize(Object.freeze({
-        staticColliders: Object.freeze([
-          Object.freeze({
-            id: "first-collider",
-            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "first-block" }),
-            traversalBinding: Object.freeze({ kind: "not-traversable" }),
-            exposedEdgePolicy: "none" as const,
-          }),
-          Object.freeze({
-            id: "second-collider",
-            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "second-block" }),
-            traversalBinding: Object.freeze({ kind: "not-traversable" }),
-            exposedEdgePolicy: "none" as const,
-          }),
-        ]),
-      }))).toThrow(/late Host commit failed/);
-      expect(cleanupOrder).toEqual([
-        "proxy:second-collider",
-        "proxy:first-collider",
-        "visual:second-block",
-        "visual:first-block",
-        "source:second-block",
-        "source:first-block",
-      ]);
+      for (const x of [0, 1]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
+      commitProfileSettlement.mockImplementationOnce(() => { throw new Error("late Host commit failed"); });
+      expect(() => session.finalize({ staticColliders: [0, 1].map(x => ({
+        id: `collider-${x}`, colliderGeometrySource: { kind: "block" as const, blockId: `block-${x}` },
+        traversalBinding: { kind: "not-traversable" as const }, exposedEdgePolicy: "none" as const,
+      })) })).toThrow("late Host commit failed");
+      expect(cleaned).toEqual(["collider-1", "collider-0"]);
+      expect(scene.meshes).toHaveLength(0);
+      expect(scene.materials).toHaveLength(0);
     });
   });
+
 });

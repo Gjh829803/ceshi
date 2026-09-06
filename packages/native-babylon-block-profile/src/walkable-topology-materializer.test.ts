@@ -186,7 +186,7 @@ function registeredLiveHandles(
   const registry = Object.freeze({
     kind: "babylon-native-block-live-handle-registry" as const,
     schemaVersion: 1 as const,
-    realization: Object.freeze({ kind: "authoring-unbatched" as const }),
+    realization: Object.freeze({ kind: "authoring-clustered" as const }),
     blocks: Object.freeze([]),
     visualBatches: Object.freeze([]),
     visualGroups: Object.freeze([]),

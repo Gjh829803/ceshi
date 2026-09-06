@@ -1,8 +1,4 @@
 import { createBabylonNativeBlockInputParsersV1 } from "./session-input.js";
-import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
-import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeSceneBuildContextV1,
@@ -52,7 +48,6 @@ import {
 import { materializeBabylonNativeBlockWalkableTopologyV1 } from
   "./walkable-topology-materializer.js";
 import {
-  BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
   type BabylonNativeBlockPositionMetersXYZV1,
   type BabylonNativeBlockRotationQuarterTurnsYV1,
@@ -93,10 +88,10 @@ export interface BabylonNativeBlockProfileFinalizeInputV1 {
 }
 
 export interface BabylonNativeBlockProfileSessionV1 {
-  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
+  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Readonly<BabylonNativeBlockCreateInputV1>;
   createBlockGrid(
     input: Readonly<BabylonNativeBlockGridCreateInputV1>,
-  ): readonly Mesh[];
+  ): readonly Readonly<BabylonNativeBlockCreateInputV1>[];
   finalize(
     input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
   ): BabylonNativeBlockFinalizedEpochV1;
@@ -105,11 +100,6 @@ export interface BabylonNativeBlockProfileSessionV1 {
 
 export interface BabylonNativeBlockSessionRecordV1 {
   readonly input: Readonly<BabylonNativeBlockCreateInputV1>;
-  readonly mesh: Mesh;
-  readonly localGeometrySnapshot: Readonly<{
-    readonly positions: readonly number[];
-    readonly indices: readonly number[];
-  }>;
 }
 
 export interface BabylonNativeBlockCheckedLayoutV1 {
@@ -183,20 +173,6 @@ export function createBabylonNativeBlockProfileSessionV1(
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
   const blockIdByMicroCellKey = new Map<string, string>();
   const acquisitions: (() => void)[] = [];
-  // Raw authoring Meshes have fixed geometry. Display batches are separately
-  // materialized and must not reuse these buffers (thin-instance data is per Geometry).
-  const rawGeometryByShape = new Map<BabylonNativeBlockShapeKindV1, Readonly<{
-    geometry: Geometry;
-    snapshot: BabylonNativeBlockSessionRecordV1["localGeometrySnapshot"];
-  }>>();
-
-  class AllocationFailure {
-    constructor(
-      readonly primaryError: unknown,
-      readonly cleanupDidFail: boolean,
-    ) {}
-  }
-
   function reserve(
     parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
   ): readonly (readonly string[])[] {
@@ -228,134 +204,31 @@ export function createBabylonNativeBlockProfileSessionV1(
     return Object.freeze(microCellKeysByInput);
   }
 
-  function allocate(
-    parsedInput: Readonly<BabylonNativeBlockCreateInputV1>,
-    microCellKeys: readonly string[],
-  ): Mesh {
-    const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
-      parsedInput.shape
-    ];
-    const sceneMeshesBefore = new Set(context.scene.meshes);
-    let mesh: Mesh | undefined;
-    try {
-      let pooled = rawGeometryByShape.get(parsedInput.shape);
-      // A fully rolled-back grid may have released the last Geometry reference.
-      if (!isNil(pooled) && pooled.geometry.isDisposed()) {
-        rawGeometryByShape.delete(parsedInput.shape);
-        pooled = undefined;
-      }
-      if (isNil(pooled)) {
-        mesh = MeshBuilder.CreateBox(parsedInput.id,
-          { width: size[0], height: size[1], depth: size[2] }, context.scene);
-      } else {
-        mesh = new Mesh(parsedInput.id, context.scene);
-        pooled.geometry.applyToMesh(mesh);
-      }
-      mesh.position.set(
-        parsedInput.centerMetersXYZ[0],
-        parsedInput.centerMetersXYZ[1],
-        parsedInput.centerMetersXYZ[2],
-      );
-      mesh.rotation.y = (parsedInput.rotationQuarterTurnsY ?? 0) * Math.PI / 2;
-      const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-      const indices = mesh.getIndices();
-      if (isNil(positions) || isNil(indices)) {
-        return fail("WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
-          "the fixed block helper did not produce indexed position geometry");
-      }
-      if (isNil(pooled)) {
-        pooled = Object.freeze({
-          geometry: mesh.geometry!,
-          snapshot: Object.freeze({
-            positions: Object.freeze(Array.from(positions)),
-            indices: Object.freeze(Array.from(indices)),
-          }),
-        });
-        rawGeometryByShape.set(parsedInput.shape, pooled);
-      }
-      recordsById.set(parsedInput.id, Object.freeze({
-        input: parsedInput,
-        mesh,
-        // Never re-baseline a shared buffer after user code has mutated it.
-        localGeometrySnapshot: pooled.snapshot,
-      }));
-    } catch (error) {
-      let cleanupDidFail = false;
-      const uncommittedMeshes = context.scene.meshes.filter(
-        (candidate) => !sceneMeshesBefore.has(candidate),
-      );
-      if (!isNil(mesh) && !uncommittedMeshes.includes(mesh)) {
-        uncommittedMeshes.push(mesh);
-      }
-      for (let index = uncommittedMeshes.length - 1; index >= 0; index -= 1) {
-        const candidate = uncommittedMeshes[index]!;
-        try {
-          candidate.dispose();
-        } catch {
-          cleanupDidFail = true;
-          try { context.scene.removeMesh(candidate); } catch { /* failed */ }
-        }
-      }
-      throw new AllocationFailure(error, cleanupDidFail);
-    }
-    for (const key of microCellKeys) {
-      blockIdByMicroCellKey.set(key, parsedInput.id);
-    }
-    return mesh;
-  }
-
-  function release(
-    parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
-    microCellKeysByInput: readonly (readonly string[])[],
-    committedCount: number,
-  ): boolean {
-    let cleanupDidFail = false;
-    for (let index = committedCount - 1; index >= 0; index -= 1) {
-      const parsedInput = parsedInputs[index]!;
-      recordsById.delete(parsedInput.id);
-      for (const key of microCellKeysByInput[index]!) {
-        blockIdByMicroCellKey.delete(key);
-      }
-      const dispose = acquisitions.pop();
-      if (!isNil(dispose)) {
-        try { dispose(); } catch { cleanupDidFail = true; }
-      }
-    }
-    return cleanupDidFail;
-  }
-
   function createBatch(
     parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
-  ): readonly Mesh[] {
-    const microCellKeysByInput = reserve(parsedInputs);
-    const meshes: Mesh[] = [];
+  ): readonly Readonly<BabylonNativeBlockCreateInputV1>[] {
+    const cellsByInput = reserve(parsedInputs);
+    // All validation precedes publication. These are data records, never Mesh
+    // stand-ins; Babylon allocation begins only after the complete Layout checks.
+    let committedCount = 0;
     try {
-      for (const [index, parsedInput] of parsedInputs.entries()) {
-        const mesh = allocate(parsedInput, microCellKeysByInput[index]!);
-        // Capture only this iteration's Mesh, outside allocate's lexical
-        // environment: retaining its sceneMeshesBefore Set costs O(n²) space.
-        acquisitions.push(() => mesh.dispose());
-        meshes.push(mesh);
+      for (const [index, input] of parsedInputs.entries()) {
+        committedCount = index + 1;
+        recordsById.set(input.id, Object.freeze({ input }));
+        for (const key of cellsByInput[index]!) blockIdByMicroCellKey.set(key, input.id);
       }
     } catch (error) {
-      const primaryError = error instanceof AllocationFailure
-        ? error.primaryError
-        : error;
-      const batchCleanupDidFail = release(
-        parsedInputs,
-        microCellKeysByInput,
-        meshes.length,
-      );
-      const cleanupDidFail = (error instanceof AllocationFailure &&
-        error.cleanupDidFail) || batchCleanupDidFail;
-      if (cleanupDidFail) state = "failed";
-      throw primaryError;
+      for (let index = committedCount - 1; index >= 0; index--) {
+        recordsById.delete(parsedInputs[index]!.id);
+        for (const key of cellsByInput[index]!) blockIdByMicroCellKey.delete(key);
+      }
+      throw error;
     }
-    return Object.freeze(meshes);
+    return Object.freeze([...parsedInputs]);
   }
 
   return Object.freeze({
-    createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh {
+    createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Readonly<BabylonNativeBlockCreateInputV1> {
       if (state !== "open") {
         return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
           "createBlock is unavailable after finalization begins");
@@ -364,7 +237,7 @@ export function createBabylonNativeBlockProfileSessionV1(
     },
     createBlockGrid(
       input: Readonly<BabylonNativeBlockGridCreateInputV1>,
-    ): readonly Mesh[] {
+    ): readonly Readonly<BabylonNativeBlockCreateInputV1>[] {
       if (state !== "open") {
         return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
           "createBlockGrid is unavailable after finalization begins");
@@ -445,6 +318,7 @@ export function createBabylonNativeBlockProfileSessionV1(
         const profileInventoryHash = settleBabylonNativeBlockProfileV1({
           context,
           checkedLayout,
+          visualNodes: visuals.nodes,
           colliderInventory: colliders.colliderInventory,
           walkableOverlays: colliders.walkableOverlays,
           expectedProfileInventoryHash: profileInventory.profileInventoryHash,
@@ -477,14 +351,12 @@ export function createBabylonNativeBlockProfileSessionV1(
         });
         recordsById.clear();
         blockIdByMicroCellKey.clear();
-        rawGeometryByShape.clear();
         state = "finalized";
         return finalizedResult;
       } catch (error) {
         state = "failed";
         recordsById.clear();
         blockIdByMicroCellKey.clear();
-        rawGeometryByShape.clear();
         disposeAcquisitions(acquisitions);
         acquisitions.length = 0;
         throw error;
@@ -495,7 +367,6 @@ export function createBabylonNativeBlockProfileSessionV1(
       state = "disposed";
       recordsById.clear();
       blockIdByMicroCellKey.clear();
-      rawGeometryByShape.clear();
       const cleanup = disposeAcquisitions(acquisitions);
       acquisitions.length = 0;
       if (cleanup.didFail) throw cleanup.error;

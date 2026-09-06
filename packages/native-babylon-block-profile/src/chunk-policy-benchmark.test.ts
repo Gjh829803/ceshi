@@ -172,7 +172,7 @@ describe("NBR-65F Chunk policy benchmark", () => {
     expect(Object.fromEntries(benchmark.policyRows.map((row) =>
       [row.policyId, row.totals]))).toEqual({
       "chunk-xz-2m": {
-        baselineVisualDrawUnitCount: 48,
+        baselineVisualDrawUnitCount: 28,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,
         visualGeometryBufferSetCount: 25,
@@ -180,10 +180,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
         independentVisualMeshCount: 8,
         residencyGroupCount: 23,
         colliderProxyCount: 10,
-        colliderTriangleCount: 1440,
+        colliderTriangleCount: 352,
       },
       "chunk-xz-4m": {
-        baselineVisualDrawUnitCount: 48,
+        baselineVisualDrawUnitCount: 28,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,
         visualGeometryBufferSetCount: 25,
@@ -191,10 +191,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
         independentVisualMeshCount: 8,
         residencyGroupCount: 16,
         colliderProxyCount: 10,
-        colliderTriangleCount: 1440,
+        colliderTriangleCount: 352,
       },
       "chunk-xz-8m": {
-        baselineVisualDrawUnitCount: 48,
+        baselineVisualDrawUnitCount: 28,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,
         visualGeometryBufferSetCount: 25,
@@ -202,10 +202,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
         independentVisualMeshCount: 8,
         residencyGroupCount: 16,
         colliderProxyCount: 10,
-        colliderTriangleCount: 1440,
+        colliderTriangleCount: 352,
       },
       "chunk-xz-16m": {
-        baselineVisualDrawUnitCount: 48,
+        baselineVisualDrawUnitCount: 28,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,
         visualGeometryBufferSetCount: 25,
@@ -213,10 +213,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
         independentVisualMeshCount: 8,
         residencyGroupCount: 16,
         colliderProxyCount: 10,
-        colliderTriangleCount: 1440,
+        colliderTriangleCount: 352,
       },
       "chunk-xz-32m": {
-        baselineVisualDrawUnitCount: 48,
+        baselineVisualDrawUnitCount: 28,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,
         visualGeometryBufferSetCount: 25,
@@ -224,7 +224,7 @@ describe("NBR-65F Chunk policy benchmark", () => {
         independentVisualMeshCount: 8,
         residencyGroupCount: 16,
         colliderProxyCount: 10,
-        colliderTriangleCount: 1440,
+        colliderTriangleCount: 352,
       },
     });
     expect(benchmark.selection).toEqual({

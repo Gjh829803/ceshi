@@ -106,6 +106,7 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
     contributionHash,
     profileInventoryHash: input.profileInventoryHash,
     settledVisualHash: contribution.profileSettlement.settledVisualHash,
+    settledVisualTargetCount: contribution.profileSettlement.targetCount,
     blocks,
     visualGroups: input.authoringLayoutBinding.visualGroups,
     colliderJoins,

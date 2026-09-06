@@ -1,3 +1,4 @@
+import type { BabylonNativeBlockVisualNodeV1 } from "./babylon-visual-adapter.js";
 import type { BabylonNativeSceneBuildContextV1 } from
   "@whitebox-world/native-babylon";
 import {
@@ -32,6 +33,7 @@ function overlayElementId(overlay: BabylonNativeBlockWalkableOverlayHandleV1): s
 export function settleBabylonNativeBlockProfileV1(input: Readonly<{
   context: BabylonNativeSceneBuildContextV1;
   checkedLayout: BabylonNativeBlockCheckedLayoutV1;
+  visualNodes: readonly BabylonNativeBlockVisualNodeV1[];
   colliderInventory:
     readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
   walkableOverlays: readonly BabylonNativeBlockWalkableOverlayHandleV1[];
@@ -151,21 +153,31 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       "Materialized Collider joins drifted from the frozen Profile inventory.",
     );
   }
+  const visualBlockIds = input.visualNodes.flatMap(node => node.sourceBlockIds);
+  if (visualBlockIds.length !== blocks.length ||
+      new Set(visualBlockIds).size !== blocks.length ||
+      visualBlockIds.some(id => !recordsById.has(id))) {
+    return fail("WORLDKIT_NATIVE_BLOCK_PROFILE_INVENTORY_MISMATCH",
+      "Cluster visual membership must cover every logical Block exactly once.");
+  }
   commitBabylonNativeProfileSettlementV1(input.context, Object.freeze({
     kind: "babylon-native-profile-settlement-batch",
     schemaVersion: 1,
     profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     profileInventoryHash,
     targets: Object.freeze([
-      ...blocks.map((block) => {
-        const record = recordsById.get(block.id)!;
-        const collisionBinding = collisionBindingByElementId.get(block.id);
+      ...input.visualNodes.map((node) => {
+        const colliderIds = node.sourceBlockIds.flatMap(blockId => {
+          const binding = collisionBindingByElementId.get(blockId);
+          return isNil(binding) ? [] : [binding.colliderId];
+        }).sort(stableCompare);
         return Object.freeze({
-          elementId: block.id,
-          mesh: record.mesh,
-          collisionBinding: isNil(collisionBinding)
+          elementId: node.id,
+          mesh: node.mesh,
+          collisionBinding: colliderIds.length === 0
             ? Object.freeze({ kind: "none" as const })
-            : collisionBinding,
+            : Object.freeze({ kind: "static-colliders" as const,
+                colliderIds: Object.freeze(colliderIds) as readonly [string, ...string[]] }),
         });
       }),
       ...[...input.walkableOverlays]
@@ -177,7 +189,10 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
           return Object.freeze({
             elementId,
             mesh: overlay.mesh,
-            collisionBinding: collisionBinding ?? Object.freeze({ kind: "none" as const }),
+            collisionBinding: isNil(collisionBinding)
+              ? Object.freeze({ kind: "none" as const })
+              : Object.freeze({ kind: "static-colliders" as const,
+                  colliderIds: Object.freeze([collisionBinding.colliderId] as [string]) }),
           });
         }),
     ]),
