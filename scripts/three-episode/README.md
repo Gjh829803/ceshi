@@ -127,3 +127,31 @@ outputs. They never approve later frames, tri-views or videos. A changed rubric 
 re-evaluates the existing candidate before attempting another image, preserving the
 old attempt count. Changing review instructions/acceptances invalidates only the
 relevant review cache; it does not erase images or historical provider journals.
+
+## Player input policy
+
+`player-controller.ts` wraps the Agent's route with versioned player inputs:
+brief look-around pauses, two moving side glances, small pitch changes, short
+sprints/walk breaks and one locally probed jump on Segments 00/02/04 when the
+subject supports it. Pause time is excluded from route-stuck detection. Local
+capsule/support probes only inspect the current Agent edge; they are not a
+ballistic clearance proof or a global navigation catalog. The SDK remains the
+sole owner of physics, animation, camera collision and simulation time.
+
+`health.json` measures rendered camera travel/range, actual movement with gait
+inputs, and input-associated upward takeoff/landing. Missing visible camera
+rotation, gait variation or a requested-but-uncompleted jump fails the capture.
+Unsafe jumps are bounded deferrals, and unsupported actions remain explicit.
+The full 30 seconds/720 frames/1800 ticks and untouched opening capture remain.
+
+`playback-policy.mjs` is shared by capture recipes, cloud dispatch and workflow
+resume. Bump it when controller behavior changes; an older completed capture
+cannot bypass a new policy. Include the controller and shared policy in the next
+immutable cloud worker release. A local recording is developer evidence, not a
+cloud capture delivery. Image approvals remain bound to their original first
+frame hashes; a new renderer or first frame never inherits them automatically.
+
+For local review, `node scripts/three-episode/preview-server.mjs REPORT_DIRECTORY
+53747` serves only that directory on loopback and supports native video seeking
+with HTTP byte ranges. Keep its lifetime independent of a short shell session
+when leaving the review page open for the user.

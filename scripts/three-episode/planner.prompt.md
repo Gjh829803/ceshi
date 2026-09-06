@@ -16,6 +16,8 @@ The `positionWorldMetersXYZ` for a start is the character's **foot/root position
 
 Read the actual movement capabilities rather than assume speeds or jumping. Plan reachable straight connections between consecutive waypoints; include turns before walls and around obstacles. The Host converts intentions into actual player inputs with local correction. It does not fly along your coordinate list or teleport past obstacles. Waypoint Y represents the intended support/floor level, not merely an XZ destination. `gait` is `walk` or `run`.
 
+Plan deliberate changes of direction and walk/run pacing appropriate to the terrain and landmarks, rather than six straight constant-speed traversals. Allow space for brief pauses to look around and, when the actual subject can jump, a grounded jump on locally clear supported travel. The versioned Host input policy adds short observations, side glances, small pitch changes, gait transitions and bounded jump attempts; it never chooses new waypoints. Leave ample route length for these pace changes.
+
 Provide enough useful travel for approximately 30 seconds at the actual speed. A longer route may be cut at the segment duration. `endBehavior:"stop"` is suitable when the route lasts long enough. Use `"reverse"` only for an intentionally reversible route, or `"loop"` for a genuine continuous loop including its closing edge. Do not default to repeating a tiny safe circuit or six barely shifted copies of the same start. Do not invent content the delivered world does not contain. Select coverage and viewpoints within its actual limits.
 
 The plan object has this structure (the coordinates below are explanatory placeholders, not suggested starts or a route for your world):

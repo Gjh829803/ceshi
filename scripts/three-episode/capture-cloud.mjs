@@ -5,6 +5,8 @@ import path from 'node:path';
 import * as defaultCloud from './cloud.mjs';
 import { threeEpisodeHostJob } from '../cloud/three-episode-host.mjs';
 
+import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
+
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 async function readJson(file) { try { return JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } }
 async function save(file, value) { await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${process.pid}.part`; await writeFile(temporary, JSON.stringify(value, null, 2)); await rename(temporary, file); }
@@ -17,7 +19,7 @@ async function kubectl(args, input) {
 }
 function condition(job, type) { return job.status?.conditions?.some(value => value.type === type && value.status === 'True'); }
 function normalizeSummary(summary, outputRoot, worldBuildHash) {
-  if (summary?.kind !== 'three-episode-capture-summary' || summary.worldBuildHash !== worldBuildHash) throw new Error('EPISODE_CAPTURE_REMOTE_IDENTITY_INVALID');
+  if (summary?.kind !== 'three-episode-capture-summary' || summary.worldBuildHash !== worldBuildHash || summary.playerCaptureVersion !== PLAYER_CAPTURE_VERSION) throw new Error('EPISODE_CAPTURE_REMOTE_IDENTITY_INVALID');
   return { ...summary, segments: summary.segments.map(segment => {
     const relative = path.posix.relative('/episode/output/capture', segment.outputRoot);
     if (!relative.startsWith('segments/') || relative.startsWith('../') || path.isAbsolute(relative)) throw new Error('EPISODE_CAPTURE_REMOTE_PATH_INVALID');
@@ -34,7 +36,7 @@ export function createCaptureDispatcher({ runtimeConfig, cloud = defaultCloud, k
     const source = JSON.parse(sourceBytes); const plan = JSON.parse(planBytes);
     if (source.worldBuildHash !== worldBuildHash || plan.worldBuildHash !== worldBuildHash) throw new Error('EPISODE_CAPTURE_INPUT_IDENTITY_MISMATCH');
     if (segmentIds && (!segmentIds.length || segmentIds.some(value => !/^segment-0[0-5]$/.test(value)))) throw new Error('EPISODE_CAPTURE_SEGMENT_SELECTION_INVALID');
-    const recipeHash = hash(JSON.stringify({ worldBuildHash, runtimeHash: source.runtimeHash, sourceHash: source.sourceHash, planHash: hash(planBytes), sourceArchiveS3Uri: conf.sourceArchiveS3Uri, image: conf.workerImage, segmentIds: segmentIds ?? null }));
+    const recipeHash = hash(JSON.stringify({ playerCaptureVersion: PLAYER_CAPTURE_VERSION, worldBuildHash, runtimeHash: source.runtimeHash, sourceHash: source.sourceHash, planHash: hash(planBytes), sourceArchiveS3Uri: conf.sourceArchiveS3Uri, image: conf.workerImage, segmentIds: segmentIds ?? null }));
     const jobId = `three-episode-capture-${recipeHash.slice(0, 24)}`; const namespace = conf.namespace ?? 'lwdp';
     const capturePrefix = `${conf.captureS3Root.replace(/\/$/, '')}/${recipeHash}`;
     const planUri = `${capturePrefix}/input/plan.json`;
@@ -74,7 +76,7 @@ export function createCaptureDispatcher({ runtimeConfig, cloud = defaultCloud, k
     catch (error) { if (condition(job, 'Failed')) throw new Error(`EPISODE_CAPTURE_JOB_FAILED: ${job.status.conditions?.find(c => c.type === 'Failed')?.reason ?? 'worker-failed'}`, { cause: error }); throw error; }
     const remoteSummary = await readJson(path.join(outputRoot, 'capture-summary.json'));
     let summary = normalizeSummary(remoteSummary, outputRoot, worldBuildHash);
-    if (previousSummary?.worldBuildHash === worldBuildHash && segmentIds) {
+    if (previousSummary?.worldBuildHash === worldBuildHash && previousSummary.playerCaptureVersion === PLAYER_CAPTURE_VERSION && segmentIds) {
       const fresh = new Map(summary.segments.map(segment => [segment.segmentId, segment]));
       const merged = previousSummary.segments.map(segment => fresh.get(segment.segmentId) ?? segment);
       for (const segment of summary.segments) if (!merged.some(previous => previous.segmentId === segment.segmentId)) merged.push(segment);

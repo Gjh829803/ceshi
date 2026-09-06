@@ -120,3 +120,47 @@ The seven exact current image SHA256 values, original whitebox hash, current wor
 Current live report now shows 7/10 user-confirmed anchors and 02/03/04 pending reevaluation under the new standard. report/anchor-admissions.json and user-review-calibration.json overlay the unchanged raw anchor-history.json and cloud verdicts. The prior ZIP and sealed R8 S3 checkpoint remain historical strict-review snapshots. Local report, candidate labels and comparison dropdowns were checked in Chromium. Regression tests cover exact-world/plan/image scoping, reuse without regenerating approved anchors, preservation of raw cloud failures, and rejection of later-frame defects despite opening approval.
 
 Calibration verification finished: 35 Node tests, typecheck and test census passed. Chromium confirmed seven user-approved cards, three pending cards, the corresponding comparison labels, and the homepage's calibrated/pending state without page errors. Raw anchor-history.json and final-anchor-review.json remain byte-identical to the prior verified review package. No SDK, recording, image bytes, original cloud verdict, archived ZIP or S3 checkpoint was changed.
+
+## Player behavior correction — 2026-09-06
+
+Latest user steering: too little camera rotation, no jump, and monotonous motion.
+This continues EP3 and EP5 under main-agent ownership. Dependency order: reproduce
+missing normal-travel inputs → versioned input controller/trace and cache identity
+→ real six-clip local browser evidence → comparison page. Files owned here are
+`player-controller.ts`, `playback-policy.*`, capture/workflow/dispatcher/report and
+their tests. Frozen author scene, SDK physics/animation and cloud Agent plan remain
+unchanged. No cloud image or Seedance submission is part of this correction.
+
+Authority map: Agent owns starts and polyline; Host owns bounded input timing;
+SDK Rapier owns support/jump/movement; SDK camera owns orbit and collision; fixed
+step owns time; capture owns original renderer bitmap/encoder and session disposal.
+The failing reproducer observed no camera input on healthy travel. Policy 2.1 adds
+look pauses, moving glances, pitch changes, walk/run transitions and supported
+00/02/04 jumps. Actual rendered/motion metrics guard the recording, not just input
+counts. Input-associated jumps require upward takeoff and landing. Local probes
+along the current edge are eligibility checks, not a full ballistic guarantee.
+
+Developer replay uses `.codex-tmp/three-episode-results/player-v2-final` and the
+exact r6 source and cloud route plan. Preview is `/player-v2.html` on port 53747;
+old videos remain expandable comparisons. Local SwiftShader first-frame hashes
+are different from the original cloud render: seven original user-approved
+anchors remain in their original scope, without relabeling the new capture.
+
+Final local evidence: all six videos completed and a second invocation hit all six
+hash-verified caches. Each has 720 real frames, 1800 ticks, 30 s, 1280×720 at 24 fps,
+no audio/padding. Rendered yaw ranges for 00–05: 65.6°, 62.9°, 106.7°, 74.5°,
+151.1°, 185.0°. Walk/run time is present in every clip. Planned jumps completed
+at 15.5→16.54 s (00), 16.375→17.54 s (02), 15.625→16.67 s (04). Receipt:
+`.codex-tmp/three-episode-results/player-v2-final/verification.json`. Contact sheets
+and actual browser video playback were inspected; this is not a manual gamepad
+control-feel acceptance claim. User may compare old/new clips on the same page.
+
+Verification: 19 focused Episode tests passed; 35 Node tests passed; SDK/Creator/
+Episode aggregate had 241 passing tests and one timing-sensitive Creator camera-cut
+fixture failure. That exact unmodified test passed in isolation. Typecheck, test
+census (368 registered files) and workspace-boundary gate passed. The aggregate
+failure is retained in `/tmp/episode-player-full-vitest.log`; it is not represented
+as a clean aggregate pass. Local preview additionally gained HTTP byte ranges:
+206 payload/headers and browser seek to 14.7 s were verified; all six videos load.
+The detached server receipt is `r6/preview-server-process.json` (port 53747).
+No cloud rollout, new image generation or Seedance submission occurred here.

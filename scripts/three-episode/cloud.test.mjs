@@ -1,3 +1,4 @@
+import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, mkdir, rm, chmod } from 'node:fs/promises';
@@ -133,7 +134,7 @@ test('capture dispatch requests one real GPU and resumes exact Job without model
   const conf = { workerImage: `registry/image@sha256:${'c'.repeat(64)}`, sourceArchiveS3Uri: 's3://bucket/frozen.tar.gz', captureS3Root: 's3://bucket/captures' };
   let job; let creates = 0; let uploads = 0;
   const dispatcher = createCaptureDispatcher({ runtimeConfig: conf, kube: async (args, input) => { if (args[0] === 'create') { creates++; job = input; } return { ...job, status: { conditions: [{ type: 'Complete', status: 'True' }] } }; }, cloud: {
-    uploadArtifact: async () => { uploads++; }, hydrateDirectory: async (prefix, outputRoot) => { await mkdir(outputRoot, { recursive: true }); await writeFile(path.join(outputRoot, 'capture-summary.json'), JSON.stringify({ kind: 'three-episode-capture-summary', worldBuildHash, status: 'completed', segments: [{ segmentId: 'segment-00', status: 'completed', outputRoot: '/episode/output/capture/segments/segment-00/recipe' }] })); },
+    uploadArtifact: async () => { uploads++; }, hydrateDirectory: async (prefix, outputRoot) => { await mkdir(outputRoot, { recursive: true }); await writeFile(path.join(outputRoot, 'capture-summary.json'), JSON.stringify({ kind: 'three-episode-capture-summary', playerCaptureVersion: PLAYER_CAPTURE_VERSION, worldBuildHash, status: 'completed', segments: [{ segmentId: 'segment-00', status: 'completed', outputRoot: '/episode/output/capture/segments/segment-00/recipe' }] })); },
   } });
   const args = { sourceManifestPath, planPath, worldBuildHash, outputRoot: path.join(root, 'capture') };
   const first = await dispatcher.run(args); await dispatcher.run(args);

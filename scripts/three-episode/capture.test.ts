@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
+import { Matrix4, Euler } from 'three';
 import type { Vec3, WorldInput, WorldSnapshot } from '@worldkit/three';
 import type { EpisodeCapabilities, EpisodeFrame } from '@worldkit/three';
 import type { EpisodeCaptureSession } from './browser.js';
@@ -18,23 +19,29 @@ const capabilities: EpisodeCapabilities = { schemaVersion: 1, controlledEntityId
   camera: { mode: 'follow', segmentInitialization: 'relative-authored-pose' }, maximumStartAlignmentMeters: 0.75 };
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 function fakeSession(options: { shouldFail?: boolean } = {}) {
+  let yaw = 0, pitch = 0;
+  let velocity: Vec3 = [0, 0, 0];
   let tick = 1, position: Vec3 = [0, 0, 0], preparations = 0;
   const advances: number[] = [];
   const snapshot = (): WorldSnapshot => ({ schemaVersion: 2, worldRevision: 0, simulationTick: tick, simulationSeconds: tick / 60, controlledEntityId: 'actor', isRunning: false,
-    camera: { mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: 0, desiredPitchRadians: 0 },
-    entities: [{ id: 'actor', generation: 0, geometryVersion: 0, name: 'actor', tags: [], role: 'actor', appearancePrompt: '', positionWorldMetersXYZ: position, rotationLocalRadiansXYZ: [0, 0, 0], scaleLocalXYZ: [1, 1, 1], isVisibleLocal: true, isVisibleEffective: true, controlOwners: [], motion: { phase: 'grounded', isGrounded: true, velocityWorldMetersPerSecondXYZ: [0, 0, 0], collisionEntityIds: [] } }],
+    camera: { mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: yaw, desiredPitchRadians: pitch },
+    entities: [{ id: 'actor', generation: 0, geometryVersion: 0, name: 'actor', tags: [], role: 'actor', appearancePrompt: '', positionWorldMetersXYZ: position, rotationLocalRadiansXYZ: [0, 0, 0], scaleLocalXYZ: [1, 1, 1], isVisibleLocal: true, isVisibleEffective: true, controlOwners: [], motion: { phase: 'grounded', isGrounded: true, velocityWorldMetersPerSecondXYZ: velocity, collisionEntityIds: [] } }],
     errors: options.shouldFail && tick > 30 ? [{ code: 'FIXTURE_RUNTIME_ERROR', message: 'fixture failure', phase: 'step', category: 'runtime', entityIds: ['actor'] }] : [] });
   const session: EpisodeCaptureSession = {
     errors: [], capabilities: async () => capabilities,
     probeStart: async start => ({ isValid: true, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: [] }),
-    prepareSegment: async start => { tick = 1; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
+    prepareSegment: async start => { tick = 1; yaw = start.facingYawRadians; pitch = 0; velocity = [0,0,0]; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
     advance: async (input: WorldInput, ticks: number) => {
       advances.push(ticks); tick += ticks;
       const speed = input.run ? 7 : 4;
-      position = [position[0] + (input.moveXRatio ?? 0) * speed * ticks / 60, position[1], position[2] + (input.moveZRatio ?? 0) * speed * ticks / 60];
+      yaw += (input.cameraYawRatio ?? 0) * 1.8 * ticks / 60;
+      pitch += (input.cameraPitchRatio ?? 0) * 1.8 * ticks / 60;
+      const x = input.moveXRatio ?? 0, z = input.moveZRatio ?? 0;
+      velocity = [(x*Math.cos(yaw) + z*Math.sin(yaw))*speed, 0, (-x*Math.sin(yaw) + z*Math.cos(yaw))*speed];
+      position = [position[0] + velocity[0]*ticks/60, position[1], position[2] + velocity[2]*ticks/60];
       return snapshot();
     },
-    frame: async mimeType => ({ captureSurface: 'world-renderer-canvas', imageDataUrl: `data:${mimeType};base64,${Buffer.from('fixture image bytes').toString('base64')}`, snapshot: snapshot(), camera: { projectionMatrix: matrix, viewMatrix: matrix, cameraToWorldMatrix: matrix, controlForwardWorldXYZ: [0, 0, -1] } } satisfies EpisodeFrame),
+    frame: async mimeType => ({ captureSurface: 'world-renderer-canvas', imageDataUrl: `data:${mimeType};base64,${Buffer.from('fixture image bytes').toString('base64')}`, snapshot: snapshot(), camera: { projectionMatrix: matrix, viewMatrix: matrix, cameraToWorldMatrix: new Matrix4().makeRotationFromEuler(new Euler(-pitch, yaw, 0, 'YXZ')).toArray(), controlForwardWorldXYZ: [-Math.sin(yaw), 0, -Math.cos(yaw)] } } satisfies EpisodeFrame),
     release: vi.fn(async () => {}), close: vi.fn(async () => {}),
   };
   return { session, advances, get preparations() { return preparations; } };
@@ -143,6 +150,11 @@ it('resumes an admitted six-clip boundary without a planner or GPU job and rejec
  const capture=vi.fn(async()=>{throw new Error('unexpected GPU dispatch');}),runCodex=vi.fn(async()=>{throw new Error('unexpected planner');});
  const options={sourceManifestPath,outputRoot:setup.root,episodeId:'fixture-episode',stopBeforeSeedance:true as const,until:'capture' as const,runtimeConfig:{},capture,cloud:{runCodex} as any};
  expect((await runEpisodeWorkflow(options)).status).toBe('paused-before-visuals');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ // A completed legacy summary cannot silently bypass the new input policy.
+ await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify({...summary,playerCaptureVersion:'legacy-constant-travel'}));
+ await expect(runEpisodeWorkflow(options)).rejects.toThrow('unexpected GPU dispatch');expect(capture).toHaveBeenCalledOnce();expect(runCodex).not.toHaveBeenCalled();
+ capture.mockClear();
+ await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify(summary));
  await writeFile(path.join(summary.segments[2]!.outputRoot,'video.mp4'),'corrupted');
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
 });

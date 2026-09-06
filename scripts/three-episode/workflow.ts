@@ -1,3 +1,4 @@
+import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, lstat } from 'node:fs/promises';
 import path from 'node:path';
@@ -87,7 +88,7 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     let summary:CaptureSummary; let segmentIds:string[]|undefined;
     const admittedCapture = state.segments?.length===6 && state.segments.every((segment:any)=>segment.status==='completed')
       ? await json(path.join(output,'capture','capture-summary.local.json')) as CaptureSummary|null : null;
-    if(admittedCapture){
+    if(admittedCapture?.playerCaptureVersion===PLAYER_CAPTURE_VERSION){
       await normalizeCaptureForVisuals(admittedCapture,{worldBuildHash:source.worldBuildHash,runtimeHash:source.runtimeHash});
       summary=admittedCapture;
       await update('whitebox-capture',{status:'running',segments:summary.segments,captureReused:true});

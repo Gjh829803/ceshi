@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Vec3, WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
+import { PlayerCaptureController } from './player-controller.js';
 import { RouteController, routeDirectionInput } from './route-controller.js';
 
 const movement = { kind: 'ground', walkSpeedMetersPerSecond: 4, runSpeedMetersPerSecond: 7, heightMeters: 1.8, radiusMeters: 0.3, jumpSpeedMetersPerSecond: 5 };
@@ -49,4 +50,33 @@ describe('Three episode route controller', () => {
     const controller = new RouteController(segment(), movement);
     expect(controller.step(snapshot([0.1, 0.1, -20.1]), [0, 0, -1], 5).mode).toBe('finished');
   });
+});
+
+// Regression: unobstructed travel used to contain neither observation nor a normal jump.
+it('includes visible looking and a deliberate jump during healthy traversal', async () => {
+  const controller = new PlayerCaptureController(segment({ waypoints: [{positionWorldMetersXYZ: [0,0,-200], gait: 'walk'}] }), movement, 'follow', async start => ({isValid: true, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: []}));
+  const decisions = [];
+  for (let i = 0; i < 720; i++) decisions.push(await controller.step(snapshot([0,0,-i/24*2]), [0,0,-1], i/24));
+  expect(decisions.some(d => Math.abs(d.input.cameraYawRatio ?? 0) >= 0.01)).toBe(true);
+  expect(decisions.some(d => d.input.jumpPressed)).toBe(true);
+});
+
+it('does not jump on rejected local support, and skips camera commands for an authored camera', async () => {
+  const probe = async (start: {positionWorldMetersXYZ: Vec3}) => ({isValid: false, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: [{code:'NO_SUPPORT',message:'edge'}]});
+  const controller = new PlayerCaptureController(segment({waypoints:[{positionWorldMetersXYZ:[0,0,-200],gait:'run'}]}), movement, 'authored', probe);
+  const decisions = [];
+  for (let i = 0; i < 720; i++) decisions.push(await controller.step(snapshot([0,0,-i/24*2]), [0,0,-1], i/24));
+  expect(decisions.some(d => d.input.jumpPressed)).toBe(false);
+  expect(decisions.every(d => !d.input.cameraYawRatio && !d.input.cameraPitchRatio)).toBe(true);
+  expect(decisions.at(-1)?.behavior.plannedJump).toBe('deferred');
+});
+
+it('does not treat the deliberate observation pause as a blocked route', async () => {
+  const controller = new PlayerCaptureController(segment({waypoints:[{positionWorldMetersXYZ:[0,0,-200],gait:'walk'}]}), {...movement,jumpSpeedMetersPerSecond:0}, 'follow', async start => ({isValid:true, requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,diagnostics:[]}));
+  let z = 0;
+  for (let i = 0; i < 240; i++) {
+    const decision = await controller.step(snapshot([0,0,z]), [0,0,-1], i/24);
+    expect(decision.mode).toBe('travel'); expect(decision.input.jumpPressed).not.toBe(true);
+    z += (decision.input.moveZRatio ?? 0)*2/24;
+  }
 });

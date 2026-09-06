@@ -6,7 +6,10 @@ import type { EpisodeCapabilities, EpisodeFrame } from '@worldkit/three';
 import { createRenderedFrameEncoder, inspectRenderedVideo, type RenderedFrameEncoder } from '../lib/rendered-frame-encoder.js';
 import { canonicalHash, PRE_SEEDANCE_PROFILE, SEGMENT_IDS, validateEpisodePlan, type EpisodePlan, type EpisodeSegmentPlan } from './contracts.js';
 import { openEpisodeBrowser, type EpisodeBrowserOptions, type EpisodeCaptureSession } from './browser.js';
-import { RouteController, ROUTE_CONTROLLER_VERSION, type RouteDecision, type RouteMovement } from './route-controller.js';
+import { ROUTE_CONTROLLER_VERSION, type RouteDecision, type RouteMovement } from './route-controller.js';
+
+import { PlayerCaptureController, summarizePlayerBehavior, assertPlayerBehavior } from './player-controller.js';
+import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
 
 const PROFILE = PRE_SEEDANCE_PROFILE;
 export interface CaptureArtifact { path: string; sha256: string; byteLength: number }
@@ -20,7 +23,7 @@ export interface SegmentCaptureResult {
 export interface CaptureSummary {
   kind: 'three-episode-capture-summary'; schemaVersion: 1;
   status: 'completed' | 'partial' | 'failed'; worldBuildHash: string;
-  playableFilesHash: string; segments: SegmentCaptureResult[];
+  playerCaptureVersion?: string; playableFilesHash: string; segments: SegmentCaptureResult[];
 }
 export interface CaptureSegmentsOptions {
   playableRoot: string; plan: EpisodePlan; outputRoot: string; runtimeHash?: string;
@@ -118,7 +121,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
     initialTick = initialSnapshot.simulationTick;
     const opening = await session.frame('image/png');
     await writeFile(path.join(root, 'first-frame.png'), imageBytes(opening.imageDataUrl, 'image/png'));
-    const controller = new RouteController(segment, movementForCapture(capabilities));
+    const controller = new PlayerCaptureController(segment, movementForCapture(capabilities), capabilities.camera.mode, start => session.probeStart(start));
     encoder = (options.encoderFactory ?? createRenderedFrameEncoder)({ outputPath: path.join(root, 'video.mp4'), frameRate: PROFILE.captureFps, frameCount: PROFILE.captureFrameCount });
     for (let index = 0; index < PROFILE.captureFrameCount; index += 1) {
       const frame = await session.frame('image/jpeg');
@@ -127,7 +130,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
       if (frame.snapshot.errors.length) throw new Error(`EPISODE_RUNTIME_ERROR: ${JSON.stringify(frame.snapshot.errors)}`);
       if (session.errors.length > initialErrorCount) throw new Error(`EPISODE_BROWSER_ERROR: ${session.errors.slice(initialErrorCount).join('\n')}`);
       const elapsedSeconds = index / PROFILE.captureFps;
-      const decision = controller.step(frame.snapshot, inputBasis(frame), elapsedSeconds);
+      const decision = await controller.step(frame.snapshot, inputBasis(frame), elapsedSeconds);
       trace.push({ frameIndex: index, timeSeconds: elapsedSeconds, snapshot: frame.snapshot, camera: frame.camera, decision });
       if (index % 12 === 0) {
         evidenceFrames.push({ frameIndex: index, imageDataUrl: frame.imageDataUrl });
@@ -146,6 +149,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
       if (index % 120 === 0 || index === PROFILE.captureFrameCount - 1) await options.onProgress?.({ segmentId: segment.id, frameCount, totalFrameCount: PROFILE.captureFrameCount, status: 'recording' });
     }
     if (terminalSnapshot?.errors.length) throw new Error(`EPISODE_RUNTIME_ERROR: ${JSON.stringify(terminalSnapshot.errors)}`);
+    assertPlayerBehavior(trace, capabilities);
     await encoder.finish(); encoder = undefined;
     media = await (options.inspectVideo ?? inspectRenderedVideo)(path.join(root, 'video.mp4'));
     if (media.widthPixels !== PROFILE.widthPixels || media.heightPixels !== PROFILE.heightPixels || media.frameCount !== PROFILE.captureFrameCount || media.frameRate !== '24/1' || Math.abs(media.durationSeconds - PROFILE.segmentSeconds) > 0.001 || media.hasAudio) throw new Error(`EPISODE_VIDEO_CONTRACT_FAILED: ${JSON.stringify(media)}`);
@@ -171,11 +175,11 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
   const status = failure ? 'failed' : 'completed';
   await atomicJson(path.join(root, 'trace.json'), { kind: 'three-episode-trace', schemaVersion: 1,
     worldBuildHash: options.plan.worldBuildHash, recipeHash, segment, profile: PROFILE,
-    controllerVersion: ROUTE_CONTROLLER_VERSION, initialSnapshot, terminalSnapshot, frames: trace });
+    controllerVersion: ROUTE_CONTROLLER_VERSION, playerCaptureVersion: PLAYER_CAPTURE_VERSION, initialSnapshot, terminalSnapshot, frames: trace });
   await atomicJson(path.join(root, 'health.json'), { kind: 'three-episode-capture-health', schemaVersion: 1,
     status, frameCount, capturedDurationSeconds: frameCount / PROFILE.captureFps,
     simulationSeconds: terminalSnapshot ? (terminalSnapshot.simulationTick - initialTick) * capabilities.fixedTimeStepSeconds : 0,
-    travelledMeters, routeFinishedAtSeconds: finishedAt ?? null, failure: failure ?? null,
+    travelledMeters, playerBehavior: summarizePlayerBehavior(trace), playerCaptureVersion: PLAYER_CAPTURE_VERSION, routeFinishedAtSeconds: finishedAt ?? null, failure: failure ?? null,
     lastDecision: trace.at(-1)?.decision ?? null, browserErrors: session.errors.slice(initialErrorCount), media: media ?? null,
     captureMode: 'deterministic-fixed-step-real-rendered-frames', paddingOrRepeatedFramesAdded: false,
     note: 'Route execution evidence covers only these requested segments; it is not a claim of whole-world connectivity or assistant content approval.' });
@@ -200,7 +204,7 @@ export async function runCaptureSegments(options: CaptureSegmentsOptions): Promi
   let session: EpisodeCaptureSession | undefined, capabilities: EpisodeCapabilities | undefined;
   try {
     for (const segment of segments) {
-      const recipeHash = canonicalHash({ segment, worldBuildHash: plan.worldBuildHash, runtimeHash: options.runtimeHash ?? null, playableFilesHash, profile: PROFILE, controllerVersion: ROUTE_CONTROLLER_VERSION });
+      const recipeHash = canonicalHash({ segment, worldBuildHash: plan.worldBuildHash, runtimeHash: options.runtimeHash ?? null, playableFilesHash, profile: PROFILE, controllerVersion: ROUTE_CONTROLLER_VERSION, playerCaptureVersion: PLAYER_CAPTURE_VERSION });
       const root = path.join(options.outputRoot, 'segments', segment.id, recipeHash);
       const cached = await readCaptureCache(root, recipeHash);
       if (cached) { results.push(cached); await options.onProgress?.({ segmentId: segment.id, frameCount: cached.frameCount, totalFrameCount: PROFILE.captureFrameCount, status: 'cached' }); continue; }
@@ -214,7 +218,7 @@ export async function runCaptureSegments(options: CaptureSegmentsOptions): Promi
   } finally { await session?.close(); }
   const summary: CaptureSummary = { kind: 'three-episode-capture-summary', schemaVersion: 1,
     status: results.every(result => result.status === 'completed') ? 'completed' : results.some(result => result.status === 'completed') ? 'partial' : 'failed',
-    worldBuildHash: plan.worldBuildHash, playableFilesHash, segments: results };
+    worldBuildHash: plan.worldBuildHash, playerCaptureVersion: PLAYER_CAPTURE_VERSION, playableFilesHash, segments: results };
   await atomicJson(path.join(options.outputRoot, 'capture-summary.json'), summary);
   return summary;
 }
