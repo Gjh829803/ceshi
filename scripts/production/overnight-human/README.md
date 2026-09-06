@@ -332,3 +332,14 @@ startup failures model-quality failures, or infer every driver's detailed cause
 from its exit code alone. The audit's review totals describe deliberately chosen
 account-screening samples, not a random quality estimate for the whole campaign.
 It does not publish or change any job, world, account decision or quality review.
+
+Case 001's later attempt exposed two selection details: the earlier capacity
+failure must be skipped, and the later explicit authoring timeout was classified
+as `playtest` by the summary. Recovery selection now requires the exact launcher
+timeout message plus a matching failed launcher report with `timedOut: true`,
+case/task/runtime identity, matching state job ID and confirmed cleanup. It does
+not depend on the summary category alone. The actual later attempt had a clean
+297.46-second same-build episode and opening capture. Five negative checks reject
+a non-timeout launcher, wrong job/task/runtime, or unconfirmed cleanup; evidence
+is in `OUT/timeout-selector-verification-20260907-0712.json`. Snapshot retrieval
+and downstream archive/browser checks remain separate required steps.
