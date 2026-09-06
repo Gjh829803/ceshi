@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const options = {};
 for (let index = 0; index < args.length; index += 2) {
   const key = args[index];
-  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
+  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root", "--reasoning-effort"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
   options[key] = args[index + 1];
 }
 const mode = options["--mode"] ?? "prepare";
@@ -27,6 +27,9 @@ if (!/^[a-z0-9][a-z0-9-]{2,99}$/.test(runId)) throw new Error("Invalid --run-id"
 const outputRoot = path.resolve(options["--output-root"] ?? path.join(repo, ".codex-tmp/three-creator-eval/runs", runId));
 await mkdir(outputRoot, {recursive: true});
 const previousPlan = await optionalJson(path.join(outputRoot, "evaluation-plan.json"));
+const reasoningEffort = options["--reasoning-effort"] ?? previousPlan?.reasoningEffort ?? "xhigh";
+if (!["xhigh", "ultra"].includes(reasoningEffort)) throw new Error("--reasoning-effort must be xhigh or ultra");
+if (previousPlan && (previousPlan.reasoningEffort ?? "xhigh") !== reasoningEffort) throw new Error("Reasoning effort changed; use a deliberate new run ID.");
 const selectedManifest = options["--manifest"] ?? previousPlan?.manifestPath;
 if (!selectedManifest) throw new Error("A new run requires an explicit --manifest; resume uses its saved plan manifest.");
 const manifestPath = path.resolve(selectedManifest);
@@ -67,7 +70,7 @@ const statePath = caseId => path.join(outputRoot, caseId, "state.json");
 async function optionalJson(file) { try { return JSON.parse(await readFile(file, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
 async function saveSummary() {
   const cases = await Promise.all(manifest.cases.map(async item => ({id: item.id, baseCaseId: item.baseCaseId, profile: item.profile, title: item.title, ...(await optionalJson(statePath(item.id)) ?? {phase: "not-started"})})));
-  const summary = {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-evaluation" : "three-creator-paired-evaluation", suite, experimentRevision, engine: "three@0.185.1", runId, updatedAt: new Date().toISOString(), model: "gpt-6-astra", reasoningEffort: "xhigh", caseCount: 5, profileCount: profiles.length, taskCount: manifest.cases.length,
+  const summary = {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-evaluation" : "three-creator-paired-evaluation", suite, experimentRevision, engine: "three@0.185.1", runId, updatedAt: new Date().toISOString(), model: "gpt-6-astra", reasoningEffort, caseCount: 5, profileCount: profiles.length, taskCount: manifest.cases.length,
     deliveredCount: cases.filter(item => item.phase === "delivered").length, failedCount: cases.filter(item => item.phase === "failed").length, pendingCount: cases.filter(item => ["submitted", "running", "remote-pending", "delivery-pending", "submission-unknown", "admission-blocked", "stop-pending"].includes(item.phase)).length,
     qualification: "Pipeline and artifact evidence only; independent visual review and playable-world checks are reported separately.", cases};
   await writeJson(path.join(outputRoot, "summary.json"), summary);
@@ -76,6 +79,7 @@ async function saveSummary() {
 if (mode === "stats") { const summary = await saveSummary(); console.log(JSON.stringify({summary: path.join(outputRoot, "summary.json"), delivered: summary.deliveredCount, failed: summary.failedCount, pending: summary.pendingCount})); process.exit(0); }
 const lockPath = path.resolve(options["--runtime-lock"] ?? path.join(repo, ".codex-tmp/three-creator-eval/runtime-lock.json"));
 const lock = await readRuntimeLock(lockPath, {requireReady: mode !== "prepare"});
+if (lock.reasoningEffort !== reasoningEffort) throw new Error("CREATOR_REASONING_EFFORT_LOCK_MISMATCH");
 if (typeof lock.launcherPath !== "string" || !/^\/fsx\/pipeline\/worldkit-three-creator-experiments\/.+\/three-eval-launcher\.mjs$/.test(lock.launcherPath)) throw new Error("runtime-lock.launcherPath must identify the isolated cloud launcher.");
 const s3Root = (options["--output-s3-root"] ?? previousPlan?.outputS3Root ?? `s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/${suite === "sdk-only" ? "sdk-eval" : "paired-eval"}`).replace(/\/$/, "");
 if (!s3Root.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/")) throw new Error("Evaluation S3 prefix must stay within the project's Three artifact root.");
@@ -94,7 +98,7 @@ for (const item of manifest.cases) {
   const originalEffectivePrompt = (await readFile(promptPath, "utf8")).trimEnd();
   const effectivePrompt = creativePromptFromSource(originalEffectivePrompt);
   if (originalEffectivePrompt !== item.effectiveUserPrompt.trimEnd()) throw new Error(`Effective prompt mismatch: ${item.id}`);
-  const caseInput = {schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort: "xhigh", ...(suite === "sdk-only" ? {experimentRevision} : {})};
+  const caseInput = {schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, ...(suite === "sdk-only" ? {experimentRevision} : {})};
   const caseHash = sha256(JSON.stringify(caseInput));
   const requestId = `wk3-${sha256(`${runId}:${caseHash}`).slice(0, 16)}-${item.id}-a1`;
   const outputS3Prefix = `${s3Root}/${runId}/${item.id}/${caseHash.slice(0, 16)}`;
@@ -103,7 +107,9 @@ for (const item of manifest.cases) {
   const inputS3Uri = `${outputS3Prefix}/inputs/case-input.json`;
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
   const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
-  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: "xhigh", sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
+  const codexAccountIds = item.codexAccountIds;
+  if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length !== 1 || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
+  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
   const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
   if (intent && intent.payloadHash !== plan.payloadHash) throw new Error(`Submission payload changed for ${item.id}; use a deliberate new run ID.`);
@@ -112,7 +118,7 @@ for (const item of manifest.cases) {
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
 const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
-await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
+await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=5 profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
 for (const key of ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete process.env[key];
@@ -147,7 +153,7 @@ async function reserveCase(plan, state) {
 async function execute(plan) {
   const previous = await optionalJson(statePath(plan.item.id));
   if (["delivered", "failed"].includes(previous?.phase)) return;
-  const state = {...previous, caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, sourceTestSetId: plan.item.sourceTestSetId, sourceCaseId: plan.item.sourceCaseId, caseHash: plan.caseHash, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort: "xhigh", requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix};
+  const state = {...previous, caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, sourceTestSetId: plan.item.sourceTestSetId, sourceCaseId: plan.item.sourceCaseId, caseHash: plan.caseHash, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix};
   let admissionReserved = false;
   const save = async () => {
     state.updatedAt = new Date().toISOString(); await writeJson(statePath(plan.item.id), state);
@@ -249,7 +255,7 @@ async function execute(plan) {
     if (job.status !== "succeeded" || item?.status !== "succeeded") throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
-    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id)});
+    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id), expectedReasoningEffort: reasoningEffort});
     state.phase = "delivered"; delete state.failure; await save();
   } catch (error) {
     const hardDeadline = error.code === "LWDP_JOB_PENDING" && error.reason === "timeout";

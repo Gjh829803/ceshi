@@ -16,9 +16,10 @@ const layout = await parseCloudLayout(originalArgs);
 const eventsFile = path.join(layout.outputs, "creator-events.jsonl");
 const stderrFile = path.join(layout.outputs, "creator-stderr.log");
 const reportFile = path.join(layout.outputs, "creator-launcher-report.json");
-const report = {kind: "three-creator-launcher-report", schemaVersion: 1, caseId: layout.caseId, taskId: layout.taskId, profile: layout.profile, engine: "three@0.185.1", startedAt, workspace: layout.workspace, declaredOutputsRoot: layout.outputs, status: "starting", model: "gpt-6-astra", reasoningEffort: "xhigh"};
+const report = {kind: "three-creator-launcher-report", schemaVersion: 1, caseId: layout.caseId, taskId: layout.taskId, profile: layout.profile, engine: "three@0.185.1", startedAt, workspace: layout.workspace, declaredOutputsRoot: layout.outputs, status: "starting", model: "gpt-6-astra", reasoningEffort: layout.reasoningEffort};
 try {
   const lock = await readRuntimeLock(path.join(directory, "runtime-lock.json"), {checkInstalled: true});
+  if (layout.reasoningEffort !== lock.reasoningEffort) throw new Error("CREATOR_REASONING_EFFORT_LOCK_MISMATCH");
   Object.assign(report, {runtimeHash: lock.runtimeHash, codexBinary: lock.codexBinary, codexBinarySha256: lock.codexBinarySha256, toolkitRoot: lock.toolkitRoot, browserRoot: lock.browserRoot});
   const bridge = path.join(directory, "three-eval-mcp-bridge.mjs");
   const mcpArgs = [bridge, "--runtime-lock", lock.runtimeLockPath, "--workspace", layout.workspace, "--profile", layout.profile];
@@ -75,7 +76,7 @@ try {
   Object.assign(report, {sourceHash: result.sourceHash, worldBuildHash: result.worldBuildHash, episodeHash: result.episodeHash, artifacts});
   const toolEvidence = await eventStatistics(eventsFile);
   report.toolEvidence = toolEvidence;
-  const receipt = validateDeliveryEvidence({result, launcherReport: report, events: toolEvidence, eventsSha256: report.eventsSha256, artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[layout.profile].runtimeHash, expectedCaseId: layout.caseId, expectedTaskId: layout.taskId, expectedProfile: layout.profile, expectedWorkspace: layout.workspace});
+  const receipt = validateDeliveryEvidence({result, launcherReport: report, events: toolEvidence, eventsSha256: report.eventsSha256, artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[layout.profile].runtimeHash, expectedCaseId: layout.caseId, expectedTaskId: layout.taskId, expectedProfile: layout.profile, expectedWorkspace: layout.workspace, expectedReasoningEffort: lock.reasoningEffort});
   Object.assign(report, {status: "delivered", submitReceipt: receipt, qualification: "Three technical delivery with matching MCP transport receipt; independent visual/runtime review remains required"});
 } catch (error) {
   Object.assign(report, {status: "failed", error: error instanceof Error ? error.message : String(error)});

@@ -1,5 +1,12 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
+The user now explicitly authorizes two concurrent cloud cases with GPT-6 Astra
+think mode ultra. This slice is limited to Host effort selection, exact launcher
+and receipt validation, plus pinning each case to its most recent xhigh account
+for comparison. Keep historical SDK, Creator instructions, examples, assets and
+playtest contract unchanged. Authority: docs/superpowers/plans/2026-09-06-ultra-two.md.
+Preserve codex/creator-known-good-baseline and the original immutable cloud package.
+
 The user requested restoring the exact version that generated the canyon courier
 and hollow-ring worlds, then adding later improvements one at a time. This branch
 is based on `03b8cb656c2e4ccf0770f50d8c09872c39259a48`. Keep SDK, Creator tools,

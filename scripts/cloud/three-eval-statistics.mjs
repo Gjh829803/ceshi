@@ -72,12 +72,13 @@ export async function eventStatistics(file) {
   return statistics;
 }
 
-export function validateDeliveryEvidence({result, launcherReport, events, eventsSha256, artifacts, expectedRuntimeHash, expectedFixedRuntimeHash, expectedCaseId, expectedTaskId, expectedProfile, expectedWorkspace}) {
+export function validateDeliveryEvidence({result, launcherReport, events, eventsSha256, artifacts, expectedRuntimeHash, expectedFixedRuntimeHash, expectedCaseId, expectedTaskId, expectedProfile, expectedWorkspace, expectedReasoningEffort = 'xhigh'}) {
+  if (!['xhigh','ultra'].includes(expectedReasoningEffort)) throw new Error('THREE_EXPECTED_REASONING_EFFORT_INVALID');
   if (!isPassingDelivery(result, expectedProfile)) throw new Error('THREE_DELIVERY_CONTRACT_FAILED');
   if (launcherReport.kind !== 'three-creator-launcher-report' || launcherReport.runtimeHash !== expectedRuntimeHash ||
     result.creatorRuntimeLockHash !== expectedRuntimeHash || result.runtimeHash !== expectedFixedRuntimeHash || launcherReport.caseId !== expectedCaseId || launcherReport.taskId !== expectedTaskId ||
     launcherReport.profile !== expectedProfile || launcherReport.engine !== 'three@0.185.1' || launcherReport.workspace !== expectedWorkspace ||
-    launcherReport.model !== 'gpt-6-astra' || launcherReport.reasoningEffort !== 'xhigh') throw new Error('THREE_EVENT_IDENTITY_FAILED');
+    launcherReport.model !== 'gpt-6-astra' || launcherReport.reasoningEffort !== expectedReasoningEffort) throw new Error('THREE_EVENT_IDENTITY_FAILED');
   if (!hashPattern.test(eventsSha256 ?? '') || eventsSha256 !== launcherReport.eventsTransportSha256 || eventsSha256 !== launcherReport.eventsSha256) throw new Error('THREE_EVENT_STREAM_HASH_MISMATCH');
   for (const name of ['creator-result.json', 'creator-delivery.tar.gz']) {
     if (!hashPattern.test(artifacts?.[name]?.sha256 ?? '') || artifacts[name].sha256 !== launcherReport.artifacts?.[name]?.sha256 ||

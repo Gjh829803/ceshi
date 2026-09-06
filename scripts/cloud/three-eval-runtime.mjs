@@ -8,7 +8,7 @@ export const THREE_PROFILES = ["three-raw", "three-sdk"];
 export const THREE_ENGINE = "three@0.185.1";
 export const THREE_TOOL_VERSION = "0.2.0-experimental";
 export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_execute_command", "world_get_operation", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
-export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "hostCacheRoot", "note", "changeReason", "previousRuntimeLockHash"]);
+export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "hostCacheRoot", "note", "changeReason", "previousRuntimeLockHash", "reasoningEffort"]);
 export const BROWSER_ENV_KEYS = new Set(["PLAYWRIGHT_BROWSERS_PATH", "WORLDKIT_CHROMIUM_EXECUTABLE", "LD_LIBRARY_PATH", "FONTCONFIG_PATH", "FONTCONFIG_FILE", "LANG"]);
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 export async function fileSha256(file) {
@@ -55,6 +55,8 @@ export async function readRuntimeLock(file, {requireReady = true, checkInstalled
   const bytes = await readFile(file);
   const lock = JSON.parse(bytes);
   for (const key of Object.keys(lock)) if (!RUNTIME_LOCK_KEYS.has(key)) throw new Error(`THREE_RUNTIME_UNKNOWN_FIELD: ${key}`);
+  const reasoningEffort = lock.reasoningEffort ?? "xhigh";
+  if (!["xhigh", "ultra"].includes(reasoningEffort)) throw new Error("THREE_RUNTIME_REASONING_EFFORT_INVALID");
   if (lock.kind !== "three-creator-runtime-lock" || lock.engine !== THREE_ENGINE || JSON.stringify(lock.profiles) !== JSON.stringify(THREE_PROFILES) || lock.schemaVersion !== 1 || (requireReady && lock.status !== "ready")) throw new Error("CREATOR_RUNTIME_LOCK_NOT_READY");
   for (const key of ["toolkitRoot", "browserRoot", "codexBinary"]) {
     if (typeof lock[key] !== "string" || !path.isAbsolute(lock[key]) || lock[key].includes("\0")) throw new Error(`CREATOR_RUNTIME_LOCK_PATH_INVALID: ${key}`);
@@ -98,7 +100,7 @@ export async function readRuntimeLock(file, {requireReady = true, checkInstalled
     await verifyInstalledClosure(lock.browserRoot, browserManifest.files, "manifest.json");
     for (const profile of THREE_PROFILES) if (await fileSha256(path.join(lock.prebuiltRuntimes[profile].root, "runtime-manifest.json")) !== lock.prebuiltRuntimes[profile].manifestSha256) throw new Error(`THREE_PREBUILT_MANIFEST_HASH_MISMATCH: ${profile}`);
   }
-  return {...lock, nodeBinary: lock.nodeBinary ?? "/codex-tools/bin/node", maximumTaskSeconds, runtimeHash: sha256(bytes), runtimeLockPath: path.resolve(file)};
+  return {...lock, reasoningEffort, nodeBinary: lock.nodeBinary ?? "/codex-tools/bin/node", maximumTaskSeconds, runtimeHash: sha256(bytes), runtimeLockPath: path.resolve(file)};
 }
 export function valueAfter(argv, flag) {
   const indexes = argv.flatMap((value, index) => value === flag ? [index] : []);
@@ -128,14 +130,17 @@ export async function parseCloudLayout(argv) {
   }
   if (valueAfter(argv, "--model") !== "gpt-6-astra" || valueAfter(argv, "--sandbox") !== "workspace-write") throw new Error("CREATOR_MODEL_OR_SANDBOX_MISMATCH");
   const configurations = argv.flatMap((value, index) => ["-c", "--config"].includes(value) ? [argv[index + 1]] : []);
-  if (configurations.filter(value => value === 'model_reasoning_effort="xhigh"').length !== 1 || configurations.some(value => value !== 'model_reasoning_effort="xhigh"' && value !== "notify=[]")) throw new Error("CREATOR_REQUIRES_EXACT_XHIGH_CONFIGURATION");
+  const admittedEfforts = new Map([['model_reasoning_effort="xhigh"', 'xhigh'], ['model_reasoning_effort="ultra"', 'ultra']]);
+  const selectedEfforts = configurations.filter(value => admittedEfforts.has(value));
+  if (selectedEfforts.length !== 1 || configurations.some(value => !admittedEfforts.has(value) && value !== "notify=[]")) throw new Error("CREATOR_REQUIRES_EXACT_REASONING_CONFIGURATION");
+  const reasoningEffort = admittedEfforts.get(selectedEfforts[0]);
   if (argv.some(value => ["--cd", "-m", "-s", "--config-profile", "--profile", "--dangerously-bypass-approvals-and-sandbox"].includes(value))) throw new Error("CREATOR_CONFLICTING_LAUNCH_OVERRIDE");
   const taskId = path.basename(workspace);
   const profile = THREE_PROFILES.find(value => taskId.endsWith(`--${value}`));
   if (!profile) throw new Error("THREE_TASK_PROFILE_MISSING");
   const caseId = taskId.slice(0, -(profile.length + 2));
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(caseId)) throw new Error("THREE_TASK_CASE_INVALID");
-  return {workspace, outputs, lastMessage, caseId, taskId, profile};
+  return {workspace, outputs, lastMessage, caseId, taskId, profile, reasoningEffort};
 }
 export function executionEnvironment(lock, workspace, {includeAuthentication = false, inherited = process.env, profile} = {}) {
   if (!THREE_PROFILES.includes(profile)) throw new Error("THREE_EXECUTION_PROFILE_REQUIRED");
