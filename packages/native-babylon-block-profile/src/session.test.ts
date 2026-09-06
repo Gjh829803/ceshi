@@ -15,6 +15,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { takeBabylonNativeBlockCheckedEpochEvidenceV1 } from
   "./host-evidence.js";
+import { peekBabylonNativeBlockLiveHandleRegistryV1 } from "./live-handle-registry.js";
+import { materializeBabylonNativeBlockVisualBatchesV1 } from "./visual-batch-materializer.js";
+import { BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1 } from "./chunk-policy.js";
 
 const commitProfileSettlement = vi.hoisted(() => vi.fn());
 vi.mock("@whitebox-world/native-babylon/host", () => ({
@@ -172,6 +175,132 @@ function hostPublishableFailure(run: () => void): string {
 }
 
 describe("Babylon Native block profile session", () => {
+  it("CF-20 shares raw fixed-shape geometry only within its Session", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const other = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const shapes = [
+        ["full", [0, 0, 0]], ["half", [0, 0, 0]],
+        ["quarter", [0.25, 0, 0]], ["small", [0.25, 0, 0.25]],
+        ["step", [0, 0.125, 0]],
+      ] as const;
+      const geometries = new Set();
+      for (const [index, [shape, center]] of shapes.entries()) {
+        const a = session.createBlock({ id: `${shape}-a`, shape,
+          paletteRole: "ground", centerMetersXYZ: [center[0], center[1], center[2] + index * 4] });
+        const b = session.createBlock({ id: `${shape}-b`, shape,
+          paletteRole: "structure", centerMetersXYZ: [center[0] + 2, center[1], center[2] + index * 4] });
+        const independent = other.createBlock({ id: `${shape}-other`, shape,
+          paletteRole: "ground", centerMetersXYZ: [center[0], center[1], center[2] + index * 4] });
+        expect(a).not.toBe(b);
+        expect(a.geometry).not.toBeNull();
+        expect(b.geometry).toBe(a.geometry);
+        expect(independent.geometry).not.toBe(a.geometry);
+        geometries.add(a.geometry);
+        a.dispose();
+        expect(b.geometry!.isDisposed()).toBe(false);
+        expect(b.getTotalVertices()).toBe(24);
+      }
+      expect(geometries.size).toBe(5);
+      session.dispose();
+      expect(scene.geometries).toHaveLength(5);
+      other.dispose();
+      expect(scene.geometries).toHaveLength(0);
+    });
+  });
+
+  it("CF-20 keeps pooled snapshots and checked identity independent of raw Geometry ownership", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await import("./session.js");
+    const layouts: unknown[] = [];
+    for (const makeUnique of [false, true]) {
+      withScene((scene) => {
+        const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+        const meshes = [0, 2, 40, 42].map((x) => session.createBlock({
+          id: `block-${x}`, shape: "full", paletteRole: "structure",
+          centerMetersXYZ: [x, 0, 0],
+        }));
+        if (makeUnique) for (const mesh of meshes) mesh.makeGeometryUnique();
+        const epoch = session.finalize({ staticColliders: [] });
+        const records = epoch.checkedLayout.records;
+        expect(records[0]!.localGeometrySnapshot).toBe(records[1]!.localGeometrySnapshot);
+        layouts.push(epoch.checkedLayout.layout);
+        const liveHandles = peekBabylonNativeBlockLiveHandleRegistryV1(scene)!;
+        const batches = materializeBabylonNativeBlockVisualBatchesV1({
+          scene, realizationId: "pooled-shape-test",
+          chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+          liveHandles,
+          placements: epoch.checkedLayout.layout.blocks.map((block) => {
+            const handle = liveHandles.blocks.find(({ blockId }) => blockId === block.id)!;
+            return { blockId: block.id, runtimeEntityId: handle.runtimeEntityId,
+              semanticCaptureClassId: handle.semanticCaptureClassId,
+              shape: block.shape, paletteRole: block.paletteRole,
+              centerMetersXYZ: block.centerMetersXYZ,
+              rotationQuarterTurnsY: block.rotationQuarterTurnsY,
+              sizeMetersXYZ: block.sizeMetersXYZ };
+          }),
+        });
+        const displays = scene.meshes.filter((mesh) => !meshes.includes(mesh as Mesh));
+        expect(displays.length).toBeGreaterThanOrEqual(2);
+        expect(new Set(displays.map((mesh) => (mesh as Mesh).geometry)).size).toBe(displays.length);
+        for (const display of displays) {
+          for (const raw of meshes) expect((display as Mesh).geometry).not.toBe(raw.geometry);
+        }
+        batches.dispose();
+        session.dispose();
+      });
+    }
+    expect(layouts[0]).toEqual(layouts[1]);
+  });
+
+  it("CF-20 does not accept a mutated pooled shape as a new geometry baseline", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const first = session.createBlock({ id: "first", shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });
+      const positions = Array.from(first.getVerticesData("position")!);
+      positions[0] = positions[0]! + 0.125;
+      first.setVerticesData("position", positions);
+      session.createBlock({ id: "second", shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [2, 0, 0] });
+      expect(() => session.finalize({ staticColliders: [] }))
+        .toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
+      session.dispose();
+      expect(scene.meshes).toHaveLength(0);
+      expect(scene.geometries).toHaveLength(0);
+    });
+  });
+
+  it("CF-20 retries a pooled allocation failure without disposing pre-existing geometry", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const first = session.createBlock({ id: "first", shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });
+      const geometry = first.geometry!;
+      const apply = geometry.applyToMesh.bind(geometry);
+      const spy = vi.spyOn(geometry, "applyToMesh").mockImplementationOnce((mesh) => {
+        apply(mesh);
+        throw new Error("pooled geometry attachment failed");
+      });
+      try {
+        expect(() => session.createBlock({ id: "retry", shape: "full",
+          paletteRole: "ground", centerMetersXYZ: [2, 0, 0] }))
+          .toThrow(/pooled geometry attachment failed/);
+        expect(scene.meshes).toEqual([first]);
+        expect(geometry.isDisposed()).toBe(false);
+        const retry = session.createBlock({ id: "retry", shape: "full",
+          paletteRole: "ground", centerMetersXYZ: [2, 0, 0] });
+        expect(retry.geometry).toBe(geometry);
+      } finally {
+        spy.mockRestore();
+        session.dispose();
+      }
+      expect(scene.geometries).toHaveLength(0);
+    });
+  });
+
   it.each([
     ["full", [0, 0, 0]], ["half", [0, 0, 0]],
     ["quarter", [0.25, 0, 0]], ["small", [0.25, 0, 0.25]],

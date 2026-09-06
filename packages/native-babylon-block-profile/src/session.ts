@@ -1,7 +1,8 @@
 import { createBabylonNativeBlockInputParsersV1 } from "./session-input.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeSceneBuildContextV1,
@@ -182,6 +183,12 @@ export function createBabylonNativeBlockProfileSessionV1(
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
   const blockIdByMicroCellKey = new Map<string, string>();
   const acquisitions: (() => void)[] = [];
+  // Raw authoring Meshes have fixed geometry. Display batches are separately
+  // materialized and must not reuse these buffers (thin-instance data is per Geometry).
+  const rawGeometryByShape = new Map<BabylonNativeBlockShapeKindV1, Readonly<{
+    geometry: Geometry;
+    snapshot: BabylonNativeBlockSessionRecordV1["localGeometrySnapshot"];
+  }>>();
 
   class AllocationFailure {
     constructor(
@@ -231,8 +238,19 @@ export function createBabylonNativeBlockProfileSessionV1(
     const sceneMeshesBefore = new Set(context.scene.meshes);
     let mesh: Mesh | undefined;
     try {
-      mesh = MeshBuilder.CreateBox(parsedInput.id,
-        { width: size[0], height: size[1], depth: size[2] }, context.scene);
+      let pooled = rawGeometryByShape.get(parsedInput.shape);
+      // A fully rolled-back grid may have released the last Geometry reference.
+      if (!isNil(pooled) && pooled.geometry.isDisposed()) {
+        rawGeometryByShape.delete(parsedInput.shape);
+        pooled = undefined;
+      }
+      if (isNil(pooled)) {
+        mesh = MeshBuilder.CreateBox(parsedInput.id,
+          { width: size[0], height: size[1], depth: size[2] }, context.scene);
+      } else {
+        mesh = new Mesh(parsedInput.id, context.scene);
+        pooled.geometry.applyToMesh(mesh);
+      }
       mesh.position.set(
         parsedInput.centerMetersXYZ[0],
         parsedInput.centerMetersXYZ[1],
@@ -245,13 +263,21 @@ export function createBabylonNativeBlockProfileSessionV1(
         return fail("WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
           "the fixed block helper did not produce indexed position geometry");
       }
+      if (isNil(pooled)) {
+        pooled = Object.freeze({
+          geometry: mesh.geometry!,
+          snapshot: Object.freeze({
+            positions: Object.freeze(Array.from(positions)),
+            indices: Object.freeze(Array.from(indices)),
+          }),
+        });
+        rawGeometryByShape.set(parsedInput.shape, pooled);
+      }
       recordsById.set(parsedInput.id, Object.freeze({
         input: parsedInput,
         mesh,
-        localGeometrySnapshot: Object.freeze({
-          positions: Object.freeze(Array.from(positions)),
-          indices: Object.freeze(Array.from(indices)),
-        }),
+        // Never re-baseline a shared buffer after user code has mutated it.
+        localGeometrySnapshot: pooled.snapshot,
       }));
     } catch (error) {
       let cleanupDidFail = false;
@@ -451,12 +477,14 @@ export function createBabylonNativeBlockProfileSessionV1(
         });
         recordsById.clear();
         blockIdByMicroCellKey.clear();
+        rawGeometryByShape.clear();
         state = "finalized";
         return finalizedResult;
       } catch (error) {
         state = "failed";
         recordsById.clear();
         blockIdByMicroCellKey.clear();
+        rawGeometryByShape.clear();
         disposeAcquisitions(acquisitions);
         acquisitions.length = 0;
         throw error;
@@ -467,6 +495,7 @@ export function createBabylonNativeBlockProfileSessionV1(
       state = "disposed";
       recordsById.clear();
       blockIdByMicroCellKey.clear();
+      rawGeometryByShape.clear();
       const cleanup = disposeAcquisitions(acquisitions);
       acquisitions.length = 0;
       if (cleanup.didFail) throw cleanup.error;
