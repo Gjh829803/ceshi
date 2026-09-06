@@ -34,7 +34,8 @@ def rows_of(config):
   live={r['taskId']:r for r in read(root/'live-status.json',{}).get('attempts',[])}
   for task in plan.get('selectedTaskIds',[]):
    state=read(root/task/'state.json',{});payload=read(root/task/'payload.json',{});ids=payload.get('options',{}).get('codex_account_ids',[])
-   rows.append({'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
+   recovery=read(root/task/'host-recovered-delivery.json',{});recovered=recovery.get('kind')=='three-creator-recovered-delivery' and recovery.get('status')=='artifact-verified' and recovery.get('jobId')==state.get('jobId') and all(recovery.get(k)==state.get(k) and state.get(k) for k in ['sourceHash','worldBuildHash'])
+   rows.append({'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
  return rows
 
 def main():
@@ -49,20 +50,21 @@ def main():
    rows=rows_of(config);byCase={}
    for row in rows:byCase.setdefault(row['caseId'],[]).append(row)
    completed={cid for cid,attempts in byCase.items() if any(r['phase']=='delivered' for r in attempts)}
+   recovered={r['caseId'] for r in rows if r.get('recoveredArtifact')};available=completed|recovered
    active=[r for r in rows if r['phase'] not in TERMINAL];busy=collections.Counter(r['requestedAccountSha256'] for r in active)
    reviews=read(OUT/'quality-reviews.json',{'cases':{}})['cases'];reviewqueue=[]
    for row in rows:
     root=Path(row['root']);verified=root/'host-verified/payload';caps=verified/'captures/captures.json';report=read(caps,{})
-    if row['phase']=='delivered' and row['taskId'] not in reviews:
+    if (row['phase']=='delivered' or row.get('recoveredArtifact')) and row['taskId'] not in reviews:
      image=next((i.get('image',{}).get('path') for i in report.get('images',[]) if i.get('view')=='opening'),None)
      existing=next((verified/'captures').glob('opening*.png'),None) if verified.exists() else None
      ref=OUT/'inputs'/row['caseId']/'reference.png'
      reviewqueue.append({**row,'referencePath':str(ref),'openingPath':str(existing) if existing else None,'verifiedRoot':str(verified),'note':'Inspect original vs opening and movement evidence; technical pass alone is not quality.'})
    write(OUT/'review-queue.json',{'updatedAt':now(),'cases':reviewqueue})
    elapsed=time.time()-datetime.datetime.fromisoformat(config['createdAt']).timestamp();remainingSeconds=datetime.datetime.fromisoformat(config['deadline'].replace('Z','+00:00')).timestamp()-time.time()
-   status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'active':len(active),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
+   status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'recoveredArtifacts':len(recovered-completed),'availableArtifacts':len(available),'active':len(active),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
    write(OUT/'status.json',status)
-   if len(completed)==300:write(OUT/'complete.json',status);return
+   if len(available)==300:write(OUT/'complete.json',status);return
    if (OUT/'halt.json').exists():time.sleep(30);continue
    if status['localFreeGiB']<8:
     write(OUT/'storage-attention.json',{'at':now(),'freeGiB':status['localFreeGiB'],'reason':'Pause new admission; preserve existing jobs and recover space without deleting unique evidence.'});time.sleep(30);continue

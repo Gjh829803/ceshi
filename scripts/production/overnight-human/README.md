@@ -124,3 +124,15 @@ Safe extra endpoints: `production-status.json`, `account-quality.json`. Full
 account credentials/identities never enter public artifacts. After completion,
 preserve manifests, requested+actual accounts, each attempt, quality evidence,
 recovery reports, delivery hashes and final summaries in an evaluation report.
+
+## Verified final archives with incomplete preview receipts
+
+Viewer commit `3315fd1e` adds separately labeled recovery for the exact
+`THREE_EVENT_PREVIEW_UNVERIFIED` failure only, after complete archive/video/hash
+verification and actual account identity checks. The original state, Agent source,
+archive and failed execution remain unchanged. Public UI keeps the failed process
+status while allowing the original artifact to be played. Other receipt/identity
+failures are not admitted through this path. Per-case `host-recovered-delivery.json`
+is Host evidence, not an Agent success receipt. Controller reports `delivered`,
+`recoveredArtifacts`, and their unique union `availableArtifacts` separately, and
+queues recovered builds for the same quality assessment. No regeneration occurs.
