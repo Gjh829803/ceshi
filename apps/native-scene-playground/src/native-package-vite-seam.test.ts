@@ -25,12 +25,13 @@ import {
   createWorldPackageTestInputV1,
 } from
   "@whitebox-world/world-package/testing";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveConfig, type Connect, type Plugin, type UserConfig } from "vite";
 
 import { writeWorldPackageDirectoryV1 } from
   "../../../scripts/lib/file-world-package.js";
 import { createNativeScenePlaygroundViteConfigV1 } from "../vite.config.js";
+import { nativeSceneSubjectAssetResolver } from "./subject-asset-resolver.js";
 
 const SHELL_ORIGIN = "http://127.0.0.1:35174";
 const RUNTIME_ORIGIN = "http://127.0.0.1:35175";
@@ -165,10 +166,51 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await rm(testRootPath, { recursive: true, force: true });
 });
 
 describe("Native Playground verified Package Vite seam", () => {
+  const goldenPath = "/subject-assets/humanoid/golden/v2/golden-humanoid.glb";
+  const goldenHash = "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8";
+
+  it("serves the old Golden asset only with its locked content hash", async () => {
+    const stack = middlewareStack(await createConfig());
+    const response = await invoke(stack, { method: "GET",
+      url: `${goldenPath}?worldkit-content-hash=${encodeURIComponent(goldenHash)}` });
+    expect(response.statusCode).toBe(200);
+    expect(Buffer.from(response.bytes)).toEqual(await readFile(new URL(
+      `../../playground/public${goldenPath}`, import.meta.url,
+    )));
+    for (const url of [goldenPath, `${goldenPath}?worldkit-content-hash=wrong`,
+      "/subject-assets/unknown.glb"]) {
+      const rejected = await invoke(stack, { method: "GET", url });
+      expect(rejected.statusCode).toBe(404);
+      expect(rejected.reachedFallback).toBe(false);
+    }
+  });
+
+  it("resolves the Host-selected Golden subject through the actual asset middleware", async () => {
+    const stack = middlewareStack(await createConfig());
+    vi.stubGlobal("location", { origin: RUNTIME_ORIGIN });
+    vi.stubGlobal("fetch", async (value: URL, options: RequestInit) => {
+      expect(value.origin).toBe(RUNTIME_ORIGIN);
+      expect(options).toEqual({ mode: "same-origin", credentials: "same-origin",
+        redirect: "error", cache: "no-store" });
+      const response = await invoke(stack, { method: "GET", host: value.host,
+        url: value.pathname + value.search });
+      return new Response(new Uint8Array(response.bytes), { status: response.statusCode });
+    });
+    const resolved = await nativeSceneSubjectAssetResolver.resolveSubjectAsset({
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
+      artifactContentHash: goldenHash, byteLength: 48_060, mediaType: "model/gltf-binary",
+    });
+    expect(resolved.sourceLabel).toBe(goldenPath);
+    expect(Buffer.from(resolved.bytes)).toEqual(await readFile(new URL(
+      `../../playground/public${goldenPath}`, import.meta.url,
+    )));
+  });
+
   it("keeps Studio capability server-only and rejects a Runtime or mismatched Package binding", async () => {
     const binding = { sceneId: "palace", worldPackageRootHash: packageDirectory.receipt.worldPackageRootHash,
       studioOrigin: "http://127.0.0.1:3000", capability: "a".repeat(64) };

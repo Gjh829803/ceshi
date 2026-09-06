@@ -4,6 +4,8 @@ import type { SubjectAssetResolverV1 } from
 const SUBJECT_ASSET_URI_BY_REF: Readonly<Record<string, string>> = Object.freeze({
   "worldkit://subject-asset/actor.humanoid.g-bot@2":
     "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+  "worldkit://subject-asset/humanoid.golden@2":
+    "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
 });
 
 export const nativeSceneSubjectAssetResolver: SubjectAssetResolverV1 =

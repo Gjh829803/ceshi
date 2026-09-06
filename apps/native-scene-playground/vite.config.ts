@@ -494,27 +494,24 @@ export async function createNativeScenePlaygroundViteConfigV1(
     const receiptContentHash =
       `sha256:${createHash("sha256").update(receiptBytes).digest("hex")}` as const;
 
-    const gBotAssetContentHash =
-      "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f" as const;
-    const gBotAssetBytes = new Uint8Array(readFileSync(new URL(
-      "subject-assets/humanoid/g-bot/v2/g-bot.glb",
-      playgroundPublicRoot,
-    )));
-    if (
-      `sha256:${createHash("sha256").update(gBotAssetBytes).digest("hex")}` !==
-        gBotAssetContentHash
-    ) {
-      throw new Error("WORLDKIT_HOSTED_RUNTIME_SUBJECT_ASSET_INTEGRITY_FAILED");
+    const exactAssetByPath = new Map<string, ExactRuntimeAssetV1>();
+    // Both existing humanoid assets may be selected by the trusted Host. Keep
+    // the original exact-byte/query admission; do not substitute a different rig.
+    for (const [assetPath, contentHash] of [
+      ["subject-assets/humanoid/g-bot/v2/g-bot.glb",
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f"],
+      ["subject-assets/humanoid/golden/v2/golden-humanoid.glb",
+        "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8"],
+    ] as const) {
+      const bytes = new Uint8Array(readFileSync(new URL(assetPath, playgroundPublicRoot)));
+      if (`sha256:${createHash("sha256").update(bytes).digest("hex")}` !== contentHash) {
+        throw new Error("WORLDKIT_HOSTED_RUNTIME_SUBJECT_ASSET_INTEGRITY_FAILED");
+      }
+      exactAssetByPath.set(`/${assetPath}`, Object.freeze({
+        bytes, contentHash, mediaType: "model/gltf-binary",
+        requiredContentHashQuery: contentHash,
+      }));
     }
-    const exactAssetByPath = new Map<string, ExactRuntimeAssetV1>([[
-      "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
-      Object.freeze({
-        bytes: gBotAssetBytes,
-        contentHash: gBotAssetContentHash,
-        mediaType: "model/gltf-binary",
-        requiredContentHashQuery: gBotAssetContentHash,
-      }),
-    ]]);
 
     const hostedBrowserRunnerSourcePaths = Object.freeze([
       "src/main.ts",

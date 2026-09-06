@@ -3346,6 +3346,17 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   伪造进度，不改 45s/180s 预算，不减完整校验。37 项 focused、最终 typecheck 和
   loader 补充 3 项通过，下一步恢复 Host；两次失败记录及原 Package 都保留，不重跑模型。
 
+- `17b12f97` 的原 Run Host-only 恢复 2 已结束，未发布：真实加载进度已推进到
+  module/Havok，93.8s 在 `runtime-subjects` 终局失败，不再是 package stall。
+  对应最小补齐 `CF-12/SUBJECT-ASSET-HANDOFF`（main-agent-only）：Package 锁定
+  `humanoid.golden@2`，Native Browser resolver/HTTP 服务却只注册 G Bot。旧
+  `9e35ab53` 的 Playground resolver 支持 Golden，且旧 GLB SHA-256 与当前完全相同
+  （`6cf29a2c…32cd25a8`）。页面诊断为 `WORLD_SESSION_FAILED`；直接消费者回归分别
+  RED 于资源 404 和 resolver unavailable。补齐旧 Golden 路径/字节交接，保留现有
+  exact-hash 请求和 Runtime 校验，不替换 Host 选定人物、不增加 gate/重试/预算。
+  Vite/资源交接与真实 GLB 加载回归 16/16 通过；仍需冻结后恢复 Capture，不能称
+  Case 已通过。原生成/Package 字节和失败恢复记录保留。
+
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
   用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。
