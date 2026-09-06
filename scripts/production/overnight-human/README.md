@@ -256,7 +256,7 @@ Remote source files and Agent prompt are never modified.
 Public HTTP pages receive the existing host-compat UUID shim. Verification
 checks that exact shim's SHA and excludes only its known tag when comparing
 HTML; compiled world bytes remain identical. `checkpoint-public-verification.json`
-records real public browser readiness, intermediate notice and links. Nine
+records real public browser readiness, intermediate notice and links. Ten
 controller tests and two publisher tests cover identity, retry holds and
 cross-attempt precedence. Original frozen runtime lock remains unchanged.
 

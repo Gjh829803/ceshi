@@ -46,6 +46,19 @@ class CapacityTests(unittest.TestCase):
                 self.assertEqual(status['runnableCheckpoints'],0 if final else 1)
                 self.assertEqual(status['delivered'],1 if final else 0)
 
+    def test_three_hundred_intermediate_versions_do_not_complete_campaign(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);cases=[{'id':f'fixture-{i}'} for i in range(300)]
+            controller.write(root/'master.json',{'cases':cases})
+            controller.write(root/'campaign.json',{'id':'fixture','masterManifest':str(root/'master.json'),'createdAt':'2020-01-01T00:00:00+00:00','deadline':'2020-01-02T00:00:00Z','latestNewGenerationAt':'2020-01-01T23:00:00Z','waves':[]})
+            rows=[{'root':str(root),'caseId':c['id'],'taskId':c['id']+'--three-sdk','jobId':f'gen_{i}','phase':'failed','executionComplete':True,'checkpointArtifact':True,'cliActivityObserved':False} for i,c in enumerate(cases)]
+            with patch.object(controller,'OUT',root),patch.object(controller,'rows_of',return_value=rows),patch.object(controller,'refresh_health'),patch.object(controller,'start_supervisor'):
+                controller.main()
+            self.assertFalse((root/'complete.json').exists())
+            summary=json.loads((root/'deadline-summary.json').read_text())
+            self.assertEqual(summary['availableArtifacts'],300)
+            self.assertEqual(summary['delivered'],0)
+
     def test_refills_one_free_slot_without_exceeding_account_or_global_capacity(self):
         for active_count, expected_submissions in [(7, 1), (8, 0)]:
             with self.subTest(active_count=active_count), tempfile.TemporaryDirectory() as temporary:
