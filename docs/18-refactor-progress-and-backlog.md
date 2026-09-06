@@ -3248,6 +3248,12 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   typecheck 通过。具体证据目录与不足见当日参数审计 T1 real Hosted validation；
   真实遮挡世界、多入口完整像素/手感、CF-04/12 和最后生成 Case 仍开放，未合 main。
 
+- CF-04/T1 单方块遮挡跟进（2026-09-07）：真实遮挡夹具已复现图片挡住人物但
+  opacity instances 为空；根因是新批次分组排除了单方块，旧 renderer 无此门槛。
+  已删除该门槛，单方块回归 RED→GREEN，批次/遮挡 22 项、session 40 项、隔离/容量
+  12 项及 typecheck 通过；实际遮挡 Hosted 重验仍待完成。没有改变生产 gate 或淡化参数，
+  完整 CF-04/12、交互时序对齐和最终新 Case 仍未完成。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

@@ -46,7 +46,7 @@ interface BlockSpecV1 {
 /**
  * One continuous route floor crosses the 4 m Chunk seam at x = 3.5: four Blocks
  * belong to Chunk `xp0-zp0` and two to `xp1-zp0`. The single wall Block is the
- * only member of its partition and must stay an independent Mesh.
+ * only member of its partition and must still enter the Host display batch.
  */
 const FIXTURE_BLOCKS: readonly BlockSpecV1[] = Object.freeze([
   { id: "route-0", centerMetersXYZ: [0, 0.5, 0], paletteRole: "route",
@@ -164,6 +164,26 @@ function batchMeshNames(scene: Scene): readonly string[] {
 }
 
 describe("NBR-65F Native Block visual batch realization", () => {
+  it("keeps a lone occluding wall in the same admitted batch path as larger partitions", () => {
+    const fixture = createFixture([
+      { id: "lone-wall", centerMetersXYZ: [0.5, 1.5, 20], paletteRole: "structure" },
+    ]);
+    const materialized = materializeBabylonNativeBlockVisualBatchesV1({
+      scene: fixture.scene, realizationId: "single-wall",
+      chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+      placements: fixture.placements, liveHandles: fixture.liveHandles,
+    });
+    cleanups.push(() => materialized.dispose());
+    expect(materialized.batches).toHaveLength(1);
+    const batch = materialized.batches[0]!;
+    expect(batch.instances).toEqual([{ sourceBlockIds: ["lone-wall"] }]);
+    const [matrix] = batch.mesh.thinInstanceGetWorldMatrices();
+    expect(matrix!.m[12]).toBe(0.5);
+    expect(matrix!.m[13]).toBe(1.5);
+    expect(matrix!.m[14]).toBe(20);
+    expect(matrix!.m[0]).toBeCloseTo(0.985, 6);
+    expect(materialized.independentBlockIds).toEqual([]);
+  });
 
   it("merges rotated non-square shapes using effective dimensions and keeps holes", () => {
     const fixture = createFixture([
@@ -217,16 +237,22 @@ describe("NBR-65F Native Block visual batch realization", () => {
         semanticCaptureClassId: "worldkit.native-block.group.route",
         blockIds: ["route-0", "route-1", "route-2", "route-3", "route-4", "route-5"],
       },
+      {
+        batchId: "thin-instance-group-0002",
+        visualChunkIndexXZ: [0, 0], shape: "full", paletteRole: "structure",
+        semanticCaptureClassId: "worldkit.native-block.group.wall",
+        blockIds: ["wall-single"],
+      },
     ]);
-    expect(materialized.independentBlockIds).toEqual(["wall-single"]);
+    expect(materialized.independentBlockIds).toEqual([]);
     expect(materialized.resources).toEqual({
       authoringVisualMeshCount: 2,
-      thinInstanceBatchCount: 1,
-      thinInstanceCount: 1,
-      independentVisualMeshCount: 1,
+      thinInstanceBatchCount: 2,
+      thinInstanceCount: 2,
+      independentVisualMeshCount: 0,
       renderedDrawUnitCount: 2,
       renderedGeometryBufferSetCount: 2,
-      hiddenAuthoringMeshCount: 1,
+      hiddenAuthoringMeshCount: 2,
     });
     expect(materialized.chunkPolicyHash)
       .toBe(BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1);
@@ -303,7 +329,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
       const displayMatrix = babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle);
       const center = Vector3.TransformCoordinates(Vector3.Zero(), displayMatrix);
       const sourceCenter = Vector3.FromArray(fixture.placements.find(row => row.blockId === handle.blockId)!.centerMetersXYZ);
-      const expectedX = handle.kind === "thin-instance"
+      const expectedX = handle.blockId !== "wall-single"
         ? 2.5 + (sourceCenter.x - 2.5) * 0.985 : sourceCenter.x;
       expect(center.x).toBeCloseTo(expectedX, 6);
       expect(center.y).toBeCloseTo(sourceCenter.y, 6);
@@ -323,6 +349,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
       ["route-3", "thin-instance-group-0001", 0],
       ["route-4", "thin-instance-group-0001", 0],
       ["route-5", "thin-instance-group-0001", 0],
+      ["wall-single", "thin-instance-group-0002", 0],
     ]);
     expect(registry.visualGroups.map((group) => [
       group.visualGroupId,
@@ -372,15 +399,12 @@ describe("NBR-65F Native Block visual batch realization", () => {
     }
     // Batched authoring Meshes stop rendering, but they are never disposed,
     // disabled or removed: physics residency must not be able to cull visuals.
-    for (const blockId of ["route-0", "route-5"]) {
+    for (const blockId of ["route-0", "route-5", "wall-single"]) {
       const member = fixture.meshByBlockId.get(blockId)!;
       expect(member.isVisible).toBe(false);
       expect(member.isEnabled()).toBe(true);
       expect(member.isDisposed()).toBe(false);
     }
-    const independent = fixture.meshByBlockId.get("wall-single")!;
-    expect(independent.isVisible).toBe(true);
-    expect(independent.alwaysSelectAsActiveMesh).toBe(true);
   });
 
   it("publishes one deterministic batch plan across creation orders", () => {
@@ -430,7 +454,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
     cleanups.push(() => coarse.dispose());
     expect(coarse.batchPlanHash).not.toBe(currentPlanHash);
     expect(coarse.resources).toEqual(currentResources);
-    expect(coarse.batches).toHaveLength(1);
+    expect(coarse.batches).toHaveLength(2);
     expect(coarse.batches[0]!.blockIds).toEqual([
       "route-0",
       "route-1",
@@ -450,7 +474,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
       placements: fixture.placements,
       liveHandles: fixture.liveHandles,
     });
-    expect(batchMeshNames(fixture.scene)).toHaveLength(1);
+    expect(batchMeshNames(fixture.scene)).toHaveLength(2);
 
     materialized.dispose();
     materialized.dispose();
@@ -542,7 +566,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
     });
     cleanups.push(() => firstBatches.dispose());
 
-    expect(batchMeshNames(first.scene)).toHaveLength(1);
+    expect(batchMeshNames(first.scene)).toHaveLength(2);
     expect(batchMeshNames(second.scene)).toEqual([]);
     expect(peekBabylonNativeBlockLiveHandleRegistryV1(second.scene))
       .toBe(second.liveHandles);

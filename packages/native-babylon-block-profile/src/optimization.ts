@@ -311,7 +311,8 @@ export function createBabylonNativeBlockResidencyGroupsV1(
 /**
  * Single owner of Thin Instance batch membership. A batch may join Blocks only
  * inside one 32m visual Chunk, one fixed shape, one palette role and at most one semantic
- * visual group; every other Block stays an independent Mesh.
+ * visual group. Singleton partitions use the same display path as the pinned
+ * old renderer, so they also participate in per-instance Subject occlusion.
  */
 export function createBabylonNativeBlockThinInstanceGroupsV1(
   blocks: readonly BabylonNativeBlockVisualClusterSourceV1[],
@@ -326,7 +327,6 @@ export function createBabylonNativeBlockThinInstanceGroupsV1(
   ]));
   const groupedBlockIds = new Set<string>();
   const groups = Object.entries(partitions)
-    .filter(([, members]) => members.reduce((sum, member) => sum + member.sourceBlockIds.length, 0) >= 2)
     .sort(([left], [right]) => stableCompare(left, right))
     .map(([, members], index) => {
       const first = members[0]!;

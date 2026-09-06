@@ -235,6 +235,26 @@ deterministic Browser verifier now requires opening Tick 0, sampled support Tick
 1 and distinct hashes. Actual Browser verification is still pending at this
 checkpoint; this is not final T1, CF-04/12 or generated-Case acceptance.
 
+### CF-04/T1 singleton occluder follow-up
+
+The actual Hosted probe on `fe0fa657` retained its failing output at
+`/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-TKMOSI`.
+Opening pixels visibly contain the wall in front of the Subject, but both reset
+and sampled Camera states contain no registered opacity instances. Root cause:
+`createBabylonNativeBlockThinInstanceGroupsV1` excluded partitions with fewer
+than two source Blocks. The pinned old `scene-geometry.ts` batches every nonempty
+Block partition and registers it for occlusion, including singletons.
+
+Remove that membership threshold rather than changing the test geometry, ray
+selection, opacity parameters or production gates. The one-wall materializer
+regression failed with zero batches before the fix. Materializer/optimization/
+occlusion tests then passed 22/22; session tests passed 40/40; capture isolation
+and benchmark tests passed 12/12 after updating their old singleton expectations.
+Corpus draw units and geometry buffers remain 25, Collider proxies remain 10;
+only display classification changes from 17 batches + 8 independent meshes to
+25 batches. Typecheck passed. Real occluding Hosted revalidation is still pending;
+this is not final CF-04/12 or generated-Case acceptance.
+
 ### CF-04/T1 real Hosted validation
 
 On candidate `a1802205`, `pnpm verify:native-no-script-capture` passed real

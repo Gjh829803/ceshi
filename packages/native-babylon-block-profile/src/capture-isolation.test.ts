@@ -139,7 +139,8 @@ function createFixture(materializeBatches = true): FixtureV1 {
     registry: batches?.liveHandles ?? visuals.liveHandles,
     meshByBlockId: new Map(visuals.nodes.flatMap(node => node.sourceBlockIds.map(id => [id, node.mesh] as const))),
     batchMesh: batches?.batches[0]!.mesh ?? visuals.nodes[0]!.mesh,
-    independentMesh: visuals.nodes.find(node => node.sourceBlockIds.includes("wall-single"))!.mesh,
+    independentMesh: batches?.batches.find(batch => batch.blockIds.includes("wall-single"))?.mesh
+      ?? visuals.nodes.find(node => node.sourceBlockIds.includes("wall-single"))!.mesh,
   });
 }
 
@@ -236,8 +237,8 @@ describe("NBR-65F formal Capture target isolation", () => {
     });
 
     expect(isolation.targetBlockIds).toEqual(["route-1"]);
-    expect(isolation.hiddenIndependentBlockIds).toEqual(["wall-single"]);
-    expect(isolation.hiddenBatchIds).toEqual([]);
+    expect(isolation.hiddenIndependentBlockIds).toEqual([]);
+    expect(isolation.hiddenBatchIds).toEqual(["thin-instance-group-0002"]);
     expect(isolation.maskedThinInstanceCount).toBe(1);
     expect(fixture.independentMesh.isVisible).toBe(false);
     expect(fixture.batchMesh.isVisible).toBe(true);
