@@ -153,3 +153,49 @@ then all 12 seam tests passed. Real cold Browser rerun remains required after th
 repair commit. The diagnostic fixture is retained locally at
 `/private/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-native-package-vkx0fp`;
 it is synthetic test input, not a successful generated Case or modified old failure.
+
+### OCC-C2 verified cold Hosted capture
+
+Candidate `09d0ce69` (including `9b8f36a9`) passed the retained-fixture cold
+Browser diagnostic without a late dependency optimization or iframe reload.
+All Formal image/observation payloads returned; Browser and Vite cleanup both
+reported `completed`. The ordinary `pnpm verify:native-no-script-capture` then
+passed real Check/Ground/Package, Browser Capture, observation parsing and
+Evaluation. Five semantic targets had admitted identity pixels, including all
+five in top-down, and the existing opening solid-projection bounds assertions
+passed. Case and generation Request bytes remained unchanged.
+
+Inspectable local evidence:
+`/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-9YqFgB`.
+The main agent inspected `capture/opening.png` and its identity mask: the Subject,
+ground strip and two offset blocks render; the opaque mask respects the Subject
+silhouette. The fixture has no scripted traversal (`critical-traversal` remains
+`incomplete` by design), and is not an occluding-wall scene or a model-generated
+Case. This closes the reproduced cold-start defect, not full CF-04/12 or final
+production acceptance. No full CI, independent review or new model run occurred.
+
+### CF-04/T1 opening capture state boundary — confirmed remaining difference
+
+Further pinned-old source tracing refines the earlier timing row. Old
+`scripts/cli/worldkit.ts:1624-1659` pauses, resets, waits two animation frames,
+checks that the simulation Tick is unchanged, then calls `captureScreenshot`
+twice. Old `apps/playground/src/babylon-world-adapter.ts:886-922` resets through
+the Coordinator and only renders in `captureScreenshot`; it does not inject a
+neutral gameplay Tick there. Old Runtime `renderFrame` synchronizes the initial
+Camera view with delta zero. Current `formal-world-capture-provider.ts`
+`resetAndSettle` deliberately commits one neutral Tick before opening Capture.
+The actual C2 receipt confirms `readySnapshot.world.simulationTick = 1` and fade
+selection elapsed `1/60` seconds. Thus passing cold capture is not evidence that
+the old opening state/time is identical.
+
+T1 is main-agent-only and depends on OCC-C2. Its owner is the existing Formal
+Capture preparation/observation boundary, not a second Camera or Physics owner.
+The neutral Tick also supplies the current required committed support sample:
+simply deleting it would fail `COMMITTED_SUPPORT_MISSING`; fabricating a contact,
+relabeling Tick 1 as Tick 0 or advancing fade during arbitrary renders is not a
+valid fix. Next work must reproduce opening-state divergence with an occluder,
+restore the old reset/render opening state, and keep any actual support/traversal
+measurement bound to its true sampled state through the existing contracts and
+consumers. No production timeouts, hidden repair tasks or ordinary failure gates
+are to be added. Opening/identity pixels, unchanged capture Snapshot, actual
+support provenance and repeat-reset evidence are required before closing T1.

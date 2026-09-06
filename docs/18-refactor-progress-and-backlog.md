@@ -3223,6 +3223,16 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   RED→GREEN；不弱化导航保护、不改超时/相机参数/修复轮次。修复后的冷 Browser
   验证尚待运行，完整 CF-04/12 与最终模型 Case 仍开放。
 
+- CF-04/12-OCC-C2 复验（2026-09-07，`09d0ce69`）：保留夹具的冷 Hosted Capture
+  已通过，无晚加载预打包/reload；随后 `pnpm verify:native-no-script-capture` 通过真实
+  Check/Ground/Package、Browser Capture、观察解析和 Evaluation，5 个目标具备身份像素，
+  输入未变，Browser/Vite 清理 completed。人工看过开场及身份 mask；证据目录见当日参数
+  审计 OCC-C2 verified。该确定性夹具不含脚本遍历，不是新模型 Case，也不关闭整体任务。
+  后续旧源追踪确认 CF-04/T1：旧 CLI 暂停/Reset 后只等待渲染，当前 Formal 在开场前
+  多提交一个中性 Tick（真实收据为 Tick 1）。该 Tick 同时供当前 committed support
+  观察使用，需要一起对齐捕获状态与真实支撑证据，不能简单删除、伪造或放宽检查。
+  CF-04/12 与最终两张图生产验收保持开放。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史
