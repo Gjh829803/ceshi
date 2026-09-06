@@ -7,13 +7,9 @@ import { evaluateCompiledWorldResourceBudgetV1 } from "@whitebox-world/compiler"
 import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from "../native-scene/admission-budget.js";
 
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
-// CF-20/R1: 8k was measured with the real Babylon Runtime/Host batching/Havok.
-// After the allocation-retention repair, 16k also completes that workload, but
-// its memory/render cost and missing full-world parity evidence do not yet
-// justify increasing this production ceiling (CF-20/MEM1-BROWSER).
-// This ceiling is not a target count or a guarantee for every layout/Collider mix.
+// Pinned old source accounting has no fixed Block-count admission gate.
+// Keep Native contribution, output and process limits in their own domains.
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
-  maximumBlockCount: 8_000,
   ...BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
   maximumOutputBytes: 4_000_000,
   timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,

@@ -101,7 +101,6 @@ async function finalizedEpoch(reverse: boolean): Promise<Readonly<{
       build(buildContext): void {
         session = createBabylonNativeBlockProfileSessionV1(
           buildContext,
-          Object.freeze({ maximumBlockCount: 2 }),
         );
         for (const block of reverse ? [...blocks].reverse() : blocks) {
           session.createBlock(block);

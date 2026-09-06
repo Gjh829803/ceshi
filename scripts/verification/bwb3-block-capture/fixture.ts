@@ -143,7 +143,6 @@ async function start(): Promise<void> {
       build(context): void {
         session = createBabylonNativeBlockProfileSessionV1(
           context,
-          { maximumBlockCount: 32 },
         );
         buildFixture(session);
         finalizedEpoch = session.finalize(Object.freeze({

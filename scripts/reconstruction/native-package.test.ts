@@ -115,6 +115,8 @@ describe("packageNativeBlockAttemptV1", () => {
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     };
     const fixture = await completedAttempt({ withoutScriptedTraversal: true, withoutSemanticTargets, groundExploration });
+    const request = JSON.parse(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"), "utf8"));
+    expect(request.budgets).not.toHaveProperty("maximumBlockCount");
     expect(fixture.reconstructionCase.expected.criticalTraversalChecks).toEqual([]);
     expect(fixture.reconstructionCase.expected.topology.relations).toEqual([]);
     const intent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
@@ -347,8 +349,7 @@ describe("packageNativeBlockAttemptV1", () => {
       requiredTraversalBands: [],
     };
     const fixture = await completedAttempt({
-      groundExploration, requireSingleReachableComponent: false, maximumBlockCount: 128,
-      sceneSource: SCENE_SOURCE.replace("maximumBlockCount: 64", "maximumBlockCount: 128")
+      groundExploration, requireSingleReachableComponent: false, sceneSource: SCENE_SOURCE
         .replace('    session.finalize({',
           '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
     });
@@ -385,14 +386,13 @@ describe("packageNativeBlockAttemptV1", () => {
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 11], [6, 0, 11], [6, 0, 7]] }],
     };
     const curvedSource = SCENE_SOURCE
-      .replace("maximumBlockCount: 64", "maximumBlockCount: 128")
       .replace('minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7]',
         'minimumCenterMetersXYZ: [5, -0.5, 4], repeatCountXYZ: [3, 1, 6]')
       .replace('minimumCenterMetersXYZ: [-1, -0.5, 1], repeatCountXYZ: [3, 1, 3]',
         'minimumCenterMetersXYZ: [5, -0.5, 1], repeatCountXYZ: [3, 1, 3]')
       .replace('    session.finalize({',
         '    session.createBlockGrid({idPrefix: "bend", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [2, -0.5, 10], repeatCountXYZ: [6, 1, 3] });\n    session.finalize({');
-    const fixture = await completedAttempt({ sceneSource: curvedSource, groundExploration, maximumBlockCount: 128 });
+    const fixture = await completedAttempt({ sceneSource: curvedSource, groundExploration });
     const originalCase = await readFile(fixture.casePath);
     const originalRequest = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
     const packaged = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
@@ -404,8 +404,7 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata!.groundExploration).toEqual(groundExploration);
     expect(await readFile(fixture.casePath)).toEqual(originalCase);
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
-    const failedFixture = await completedAttempt({ sceneSource: curvedSource, maximumBlockCount: 128,
-      groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
+    const failedFixture = await completedAttempt({ sceneSource: curvedSource, groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
         { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });
     await expect(packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
       casePath: failedFixture.casePath, attemptDirectoryPath: failedFixture.attemptDirectoryPath,
@@ -414,8 +413,7 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(failure.admissionOutcome).toBe("failed");
     expect(failure.identity.worldPackageRootHash).not.toBe(packaged.worldPackageRootHash);
     expect(failure.failureFacts).toContainEqual(expect.objectContaining({ targetId: "remote-garden" }));
-    const islandFixture = await completedAttempt({ maximumBlockCount: 128,
-      sceneSource: curvedSource.replace('    session.finalize({',
+    const islandFixture = await completedAttempt({ sceneSource: curvedSource.replace('    session.finalize({',
         '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
       groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
         { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });

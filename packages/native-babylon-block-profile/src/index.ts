@@ -38,7 +38,6 @@ export type {
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockFinalizedEpochV1,
   BabylonNativeBlockGridCreateInputV1,
-  BabylonNativeBlockProfileBudgetV1,
   BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./session.js";

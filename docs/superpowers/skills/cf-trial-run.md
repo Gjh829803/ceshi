@@ -53,12 +53,18 @@ Builder 同任务内自修复，以及 Host 的交接、Check、Ground、Package
   最新修复已通过定向回归、类型检查、六组合成真实捕获和七条像素关系验证。
 - 合成捕获不等于参考图生成验收；当前没有这版代码的完整真实 054 成功收据，也没有
   最终 exact-SHA 全仓 CI 或独立审查证明。
-- CF-20 的全世界容量/预算映射、部分地理还原仍在开发；生产方块上限目前为 8,000。
-  不要据此声称已达到老分支的大场景容量或还原效果。
+- CF-20 的全世界容量/预算映射、部分地理还原仍在开发。当前已删除老分支不存在的固定
+  8,000 源码 Block 上限，并同步请求、Session、比较图及 Ground 消费者；这不保证任意
+  场景都能装入内存/执行时限，也不证明已经达到老分支的大场景还原效果。
+- 当前 API 是 `createBabylonNativeBlockProfileSessionV1(context)`，不再传数量预算参数；
+  Generation Request 的 budgets 也不再包含 maximumBlockCount。旧字段不会被静默忽略。
+  更新分支后用新的 scene-id 发起全新任务，不要拼接旧请求、旧生成源码和新检查器，
+  也不要改写历史 Run 的输入与收据来迁移它。
 - 用户最新安排：本次真实 Case 完整跑通并完成必要合入检查后，可以先合入 main，
   再从最新 main 拉新分支继续 CF；第二张图在后续分支验证，不再是本次合入前置。
   这不把容量、地理还原或其他未完成 CF 项标记为完成。
 - 固定 `fda2ced3` 的 054 试跑已结束于 Native Check：Planner/Host 交接通过，
   Builder 退出 0，但源码包含小数点 ID，触发 `WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID`。
-  Ground/Capture/发布未启动，因此当前尚不满足合入条件。CF-19 正修复任务内 ID 反馈遗漏，
-  不能把私有诊断回放称为原 Run 成功。
+  Ground/Capture/发布未启动，因此当前尚不满足合入条件。CF-19 的共享 ID/输入校验修复
+  已提交于 `13f31012`，体量合并修复已提交于 `e8f7de07`；均不能把私有诊断回放或合成
+  回归称为原 Run 成功。

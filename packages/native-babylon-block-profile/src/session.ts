@@ -61,10 +61,6 @@ import {
   recordBabylonNativeBlockCheckedEpochEvidenceV1,
 } from "./host-evidence.js";
 
-export interface BabylonNativeBlockProfileBudgetV1 {
-  readonly maximumBlockCount: number;
-}
-
 export interface BabylonNativeBlockCreateInputV1 {
   readonly id: string;
   readonly shape: BabylonNativeBlockShapeKindV1;
@@ -145,7 +141,7 @@ const GROUND_BOUNDARY_POLICY = Object.freeze({
   maximumBoundaryTriangleCount: 262_144,
 });
 
-const { parseBudget, parseCreateInput, parseGridCreateInput, parseFinalizeInput } =
+const { parseCreateInput, parseGridCreateInput, parseFinalizeInput } =
   createBabylonNativeBlockInputParsersV1(fail);
 
 function disposeAcquisitions(
@@ -168,9 +164,7 @@ function disposeAcquisitions(
 
 export function createBabylonNativeBlockProfileSessionV1(
   context: BabylonNativeSceneBuildContextV1,
-  requestedBudget: Readonly<BabylonNativeBlockProfileBudgetV1>,
 ): BabylonNativeBlockProfileSessionV1 {
-  const budget = parseBudget(requestedBudget);
   if (!(context.scene instanceof Scene) || context.scene.isDisposed) {
     return fail("WORLDKIT_NATIVE_BLOCK_SCENE_INVALID",
       "the Profile requires one live Host Candidate Scene");
@@ -199,10 +193,6 @@ export function createBabylonNativeBlockProfileSessionV1(
   function reserve(
     parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
   ): readonly (readonly string[])[] {
-    if (recordsById.size + parsedInputs.length > budget.maximumBlockCount) {
-      return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
-        "block creation exceeds the caller-authorized hard cap");
-    }
     const proposedIds = new Set<string>();
     const proposedCells = new Map<string, string>();
     const microCellKeysByInput: (readonly string[])[] = [];
@@ -353,10 +343,7 @@ export function createBabylonNativeBlockProfileSessionV1(
         return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
           "createBlockGrid is unavailable after finalization begins");
       }
-      return createBatch(parseGridCreateInput(
-        input,
-        budget.maximumBlockCount - recordsById.size,
-      ));
+      return createBatch(parseGridCreateInput(input));
     },
     finalize(
       input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,

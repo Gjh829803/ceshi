@@ -37,8 +37,6 @@ describe("shared Host and task-feedback input grammar", () => {
     ["create", "({ ..." + block + ', id: { toString() { throw new Error("coercion executed"); } } })', "CREATE_INPUT_INVALID"],
     ["grid", '{ idPrefix: "ab", shape: "full", paletteRole: "ground", minimumCenterMetersXYZ: [0, 0.5, 0], repeatCountXYZ: [1, 1, 1] }', "GRID_CREATE_INPUT_INVALID"],
     ["grid", '{ idPrefix: "ground", shape: "full", paletteRole: "ground", minimumCenterMetersXYZ: [0, 0.5, 0], repeatCountXYZ: [9007199254740991, 2, 1] }', "GRID_CREATE_INPUT_INVALID"],
-    ["budget", '{ maximumBlockCount: -0 }', "BUDGET_INVALID"],
-    ["budget", '{ maximumBlockCount: 1, extra: true }', "BUDGET_INVALID"],
     ["finalize", '{ staticColliders: [,] }', "FINALIZE_INPUT_INVALID"],
     ["finalize", '{ get staticColliders() { throw new Error("getter executed"); } }', "FINALIZE_INPUT_INVALID"],
     ["finalize", "{ staticColliders: [" + collider + ", " + collider + "] }", "COLLIDER_ID_DUPLICATE"],
@@ -49,8 +47,7 @@ describe("shared Host and task-feedback input grammar", () => {
     const parse = (parser: typeof host, input: unknown): unknown => {
       switch (kind) {
         case "create": return parser.parseCreateInput(input);
-        case "grid": return parser.parseGridCreateInput(input, 100);
-        case "budget": return parser.parseBudget(input);
+        case "grid": return parser.parseGridCreateInput(input);
         case "finalize": return parser.parseFinalizeInput(input);
       }
     };
@@ -71,13 +68,11 @@ describe("shared Host and task-feedback input grammar", () => {
 
   it("keeps accepted normalization, grid order and Collider canonical order identical", () => {
     const grid = '{ idPrefix: "ground", shape: "quarter", paletteRole: "ground", minimumCenterMetersXYZ: [0, 0.25, 0.25], rotationQuarterTurnsY: 1, repeatCountXYZ: [2, 2, 2] }';
-    expect(feedback.parseGridCreateInput(evaluate(grid, true), 8))
-      .toEqual(host.parseGridCreateInput(evaluate(grid, false), 8));
+    expect(feedback.parseGridCreateInput(evaluate(grid, true)))
+      .toEqual(host.parseGridCreateInput(evaluate(grid, false)));
     const row = feedback.parseCreateInput(evaluate("({ ..." + block + ", centerMetersXYZ: [0.0000000001, 0.5, 0] })", true));
     expect(row.centerMetersXYZ).toEqual([0, 0.5, 0]);
     expect(row.rotationQuarterTurnsY).toBe(0);
-    expect(feedback.parseBudget(evaluate('{ maximumBlockCount: 0 }', true)))
-      .toEqual({ maximumBlockCount: 0 });
     const other = "{ ..." + collider + ', id: "aaa-solid", colliderGeometrySource: { kind: "block-group", colliderGroupId: "ground-group" } }';
     expect(feedback.parseFinalizeInput(evaluate("{ staticColliders: [" + collider + ", " + other + "] }", true)))
       .toEqual(host.parseFinalizeInput(evaluate("{ staticColliders: [" + other + ", " + collider + "] }", false)));

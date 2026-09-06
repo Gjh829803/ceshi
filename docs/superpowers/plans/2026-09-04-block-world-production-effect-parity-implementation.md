@@ -2672,3 +2672,50 @@ replacing the mismatched count contract consistently, using actual checked
 inventory for derived work bounds, not an arbitrarily enlarged numeric cap.
 Preserve existing Native trust/Collider ownership and output/process limits;
 do not claim old resource equivalence from visual cluster counts alone.
+
+#### CLUSTER3/COUNT current-only source-count contract removal
+
+Baseline e8f7de07, main-agent-only, sequential. COUNT1 owns the Profile Session
+and shared input parser: remove the caller-defined Block cap and budget argument;
+retain exact input grammar, deterministic grid expansion, overlap preflight and
+atomic allocation/rollback. COUNT2 depends on COUNT1 and owns Generation Request,
+Planner budget context, advisory execution and Ground consumers: delete the fixed
+source count from current request schemas and the advisory-only 100k cap; derive
+Ground work bounds from checked layout Blocks, not an untrusted/request maximum.
+COUNT3 owns migration of all direct callers, portable type graph, live/frozen Skill,
+fixtures and affected hashes. Remove the obsolete source-count rejection corpus;
+retain all independent malformed-input, occupancy, Collider and resource negatives.
+
+Evidence: RED no-budget Session plus production budget shape, beyond-8k actual
+Profile allocation and shared Host/VM grammar, Ground integration, strict current
+Request parsing (old count field rejected rather than ignored), full directly
+affected typecheck/Skill drift and frozen bytes. Existing process/output/Native
+Collider safety limits are not changed here. Complete-world capacity, old total
+resource-accounting correspondence and final image production remain open after
+this count-contract repair; no newly invented gate or infinity/large-number alias.
+
+COUNT implementation evidence: both initial reproductions failed (missing Session
+budget and the published 8,000 property), then the actual 8,100-Block allocation
+and the four-file Profile/corpus/budget regression passed 92/92. Six further
+Request/generation/settlement/workload files passed 148/148. Current-only Request
+parsing explicitly rejects the removed field. The rebuilt advisory tool captured
+8,104 Blocks (8,100 slab plus four fixture Blocks) and emitted the normal PNGs in
+the focused execution test; it is not a geometry-quality judgment. Five real
+Host integration tests passed (32 unrelated tests skipped, 243.25s): no-script
+Requests, checked complete bounds, optional Ground evidence and curved exploration
+including unsupported/disconnected negatives. Typecheck and Skill quick_validate
+passed; live/frozen Skill and tools are synchronized. Complete portable-tool and
+remaining direct source-admission regression passed 172/172 across six files
+(486.41s), including Planner context freezing, Native dual replay, Package input
+and live Collider registration. A final strengthened slab replay asserted the
+actual 8,104 captured count and passed again (one selected test). Final typecheck,
+diff checks and frozen byte comparisons passed. COUNT1–3 implementation closure
+is ready for the focused branch commit; this is not root full CI, an independent
+review or final real-Case acceptance.
+
+Package budget ownership was also checked directly: native-package-input.ts
+assertContributionWorldFacts and babylon-native-isolated-runtime-entry.ts count
+static Contribution Collider vertices/triangles, not visual Block Mesh vertices.
+Those limits are not an undiscovered replacement source-count gate; do not widen
+or reclassify them as whole-world render limits. B2 total resource correspondence,
+other representation limits and final full reference-image production remain open.

@@ -85,9 +85,7 @@ function moduleFixture(
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
-      const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: profile === "single-block" ? 1 : 512,
-      });
+      const session = createBabylonNativeBlockProfileSessionV1(context);
       if (profile === "quarter-meter-ramp") {
         for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
           const riseCount = xMeters < 2

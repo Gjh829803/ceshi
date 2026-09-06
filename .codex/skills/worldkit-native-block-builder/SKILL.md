@@ -157,7 +157,7 @@ ungrouped off-camera scenery; there is no fixed 128m box. Preserve the actual
 Brief/World Plan extent rather than shrinking it to a remembered sample boundary.
 Legacy container margins are not required empty ground and do not authorize a
 hidden foundation. In `fixed` mode, honor the declared `worldBounds`. Never edit
-the policy or emit final bounds; the existing Block and Collider budgets still apply.
+the policy or emit final bounds; the frozen Collider and output budgets still apply.
 
 Implement the frozen Brief/World Plan's legacy complete-world intent: one continuous geographic
 world with an explorable top-down footprint at least four times the reference-visible area, normally
@@ -178,13 +178,13 @@ side/rear/remote regions because the fixed check does not visit them. Do not inv
 this Case, promote ordinary decoration to identity targets, or output this internal inventory as a
 second geometry file.
 
-Read the exact Generation Request budget before allocating geometry. Reserve and count Blocks for
-the complete floor/support volume, major terrain, complete landmarks and actual connecting courses
-before spending the remainder on exposed detail. Use deterministic loops/Grid counts to check that
-allocation, and keep reserve for the existing shared repair cycles. A maximum is not a target: do not
-add filler to reach it, and do not reuse a remembered 2,000-Block cap. If detail would crowd out the
-world, simplify repeated ornament first while retaining meaningful complete forms, thickness, scale
-and geography. This does not relax overlap, explicit Collider, support, lattice or output-byte limits.
+Read the exact Generation Request's Collider and output budgets before allocating geometry.
+Count the complete floor/support volume, major terrain, complete landmarks and actual connecting
+courses before exposed detail. Use deterministic loops/Grid counts to understand that workload.
+There is no fixed source Block-count gate or caller-defined Session cap: do not omit geography to
+fit a remembered 2,000/8,000 count. This is not a target to fill or a guarantee that arbitrary workloads
+fit memory/time. Simplify repeated ornament before complete forms, thickness, scale or geography.
+Overlap, explicit Collider, support, lattice, output-byte and task execution limits remain in force.
 
 1. Establish the complete metric footprint before detail. Reconstruct the reference as coherent volumes seen from opening, top, side, and exploration views—not camera-facing facades.
 2. Use the fixed Block Profile shapes and palette. One block is metric geometry; keep the fixed lattice, undeformed meshes, Y-only quarter turns, stable IDs, and deterministic insertion order. Read the exact shape dimensions, shape-specific legal center residues, occupancy grid, support rule, route adjacency rule, and safe stair recipe in the output contract before choosing any coordinates; never infer a Minecraft-like 2 m block scale. A center that is merely a multiple of the broad `[0.25, 0.125, 0.25]` lattice is not automatically valid for every shape.
@@ -252,8 +252,8 @@ The renderer performs a source-only restricted mock capture of the Block Profile
 Before emitting comparisons, it checks Block, visual-group and Collider-group IDs with the Host
 Profile's exact identifier rule. Coordinates belong in metric fields; a fractional coordinate must
 not introduce a decimal point into an ID. Repair the named field without changing geometry merely
-to make its identifier legal. It also shares the Host input parsers for the caller budget,
-individual Blocks, grids and final Collider selections, including closed fields and repeated
+to make its identifier legal. It also shares the Host input parsers for individual Blocks,
+grids and final Collider selections, including closed fields and repeated
 canonical finalization. This checks authoring input grammar only; Collider geometry admission,
 Ground and Runtime checks remain Host-owned. This feedback uses the same shared repair budget.
 

@@ -49,9 +49,7 @@ BabylonNativeSceneModuleV1 {
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
-      const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: RUNTIME_FIXTURE_BLOCKS.length,
-      });
+      const session = createBabylonNativeBlockProfileSessionV1(context);
       for (const block of RUNTIME_FIXTURE_BLOCKS) {
         session.createBlock({
           id: block.id,

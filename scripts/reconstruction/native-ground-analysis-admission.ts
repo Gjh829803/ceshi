@@ -59,7 +59,6 @@ export interface AnalyzeProductionNativeBlockGroundInputV1 {
   readonly worldBounds: WorldPackageWorldBoundsV1;
   readonly checkedEpochEvidence: BabylonNativeBlockCheckedEpochEvidenceV1;
   readonly worldPackageRootHash: Sha256HashV1;
-  readonly maximumBlockCount: number;
   readonly groundModelEvidenceRef: string;
 }
 
@@ -276,9 +275,9 @@ function createGroundCaseIntentV1(
 export function analyzeProductionNativeBlockGroundV1(
   input: AnalyzeProductionNativeBlockGroundInputV1,
 ): ProductionNativeBlockGroundAnalysisResultV1 {
-  if (!Number.isSafeInteger(input.maximumBlockCount) || input.maximumBlockCount <= 0) {
-    return fail("maximumBlockCount must be one positive safe integer");
-  }
+  // Work bounds follow trusted inventory, not a generation quota. The analyzer's
+  // positive-budget grammar must not introduce a new non-empty-world gate.
+  const budgetBlockCount = Math.max(1, input.checkedEpochEvidence.checkedLayout.layout.blocks.length);
   const traversalCapabilityEnvelopeReceipt = createTraversalCapabilityEnvelopeV1({
     traversalLockReceipt: compileSubjectTraversalLockV1({
       resources: {
@@ -309,9 +308,9 @@ export function analyzeProductionNativeBlockGroundV1(
       kind: "babylon-native-block-ground-analysis-budget",
       schemaVersion: 1,
       maximumSolidOccupancyCellCount:
-        input.maximumBlockCount * MAXIMUM_OCCUPANCY_CELLS_PER_BLOCK,
+        budgetBlockCount * MAXIMUM_OCCUPANCY_CELLS_PER_BLOCK,
       maximumSupportTopCellCount:
-        input.maximumBlockCount * MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK,
+        budgetBlockCount * MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK,
     }),
   });
   const runtimeSurfaceAdmission = caseIntent.groundFailurePolicy === "block-admission"

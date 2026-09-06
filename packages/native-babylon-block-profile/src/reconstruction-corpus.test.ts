@@ -32,7 +32,6 @@ const POSITIVE_IDS = Object.freeze([
 
 const NEGATIVE_IDS = Object.freeze([
   "overlap-occupancy",
-  "out-of-budget",
   "invalid-traversal-binding",
   "unsupported-spawn",
   "cleanup-throw-partial",
@@ -46,7 +45,6 @@ const EXPECTED_SEEDS = Object.freeze({
   "limited-interior": 202608315,
   "route-islands-on-ground": 202608325,
   "overlap-occupancy": 202608321,
-  "out-of-budget": 202608322,
   "invalid-traversal-binding": 202608323,
   "unsupported-spawn": 202608324,
   "cleanup-throw-partial": 202608326,
@@ -54,7 +52,6 @@ const EXPECTED_SEEDS = Object.freeze({
 
 const EXPECTED_NEGATIVE_CODES = Object.freeze({
   "overlap-occupancy": "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
-  "out-of-budget": "WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
   "invalid-traversal-binding": "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
   "cleanup-throw-partial": "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
 } as const);

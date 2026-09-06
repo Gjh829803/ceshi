@@ -38,9 +38,7 @@ export default defineBabylonNativeScene({
   kind: "babylon-native-scene-module",
   id: "reference-block-world",
   build(context) {
-    const session = createBabylonNativeBlockProfileSessionV1(context, {
-      maximumBlockCount: 512,
-    });
+    const session = createBabylonNativeBlockProfileSessionV1(context);
 
     session.createBlockGrid({
       idPrefix: "entry-ground",
@@ -91,7 +89,9 @@ This is ordinary visual construction without invented identity groups, with expl
 
 ### Block placement
 
-`createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. Never create a Block and then assign `position`, `rotation.y`, or `scaling` for its initial placement: the Session validates the shape-specific lattice, occupancy and budget before allocating a Mesh, and Finalize rejects any later transform as tampering.
+`createBabylonNativeBlockProfileSessionV1(context)` takes only the Host context. Do not pass a retired `maximumBlockCount` budget argument. There is no fixed source Block-count gate; the frozen Collider, output and task execution budgets still apply.
+
+`createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. Never create a Block and then assign `position`, `rotation.y`, or `scaling` for its initial placement: the Session validates the shape-specific lattice and occupancy before allocating a Mesh, and Finalize rejects any later transform as tampering.
 
 `createBlockGrid()` is dense mechanical repetition of one shape and palette role only. It takes `idPrefix`, `minimumCenterMetersXYZ`, and a positive `repeatCountXYZ`, spaces cells by the selected shape's effective rotated size, iterates Y outermost then Z then X, and names children `<idPrefix>-x<i>-y<j>-z<k>` with zero-based unpadded indices. It has no stride, gap, mask, or callback. An optional `colliderGroupId` assigns every generated child to one explicit logical Collider Group; it does not itself register collision. Use the Grid for ground slabs, wall runs, and solid mass; keep stairs, gates, buildings, and any semantic topology as ordinary TypeScript loops over `createBlock()`.
 
@@ -127,12 +127,12 @@ Here `n` is any integer, including negative values. A Y quarter turn swaps the e
 
 Profile meshes remain direct, unparented members of the Host Candidate Scene. Keep them enabled, visible, non-instanced, non-thin-instanced, and physics-free. Do not attach parents, bake/replace geometry, or create an alternate visual/collider mesh for a Block.
 
-The Host applies the fixed legacy `0.985` visual scale on all three local axes;
+The Host applies the fixed legacy `0.985` visual scale to each merged visual cuboid;
 the checker and Collider geometry retain the complete metric Block dimensions.
 `session.finalize()` accepts only `staticColliders`. Do not supply a display-gap
 or display-scale override, or shrink the authored Block geometry to imitate seams.
 As in the old software reviewer, advisory comparisons use complete metric merged
-volumes, not the Runtime's per-cell display seams. This is a projection convention,
+volumes without that display shrink. This is a projection convention,
 not simplified source geometry or a replacement Collider/Runtime representation.
 
 Use only palette roles `ground`, `route`, `structure`, `hazard`, `water-like-visual`, and `background-mass`. Stable lowercase IDs are mandatory. Blocks may touch at faces but their occupied volumes must never overlap. Never place a support block through the occupied volume of the block it supports.

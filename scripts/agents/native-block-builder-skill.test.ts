@@ -163,9 +163,7 @@ export default defineBabylonNativeScene({
   kind: "babylon-native-scene-module",
   id: "valid-native-block-world",
   build(context) {
-    const blocks = createBabylonNativeBlockProfileSessionV1(context, {
-      maximumBlockCount: 32,
-    });
+    const blocks = createBabylonNativeBlockProfileSessionV1(context);
     void blocks;
   },
 });
@@ -360,9 +358,7 @@ export default defineBabylonNativeScene({
   kind: "babylon-native-scene-module",
   id: "visual-review-world",
   build(context) {
-    const session = createBabylonNativeBlockProfileSessionV1(context, {
-      maximumBlockCount: 8,
-    });
+    const session = createBabylonNativeBlockProfileSessionV1(context);
     session.createBlockGrid({
       idPrefix: "ground",
       shape: "full",
@@ -1132,6 +1128,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
   }, 20_000);
 
   it.each([
+    ['createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 8 });', 2554],
     ['blocks.createBlock({ id: "bad", shape: "cube", paletteRole: "ground", centerMetersXYZ: [0, 0, 0] });', 2322],
     ['blocks.createBlock({ id: "bad", shape: "full", paletteRole: "ground" });', 2345],
     ['const count: number = "bad"; void count;', 2322],
@@ -1146,6 +1143,21 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       expect.objectContaining({ typescriptCode: code }),
     ]));
   }, 20_000);
+
+  it("renders an 8,100-Block complete slab without the retired source cap", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, source.replace("session.finalize(", `
+      session.createBlockGrid({ idPrefix: "complete-world", shape: "full", paletteRole: "ground",
+        minimumCenterMetersXYZ: [1000, -0.5, 1000], repeatCountXYZ: [81, 1, 100] });
+      session.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result).toMatchObject({ exitCode: 0, stderr: "" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ blockCount: 8_104 });
+    const metadata = await sharp(path.join(workspace, "attempts/advisory/builder-top-down-comparison.png")).metadata();
+    expect(metadata).toMatchObject({ width: 1544, height: 768 });
+  });
 
   it("typechecks with a relocated standalone checker and no repository dependency access", async () => {
     const workspace = await createWorkspace();
@@ -1320,7 +1332,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       'try { session.createBlockGrid({ idPrefix: "batch", shape: "full", paletteRole: "structure", minimumCenterMetersXYZ: [20, 0.5, 0], repeatCountXYZ: [2, 1, 1] }); } catch {}',
       'session.createBlock({ id: "batch-x0-y0-z0", shape: "full", paletteRole: "structure", centerMetersXYZ: [20, 0.5, 0] });',
     ].join("\n");
-    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 20")
+    await writeFile(sourcePath, source
       .replace("session.finalize(", calls + "\nsession.finalize("));
     const result = await runVisualReview(workspace);
     expect(result.stderr).toBe("");
@@ -1370,7 +1382,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const calls = Array.from({ length: pairCount }, (_, index) => ["base", "overlap"].map((role) =>
       `session.createBlock({ id: "${role}-${index}", shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] });`,
     ).join("\n")).join("\n");
-    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+    await writeFile(sourcePath, source
       .replace("session.finalize(", `${calls}\nsession.finalize(`));
     const result = await runVisualReview(workspace);
     expect(result.exitCode).toBe(2);
@@ -1416,7 +1428,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const calls = Array.from({ length: 32 }, (_, index) => ["base", "overlap"].map((role) =>
       `session.createBlock({ id: ${JSON.stringify(`${prefix}${role}-${index}`)}, shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] });`,
     ).join("\n")).join("\n");
-    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+    await writeFile(sourcePath, source
       .replace("session.finalize(", `${calls}\nsession.finalize(`));
     const result = await runVisualReview(workspace);
     expect(result.exitCode).toBe(2);
@@ -1440,7 +1452,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const laterFailure = mode === "later-off-grid"
       ? 'session.createBlock({ id: "off-grid", shape: "full", paletteRole: "ground", centerMetersXYZ: [0.1, 0.5, -2] });'
       : "";
-    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 100")
+    await writeFile(sourcePath, source
       .replace("session.finalize(", `${calls}\n${laterFailure}\nsession.finalize(`));
     const result = await runVisualReview(workspace);
     expect(result.exitCode).toBe(2);

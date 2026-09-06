@@ -84,7 +84,6 @@ export interface NativeBlockGenerationContextInputV1 {
 }
 
 export interface NativeBlockGenerationBudgetV1 {
-  readonly maximumBlockCount: number;
   readonly maximumStaticColliderCount: number;
   readonly maximumStaticColliderVertexCount: number;
   readonly maximumStaticColliderTriangleCount: number;
@@ -341,7 +340,7 @@ const GENERATION_CONTEXT_INPUT_FIELDS = Object.freeze([
   "inputRef", "contentHash",
 ] as const);
 const GENERATION_BUDGET_FIELDS = Object.freeze([
-  "maximumBlockCount", "maximumStaticColliderCount",
+  "maximumStaticColliderCount",
   "maximumStaticColliderVertexCount", "maximumStaticColliderTriangleCount",
   "maximumOutputBytes", "timeoutSeconds",
 ] as const);
@@ -671,10 +670,6 @@ function parseGenerationBudgets(input: unknown): NativeBlockGenerationBudgetV1 {
     "generation-request",
   );
   return Object.freeze({
-    maximumBlockCount: positiveSafeInteger(
-      record.maximumBlockCount,
-      "generation-request",
-    ),
     maximumStaticColliderCount: positiveSafeInteger(
       record.maximumStaticColliderCount,
       "generation-request",

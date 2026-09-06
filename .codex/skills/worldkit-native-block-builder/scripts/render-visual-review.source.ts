@@ -31,7 +31,6 @@ const WIDTH_TOP = 768;
 const WIDTH_ENTRY = 960;
 const HEIGHT_ENTRY = 540;
 const COMPARISON_SEPARATOR = 8;
-const MAXIMUM_CAPTURED_BLOCK_COUNT = 100_000;
 const MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT = 32;
 const BUILD_TIMEOUT_MILLISECONDS = 10_000;
 const MAXIMUM_PLANNING_PNG_ENCODED_BYTES = 16 * 1024 * 1024;
@@ -416,7 +415,6 @@ function captureSource(
 
   const blocks: CapturedBlock[] = [];
   const blockIds = new Set<string>();
-  let maximumBlockCount: number | undefined;
   const blockIndexesByMicroCellKey = new Map<string, number[]>();
   const overlapPairKeys = new Set<string>();
   const overlapDiagnostics: string[] = [];
@@ -456,11 +454,6 @@ function captureSource(
     if (blockIds.has(id)) {
       return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE", `duplicate Block id '${id}'`);
     }
-    if (maximumBlockCount === undefined || blocks.length >= maximumBlockCount ||
-        blocks.length >= MAXIMUM_CAPTURED_BLOCK_COUNT) {
-      return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
-        "block creation exceeds the caller-authorized hard cap");
-    }
     const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation };
     // Disposable feedback only. Use the Profile's exact occupied cells, not a
     // second bounds/intersection approximation or a Runtime collision inference.
@@ -498,15 +491,11 @@ function captureSource(
     return Object.freeze({});
   };
 
-  const createSession = (_context: unknown, budgetInput: unknown) => {
+  const createSession = (_context: unknown) => {
     if (sessionCreated) {
       return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "exactly one Block Profile session is required");
     }
     sessionCreated = true;
-    maximumBlockCount = inputParsers.parseBudget(budgetInput).maximumBlockCount;
-    if (maximumBlockCount > MAXIMUM_CAPTURED_BLOCK_COUNT) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "maximumBlockCount exceeds advisory capture limit");
-    }
     return Object.freeze({
       createBlock: addBlock,
       createBlockGrid(input: unknown) {
@@ -514,7 +503,7 @@ function captureSource(
           return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
             "createBlockGrid is unavailable after finalization begins");
         }
-        const rows = inputParsers.parseGridCreateInput(input, maximumBlockCount! - blocks.length);
+        const rows = inputParsers.parseGridCreateInput(input);
         // Match Host batch preflight: an ID collision must not leave a partial grid.
         for (const row of rows) {
           if (blockIds.has(row.id)) {

@@ -6,6 +6,9 @@ import {
 } from "./native-block-production-budget.js";
 
 describe("pinned Block source resource accounting", () => {
+  it("does not publish a fixed source-count gate absent from the old compiler", () => {
+    expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1).not.toHaveProperty("maximumBlockCount");
+  });
   it("preserves the old inclusive world budget and diagnostic ordering", () => {
     const budget = { maxVertices: 24, maxTriangles: 12, maxColliders: 1 };
     expect(evaluateCompiledWorldResourceBudgetV1({
@@ -45,7 +48,7 @@ describe("pinned Block source resource accounting", () => {
     expect(result.usage).toEqual({ vertices: 52, triangles: 26, colliders: 3 });
     expect(result.diagnostics).toEqual([]);
     expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1).toMatchObject({
-      maximumBlockCount: 8_000, maximumStaticColliderCount: 256,
+      maximumStaticColliderCount: 256,
       maximumStaticColliderVertexCount: 65_536, maximumStaticColliderTriangleCount: 131_072,
     });
   });

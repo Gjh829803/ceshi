@@ -237,7 +237,6 @@ function generationRequestFixture(input: ReturnType<
     bootstrapInputHash: attempt.sourceInput.bootstrapInputHash,
     seed: attempt.seed,
     budgets: {
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,

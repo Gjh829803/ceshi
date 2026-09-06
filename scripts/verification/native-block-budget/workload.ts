@@ -24,9 +24,7 @@ export function createBudgetWorkloadModule(
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context) {
-      const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: blockCount,
-      });
+      const session = createBabylonNativeBlockProfileSessionV1(context);
       session.createBlockGrid({
         idPrefix: "floor", shape: "full", paletteRole: "ground",
         visualGroupId: "floor", colliderGroupId: "floor",

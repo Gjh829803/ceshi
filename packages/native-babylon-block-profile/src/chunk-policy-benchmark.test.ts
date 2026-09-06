@@ -126,7 +126,7 @@ describe("NBR-65F Chunk policy benchmark", () => {
         candidate: { engine, scene }, hostDerivedStaticColliders: [], bootstrap: bootstrap("macro-span"),
         module: defineBabylonNativeScene({ kind: "babylon-native-scene-module", id: "chunk-benchmark-macro-span-module",
           build(context) {
-            const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 128 });
+            const session = createBabylonNativeBlockProfileSessionV1(context);
             session.createBlockGrid({ idPrefix: "macro-wall", shape: "full", paletteRole: "background-mass",
               visualGroupId: "macro-wall", minimumCenterMetersXYZ: [-64, 5, 0], repeatCountXYZ: [128, 1, 1] });
             finalizedEpoch = session.finalize({ staticColliders: [] });

@@ -58,7 +58,6 @@ interface Session {
 interface SessionModule {
   createBabylonNativeBlockProfileSessionV1(
     context: BabylonNativeSceneBuildContextV1,
-    budget: Readonly<{ maximumBlockCount: number }>,
   ): Session;
 }
 async function loadSession(): Promise<SessionModule> {
@@ -206,7 +205,7 @@ async function buildProfileInventoryHash(
   try {
     const result = await admit(engine, scene, "hash-test", 1, (context) => {
       session = createBabylonNativeBlockProfileSessionV1(
-        context, { maximumBlockCount: 2 });
+        context);
       const shape = variant.shape ?? "small";
       const definitions = [
         { id: "base-block", shape: "full" as const,
@@ -279,7 +278,7 @@ describe("Babylon Native block Profile settlement", () => {
       const admission = await admit(engine, scene, "block-finalize-test", 1,
         (context) => {
           session = createBabylonNativeBlockProfileSessionV1(
-            context, { maximumBlockCount: 2 });
+            context);
           session.createBlock({ id: "route-block", shape: "full",
             paletteRole: "route", visualGroupId: "route-group",
             centerMetersXYZ: [0, 0.5, 0] });
@@ -355,7 +354,7 @@ describe("Babylon Native block Profile settlement", () => {
       try {
         await admit(engine, scene, `invalid-input-${index}`, 1, (context) => {
           session = createBabylonNativeBlockProfileSessionV1(
-            context, { maximumBlockCount: 1 });
+            context);
           session.createBlock({ id: "route-block", shape: "full",
             paletteRole: "route", centerMetersXYZ: [0, 0.5, 0] });
           try { session.finalize(invalidInput as never); }

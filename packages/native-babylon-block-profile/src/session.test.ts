@@ -35,7 +35,6 @@ beforeEach(() => {
 interface SessionModule {
   createBabylonNativeBlockProfileSessionV1(
     context: BabylonNativeSceneBuildContextV1,
-    budget: Readonly<{ maximumBlockCount: number }>,
   ): {
     createBlock(input: Readonly<{
       id: string;
@@ -181,7 +180,7 @@ describe("Babylon Native block profile session", () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene), { maximumBlockCount: 1 });
+        createContext(scene));
       const mesh = session.createBlock({
         id: "fixed-scale", shape, paletteRole: "structure", centerMetersXYZ,
       });
@@ -210,7 +209,7 @@ describe("Babylon Native block profile session", () => {
       import { createBabylonNativeBlockProfileSessionV1 } from ${JSON.stringify(new URL("./session.ts", import.meta.url).href)};
       const engine = new NullEngine();
       const scene = new Scene(engine);
-      const session = createBabylonNativeBlockProfileSessionV1({scene, bootstrap: ${JSON.stringify(bootstrap)}}, {maximumBlockCount:64});
+      const session = createBabylonNativeBlockProfileSessionV1({scene, bootstrap: ${JSON.stringify(bootstrap)}});
       const originalSet = globalThis.Set;
       const snapshots = [];
       try {
@@ -242,7 +241,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       const mesh = session.createBlock({
         id: "ridge-edge",
@@ -268,7 +266,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "route-step",
@@ -289,7 +286,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
 
       const unrotated = session.createBlock({
@@ -337,7 +333,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "near-lattice-block",
@@ -361,7 +356,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       const initialMeshCount = scene.meshes.length;
       const sparseCenter = [0, 0.5] as unknown[];
@@ -411,7 +405,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       session.createBlock({
         id: "ground-block",
@@ -444,7 +437,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       // An identity root keeps the declared placement intact so this case
       // isolates the unparented-final-Mesh rule from transform drift.
@@ -470,7 +462,22 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("enforces the selected Profile and an exact caller budget", async () => {
+  it("creates more than the retired production cap without a caller budget", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      try {
+        const meshes = session.createBlockGrid({
+          idPrefix: "complete-world", shape: "full", paletteRole: "ground",
+          minimumCenterMetersXYZ: [0, -0.5, 0], repeatCountXYZ: [81, 1, 100],
+        });
+        expect(meshes).toHaveLength(8_100);
+        expect(new Set(meshes.map((mesh) => mesh.id)).size).toBe(8_100);
+      } finally { session.dispose(); }
+    });
+  });
+
+  it("enforces the selected Profile", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -484,31 +491,7 @@ describe("Babylon Native block profile session", () => {
               "worldkit://native-scene-profile/something-else@1",
           }),
         }),
-        { maximumBlockCount: 1 },
       )).toThrow(/WORLDKIT_NATIVE_BLOCK_PROFILE_MISMATCH/);
-      for (const budget of [
-        { maximumBlockCount: -1 },
-        { maximumBlockCount: 1.5 },
-        { maximumBlockCount: 1, legacyMaximum: 2 },
-      ]) {
-        expect(() => createBabylonNativeBlockProfileSessionV1(
-          context,
-          budget as never,
-        )).toThrow(/WORLDKIT_NATIVE_BLOCK_BUDGET_INVALID/);
-      }
-
-      const initialMeshCount = scene.meshes.length;
-      const session = createBabylonNativeBlockProfileSessionV1(
-        context,
-        { maximumBlockCount: 0 },
-      );
-      expect(() => session.createBlock({
-        id: "over-budget",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED/);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
     });
   });
 
@@ -518,7 +501,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       const centerMetersXYZ = [0, 0.5, 0] as const;
       const invalid = [
@@ -561,7 +543,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       session.createBlock({
         id: "ground-block",
@@ -606,7 +587,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 3 },
       );
       const disposalOrder: string[] = [];
       for (const [index, id] of [
@@ -652,11 +632,9 @@ describe("Babylon Native block profile session", () => {
       const context = createContext(scene);
       const first = createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       );
       const second = createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       );
 
       first.createBlock({
@@ -685,7 +663,6 @@ describe("Babylon Native block profile session", () => {
     try {
       expect(() => createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       )).toThrow(/WORLDKIT_NATIVE_BLOCK_SCENE_INVALID/);
     } finally {
       engine.dispose();
@@ -698,7 +675,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       session.dispose();
       let wasRead = false;
@@ -730,7 +706,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "route-step",
@@ -760,7 +735,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const full = session.createBlock({
         id: "full-block",
@@ -784,7 +758,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       expect(hostPublishableFailure(() => {
         session.createBlock({
@@ -799,7 +772,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       session.createBlock({
         id: "ground-a",
@@ -824,7 +796,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 3 },
       );
       session.createBlock({
         id: "west-route",
@@ -859,7 +830,6 @@ describe("Babylon Native block profile session", () => {
       withScene((scene) => {
         const session = createBabylonNativeBlockProfileSessionV1(
           createContext(scene),
-          { maximumBlockCount: 1 },
         );
         const mesh = session.createBlock({
           id: "ground-block",
@@ -882,7 +852,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
 
       const meshes = session.createBlockGrid({
@@ -921,7 +890,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const initialMeshCount = scene.meshes.length;
       expect(() => session.createBlock({
@@ -981,7 +949,6 @@ describe("Babylon Native block profile session", () => {
               registeredColliders.push(collider);
             },
           })),
-          { maximumBlockCount: 1 },
         );
         session.createBlock({
           id: "ground-block",
@@ -1013,7 +980,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ground-block",
@@ -1058,7 +1024,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ledge-block",
@@ -1105,7 +1070,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ground-block",
@@ -1151,7 +1115,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
 
       const unrotated = session.createBlockGrid({
@@ -1185,7 +1148,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       const base = Object.freeze({
         idPrefix: "entry-ground",
@@ -1210,8 +1172,6 @@ describe("Babylon Native block profile session", () => {
         { minimumCenterMetersXYZ: [0, Number.NaN, 0] },
         { rotationQuarterTurnsY: 4 },
         { unknownField: true },
-        // The whole batch exceeds the Session budget.
-        { repeatCountXYZ: [5, 1, 1] },
       ]) {
         expect(() => session.createBlockGrid({
           ...base,
@@ -1246,7 +1206,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       session.createBlock({
         id: "entry-ground-x0-y0-z0",
@@ -1282,7 +1241,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       const initialMeshCount = scene.meshes.length;
       const disposalOrder: string[] = [];
@@ -1333,7 +1291,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const initialMeshCount = scene.meshes.length;
       const addMesh = scene.addMesh.bind(scene);
@@ -1369,7 +1326,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const initialMeshCount = scene.meshes.length;
       const createBox = MeshBuilder.CreateBox;
@@ -1408,7 +1364,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       const initialMeshCount = scene.meshes.length;
       const disposalOrder: string[] = [];
@@ -1459,7 +1414,6 @@ describe("Babylon Native block profile session", () => {
       withScene((scene) => {
         const session = createBabylonNativeBlockProfileSessionV1(
           createContext(scene),
-          { maximumBlockCount: 1 },
         );
         build(session);
         blocks = session.finalize({ staticColliders: [] })
@@ -1511,7 +1465,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 4 },
       );
 
       session.createBlockGrid({
@@ -1551,7 +1504,6 @@ describe("Babylon Native block profile session", () => {
       }));
       const session = createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 2 },
       );
       for (const [index, id] of ["first-block", "second-block"].entries()) {
         const mesh = session.createBlock({

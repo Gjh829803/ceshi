@@ -48,11 +48,9 @@ function fixture(targetAndOccluderBlocks: readonly BabylonNativeBlockCreateInput
     throw new Error("Native semantic fixture requires the current base gate declaration");
   }
   const sceneSource = SCENE_SOURCE
-    .replace(gateLine, blocks.map((input) => `    session.createBlock(${JSON.stringify(input)});`).join("\n"))
-    .replace("maximumBlockCount: 64", "maximumBlockCount: 128");
+    .replace(gateLine, blocks.map((input) => `    session.createBlock(${JSON.stringify(input)});`).join("\n"));
   const options = {
     sceneSource,
-    maximumBlockCount: 128,
     withoutScriptedTraversal: true,
     worldBoundsPolicy: { mode: "checked-block-layout" },
     groundExploration: {

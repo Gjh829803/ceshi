@@ -111,7 +111,7 @@ describe("Planner execution identity", () => {
     await expect(verifyAcceptedPlannerExecutionV1({ ...native.input,
       plannerSelfCheckPath: path.join(native.input.artifactRoot, "planner-self-check.json"),
       requiredNativeProductionContext: { ...NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1,
-        budgets: { ...NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1, maximumBlockCount: 2_000 } },
+        budgets: { ...NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1, maximumOutputBytes: 2_000_000 } },
     })).rejects.toThrow("PLANNER_EXECUTION_PRODUCTION_BUDGET_MISMATCH");
     await chmod(path.join(native.prepared.workspaceContextRoot, ref), 0o600);
     await writeFile(path.join(native.prepared.workspaceContextRoot, ref), "{}");

@@ -2,7 +2,7 @@ import { isNil } from "lodash-es";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type { BabylonNativeTraversalBindingV1 } from "@whitebox-world/native-babylon";
 import type {
-  BabylonNativeBlockProfileBudgetV1, BabylonNativeBlockCreateInputV1,
+  BabylonNativeBlockCreateInputV1,
 } from "./session.js";
 import type {
   BabylonNativeBlockColliderGeometrySourceV1, BabylonNativeBlockStaticColliderSelectionV1,
@@ -133,19 +133,6 @@ export function createBabylonNativeBlockInputParsersV1(
       ? value : undefined;
   }
 
-  function parseBudget(
-    input: unknown,
-  ): BabylonNativeBlockProfileBudgetV1 {
-    const code = "WORLDKIT_NATIVE_BLOCK_BUDGET_INVALID";
-    const record = exactPlainRecord(input, ["maximumBlockCount"], [], code);
-    if (typeof record.maximumBlockCount !== "number" ||
-        !Number.isSafeInteger(record.maximumBlockCount) ||
-        record.maximumBlockCount < 0 || Object.is(record.maximumBlockCount, -0)) {
-      return fail(code, "maximumBlockCount must be a non-negative safe integer");
-    }
-    return Object.freeze({ maximumBlockCount: record.maximumBlockCount });
-  }
-
   function parseFiniteNumberTupleXYZ(
     input: unknown,
     code: string,
@@ -234,7 +221,6 @@ export function createBabylonNativeBlockInputParsersV1(
 
   function parseGridCreateInput(
     input: unknown,
-    remainingBlockCount: number,
   ): readonly Readonly<BabylonNativeBlockCreateInputV1>[] {
     const code = "WORLDKIT_NATIVE_BLOCK_GRID_CREATE_INPUT_INVALID";
     const record = exactPlainRecord(input,
@@ -274,10 +260,6 @@ export function createBabylonNativeBlockInputParsersV1(
     const totalCount = repeatCountXYZ[0] * repeatCountXYZ[1] * repeatCountXYZ[2];
     if (!Number.isSafeInteger(totalCount)) {
       return fail(code, "repeatCountXYZ product exceeds the safe integer range");
-    }
-    if (totalCount > remainingBlockCount) {
-      return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
-        "block creation exceeds the caller-authorized hard cap");
     }
     const spacing = effectiveBabylonNativeBlockSizeMetersXYZV1(
       shape, rotationQuarterTurnsY,
@@ -464,5 +446,5 @@ export function createBabylonNativeBlockInputParsersV1(
     });
   }
 
-  return Object.freeze({ parseBudget, parseCreateInput, parseGridCreateInput, parseFinalizeInput });
+  return Object.freeze({ parseCreateInput, parseGridCreateInput, parseFinalizeInput });
 }

@@ -3132,7 +3132,7 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   这些不替代新真实 Case，不标 CF-19
   全完成，Collider 几何准入/地面/容量和实际山谷还原仍是独立未完成证据。
 
-- CF-20/CLUSTER（2026-09-06，`13f31012` 上的未提交工作树）：比较图已有旧式合并体块，
+- CF-20/CLUSTER（2026-09-06，已提交/推送 `e8f7de07`）：比较图已有旧式合并体块，
   修复前 Runtime 却按 Block 分别生成实例；相同 0.985 比例不代表几何等价。真实 Babylon
   初始 RED：两个相邻 1m Block 的旧合并显示左边界应为 -0.485m，修复前为
   -0.492500007m，后续还要求一个显示体块并保留全部逻辑 ID。CLUSTER1 将已有纯合并
@@ -3146,6 +3146,21 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   11 文件 254/254 通过（278.02s，包含完整 Builder Skill 漂移检查）；diff 检查通过。
   物理分块仍为 4m、显示分块 32m；CLUSTER3 的 8k 容量与旧源预算闭包仍未完成。
   此批仅达到分支提交条件；未做 root full CI/独立 exact-SHA 审查，不跑新 Case、不合 main。
+
+- CF-20/CLUSTER3/COUNT（`e8f7de07` 上的当前未提交代码）：删除老分支不存在的固定
+  8,000 源码 Block gate、Session 调用方预算参数和比较图额外 100,000 上限，未改成
+  另一大数。Generation Request/Planner context 删除旧字段并同步严格解析，Ground
+  工作量边界由已检查布局数量派生（空清单保留最小正工作预算，不新增非空世界 gate）。
+  当前 API 为 `createBabylonNativeBlockProfileSessionV1(context)`；生产/测试调用方和
+  活跃及冻结 Skill/工具已同步。退役专门断言源码数量拒绝的 corpus，其他占用、参数、
+  Collider 和资源失败断言保留。两项 RED 后，8,100 Block 真实分配及相关四文件 92/92、
+  六文件 Request/生成/结算等 148/148、typecheck、Skill quick_validate 通过。Host
+  Ground/Package 定向 5/5 通过（32 项未选），其余完整六文件 172/172 通过（486.41s），
+  包含 Builder Skill、Planner 冻结、源码/Package 准入及 Collider 注册；新增比较图实测
+  8,104 个捕获 Block，强化计数断言后再通过。COUNT1–3 实现达到分支提交条件。
+  此条取代前文“当前生产仍限 8k”的旧状态，
+  不撤销那些历史测量。尚不证明任意容量可运行、旧总资源计数完全对齐或真实 Case 通过；
+  CF 父项仍开放，最终图片 Case/合 main 条件未满足。
 
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附

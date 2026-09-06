@@ -1269,7 +1269,6 @@ export async function packageNativeBlockAttemptV1(
       worldBounds: verified.manifest.worldBounds,
       checkedEpochEvidence,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
-      maximumBlockCount: generationRequest.budgets.maximumBlockCount,
       groundModelEvidenceRef,
     });
     const groundAnalysisReportPath = path.join(

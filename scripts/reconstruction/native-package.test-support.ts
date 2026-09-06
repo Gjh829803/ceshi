@@ -137,7 +137,7 @@ export default defineBabylonNativeScene({
   kind: "babylon-native-scene-module",
   id: "cloud-temple-test",
   build(context) {
-    const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 64 });
+    const session = createBabylonNativeBlockProfileSessionV1(context);
     session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8] });
     session.createBlockGrid({idPrefix: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7] });
     session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });
@@ -249,7 +249,6 @@ type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
   target3IdentityColorHex?: string;
   groundExploration?: NativeBlockGroundExplorationV1;
   requireSingleReachableComponent?: boolean;
-  maximumBlockCount?: number;
   worldBoundsPolicy?: NativeSceneWorldBoundsPolicyV1;
   semanticReferenceProjections?: readonly Readonly<{
     acceptanceTargetRef: string;
@@ -556,7 +555,6 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed: 19,
     budgets: {
-      maximumBlockCount: options.maximumBlockCount ?? 64,
       maximumStaticColliderCount: 8,
       maximumStaticColliderVertexCount: 1024,
       maximumStaticColliderTriangleCount: 1024,

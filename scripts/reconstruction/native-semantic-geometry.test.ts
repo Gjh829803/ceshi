@@ -51,15 +51,12 @@ describe("Native semantic geometry capture fixtures", () => {
   it("preserves Ground, Spawn, four other identities and the gate Collider", () => {
     const unchangedLines = SCENE_SOURCE.split("\n").filter((line) =>
       !line.includes('session.createBlock({id: "gate"') &&
-      !line.includes("maximumBlockCount: 64") &&
       !line.includes("session.finalize({ staticColliders:")
     );
     for (const fixture of Object.values(fixtures)) {
       for (const line of unchangedLines) expect(fixture.options.sceneSource).toContain(line);
       expect(fixture.blocks.filter((block) => block.id === "gate")).toHaveLength(1);
       expect(fixture.options.sceneSource).not.toContain("displayGapMeters");
-      expect(fixture.options.maximumBlockCount).toBe(128);
-      expect(fixture.blocks.length + 55).toBeLessThanOrEqual(128);
       expect(fixture.options).toMatchObject({
         withoutScriptedTraversal: true,
         worldBoundsPolicy: { mode: "checked-block-layout" },
@@ -87,9 +84,7 @@ describe("Native semantic geometry capture fixtures", () => {
   it.each(Object.keys(fixtures) as (keyof typeof fixtures)[])("passes public Session createBlock admission and the real pure Block checker: %s", (id) => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
-    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), {
-      maximumBlockCount: fixtures[id].options.maximumBlockCount,
-    });
+    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
     try {
       const records: BabylonNativeBlockSessionRecordV1[] = fixtures[id].blocks.map((input) => {
         // Use the public entry point: constructing checker records directly
@@ -117,7 +112,7 @@ describe("Native semantic geometry capture fixtures", () => {
   it("rejects the previous fractional-coordinate ids through the actual owning parser", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
-    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), { maximumBlockCount: 128 });
+    const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
     try {
       for (const id of ["wall-3-0.5", "bounds-column--0.5", "occluder-2--0.5", "rear-7-0.5"]) {
         expect(() => session.createBlock({ ...fixtures["solid-wall"].blocks[0]!, id }))

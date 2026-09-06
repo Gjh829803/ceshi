@@ -389,7 +389,6 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     sceneModuleRef: "worldkit://native-scene/fixture@1",
     seed: 17,
     budgets: {
-      maximumBlockCount: 2000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200000,
       maximumStaticColliderTriangleCount: 100000,

@@ -40,7 +40,6 @@ interface BlockProfileModule {
   readonly BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1: readonly string[];
   createBabylonNativeBlockProfileSessionV1(
     context: BabylonNativeSceneBuildContextV1,
-    budget: Readonly<{ maximumBlockCount: number }>,
   ): {
     createBlock(input: Readonly<BlockCreateInput>): Mesh;
     finalize(): Readonly<{
@@ -91,13 +90,10 @@ interface BlockProfileModule {
 async function loadProfile(): Promise<BlockProfileModule> {
   return {
     BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
-    createBabylonNativeBlockProfileSessionV1(context, budget) {
+    createBabylonNativeBlockProfileSessionV1(context) {
       const records: BabylonNativeBlockSessionRecordV1[] = [];
       return {
         createBlock(input) {
-          if (records.length >= budget.maximumBlockCount) {
-            throw new Error("test check-session budget exceeded");
-          }
           const [width, height, depth] =
             BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[input.shape];
           const mesh = MeshBuilder.CreateBox(input.id, {
@@ -201,7 +197,7 @@ describe("Babylon Native block profile structural check", () => {
   it("allows ordinary functional scenery without inventing semantic identity groups (legacy parity)", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
     withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), { maximumBlockCount: 4 });
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
       for (const [index, paletteRole] of (["structure", "hazard", "water-like-visual", "background-mass"] as const).entries()) {
         session.createBlock({ id: `ordinary-scenery-${index}`, shape: "full", paletteRole, centerMetersXYZ: [index, 0.5, 0] });
       }
@@ -235,7 +231,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const ground = session.createBlock({
         id: "ground-block",
@@ -294,7 +289,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const upper = session.createBlock({
         id: "gate-upper",
@@ -340,7 +334,6 @@ describe("Babylon Native block profile structural check", () => {
       try {
         const session = createBabylonNativeBlockProfileSessionV1(
           createContext(scene, "deterministic-check"),
-          { maximumBlockCount: 3 },
         );
         const definitions = [
           { id: "route-west", x: 0 },
@@ -380,7 +373,6 @@ describe("Babylon Native block profile structural check", () => {
       try {
         const session = createBabylonNativeBlockProfileSessionV1(
           createContext(scene, `step-route-${upperY}`),
-          { maximumBlockCount: 2 },
         );
         const low = session.createBlock({
           id: "low-step",
@@ -425,7 +417,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene, "route-islands-on-ground"),
-        { maximumBlockCount: 3 },
       );
       session.createBlock({
         id: "west-route",
@@ -466,7 +457,6 @@ describe("Babylon Native block profile structural check", () => {
     try {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene, "stacked-step-route"),
-        { maximumBlockCount: 5 },
       );
       session.createBlock({
         id: "route-base",
@@ -518,7 +508,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 5 },
       );
       const first = session.createBlock({
         id: "overlap-first",
@@ -582,7 +571,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const base = session.createBlock({
         id: "base-block",
@@ -619,7 +607,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "disposed-block",
@@ -649,7 +636,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "mutated-block",
@@ -680,7 +666,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "thin-instance-source",
@@ -714,7 +699,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "instance-source",
@@ -742,7 +726,6 @@ describe("Babylon Native block profile structural check", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "throwing-block",

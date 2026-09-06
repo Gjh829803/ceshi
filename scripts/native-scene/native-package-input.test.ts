@@ -199,7 +199,6 @@ async function makeInput() {
     bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
     seed: nativeSceneBootstrap.seed,
     budgets: {
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
