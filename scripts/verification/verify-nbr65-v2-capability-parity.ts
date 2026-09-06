@@ -310,7 +310,7 @@ const PASSED_CAPABILITIES = Object.freeze([
     owner: "native-reconstruction-production-host-and-builder-skill",
     evidence: {
       "scripts/reconstruction/native-world-case-preparation.test.ts": [
-        "binds an untrusted semantic proposal to Host profiles and immutable inputs",
+        "binds an untrusted proposal to Host profiles and immutable %s inputs through Publisher admission",
         "entry-whitebox-target.png",
         "world-plan.png",
       ],
