@@ -52,10 +52,14 @@ def main():
       for p in folder.rglob('*'):
        if p.is_file():cp(p,SITE/p.relative_to(gallery))
    status=read(OUT/'status.json',{});decisions=read(OUT/'account-decisions.json',{'accounts':{}})
+   accountLabels={v['identitySha256']:k for k,v in decisions['accounts'].items()}
+   execution={r['taskId']:r for r in status.get('cases',[])}
    for task,c in rows.items():
-    if task not in progressRows:progressRows[task]={'taskId':task,'caseId':c['baseCaseId'],'phase':'queued','stage':'queued','stageLabel':'等待账号质量评估与投递','attempts':[]}
+    assigned=execution.get(task,{});actual=assigned.get('actualAccount',{});label=actual.get('label') or accountLabels.get(assigned.get('requestedAccountSha256'))
+    if label:c['tags']=list(dict.fromkeys(c.get('tags',[])+['账号 '+label+('（已核对）' if actual.get('verified') else '（指定）')]))
+    if task not in progressRows:progressRows[task]={'taskId':task,'caseId':c['baseCaseId'],'phase':'queued','stage':'queued','stageLabel':'等待账号质量评估与投递','lastObservedAt':now(),'source':'Host production queue','attempts':[]}
    timestamp=now();manifest={'schemaVersion':1,'kind':'three-creator-evaluation-gallery','id':RUN,'title':'今晚 300 个人形开阔世界','description':'08:00 截止 · 真实云端流程 · 首批账号摸底，后续按质量分配','createdAt':config['createdAt'],'updatedAt':timestamp,'reviewStorageKey':'worldkit-feedback-'+RUN,'cases':[rows[c['id']+'--three-sdk'] for c in master['cases']]}
-   write(SITE/'results.json',manifest);write(SITE/'progress.json',{'kind':'three-creator-run-progress','schemaVersion':1,'runId':RUN,'updatedAt':timestamp,'cases':list(progressRows.values())});write(SITE/'production-status.json',{k:v for k,v in status.items() if k!='cases'});write(SITE/'account-quality.json',decisions)
+   write(SITE/'results.json',manifest);write(SITE/'progress.json',{'kind':'three-creator-run-progress','schemaVersion':1,'runId':RUN,'updatedAt':timestamp,'model':'gpt-6-astra','effort':'xhigh','cases':list(progressRows.values())});write(SITE/'production-status.json',{k:v for k,v in status.items() if k!='cases'});write(SITE/'account-quality.json',decisions)
    remote=pub.validate_manifest(manifest,'three')+'/runs/'+RUN
    files=[];newSent={}
    for p in sorted(SITE.rglob('*'),key=lambda p:(p.name=='results.json',str(p))):
