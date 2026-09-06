@@ -1128,8 +1128,20 @@ describe("Babylon Native block profile session", () => {
       const createBox = MeshBuilder.CreateBox;
       let count = 0;
       const cleanup: string[] = [];
+      let unrelated: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
+      const observerCount = scene.onNewMeshAddedObservable.observers.length;
+      if (throwsOnCleanup) Object.defineProperty(scene, "addMesh", {
+        value: scene.addMesh.bind(scene), configurable: true, writable: true, enumerable: true,
+      });
+      const addMeshDescriptor = Object.getOwnPropertyDescriptor(scene, "addMesh");
       const spy = vi.spyOn(MeshBuilder, "CreateBox").mockImplementation((...args) => {
         const mesh = createBox(...args);
+        const getVerticesData = mesh.getVerticesData.bind(mesh);
+        mesh.getVerticesData = (...readArgs) => {
+          // A caller side effect after allocation is not owned by the adapter.
+          unrelated ??= createBox("unrelated-after-allocation", {}, scene);
+          return getVerticesData(...readArgs);
+        };
         const dispose = mesh.dispose.bind(mesh);
         mesh.dispose = (...disposeArgs) => {
           cleanup.push(mesh.name); dispose(...disposeArgs);
@@ -1140,7 +1152,11 @@ describe("Babylon Native block profile session", () => {
       });
       try {
         expect(() => session.finalize({ staticColliders: [] })).toThrow("primary allocation error");
-        expect(scene.meshes).toEqual([prior]);
+        expect(scene.meshes).toHaveLength(2);
+        expect(scene.meshes[0] === prior).toBe(true);
+        expect(scene.meshes[1] === unrelated).toBe(true);
+        expect(scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+        expect(Object.getOwnPropertyDescriptor(scene, "addMesh")).toEqual(addMeshDescriptor);
         expect(cleanup).toEqual(["block-cluster-000003", "block-cluster-000002", "block-cluster-000001"]);
         expect(() => session.finalize({ staticColliders: [] })).toThrow("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED");
       } finally { spy.mockRestore(); }

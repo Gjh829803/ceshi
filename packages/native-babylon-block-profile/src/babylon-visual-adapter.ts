@@ -1,11 +1,12 @@
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { createOwnedNativeBlockBoxV1 } from "./owned-box-allocation.js";
 import { CreateBoxVertexData } from "@babylonjs/core/Meshes/Builders/boxBuilder.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { createBabylonNativeBlockVisualClustersV1 } from "./visual-clusters.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { isNil, min, max } from "lodash-es";
 
@@ -249,7 +250,7 @@ export function createBabylonNativeBlockVisualsV1(
   const clusters = createBabylonNativeBlockVisualClustersV1(input.checkedLayout.layout.blocks);
   const blocksById = new Map(input.checkedLayout.layout.blocks.map(block => [block.id, block]));
   const handles: BabylonNativeBlockLiveHandleRegistryV1["blocks"][number][] = [];
-  const meshesBefore = new Set(input.scene.meshes);
+  const acquiredMeshes = new Set<AbstractMesh>();
   const materialsByRole = new Map<
     BabylonNativeBlockPaletteRoleV1,
     StandardMaterial
@@ -284,7 +285,7 @@ export function createBabylonNativeBlockVisualsV1(
         materials.push(material);
       }
       const id = `block-cluster-${String(index + 1).padStart(6, "0")}`;
-      const mesh = MeshBuilder.CreateBox(id, { size: 1 }, input.scene);
+      const mesh = createOwnedNativeBlockBoxV1(input.scene, id, acquiredMeshes);
       const visualGroupId = cluster.source.visualGroupId;
       nodes.push(Object.freeze({
         id, sourceBlockIds: cluster.sourceBlockIds, paletteRole: role,
@@ -329,7 +330,7 @@ export function createBabylonNativeBlockVisualsV1(
     // Include a constructor that registered its Mesh and then threw, last in
     // acquisition order so it is released first. Preserve unrelated Scene nodes.
     const returned = new Set(nodes.map(node => node.mesh));
-    const unreturned = input.scene.meshes.filter(mesh => !meshesBefore.has(mesh) && !returned.has(mesh as Mesh));
+    const unreturned = [...acquiredMeshes].filter(mesh => !returned.has(mesh as Mesh));
     disposeVisualResources([...nodes, ...unreturned.map(mesh => ({ mesh: mesh as Mesh }))], materials);
     throw error;
   }

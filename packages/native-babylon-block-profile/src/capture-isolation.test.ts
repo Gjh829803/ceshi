@@ -159,6 +159,8 @@ describe("NBR-65F formal Capture target isolation", () => {
   it("isolates exact logical portions before Runtime batching and restores the initial cluster", () => {
     const fixture = createFixture(false);
     const priorMeshes = [...fixture.scene.meshes];
+    const observerCount = fixture.scene.onNewMeshAddedObservable.observers.length;
+    const addMeshDescriptor = Object.getOwnPropertyDescriptor(fixture.scene, "addMesh");
     const isolation = applyBabylonNativeBlockCaptureIsolationV1({
       registry: fixture.registry, targetBlockIds: ["route-0", "route-2"],
     });
@@ -168,6 +170,8 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(portions[1]!.position.x).toBeCloseTo(1.985, 6);
     for (const mesh of portions) expect(mesh.scaling.x).toBeCloseTo(0.985, 6);
     const unrelated = MeshBuilder.CreateBox("later-unrelated", {}, fixture.scene);
+    expect(fixture.scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+    expect(Object.getOwnPropertyDescriptor(fixture.scene, "addMesh")).toEqual(addMeshDescriptor);
     isolation.restore();
     isolation.restore();
     expect(new Set(fixture.scene.meshes)).toEqual(new Set([...priorMeshes, unrelated]));
@@ -177,6 +181,8 @@ describe("NBR-65F formal Capture target isolation", () => {
   it("releases a capture portion whose constructor registered it before throwing", () => {
     const fixture = createFixture(false);
     const priorMeshes = [...fixture.scene.meshes];
+    const observerCount = fixture.scene.onNewMeshAddedObservable.observers.length;
+    const addMeshDescriptor = Object.getOwnPropertyDescriptor(fixture.scene, "addMesh");
     const createBox = MeshBuilder.CreateBox;
     vi.spyOn(MeshBuilder, "CreateBox").mockImplementation((...args) => {
       createBox(...args);
@@ -185,6 +191,8 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(() => applyBabylonNativeBlockCaptureIsolationV1({
       registry: fixture.registry, targetBlockIds: ["route-0"],
     })).toThrow("partial capture allocation");
+    expect(fixture.scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+    expect(Object.getOwnPropertyDescriptor(fixture.scene, "addMesh")).toEqual(addMeshDescriptor);
     expect(fixture.scene.meshes).toEqual(priorMeshes);
     expect(priorMeshes.every(mesh => mesh.isVisible)).toBe(true);
   });

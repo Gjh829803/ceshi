@@ -2377,7 +2377,7 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.match(launcher, /\.codex\/skills\/worldkit-spatial-planner\/SKILL\.md/);
   assert.match(plannerSkill, /optional hosted preview-planning stage/);
   assert.match(plannerSkill, /does not replace the formal World Planner's WorldSpec/);
-  assert.match(plannerSkill, /Name exactly one movement mode/);
+  assert.match(plannerSkill, /List 1-8 movement modes in user-requested order/);
   assert.match(plannerSkill, /not a closed list/);
   assert.match(plannerSkill, /custom movement label/);
   assert.match(plannerSkill, /Write 1-5 entries total/);

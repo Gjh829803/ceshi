@@ -2,8 +2,9 @@ import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { createOwnedNativeBlockBoxV1 } from "./owned-box-allocation.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import { isNil } from "lodash-es";
 
@@ -128,10 +129,7 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
   };
 
   try {
-    const captureScenes = new Map<Scene, {
-      priorMeshes: ReadonlySet<Scene["meshes"][number]>;
-      owned: Set<Scene["meshes"][number]>;
-    }>();
+    const captureScenes = new Map<Scene, Set<AbstractMesh>>();
     const clusters = new Map<Mesh, Extract<typeof registry.blocks[number], { kind: "cluster-mesh" }>[]>();
     for (const handle of registry.blocks) {
       if (handle.kind !== "cluster-mesh") continue;
@@ -149,9 +147,8 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
       hiddenIndependentBlockIds.push(...members.filter(handle => !targets.has(handle.blockId)).map(handle => handle.blockId));
       const scene = mesh.getScene();
       if (selected.length > 0 && !captureScenes.has(scene)) {
-        const priorMeshes = new Set(scene.meshes);
-        const owned = new Set<typeof scene.meshes[number]>();
-        captureScenes.set(scene, { priorMeshes, owned });
+        const owned = new Set<AbstractMesh>();
+        captureScenes.set(scene, owned);
         restoreSteps.push(() => {
           let firstError: unknown;
           let didFail = false;
@@ -164,15 +161,8 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
         });
       }
       for (const handle of selected) {
-        let portion: Mesh;
-        try {
-          portion = MeshBuilder.CreateBox(`capture-portion-${handle.blockId}`, { size: 1 }, scene);
-        } finally {
-          const acquisition = captureScenes.get(scene)!;
-          for (const candidate of scene.meshes) {
-            if (!acquisition.priorMeshes.has(candidate)) acquisition.owned.add(candidate);
-          }
-        }
+        const owned = captureScenes.get(scene)!;
+        const portion = createOwnedNativeBlockBoxV1(scene, `capture-portion-${handle.blockId}`, owned);
         handle.sourceWorldMatrix.decompose(portion.scaling, undefined, portion.position);
         portion.material = mesh.material;
         portion.isPickable = false;

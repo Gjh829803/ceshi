@@ -3354,8 +3354,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   （`6cf29a2c…32cd25a8`）。页面诊断为 `WORLD_SESSION_FAILED`；直接消费者回归分别
   RED 于资源 404 和 resolver unavailable。补齐旧 Golden 路径/字节交接，保留现有
   exact-hash 请求和 Runtime 校验，不替换 Host 选定人物、不增加 gate/重试/预算。
-  Vite/资源交接与真实 GLB 加载回归 16/16 通过；仍需冻结后恢复 Capture，不能称
-  Case 已通过。原生成/Package 字节和失败恢复记录保留。
+  Vite/资源交接与真实 GLB 加载回归 16/16、typecheck 通过。冻结提交 `a19039ea`
+  的恢复 3 已完成：正式 opening/side/top/Collider 与四个目标三视图全部交付，
+  普通生产 `passed`、发布 `published`、退出 0、cleanup completed；原 Package root
+  仍为 `sha256:e1d3d41846c5ecc9fd08f972210b4f1f7992c50f3054318b2285720b12f344ac`。
+  不把普通发布说成完整效果验收：evaluation incomplete，构图/轮廓仍有偏差，
+  critical-traversal 未执行；strict diagnostic failed（`NBR70_BLOCKER_IDENTITY_MISMATCH`、
+  `NBR70_EVALUATION_NOT_PASSED`）。未把这些严格诊断新增为普通生产 gate。
+  原生成/Package 字节和失败恢复记录保留。已按原链路启动单任务的开场风格化及四目标
+  三视图（`visual-1788736127520-dedbbd`），其交付/Host finalization 尚待完成；未合 main。
+
+- 合入前清理收尾（main-agent-only，不是新增生产 gate）：现有 clean-break 检查的
+  五处 Scene Mesh 反扫曾全部失败；异常清理反例也复现了误删分配过程外的无关 Mesh。
+  改为仅在同步 `CreateBox` 调用期间记录原 `Scene.addMesh` 注册，`finally` 恢复原
+  属性描述符/继承方法，再按原逆序清理。已确认 Babylon 9.23 的新增 Mesh Observable
+  异步通知，不能用于同步异常回滚，因此未采用该错误方案。成功/构造失败、清理抛错、
+  无关 Mesh 保留及注册方法恢复回归 53/53、typecheck 通过；现有 clean-break 为 0 命中。
+  renderer 重建字节未变，无需改写冻结工具或历史 Case。Studio 过期的单 mode 断言
+  改为旧分支已有的有序 1–8 modes，定向测试通过。最终全量检查/合入仍待收口；用户
+  禁用子智能体，本轮没有独立子智能体审查证据。
 
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
