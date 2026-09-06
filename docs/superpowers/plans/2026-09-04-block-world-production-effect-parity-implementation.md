@@ -1064,6 +1064,27 @@ Runtime.renderFrame; this is source evidence, not a Browser receipt. CF-04 remai
 open for multi-entry rendered/pixel/feel acceptance after all CF code/alignment.
 No model/paid Case, Browser, media, full CI or independent final review ran.
 
+### CF-04/R7 Native Hosted display scheduling parity (2026-09-07)
+
+Main-agent-only/sequential; depends on R5/R6. The prior Viewer source check did
+not cover the actual Native Hosted frame. That frame currently queues fixed
+input without awaiting it, renders at the default alpha 1, and retains excess
+long-frame backlog. Pinned old `babylon-world-adapter.ts` waits for fixed input,
+caps the complete accumulator at five fixed Ticks, uses the 1e-12 boundary
+epsilon, and renders the remaining-time alpha. Its first display frame advances
+no simulation Tick.
+
+Owner: existing Native Hosted display/input adapter; Runtime remains the only
+fixed-input and render-pose owner. Input: display elapsed time and pressed keys.
+Output: bounded fixed input followed by Runtime render with remaining-time alpha.
+Expose the existing Runtime alpha through the isolated entry, not a new protocol
+command, Camera state, timing parameter, gameplay loop or production gate.
+Tests must cover long-frame backlog discard, exact-boundary rounding, 120 Hz
+sub-Tick alpha, commit-before-render, failed submission, disposal while pending,
+and actual Native entry alpha 0/0.5/1 with unchanged committed snapshots. Run
+focused consumers, typecheck and 3C migration; full Browser/feel remains a distinct
+acceptance layer. R7 does not close all CF-04/12 or authorize an early final Case.
+
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 
 Main-agent-only, sequential; depends on the existing CF-02 watchdog, not on a new

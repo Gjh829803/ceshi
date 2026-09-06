@@ -255,6 +255,14 @@ only display classification changes from 17 batches + 8 independent meshes to
 25 batches. Typecheck passed. Real occluding Hosted revalidation is still pending;
 this is not final CF-04/12 or generated-Case acceptance.
 
+Actual Hosted follow-up on `4788a039` passed:
+`pnpm verify:native-no-script-capture --subject-occluder`.
+Evidence: `/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-hTuTdI`.
+Reset Tick 0 selects one instance at opacity 1 and target 0.5; sampled Tick 1
+fades it to 0.8888888955116272. Check/Ground/Package/Capture/Evaluation and owned
+cleanup passed. Opening pixels were inspected and retain the unadvanced opaque
+wall, matching reset timing; this is not a claim of full interactive acceptance.
+
 ### CF-04/T1 real Hosted validation
 
 On candidate `a1802205`, `pnpm verify:native-no-script-capture` passed real
