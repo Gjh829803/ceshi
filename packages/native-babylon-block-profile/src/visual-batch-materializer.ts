@@ -94,11 +94,11 @@ interface RestorableVisualStateV1 {
 }
 
 /**
- * Materialize 32m center-owned visual-cluster batches over the already-admitted
+ * Materialize 32m center-owned, per-Block instance batches over the already-admitted
  * Native Block visuals. Batching is a Host realization detail: it never changes
  * the authored Block inventory, the frozen settlement fingerprints or the
- * authored Package. The realization hash binds cluster membership and matrices.
- * Logical Block portions remain exactly addressable for Capture. Visuals stay far-visible; only
+ * authored Package. The realization hash binds Block membership and matrices.
+ * Each Block remains exactly addressable for Capture. Visuals stay far-visible; only
  * physics residency is bounded, and it never touches these Meshes.
  */
 export function materializeBabylonNativeBlockVisualBatchesV1(
@@ -186,37 +186,30 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         { size: 1 }, input.scene,
       );
       batchMeshes.push(batchMesh);
-      const matrices = new Float32Array(group.clusters.length * 16);
-      const sourceWorldMatrixByBlockId = new Map<string, Matrix>();
+      // Logical clusters reduce authoring allocations, but old Runtime expands
+      // each cluster in Y/Z/X order before applying the per-Block display scale.
+      const instancePlacements = group.clusters.flatMap(cluster =>
+        cluster.sourceBlockIds.map(blockId => placementByBlockId.get(blockId)!)
+          .sort((left, right) => left.centerMetersXYZ[1] - right.centerMetersXYZ[1] ||
+            left.centerMetersXYZ[2] - right.centerMetersXYZ[2] ||
+            left.centerMetersXYZ[0] - right.centerMetersXYZ[0]));
+      const matrices = new Float32Array(instancePlacements.length * 16);
       const instanceIndexByBlockId = new Map<string, number>();
-      const clusterPlacements = group.clusters.map((cluster, instanceIndex) => {
-        const center = Vector3.FromArray(cluster.minimumMetersXYZ)
-          .add(Vector3.FromArray(cluster.maximumMetersXYZ)).scale(0.5);
-        const size = Vector3.FromArray(cluster.maximumMetersXYZ)
-          .subtract(Vector3.FromArray(cluster.minimumMetersXYZ));
-        Matrix.Compose(size.scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1),
-          Quaternion.Identity(), center).copyToArray(matrices, instanceIndex * 16);
-        for (const blockId of cluster.sourceBlockIds) {
-          const placement = placementByBlockId.get(blockId)!;
-          const memberCenter = Vector3.FromArray(placement.centerMetersXYZ).subtract(center)
-            .scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1).add(center);
-          sourceWorldMatrixByBlockId.set(blockId, Matrix.Compose(
-            Vector3.FromArray(placement.sizeMetersXYZ).scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1),
-            Quaternion.Identity(), memberCenter,
-          ));
-          instanceIndexByBlockId.set(blockId, instanceIndex);
-        }
-        return Object.freeze({ blockId: cluster.sourceBlockIds[0]!,
-          paletteRole: group.paletteRole, centerMetersXYZ: Object.freeze(center.asArray() as [number, number, number]) });
+      instancePlacements.forEach((placement, instanceIndex) => {
+        Matrix.Compose(
+          Vector3.FromArray(placement.sizeMetersXYZ).scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1),
+          Quaternion.Identity(), Vector3.FromArray(placement.centerMetersXYZ),
+        ).copyToArray(matrices, instanceIndex * 16);
+        instanceIndexByBlockId.set(placement.blockId, instanceIndex);
       });
       batchMesh.thinInstanceSetBuffer("matrix", matrices, 16, true);
-      if (batchMesh.thinInstanceCount !== group.clusters.length) {
-        return fail(CODE, `Batch '${group.id}' did not accept one Thin Instance per visual cluster.`);
+      if (batchMesh.thinInstanceCount !== instancePlacements.length) {
+        return fail(CODE, `Batch '${group.id}' did not accept one Thin Instance per Block.`);
       }
       batchMesh.material = sourceMesh.material;
       if (group.paletteRole === "ground" || group.paletteRole === "route") {
         walkableDisplayRegistrations.push(
-          registerBabylonNativeBlockWalkableInstanceDisplayV1(batchMesh, clusterPlacements),
+          registerBabylonNativeBlockWalkableInstanceDisplayV1(batchMesh, instancePlacements),
         );
       }
       batchMesh.isPickable = false;
@@ -233,7 +226,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         paletteRole: group.paletteRole,
         semanticCaptureClassId: group.semanticCaptureClassId,
         blockIds: Object.freeze([...group.blockIds]),
-        instances: Object.freeze(group.clusters.map(({ sourceBlockIds }) => Object.freeze({ sourceBlockIds }))),
+        instances: Object.freeze(instancePlacements.map(({ blockId }) => Object.freeze({ blockId }))),
         mesh: batchMesh,
       }));
       group.blockIds.forEach((blockId) => {
@@ -249,7 +242,6 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
           batchId: group.id,
           batchMesh,
           instanceIndex: instanceIndexByBlockId.get(blockId)!,
-          sourceWorldMatrix: sourceWorldMatrixByBlockId.get(blockId)!,
         }));
       });
     }
@@ -281,7 +273,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         paletteRole: batch.paletteRole,
         semanticCaptureClassId: batch.semanticCaptureClassId,
         blockIds: [...batch.blockIds],
-        instances: batch.instances.map(({ sourceBlockIds }) => ({ sourceBlockIds: [...sourceBlockIds] })),
+        instances: batch.instances.map(({ blockId }) => ({ blockId })),
         matrices: batch.mesh.thinInstanceGetWorldMatrices().map((matrix) => Array.from(matrix.asArray())),
       })),
       independentBlockIds: [...partition.independentBlockIds],
@@ -415,6 +407,11 @@ export function babylonNativeBlockLiveVisualHandleWorldMatrixV1(
 ): Matrix {
   if (handle.kind === "independent-mesh") {
     return handle.mesh.computeWorldMatrix(true).clone();
+  }
+  if (handle.kind === "thin-instance") {
+    const matrix = handle.batchMesh.thinInstanceGetWorldMatrices()[handle.instanceIndex];
+    if (isNil(matrix)) return fail(CODE, "Logical Block has no live Thin Instance matrix.");
+    return matrix.multiply(handle.batchMesh.computeWorldMatrix(true));
   }
   return handle.sourceWorldMatrix.clone();
 }

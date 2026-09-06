@@ -1,4 +1,3 @@
-import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
@@ -190,49 +189,24 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
       applyTint(handle.mesh);
     }
     for (const batch of registry.visualBatches) {
-      const selectedByInstance = batch.instances.map(({ sourceBlockIds }) =>
-        sourceBlockIds.filter((blockId) => targets.has(blockId)));
-      if (selectedByInstance.every((ids) => ids.length === 0)) {
+      const selectedByInstance = batch.instances.map(({ blockId }) => targets.has(blockId));
+      if (selectedByInstance.every(selected => !selected)) {
         hide(batch.mesh);
         hiddenBatchIds.push(batch.batchId);
         continue;
       }
-      if (selectedByInstance.some((ids, index) => ids.length !== batch.instances[index]!.sourceBlockIds.length)) {
+      if (selectedByInstance.some(selected => !selected)) {
         const current = batch.mesh.thinInstanceGetWorldMatrices();
         if (current.length !== batch.instances.length) {
-          return fail(CODE, `Batch '${batch.batchId}' instance count does not match its cluster rows.`);
+          return fail(CODE, `Batch '${batch.batchId}' instance count does not match its Block rows.`);
         }
         const priorMatrices = new Float32Array(current.length * THIN_INSTANCE_MATRIX_STRIDE);
         current.forEach((matrix, index) => matrix.copyToArray(priorMatrices, index * THIN_INSTANCE_MATRIX_STRIDE));
-        // Instance colors have one row per instance, not per cube vertex.
-        const colors = batch.mesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)
-          ?.getFloatData(current.length, true);
-        const priorColors = isNil(colors) ? undefined : new Float32Array(colors);
-        const nextMatrices: number[] = [];
-        const nextColors: number[] = [];
-        const append = (values: readonly number[] | Float32Array, index: number): void => {
-          nextMatrices.push(...values);
-          if (!isNil(priorColors)) nextColors.push(...priorColors.slice(index * 4, index * 4 + 4));
-        };
+        const nextMatrices = new Float32Array(priorMatrices);
         selectedByInstance.forEach((selected, index) => {
-          const instance = batch.instances[index]!;
-          if (selected.length === instance.sourceBlockIds.length) {
-            append(current[index]!.asArray(), index);
-          } else if (selected.length === 0) {
-            const matrix = Array.from(current[index]!.asArray());
-            for (const offset of LINEAR_MATRIX_OFFSETS) matrix[offset] = 0;
-            append(matrix, index);
-            maskedThinInstanceCount++;
-          } else {
-            // Capture-only fragmentation. Each portion uses the materializer's
-            // exact whole-cluster transform, not independently re-shrunk Blocks.
-            for (const blockId of selected) {
-              const handle = handleByBlockId.get(blockId)!;
-              if (handle.kind !== "thin-instance" || handle.batchId !== batch.batchId ||
-                  handle.instanceIndex !== index) {
-                return fail(CODE, "partial cluster target has no matching logical member");
-              }
-              append(handle.sourceWorldMatrix.asArray(), index);
+          if (!selected) {
+            for (const offset of LINEAR_MATRIX_OFFSETS) {
+              nextMatrices[index * THIN_INSTANCE_MATRIX_STRIDE + offset] = 0;
             }
             maskedThinInstanceCount++;
           }
@@ -240,11 +214,9 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
         const mesh = batch.mesh;
         restoreSteps.push(() => {
           mesh.thinInstanceSetBuffer("matrix", new Float32Array(priorMatrices), THIN_INSTANCE_MATRIX_STRIDE, true);
-          if (!isNil(priorColors)) mesh.thinInstanceSetBuffer(VertexBuffer.ColorKind, new Float32Array(priorColors), 4, true);
           mesh.thinInstanceRefreshBoundingInfo(true);
         });
-        mesh.thinInstanceSetBuffer("matrix", new Float32Array(nextMatrices), THIN_INSTANCE_MATRIX_STRIDE, true);
-        if (!isNil(priorColors)) mesh.thinInstanceSetBuffer(VertexBuffer.ColorKind, new Float32Array(nextColors), 4, true);
+        mesh.thinInstanceSetBuffer("matrix", nextMatrices, THIN_INSTANCE_MATRIX_STRIDE, true);
         mesh.thinInstanceRefreshBoundingInfo(true);
       }
       applyTint(batch.mesh);

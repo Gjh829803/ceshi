@@ -3319,6 +3319,19 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   收据为 output/playwright/cf-g3-*.json。未运行最终新图 Case，不把本项定向证据
   称为完整 CF 闭环。
 
+- CF-04/G4 逐块显示纠偏（2026-09-07，`45c27839` 后）：直接执行旧
+  `scene-geometry.ts:blockClusterTransformsV2`，证实逻辑 cluster 在 Runtime 会展开为
+  每个源 Block、各自中心不变且各自缩放 0.985。此前 CLUSTER2 把整个 cuboid 缩放
+  的解释错误，已按真实旧执行纠正；保留 MEM4 预分配与物理不变。删除 Runtime
+  Thin Instance 的多 Block 成员/portion matrix 与 Capture 分割逻辑，改为一块一个
+  实例和实际矩阵；地面条纹也按逐块中心采样。真实顶点反例 RED→GREEN，12 项
+  materializer、Formal/Artifact/occlusion 通过；Capture 旧体量断言修正后 8/8、真实
+  Runtime 10/10、typecheck 通过。补充逐块条纹/真实 batch 世界矩阵用例通过，原 3C
+  与零债务 boundaries 通过；live/frozen 类型工具已重新生成，做最后便携性复验。
+  摩擦审计确认旧 preset 的 0.8 未被真实 Block Physics 使用，旧/新实际均为 0.75，
+  因此没有错误地改动该值。用户最新安排是本批修复后先跑一个新 Case，通过及必要
+  合入检查完成后合 main，再从最新 main 新建 worktree 继续 CF；不等待全部 CF。
+
 - CF-05/R1 浏览器异常恢复（2026-09-07，未提交树）：恢复旧分支精确 prepare 失败
   条件与一次 neutral Tick，不扩大到脚本或正式 Capture。Runtime 只提供原事务回滚
   后的一次性错误码/阶段证据，Native 对可恢复请求返回独立拒绝诊断并保留幂等收据；

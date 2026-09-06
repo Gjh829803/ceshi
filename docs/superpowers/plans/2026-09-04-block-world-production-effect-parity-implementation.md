@@ -6,8 +6,11 @@ This plan implements the frozen production-outcome decision and the effect-relev
 `codex/block-world-main-integration`, under current Babylon Native ownership. Worker success is not
 integration proof; each task merges only after its focused contract is green.
 
-User-confirmed completion rule (2026-09-06): finish all CF implementation and
-alignment before the final local production Case. The behavioral authority is
+Latest user scheduling (2026-09-07): finish/verify the current repair, run one
+fresh local Case now, merge to main only after it passes and necessary integration
+checks pass, then create a new worktree from updated main to finish remaining CF.
+This supersedes waiting for all CF development before the first Case; it does not
+declare remaining CF complete or authorize a failed Case merge. The behavioral authority is
 `codex/block-world-main-integration` (local remote-tracking ref verified at
 `9e35ab53c634acaef8c53a33082fff77653f7bbb`). If the final chain exposes a mismatch,
 follow the old branch's actual logic and correct the new implementation; a
@@ -1326,6 +1329,53 @@ runs. Rebuilt live/frozen checker bytes and the current embedded type graph matc
 four affected portable/tuple/shape/drift tests passed (103 unrelated tests not rerun).
 JSON evidence is in `output/playwright/cf-g3-{source-spawn,package-spawn,package-exact-spawn,builder-tools}.json`.
 This checkpoint does not prove final generated production or complete CF acceptance.
+
+### CF-04/G4 correct CLUSTER2 display interpretation (2026-09-07)
+
+Main-agent-only/sequential after G3. The later CLUSTER2 entry below incorrectly
+treated the old logical compiler cuboid as its displayed instance. Pinned
+`scene-geometry.ts:101-220` actually expands each cluster into source Blocks,
+then scales each Block by 0.985 around its own unchanged center. The earlier
+DISPLAY-PARITY section was correct on this point. Executing the pinned
+`blockClusterTransformsV2` for a two-Block cluster returns centers 0 and 1,
+each scale 0.985; current whole-cluster rendering produces minimum X -0.485
+instead of -0.4925. The actual Babylon regression is RED on that discrepancy.
+
+Correct the existing final Host materializer, not the source allocation or
+physics representation: retain MEM4 clustered pre-allocation, logical cluster
+analysis/advisory and 32m display batches; expand Runtime instances in old Y/Z/X
+order and preserve each exact source center. Each live instance now names one
+`blockId`. Remove thin-instance portion matrices and capture fragmentation;
+Capture masks the existing individual instances and restores their buffers.
+The live Babylon matrix remains the only displayed transform authority; pre-batch
+cluster handles still need their exact source-portion transforms. Update Formal
+coverage, resource counts, stripe, occlusion and every typed fixture together.
+No fallback representation, extra gate, physics change or task is introduced.
+
+Required evidence: old execution versus real Native geometry, non-square rotated
+Blocks, stable centers/stripes, exact individual Capture selection/restore and
+failure cleanup, actual Runtime/Hosted Capture, rebuilt frozen tools and typecheck.
+The separate friction audit found no bug: old preset declares 0.8 but actual
+`block-chunk-collision.ts:223` creates solid bodies at 0.75 (boundaries at 0),
+matching current Runtime. Do not "fix" actual parity to an unused declaration.
+
+G4 focused checkpoint: actual two-Block vertex reproducer RED→GREEN; materializer
+12/12, Formal/Artifact/occlusion suites passed. Four Capture assertions still
+encoded the incorrect merged-volume behavior; after migrating those expectations,
+Capture 8/8 and actual Runtime 10/10 passed. The added literal per-Block stripe
+test also passed, including live batch-world-transform consumption. Typecheck,
+zero-debt workspace boundaries and unchanged 3C ledger passed. The live/frozen
+checker is regenerated for the one-Block instance contract. This invalidates the
+earlier CLUSTER2 claim of old whole-volume display parity, not its original
+recorded test results; those tests had asserted the wrong target behavior.
+
+Post-Case follow-up remains CF-20/B2 accounting and CF-22 display palette/opacity:
+the old `materials.ts` distinguishes semantic identity colors from runtime pastel
+colors and uses preset alpha/back-face behavior. Native's current role palette
+is not proof of that complete mapping. Do not silently infer old interaction or
+Physics presets from six visual roles. Under the latest user scheduling, finish
+the current candidate/Case/merge first, then resolve these remaining CF contracts
+on the requested new worktree without labeling the overall goal complete.
 
 ### CF-05/R1 prepared-input browser recovery parity (2026-09-07)
 

@@ -94,8 +94,7 @@ describe("Babylon artifact capture", () => {
     const blocks = ["front-block", "rear-block", "other-block"].map((blockId, instanceIndex) => {
       const identity = { blockId, runtimeEntityId: `native-block:${blockId}`, semanticCaptureClassId: "landmark.fixture" };
       return realization === "thin-instance"
-        ? { ...identity, kind: "thin-instance" as const, batchId: "batch", batchMesh: batch, instanceIndex,
-          sourceWorldMatrix: Matrix.FromArray(originalMatrices, instanceIndex * 16) }
+        ? { ...identity, kind: "thin-instance" as const, batchId: "batch", batchMesh: batch, instanceIndex }
         : { ...identity, kind: "independent-mesh" as const, mesh: independentMeshes[instanceIndex]! };
     });
     const registry: nativeCapture.BabylonNativeBlockLiveHandleRegistryV1 = {
@@ -103,7 +102,7 @@ describe("Babylon artifact capture", () => {
       realization: realization === "thin-instance" ? { kind: "host-chunk-batched", chunkPolicyHash: `sha256:${"a".repeat(64)}`,
         batchPlanHash: `sha256:${"b".repeat(64)}` } : { kind: "authoring-clustered" }, blocks,
       visualBatches: realization === "independent-mesh" ? [] : [{ batchId: "batch", visualChunkIndexXZ: [0, 0], shape: "full", paletteRole: "structure",
-        semanticCaptureClassId: "landmark.fixture", blockIds: blocks.map(b => b.blockId), instances: blocks.map(b => ({ sourceBlockIds: [b.blockId] })), mesh: batch }],
+        semanticCaptureClassId: "landmark.fixture", blockIds: blocks.map(b => b.blockId), instances: blocks.map(b => ({ blockId: b.blockId })), mesh: batch }],
       visualGroups: [], walkableOverlays: [{ logicalColliderId: "ground", sourceBlockIds: ["front-block"],
         visualGroupIds: [], topologyHash: `sha256:${"a".repeat(64)}`, mesh: overlay }],
     };

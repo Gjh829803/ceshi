@@ -35,15 +35,15 @@ function fixture() {
 }
 
 describe("Native Block old-branch Subject occlusion presentation", () => {
-  it("derives admitted display bounds from actual merged instance matrices, not logical Block count", () => {
+  it("derives admitted display bounds from actual per-Block instance matrices", () => {
     const f = fixture();
     try {
       f.mesh.position.set(3, 2, -1);
       const batch = {
         batchId: "batch-a", visualChunkIndexXZ: [0, 0] as const, shape: "full" as const,
         paletteRole: "structure" as const, semanticCaptureClassId: "worldkit.native-block.group.wall",
-        blockIds: ["logical-a", "logical-b", "logical-c"],
-        instances: [{ sourceBlockIds: ["logical-a", "logical-b"] }, { sourceBlockIds: ["logical-c"] }],
+        blockIds: ["logical-a", "logical-b"],
+        instances: [{ blockId: "logical-a" }, { blockId: "logical-b" }],
         mesh: f.mesh,
       };
       const [actual] = nativeBlockOcclusionBatchesFromLiveHandlesV1([batch]);

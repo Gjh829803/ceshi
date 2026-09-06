@@ -16,7 +16,7 @@ export interface BabylonNativeBlockWalkableOverlayHandleV1 {
 
 /**
  * One closed row per logical Block. A Block is realized either as its own Mesh
- * or as a member of one visual-cluster Thin Instance; both branches
+ * or as one independently scaled Thin Instance; both branches
  * keep the logical Block ID, runtime Entity ID and semantic Capture class, so
  * Capture selection, tinting, hiding and diagnostics never lose identity.
  */
@@ -45,8 +45,6 @@ export type BabylonNativeBlockLiveVisualHandleV1 =
       batchId: string;
       batchMesh: Mesh;
       instanceIndex: number;
-      /** Exact displayed portion of the cluster owned by this logical Block. */
-      sourceWorldMatrix: Matrix;
     }>;
 
 export interface BabylonNativeBlockLiveVisualBatchV1 {
@@ -55,10 +53,10 @@ export interface BabylonNativeBlockLiveVisualBatchV1 {
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly semanticCaptureClassId: string;
-  /** Complete logical inventory, independent of instance count. */
+  /** Complete logical inventory, one Block per instance. */
   readonly blockIds: readonly string[];
-  /** Ordered by normal Thin Instance index; each row is a merged cuboid. */
-  readonly instances: readonly Readonly<{ sourceBlockIds: readonly string[] }>[];
+  /** Ordered by normal Thin Instance index, as in the old Block renderer. */
+  readonly instances: readonly Readonly<{ blockId: string }>[];
   readonly mesh: Mesh;
 }
 

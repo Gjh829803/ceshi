@@ -176,7 +176,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
     cleanups.push(() => materialized.dispose());
     expect(materialized.batches).toHaveLength(1);
     const batch = materialized.batches[0]!;
-    expect(batch.instances).toEqual([{ sourceBlockIds: ["lone-wall"] }]);
+    expect(batch.instances).toEqual([{ blockId: "lone-wall" }]);
     const [matrix] = batch.mesh.thinInstanceGetWorldMatrices();
     expect(matrix!.m[12]).toBe(0.5);
     expect(matrix!.m[13]).toBe(1.5);
@@ -185,7 +185,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
     expect(materialized.independentBlockIds).toEqual([]);
   });
 
-  it("merges rotated non-square shapes using effective dimensions and keeps holes", () => {
+  it("expands rotated non-square shapes using effective dimensions and keeps holes", () => {
     const fixture = createFixture([
       { id: "quarter-west", shape: "quarter", rotationQuarterTurnsY: 1, centerMetersXYZ: [0, 0.25, 0.25], paletteRole: "structure" },
       { id: "quarter-east", shape: "quarter", rotationQuarterTurnsY: 1, centerMetersXYZ: [1, 0.25, 0.25], paletteRole: "structure" },
@@ -199,15 +199,16 @@ describe("NBR-65F Native Block visual batch realization", () => {
     cleanups.push(() => materialized.dispose());
     expect(materialized.batches).toHaveLength(1);
     const batch = materialized.batches[0]!;
-    expect(batch.instances.map(({ sourceBlockIds }) => sourceBlockIds))
-      .toEqual([["quarter-east", "quarter-west"], ["quarter-remote"]]);
+    expect(batch.instances.map(({ blockId }) => blockId))
+      .toEqual(["quarter-west", "quarter-east", "quarter-remote"]);
     const matrices = batch.mesh.thinInstanceGetWorldMatrices();
-    expect(matrices).toHaveLength(2);
-    expect(matrices[0]!.m[0]).toBeCloseTo(1.97, 6);
+    expect(matrices).toHaveLength(3);
+    expect(matrices[0]!.m[0]).toBeCloseTo(0.985, 6);
     expect(matrices[0]!.m[5]).toBeCloseTo(0.4925, 6);
     expect(matrices[0]!.m[10]).toBeCloseTo(0.4925, 6);
-    expect(matrices[0]!.m[12]).toBeCloseTo(0.5, 6);
-    expect(matrices[1]!.m[12]).toBeCloseTo(4, 6);
+    expect(matrices[0]!.m[12]).toBeCloseTo(0, 6);
+    expect(matrices[1]!.m[12]).toBeCloseTo(1, 6);
+    expect(matrices[2]!.m[12]).toBeCloseTo(4, 6);
     expect(batch.mesh.geometry).not.toBe(fixture.meshByBlockId.get("quarter-west")!.geometry);
   });
   it("batches old 32m visual clusters independently of physics Chunk seams", () => {
@@ -248,7 +249,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
     expect(materialized.resources).toEqual({
       authoringVisualMeshCount: 2,
       thinInstanceBatchCount: 2,
-      thinInstanceCount: 2,
+      thinInstanceCount: 7,
       independentVisualMeshCount: 0,
       renderedDrawUnitCount: 2,
       renderedGeometryBufferSetCount: 2,
@@ -260,7 +261,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
   });
 
 
-  it("realizes the old whole-cluster display extent without per-Block seams", () => {
+  it("expands logical clusters into the old independently scaled Block instances", () => {
     const fixture = createFixture([
       { id: "mass-west", centerMetersXYZ: [0, 0.5, 0], paletteRole: "structure", visualGroupId: "mass" },
       { id: "mass-east", centerMetersXYZ: [1, 0.5, 0], paletteRole: "structure", visualGroupId: "mass" },
@@ -290,13 +291,38 @@ describe("NBR-65F Native Block visual batch realization", () => {
         }
       }
     }
-    // Old cluster spans [-0.5, 1.5]; 0.985 scales that 2m cuboid about x=0.5.
-    expect(Math.min(...xCoordinates)).toBeCloseTo(-0.485, 6);
-    expect(Math.max(...xCoordinates)).toBeCloseTo(1.485, 6);
-    expect(displayedVolumeCount).toBe(1);
+    // Pinned old scene-geometry blockClusterTransformsV2 expands the cluster,
+    // retaining centers 0/1 and shrinking each 1m Block independently.
+    expect(Math.min(...xCoordinates)).toBeCloseTo(-0.4925, 6);
+    expect(Math.max(...xCoordinates)).toBeCloseTo(1.4925, 6);
+    expect(displayedVolumeCount).toBe(2);
+    const matrices = materialized.batches[0]!.mesh.thinInstanceGetWorldMatrices();
+    expect(matrices.map(matrix => matrix.m[12]).sort()).toEqual([0, 1]);
+    expect(matrices.every(matrix => Math.abs(matrix.m[0]! - 0.985) < 1e-6)).toBe(true);
     expect(materialized.liveHandles.blocks.map(({ blockId }) => blockId).sort())
       .toEqual(["mass-east", "mass-west"]);
   });
+  it("samples old ground stripes at each source Block center, not the merged center", () => {
+    const fixture = createFixture([0, 1, 2, 3].map(z => ({
+      id: `stripe-${z}`, centerMetersXYZ: [0, 0.5, z] as const,
+      paletteRole: "route" as const, visualGroupId: "route",
+    })));
+    const materialized = materializeBabylonNativeBlockVisualBatchesV1({
+      scene: fixture.scene, realizationId: "per-block-stripes",
+      chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+      placements: fixture.placements, liveHandles: fixture.liveHandles,
+    });
+    cleanups.push(() => materialized.dispose());
+    const batch = materialized.batches[0]!;
+    const colors = batch.mesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(4, true)!;
+    expect(Array.from(colors)).toEqual(Array.from(new Float32Array([
+      1, 1, 1, 1, 1, 1, 1, 1, 0.78, 0.8, 0.78, 1, 0.78, 0.8, 0.78, 1,
+    ])));
+    batch.mesh.position.x = 7;
+    const handle = materialized.liveHandles.blocks.find(row => row.blockId === "stripe-0")!;
+    expect(babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle).m[12]).toBe(7);
+  });
+
   it("maps every logical Block to one live Mesh or batch instance", () => {
     const fixture = createFixture();
     const materialized = materializeBabylonNativeBlockVisualBatchesV1({
@@ -329,9 +355,7 @@ describe("NBR-65F Native Block visual batch realization", () => {
       const displayMatrix = babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle);
       const center = Vector3.TransformCoordinates(Vector3.Zero(), displayMatrix);
       const sourceCenter = Vector3.FromArray(fixture.placements.find(row => row.blockId === handle.blockId)!.centerMetersXYZ);
-      const expectedX = handle.blockId !== "wall-single"
-        ? 2.5 + (sourceCenter.x - 2.5) * 0.985 : sourceCenter.x;
-      expect(center.x).toBeCloseTo(expectedX, 6);
+      expect(center.x).toBeCloseTo(sourceCenter.x, 6);
       expect(center.y).toBeCloseTo(sourceCenter.y, 6);
       expect(center.z).toBeCloseTo(sourceCenter.z, 6);
       expect(displayMatrix.m[0]).toBeCloseTo(0.985, 6);
@@ -344,11 +368,11 @@ describe("NBR-65F Native Block visual batch realization", () => {
       handle.kind === "thin-instance" ? handle.instanceIndex : -1,
     ])).toEqual([
       ["route-0", "thin-instance-group-0001", 0],
-      ["route-1", "thin-instance-group-0001", 0],
-      ["route-2", "thin-instance-group-0001", 0],
-      ["route-3", "thin-instance-group-0001", 0],
-      ["route-4", "thin-instance-group-0001", 0],
-      ["route-5", "thin-instance-group-0001", 0],
+      ["route-1", "thin-instance-group-0001", 1],
+      ["route-2", "thin-instance-group-0001", 2],
+      ["route-3", "thin-instance-group-0001", 3],
+      ["route-4", "thin-instance-group-0001", 4],
+      ["route-5", "thin-instance-group-0001", 5],
       ["wall-single", "thin-instance-group-0002", 0],
     ]);
     expect(registry.visualGroups.map((group) => [

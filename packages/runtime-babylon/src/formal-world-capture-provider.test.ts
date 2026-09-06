@@ -19,20 +19,21 @@ import {
 } from "./formal-world-capture-provider.js";
 
 
-it("preserves exact logical coverage for a merged visual instance", () => {
+it("preserves exact one-to-one logical coverage for Block instances", () => {
   const engine = new NullEngine();
   const scene = new Scene(engine);
   try {
     const mesh = MeshBuilder.CreateBox("cluster", {}, scene);
-    mesh.thinInstanceSetBuffer("matrix", new Float32Array(Matrix.Scaling(2, 1, 1).asArray()), 16, true);
+    mesh.thinInstanceSetBuffer("matrix", new Float32Array([
+      ...Matrix.Translation(-0.5, 0, 0).asArray(), ...Matrix.Translation(0.5, 0, 0).asArray(),
+    ]), 16, true);
     const metadata = {
       blocks: ["west", "east"].map(blockId => ({ blockId, runtimeEntityId: "native-block:" + blockId,
         semanticCaptureClassId: "worldkit.native-block.group.mass", visualGroupId: "mass" })),
       visualGroups: [{ visualGroupId: "mass", blockIds: ["west", "east"] }],
     };
     const blocks = metadata.blocks.map((row, index) => ({ ...row, kind: "thin-instance" as const,
-      batchId: "cluster-batch", batchMesh: mesh, instanceIndex: 0,
-      sourceWorldMatrix: Matrix.Translation(index - 0.5, 0, 0) }));
+      batchId: "cluster-batch", batchMesh: mesh, instanceIndex: index }));
     const registry: BabylonNativeBlockLiveHandleRegistryV1 = {
       kind: "babylon-native-block-live-handle-registry", schemaVersion: 1,
       realization: { kind: "host-chunk-batched", chunkPolicyHash: "sha256:" + "a".repeat(64) as never,
@@ -40,7 +41,7 @@ it("preserves exact logical coverage for a merged visual instance", () => {
       blocks, visualGroups: [{ visualGroupId: "mass", blockHandles: blocks }],
       visualBatches: [{ batchId: "cluster-batch", visualChunkIndexXZ: [0, 0], shape: "full",
         paletteRole: "structure", semanticCaptureClassId: "worldkit.native-block.group.mass",
-        blockIds: ["west", "east"], instances: [{ sourceBlockIds: ["west", "east"] }], mesh }],
+        blockIds: ["west", "east"], instances: [{ blockId: "west" }, { blockId: "east" }], mesh }],
       walkableOverlays: [],
     };
     expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
@@ -48,7 +49,7 @@ it("preserves exact logical coverage for a merged visual instance", () => {
     for (const sourceBlockIds of [["west"], ["west", "west"], ["west", "east", "extra"], []]) {
       expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
         liveHandleRegistry: { ...registry, visualBatches: [{ ...registry.visualBatches[0]!,
-          instances: [{ sourceBlockIds }] }] } })).toThrow(/LIVE_VISUAL_BATCH_COVERAGE_INVALID/);
+          instances: sourceBlockIds.map(blockId => ({ blockId })) }] } })).toThrow(/LIVE_VISUAL_BATCH_COVERAGE_INVALID/);
     }
     expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
       liveHandleRegistry: { ...registry, blocks: [{ ...blocks[0]!, instanceIndex: 1 }, blocks[1]!] } }))
