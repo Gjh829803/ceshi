@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { evaluateCompiledWorldResourceBudgetV1 } from "@whitebox-world/compiler";
+import * as productionBudget from "./native-block-production-budget.js";
 import {
-  evaluateBlockSourceResourceBudgetV1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
 } from "./native-block-production-budget.js";
+import { evaluateBlockSourceResourceBudgetV1 } from "./native-block-source-budget.test-support.js";
 
 describe("pinned Block source resource accounting", () => {
+  it("keeps the unconnected legacy source oracle out of the production budget API", () => {
+    expect(productionBudget).not.toHaveProperty("evaluateBlockSourceResourceBudgetV1");
+  });
   it("does not publish a fixed source-count gate absent from the old compiler", () => {
     expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1).not.toHaveProperty("maximumBlockCount");
   });

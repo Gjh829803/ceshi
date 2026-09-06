@@ -301,3 +301,30 @@ If approved, main-agent-only tasks are sequential:
 
 No new Case, test worktree, source mutation, frozen-contract rewrite, full CI or
 main merge was performed for this inspection. The original failed run remains intact.
+
+## CF-20/BUDGET-ORACLE — independent of MEM4 approval
+
+Main-agent-only, bounded module ownership cleanup. Read-only reference search at
+`737338f1` confirmed `evaluateBlockSourceResourceBudgetV1` was called only by tests,
+not any production stage. Keeping that unconnected historical oracle exported by
+the actual production budget module creates an ambiguous owner and an unnecessary
+compiler import; it does not provide production source-budget parity evidence.
+
+Move the unchanged formula to `native-block-source-budget.test-support.ts` and
+update its two test consumers. Keep every old boundary/ordering/Subject-cost test,
+including the heavy Subject case; do not delete the historical evidence or wire
+an unproven production gate. The production module continues to own exactly the
+same formal limits and Planner budget context. Add a direct regression that the
+test oracle is no longer a production-module export. This is no alternative Scene
+Source, authoring API change or reset of the pending MEM4 decision.
+
+The full production source-budget correspondence (actual cluster/Subject domains)
+remains open. Separating a test oracle must not be reported as closing that work.
+
+Implemented with all prior tests preserved. Four full budget/generation-request/
+Planner-execution/workload files passed **104/104**; the subsequently added export
+boundary test passed **1/1**, for 105 unique affected tests. Final typecheck passed.
+An AST printer comparison against `737338f1` (comments removed) confirmed the oracle
+function is unchanged beyond comments and file location. A production-source
+reference search finds no imports or calls of the test helper. No new production
+Case, memory measurement, full CI or main merge is claimed for this cleanup.

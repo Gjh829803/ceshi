@@ -35,8 +35,8 @@ import {
 import {
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
-  evaluateBlockSourceResourceBudgetV1,
 } from "./native-block-production-budget.js";
+import { evaluateBlockSourceResourceBudgetV1 } from "./native-block-source-budget.test-support.js";
 import {
   deriveNativeBlockSubjectVisualReviewProxyV1,
   parseNativeBlockSubjectVisualReviewProxyV1,
