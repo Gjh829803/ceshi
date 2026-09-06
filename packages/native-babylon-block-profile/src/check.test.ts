@@ -574,7 +574,9 @@ describe("Babylon Native block profile structural check", () => {
     });
   });
 
-  it("keeps unsupported visual mass as a warning rather than a Runtime claim", async () => {
+  it.each<PaletteRole>(["ground", "route", "structure", "hazard", "water-like-visual", "background-mass"])(
+    "keeps unsupported %s mass as a warning without requiring a floating disposition",
+    async (paletteRole) => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
 
     withScene((scene) => {
@@ -591,7 +593,7 @@ describe("Babylon Native block profile structural check", () => {
       const floating = session.createBlock({
         id: "floating-block",
         shape: "small",
-        paletteRole: "background-mass",
+        paletteRole,
         visualGroupId: "floating-mass",
         centerMetersXYZ: [2.25, 2.25, 0.25],
       });
@@ -608,7 +610,8 @@ describe("Babylon Native block profile structural check", () => {
       });
       expect(result.diagnostics[0]).not.toHaveProperty("details");
     });
-  });
+    },
+  );
 
   it("reports a disposed final Mesh as a closed block diagnostic", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();

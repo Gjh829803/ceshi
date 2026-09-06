@@ -21,11 +21,11 @@ JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and
 
 scene.ts owns Babylon Native Block visual construction and explicit registration calls only.
 
-The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation. The sidecar owns only the closed openingCamera numeric intent and groundExploration validation intent described below; scene.ts cannot create or operate a Camera or Runtime route.
+The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation. The sidecar supplies the closed controlledSubject design, openingCamera numeric intent and groundExploration validation intent described below. The Host compiles the Subject design through the shared Authoring/Subject compiler; scene.ts cannot create a Subject, Camera or Runtime route.
 
 The Formal Capture Intent remains Capture-only Host input and is not part of the generation context or any Builder output. Do not predict `sourceBoundsMeters` or `planeMeters`; after Package verification, the Host resolves those values from checked visual-group bounds or exact frozen Collider geometry.
 
-This is one of exactly two Scene Sources. Do not emit Canonical geometry, overlay a Canonical world, introduce a third Source, or route Native output through a Manifest or Compiler. The Host-selected route and Bootstrap are immutable. A successful task or Skill self-check is not Native admission.
+This is one of exactly two Scene Sources. Do not emit Canonical geometry, overlay a Canonical world, introduce a third Source, or route Native world geometry through a Canonical Manifest or Compiler. The Host-selected route and Bootstrap are immutable. A successful task or Skill self-check is not Native admission.
 
 The formal Builder task uses `gpt-5.6-sol` with reasoning effort `xhigh`. Never downgrade a formal run or describe a smoke run as reconstruction evidence.
 
@@ -50,6 +50,54 @@ The top-down comparison is exactly `1544x768`; the entry comparison is exactly `
 
 ## Reconstruction method
 
+### Controlled Subject design
+
+Write required `controlledSubject: { visualTargetId, design }` in the existing
+`native-block-authoring.json`. Bind the exact `primary-subject` visualTargetId in
+the frozen Palette. Select for behavior, not appearance likeness: first match the
+Brief's complete ordered movement-mode set and necessary body topology, then reuse
+the closest complete admitted registered Subject, then tune its third-person
+Camera. Compose only when no complete registered Subject represents the required
+movement-changing whole or materially different body topology. A coarse registered
+proxy is correct even when clothing or equipment differs from the reference.
+Subject appearance fidelity belongs to later visual generation, not whitebox
+construction. Do not compose primitive parts merely for faces, hair, clothing,
+armor, handheld or holstered weapons, backpacks, headwear, colors or material
+details; those do not change an ordinary walking human's control behavior.
+
+For a necessary composition, keep only the major masses communicating the complete
+locomotion/body topology at truthful scale, using the output contract below.
+Never enlarge a Subject to fill the frame; tune the Camera around it. This is the
+old Builder's selection guidance, not a new automatic likeness/composition gate.
+Use the exact admitted Definition and frozen resources. Do not silently substitute
+G Bot or infer supported movement from a resource name. The context freezes
+resource definitions and their hashes, not a preselected Subject. Missing or
+incompatible selection remains an error, not a default Subject.
+
+Read `inputs/subject-host-context.json.authoringCatalog` before selecting a
+registered Subject. Its admitted rows expose the actual compiled movement modes,
+Collider dimensions, Camera context and visual-review cuboids; rejected rows
+explain unavailable entries. The underlying `resources` still includes SDK test
+fixtures and is not itself the admitted selection list. As in the old Hosted
+Builder, a registered human/biped must be asset-backed and rigged; an ordinary
+primitive humanoid preset is a Runtime fixture, not a substitute for the designed
+person. Necessary composed Subjects follow the behavior-first selection above.
+
+Preserve every ordered Brief movement mode, not only the first or ground mode.
+The same-task self-check compares them with the selected Subject's compiled
+executable capabilities and reports every missing mode. A composed Subject in
+this Hosted lane supplies only ground-walk, as in the old Builder. A vehicle,
+boat or wing shape does not implement driving, swimming or flight. Do not rename
+the requested modes, edit the Brief, or claim a visual approximation satisfies
+unavailable motion; repair the actual design within the same shared budget.
+
+The checker and renderer compile this same design with those frozen resources;
+the Host derives Gameplay, WRT, resource locks and Subject visual-review bounds
+from it. Do not author those derived products or modify the frozen context. A
+design repair consumes the existing shared structural/visual repair counter and
+requires fresh self-check and both comparison PNGs. `scene.ts` never draws the
+controlled Subject or creates its Collider, Physics, Input or Camera.
+
 ### Ground exploration ownership
 
 Ordinary Case preparation does not invent entry/remote ground visual identities.
@@ -66,19 +114,28 @@ Read `context/case.json.expected.groundConnectivity.mode` first. Write required
 mode; it is pure validation intent, not a new Source, Route/Nav product, visible
 object, Collider, success report or executable behavior.
 
-For `source-authored`, choose metric anchors from the Brief's actual exploration
-regions while constructing the world. Declare at least one `middle` and one
-`remote` required target at distinct real stand positions, neither equal to Spawn.
-Use stable sorted unique IDs. Declare ordered `requiredTraversalBands` with honest
-`halfWidthMeters`, preserving actual bends and elevations. At least one band starts
-at the exact registered Spawn and ends at a middle anchor. Add bands for Brief-required
+For `source-authored`, read the frozen Case's `requireSingleReachableComponent`.
+When it is `true`, choose metric anchors from the Brief's actual exploration
+regions and declare at least one `middle` and one `remote` target; at least one band
+starts at the exact registered Spawn and ends at a middle anchor. When it is
+`false`, the ground evidence arrays may be empty, as in the old mixed/free-space
+policy; do not invent ground routes or anchors to satisfy ground-only minima.
+Any declared targets still use distinct real stand positions, neither equal to Spawn.
+Use stable unique IDs within each list; authored list order is preserved, not alphabetically constrained.
+Declare ordered `requiredTraversalBands` with honest
+`halfWidthMeters`, preserving actual bends and elevations. Add bands for Brief-required
 bridges, corridors, staircase courses, narrow saddles and other restricted connections.
-The current admitted ground graph is bidirectional; do not add one-way fields.
+Write explicit `isBidirectional: true` unless the Brief describes physically one-way
+traversal. False requires forward reachability; true also requires the reverse.
+This is a validation requirement, not one-way physics or a directed-transition
+capability. The current ground graph itself remains bidirectional.
 There are no minimum meter spans or chunk counts: do not add empty ground, stretch
 a road or erase a planned region to influence those measurements. Never invent a
 path in open scenery or widen a band to admit a distant detour. A failed anchor or
 band means repairing the real support/clearance/course, not moving the validation
 point to hide missing ground. These invisible anchors do not need visual groups.
+Optional ground evidence does not grant unsupported movement or skip actual Ground
+checks; the selected Subject must still implement every requested movement mode.
 
 For `case-defined`, write exactly `groundExploration: { "mode": "case-defined" }`.
 The frozen Case owns its metric bands and scripted constraints; do not duplicate
@@ -136,7 +193,8 @@ and geography. This does not relax overlap, explicit Collider, support, lattice 
 5. Give mountains, cliffs, stairs, platforms, and buildings real plan depth, cross-section, support, and rear mass. Small blocks express exposed detail; they do not replace structural volume.
    Reconstruct terrain evidence at four scales: macro silhouette and horizon; ridges, valleys, shorelines, ledges, and constructed surfaces; complete semantic landmarks; then exposed rock, foliage, eaves, rails, and edge detail. Full blocks own structural mass, half blocks own major transitions, and quarter/small blocks own exposed silhouette detail. Never turn decorative detail into hidden bulk fill or a separate semantic target.
    Three-dimensional fidelity is required: preserve footprint, longitudinal profile, cross-section, thickness, vertical endpoints, and over/under relationships. Valleys need a floor and containing sides; cliffs need a rim, face, base, and mass behind the rim. Do not substitute camera-facing mountain walls, facade-only buildings, shallow scenery strips, or oversized flat platforms for coherent reference volumes.
-   Build complete playable floor groups across the whole intended exploration domain, not a narrow strip that only satisfies one scripted input. Every floor needs visible support depth down to the shared root stratum, enough horizontal clearance for the controlled Capsule, and a continuous explicitly contributed support surface. Stairs are real supported tread columns joining two support levels. A ledge is allowed only when the Scene Brief or visible reference makes that drop intentional; otherwise close the floor. Never place an invisible or visual-only air wall to force a test outcome.
+   Build complete playable floor groups across the whole intended exploration domain, not a narrow strip that only satisfies one scripted input. Preserve reference-supported deck thickness, piers, cliff mass, arches and intentional suspended forms. Every playable floor needs enough horizontal clearance for the controlled Capsule and a continuous explicitly contributed support surface. Stairs join two real support levels with the visible supporting mass in the reference; they need not be solid columns extending to a shared world bottom. A ledge is allowed only when the Scene Brief or visible reference makes that drop intentional; otherwise close the floor. Never place an invisible or visual-only air wall to force a test outcome.
+   `WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING` is advisory only, including for structure and playable Blocks. Its global-root face-contact count is not proof of missing Capsule support or incorrect reference geometry. Do not extend all floors to the global lowest Block, fill arch openings or suspended scenery, relabel Blocks, or spend a repair cycle solely to erase this warning. There is no floating-intent approval or support-disposition output. Repair a real visual mismatch inside the existing image-review loop; the unchanged Case Ground Analysis owns actual Spawn/footprint support, clearance and required connectivity.
    Preserve every visually important road, trail, bridge approach, corridor, and other route as a metric course: keep its endpoints, ordered bends, junctions, switchbacks, width changes, elevation changes, and relationship to nearby landmarks. Approximate curves on the admitted Block lattice without replacing a winding route with a convenient straight or axis-aligned shortcut. A staircase must preserve its lower and upper support elevations, total rise, tread rhythm, width, course, major landings, side containment or intentional drop, and visible supporting mass; flat support with colored cross-bands is not a staircase.
    Before detailing each non-Subject semantic visual group, lock its footprint center, long axis, semantic front, and relationship to nearby routes and structures from the reference and frozen planning views. Declare that front in the group's required `frontDirectionWorldXZ` field in `native-block-authoring.json`, using exactly one of `[0, -1]`, `[-1, 0]`, `[0, 1]`, or `[1, 0]`. It is the complete object's semantic front in world XZ, not the opening Camera direction, an inferred longest axis, or a block's local rotation. The Host preserves it for Front/Right/Back review; it does not rotate geometry, Subject or Camera. Do not mirror, quarter-turn, front/back reverse, or relocate a target merely because its silhouette remains visible from the opening view.
    Formal opening depth order is measured from each declared visual group's complete checked bounds center. Extending a midground ridge or landmark group toward Spawn changes that measurement even when its distant mass remains in place. Keep support connections in their explicit Collider Groups without inventing visual membership, and preserve the complete footprint of every composition target during every repair.
@@ -155,7 +213,7 @@ and geography. This does not relax overlap, explicit Collider, support, lattice 
    `context/case.json.expected.groundConnectivity` is frozen Host intent, not Builder-owned policy. For a `case-defined` ground Spawn, make every declared traversal-band waypoint a real stand position and keep each consecutive segment traversable inside its honest `halfWidthMeters`. Current ground surfaces are bidirectional by construction; do not add an `isBidirectional` or one-way field. At least one band begins at the exact registered Spawn support position, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`. When `requireSingleReachableComponent` is `true`, every explicitly contributed standable floor must belong to the Spawn-reachable component; do not hide a disconnected island by relabeling it visual-only or blocker. Do not move, widen, omit, duplicate, or invent bands to make the checker pass. For an air Spawn, an empty band list and `false` single-component policy make ground analysis measurement-only; they do not authorize claiming flight/water reachability from the current ground-only Traversal Envelope.
    The checker samples the final smoothed collision triangles, not only raw Block tops. Put the exact Spawn, every pass target, and every declared band waypoint on a flat landing with full Capsule-footprint support plus at least one surrounding Profile microcell at the same top height; place stair and slope transitions outside that landing. If smoothing changes the final triangle height at a frozen point, repair the nearby explicit surface Blocks—never move the point or relax the threshold.
    Preserve the old block-world ability to cross an intended walkable rise of up to one meter by authoring it through the current Profile contract, not by restoring the old one-meter smoothing constant. Decompose the total rise into four or fewer face-connected, visibly supported `0.25m` tread transitions with flat endpoint landings. The trusted topology may smooth each quarter-meter join, while Ground Analysis still validates the resulting surface against the Subject's `0.3m` step and `42°` slope authorities. Never join two walkable levels `0.5m`–`1m` apart directly and assume smoothing will make them traversable.
-   In `case-defined` mode every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from `inputs/world-runtime-bootstrap.json`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check's `acceptanceTargetRef` must bind a declared ground/step Collider and must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A block check's `acceptanceTargetRef` must bind a declared blocker Collider, and the supported approach must let the Capsule reach that blocker; falling from a visual-only platform edge is not evidence that the blocker works.
+   In `case-defined` mode every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from the selected design and its exact profiles in `inputs/subject-host-context.json.resources`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check's `acceptanceTargetRef` must bind a declared ground/step Collider and must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A block check's `acceptanceTargetRef` must bind a declared blocker Collider, and the supported approach must let the Capsule reach that blocker; falling from a visual-only platform edge is not evidence that the blocker works.
 9. Ground-connectivity and fixed-input checks are structural admission evidence, not a Route/Nav product claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
 
 ## Mandatory visual feedback
@@ -169,11 +227,12 @@ these four values against the reference and Entry Whitebox Target in the same
 check/render/view/repair loop. Do not scale the SDK Subject to fill the frame.
 Keep the rear-view centerline and 16:9 frame; do not add entity IDs, Profile refs,
 shoulder/lateral/yaw offsets, or a second Bootstrap. The existing selectable
-third-person Profile ranges in `inputs/world-runtime-bootstrap.json` apply.
+third-person Profile ranges resolved from the selected Subject and frozen
+`inputs/subject-host-context.json` resources apply.
 
 The Host independently validates this data and binds it through the existing
 authoring manifest, compiled metadata and Package hashes. The frozen Request,
-Bootstrap, WRT and Registry files remain untouched. Camera-only repairs use the
+Bootstrap and frozen resource context remain untouched. Camera-only repairs use the
 same shared repair counter and invalidate both comparison PNGs; they do not
 allocate another task, output, or external repair attempt. Runtime target sockets
 and Context Modifiers retain their existing precedence; do not claim an advisory
@@ -188,7 +247,7 @@ node <resolved-bundled-renderer-path> \
   --entry-output attempts/advisory/builder-entry-comparison.png
 ```
 
-The renderer performs a source-only restricted mock capture of the Block Profile calls. It reads the frozen Native Bootstrap, Host-owned `subject-visual-review-proxy.json`, `native-block-authoring.json`, World Plan, and Entry Whitebox Target; it never derives the Subject from Native Source or reinterprets Runtime resources, and it does not instantiate Babylon, Engine, Scene, Runtime, Physics, Camera, Package, or Formal Capture. A passing renderer report proves only that the current source produced deterministic advisory pixels.
+The renderer performs a source-only restricted mock capture of the Block Profile calls. It reads the frozen Native Bootstrap, `subject-host-context.json`, `native-block-authoring.json`, World Plan, and Entry Whitebox Target. Its bundled Host compiler derives the controlled Subject's visual-review proxy from the sidecar design and frozen resources, never from Native geometry. It does not instantiate Babylon, Engine, Scene, Runtime, Physics, Camera, Package, or Formal Capture. A passing renderer report proves only that the current source produced deterministic advisory pixels.
 
 Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
 functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and

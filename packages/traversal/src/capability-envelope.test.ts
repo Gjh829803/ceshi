@@ -28,8 +28,7 @@ function lockInput(
     resourceLockHash: HASH_A,
     subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
     subjectDefinitionHash: HASH_A,
-    colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
-    colliderProfileHash: HASH_A,
+    colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1", colliderProfileHash: HASH_A },
     physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
     physicsBodyProfileHash: HASH_A,
     locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
@@ -73,6 +72,20 @@ function createEnvelope(
 }
 
 describe("createTraversalCapabilityEnvelopeV1", () => {
+  it("retains derived collider provenance and the exact locked Capsule without a named profile", () => {
+    const colliderSource = { kind: "derive" as const,
+      colliderDerivationProfileRef: "worldkit://collider-derivation-profile/capsule@1",
+      colliderDerivationProfileHash: HASH_A };
+    const receipt = createEnvelope({ colliderSource });
+    expect(receipt.envelope).toMatchObject({ colliderSource,
+      capsuleRadiusMeters: 0.32, capsuleHeightMeters: 1.92,
+      maxSlopeDegrees: 42, maxStepHeightMeters: 0.3 });
+    expect(receipt.envelope).not.toHaveProperty("colliderProfileRef");
+    expect(Object.isFrozen(receipt.envelope.colliderSource)).toBe(true);
+    expect(createEnvelope({ colliderSource: { ...colliderSource, colliderDerivationProfileHash: HASH_B } })
+      .traversalCapabilityEnvelopeHash).not.toBe(receipt.traversalCapabilityEnvelopeHash);
+  });
+
   it("joins only locked traversal capability and V2 build-policy authorities", () => {
     const receipt = createEnvelope();
 
@@ -82,8 +95,7 @@ describe("createTraversalCapabilityEnvelopeV1", () => {
       traversalMode: "ground",
       subjectEntityId: "player",
       resourceLockHash: HASH_A,
-      colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
-      colliderProfileHash: HASH_A,
+      colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1", colliderProfileHash: HASH_A },
       physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
       physicsBodyProfileHash: HASH_A,
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",

@@ -146,6 +146,10 @@ export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
       error instanceof Error ? error.message : String(error),
     );
   }
+  if (!palette.targets.some((target) => target.role === "primary-subject" &&
+    target.visualTargetId === authoringManifest.controlledSubject.visualTargetId)) {
+    return rejected("manifest-invalid", "Controlled Subject must bind the exact Palette primary Subject target.");
+  }
   const sortedCaseTargetRefs = [...caseTargetRefs].sort(stableCompare);
   const sortedManifestTargetRefs = authoringManifest.visualGroups
     .map(({ acceptanceTargetRef }) => acceptanceTargetRef)

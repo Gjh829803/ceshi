@@ -142,6 +142,31 @@ For Canonical Source, Builder may assemble a package-local controlled Subject an
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
 
+### Babylon Native three-dimensional spatial form
+
+Plan a volume, not a camera-facing picture. For every major terrain mass,
+constructed platform, bridge, stair, and landmark, reason about its footprint,
+longitudinal elevation profile, cross-section, thickness, and position in depth.
+Use perspective scale, overlap, vanishing lines, visible top/side faces, horizon
+placement, and occlusion as evidence. The opening image's two-dimensional
+silhouette is only one consequence of that volume and is never sufficient by
+itself.
+
+Record the visible vertical relationships in concise Brief prose without
+coordinates or engineering tables: which area is lower or higher, where an
+ascent begins and ends, what it passes above or below, and which upper/lower
+spaces it connects. Preserve the number and order of clearly visible elevation
+levels. Where the single view leaves depth ambiguous, choose the simplest
+volume that satisfies all visible evidence; do not collapse it to a thin
+backdrop wall or invent dramatic unseen relief.
+
+For a visible staircase, identify its lower start, upper destination, travel and
+rise direction, approximate width relative to the Subject, straight/curved/
+switchback form, major landings, side enclosure or drop, and the supporting
+terrain/structure. The planned stair must physically arrive at the visibly
+higher or lower destination. Horizontal strips painted across a flat path are
+not a staircase.
+
 ### Navigation intent
 
 Describe navigation in prose, not a graph.
@@ -344,5 +369,10 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
 ```
 
 If it fails, read the JSON diagnostics, repair the selected profile's outputs, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes every semantic output in the selected closed profile, so any edit after a passing check requires another check. For Babylon Native, a changed entry always invalidates and requires regeneration of the dependent World Plan before this check. Inspect the exact delivered pair again after repair. The primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+
+For Babylon Native, semantic colors cannot prove correct geography or
+continuous-world coherence by themselves. Human review owns top-down geography,
+inferred continuation, four-times-area coverage, spawn-token meaning, and visual
+quality; do not invent pixel-area, marker-shape, or image-recognition rules.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

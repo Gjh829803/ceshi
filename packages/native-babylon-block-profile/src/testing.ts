@@ -9,6 +9,9 @@ import {
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,
 } from "./reconstruction-corpus.js";
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
+export { createBabylonNativeBlockProfileCheckResultV1 } from "./check.js";
+export { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+export type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 
 export {
   babylonNativeBlockCenterAlignsToGridV1,
@@ -63,7 +66,6 @@ BabylonNativeSceneModuleV1 {
       const traversalSurfaceProfileRef =
         "worldkit://traversal-surface-profile/ground.static@1";
       session.finalize(Object.freeze({
-        displayGapMeters: 0.04,
         staticColliders: Object.freeze(RUNTIME_FIXTURE_BLOCKS.map((block) =>
           Object.freeze({
             id: `collider-${block.id}`,

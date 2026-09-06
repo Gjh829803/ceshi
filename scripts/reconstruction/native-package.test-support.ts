@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { parseSceneBriefV1, type SubjectDesignV1 } from "@whitebox-world/authoring";
 import { sha256Bytes, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashFormalWorldCaptureIntentV1, parseFormalWorldCaptureIntentV1, type NativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionViewRequirementV1 } from "@whitebox-world/validation";
@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 
 import { decideNativeBlockReconstructionRouteV1, prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
+import { createNativeSubjectHostContextV1 } from "./native-subject-host-context.js";
 
 // Deterministic test fixture: stubbed generation, real Host Check/Ground/Package.
 export const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -156,6 +157,7 @@ export default defineBabylonNativeScene({
 
 const AUTHORING = {
   kind: "native-block-authoring",
+  controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
   groundExploration: { mode: "case-defined" as const },
   openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
   schemaVersion: 1,
@@ -188,10 +190,9 @@ export const MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
     session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [capturedContext.scene === undefined ? 4 : 5, -0.5, 2] });`,
 );
 
-export const MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
+export const REMOVED_DISPLAY_GAP_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.finalize({ staticColliders: [`,
-  `    const capturedContext = context;
-    session.finalize({ displayGapMeters: capturedContext.scene === undefined ? 0.04 : 0.08, staticColliders: [`,
+  `    session.finalize({ displayGapMeters: 0.04, staticColliders: [`,
 );
 
 export const MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
@@ -238,6 +239,8 @@ export const EXTRA_VISUAL_GROUP_AUTHORING = {
 } as const;
 
 type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
+  movementModeRows?: readonly string[];
+  subjectDesign?: SubjectDesignV1;
   withoutScriptedTraversal?: boolean;
   withoutSemanticTargets?: boolean;
   sceneSource?: string;
@@ -245,6 +248,7 @@ type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
   omitAdvisory?: boolean;
   target3IdentityColorHex?: string;
   groundExploration?: NativeBlockGroundExplorationV1;
+  requireSingleReachableComponent?: boolean;
   maximumBlockCount?: number;
   worldBoundsPolicy?: NativeSceneWorldBoundsPolicyV1;
   semanticReferenceProjections?: readonly Readonly<{
@@ -314,6 +318,9 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     ? (options.sceneSource ?? SCENE_SOURCE).replace(/, visualGroupId: "[^"]+"/g, "")
     : options.sceneSource ?? SCENE_SOURCE;
   const authoring = { ...(options.authoring ?? AUTHORING),
+    ...(options.subjectDesign === undefined ? {} : {
+      controlledSubject: { visualTargetId: "visual-target-1", design: options.subjectDesign },
+    }),
     ...(options.withoutSemanticTargets === true ? { visualGroups: [] } : {}),
     groundExploration: options.groundExploration ?? (options.authoring ?? AUTHORING).groundExploration };
   const caseRoot = path.join(root, "case");
@@ -329,11 +336,20 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     await writeFile(path.join(inputDirectoryPath, "world-bounds-policy.json"),
       stringifyCanonicalJson(options.worldBoundsPolicy));
   }
-  const sceneBrief = parseSceneBriefV1(await readFile(
+  const originalBrief = await readFile(
     path.join(inputDirectoryPath, caseValue.sceneBriefRef),
     "utf8",
-  ));
+  );
+  const brief = options.movementModeRows === undefined ? originalBrief : originalBrief.replace(
+    /## 运动模式\n[^]*?\n## 空间/,
+    `## 运动模式\n${options.movementModeRows.join("\n")}\n\n## 空间`,
+  );
+  const sceneBrief = parseSceneBriefV1(brief);
   if (!sceneBrief.ok) throw new TypeError("TEST_SCENE_BRIEF_INVALID");
+  if (options.movementModeRows !== undefined) {
+    await writeFile(path.join(inputDirectoryPath, caseValue.sceneBriefRef), brief);
+    caseValue.sceneBriefHash = sha256Bytes(new TextEncoder().encode(brief));
+  }
   // This package-owner fixture intentionally builds a compact straight route.
   // Keep its trusted Ground Analysis band local to that geometry instead of
   // inheriting the production Case's gate-detour samples whenever the real
@@ -346,7 +362,7 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     ];
   if (authoring.groundExploration.mode === "source-authored") {
     caseValue.expected.groundConnectivity = {
-      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+      mode: "source-authored", requireSingleReachableComponent: options.requireSingleReachableComponent ?? true, requiredTraversalBands: [],
     };
   }
   if (options.withoutScriptedTraversal === true) {
@@ -434,8 +450,8 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
       schemaVersion: 1,
       sceneId: caseValue.id,
       sceneBriefHash: sceneBrief.sceneBriefHash,
-      movementModes: ["ground-walk"],
-      movementModeLabels: ["Ground walk"],
+      movementModes: sceneBrief.value.movementModes.map(({ mode }) => mode),
+      movementModeLabels: sceneBrief.value.movementModes.map(({ label }) => label),
       targets: [
         { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
         ...(options.target3IdentityColorHex === undefined ? [] : [
@@ -533,10 +549,7 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(inputDirectoryPath, "native-scene-profile.json"),
     blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"),
-    hostClosureRootPath: HOST_CLOSURE_ROOT,
-    gameplayBootstrapPath: path.join(HOST_CLOSURE_ROOT, "gameplay/bootstrap.json"),
-    worldRuntimeBootstrapPath: path.join(HOST_CLOSURE_ROOT, "runtime/world-runtime-bootstrap.json"),
-    worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+    subjectHostContext: createNativeSubjectHostContextV1(reconstructionCase.id, "camera-main"),
     worldBoundsPolicyPath: path.join(inputDirectoryPath, "world-bounds-policy.json"),
     worldBoundsPolicy: parseNativeSceneWorldBoundsPolicyV1(options.worldBoundsPolicy ?? boundsValue),
     bootstrapId: `${reconstructionCase.id}-native`,
@@ -590,10 +603,10 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
       path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"),
       "--bootstrap",
       path.join(prepared.taskWorkspacePath, "inputs/native-scene.bootstrap.json"),
-      "--subject-visual-review-proxy",
+      "--subject-host-context",
       path.join(
         prepared.taskWorkspacePath,
-        "inputs/subject-visual-review-proxy.json",
+        "inputs/subject-host-context.json",
       ),
       "--world-plan",
       path.join(prepared.taskWorkspacePath, "inputs/world-plan.png"),

@@ -18,7 +18,7 @@ import {
   BABYLON_NATIVE_BLOCK_CHUNK_POLICY_PENDING_CASE_SLOTS_V1,
   measureBabylonNativeBlockChunkPolicyBenchmarkV1,
 } from "./chunk-policy-benchmark.js";
-import type { BabylonNativeBlockFinalizedEpochV1 } from "./session.js";
+import { createBabylonNativeBlockProfileSessionV1, type BabylonNativeBlockFinalizedEpochV1 } from "./session.js";
 import {
   materializeBabylonNativeBlockReconstructionCorpusCaseV1,
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,
@@ -116,6 +116,43 @@ async function measureCorpusEpochs(): Promise<
 }
 
 describe("NBR-65F Chunk policy benchmark", () => {
+  it("CF-20 measures the 32m candidate on a macro-world span without changing the frozen selection", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      let finalizedEpoch: BabylonNativeBlockFinalizedEpochV1 | undefined;
+      const admission = await admitBabylonNativeSceneCandidateV1({
+        candidate: { engine, scene }, hostDerivedStaticColliders: [], bootstrap: bootstrap("macro-span"),
+        module: defineBabylonNativeScene({ kind: "babylon-native-scene-module", id: "chunk-benchmark-macro-span-module",
+          build(context) {
+            const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 128 });
+            session.createBlockGrid({ idPrefix: "macro-wall", shape: "full", paletteRole: "background-mass",
+              visualGroupId: "macro-wall", minimumCenterMetersXYZ: [-64, 5, 0], repeatCountXYZ: [128, 1, 1] });
+            finalizedEpoch = session.finalize({ staticColliders: [] });
+            context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId,
+              positionMetersXYZ: [0, 0, 0], facingRadians: 0 });
+          },
+        }),
+        assets: { async resolve(): Promise<never> { throw new Error("no assets"); } },
+        budget: { maximumStaticColliderCount: 24, maximumStaticColliderVertexCount: 1024, maximumStaticColliderTriangleCount: 1024 },
+      });
+      expect(admission.outcome).toBe("passed");
+      expect(finalizedEpoch).toBeDefined();
+      const benchmark = measureBabylonNativeBlockChunkPolicyBenchmarkV1({
+        candidatePolicies: BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
+        measuredCases: [{ caseId: "macro-span", finalizedEpoch: finalizedEpoch! }], pendingCaseSlots: [],
+      });
+      expect(Object.fromEntries(benchmark.policyRows.map((row) => [row.policyId,
+        [row.totals.visualDrawUnitCount, row.maximumResidencyGroupBlockCount]])))
+        .toEqual({ "chunk-xz-2m": [64, 2], "chunk-xz-4m": [32, 4], "chunk-xz-8m": [16, 8],
+          "chunk-xz-16m": [8, 16], "chunk-xz-32m": [4, 32] });
+      expect(benchmark.selection.selectedPolicyId).toBe("chunk-xz-32m");
+      expect(BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1.id).toBe("chunk-xz-4m");
+      // Deterministic layout counts only: this visual-only fixture does not
+      // claim Ground, Havok, frame timing or complete-world production evidence.
+      expect(benchmark.policyRows.every((row) => row.totals.colliderProxyCount === 0)).toBe(true);
+    } finally { scene.dispose(); engine.dispose(); }
+  });
   it("re-derives the frozen policy from every positive Corpus Case", async () => {
     const measuredCases = await measureCorpusEpochs();
     const benchmark = measureBabylonNativeBlockChunkPolicyBenchmarkV1({
@@ -127,6 +164,7 @@ describe("NBR-65F Chunk policy benchmark", () => {
     expect(benchmark.policyRows.map(({ policyId }) => policyId)).toEqual([
       "chunk-xz-16m",
       "chunk-xz-2m",
+      "chunk-xz-32m",
       "chunk-xz-4m",
       "chunk-xz-8m",
     ]);
@@ -166,6 +204,17 @@ describe("NBR-65F Chunk policy benchmark", () => {
         colliderTriangleCount: 1440,
       },
       "chunk-xz-16m": {
+        baselineVisualDrawUnitCount: 48,
+        baselineColliderProxyCount: 10,
+        visualDrawUnitCount: 25,
+        visualGeometryBufferSetCount: 25,
+        thinInstanceBatchCount: 17,
+        independentVisualMeshCount: 8,
+        residencyGroupCount: 16,
+        colliderProxyCount: 10,
+        colliderTriangleCount: 1440,
+      },
+      "chunk-xz-32m": {
         baselineVisualDrawUnitCount: 48,
         baselineColliderProxyCount: 10,
         visualDrawUnitCount: 25,

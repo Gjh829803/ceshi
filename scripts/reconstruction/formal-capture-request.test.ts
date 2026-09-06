@@ -373,7 +373,7 @@ async function fixture(withoutScriptedTraversal = false, completeTargets = false
         { id: "middle", region: "middle" as const, standPositionMetersXYZ: [0, 0, -1] as const },
         { id: "remote", region: "remote" as const, standPositionMetersXYZ: [0, 0, -2] as const },
       ],
-      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
         centerlineStandPositionsMetersXYZ: [[0, 0, 0] as const, [0, 0, -1] as const] }],
     } : baseMetadata.groundExploration,
     caseHash,

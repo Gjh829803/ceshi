@@ -51,7 +51,7 @@ interface Session {
     rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
     visualGroupId?: string;
     colliderGroupId?: string }>): Mesh;
-  finalize(input: Readonly<{ displayGapMeters?: number;
+  finalize(input: Readonly<{
     staticColliders: readonly FinalizeSelection[] }>): FinalizedEpoch;
   dispose(): void;
 }
@@ -190,7 +190,6 @@ interface HashVariant {
   readonly visualGroupId?: string;
   readonly colliderGroupId?: string;
   readonly xMeters?: number;
-  readonly displayGapMeters?: number;
   readonly colliderId?: string;
   readonly notTraversable?: boolean;
   readonly exposedEdgePolicy?: "none" | "protect-ground-subject";
@@ -238,7 +237,6 @@ async function buildProfileInventoryHash(
         });
       }
       epoch = session.finalize(Object.freeze({
-        displayGapMeters: variant.displayGapMeters ?? 0.04,
         staticColliders: Object.freeze([frozenSelection(
           variant.colliderId ?? "feature-collider",
           "feature-block",
@@ -288,13 +286,13 @@ describe("Babylon Native block Profile settlement", () => {
           session.createBlock({ id: "structure-block", shape: "small",
             paletteRole: "structure", visualGroupId: "structure-group",
             centerMetersXYZ: [1.25, 0.25, 0.25] });
-          epoch = session.finalize(Object.freeze({ displayGapMeters: 0.04,
+          epoch = session.finalize(Object.freeze({
             staticColliders: Object.freeze([frozenSelection()]) }));
-          repeated = session.finalize(Object.freeze({ displayGapMeters: 0.04,
+          repeated = session.finalize(Object.freeze({
             staticColliders: Object.freeze([frozenSelection()]) }));
           try {
-            session.finalize(Object.freeze({ displayGapMeters: 0.03,
-              staticColliders: Object.freeze([frozenSelection()]) }));
+            session.finalize(Object.freeze({
+              staticColliders: Object.freeze([frozenSelection("changed-collider")]) }));
           } catch (error) { mismatch = error; }
         });
       if (admission.outcome === "rejected") {
@@ -326,8 +324,8 @@ describe("Babylon Native block Profile settlement", () => {
         .toEqual([-0.5, 1, -0.5]);
       expect(proxy.getBoundingInfo().boundingBox.maximumWorld.asArray())
         .toEqual([0.5, 1, 0.5]);
-      expect(route.scaling.asArray()).toEqual([0.96, 0.96, 0.96]);
-      expect(structure.scaling.asArray()).toEqual([0.92, 0.92, 0.92]);
+      expect(route.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
+      expect(structure.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
     } finally {
       session?.dispose();
       scene.dispose();
@@ -504,7 +502,6 @@ describe("Babylon Native block Profile settlement", () => {
           profileInventoryHash = settleBabylonNativeBlockProfileV1({
             context,
             checkedLayout,
-            displayGapMeters: 0.04,
             colliderInventory,
             walkableOverlays: Object.freeze(overlays.map((mesh, index) => Object.freeze({
               logicalColliderId: "floor-collider",
@@ -518,7 +515,6 @@ describe("Babylon Native block Profile settlement", () => {
             expectedProfileInventoryHash:
               createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1({
                 checkedLayout,
-                displayGapMeters: 0.04,
                 colliderInventory,
               }).profileInventoryHash,
           });
@@ -552,7 +548,6 @@ describe("Babylon Native block Profile settlement", () => {
       { visualGroupId: "changed-group" },
       { colliderGroupId: "changed-collider-group" },
       { xMeters: 1.75 },
-      { displayGapMeters: 0.03 },
       { colliderId: "changed-collider" },
       { notTraversable: true },
       { exposedEdgePolicy: "protect-ground-subject" as const },

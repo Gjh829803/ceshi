@@ -3736,7 +3736,7 @@ export class BabylonWorldRuntime {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
-    this.scene.render();
+    this.cameraComponent.render(interpolationAlphaRatio, () => this.scene.render());
     const receipt: RenderReadyReceiptV1 = {
       kind: "worldkit-render-ready-receipt",
       schemaVersion: 1,

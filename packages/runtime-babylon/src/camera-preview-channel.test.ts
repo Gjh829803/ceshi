@@ -4,6 +4,9 @@ import { createRequire } from "node:module";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
+import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
   parseCameraContextSampleV2,
@@ -29,6 +32,7 @@ import {
   committedCameraContextFromViewTargetV2,
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
+import { CameraComponentV1 } from "./camera-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import {
   compileRuntimeTestScenePlanV1,
@@ -72,6 +76,38 @@ function cameraGeometryQuery(
       penetrationDepth: "exact-or-zero",
     },
     query,
+  };
+}
+
+function createCameraRenderFixture() {
+  const executionPlan = compileRuntimeTestScenePlanV1(createFlatTerrainCapabilitySpec(), {
+    subjectResourceRegistry: builtInSubjectResourceRegistry,
+  });
+  const subject = runtimeSubject(executionPlan);
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = new FreeCamera("camera.render-history", Vector3.Zero(), scene);
+  const query = vi.fn<CameraGeometryQueryPortV2["query"]>(() => undefined);
+  const component = new CameraComponentV1(initialCamera(executionPlan), camera, scene, cameraGeometryQuery(query));
+  const arm = new SpringArmComponentV1();
+  const sample: ViewTargetSampleV1 = {
+    controlledEntityId: subject.entityId, entityId: subject.entityId,
+    targetPositionMetersXYZ: [3, 1, -7], forwardXYZ: [0, 0, -1], upXYZ: [0, 1, 0],
+    velocityMetersPerSecondXYZ: [0, 0, 0], approximateRadiusMeters: 0.5,
+    socketPositionsMetersXYZById: {}, movementMedium: "ground",
+    relationshipContexts: [], cameraContextTags: [],
+  };
+  component.setViewPreference(subject.capabilityAssembly.cameraContext, {
+    mode: "camera-rig-profile", cameraRigProfileRef: ORBIT_REF,
+  });
+  return {
+    component, camera, query, sample, subject,
+    update(tick: number, overrides: Partial<ViewTargetSampleV1> = {}, deltaSeconds = 1 / 60) {
+      const next = { ...sample, ...overrides };
+      component.update(subject.capabilityAssembly.cameraContext, next, deltaSeconds,
+        committedCameraContextFromViewTargetV2(next, tick, "idle", 0), arm);
+    },
+    dispose() { component.dispose(); arm.dispose(); engine.dispose(); },
   };
 }
 
@@ -683,7 +719,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(afterPreview.camera.collisionHitNormalXYZ).toEqual([0, 0, -1]);
       expect(afterPreview.camera.startedOverlapping).toBe(false);
       expect(afterPreview.camera.penetrationDepthMeters).toBe(0);
-      expect(afterPreview.camera.clearHoldRemainingSeconds).toBeCloseTo(0.12, 12);
+      expect(afterPreview.camera.clearHoldRemainingSeconds).toBe(0);
       const desiredTarget = afterPreview.camera.desiredTargetPositionMetersXYZ;
       const actualPosition = afterPreview.camera.actualPositionMetersXYZ;
       if (actualPosition === undefined || desiredTarget === undefined) {
@@ -947,6 +983,216 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
+  it.each([1 / 30, 1 / 60, 1 / 120])("recovers the Director arm at the old profile speed without double damping at dt=%s", (deltaSeconds) => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.recovery-parity", Vector3.Zero(), scene);
+    let obstructed = true;
+    const queryPort = cameraGeometryQuery((request) => {
+      if (!obstructed) return undefined;
+      const start = new Vector3(...request.startPositionMetersXYZ);
+      const end = new Vector3(...request.endPositionMetersXYZ);
+      const length = Vector3.Distance(start, end);
+      const travel = Math.min(0.75, length);
+      return {
+        schemaVersion: 2,
+        travelDistanceMeters: travel,
+        travelFraction: travel / length,
+        hitPointMetersXYZ: start.add(end.subtract(start).normalize().scale(travel)).asArray() as [number, number, number],
+        hitNormalXYZ: [0, 0, -1],
+        hitEntityId: "wall",
+        startedOverlapping: false,
+        penetrationDepthMeters: 0,
+        obstructionClass: "hard",
+      };
+    });
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
+    const springArm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId, entityId: subject.entityId,
+      targetPositionMetersXYZ: [3, 1, -7], forwardXYZ: [0, 0, -1], upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0], approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {}, movementMedium: "ground",
+      relationshipContexts: [], cameraContextTags: [],
+    };
+    try {
+      director.setViewPreference(subject.capabilityAssembly.cameraContext, {
+        mode: "camera-rig-profile", cameraRigProfileRef: ORBIT_REF,
+      });
+      expect(director.applyPreview({ [ORBIT_REF]: {
+        distanceMeters: 6, collisionRecoveryMetersPerSecond: 6,
+        horizontalPositionDampingPerSecond: 0.5, verticalPositionDampingPerSecond: 0.5,
+        maximumPositionLagMeters: 10,
+      } }, subject.capabilityAssembly.cameraContext)).toBe(true);
+      const update = (tick: number) => director.update(
+        subject.capabilityAssembly.cameraContext, sample, deltaSeconds,
+        committedCameraContextFromViewTargetV2(sample, tick, "idle", 0), springArm,
+      );
+      update(1);
+      expect(director.snapshot().effectiveArmLengthMeters).toBeCloseTo(0.75, 8);
+      obstructed = false;
+      for (let tick = 2; tick <= 12; tick += 1) {
+        update(tick);
+        const snapshot = director.snapshot();
+        const expected = 0.75 + (tick - 1) * 6 * deltaSeconds;
+        expect(snapshot.effectiveArmLengthMeters).toBeCloseTo(expected, 8);
+        expect(distanceMeters(snapshot.actualPositionMetersXYZ!, snapshot.desiredTargetPositionMetersXYZ!))
+          .toBeCloseTo(expected, 8);
+      }
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it.each([1 / 30, 1 / 60, 1 / 120])("matches old independent position and target damping for a moving Subject at dt=%s", (deltaSeconds) => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.moving-target-parity", Vector3.Zero(), scene);
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, cameraGeometryQuery());
+    const springArm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId, entityId: subject.entityId,
+      targetPositionMetersXYZ: [3, 1, -7], forwardXYZ: [0, 0, -1], upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0], approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {}, movementMedium: "ground",
+      relationshipContexts: [], cameraContextTags: [],
+    };
+    try {
+      director.setViewPreference(subject.capabilityAssembly.cameraContext, {
+        mode: "camera-rig-profile", cameraRigProfileRef: ORBIT_REF,
+      });
+      expect(director.applyPreview({ [ORBIT_REF]: {
+        distanceMeters: 6, targetHeightMeters: 1.2, pitchRadians: 0.2,
+        shoulderOffsetMeters: 0.3, lookAheadSeconds: 0, accelerationLookAheadSecondsSquared: 0,
+        horizontalDeadZoneRatio: 0, verticalDeadZoneRatio: 0,
+        horizontalPositionDampingPerSecond: 2, verticalPositionDampingPerSecond: 3,
+        yawDampingPerSecond: 5, pitchDampingPerSecond: 7, maximumPositionLagMeters: 10,
+      } }, subject.capabilityAssembly.cameraContext)).toBe(true);
+      director.update(subject.capabilityAssembly.cameraContext, sample, deltaSeconds,
+        committedCameraContextFromViewTargetV2(sample, 1, "idle", 0), springArm);
+      let expectedPosition = camera.position.clone();
+      let expectedTarget = new Vector3(...director.snapshot().desiredTargetPositionMetersXYZ!);
+      const offset = expectedPosition.subtract(expectedTarget);
+      const moves = [[4, 1.1, -7.3], [3.7, 0.8, -6.8], [4.5, 1.2, -7.8]] as const;
+      for (const [index, position] of moves.entries()) {
+        const moved = { ...sample, targetPositionMetersXYZ: position };
+        const rawTarget = new Vector3(position[0], position[1] + 1.2, position[2]);
+        const idealPosition = rawTarget.add(offset);
+        // 9e35ab53 Director: position damping consumes the raw ideal position;
+        // target damping is independent and is not also added to ideal position.
+        expectedPosition = new Vector3(
+          expectedPosition.x + (idealPosition.x - expectedPosition.x) * (1 - Math.exp(-2 * deltaSeconds)),
+          expectedPosition.y + (idealPosition.y - expectedPosition.y) * (1 - Math.exp(-3 * deltaSeconds)),
+          expectedPosition.z + (idealPosition.z - expectedPosition.z) * (1 - Math.exp(-2 * deltaSeconds)),
+        );
+        expectedTarget = new Vector3(
+          expectedTarget.x + (rawTarget.x - expectedTarget.x) * (1 - Math.exp(-5 * deltaSeconds)),
+          expectedTarget.y + (rawTarget.y - expectedTarget.y) * (1 - Math.exp(-7 * deltaSeconds)),
+          expectedTarget.z + (rawTarget.z - expectedTarget.z) * (1 - Math.exp(-5 * deltaSeconds)),
+        );
+        director.update(subject.capabilityAssembly.cameraContext, moved, deltaSeconds,
+          committedCameraContextFromViewTargetV2(moved, index + 2, "idle", 0), springArm);
+        expect(Vector3.Distance(camera.position, expectedPosition)).toBeLessThan(1e-9);
+        expect(Vector3.Distance(new Vector3(...director.snapshot().desiredTargetPositionMetersXYZ!), expectedTarget))
+          .toBeLessThan(1e-9);
+      }
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it.each([1 / 30, 1 / 60, 1 / 120])("matches pinned-old bidirectional Profile transition traces at dt=%s", (dt) => {
+    for (const reverse of [false, true]) for (const blocked of [false, true]) {
+      const f = createCameraRenderFixture();
+      try {
+        const shared = {
+          horizontalDeadZoneRatio: 0, verticalDeadZoneRatio: 0,
+          lookAheadSeconds: 0, accelerationLookAheadSecondsSquared: 0, maximumPositionLagMeters: 10,
+        };
+        const orbit = { ...shared, distanceMeters: 4, targetHeightMeters: 1.1, pitchRadians: 0.15,
+          shoulderOffsetMeters: -0.3, baseFovDegrees: 48, horizontalPositionDampingPerSecond: 2,
+          verticalPositionDampingPerSecond: 3, yawDampingPerSecond: 4, pitchDampingPerSecond: 5,
+          fovDampingPerSecond: 6, transitionSeconds: 0.4 };
+        const follow = { ...shared, distanceMeters: 7, targetHeightMeters: 2.3, pitchRadians: 0.35,
+          shoulderOffsetMeters: 0.6, baseFovDegrees: 78, horizontalPositionDampingPerSecond: 7,
+          verticalPositionDampingPerSecond: 8, yawDampingPerSecond: 9, pitchDampingPerSecond: 10,
+          fovDampingPerSecond: 11, transitionSeconds: 0.3 };
+        const fromRef = reverse ? FOLLOW_REF : ORBIT_REF;
+        const toRef = reverse ? ORBIT_REF : FOLLOW_REF;
+        const to = reverse ? orbit : follow;
+        const context = f.subject.capabilityAssembly.cameraContext;
+        expect(f.component.setViewPreference(context, { mode: "camera-rig-profile", cameraRigProfileRef: fromRef }).ok).toBe(true);
+        expect(f.component.applyPreview({ [ORBIT_REF]: orbit, [FOLLOW_REF]: follow }, context)).toBe(true);
+        const wallZ = -6;
+        if (blocked) f.query.mockImplementation((request) => {
+          const start = new Vector3(...request.startPositionMetersXYZ);
+          const end = new Vector3(...request.endPositionMetersXYZ);
+          if (end.z <= wallZ + 1e-9 || end.z <= start.z) return undefined;
+          const fraction = (wallZ - start.z) / (end.z - start.z);
+          return {
+            schemaVersion: 2, travelFraction: fraction,
+            travelDistanceMeters: Vector3.Distance(start, end) * fraction,
+            hitPointMetersXYZ: Vector3.Lerp(start, end, fraction).asArray() as [number, number, number],
+            hitNormalXYZ: [0, 0, -1], hitEntityId: "wall", startedOverlapping: false,
+            penetrationDepthMeters: 0, obstructionClass: "hard",
+          };
+        });
+        f.update(1, {}, dt);
+        const startPosition = f.camera.position.clone();
+        const startTarget = new Vector3(...f.component.snapshot().desiredTargetPositionMetersXYZ!);
+        const startFov = f.camera.fov;
+        let position = startPosition.clone();
+        let target = startTarget.clone();
+        let dampedFov = startFov;
+        expect(f.component.setViewPreference(context, { mode: "camera-rig-profile", cameraRigProfileRef: toRef }).ok).toBe(true);
+        const rawTarget = new Vector3(3, 1 + to.targetHeightMeters, -7);
+        const ideal = new Vector3(3 - to.shoulderOffsetMeters,
+          rawTarget.y + Math.sin(to.pitchRadians) * to.distanceMeters,
+          -7 + Math.cos(to.pitchRadians) * to.distanceMeters);
+        let elapsed = 0;
+        for (let tick = 2; tick < Math.ceil(to.transitionSeconds / dt) + 6; tick += 1) {
+          const alpha = smoothstep01(elapsed / to.transitionSeconds);
+          const nextPosition = blocked
+            ? Vector3.Lerp(rawTarget, ideal, (wallZ - rawTarget.z) / (ideal.z - rawTarget.z))
+            : new Vector3(
+                position.x + (ideal.x - position.x) * (1 - Math.exp(-to.horizontalPositionDampingPerSecond * dt)),
+                position.y + (ideal.y - position.y) * (1 - Math.exp(-to.verticalPositionDampingPerSecond * dt)),
+                position.z + (ideal.z - position.z) * (1 - Math.exp(-to.horizontalPositionDampingPerSecond * dt)),
+              );
+          const nextTarget = new Vector3(
+            target.x + (rawTarget.x - target.x) * (1 - Math.exp(-to.yawDampingPerSecond * dt)),
+            target.y + (rawTarget.y - target.y) * (1 - Math.exp(-to.pitchDampingPerSecond * dt)),
+            target.z + (rawTarget.z - target.z) * (1 - Math.exp(-to.yawDampingPerSecond * dt)),
+          );
+          dampedFov += (to.baseFovDegrees * Math.PI / 180 - dampedFov) * (1 - Math.exp(-to.fovDampingPerSecond * dt));
+          position = blocked ? nextPosition : Vector3.Lerp(startPosition, nextPosition, alpha);
+          target = Vector3.Lerp(startTarget, nextTarget, alpha);
+          const fov = startFov + (dampedFov - startFov) * alpha;
+          f.update(tick, {}, dt);
+          expect(f.component.snapshot().activeCameraProfileRef).toBe(toRef);
+          expect(f.component.snapshot().resolvedParameters).toMatchObject(to);
+          expect(f.component.snapshot().profileTransitionProgressRatio).toBeCloseTo(alpha, 12);
+          expect(Vector3.Distance(f.camera.position, position)).toBeLessThan(1e-8);
+          expect(Vector3.Distance(new Vector3(...f.component.snapshot().desiredTargetPositionMetersXYZ!), target)).toBeLessThan(1e-8);
+          expect(f.camera.fov).toBeCloseTo(fov, 10);
+          elapsed += dt;
+        }
+      } finally { f.dispose(); }
+    }
+  });
+
   it("recovers a third-person arm monotonically after it exits a collision", async () => {
     const collisionRecoveryMetersPerSecond = 2;
     const runtime = await createCameraPreviewChannelRuntime({
@@ -1054,6 +1300,200 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       await Promise.all([firstRuntime.dispose(), secondRuntime.dispose()]);
     }
   }, 15_000);
+
+  it("renders old committed Camera interpolation at alpha 0/0.5/1 and restores authoritative state", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+      runtime.adjustCameraView({ yawDeltaRadians: 0.6 });
+      const previous = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const current = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(distanceMeters(previous.camera.actualPositionMetersXYZ!, current.camera.actualPositionMetersXYZ!))
+        .toBeGreaterThan(0.001);
+      const scene = (runtime as unknown as { readonly scene: Scene }).scene;
+      const camera = scene.activeCamera;
+      if (!(camera instanceof FreeCamera)) throw new Error("Expected runtime Camera.");
+      const render = vi.spyOn(scene, "render");
+      try {
+        for (const alpha of [0, 0.5, 1]) {
+          render.mockImplementation(() => {
+            const position = Vector3.Lerp(new Vector3(...previous.camera.actualPositionMetersXYZ!),
+              new Vector3(...current.camera.actualPositionMetersXYZ!), alpha);
+            const target = Vector3.Lerp(new Vector3(...previous.camera.desiredTargetPositionMetersXYZ!),
+              new Vector3(...current.camera.desiredTargetPositionMetersXYZ!), alpha);
+            camera.getViewMatrix(true);
+            expect(Vector3.Distance(camera.position, position)).toBeLessThan(1e-8);
+            expect(Vector3.Distance(camera.getTarget(), target)).toBeLessThan(1e-5);
+            expect(camera.fov).toBeCloseTo((previous.camera.finalFovDegrees! +
+              (current.camera.finalFovDegrees! - previous.camera.finalFovDegrees!) * alpha) * Math.PI / 180, 10);
+          });
+          runtime.renderFrame(alpha);
+          expect(runtime.snapshot().camera).toEqual(current.camera);
+          expect(runtime.snapshot().subjectStatesByEntityId).toEqual(current.subjectStatesByEntityId);
+        }
+        render.mockImplementation(() => { throw new Error("render interrupted"); });
+        expect(() => runtime.renderFrame(0.5)).toThrow("render interrupted");
+        expect(runtime.snapshot().camera).toEqual(current.camera);
+        expect(runtime.snapshot().subjectStatesByEntityId).toEqual(current.subjectStatesByEntityId);
+      } finally {
+        render.mockRestore();
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps a pending render-history reset through a repeated committed tick", () => {
+    const f = createCameraRenderFixture();
+    try {
+      f.update(1);
+      f.update(2, { targetPositionMetersXYZ: [4, 1, -7] });
+      expect(f.component.applyPreview({ [ORBIT_REF]: { baseFovDegrees: 80 } },
+        f.subject.capabilityAssembly.cameraContext)).toBe(true);
+      f.update(2, { targetPositionMetersXYZ: [4, 1, -7] });
+      expect(f.component.captureTransactionState().renderPoseHistoryNeedsReset).toBe(true);
+      const before = f.component.captureTransactionState();
+      f.component.render(0.5, () => {});
+      expect(f.component.captureTransactionState()).toEqual(before);
+      f.update(3, { targetPositionMetersXYZ: [4, 1, -7] });
+      const folded = f.component.captureTransactionState();
+      expect(folded.renderPoseHistoryNeedsReset).toBe(false);
+      expect(folded.renderPoseHistory.previous).toEqual(folded.renderPoseHistory.current);
+    } finally { f.dispose(); }
+  });
+
+  it.each(["target-rebind", "teleport"])("collapses Camera render history on %s without inferring another movement state", (change) => {
+    const f = createCameraRenderFixture();
+    try {
+      f.update(1);
+      f.update(2, { targetPositionMetersXYZ: [4, 1, -7] });
+      f.update(3, change === "target-rebind"
+        ? { entityId: "render-target-b", targetPositionMetersXYZ: [4, 1, -7] }
+        : { targetPositionMetersXYZ: [100, 1, -7] });
+      const state = f.component.captureTransactionState();
+      expect(state.renderPoseHistory.previous).toEqual(state.renderPoseHistory.current);
+      f.component.render(0.5, () => {
+        expect(f.camera.position.asArray()).toEqual(state.renderPoseHistory.current.positionMetersXYZ);
+      });
+    } finally { f.dispose(); }
+  });
+
+  it.each(["path-blocked", "lookat-blocked", "query-failed"])("uses the committed pose for %s during display interpolation without mutating authority", (failure) => {
+    const f = createCameraRenderFixture();
+    try {
+      f.update(1);
+      f.update(2, { targetPositionMetersXYZ: [4, 1.5, -7.5] });
+      const before = f.component.captureTransactionState();
+      f.query.mockClear();
+      f.query.mockImplementation(() => {
+        if (failure === "query-failed") throw new Error("geometry unavailable");
+        if (failure === "lookat-blocked" && f.query.mock.calls.length === 1) return undefined;
+        return {
+          schemaVersion: 2, travelDistanceMeters: 0, travelFraction: 0,
+          hitPointMetersXYZ: [0, 0, 0], hitNormalXYZ: [0, 0, -1],
+          hitEntityId: "wall", startedOverlapping: false, penetrationDepthMeters: 0,
+          obstructionClass: "hard",
+        };
+      });
+      f.component.render(0.5, () => {
+        expect(f.camera.position.asArray()).toEqual(before.renderPoseHistory.current.positionMetersXYZ);
+      });
+      expect(f.query).toHaveBeenCalledTimes(failure === "lookat-blocked" ? 2 : 1);
+      expect(f.query.mock.calls[0]![0]).toMatchObject({
+        committedTick: 2, excludedEntityIds: [f.sample.entityId], collisionMask: "camera-hard",
+        startPositionMetersXYZ: before.renderPoseHistory.previous.positionMetersXYZ,
+        endPositionMetersXYZ: before.renderPoseHistory.current.positionMetersXYZ,
+      });
+      expect(f.component.captureTransactionState()).toEqual(before);
+      f.query.mockClear();
+      f.component.render(1, () => {});
+      expect(f.query).not.toHaveBeenCalled();
+      expect(f.component.captureTransactionState()).toEqual(before);
+    } finally { f.dispose(); }
+  });
+
+  it("interpolates changing FOV and restores render history with the existing Camera transaction", () => {
+    const f = createCameraRenderFixture();
+    try {
+      f.update(1);
+      f.component.applyPreview({ [ORBIT_REF]: { baseFovDegrees: 90 } }, f.subject.capabilityAssembly.cameraContext);
+      f.update(2);
+      f.update(3, { targetPositionMetersXYZ: [4, 1, -7] });
+      const before = f.component.captureTransactionState();
+      const { previous, current } = before.renderPoseHistory;
+      expect(current.fovRadians).not.toBe(previous.fovRadians);
+      const renderAndCheck = () => f.component.render(0.5, () => {
+        expect(f.camera.fov).toBeCloseTo((previous.fovRadians + current.fovRadians) / 2, 12);
+        expect(Vector3.Distance(f.camera.position, Vector3.Lerp(new Vector3(...previous.positionMetersXYZ),
+          new Vector3(...current.positionMetersXYZ), 0.5))).toBeLessThan(1e-9);
+      });
+      renderAndCheck();
+      f.update(4, { targetPositionMetersXYZ: [5, 1, -7] });
+      f.component.restoreTransactionState(before);
+      expect(f.component.captureTransactionState()).toEqual(before);
+      renderAndCheck();
+      expect(f.component.captureTransactionState()).toEqual(before);
+      expect(Vector3.Distance(f.camera.getTarget(), new Vector3(...current.targetPositionMetersXYZ)))
+        .toBeLessThan(1e-5);
+      f.component.reset();
+      expect(f.component.captureTransactionState().renderPoseHistoryNeedsReset).toBe(true);
+      f.update(1);
+      const reset = f.component.captureTransactionState();
+      expect(reset.renderPoseHistory.previous).toEqual(reset.renderPoseHistory.current);
+    } finally { f.dispose(); }
+  });
+
+  it("snaps a real Havok-obstructed interpolation segment with two individually safe Camera endpoints", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+      runtime.applyCameraPreview({ tuningByProfileRef: {
+        [ORBIT_REF]: { distanceMeters: 6, maximumPositionLagMeters: 0 },
+      } });
+      runtime.adjustCameraView({ yawDeltaRadians: 1.4 });
+      const previous = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const current = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const scene = (runtime as unknown as { readonly scene: Scene }).scene;
+      const port = (runtime as unknown as {
+        readonly cameraComponent: { readonly director: { readonly cameraGeometryQuery: CameraGeometryQueryPortV2 } };
+      }).cameraComponent.director.cameraGeometryQuery;
+      const camera = scene.activeCamera;
+      if (!(camera instanceof FreeCamera)) throw new Error("Expected runtime Camera.");
+      const radius = current.camera.resolvedParameters!.collisionRadiusMeters;
+      expect(distanceMeters(previous.camera.actualPositionMetersXYZ!, current.camera.actualPositionMetersXYZ!))
+        .toBeGreaterThan(radius * 2 + 0.1);
+      const wall = MeshBuilder.CreateBox("render-corner-blocker", { size: 0.04 }, scene);
+      wall.position.copyFrom(Vector3.Lerp(new Vector3(...previous.camera.actualPositionMetersXYZ!),
+        new Vector3(...current.camera.actualPositionMetersXYZ!), 0.5));
+      wall.metadata = { worldkitEntityId: "render-corner-blocker" };
+      const aggregate = new PhysicsAggregate(wall, PhysicsShapeType.BOX, { mass: 0 }, scene);
+      const render = vi.spyOn(scene, "render");
+      const query = vi.spyOn(port, "query");
+      try {
+        for (const endpoint of [previous, current]) {
+          expect(port.query({
+            schemaVersion: 2, committedTick: current.tick,
+            startPositionMetersXYZ: endpoint.camera.desiredTargetPositionMetersXYZ!,
+            endPositionMetersXYZ: endpoint.camera.actualPositionMetersXYZ!,
+            radiusMeters: radius, collisionMask: "camera-hard", excludedEntityIds: ["player"], maximumHitCount: 1,
+          })).toBeUndefined();
+        }
+        query.mockClear();
+        render.mockImplementation(() => {
+          expect(camera.position.asArray()).toEqual(current.camera.actualPositionMetersXYZ);
+        });
+        runtime.renderFrame(0.5);
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(query.mock.results[0]!.value).toMatchObject({ hitEntityId: "render-corner-blocker" });
+        expect(runtime.snapshot().camera).toEqual(current.camera);
+        expect(runtime.snapshot().subjectStatesByEntityId).toEqual(current.subjectStatesByEntityId);
+      } finally {
+        query.mockRestore(); render.mockRestore(); aggregate.dispose(); wall.dispose();
+      }
+    } finally { await runtime.dispose(); }
+  });
 
   it("keeps previewed rendered Camera state deterministic across 30/60/120 Hz cadence", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
@@ -1520,7 +1960,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("queries from the final smoothed LookAt target after position damping", () => {
+  it("solves the raw ideal arm and also validates the actual smoothed LookAt while retracted", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
@@ -1568,6 +2008,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       cameraContextTags: [],
     };
     try {
+      expect(director.applyPreview({
+        [ORBIT_REF]: { horizontalDeadZoneRatio: 0, verticalDeadZoneRatio: 0 },
+        [FOLLOW_REF]: { horizontalDeadZoneRatio: 0, verticalDeadZoneRatio: 0 },
+      }, subject.capabilityAssembly.cameraContext)).toBe(true);
       director.update(
         subject.capabilityAssembly.cameraContext,
         initialSample,
@@ -1587,17 +2031,21 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         springArm,
       );
 
-      const secondRequest = requests[1];
-      if (secondRequest === undefined) throw new Error("Expected a second geometry query.");
-      expect(secondRequest.startPositionMetersXYZ).toEqual(
+      const nominalRequest = requests[1];
+      const finalRequest = requests[2];
+      if (nominalRequest === undefined || finalRequest === undefined) {
+        throw new Error("Expected nominal and final geometry queries after target movement.");
+      }
+      expect(nominalRequest.startPositionMetersXYZ[0]).toBe(10);
+      expect(nominalRequest.endPositionMetersXYZ[0]).toBe(10);
+      expect(finalRequest.startPositionMetersXYZ).toEqual(
         director.snapshot().desiredTargetPositionMetersXYZ,
       );
-      expect(secondRequest.startPositionMetersXYZ[0]).toBeGreaterThan(0);
-      expect(secondRequest.startPositionMetersXYZ[0]).toBeLessThan(10);
-      expect(secondRequest.endPositionMetersXYZ[0]).toBeGreaterThan(0);
-      expect(secondRequest.endPositionMetersXYZ[0]).toBeLessThan(
-        secondRequest.startPositionMetersXYZ[0],
-      );
+      expect(finalRequest.startPositionMetersXYZ[0]).toBeGreaterThan(0);
+      expect(finalRequest.startPositionMetersXYZ[0]).toBeLessThan(10);
+      expect(finalRequest.endPositionMetersXYZ[0]).toBe(10);
+      expect(distanceMeters(director.snapshot().actualPositionMetersXYZ!, finalRequest.startPositionMetersXYZ))
+        .toBeLessThanOrEqual(distanceMeters(finalRequest.startPositionMetersXYZ, finalRequest.endPositionMetersXYZ) * 0.5);
     } finally {
       director.dispose();
       engine.dispose();

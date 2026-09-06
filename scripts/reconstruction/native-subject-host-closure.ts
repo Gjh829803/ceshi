@@ -9,7 +9,7 @@ import {
   type NormalizedSubjectDefinitionV2,
   type PackageSubjectDefinitionV1,
 } from "@whitebox-world/authoring";
-import { compileNormalizedSubjectResourcesV1, type CompiledSubjectResourcesV1 } from "@whitebox-world/compiler";
+import { compileNormalizedSubjectResourcesV1, type CompiledSubjectResourcesV1, type NormalizedSubjectTraversalResourcesV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
@@ -24,10 +24,7 @@ import {
   type WorldResourceLockEntryV1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-import {
-  builtInSubjectResourceRegistry,
-  type SubjectResourceRegistryV3,
-} from "@whitebox-world/subject-registry";
+import type { SubjectResourceRegistryV3 } from "@whitebox-world/subject-registry";
 import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
 import { checkNativeComposedSubjectDesignV1, compileNativeComposedSubjectDefinitionV1 } from "./native-composed-subject-definition.js";
 
@@ -38,10 +35,10 @@ export interface NativeSubjectHostClosureInputV1 {
   readonly subject:
     | Readonly<{ source: "registry"; subjectDefinitionRef: string }>
     | Readonly<{ source: "package"; definition: PackageSubjectDefinitionV1 }>;
-  readonly resourceBudget: AuthoringDocumentBase["world"]["resourceBudget"];
+  readonly resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
   readonly gravityMetersPerSecondSquaredXYZ:
     WorldRuntimeBootstrapV1["gravityMetersPerSecondSquaredXYZ"];
-  readonly initialCamera: Omit<WorldRuntimeBootstrapV1["initialCamera"], "targetEntityId">;
+  readonly initialCamera: Omit<WorldRuntimeBootstrapV1["initialCamera"], "targetEntityId" | "cameraRigProfileRef">;
 }
 
 export type NativeSubjectHostClosureResultV1 =
@@ -52,6 +49,7 @@ export type NativeSubjectHostClosureResultV1 =
       worldRuntimeBootstrapRef: string;
       worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
       registryLock: readonly WorldResourceLockEntryV1[];
+      normalizedSubjectResources: NormalizedSubjectTraversalResourcesV1;
       subjectResourceCost: Readonly<{ vertices: number; triangles: number; colliders: number }>;
     }>;
 
@@ -62,7 +60,7 @@ export type NativeSubjectHostDesignInputV1 = Omit<NativeSubjectHostClosureInputV
 /** Shape proposal -> the same Host constructor; no name matching or fallback. */
 export function compileNativeSubjectHostClosureFromDesignV1(
   input: NativeSubjectHostDesignInputV1,
-  registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
+  registry: SubjectResourceRegistryV3,
 ): NativeSubjectHostClosureResultV1 {
   let snapshot: NativeSubjectHostDesignInputV1;
   try {
@@ -110,7 +108,7 @@ export type NativeSubjectProjectionResultV1 =
 /** One normalization/compilation owner shared by Host closure and Registry replay. */
 export function compileNativeSubjectProjectionV1(
   input: NativeSubjectProjectionInputV1,
-  registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
+  registry: SubjectResourceRegistryV3,
 ): NativeSubjectProjectionResultV1 {
   let snapshot: NativeSubjectProjectionInputV1;
   try {
@@ -191,7 +189,7 @@ export function compileNativeSubjectProjectionV1(
  */
 export function compileNativeSubjectHostClosureV1(
   input: NativeSubjectHostClosureInputV1,
-  registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
+  registry: SubjectResourceRegistryV3,
 ): NativeSubjectHostClosureResultV1 {
   let snapshot: NativeSubjectHostClosureInputV1;
   try {
@@ -231,7 +229,11 @@ export function compileNativeSubjectHostClosureV1(
       gameplayBootstrapHash: gameplayBootstrap.contentHash,
       initialControlledEntityId: snapshot.controlledEntityId,
       gravityMetersPerSecondSquaredXYZ: snapshot.gravityMetersPerSecondSquaredXYZ,
-      initialCamera: { ...snapshot.initialCamera, targetEntityId: snapshot.controlledEntityId },
+      initialCamera: {
+        ...snapshot.initialCamera,
+        cameraRigProfileRef: projection.subjects[0]!.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
+        targetEntityId: snapshot.controlledEntityId,
+      },
       subjectAssets: projection.subjectAssets,
       rigProfiles: projection.rigProfiles,
       animationSets: projection.animationSets,
@@ -260,6 +262,7 @@ export function compileNativeSubjectHostClosureV1(
       worldRuntimeBootstrap,
       registryLock,
       subjectResourceCost: Object.freeze(projection.resourceCost),
+      normalizedSubjectResources: { ...resources, subjectDefinitions: [definition] },
     });
   } catch {
     return failure("NATIVE_SUBJECT_HOST_CLOSURE_INVALID", "Selected Subject resources could not produce a valid Host closure.");

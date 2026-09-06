@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BabylonNativeBlockCheckedLayoutV1 } from "@whitebox-world/native-babylon-block-profile";
-import { createBabylonNativeBlockProfileCheckResultV1 } from "../../packages/native-babylon-block-profile/src/check.js";
+import { createBabylonNativeBlockProfileCheckResultV1 } from "@whitebox-world/native-babylon-block-profile/testing";
 import {
   hashNativeSceneWorldBoundsPolicyV1,
   parseNativeSceneWorldBoundsPolicyV1,

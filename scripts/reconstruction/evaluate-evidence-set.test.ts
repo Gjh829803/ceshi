@@ -11,7 +11,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { evaluateWorldReconstructionV1 } from "@whitebox-world/validation";
 import { describe, expect, it, vi } from "vitest";
-import { FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 } from "../../packages/runtime-babylon/src/formal-world-capture-provider.js";
+import { FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 } from "@whitebox-world/runtime-babylon/testing";
 
 import {
   assertColliderOverlaySourceJoinClosureV1,

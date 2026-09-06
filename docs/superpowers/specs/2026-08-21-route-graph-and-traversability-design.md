@@ -279,8 +279,8 @@ Driver 和 Adapter fallback 均不得覆盖。
 
 Canonical Traversal Contract 必须从同一 `ResolvedTraversalLock` Receipt 与已解析的 Graph
 Builder Profile 派生唯一的 Provider-neutral `TraversalCapabilityEnvelope`，其中携带胶囊、
-步高、坡度、保守净空和锁定的 Backend/Adapter 实现身份；不得为了 Envelope 修改已经冻结的
-R0 Lock 形状。Graph Provider Adapter 只能把这个 Envelope 映射为 Provider 参数，不得再次读取
+步高、坡度、保守净空和锁定的 Backend/Adapter 实现身份。CF-12 的 current-only Collider 来源
+修订如下；除此之外不得为了 Envelope 另造 Lock 字段或能力权威。Graph Provider Adapter 只能把这个 Envelope 映射为 Provider 参数，不得再次读取
 Subject/Profile 或维护第二份能力参数；映射必须针对锁定 Babylon 版本覆盖胶囊半径、步高与
 坡度接触的耦合语义。Provider 公式不进入 AI-facing Schema；等价探针和 Backend/Adapter
 版本进入 Evidence。Graph 是保守预测，真实 Controller 仍是最终真相，但 Builder 不得明知
@@ -292,6 +292,28 @@ R1 的 Envelope 工厂由 `@whitebox-world/traversal` 唯一拥有，只接受�
 两者不得互相复制字段。R1 在锁编译阶段已经闭合验证唯一 Ground Locomotion Capability，Envelope
 因此记录规范化的 `traversalMode: "ground"`，不得由 Adapter 再读 Subject、再查 Registry 或从
 Resource Ref 字符串猜语义。Recast Adapter 只消费该 Envelope，不拥有第二个编译入口。
+
+#### CF-12：命名与派生 Collider 的来源闭包（2026-09-06）
+
+已存在的 Authoring `SubjectColliderPolicyV2` 同时支持 `profile` 和 `derive`。Native 不能
+按 Capsule 尺寸反查并强制选择一个命名 Profile，也不能为合法派生 Collider 伪造 Profile。
+Lock 与 Envelope 使用同一个必填 `colliderSource` 闭合 union：`profile` 携带
+`colliderProfileRef/Hash`；`derive` 携带 `colliderDerivationProfileRef/Hash`。
+删除旧顶层 `colliderProfileRef/Hash`，不保留 alias、缺省来源或形状匹配 fallback。
+这是锁定已编译 Capsule 的来源身份，不是另一个推导请求或运行时碰撞状态。
+
+Canonical 与 Native 共用 Compiler 的 `compileSubjectTraversalLockV1`：输入为现有
+Normalizer 产出的 Subject Definition、Collider Profile、资源锁与实际 WRT；不是合成
+Canonical 世界。Compiler 将规范化 Definition Hash 和 Collider 与实际 descriptor 精确
+连接，读取对应命名/派生资源锁。源资源 contentHash 与规范化 Definition Hash 属于不同
+域，不能直接比较。Canonical 外层仍验证原 Scene Plan/WRT/完整资源锁关系。
+Native 在原 Ground 阶段传入同一次主体编译的规范化资源，不前移为新的生产门禁。
+
+胶囊尺寸/偏移、Physics Body 坡度/步高、Graph 参数与 Runtime 实现身份不变。Envelope
+仅投影该锁；Runtime 对派生分支验证对应派生资源锁及同一实际 Subject 的尺寸、Definition
+Hash 与能力身份，不重推几何。来源 union 参与既有 Lock/Envelope/Graph Hash，修改来源或
+来源资源 Hash 会使下游证据 stale；历史 runs/receipts 不改写，也不声称旧 Hash 仍然有效。
+此修订不授予 ground-only Envelope 飞行、水面或水下能力，不新增质量阈值或修复轮次。
 
 R1b 的成功/失败高度从 Fixture 锁中的 `maxStepHeightMeters` 推导。当前 `0.3m` 人形锁下
 保留 `0.25m` 成功和 `0.35m` 失败 Fixture；若未来 Profile 版本变化，Fixture 必须显式锁

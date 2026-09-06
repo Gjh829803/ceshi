@@ -1,5 +1,5 @@
 import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
-import { createBabylonNativeBlockProfileSessionV1 } from
+import { createBabylonNativeBlockProfileSessionV1, type BabylonNativeBlockFinalizedEpochV1 } from
   "@whitebox-world/native-babylon-block-profile";
 
 export const NATIVE_BLOCK_BUDGET_SAMPLE_COUNTS = [2_000, 8_000, 16_000] as const;
@@ -15,7 +15,10 @@ export function budgetWorkloadDimensions(blockCount: number) {
 }
 
 /** Synthetic load, never a reconstruction Case or alternate scene authoring format. */
-export function createBudgetWorkloadModule(blockCount: number) {
+export function createBudgetWorkloadModule(
+  blockCount: number,
+  onFinalized?: (epoch: BabylonNativeBlockFinalizedEpochV1) => void,
+) {
   const { width, depth } = budgetWorkloadDimensions(blockCount);
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
@@ -46,8 +49,7 @@ export function createBudgetWorkloadModule(blockCount: number) {
           });
         }
       }
-      session.finalize({
-        displayGapMeters: 0.04,
+      const epoch = session.finalize({
         staticColliders: [{
           id: "ground", colliderGeometrySource: {
             kind: "block-group", colliderGroupId: "floor",
@@ -68,6 +70,7 @@ export function createBudgetWorkloadModule(blockCount: number) {
           exposedEdgePolicy: "none" as const,
         }))],
       });
+      onFinalized?.(epoch);
       context.registration.registerSpawnMarker({
         id: context.bootstrap.spawnMarkerId,
         positionMetersXYZ: [0, 0, 0], facingRadians: 0,

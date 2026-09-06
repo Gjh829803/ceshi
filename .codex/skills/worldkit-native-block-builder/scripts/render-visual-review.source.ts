@@ -11,6 +11,7 @@ import ts from "typescript";
 import { parseBabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 as SHAPE_SIZE_BY_KIND,
+  BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
   effectiveBabylonNativeBlockSizeMetersXYZV1 as effectiveSize,
@@ -21,9 +22,10 @@ import {
 } from "@whitebox-world/protocol";
 
 import {
-  parseNativeBlockSubjectVisualReviewProxyV1,
   type NativeBlockSubjectVisualReviewProxyV1,
 } from "../../../../scripts/reconstruction/native-block-subject-visual-review-proxy.js";
+import { resolveNativeSubjectAuthoringClosureV1 } from "../../../../scripts/reconstruction/native-subject-host-context.js";
+import { clusterNativeBlockVisualReviewV1 } from "../../../../scripts/reconstruction/native-block-visual-review-clusters.js";
 
 const WIDTH_TOP = 768;
 const WIDTH_ENTRY = 960;
@@ -32,7 +34,6 @@ const COMPARISON_SEPARATOR = 8;
 const MAXIMUM_CAPTURED_BLOCK_COUNT = 100_000;
 const MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT = 32;
 const BUILD_TIMEOUT_MILLISECONDS = 10_000;
-const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 const MAXIMUM_PLANNING_PNG_ENCODED_BYTES = 16 * 1024 * 1024;
 const MAXIMUM_PLANNING_PNG_DIMENSION_PIXELS = 8_192;
 const MAXIMUM_PLANNING_PNG_PIXEL_COUNT = 16_777_216;
@@ -114,7 +115,7 @@ interface CapturedLayoutIdentity {
   readonly kind: "native-block-builder-captured-layout-identity";
   readonly schemaVersion: 1;
   readonly blocks: readonly CapturedBlock[];
-  readonly displayGapMeters: number;
+  readonly displayScaleRatio: number;
   readonly spawn: Readonly<{
     readonly id: string;
     readonly positionMetersXYZ: Vec3;
@@ -396,7 +397,7 @@ function captureSource(
   bootstrap: Record<string, unknown>,
 ): Readonly<{
   blocks: readonly CapturedBlock[];
-  displayGapMeters: number;
+  displayScaleRatio: number;
   spawn: Readonly<{ id: string; positionMetersXYZ: Vec3; facingRadians: number }>;
 }> {
   validateSourceForAdvisoryCapture(sourceText, sourcePath);
@@ -439,7 +440,6 @@ function captureSource(
       ? [`additional overlapping Block pairs omitted (limit ${MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT})`]
       : [])].join("; "),
   );
-  let displayGapMeters = DEFAULT_DISPLAY_GAP_METERS;
   let finalized = false;
   let sessionCreated = false;
   let spawn: Readonly<{
@@ -580,13 +580,11 @@ function captureSource(
         if (finalized || input === null || typeof input !== "object" || Array.isArray(input)) {
           return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "session.finalize input is invalid");
         }
-        finalized = true;
-        const gap = (input as Record<string, unknown>).displayGapMeters ??
-          DEFAULT_DISPLAY_GAP_METERS;
-        if (typeof gap !== "number" || !Number.isFinite(gap) || gap < 0 || gap >= 0.25) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "displayGapMeters is invalid");
+        if (Object.keys(input).length !== 1 ||
+            !Array.isArray((input as Record<string, unknown>).staticColliders)) {
+          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "session.finalize requires only staticColliders");
         }
-        displayGapMeters = gap;
+        finalized = true;
         return Object.freeze({});
       },
       dispose() {
@@ -693,7 +691,7 @@ function captureSource(
   }
   return Object.freeze({
     blocks: Object.freeze([...blocks].sort((left, right) => stableCompare(left.id, right.id))),
-    displayGapMeters,
+    displayScaleRatio: BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
     spawn,
   });
 }
@@ -1037,19 +1035,14 @@ function shade(color: Rgb, ratio: number): Rgb {
 
 function cuboids(
   blocks: readonly CapturedBlock[],
-  displayGapMeters: number,
   colorsByVisualGroupId: ReadonlyMap<string, Rgb>,
 ): readonly Cuboid[] {
-  return blocks.map((block) => {
-    const size = effectiveSize(block.shape, block.rotationQuarterTurnsY).map((value) =>
-      Math.max(0.01, value - displayGapMeters)) as [number, number, number];
-    const half = size.map((value) => value / 2);
+  return clusterNativeBlockVisualReviewV1(blocks).map((cluster) => {
+    const block = cluster.source;
     return Object.freeze({
       id: block.id,
-      minimum: Object.freeze(block.centerMetersXYZ.map((value, axis) =>
-        value - half[axis]!) as [number, number, number]),
-      maximum: Object.freeze(block.centerMetersXYZ.map((value, axis) =>
-        value + half[axis]!) as [number, number, number]),
+      minimum: cluster.minimumMetersXYZ,
+      maximum: cluster.maximumMetersXYZ,
       color: block.visualGroupId === undefined
         ? rgb(COLOR_BY_PALETTE_ROLE[block.paletteRole])
         : colorsByVisualGroupId.get(block.visualGroupId)!,
@@ -1079,11 +1072,13 @@ function drawTopDown(cuboidRows: readonly Cuboid[], spawn: Vec3): Raster {
     const [left, top] = project(cuboid.minimum[0], cuboid.minimum[2]);
     const [right, bottom] = project(cuboid.maximum[0], cuboid.maximum[2]);
     fillRect(raster, left, top, right, bottom, cuboid.color);
-    const edge = shade(cuboid.color, 0.7);
-    drawLine(raster, [left, top], [right, top], edge);
-    drawLine(raster, [right, top], [right, bottom], edge);
-    drawLine(raster, [right, bottom], [left, bottom], edge);
-    drawLine(raster, [left, bottom], [left, top], edge);
+    if (right - left >= 4 && bottom - top >= 4) {
+      const edge = shade(cuboid.color, 0.72);
+      drawLine(raster, [left, top], [right, top], edge);
+      drawLine(raster, [right, top], [right, bottom], edge);
+      drawLine(raster, [right, bottom], [left, bottom], edge);
+      drawLine(raster, [left, bottom], [left, top], edge);
+    }
   }
   const [spawnX, spawnY] = project(spawn[0], spawn[2]);
   drawCircle(raster, spawnX, spawnY, 7, [232, 93, 93]);
@@ -1321,7 +1316,7 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
   sourcePath: string;
   authoringPath: string;
   bootstrapPath: string;
-  subjectVisualReviewProxyPath: string;
+  subjectHostContextPath: string;
   worldPlanPath: string;
   entryTargetPath: string;
   topDownOutputPath: string;
@@ -1332,14 +1327,14 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     sourceText,
     authoring,
     bootstrap,
-    subjectVisualReviewProxyInput,
+    subjectHostContext,
     worldPlanBytes,
     entryTargetBytes,
   ] = await Promise.all([
     readFile(options.sourcePath, "utf8"),
     readJson(options.authoringPath),
     readJson(options.bootstrapPath),
-    readJson(options.subjectVisualReviewProxyPath),
+    readJson(options.subjectHostContextPath),
     readFile(options.worldPlanPath),
     readFile(options.entryTargetPath),
   ]);
@@ -1348,7 +1343,7 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     kind: "native-block-builder-captured-layout-identity",
     schemaVersion: 1,
     blocks: captured.blocks,
-    displayGapMeters: captured.displayGapMeters,
+    displayScaleRatio: captured.displayScaleRatio,
     spawn: captured.spawn,
   });
   const capturedLayoutIdentityHash = sha256CanonicalJson(
@@ -1357,13 +1352,12 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
   const colorsByVisualGroupId = validateAuthoringGroups(authoring, captured.blocks);
   const geometry = cuboids(
     captured.blocks,
-    captured.displayGapMeters,
     colorsByVisualGroupId,
   );
   const topDown = drawTopDown(geometry, captured.spawn.positionMetersXYZ);
-  const subjectVisualReviewProxy = parseNativeBlockSubjectVisualReviewProxyV1(
-    subjectVisualReviewProxyInput,
-  );
+  const { subjectVisualReviewProxy, subjectVisualReviewProxyBytes } = resolveNativeSubjectAuthoringClosureV1({
+    context: subjectHostContext, bootstrap, authoring,
+  });
   if (
     subjectVisualReviewProxy.initialControlledEntityId !==
       bootstrap.initialControlledEntityId
@@ -1419,9 +1413,8 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     sourceHash: hash(sourceText),
     authoringHash: hash(await readFile(options.authoringPath)),
     bootstrapHash: hash(await readFile(options.bootstrapPath)),
-    subjectVisualReviewProxyHash: hash(
-      await readFile(options.subjectVisualReviewProxyPath),
-    ),
+    subjectHostContextHash: hash(await readFile(options.subjectHostContextPath)),
+    subjectVisualReviewProxyHash: hash(subjectVisualReviewProxyBytes),
     worldPlanHash: hash(worldPlanBytes),
     entryTargetHash: hash(entryTargetBytes),
     topDownComparisonHash: hash(topDownComparison),
@@ -1437,9 +1430,9 @@ export async function main(arguments_ = process.argv.slice(2)): Promise<void> {
     sourcePath: resolveFromWorkspace("--source", "scene.ts"),
     authoringPath: resolveFromWorkspace("--authoring", "native-block-authoring.json"),
     bootstrapPath: resolveFromWorkspace("--bootstrap", "inputs/native-scene.bootstrap.json"),
-    subjectVisualReviewProxyPath: resolveFromWorkspace(
-      "--subject-visual-review-proxy",
-      "inputs/subject-visual-review-proxy.json",
+    subjectHostContextPath: resolveFromWorkspace(
+      "--subject-host-context",
+      "inputs/subject-host-context.json",
     ),
     worldPlanPath: resolveFromWorkspace("--world-plan", "inputs/world-plan.png"),
     entryTargetPath: resolveFromWorkspace("--entry-target", "inputs/entry-whitebox-target.png"),

@@ -70,6 +70,7 @@ import {
   createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
+  type StartConcreteCaptureOnlyHostedTransportInputV1,
 } from "./hosted-session-capture.js";
 import {
   evaluateOpeningCompositionHostGateV1,
@@ -145,6 +146,7 @@ export interface CaptureHostedWorldPackageInputV1 {
   readonly rejectedOutputDirectoryPath?: string;
   readonly port?: number;
   readonly budget?: FormalCaptureArtifactBudgetV1;
+  readonly onRuntimeFlightDiagnostic?: NonNullable<StartConcreteCaptureOnlyHostedTransportInputV1["onRuntimeFlightDiagnostic"]>;
   /** Required by the production reconstruction owner; omitted only by low-level transport tests. */
   readonly openingGate?: Readonly<{
     readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
@@ -610,6 +612,7 @@ export async function captureHostedWorldPackageV1(
     createCaptureOnlyHostedTransportStarterV1({
       packageDirectoryPath,
       ...(input.port === undefined ? {} : { port: input.port }),
+      ...(input.onRuntimeFlightDiagnostic === undefined ? {} : { onRuntimeFlightDiagnostic: input.onRuntimeFlightDiagnostic }),
     });
   let payload: FormalHostedWorldCapturePayloadV1;
   try {

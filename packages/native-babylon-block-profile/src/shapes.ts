@@ -1,4 +1,6 @@
 export const BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1 = 1 as const;
+// Pinned Block Runtime visual ratio; occupancy and Colliders keep metric size.
+export const BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 = 0.985 as const;
 export const BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1 = Object.freeze([
   0.5,
   0.25,

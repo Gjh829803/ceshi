@@ -15,6 +15,7 @@ export interface CameraHardDecolliderTransactionStateV1 {
   readonly stableHitEntityId: string | undefined;
   readonly stableHitNormalXYZ: CameraHardDecolliderVec3V1 | undefined;
   readonly lastSafePositionMetersXYZ: CameraHardDecolliderVec3V1 | undefined;
+  /** Nominal target anchor used to translate the last-safe position on target movement. */
   readonly lastSafeTargetPositionMetersXYZ: CameraHardDecolliderVec3V1 | undefined;
   readonly authorityTick: number | undefined;
 }
@@ -172,6 +173,49 @@ export class CameraHardDecolliderV1 {
 
   restoreTransactionState(state: CameraHardDecolliderTransactionStateV1): void {
     this.state = frozenState(state);
+  }
+
+  /** Change only the spatial basis for a same-tick final clamp, never its clock. */
+  prepareFinalClamp(
+    authorityTick: number,
+    candidatePositionMetersXYZ: CameraHardDecolliderVec3V1,
+    targetPositionMetersXYZ: CameraHardDecolliderVec3V1,
+  ): void {
+    if (authorityTick !== this.state.authorityTick ||
+      !finiteVec3(candidatePositionMetersXYZ) || !finiteVec3(targetPositionMetersXYZ)) {
+      throw new RangeError("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    }
+    this.state = frozenState({
+      ...this.state,
+      constrainedArmLengthMeters: distance(candidatePositionMetersXYZ, targetPositionMetersXYZ),
+      // Preserve the previously verified world-space position. The candidate
+      // may be obstructed and must never become last-safe before the clamp.
+      lastSafeTargetPositionMetersXYZ: targetPositionMetersXYZ,
+    });
+  }
+
+  /** Record the validated final pose in the nominal arm's moving reference frame. */
+  commitValidatedPose(
+    authorityTick: number,
+    positionMetersXYZ: CameraHardDecolliderVec3V1,
+    targetPositionMetersXYZ: CameraHardDecolliderVec3V1,
+  ): void {
+    if (authorityTick !== this.state.authorityTick ||
+      !finiteVec3(positionMetersXYZ) || !finiteVec3(targetPositionMetersXYZ)) {
+      throw new RangeError("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    }
+    this.state = frozenState({
+      ...this.state,
+      // A final-path clamp may have used the smoothed LookAt as its origin.
+      // Rebase its constrained distance to the nominal arm anchor for next Tick;
+      // an ordinary clear smoothed pose must not redefine recovery distance.
+      constrainedArmLengthMeters: this.state.lastSafeTargetPositionMetersXYZ !== undefined &&
+        distance(this.state.lastSafeTargetPositionMetersXYZ, targetPositionMetersXYZ) > 0
+        ? distance(positionMetersXYZ, targetPositionMetersXYZ)
+        : this.state.constrainedArmLengthMeters,
+      lastSafePositionMetersXYZ: positionMetersXYZ,
+      lastSafeTargetPositionMetersXYZ: targetPositionMetersXYZ,
+    });
   }
 
   solve(input: CameraHardDecolliderSolveRequestV1): CameraHardDecolliderSolveResultV1 {

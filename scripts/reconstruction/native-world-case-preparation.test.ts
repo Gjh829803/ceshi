@@ -353,7 +353,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "baseline-native-world",
-      sceneBriefSemanticHash: sceneBriefSemanticHashValue,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -550,6 +550,45 @@ describe("trusted Native world Case preparation", () => {
     })).rejects.toThrow("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
   });
 
+  it("derives connected ground only when every ordered movement mode is ground-based", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-ground-policy-"));
+    temporaryRoots.push(root);
+    const sceneId = "ground-policy-parity";
+    const palettePath = path.join(root, "palette.json");
+    const imagePath = path.join(root, "entry.png");
+    const sceneBriefHash = sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF));
+    const basePalette = JSON.parse(nativeVisualIdentityPaletteText({ sceneId, sceneBriefHash, targetCount: 1 }));
+    await sharp({ create: { width: 100, height: 100, channels: 4, background: "#E85D5D" } }).png().toFile(imagePath);
+    const scenarios = [
+      ["ground-walk"], ["ground-slide"], ["ground-ride"], ["ground-drive"],
+      ["water-surface"], ["underwater"], ["flight"], ["custom"],
+      ["ground-drive", "ground-walk"], ["ground-walk", "flight"], ["flight", "ground-walk"],
+    ];
+    for (const movementModes of scenarios) {
+      const labels = new Map([
+        ["ground-walk", "陆地步行"], ["ground-slide", "陆地滑行"], ["ground-ride", "陆地骑乘"],
+        ["ground-drive", "陆地驾驶"], ["water-surface", "水面航行"], ["underwater", "水下游动"],
+        ["flight", "空中飞行"], ["custom", "自定义墙面行走"],
+      ]);
+      const sceneBriefBytes = new TextEncoder().encode(VALID_SCENE_BRIEF.replace(
+        "- 陆地步行：主体自然行走和奔跑。",
+        movementModes.map(mode => `- ${labels.get(mode)}：按参考移动。`).join("\n"),
+      ));
+      // The intentionally unchanged ground-only Palette labels cannot override
+      // the real Brief's mixed/free-space policy.
+      await writeFile(palettePath, JSON.stringify({ ...basePalette, sceneBriefHash: sceneBriefSemanticHash(sceneBriefBytes) }));
+      const proposal = await deriveNativeWorldBaselineProposalV1({ sceneId, sceneBriefBytes,
+        visualIdentityPalettePath: palettePath, entryWhiteboxTargetPath: imagePath }) as {
+          expected: { groundConnectivity: { requireSingleReachableComponent: boolean; requiredTraversalBands: unknown[] } };
+        };
+      expect(proposal.expected.groundConnectivity, movementModes.join(",")).toEqual({
+        mode: "source-authored",
+        requireSingleReachableComponent: movementModes.every(mode => ["ground-walk", "ground-slide", "ground-ride", "ground-drive"].includes(mode)),
+        requiredTraversalBands: [],
+      });
+    }
+  });
+
   it("prepares a Subject-only palette without inventing ground visual targets or a remote Collider", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-subject-only-"));
     temporaryRoots.push(root);
@@ -562,7 +601,7 @@ describe("trusted Native world Case preparation", () => {
       sceneBriefHash: sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF)), targetCount: 1 }));
     await sharp({ create: { width: 100, height: 100, channels: 4, background: "#E85D5D" } }).png().toFile(imagePath);
     const proposal = await deriveNativeWorldBaselineProposalV1({ sceneId,
-      sceneBriefSemanticHash: sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF)),
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath, entryWhiteboxTargetPath: imagePath });
     const proposalPath = path.join(root, "proposal.json");
     await writeFile(proposalPath, JSON.stringify(proposal));
@@ -1031,7 +1070,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "missing-native-mask",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -1106,9 +1145,7 @@ describe("trusted Native world Case preparation", () => {
   it("accepts historical Native target-3 yellow and rejects the Canonical target-3 purple", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-palette-profile-"));
     temporaryRoots.push(root);
-    const sceneBriefHash = sha256Bytes(
-      Buffer.from("native-palette-profile-brief"),
-    ) as Sha256HashV1;
+    const sceneBriefHash = sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF));
     const palettePath = path.join(root, "visual-identity-palette.json");
     const entryPath = path.join(root, "entry-whitebox-target.png");
     const palette = {
@@ -1188,7 +1225,7 @@ describe("trusted Native world Case preparation", () => {
 
     const nativeProposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as { expected: { semanticSilhouetteTargets: readonly {
@@ -1202,7 +1239,7 @@ describe("trusted Native world Case preparation", () => {
     await writeFile(palettePath, JSON.stringify(palette));
     await expect(deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     })).rejects.toThrow("WORLDKIT_VISUAL_IDENTITY_PALETTE_INVALID");

@@ -19,7 +19,7 @@ import type {
   BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockSessionRecordV1,
 } from "./session.js";
-import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
+import { BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 } from "./shapes.js";
 import {
   registerBabylonNativeBlockLiveHandleRegistryV1,
   unregisterBabylonNativeBlockLiveHandleRegistryV1,
@@ -49,30 +49,9 @@ export interface CreateBabylonNativeBlockVisualsInputV1 {
   readonly scene: Scene;
   readonly buildEpochId: string;
   readonly checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-  readonly displayGapMeters?: number;
 }
 
 const BUILD_EPOCH_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
-const DEFAULT_DISPLAY_GAP_METERS = 0.04;
-
-export function validateBabylonNativeBlockDisplayGapV1(
-  layout: BabylonNativeBlockLayoutV1,
-  displayGapMeters: unknown,
-  code = "WORLDKIT_NATIVE_BLOCK_VISUAL_INPUT_INVALID",
-): asserts displayGapMeters is number {
-  if (
-    typeof displayGapMeters !== "number" ||
-    !Number.isFinite(displayGapMeters) ||
-    displayGapMeters < 0 ||
-    layout.blocks.some((block) =>
-      displayGapMeters >= Math.min(...block.sizeMetersXYZ))
-  ) {
-    return fail(
-      code,
-      "displayGapMeters must be finite, non-negative, and smaller than every checked block dimension",
-    );
-  }
-}
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -175,7 +154,6 @@ export function babylonNativeBlockVisualGroupsMatchV1(
 function validateInput(
   input: CreateBabylonNativeBlockVisualsInputV1,
 ): Readonly<{
-  displayGapMeters: number;
   sortedRecords: readonly BabylonNativeBlockSessionRecordV1[];
 }> {
   if (!(input.scene instanceof Scene) || input.scene.isDisposed) {
@@ -214,13 +192,6 @@ function validateInput(
       "checkResult.visualGroups does not describe the supplied layout",
     );
   }
-  const displayGapMeters = Object.hasOwn(input, "displayGapMeters")
-    ? input.displayGapMeters
-    : DEFAULT_DISPLAY_GAP_METERS;
-  validateBabylonNativeBlockDisplayGapV1(
-    checkedLayout.layout,
-    displayGapMeters,
-  );
   const blocksById = new Map(checkedLayout.layout.blocks.map((block) =>
     [block.id, block] as const));
   if (
@@ -263,7 +234,6 @@ function validateInput(
     seen.add(record.input.id);
   }
   return Object.freeze({
-    displayGapMeters,
     sortedRecords: Object.freeze(sortedRecords),
   });
 }
@@ -305,13 +275,10 @@ export function createBabylonNativeBlockVisualsV1(
         materialsByRole.set(role, material);
         materials.push(material);
       }
-      const localSize = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
-        record.input.shape
-      ];
       record.mesh.scaling.set(
-        (localSize[0] - validated.displayGapMeters) / localSize[0],
-        (localSize[1] - validated.displayGapMeters) / localSize[1],
-        (localSize[2] - validated.displayGapMeters) / localSize[2],
+        BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
+        BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
+        BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
       );
       record.mesh.material = material;
       nodes.push(Object.freeze({

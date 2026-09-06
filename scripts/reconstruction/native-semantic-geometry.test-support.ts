@@ -1,4 +1,4 @@
-import type { BabylonNativeBlockCreateInputV1 } from "../../packages/native-babylon-block-profile/src/session.js";
+import type { BabylonNativeBlockCreateInputV1 } from "@whitebox-world/native-babylon-block-profile";
 import {
   SCENE_SOURCE,
   type createNativeBlockPackageAttemptFixtureV1,
@@ -49,10 +49,7 @@ function fixture(targetAndOccluderBlocks: readonly BabylonNativeBlockCreateInput
   }
   const sceneSource = SCENE_SOURCE
     .replace(gateLine, blocks.map((input) => `    session.createBlock(${JSON.stringify(input)});`).join("\n"))
-    .replace("maximumBlockCount: 64", "maximumBlockCount: 128")
-    // Deliberately controlled fixture parameter: seams must not leak pixels
-    // through an otherwise opaque occluder. Production defaults are unchanged.
-    .replace("session.finalize({ staticColliders:", "session.finalize({ displayGapMeters: 0, staticColliders:");
+    .replace("maximumBlockCount: 64", "maximumBlockCount: 128");
   const options = {
     sceneSource,
     maximumBlockCount: 128,
@@ -65,7 +62,7 @@ function fixture(targetAndOccluderBlocks: readonly BabylonNativeBlockCreateInput
         { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, 3] },
       ],
       requiredTraversalBands: [{
-        id: "entry-middle", halfWidthMeters: 1,
+        id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]],
       }],
     },
@@ -79,11 +76,13 @@ export const NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 = {
   "fully-occluded-wall": fixture([...solidWall, ...occluderColumns([2, 3, 4, 5, 6])]),
   "partly-occluded-wall": fixture([...solidWall, ...occluderColumns([2, 3])]),
   "separated-columns": fixture(solidWall.filter(({ centerMetersXYZ: [x] }) => x !== 4)),
-  // Rear cells remain inside the front wall's opening-view silhouette, but add
-  // independently visible depth from +X (side) and +Y (top). Original gate
-  // Collider is retained; these extra visual blocks do not add Collider intent.
-  "rear-depth-wall": fixture([...solidWall, ...[7, 8, 9].flatMap((z) =>
-    [0.5, 1.5].map((y, yIndex) => block(`rear-${z}-${yIndex}`, [4, y, z]))
+  // Keep rear depth below the near-eye-level seam between the front wall's
+  // upper rows. The old Runtime scale 0.985 leaves a real gap there: a second
+  // rear row at y=1.5 leaks a pixel rather than being fully occluded. The lower
+  // row still adds independently visible +X/+Y depth, without changing any
+  // Capture threshold, display scale, front-wall Blocks or Collider intent.
+  "rear-depth-wall": fixture([...solidWall, ...[7, 8, 9].map((z) =>
+    block(`rear-${z}-0`, [4, 0.5, z])
   )]),
 } as const;
 

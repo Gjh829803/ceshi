@@ -12,9 +12,11 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { parseNativeSourceTypecheckDiagnostics } from "../native-scene/source-typecheck.js";
+import { parseRuntimeFlightReportV1 } from "@whitebox-world/runtime-babylon";
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { readHostCheckpointV1, writeHostCheckpointV1 } from "./host-checkpoint.js";
+import { CaptureStartupErrorV1, parseCaptureStartupTraceV1 } from "./capture-startup-watchdog.js";
 
 import {
   sha256CanonicalJson,
@@ -823,6 +825,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
         !isEqual(state.packaged, stageInput.packaged) ||
         state.captureDirectoryPath !== undefined
       ) throw new Error("WORLD_RECONSTRUCTION_CAPTURE_STAGE_INVALID");
+      const expectedPackageRootHash = state.packaged.worldPackageRootHash;
       const attemptDirectoryPath = path.join(
         input.generationInput.runDirectoryPath,
         "attempts",
@@ -838,6 +841,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
         "rejected-capture",
       );
       let captureOwnerStarted = false;
+      let captureRequestHash: Sha256HashV1 | undefined;
       try {
         const materialized = await owners.materializeCaptureRequest({
           visualCaptureScope: input.visualCaptureScope,
@@ -849,12 +853,34 @@ export async function createProductionWorldReconstructionRunPortsV1(
           outputPath: requestPath,
           formalCaptureIntent,
         });
+        captureRequestHash = materialized.formalRequestHash;
         captureOwnerStarted = true;
         const captured = await owners.capturePackage({
           packageDirectoryPath: state.packaged.worldPackagePath,
           outputPath: path.join(captureDirectoryPath, "opening.png"),
           triviewOutputPath: captureDirectoryPath,
           rejectedOutputDirectoryPath: rejectedCaptureDirectoryPath,
+          onRuntimeFlightDiagnostic: async (diagnostic) => {
+            // Advisory, identity-bound history is separate from admitted Capture
+            // artifacts. A failed write cannot change outcome or authorize retry.
+            try {
+              const { runtimeSessionId, formalRequestHash, worldPackageRootHash } = diagnostic;
+              if (formalRequestHash !== materialized.formalRequestHash ||
+                worldPackageRootHash !== expectedPackageRootHash ||
+                !/^runtime\.formal-capture\.[a-zA-Z0-9.-]{1,128}$/.test(runtimeSessionId)) return;
+              const report = parseRuntimeFlightReportV1(diagnostic.report);
+              await ensureHostOutputPath(stageInput.attemptIndex);
+              await publishCanonicalJsonImmutable(path.join(hostOutputPath(stageInput.attemptIndex),
+                `capture-runtime-diagnostic.${runtimeSessionId}.json`), {
+                kind: "world-reconstruction-capture-runtime-diagnostic", schemaVersion: 1,
+                caseRef: input.caseRef, attemptIndex: stageInput.attemptIndex,
+                hostRecoveryIndex: input.hostRecoveryIndex ?? null,
+                formalRequestHash, worldPackageRootHash, runtimeSessionId, report,
+              });
+            } catch {
+              // Includes stale files, unsafe paths and unavailable diagnostics.
+            }
+          },
           openingGate: {
             executionPurpose,
             reconstructionCase: input.reconstructionCase,
@@ -888,6 +914,35 @@ export async function createProductionWorldReconstructionRunPortsV1(
           diagnosticCodes: Object.freeze([]),
         });
       } catch (error) {
+        // Advisory evidence belongs to this Host output epoch, outside admitted
+        // Capture/Package artifacts. Persistence must never replace the primary
+        // failure, authorize a retry, or overwrite an earlier diagnostic.
+        if (captureRequestHash !== undefined) {
+          try {
+            const visited = new Set<Error>();
+            let cause: unknown = error;
+            while (cause instanceof Error && !visited.has(cause) && visited.size < 64) {
+              visited.add(cause);
+              if (cause instanceof CaptureStartupErrorV1) {
+                const trace = parseCaptureStartupTraceV1(cause.trace);
+                await ensureHostOutputPath(stageInput.attemptIndex);
+                await publishCanonicalJsonImmutable(
+                  path.join(hostOutputPath(stageInput.attemptIndex), "capture-startup-diagnostic.json"),
+                  { kind: "world-reconstruction-capture-startup-diagnostic", schemaVersion: 1,
+                    caseRef: input.caseRef, attemptIndex: stageInput.attemptIndex,
+                    hostRecoveryIndex: input.hostRecoveryIndex ?? null,
+                    formalRequestHash: captureRequestHash,
+                    worldPackageRootHash: state.packaged.worldPackageRootHash, trace },
+                );
+                break;
+              }
+              cause = cause.cause;
+            }
+          } catch {
+            // Disk errors or stale/unsafe evidence leave the original outcome
+            // and cleanup facts intact; this is not an admission artifact.
+          }
+        }
         if (error instanceof FormalCaptureCommandClosedErrorV1) {
           applyCaptureCleanup(error.cleanupOutcomes);
           cleanupState.outputPromotion = error.stage === "publication"
@@ -1078,16 +1133,11 @@ export async function createProductionWorldReconstructionRunPortsV1(
     },
 
     rehashOwnerIdentities: async () => {
-      const [gameplayBootstrap, worldRuntimeBootstrap, worldBoundsPolicy] =
-        await Promise.all([
-          readJsonNoFollow(input.generationInput.gameplayBootstrapPath),
-          readJsonNoFollow(input.generationInput.worldRuntimeBootstrapPath),
-          readJsonNoFollow(input.generationInput.worldBoundsPolicyPath),
-        ]);
+      const worldBoundsPolicy = await readJsonNoFollow(input.generationInput.worldBoundsPolicyPath);
+      const subjectHostContext = input.generationInput.subjectHostContext;
       const derived = deriveNativeBlockGenerationBootstrapV1({
         reconstructionCase: input.reconstructionCase,
-        gameplayBootstrap,
-        worldRuntimeBootstrap,
+        subjectHostContext,
         worldBoundsPolicy,
         bootstrapId: input.generationInput.bootstrapId,
         sceneModuleRef: input.generationInput.sceneModuleRef,
@@ -1098,8 +1148,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
       return owners.resolveFrozenOwnerIdentities({
         reconstructionCase: input.reconstructionCase,
         evaluationProfile: input.evaluationProfile,
-        gameplayBootstrap,
-        worldRuntimeBootstrap,
+        subjectHostContext,
         worldBoundsPolicy: derived.worldBoundsPolicy,
         bootstrap: derived.bootstrap,
       });

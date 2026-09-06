@@ -779,8 +779,13 @@ function withBoundOrientedPlatformAtStart(
       sizeMetersXYZ: options.sizeMetersXYZ,
     },
   };
+  const spawnPositionMetersXYZ = [spawnXz[0], options.heightMeters, spawnXz[1]] as const;
   return {
     ...plan,
+    subjectInstances: plan.subjectInstances.map((instance) =>
+      instance.spawnAnchorEntityId === "spawn-main"
+        ? { ...instance, subjectOriginPositionMetersXYZ: spawnPositionMetersXYZ }
+        : instance),
     layout: {
       ...plan.layout,
       layoutAssertions: [],
@@ -790,11 +795,7 @@ function withBoundOrientedPlatformAtStart(
           ...placement,
           transform: {
             ...placement.transform,
-            positionMetersXYZ: [
-              spawnXz[0],
-              options.heightMeters,
-              spawnXz[1],
-            ],
+            positionMetersXYZ: spawnPositionMetersXYZ,
           },
         },
       },
@@ -834,8 +835,13 @@ function withBoundCeilingAboveStart(
       sizeMetersXYZ: [4, 1, 4] as const,
     },
   };
+  const spawnPositionMetersXYZ = [placement.transform.positionMetersXYZ[0], 1.1, placement.transform.positionMetersXYZ[2]] as const;
   return {
     ...plan,
+    subjectInstances: plan.subjectInstances.map((instance) =>
+      instance.spawnAnchorEntityId === "spawn-main"
+        ? { ...instance, subjectOriginPositionMetersXYZ: spawnPositionMetersXYZ }
+        : instance),
     layout: {
       ...plan.layout,
       layoutAssertions: [],
@@ -845,11 +851,7 @@ function withBoundCeilingAboveStart(
           ...placement,
           transform: {
             ...placement.transform,
-            positionMetersXYZ: [
-              placement.transform.positionMetersXYZ[0],
-              1.1,
-              placement.transform.positionMetersXYZ[2],
-            ],
+            positionMetersXYZ: spawnPositionMetersXYZ,
           },
         },
       },
@@ -1111,6 +1113,61 @@ function withStartTransform(
 }
 
 describe("createBabylonTraversalRuntimePortV1", () => {
+  it("keeps raised support fixture initial placement and reset anchor in the same compiled coordinate domain", () => {
+    const fixture = compileFixture();
+    const plans = [
+      withBoundCeilingAboveStart(fixture),
+      withBoundOrientedPlatformAtStart(fixture, {
+        entityId: "oriented-fixture", heightMeters: 1,
+        sizeMetersXYZ: [2, 1, 4], rotationEulerRadiansXYZ: [0.31, 0.47, 0.19], scaleXYZ: [1.4, 0.8, 1.25],
+      }),
+    ];
+    for (const plan of plans) {
+      const subject = runtimeTestSubjectsForPlanV1(plan).find((row) => row.entityId === "player")!;
+      const anchor = plan.layout.placementsByEntityId[subject.spawnAnchorEntityId]!;
+      expect(subject.spawnSubjectOriginPositionMetersXYZ).toEqual(anchor.transform.positionMetersXYZ);
+      expect(subject.spawnSubjectFacingRadians).toBe(anchor.transform.rotationEulerRadiansXYZ[1]);
+    }
+  });
+
+  it("runs and resets a derived-collider Subject with exact source locks and no synthetic Profile", async () => {
+    const world = routeWorld(createValidPackageSubjectWorldV4());
+    world.startup = { ...world.startup, controlledEntityId: "pack-animal-a", spawnAnchorEntityId: "spawn-pack-animal-a" };
+    world.nodes = world.nodes.map((node) => node.kind === "camera" ? {
+      ...node, components: { cameraRig: { ...node.components.cameraRig, target: { targetEntityId: "pack-animal-a" } } },
+    } : node);
+    const fixture = compileFixture(world);
+    const worldRuntimeBootstrap = runtimeTestWorldArtifactsForPlanV1(fixture.executionPlan).worldRuntimeBootstrap;
+    const receipt = compileResolvedTraversalLockV1({
+      normalizedWorldIr: fixture.normalizedWorldIr,
+      canonicalSceneExecutionPlan: fixture.executionPlan,
+      worldRuntimeBootstrap,
+      traversingEntityId: "pack-animal-a",
+      runtimeImplementationIdentity: BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
+    });
+    expect(receipt.lock.colliderSource.kind).toBe("derive");
+    const runtime = await createRuntime(fixture.executionPlan);
+    try {
+      const port = createBabylonTraversalRuntimePortV1({ runtime, traversalLockReceipt: receipt });
+      const first = port.resetToStartAnchor({ startAnchorEntityId: "spawn-pack-animal-a" });
+      await port.runFixedTick({ walkDirectionWorldXZ: [0, -1] });
+      expect(port.resetToStartAnchor({ startAnchorEntityId: "spawn-pack-animal-a" }).subjectPositionMetersXYZ)
+        .toEqual(first.subjectPositionMetersXYZ);
+      const source = receipt.lock.colliderSource;
+      if (source.kind !== "derive") throw new Error("Expected actual derived collider.");
+      for (const colliderSource of [
+        { ...source, colliderDerivationProfileHash: `sha256:${"e".repeat(64)}` },
+        { ...source, colliderDerivationProfileRef: "worldkit://collider-derivation-profile/absent@1" },
+      ]) {
+        const forgedReceipt = resolveTraversalLockV1({ ...receipt.lock, colliderSource });
+        expectRuntimeCode(() => createBabylonTraversalRuntimePortV1({ runtime, traversalLockReceipt: forgedReceipt }),
+          "TRAVERSAL_RUNTIME_LOCK_MISMATCH");
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("fails closed before reading world evidence after Gameplay releases control", async () => {
     const fixture = compileFixture();
     const runtime = await createRuntime(fixture.executionPlan);
@@ -1421,7 +1478,6 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     const runtime = await createRuntime(fixture.executionPlan);
     try {
       const resourceHashFields = [
-        "colliderProfileHash",
         "physicsBodyProfileHash",
         "locomotionProfileHash",
         "locomotionCapabilityHash",
@@ -1432,6 +1488,12 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         "mediumProfileHash",
         "subjectDefinitionHash",
       ] as const;
+      const colliderSource = fixture.traversalLockReceipt.lock.colliderSource;
+      if (colliderSource.kind !== "profile") throw new Error("Expected profile fixture.");
+      const forgedCollider = resolveTraversalLockV1({ ...fixture.traversalLockReceipt.lock,
+        colliderSource: { ...colliderSource, colliderProfileHash: `sha256:${"e".repeat(64)}` } });
+      expectRuntimeCode(() => createBabylonTraversalRuntimePortV1({ runtime, traversalLockReceipt: forgedCollider }),
+        "TRAVERSAL_RUNTIME_LOCK_MISMATCH");
       for (const field of resourceHashFields) {
         const forgedReceipt = resolveTraversalLockV1({
           ...fixture.traversalLockReceipt.lock,

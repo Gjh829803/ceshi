@@ -1,3 +1,4 @@
+import { compileSubjectTraversalLockV1, type NormalizedSubjectTraversalResourcesV1 } from "@whitebox-world/compiler";
 import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
@@ -24,7 +25,6 @@ import {
 import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalGraphBuilderProfileV2,
-  resolveTraversalLockV1,
   BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   type TraversalCapabilityEnvelopeReceiptV1,
 } from "@whitebox-world/traversal";
@@ -33,7 +33,7 @@ import {
   type WorldReconstructionCaseV1,
   type WorldReconstructionDiagnosticV1,
 } from "@whitebox-world/validation";
-import { isEqual, isNil } from "lodash-es";
+import { isNil } from "lodash-es";
 
 import {
   admitBabylonNativeSurfacesV1,
@@ -53,6 +53,7 @@ export interface AnalyzeProductionNativeBlockGroundInputV1 {
   readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly reconstructionCase: WorldReconstructionCaseV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly subjectResources: NormalizedSubjectTraversalResourcesV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
   readonly contribution: BabylonNativeSceneContributionV1;
   readonly worldBounds: WorldPackageWorldBoundsV1;
@@ -82,104 +83,6 @@ function controlledSubjectV1(runtime: WorldRuntimeBootstrapV1) {
     entityId === runtime.initialControlledEntityId);
   if (subjects.length !== 1) return fail("controlled Subject is not unique");
   return subjects[0]!;
-}
-
-function resourceEntry(
-  rows: readonly WorldResourceLockEntryV1[],
-  resourceRef: string,
-  resourceKind: WorldResourceLockEntryV1["resourceKind"],
-): WorldResourceLockEntryV1 {
-  const matches = rows.filter((row) =>
-    row.resourceRef === resourceRef && row.resourceKind === resourceKind);
-  if (matches.length !== 1) {
-    return fail(`expected one locked ${resourceKind} '${resourceRef}'`);
-  }
-  return matches[0]!;
-}
-
-function createControlledTraversalCapabilityEnvelopeV1(
-  runtime: WorldRuntimeBootstrapV1,
-  registryLockInput: readonly WorldResourceLockEntryV1[],
-) {
-  const registryLock = worldResourceLockEntriesV1(registryLockInput);
-  const subject = controlledSubjectV1(runtime);
-  const colliderShape = {
-    kind: subject.collider.kind,
-    radiusMeters: subject.collider.radiusMeters,
-    heightMeters: subject.collider.heightMeters,
-    centerOffsetFromSubjectOriginMetersXYZ:
-      subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-  };
-  const colliderProfiles = runtime.colliderProfiles.filter(({ collider }) =>
-    isEqual(collider, colliderShape));
-  if (colliderProfiles.length !== 1) {
-    return fail("controlled Subject collider Profile is not unique");
-  }
-  const colliderProfile = colliderProfiles[0]!;
-  const assembly = subject.capabilityAssembly;
-  const motionProfile = assembly.defaultMotionProfile;
-  const locked = (
-    resourceRef: string,
-    resourceKind: WorldResourceLockEntryV1["resourceKind"],
-  ) => resourceEntry(registryLock, resourceRef, resourceKind);
-  const collider = locked(colliderProfile.colliderProfileRef, "collider-profile");
-  const physicsBody = locked(subject.physicsBodyProfileRef,
-    "physics-body-profile");
-  const locomotion = locked(subject.locomotionProfileRef,
-    "locomotion-profile");
-  const capability = locked(subject.locomotionCapabilityRef, "capability");
-  const controlFeel = locked(subject.controlFeel.resourceRef,
-    "control-feel-profile");
-  const control = locked(assembly.controlProfile.resourceRef,
-    "control-profile");
-  const motion = locked(motionProfile.resourceRef, "motion-profile");
-  const motionKernel = locked(motionProfile.motionKernelRef, "motion-kernel");
-  const medium = locked(assembly.mediumProfile.resourceRef, "medium-profile");
-  if (
-    controlFeel.contentHash !== subject.controlFeel.contentHash ||
-    control.contentHash !== assembly.controlProfile.contentHash ||
-    motion.contentHash !== motionProfile.contentHash ||
-    capability.contentHash !== subject.locomotionCapabilityHash
-  ) return fail("controlled Subject resource identity is stale");
-  const traversalLockReceipt = resolveTraversalLockV1({
-    kind: "resolved-traversal-lock",
-    schemaVersion: 1,
-    subjectEntityId: subject.entityId,
-    resourceLockHash: sha256CanonicalJson(registryLock),
-    subjectDefinitionRef: subject.subjectDefinitionRef,
-    subjectDefinitionHash: subject.subjectDefinitionHash,
-    colliderProfileRef: collider.resourceRef,
-    colliderProfileHash: collider.contentHash,
-    physicsBodyProfileRef: physicsBody.resourceRef,
-    physicsBodyProfileHash: physicsBody.contentHash,
-    locomotionProfileRef: locomotion.resourceRef,
-    locomotionProfileHash: locomotion.contentHash,
-    locomotionCapabilityRef: capability.resourceRef,
-    locomotionCapabilityHash: capability.contentHash,
-    controlFeelProfileRef: controlFeel.resourceRef,
-    controlFeelProfileHash: controlFeel.contentHash,
-    controlProfileRef: control.resourceRef,
-    controlProfileHash: control.contentHash,
-    motionProfileRef: motion.resourceRef,
-    motionProfileHash: motion.contentHash,
-    motionKernelRef: motionKernel.resourceRef,
-    motionKernelHash: motionKernel.contentHash,
-    mediumProfileRef: medium.resourceRef,
-    mediumProfileHash: medium.contentHash,
-    ...BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
-    capsuleRadiusMeters: subject.collider.radiusMeters,
-    capsuleHeightMeters: subject.collider.heightMeters,
-    colliderCenterOffsetMetersXYZ:
-      subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-    maxSlopeDegrees: subject.collider.maxSlopeDegrees,
-    maxStepHeightMeters: subject.collider.maxStepHeightMeters,
-  });
-  return createTraversalCapabilityEnvelopeV1({
-    traversalLockReceipt,
-    graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
-      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
-    ),
-  });
 }
 
 export function assertProductionNativeBlockGroundTopologyCompatibleV1(
@@ -311,6 +214,7 @@ function createGroundCaseIntentV1(
     .sort((left, right) => stableCompare(left.id, right.id));
   const exploration = admitNativeBlockGroundExplorationV1(
     input.groundExploration, expected.groundConnectivity.mode, spawnDesired,
+    expected.groundConnectivity.requireSingleReachableComponent,
   );
   const groundAcceptanceTargetRef = expected.topology.acceptanceTargetRef;
   const normalizedYaw = ((Math.round(spawn.facingRadians / (Math.PI / 2)) % 4) + 4) % 4;
@@ -358,6 +262,9 @@ function createGroundCaseIntentV1(
             ),
           ),
           halfWidthMeters: band.halfWidthMeters,
+          // The existing case-defined contract declares bidirectional ground;
+          // only source-authored intent supplies the old explicit direction flag.
+          isBidirectional: true,
         })
       ),
     ),
@@ -372,11 +279,20 @@ export function analyzeProductionNativeBlockGroundV1(
   if (!Number.isSafeInteger(input.maximumBlockCount) || input.maximumBlockCount <= 0) {
     return fail("maximumBlockCount must be one positive safe integer");
   }
-  const traversalCapabilityEnvelopeReceipt =
-    createControlledTraversalCapabilityEnvelopeV1(
-      input.worldRuntimeBootstrap,
-      input.registryLock,
-    );
+  const traversalCapabilityEnvelopeReceipt = createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: compileSubjectTraversalLockV1({
+      resources: {
+        ...input.subjectResources,
+        resourceLock: worldResourceLockEntriesV1(input.registryLock),
+      },
+      worldRuntimeBootstrap: input.worldRuntimeBootstrap,
+      traversingEntityId: input.worldRuntimeBootstrap.initialControlledEntityId,
+      runtimeImplementationIdentity: BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
+    }),
+    graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ),
+  });
   assertProductionNativeBlockGroundTopologyCompatibleV1(
     input.checkedEpochEvidence,
     traversalCapabilityEnvelopeReceipt,

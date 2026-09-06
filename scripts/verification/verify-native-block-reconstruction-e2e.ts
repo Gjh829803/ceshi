@@ -496,17 +496,27 @@ function exactStringSet(
   ) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
 }
 
+type CaseBlockerIdentity = Pick<
+  ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["colliders"][number],
+  "acceptanceTargetRef" | "contributionId" | "colliderId"
+>;
+
 function verifyBlockerEvidenceClosure(input: Readonly<{
-  caseBlockerColliderIds: readonly string[];
+  caseBlockers: readonly CaseBlockerIdentity[];
   formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   contribution: BabylonNativeSceneContributionV1;
   materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
 }>): readonly string[] {
-  const caseBlockers = uniqueSortedExactSet(input.caseBlockerColliderIds);
+  const caseBlockers = uniqueSortedExactSet(input.caseBlockers.map(({ colliderId }) => colliderId));
+  const caseBlockerByColliderId = new Map(input.caseBlockers.map((blocker) => [blocker.colliderId, blocker]));
+  if (input.caseBlockers.some(({ contributionId, colliderId }) => contributionId !== colliderId)) {
+    fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  }
   const blockCriteria = input.formalChecks.flatMap((check) =>
-    check.checkpointCriteria.filter((criterion) => criterion.kind === "block-plane"));
+    check.checkpointCriteria.filter((criterion) => criterion.kind === "block-plane")
+      .map((criterion) => ({ criterion, acceptanceTargetRef: check.acceptanceTargetRef })));
   const formalBlockers = uniqueSortedExactSet(
-    blockCriteria.map(({ colliderId }) => colliderId),
+    blockCriteria.map(({ criterion }) => criterion.colliderId),
   );
   const contributionBlockers = uniqueSortedExactSet(
     input.contribution.staticColliders
@@ -528,10 +538,15 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
       ),
     );
   }
-  for (const criterion of blockCriteria) {
+  for (const { criterion, acceptanceTargetRef } of blockCriteria) {
     const joins = joinsByColliderId.get(criterion.colliderId);
     if (joins?.length !== 1) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
-    if (!joins[0]!.visualGroupIds.includes(criterion.sourceVisualGroupId)) {
+    // Case traversal acceptance joins its Collider obligation. The visual
+    // group names source geometry, not necessarily that same acceptance target.
+    // Keep both joins without inventing a visual identity for collider-only goals.
+    if (!joins[0]!.visualGroupIds.includes(criterion.sourceVisualGroupId) ||
+        acceptanceTargetRef !==
+          caseBlockerByColliderId.get(criterion.colliderId)!.acceptanceTargetRef) {
       fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
     }
   }
@@ -539,7 +554,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
 }
 
 function verifyBlockerEvidenceClosureForContext(input: Readonly<{
-  caseBlockerColliderIds: readonly string[];
+  caseBlockers: readonly CaseBlockerIdentity[];
   formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   contribution: BabylonNativeSceneContributionV1;
   materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
@@ -985,9 +1000,8 @@ async function verifyAllRunAttempts(input: Readonly<{
     }
     assertObservationMatchesCapture(scripted, captureReceipt);
     const { blockerColliderIds } = verifyBlockerEvidenceClosureForContext({
-      caseBlockerColliderIds: input.reconstructionCase.expected.colliders
-        .filter(({ role }) => role === "blocker")
-        .map(({ colliderId }) => colliderId),
+      caseBlockers: input.reconstructionCase.expected.colliders
+        .filter(({ role }) => role === "blocker"),
       formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
       materializerMetadata: verified.nativeBlockMaterializerMetadata,
@@ -1678,9 +1692,8 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
   const blockerClosure = verifyBlockerEvidenceClosureForContext({
-    caseBlockerColliderIds: reconstructionCase.expected.colliders
-      .filter(({ role }) => role === "blocker")
-      .map(({ colliderId }) => colliderId),
+    caseBlockers: reconstructionCase.expected.colliders
+      .filter(({ role }) => role === "blocker"),
     formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
     contribution: verified.nativeSceneContribution,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,

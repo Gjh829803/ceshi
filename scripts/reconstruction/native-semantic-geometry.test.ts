@@ -8,10 +8,9 @@ import {
 import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
 import { describe, expect, it } from "vitest";
 
-import { createBabylonNativeBlockProfileCheckResultV1 } from "../../packages/native-babylon-block-profile/src/check.js";
-import { deriveBabylonNativeBlockLayoutV1 } from "../../packages/native-babylon-block-profile/src/layout.js";
-import type { BabylonNativeBlockSessionRecordV1 } from "../../packages/native-babylon-block-profile/src/session.js";
-import { babylonNativeBlockBoundsFromCenterV1 } from "../../packages/native-babylon-block-profile/src/shapes.js";
+import { createBabylonNativeBlockProfileCheckResultV1, deriveBabylonNativeBlockLayoutV1,
+  type BabylonNativeBlockSessionRecordV1 } from "@whitebox-world/native-babylon-block-profile/testing";
+import { babylonNativeBlockBoundsFromCenterV1 } from "@whitebox-world/native-babylon-block-profile/shapes";
 import { SCENE_SOURCE } from "./native-package.test-support.js";
 import {
   NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1,
@@ -58,7 +57,7 @@ describe("Native semantic geometry capture fixtures", () => {
     for (const fixture of Object.values(fixtures)) {
       for (const line of unchangedLines) expect(fixture.options.sceneSource).toContain(line);
       expect(fixture.blocks.filter((block) => block.id === "gate")).toHaveLength(1);
-      expect(fixture.options.sceneSource).toContain("displayGapMeters: 0");
+      expect(fixture.options.sceneSource).not.toContain("displayGapMeters");
       expect(fixture.options.maximumBlockCount).toBe(128);
       expect(fixture.blocks.length + 55).toBeLessThanOrEqual(128);
       expect(fixture.options).toMatchObject({
@@ -155,7 +154,7 @@ describe("Native semantic geometry capture fixtures", () => {
     expect(targetBlocks("rear-depth-wall").filter((block) => !block.id.startsWith("rear-"))).toEqual(solid);
     expect(targetBlocks("rear-depth-wall").filter((block) => block.id.startsWith("rear-"))
       .map((block) => block.centerMetersXYZ)).toEqual([
-        [4, 0.5, 7], [4, 1.5, 7], [4, 0.5, 8], [4, 1.5, 8], [4, 0.5, 9], [4, 1.5, 9],
+        [4, 0.5, 7], [4, 0.5, 8], [4, 0.5, 9],
       ]);
   });
 

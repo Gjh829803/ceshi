@@ -601,13 +601,14 @@ export function createEvidenceSetFixtureInputV1(
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
   const authoringManifest = parseNativeBlockAuthoringManifestV1({
     kind: "native-block-authoring",
+    controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
     groundExploration: withoutScriptedTraversal ? {
       mode: "source-authored",
       requiredTargets: [
         { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, -1] },
         { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, -2] },
       ],
-      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
         centerlineStandPositionsMetersXYZ: [[0, 0, 0], [0, 0, -1]] }],
     } : { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },

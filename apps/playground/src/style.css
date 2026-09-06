@@ -1243,6 +1243,11 @@ kbd,
 
 .topbar-more-menu button:hover { color: #effff6; background: #1a2420; }
 
+#runtime-diagnostics-controls[hidden] { display: none; }
+.topbar:has(#runtime-diagnostics-controls[open]) { z-index: 21; }
+#runtime-diagnostics-controls .topbar-more-menu { width: 250px; }
+#runtime-diagnostics-status { margin: 6px 11px; font-size: 11px; color: #a4b4ab; overflow-wrap: anywhere; }
+
 .authoring-context-bar {
   position: relative;
   z-index: 4;

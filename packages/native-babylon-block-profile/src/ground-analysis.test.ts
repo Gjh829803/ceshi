@@ -56,8 +56,7 @@ function capability(
     resourceLockHash: H("a"),
     subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
     subjectDefinitionHash: H("a"),
-    colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
-    colliderProfileHash: H("a"),
+    colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1", colliderProfileHash: H("a") },
     physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
     physicsBodyProfileHash: H("a"),
     locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
@@ -304,7 +303,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             target.standPositionMetersXYZ,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional: true,
         }]),
       }),
     });
@@ -505,7 +504,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
   });
 
-  it("reports the closest directed step frontier for an unreachable target", () => {
+  it.each([true, false])("reports the closest directed step frontier only when connectivity is required=%s", (requireSingleReachableComponent) => {
     const target = Object.freeze({
       id: "high-target",
       acceptanceTargetRef: "worldkit://acceptance-target/high@1",
@@ -519,11 +518,19 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       caseIntent: caseIntent({
         spawn: SPAWN,
         requiredTargets: Object.freeze([target]),
+        requireSingleReachableComponent,
       }),
     });
 
     const step = result.failureFacts.find(({ metricId }) =>
       metricId === "ground-step-up-millimeters");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    if (!requireSingleReachableComponent) {
+      expect(step).toBeUndefined();
+      expect(result.failureFacts).toEqual([]);
+      expect(result.admissionOutcome).toBe("passed");
+      return;
+    }
     expect(step?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 0,
@@ -532,7 +539,6 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       exceededByMillimeters: 200,
       correctionDirection: "decrease",
     });
-    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
   });
 
   it("applies the trusted maximum slope to smoothed adjacent support", () => {
@@ -620,7 +626,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             position("-1,1,0"),
             target.standPositionMetersXYZ,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional: true,
         }]),
       }),
     });
@@ -677,7 +683,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
   });
 
-  it("rejects a detour that leaves the declared traversal band", () => {
+  it.each([true, false])("rejects a detour that leaves the declared traversal band with bidirectional=%s", (isBidirectional) => {
     const support = [...new Set([
       ...rectangle(-1, 1, -1, 0),
       ...rectangle(-1, 3, 2, 3),
@@ -695,7 +701,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             destination,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional,
         }]),
       }),
     });
@@ -721,7 +727,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     );
   });
 
-  it("identifies the exact missing endpoint in a traversal band", () => {
+  it.each([true, false])("identifies the exact missing endpoint in a traversal band with bidirectional=%s", (isBidirectional) => {
     const unsupportedDestination = position("4,1,0");
     const result = analyze({
       supportTopCellKeys: rectangle(-1, 1, -1, 1),
@@ -735,7 +741,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             unsupportedDestination,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional,
         }]),
       }),
     });
@@ -783,6 +789,82 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     );
   });
 
+  it.each([false, true])("preserves disconnected ground target measurements with required connectivity=%s", (requireSingleReachableComponent) => {
+    const remote = position("11,1,11");
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 2, -1, 1),
+        ...rectangle(10, 12, 10, 12),
+      ],
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent,
+        requiredTargets: [
+          { id: "middle-target", acceptanceTargetRef: "worldkit://acceptance-target/middle@1",
+            standPositionMetersXYZ: position("1,1,0") },
+          { id: "remote-target", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+            standPositionMetersXYZ: remote },
+        ],
+      }),
+    });
+    expect(result.metrics).toMatchObject({
+      requiredTargetCount: 2, reachableRequiredTargetCount: 1, componentCount: 2,
+    });
+    expect(result.metrics.disconnectedStandablePositionCount).toBeGreaterThan(0);
+    expect(result.standableNodes).toContainEqual(expect.objectContaining({
+      positionMetersXYZ: remote, isReachableFromSpawn: false,
+    }));
+    expect(result.analysisOutcome).toBe(requireSingleReachableComponent ? "failed" : "passed");
+    expect(result.admissionOutcome).toBe(result.analysisOutcome);
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toEqual(
+      requireSingleReachableComponent
+        ? ["ground-component-reachability", "ground-target-reachability"] : [],
+    );
+  });
+
+  it.each(["unsupported", "blocked"] as const)("still rejects an optional ground target that is %s", (condition) => {
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 1, -1, 1),
+        ...(condition === "blocked" ? rectangle(10, 12, 10, 12) : []),
+      ],
+      ...(condition === "blocked" ? { blockerCellKeys: ["11,3,11"] } : {}),
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent: false,
+        requiredTargets: [{ id: "remote-target",
+          acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          standPositionMetersXYZ: position("11,1,11") }],
+      }),
+    });
+    expect(result.admissionOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    expect(result.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "remote-target",
+      metricId: condition === "blocked"
+        ? "ground-clearance-millimeters" : "ground-support-coverage-basis-points",
+    }));
+    expect(result.failureFacts.map(({ metricId }) => metricId))
+      .not.toContain("ground-target-reachability");
+  });
+
+  it("still rejects a disconnected explicit band when global connectivity is optional", () => {
+    const remote = position("11,1,11");
+    const result = analyze({
+      supportTopCellKeys: [...rectangle(-1, 1, -1, 1), ...rectangle(10, 12, 10, 12)],
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent: false,
+        requiredTargets: [{ id: "remote-target", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          standPositionMetersXYZ: remote }],
+        requiredTraversalBands: [{ id: "declared-band", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          centerlineStandPositionsMetersXYZ: [SPAWN.standPositionMetersXYZ, remote],
+          halfWidthMeters: 1, isBidirectional: false }],
+      }),
+    });
+    expect(result.admissionOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId))
+      .toEqual(["ground-traversal-band-reachability"]);
+  });
+
   it("rejects duplicate anchor IDs or positions, but permits a shared Case obligation", () => {
     const target = Object.freeze({
       id: "same-target",
@@ -819,6 +901,30 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
         target, { ...target, id: "same-position-other-id" },
       ] }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+  });
+
+  it("analyzes more than 256 exploration anchors and still rejects unsupported declared targets", () => {
+    const requiredTargets = Array.from({ length: 257 }, (_, index) => ({
+      id: `target-${String(index).padStart(3, "0")}`,
+      acceptanceTargetRef: "worldkit://acceptance-target/ground@1",
+      standPositionMetersXYZ: position(`${index % 17 + 1},1,${Math.floor(index / 17) + 1}`),
+    }));
+    const supportTopCellKeys = rectangle(-1, 19, -1, 19);
+    const result = analyze({ supportTopCellKeys,
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets }),
+    });
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.metrics.requiredTargetCount).toBe(257);
+    expect(result.metrics.reachableRequiredTargetCount).toBe(257);
+    const unsupported = analyze({ supportTopCellKeys,
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets: [
+        ...requiredTargets.slice(0, -1),
+        { ...requiredTargets.at(-1)!, standPositionMetersXYZ: position("50,1,50") },
+      ] }),
+    });
+    expect(unsupported.admissionOutcome).toBe("failed");
+    expect(unsupported.metrics.requiredTargetCount).toBe(257);
+    expect(unsupported.metrics.reachableRequiredTargetCount).toBe(256);
   });
 
   it("does not invent cross-domain uniqueness between Spawn and target IDs", () => {

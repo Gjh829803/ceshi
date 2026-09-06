@@ -1,6 +1,7 @@
 import "./style.css";
 import "@whitebox-world/browser-recording/workbench.css";
-import { createFormalCaptureStartupReporterV1, type FormalCaptureStartupStageV1 } from "@whitebox-world/runtime-babylon";
+import { createFormalCaptureStartupReporterV1, installRuntimeFlightRecorderV1, type FormalCaptureStartupStageV1 } from "@whitebox-world/runtime-babylon";
+import { installRuntimeFlightControlsV1 } from "./runtime-flight-controls.js";
 
 import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
@@ -166,6 +167,15 @@ app.innerHTML = `
           <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
         </button>
         <button class="button button-primary" id="capture-button" type="button">保存截图</button>
+        <details class="topbar-more" id="runtime-diagnostics-controls" hidden>
+          <summary class="button button-subtle">运行诊断</summary>
+          <div class="topbar-more-menu">
+            <button id="runtime-diagnostics-mark" type="button">记录当前现场</button>
+            <button id="runtime-diagnostics-copy" type="button">复制诊断摘要</button>
+            <button id="runtime-diagnostics-download" type="button">下载诊断 JSON</button>
+            <p id="runtime-diagnostics-status" role="status" aria-live="polite"></p>
+          </div>
+        </details>
         ${viewerMode ? `
           <div class="topbar-more">
             <button class="button button-subtle" id="more-actions-button" type="button" aria-haspopup="menu" aria-expanded="false">更多 <span aria-hidden="true">⋮</span></button>
@@ -718,7 +728,7 @@ function activeActionFromSnapshotV4(
   ).find((state) => state.actorEntityId === actorEntityId)?.semanticActionRef;
 }
 
-function downloadJson(filename: string, payload: unknown): void {
+function downloadJson(filename: string, payload: unknown, revokeDelayMilliseconds = 0): void {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
     type: "application/json",
   });
@@ -726,7 +736,7 @@ function downloadJson(filename: string, payload: unknown): void {
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+  window.setTimeout(() => URL.revokeObjectURL(link.href), revokeDelayMilliseconds);
 }
 
 interface TuningWorkbenchContextV1 {
@@ -2934,6 +2944,8 @@ if (runtimeRoute.mode === "unknown") {
     | { dispose(): void }
     | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
+  let runtimeFlightRecorder: ReturnType<typeof installRuntimeFlightRecorderV1> | undefined;
+  let runtimeFlightControls: ReturnType<typeof installRuntimeFlightControlsV1> | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
@@ -2976,6 +2988,34 @@ if (runtimeRoute.mode === "unknown") {
         disposeAuthoringWorkbenchAdapterBinding?.();
         disposeAuthoringWorkbenchAdapterBinding = workbench.bindAdapterDiagnostics(createdAdapter);
       }
+      try {
+        runtimeFlightControls?.dispose();
+        runtimeFlightRecorder?.dispose();
+        runtimeFlightRecorder = installRuntimeFlightRecorderV1({
+          target: window,
+          diagnosticSessionId: window.crypto.randomUUID(),
+          visibilityState: () => document.visibilityState,
+          history: { worldId: recordingWorkbenchSceneId(runtimeRoute) ?? adapter.name,
+            storage: () => window.localStorage, events: { window, document } },
+          source: { read: () => ({
+            progressMode: "continuous",
+            worldSessionId: adapter.runtimeSnapshot().worldSessionId,
+            snapshot: adapter.snapshot(),
+            hasRuntimeFailure: adapter.runtimeDiagnostics().some(({ code }) =>
+              code === "WORLDKIT_RUNTIME_FRAME_FAILED" || code === "WORLDKIT_RUNTIME_RESET_FAILED"),
+          }) },
+        });
+        runtimeFlightControls = installRuntimeFlightControlsV1({ recorder: runtimeFlightRecorder,
+          root: requiredElement<HTMLElement>("#runtime-diagnostics-controls"), status: requiredElement("#runtime-diagnostics-status"),
+          markButton: requiredElement("#runtime-diagnostics-mark"), copyButton: requiredElement("#runtime-diagnostics-copy"),
+          downloadButton: requiredElement("#runtime-diagnostics-download"),
+          download: (filename, bundle) => downloadJson(filename, bundle, 10_000),
+          copyText: (text) => window.navigator.clipboard.writeText(text),
+          copyFallback: (text) => { window.prompt("复制运行诊断摘要", text); },
+        });
+      } catch {
+        // Advisory diagnostics never veto a ready world or change its controls.
+      }
       startPlayground(adapter, () => pageLifecycle.dispose(), {
         resetSimulation: async () => {
           await browserInstallation.api.reset();
@@ -2986,9 +3026,17 @@ if (runtimeRoute.mode === "unknown") {
       });
     },
     rollbackPageState() {
+      runtimeFlightControls?.dispose();
+      runtimeFlightControls = undefined;
+      runtimeFlightRecorder?.dispose();
+      runtimeFlightRecorder = undefined;
       delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     },
     disposeRuntimeHost: async () => {
+      runtimeFlightControls?.dispose();
+      runtimeFlightControls = undefined;
+      runtimeFlightRecorder?.dispose();
+      runtimeFlightRecorder = undefined;
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();

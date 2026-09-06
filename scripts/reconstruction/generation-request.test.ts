@@ -1,3 +1,4 @@
+import { builtInSubjectResourceRegistry, createSubjectResourceRegistry, type SubjectRegistryResourceInputV3 } from "@whitebox-world/subject-registry";
 import {
   cp,
   lstat,
@@ -28,18 +29,20 @@ import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCas
 import {
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationBootstrapV1,
-  deriveNativeBlockSubjectVisualReviewProxyV1,
   prepareNativeBlockGenerationTaskV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
 import {
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+  evaluateBlockSourceResourceBudgetV1,
 } from "./native-block-production-budget.js";
 import {
+  deriveNativeBlockSubjectVisualReviewProxyV1,
   parseNativeBlockSubjectVisualReviewProxyV1,
 } from "./native-block-subject-visual-review-proxy.js";
 import { createNativeBlockRepairInstructionV1 } from "./repair-request.js";
+import { checkNativeSubjectHostedSelectionV1, createNativeSubjectAuthoringCatalogV1, createNativeSubjectHostContextV1, parseNativeSubjectHostContextV1, resolveNativeSubjectAuthoringClosureV1 } from "./native-subject-host-context.js";
 import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
   "../native-scene/admission-budget.js";
 import {
@@ -372,10 +375,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     nativeSceneApiPath: path.join(fixtureValue.inputDirectory, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(fixtureValue.inputDirectory, "native-scene-profile.json"),
     blockProfilePath: path.join(fixtureValue.inputDirectory, "block-profile.json"),
-    hostClosureRootPath: path.resolve("apps/playground/public/world-packages/cloud-ridge"),
-    gameplayBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json"),
-    worldRuntimeBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json"),
-    worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+    subjectHostContext: createNativeSubjectHostContextV1(reconstructionCase.id, "camera-main"),
     worldBoundsPolicyPath: path.join(fixtureValue.inputDirectory, "world-bounds-policy.json"),
     worldBoundsPolicy: {
       mode: "fixed",
@@ -410,7 +410,6 @@ function subjectHostInput(subject: NativeSubjectHostClosureInputV1["subject"]): 
     initialCamera: {
       mode: "third-person",
       cameraEntityId: "camera-main",
-      cameraRigProfileRef: "worldkit://camera/third-person.standard@1",
       pitchRadians: 0.12,
       distanceMeters: 7,
       targetHeightMeters: 1.4,
@@ -473,15 +472,15 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     expect(sha256CanonicalJson(result.value)).toBe(rigged
       ? "sha256:934d6eb2626feb4dec4d0fa122f56fa36eec8cd519baf1c3fa59fd27466d697b"
       : "sha256:a84f80b27bd08ff0fb6c5e5225f155b9fa02ae2fe5e8e3c7f9f9d26b4a918ba0");
-    const closure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: result.value }));
-    const expectedClosure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: expected }));
+    const closure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: result.value }), builtInSubjectResourceRegistry);
+    const expectedClosure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: expected }), builtInSubjectResourceRegistry);
     expect(closure).toEqual(expectedClosure);
     if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
     const proxy = deriveNativeBlockSubjectVisualReviewProxyV1({
       worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
       worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
       worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
-    });
+    }, builtInSubjectResourceRegistry);
     expect(proxy.subjectDefinitionRef).toBe(`package://subject-definition/${design.id}@1`);
     expect(proxy.cuboids.length).toBeGreaterThan(0);
     expect(stringifyCanonicalJson(design)).toBe(before);
@@ -570,7 +569,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     ["worldkit://subject-definition/vehicle.four-wheel.arcade@1", "SUBJECT_CAPABILITY_UNSATISFIED"],
     ["worldkit://subject-definition/glider.paraglider.unpowered@1", "SUBJECT_CAPABILITY_UNSATISFIED"],
   ])("preserves existing rejection for unavailable Subject %s without substitution", (subjectDefinitionRef, code) => {
-    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef }));
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef }), builtInSubjectResourceRegistry);
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("Unavailable Subject was substituted.");
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === code)).toBe(true);
@@ -583,26 +582,60 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const { subject: _subject, ...hostInput } = input;
     expect(compileNativeSubjectHostClosureFromDesignV1({
       ...hostInput, subjectDesign: { kind: "registered", subjectDefinitionRef },
-    })).toEqual(compileNativeSubjectHostClosureV1(input));
+    }, builtInSubjectResourceRegistry)).toEqual(compileNativeSubjectHostClosureV1(input, builtInSubjectResourceRegistry));
     for (const subjectDesign of [undefined, { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/missing@1" },
       { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/glider.paraglider.unpowered@1" },
       { kind: "registered", subjectDefinitionRef, runtime: {} }]) {
-      const result = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign });
+      const result = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign }, builtInSubjectResourceRegistry);
       expect(result.ok).toBe(false);
       expect(result).not.toHaveProperty("worldRuntimeBootstrap");
     }
     let executed = false;
     const accessor = { kind: "registered" };
     Object.defineProperty(accessor, "subjectDefinitionRef", { enumerable: true, get() { executed = true; return subjectDefinitionRef; } });
-    expect(compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign: accessor }).ok).toBe(false);
+    expect(compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign: accessor }, builtInSubjectResourceRegistry).ok).toBe(false);
     expect(executed).toBe(false);
+  });
+
+  it.each(["registered", "registered-heavy", "composed"])("uses the actual compiled %s Subject cost in old source accounting", (kind) => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const closure = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput,
+      subjectDesign: kind !== "composed"
+        ? { kind: "registered", subjectDefinitionRef: kind === "registered-heavy"
+            ? "worldkit://subject-definition/xier120.tracked@1"
+            : "worldkit://subject-definition/humanoid.g-bot@2" }
+        : { kind: "composed", definition: nativeComposedDesign() },
+    }, builtInSubjectResourceRegistry);
+    if (!closure.ok) throw new Error("fixture Subject must compile");
+    const before = structuredClone(closure.subjectResourceCost);
+    expect(before.vertices).toBeGreaterThan(0);
+    expect(before.triangles).toBeGreaterThan(0);
+    const accounting = evaluateBlockSourceResourceBudgetV1({
+      sourceBlockCount: 8_000, runtimeClusterCount: 2, solidRuntimeClusterCount: 1,
+      subjectResourceCost: closure.subjectResourceCost,
+    });
+    expect(accounting.usage).toEqual({
+      vertices: before.vertices + 52, triangles: before.triangles + 26, colliders: before.colliders + 2,
+    });
+    expect(accounting.diagnostics).toEqual([]);
+    expect(closure.subjectResourceCost).toEqual(before);
+    if (kind === "registered-heavy") {
+      expect(before.vertices).toBe(172_536);
+      expect(evaluateBlockSourceResourceBudgetV1({
+        sourceBlockCount: 8_000, runtimeClusterCount: 8_000, solidRuntimeClusterCount: 1,
+        subjectResourceCost: closure.subjectResourceCost,
+      }).diagnostics).toMatchObject([{
+        code: "COMPILER_RESOURCE_BUDGET_EXCEEDED", instancePath: "/world/resourceBudget/maxVertices",
+        details: { actual: 364_540, maximum: 342_000 },
+      }]);
+    }
   });
 
   it("preserves the old composed Subject part-count, identity and tag policies at Host compilation", () => {
     const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
     const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
       ...hostInput, subjectDesign: { kind: "composed", definition },
-    });
+    }, builtInSubjectResourceRegistry);
     const base = nativeComposedDesign();
     const parts = base.visualParts;
     expect(compile(base).ok).toBe(true);
@@ -624,7 +657,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
     const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
       ...hostInput, subjectDesign: { kind: "composed", definition },
-    });
+    }, builtInSubjectResourceRegistry);
     const human = nativeComposedDesign();
     human.category = "human";
     human.bodyTopology = "biped";
@@ -676,7 +709,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const part = definition.visualParts[0]!;
     if (part.kind !== "primitive" || part.shape.kind !== "box") throw new Error("Missing body fixture.");
     part.shape.sizeMetersXYZ = [-1, 0.7, 1.4];
-    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }));
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }), builtInSubjectResourceRegistry);
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("Malformed Subject was compiled.");
     expect(result.diagnostics.length).toBeGreaterThan(0);
@@ -690,7 +723,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       enumerable: true,
       get() { executed = true; throw new Error("untrusted accessor"); },
     });
-    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }));
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }), builtInSubjectResourceRegistry);
     expect(executed).toBe(false);
     expect(result).toMatchObject({ ok: false, diagnostics: [{ code: "NATIVE_SUBJECT_HOST_INPUT_INVALID" }] });
   });
@@ -698,11 +731,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
   it("binds changed package silhouette to Runtime, locks and proxy without mutating the prior closure", () => {
     const definition = createValidPackageSubjectWorldV4().resources.subjectDefinitions[0]!;
     const options = subjectHostInput({ source: "package", definition });
-    const first = compileNativeSubjectHostClosureV1(options);
+    const first = compileNativeSubjectHostClosureV1(options, builtInSubjectResourceRegistry);
     if (!first.ok) throw new Error(JSON.stringify(first.diagnostics));
     const firstBytes = stringifyCanonicalJson(first);
     definition.visualParts[0]!.localTransform.positionMetersXYZ = [3, 1, -2];
-    const second = compileNativeSubjectHostClosureV1(options);
+    const second = compileNativeSubjectHostClosureV1(options, builtInSubjectResourceRegistry);
     if (!second.ok) throw new Error(JSON.stringify(second.diagnostics));
     expect(stringifyCanonicalJson(first)).toBe(firstBytes);
     expect(second.worldRuntimeBootstrap.contentHash).not.toBe(first.worldRuntimeBootstrap.contentHash);
@@ -712,7 +745,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
       worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
       worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
-    }));
+    }, builtInSubjectResourceRegistry));
     expect(proxies[1]!.subjectDefinitionHash).not.toBe(proxies[0]!.subjectDefinitionHash);
     expect(proxies[1]!.subjectRuntimeDescriptorHash).not.toBe(proxies[0]!.subjectRuntimeDescriptorHash);
     expect(proxies[1]!.cuboids).not.toEqual(proxies[0]!.cuboids);
@@ -726,11 +759,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       worldRuntimeBootstrap: wrongLock,
       worldRuntimeBootstrapRef: first.worldRuntimeBootstrapRef,
       worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(wrongLock))) as Sha256HashV1,
-    })).toThrow(/Subject definition Registry closure failed/);
+    }, builtInSubjectResourceRegistry)).toThrow(/Subject definition Registry closure failed/);
   });
 
   it.each(["registered", "registered-primitive", "primitive", "rigged", "designed-primitive", "designed-rigged"] as const)(
-    "prepares a compiled %s Host Subject closure without the Cloud Ridge world",
+    "compiles a %s Host Subject closure without the Cloud Ridge world",
     async (kind) => {
       const value = await fixture();
       try {
@@ -761,12 +794,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           ? compileNativeSubjectHostClosureFromDesignV1({
             ...designHostInput,
             subjectDesign: { kind: "composed", definition: nativeComposedDesign(kind === "designed-rigged") },
-          })
-          : compileNativeSubjectHostClosureV1(closureInput);
+          }, builtInSubjectResourceRegistry)
+          : compileNativeSubjectHostClosureV1(closureInput, builtInSubjectResourceRegistry);
         expect(closure.ok).toBe(true);
         if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
         expect(closureInput).toEqual(original);
-        expect(compileNativeSubjectHostClosureV1(closureInput)).toEqual(closure);
+        expect(compileNativeSubjectHostClosureV1(closureInput, builtInSubjectResourceRegistry)).toEqual(closure);
         const expectedRef = selectedSubject.source === "registry"
           ? selectedSubject.subjectDefinitionRef
           : `package://subject-definition/${definition.id}@${definition.version}`;
@@ -778,6 +811,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ]);
         expect(closure.worldRuntimeBootstrap.initialCamera).toEqual({
           ...closureInput.initialCamera,
+          cameraRigProfileRef: subject.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
           targetEntityId: "requested-subject",
         });
         if (selectedSubject.source === "package") {
@@ -789,27 +823,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           expect(subject.collider).toEqual(expected.collider);
           expect(closure.subjectResourceCost).toEqual(expected.resourceCost);
         }
-        const hostRoot = path.join(value.root, "compiled-host");
-        await mkdir(hostRoot);
-        const gameplayBootstrapPath = path.join(hostRoot, "gameplay.json");
-        const worldRuntimeBootstrapPath = path.join(hostRoot, "runtime.json");
-        await Promise.all([
-          writeFile(gameplayBootstrapPath, stringifyCanonicalJson(closure.gameplayBootstrap)),
-          writeFile(worldRuntimeBootstrapPath, stringifyCanonicalJson(closure.worldRuntimeBootstrap)),
-          writeFile(path.join(hostRoot, "registry-lock.json"), stringifyCanonicalJson(closure.registryLock)),
-        ]);
-        const prepared = await prepareNativeBlockGenerationTaskV1({
-          ...base,
-          hostClosureRootPath: hostRoot,
-          gameplayBootstrapPath,
-          worldRuntimeBootstrapPath,
+        const proxy = deriveNativeBlockSubjectVisualReviewProxyV1({
+          worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
           worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
-        });
-        expect(prepared.bootstrap.initialControlledEntityId).toBe("requested-subject");
-        expect(prepared.hostClosure.worldRuntimeBootstrapHash).toBe(closure.worldRuntimeBootstrap.contentHash);
-        const proxy = parseNativeBlockSubjectVisualReviewProxyV1(JSON.parse(await readFile(
-          path.join(base.runDirectoryPath, "attempts/0/inputs/subject-visual-review-proxy.json"), "utf8",
-        )));
+          worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
+        }, builtInSubjectResourceRegistry);
         expect(proxy.subjectDefinitionHash).toBe(subject.subjectDefinitionHash);
         expect(proxy.subjectRuntimeDescriptorHash).toBe(sha256CanonicalJson(subject));
         expect(proxy.worldRuntimeBootstrapContentHash).toBe(closure.worldRuntimeBootstrap.contentHash);
@@ -1024,55 +1042,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         sha256Bytes(prepared.bootstrapBytes),
       );
       expect(new TextDecoder().decode(prepared.bootstrapBytes)).not.toMatch(/\n$/);
-      const subjectVisualReviewProxy =
-        parseNativeBlockSubjectVisualReviewProxyV1(JSON.parse(
-          new TextDecoder().decode(prepared.subjectVisualReviewProxyBytes),
-        ));
-      const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(
-        new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes),
-      ));
-      const controlledSubject = runtime.subjectRuntimeDescriptors.find(
-        ({ entityId }) => entityId === runtime.initialControlledEntityId,
-      )!;
-      expect(subjectVisualReviewProxy).toEqual(prepared.subjectVisualReviewProxy);
-      expect(subjectVisualReviewProxy).toMatchObject({
-        initialControlledEntityId: runtime.initialControlledEntityId,
-        subjectDefinitionRef: controlledSubject.subjectDefinitionRef,
-        subjectDefinitionHash: controlledSubject.subjectDefinitionHash,
-        subjectRuntimeDescriptorHash: sha256CanonicalJson(controlledSubject),
-        worldRuntimeBootstrapRef:
-          "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-        worldRuntimeBootstrapContentHash: runtime.contentHash,
-        worldRuntimeBootstrapBytesHash:
-          sha256Bytes(prepared.worldRuntimeBootstrapBytes),
-      });
-      expect(subjectVisualReviewProxy.cuboids).toHaveLength(1);
-      expect(subjectVisualReviewProxy.cuboids[0]!.id).toBe("body.asset");
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[0])
-        .toBeCloseTo(-0.9025658369064331, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[0])
-        .toBeCloseTo(0.9025661945343018, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[1])
-        .toBeCloseTo(-0.0003511549439281225, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[1])
-        .toBeCloseTo(1.8088831901550293, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[2])
-        .toBeCloseTo(-0.17174167931079876, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[2])
-        .toBeCloseTo(0.14895710349082958, 12);
+      expect(JSON.parse(new TextDecoder().decode(prepared.subjectHostContextBytes))).toEqual(prepared.subjectHostContext);
+      expect(prepared.subjectHostContext.resources.length).toBeGreaterThan(0);
       expect(prepared.bootstrap).toMatchObject({
-        gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot-subject-world.8201@1",
-        initialControlledEntityId: "g-bot-primary",
+        gameplayBootstrapRef: "worldkit://gameplay-bootstrap/cloud-temple-t-gate-native-block.17@1",
+        initialControlledEntityId: "cloud-temple-t-gate-native-block-subject",
         spawnMarkerId: "spawn",
         seed: 17,
       });
       expect(prepared.generationRequest.contextInputs.map((entry) => entry.inputRef)).toEqual(
         expect.arrayContaining([
-          "inputs/gameplay-bootstrap.json",
-          "inputs/world-runtime-bootstrap.json",
-          "inputs/subject-visual-review-proxy.json",
+          "inputs/subject-host-context.json",
           "inputs/world-bounds-policy.json",
-          "inputs/registry-lock.json",
           "inputs/builder-skill/scripts/render-visual-review.mjs",
         ]),
       );
@@ -1080,8 +1061,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         resolveWorldReconstructionFrozenOwnerIdentitiesV1({
           reconstructionCase: input(value).case,
           evaluationProfile: input(value).profile,
-          gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
-          worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
+          subjectHostContext: prepared.subjectHostContext,
           worldBoundsPolicy: JSON.parse(new TextDecoder().decode(prepared.worldBoundsPolicyBytes)),
           bootstrap: prepared.bootstrap,
         }),
@@ -1089,12 +1069,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(() => resolveWorldReconstructionFrozenOwnerIdentitiesV1({
         reconstructionCase: input(value).case,
         evaluationProfile: input(value).profile,
-        gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
-        worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
+        subjectHostContext: prepared.subjectHostContext,
         worldBoundsPolicy: JSON.parse(new TextDecoder().decode(prepared.worldBoundsPolicyBytes)),
         bootstrap: {
           ...prepared.bootstrap,
-          gravityMetersPerSecondSquaredXYZ: [0, -1, 0],
+          gameplayBootstrapRef: "worldkit://gameplay-bootstrap/changed@1",
         },
       })).toThrowError("World reconstruction frozen owner identity closure failed");
       for (const contextInput of prepared.generationRequest.contextInputs) {
@@ -1105,16 +1084,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       const durableRoute = JSON.parse(await readFile(path.join(attemptRoot, "scene-authoring-route-decision.json"), "utf8"));
       const durableRequest = JSON.parse(await readFile(path.join(attemptRoot, "generation-request.json"), "utf8"));
       const durableAttempt = JSON.parse(await readFile(path.join(attemptRoot, "attempt.json"), "utf8"));
-      const hostClosure = JSON.parse(await readFile(path.join(attemptRoot, "inputs", "host-closure.json"), "utf8"));
+      const hostContext = JSON.parse(await readFile(path.join(attemptRoot, "inputs", "subject-host-context.json"), "utf8"));
       expect(sha256CanonicalJson(durableRoute)).toBe(prepared.generationRequest.routeDecisionHash);
       expect(durableRequest).toEqual(prepared.generationRequest);
       expect(durableAttempt).toEqual(prepared.attempt);
-      expect(hostClosure).toMatchObject({
-        kind: "native-block-generation-host-closure",
-        worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-        worldRuntimeBootstrapResolvedVersion: "1",
-        worldRuntimeBootstrapHash: prepared.hostClosure.worldRuntimeBootstrapHash,
-      });
+      expect(hostContext).toEqual(prepared.subjectHostContext);
       await rm(prepared.taskWorkspacePath, { recursive: true, force: false });
       // Cleanup may remove the disposable task, but not any frozen input needed
       // for an explicit Host replay of this same dispatch.
@@ -1149,11 +1123,10 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         const descriptor = JSON.parse(new TextDecoder().decode(durableDescriptorBytes));
         expect(descriptor).toMatchObject({ resourceRef: expectedRef, contentHash: expectedHash });
       }
-      expect(JSON.parse(await readFile(path.join(attemptRoot, "inputs", "host-closure.json"), "utf8"))).toEqual(hostClosure);
       expect(await readFile(path.join(
         attemptRoot,
-        "inputs/subject-visual-review-proxy.json",
-      ))).toEqual(Buffer.from(prepared.subjectVisualReviewProxyBytes));
+        "inputs/subject-host-context.json",
+      ))).toEqual(Buffer.from(prepared.subjectHostContextBytes));
       for (const relativePath of [
         "builder-skill/scripts/render-visual-review.mjs",
         "entry-whitebox-target.png",
@@ -1769,13 +1742,16 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
-  it("rejects a World Runtime Bootstrap identity not admitted by the selected Registry Lock", async () => {
+  it("rejects a frozen Registry resource whose bytes do not match its lock", async () => {
     const value = await fixture();
     try {
+      const requestInput = input(value);
+      const context = structuredClone(requestInput.subjectHostContext);
+      const forged = { ...context, resources: context.resources.map((resource, index) =>
+        index === 0 ? { ...resource, contentHash: hash("0") } : resource) };
       await expect(prepareNativeBlockGenerationTaskV1({
-        ...input(value),
-        worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/not-admitted@1",
-      })).rejects.toThrow(/not admitted/i);
+        ...requestInput, subjectHostContext: forged,
+      })).rejects.toThrow(/Registry resource hash mismatch/i);
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }
@@ -2011,63 +1987,149 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
-  it("derives Bootstrap only from closed Host owners and rejects a Gameplay crosswire", async () => {
-    const packageRoot = path.resolve("apps/playground/public/world-packages/cloud-ridge");
-    const gameplay = parseGameplayBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "gameplay/bootstrap.json"), "utf8")));
-    const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "runtime/world-runtime-bootstrap.json"), "utf8")));
-    const value = await fixture();
-    try {
-      const preparedInput = input(value);
-      const { contentHash: _contentHash, ...gameplayBody } = gameplay;
-      const mismatchedGameplay = createGameplayBootstrapV1({
-        ...gameplayBody,
-        resourceRef: "worldkit://gameplay-bootstrap/crosswired@1",
-      });
-      expect(() => deriveNativeBlockGenerationBootstrapV1({
-        reconstructionCase: preparedInput.case,
-        gameplayBootstrap: mismatchedGameplay,
-        worldRuntimeBootstrap: runtime,
-        worldBoundsPolicy: preparedInput.worldBoundsPolicy,
-        bootstrapId: preparedInput.bootstrapId,
-        sceneModuleRef: preparedInput.sceneModuleRef,
-        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-        nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
-        seed: preparedInput.seed,
-      })).toThrow(/owner closure/i);
-    } finally {
-      await rm(value.root, { recursive: true, force: true });
+
+  it("freezes a compiled Hosted catalog without removing SDK-only humanoid fixtures from the Registry", () => {
+    const context = createNativeSubjectHostContextV1("catalog-test", "camera-main");
+    const { subjects, rejectedSubjects } = context.authoringCatalog;
+    const definitions = builtInSubjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" });
+    expect([...subjects, ...rejectedSubjects].map(({ subjectDefinitionRef }) => subjectDefinitionRef).sort())
+      .toEqual(definitions.map(({ resourceRef }) => resourceRef).sort());
+    const proxyRef = "worldkit://subject-definition/humanoid.third-person@1";
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === proxyRef)).toBe(false);
+    expect(rejectedSubjects.find(({ subjectDefinitionRef }) => subjectDefinitionRef === proxyRef)?.diagnostics)
+      .toMatchObject([{ code: "NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED" }]);
+    expect(context.resources.some(({ resourceRef }) => resourceRef === proxyRef)).toBe(true);
+    expect(compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: proxyRef }), builtInSubjectResourceRegistry).ok).toBe(true);
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/humanoid.g-bot@2")).toBe(true);
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/quadruped.ground-proxy@1")).toBe(true);
+    for (const row of subjects) {
+      const compiled = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: row.subjectDefinitionRef }), builtInSubjectResourceRegistry);
+      if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+      const actual = compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+      expect(row.subjectDefinitionHash).toBe(actual.subjectDefinitionHash);
+      expect(row.collider).toEqual(actual.collider);
+      expect(row.cameraContext).toEqual(actual.capabilityAssembly.cameraContext);
+      expect(row.visualReviewProxy.cuboids.length).toBeGreaterThan(0);
+    }
+    expect(createNativeSubjectHostContextV1("catalog-test", "camera-main")).toEqual(context);
+    const forged = structuredClone(context);
+    Object.assign(forged.authoringCatalog.subjects[0]!, { executableMovementModes: ["flight"] });
+    expect(() => parseNativeSubjectHostContextV1(forged)).toThrow(/catalog differs from its frozen Registry/);
+    const missing = structuredClone(context);
+    Object.assign(missing.authoringCatalog, { subjects: [] });
+    expect(() => parseNativeSubjectHostContextV1(missing)).toThrow(/catalog differs from its frozen Registry/);
+  });
+
+  it("preserves the old registered Subject advisory center without rotating its asset-bound offset", () => {
+    // Literal 9e35ab53 agent-authoring-catalog.json G Bot proxy; this is the
+    // old software-review approximation, not a new Runtime transform oracle.
+    const row = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry).subjects
+      .find(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/humanoid.g-bot@2")!;
+    const proxy = row.visualReviewProxy.cuboids[0]!;
+    const minimum = [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082958];
+    const maximum = [0.9025658369064331, 1.8088831901550293, 0.17174167931079876];
+    for (let axis = 0; axis < 3; axis += 1) {
+      expect(proxy.minimumMetersXYZ[axis]).toBeCloseTo(minimum[axis]!, 10);
+      expect(proxy.maximumMetersXYZ[axis]).toBeCloseTo(maximum[axis]!, 10);
     }
   });
 
-  it("rejects multiple Runtime Subjects before deriving the Native projection", async () => {
-    const packageRoot = path.resolve("apps/playground/public/world-packages/cloud-ridge");
-    const gameplay = parseGameplayBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "gameplay/bootstrap.json"), "utf8")));
-    const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "runtime/world-runtime-bootstrap.json"), "utf8")));
+  it("preserves old registered advisory XYZ rotation and scale without changing the compiled visual transform", () => {
+    const resources = structuredClone(builtInSubjectResourceRegistry.listDiscoverableResources().map(({ contentHash: _hash, ...resource }) =>
+      resource as SubjectRegistryResourceInputV3));
+    const ref = "worldkit://subject-definition/humanoid.g-bot@2";
+    const definition = resources.find(resource => resource.kind === "subject-definition" && resource.resourceRef === ref);
+    if (definition?.kind !== "subject-definition") throw new Error("G Bot fixture missing");
+    const part = definition.visualParts[0]!;
+    const transform = { positionMetersXYZ: [1.2, 0.5, -1.1], rotationEulerRadiansXYZ: [0.2, 0.4, -0.3], scaleXYZ: [1.2, 0.8, 0.9] };
+    Object.assign(part, { localTransform: transform });
+    const registry = createSubjectResourceRegistry(resources);
+    const row = createNativeSubjectAuthoringCatalogV1(registry).subjects.find(subject => subject.subjectDefinitionRef === ref)!;
+    // Executed 9e35ab53 scripts/lib/agent-authoring-catalog.ts visualProxy on
+    // this exact registered definition. Multi-axis rotation is XYZ, not YXZ.
+    const minimum = [-0.06026366106754155, 0.22389626699974852, -1.7742169049538743];
+    const maximum = [2.460263231914099, 2.2229293611691325, -0.40527697680815344];
+    for (let axis = 0; axis < 3; axis += 1) {
+      expect(row.visualReviewProxy.cuboids[0]!.minimumMetersXYZ[axis]).toBeCloseTo(minimum[axis]!, 10);
+      expect(row.visualReviewProxy.cuboids[0]!.maximumMetersXYZ[axis]).toBeCloseTo(maximum[axis]!, 10);
+    }
+    const compiled = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: ref }), registry);
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!.visualParts[0]!.localTransform).toEqual(transform);
+  });
+
+  it("isolates catalog cache callers and invalidates it when a dependent Camera Profile changes", () => {
+    const baseline = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry);
+    const caller = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry);
+    Object.assign(caller.subjects[0]!.cameraContext, { defaultCameraRigProfileRef: "forged" });
+    expect(createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry)).toEqual(baseline);
+    const resources = structuredClone(builtInSubjectResourceRegistry.listDiscoverableResources().map(({ contentHash: _hash, ...resource }) =>
+      resource as SubjectRegistryResourceInputV3));
+    const usedProfile = baseline.subjects.flatMap(({ cameraContext }) => cameraContext.cameraRigProfiles)
+      .find(({ parameters }) => typeof parameters.baseFovDegrees === "number");
+    const profile = resources.find((resource) => resource.kind === "camera-rig-profile" && resource.resourceRef === usedProfile?.resourceRef);
+    if (profile === undefined || profile.kind !== "camera-rig-profile") throw new Error("Camera Profile fixture missing");
+    const baseFovDegrees = Number(profile.parameters.baseFovDegrees) + 1;
+    Object.assign(profile.parameters, { baseFovDegrees });
+    const changed = createNativeSubjectAuthoringCatalogV1(createSubjectResourceRegistry(resources));
+    const consumers = changed.subjects.flatMap(({ cameraContext }) => cameraContext.cameraRigProfiles)
+      .filter(({ resourceRef }) => resourceRef === profile.resourceRef);
+    expect(consumers.length).toBeGreaterThan(0);
+    for (const consumer of consumers) expect(consumer.parameters.baseFovDegrees).toBe(baseFovDegrees);
+    expect(changed).not.toEqual(baseline);
+    expect(createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry)).toEqual(baseline);
+  });
+
+  it.each(["registered", "composed", "rigged"] as const)("compiles output-selected %s from actual frozen Native Request inputs", async (kind) => {
     const value = await fixture();
     try {
-      const preparedInput = input(value);
-      const { contentHash: _contentHash, ...runtimeBody } = runtime;
-      const multipleSubjects = createWorldRuntimeBootstrapV1({
-        ...runtimeBody,
-        subjectRuntimeDescriptors: [
-          ...runtime.subjectRuntimeDescriptors,
-          { ...runtime.subjectRuntimeDescriptors[0]!, entityId: "secondary-subject" },
-        ],
-      });
-      expect(() => deriveNativeBlockGenerationBootstrapV1({
-        reconstructionCase: preparedInput.case,
-        gameplayBootstrap: gameplay,
-        worldRuntimeBootstrap: multipleSubjects,
-        worldBoundsPolicy: preparedInput.worldBoundsPolicy,
-        bootstrapId: preparedInput.bootstrapId,
-        sceneModuleRef: preparedInput.sceneModuleRef,
-        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-        nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
-        seed: preparedInput.seed,
-      })).toThrow(/owner closure/i);
-    } finally {
-      await rm(value.root, { recursive: true, force: true });
-    }
+      const requestInput = input(value);
+      const prepared = await prepareNativeBlockGenerationTaskV1(requestInput);
+      const authoring = {
+        kind: "native-block-authoring", schemaVersion: 1, entryModulePath: "scene.ts",
+        blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1", visualGroups: [],
+        groundExploration: { mode: "case-defined" }, openingCamera: prepared.bootstrap.initialCamera,
+        controlledSubject: { visualTargetId: "visual-target-1", design: kind === "registered"
+          ? { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/quadruped.ground-proxy@1" }
+          : { kind: "composed", definition: nativeComposedDesign(kind === "rigged") } },
+      };
+      const frozen = JSON.parse(await readFile(path.join(prepared.taskWorkspacePath, "inputs/subject-host-context.json"), "utf8"));
+      expect(frozen.authoringCatalog).toEqual(prepared.subjectHostContext.authoringCatalog);
+      const closure = resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap, authoring });
+      const descriptor = closure.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+      expect(descriptor.entityId).toBe(prepared.bootstrap.initialControlledEntityId);
+      expect(descriptor.subjectDefinitionRef).toBe(kind === "registered"
+        ? "worldkit://subject-definition/quadruped.ground-proxy@1"
+        : `package://subject-definition/${nativeComposedDesign(kind === "rigged").id}@1`);
+      expect(closure.gameplayBootstrap.resourceRef).toBe(prepared.bootstrap.gameplayBootstrapRef);
+      expect(closure.executableMovementModes).toEqual(["ground-walk"]);
+      expect(checkNativeSubjectHostedSelectionV1(closure, ["ground-walk"])).toEqual([]);
+      const requestedModes = ["flight", "ground-walk", "ground-ride", "ground-drive", "water-surface", "underwater", "ground-slide", "custom"] as const;
+      expect(checkNativeSubjectHostedSelectionV1(closure, requestedModes)).toMatchObject([{
+        code: "NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED", instancePath: "/controlledSubject",
+        details: { requestedMovementModes: requestedModes,
+          executableMovementModes: ["ground-walk"],
+          missingMovementModes: requestedModes.filter((mode) => mode !== "ground-walk"),
+        },
+      }]);
+      expect(closure.subjectVisualReviewProxy.subjectDefinitionHash).toBe(descriptor.subjectDefinitionHash);
+      expect(closure.subjectVisualReviewProxy.worldRuntimeBootstrapBytesHash).toBe(sha256Bytes(closure.worldRuntimeBootstrapBytes));
+      expect(resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap, authoring })).toEqual(closure);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen,
+        bootstrap: { ...prepared.bootstrap, gameplayBootstrapRef: "worldkit://gameplay-bootstrap/crosswired@1" }, authoring,
+      })).toThrow(/Gameplay resource identity mismatch/);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap,
+        authoring: { ...authoring, controlledSubject: { visualTargetId: "visual-target-1", design: {
+          kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/missing@1",
+        } } },
+      })).toThrow(/AUTHORING_REFERENCE_NOT_FOUND/);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap,
+        authoring: { ...authoring, controlledSubjects: [authoring.controlledSubject, authoring.controlledSubject] },
+      })).toThrow();
+      expect(prepared.generationRequest.contextInputs.filter(({ inputRef }) => inputRef === "inputs/subject-host-context.json"))
+        .toEqual([{ inputRef: "inputs/subject-host-context.json", contentHash: sha256Bytes(prepared.subjectHostContextBytes) }]);
+      expect(prepared.generationRequest.contextInputs.some(({ inputRef }) => /(?:gameplay-bootstrap|world-runtime-bootstrap|subject-visual-review-proxy|host-closure)\.json$/.test(inputRef))).toBe(false);
+    } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 
   it("fails closed when the Host-owned Subject visual proxy cannot close an asset", async () => {
@@ -2087,7 +2149,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       worldRuntimeBootstrapRef:
         "worldkit://world-runtime-bootstrap/cloud-ridge@1",
       worldRuntimeBootstrapBytesHash: sha256Bytes(runtimeBytes) as Sha256HashV1,
-    })).toThrow(/Subject Asset Registry closure failed/);
+    }, builtInSubjectResourceRegistry)).toThrow(/Subject Asset Registry closure failed/);
   });
 
   it("ignores an untrusted prewritten Bootstrap and changes identity when Host seed changes", async () => {
@@ -2102,7 +2164,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         seed: 18,
       });
       expect(first.bootstrap.seed).toBe(17);
-      expect(first.bootstrap.initialControlledEntityId).toBe("g-bot-primary");
+      expect(first.bootstrap.initialControlledEntityId).toBe("cloud-temple-t-gate-native-block-subject");
       expect(first.generationRequestHash).not.toBe(second.generationRequestHash);
       expect(first.generationRequest.bootstrapInputHash).not.toBe(second.generationRequest.bootstrapInputHash);
     } finally {

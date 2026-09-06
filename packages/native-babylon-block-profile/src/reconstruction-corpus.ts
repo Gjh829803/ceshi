@@ -605,7 +605,6 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
         })]),
       }))
       : session.finalize(Object.freeze({
-        displayGapMeters: 0.04,
         staticColliders: layoutSelections(recordValue),
       }));
     context.registration.registerSpawnMarker(Object.freeze({

@@ -1,5 +1,6 @@
 import {
   mkdir,
+  lstat,
   mkdtemp,
   readFile,
   realpath,
@@ -9,9 +10,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { parseRuntimeFlightReportV1 } from "@whitebox-world/runtime-babylon";
 import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createNativeSubjectHostContextV1 } from "./native-subject-host-context.js";
 import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
@@ -38,6 +41,7 @@ import {
   type ProductionWorldReconstructionRunPortsInputV1,
 } from "./production-run-ports.js";
 import { FormalCaptureCommandClosedErrorV1 } from "./formal-capture.js";
+import { CAPTURE_STARTUP_BUDGET_V1, CaptureStartupErrorV1 } from "./capture-startup-watchdog.js";
 import { CaptureOnlyHostedSessionClosedErrorV1 } from
   "./hosted-session-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
@@ -50,6 +54,17 @@ import { NativeBlockPackageErrorV1 } from "./native-package.js";
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
 const RUN_ID = "f-20260901";
+
+function runtimeDiagnosticFixture() {
+  return { runtimeSessionId: "runtime.formal-capture.transport-001", formalRequestHash: H("a"),
+    worldPackageRootHash: H("8"), report: parseRuntimeFlightReportV1({
+      kind: "runtime-flight-report", schemaVersion: 1,
+      diagnosticSessionId: "00000000-0000-4000-8000-000000000001", droppedSampleCount: 0,
+      samples: [{ sequence: 1, epoch: 0, elapsedMilliseconds: 0, heartbeatDelayMilliseconds: 0,
+        visibilityState: "visible", health: "healthy", metrics: { frame: null, tick: 0, paused: false,
+          fps: null, triangleCount: null, drawCallCount: null, progressMode: "on-demand" } }],
+    }) };
+}
 
 const temporaryDirectories: string[] = [];
 
@@ -92,20 +107,8 @@ async function fixture() {
     "inputs",
     "formal-world-capture-intent.json",
   );
-  const gameplayBootstrapPath = path.join(root, "gameplay.json");
-  const worldRuntimeBootstrapPath = path.join(root, "runtime.json");
   const worldBoundsPolicyPath = path.join(root, "world-bounds-policy.json");
-  const repositoryRoot = path.resolve(import.meta.dirname, "../..");
-  const [gameplayBootstrap, worldRuntimeBootstrap] = await Promise.all([
-    readFile(path.join(
-      repositoryRoot,
-      "apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json",
-    ), "utf8").then((contents) => JSON.parse(contents) as unknown),
-    readFile(path.join(
-      repositoryRoot,
-      "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json",
-    ), "utf8").then((contents) => JSON.parse(contents) as unknown),
-  ]);
+  const subjectHostContext = createNativeSubjectHostContextV1(evidence.reconstructionCase.id, "camera-main");
   const worldBoundsPolicy = {
     mode: "fixed" as const,
     worldBounds: {
@@ -121,18 +124,12 @@ async function fixture() {
       intentPath,
       stringifyCanonicalJson(evidence.formalCaptureIntent),
     ),
-    writeFile(gameplayBootstrapPath, stringifyCanonicalJson(gameplayBootstrap)),
-    writeFile(
-      worldRuntimeBootstrapPath,
-      stringifyCanonicalJson(worldRuntimeBootstrap),
-    ),
     writeFile(worldBoundsPolicyPath, stringifyCanonicalJson(worldBoundsPolicy)),
   ]);
   const frozenOwnerIdentities = Object.freeze({
     caseHash: H("1"),
     evaluationProfileHash: H("2"),
-    gameplayBootstrapHash: H("3"),
-    worldRuntimeBootstrapHash: H("4"),
+    subjectHostContextHash: H("3"),
     worldBoundsPolicyHash: H("5"),
     bootstrapInputHash: H("6"),
   });
@@ -156,11 +153,9 @@ async function fixture() {
     sourceDirectoryPath: path.join(attemptDirectoryPath, "source"),
     bootstrap: { id: "bootstrap" },
     bootstrapBytes: new Uint8Array(),
-    gameplayBootstrapBytes: new Uint8Array(),
-    worldRuntimeBootstrapBytes: new Uint8Array(),
+    subjectHostContext,
+    subjectHostContextBytes: new TextEncoder().encode(stringifyCanonicalJson(subjectHostContext)),
     worldBoundsPolicyBytes: new Uint8Array(),
-    hostClosure: {},
-    hostClosureBytes: new Uint8Array(),
     frozenOwnerIdentities,
   });
   const generationReceipt = Object.freeze({
@@ -255,8 +250,7 @@ async function fixture() {
     evaluationProfile: evidence.evaluationProfile,
     generationInput: {
       runDirectoryPath,
-      gameplayBootstrapPath,
-      worldRuntimeBootstrapPath,
+      subjectHostContext,
       worldBoundsPolicyPath,
       worldBoundsPolicy,
       bootstrapId: "package-fixture.case-native",
@@ -276,11 +270,8 @@ async function fixture() {
     generationReceipt,
     packageResult,
     input,
-    gameplayBootstrapPath,
-    worldRuntimeBootstrapPath,
     worldBoundsPolicyPath,
-    gameplayBootstrap,
-    worldRuntimeBootstrap,
+    subjectHostContext,
     worldBoundsPolicy,
   };
 }
@@ -446,7 +437,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         message: "TS18048: 'xOffset' is possibly 'undefined'." }],
     });
   });
-  it("no-follow rehashes the three Host owner files and re-derives one frozen identity set", async () => {
+  it("no-follow rehashes bounds and re-derives the frozen Subject context identity set", async () => {
     const value = await fixture();
     const ownerPorts = {
       ...owners(value, []),
@@ -480,34 +471,12 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       value.worldBoundsPolicyPath,
       stringifyCanonicalJson(value.worldBoundsPolicy),
     );
-    await writeFile(value.worldRuntimeBootstrapPath, stringifyCanonicalJson({
-      ...(value.worldRuntimeBootstrap as Record<string, unknown>),
-      initialCamera: {
-        ...((value.worldRuntimeBootstrap as Record<string, unknown>)
-          .initialCamera as Record<string, unknown>),
-        distanceMeters: 5.25,
-      },
-    }));
-    await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
-      "WorldRuntimeBootstrapV1 schema",
-    );
-
-    await writeFile(
-      value.worldRuntimeBootstrapPath,
-      stringifyCanonicalJson(value.worldRuntimeBootstrap),
-    );
-    await writeFile(value.gameplayBootstrapPath, stringifyCanonicalJson({
-      ...(value.gameplayBootstrap as Record<string, unknown>),
-      resourceRef: "worldkit://gameplay-bootstrap/foreign-owner@1",
-    }));
-    await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
-      "GameplayBootstrapV1 schema",
-    );
-
-    await writeFile(
-      value.gameplayBootstrapPath,
-      stringifyCanonicalJson(value.gameplayBootstrap),
-    );
+    const changedContext = { ...value.subjectHostContext, resources: value.subjectHostContext.resources.map(
+      (resource, index) => index === 0 ? { ...resource, contentHash: H("0") } : resource) };
+    const tamperedPorts = await createProductionWorldReconstructionRunPortsV1({
+      ...value.input, generationInput: { ...value.input.generationInput, subjectHostContext: changedContext },
+    }, ownerPorts);
+    await expect(tamperedPorts.rehashOwnerIdentities()).rejects.toThrow("Registry resource hash mismatch");
     const linkedBoundsTarget = path.join(value.root, "linked-world-bounds-policy.json");
     await writeFile(
       linkedBoundsTarget,
@@ -1267,6 +1236,178 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ],
     });
+  });
+
+  it.each(["new", "existing", "symlink", "directory", "wrong-request", "wrong-package", "unsafe-session", "malformed"])(
+    "CF-05 persists runtime history without changing Capture or overwriting %s output", async (mode) => {
+      const value = await fixture();
+      const diagnostic = runtimeDiagnosticFixture();
+      const baseOwners = owners(value, []);
+      const ownerPorts: ProductionWorldReconstructionRunPortOwnersV1 = { ...baseOwners,
+        capturePackage: vi.fn(async (input) => {
+          expect(input.onRuntimeFlightDiagnostic).toBeTypeOf("function");
+          const candidate = { ...diagnostic,
+            ...(mode === "wrong-request" ? { formalRequestHash: H("c") } : {}),
+            ...(mode === "wrong-package" ? { worldPackageRootHash: H("c") } : {}),
+            ...(mode === "unsafe-session" ? { runtimeSessionId: "../../unrelated-user-file" } : {}),
+            ...(mode === "malformed" ? { report: { ...diagnostic.report, token: "private-secret" } } : {}),
+          };
+          await input.onRuntimeFlightDiagnostic!(candidate);
+          if (mode === "new") await input.onRuntimeFlightDiagnostic!({ ...diagnostic,
+            runtimeSessionId: "runtime.formal-capture.transport-002" });
+          return baseOwners.capturePackage(input);
+        }),
+      };
+      const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+      const diagnosticPath = path.join(value.attemptDirectoryPath,
+        `capture-runtime-diagnostic.${diagnostic.runtimeSessionId}.json`);
+      const target = path.join(value.attemptDirectoryPath, "unrelated-user-file.json");
+      await writeFile(target, "keep-original");
+      if (mode === "existing") await writeFile(diagnosticPath, "keep-original");
+      if (mode === "symlink") await symlink(target, diagnosticPath);
+      if (mode === "directory") await mkdir(diagnosticPath);
+      expect(await ports.capture({ attemptIndex: 0, packaged })).toMatchObject({ outcome: "completed", diagnosticCodes: [] });
+      expect(ownerPorts.capturePackage).toHaveBeenCalledOnce();
+      expect(await ports.cleanup()).toMatchObject({ hostedBrowserSession: "completed", viteServer: "completed" });
+      expect(await readFile(target, "utf8")).toBe("keep-original");
+      if (mode === "new") {
+        expect(JSON.parse(await readFile(diagnosticPath, "utf8"))).toEqual({
+          kind: "world-reconstruction-capture-runtime-diagnostic", schemaVersion: 1,
+          caseRef: value.input.caseRef, attemptIndex: 0, hostRecoveryIndex: null, ...diagnostic,
+        });
+        expect((await lstat(diagnosticPath)).mode & 0o777).toBe(0o600);
+        expect(JSON.parse(await readFile(path.join(value.attemptDirectoryPath,
+          "capture-runtime-diagnostic.runtime.formal-capture.transport-002.json"), "utf8")))
+          .toMatchObject({ runtimeSessionId: "runtime.formal-capture.transport-002", report: diagnostic.report });
+      } else if (mode === "directory") expect((await lstat(diagnosticPath)).isDirectory()).toBe(true);
+      else if (mode === "existing" || mode === "symlink") {
+        expect(await readFile(diagnosticPath, "utf8")).toBe("keep-original");
+        if (mode === "symlink") expect((await lstat(diagnosticPath)).isSymbolicLink()).toBe(true);
+      } else await expect(lstat(diagnosticPath)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+  it.each(["new", "existing", "symlink", "directory"])("CF-05 persists startup evidence without changing failure or overwriting %s output", async (mode) => {
+    const value = await fixture();
+    const startup = new CaptureStartupErrorV1({
+      kind: "capture-startup-trace", schemaVersion: 1, outcome: "stalled",
+      budget: CAPTURE_STARTUP_BUDGET_V1, droppedEntryCount: 0,
+      entries: [{ sequence: 1, elapsedMilliseconds: 0, type: "probe",
+        runtime: { phase: "loading", stage: "runtime-havok", revision: 4 } }],
+    });
+    Object.assign(startup, { providerUrl: "https://provider.invalid/secret-cf05-token" });
+    const ownerPorts = {
+      ...owners(value, []),
+      capturePackage: vi.fn(async () => {
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "hosted-session",
+          cleanupOutcomes: { hostedBrowserSession: "completed", viteServer: "completed" },
+          cause: new CaptureOnlyHostedSessionClosedErrorV1(startup,
+            { hostedBrowserSession: "completed", viteServer: "completed" }),
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+    const diagnosticPath = path.join(value.attemptDirectoryPath, "capture-startup-diagnostic.json");
+    const prior = "keep-original-diagnostic";
+    const target = path.join(value.attemptDirectoryPath, "unrelated-user-file.json");
+    await mkdir(value.attemptDirectoryPath, { recursive: true });
+    if (mode === "existing") await writeFile(diagnosticPath, prior);
+    if (mode === "symlink") {
+      await writeFile(target, prior);
+      await symlink(target, diagnosticPath);
+    }
+    if (mode === "directory") await mkdir(diagnosticPath);
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+      outcome: "failed", cameraRollbackOutcome: "completed",
+      diagnosticCodes: ["WORLDKIT_CAPTURE_STARTUP_STALLED"],
+    });
+    expect(ownerPorts.capturePackage).toHaveBeenCalledOnce();
+    expect(await ports.cleanup()).toEqual(expect.objectContaining({
+      hostedBrowserSession: "completed", viteServer: "completed", outputPromotion: "completed",
+    }));
+    if (mode === "new") {
+      const text = await readFile(diagnosticPath, "utf8");
+      expect(text).not.toMatch(/provider.invalid|secret-cf05-token|providerUrl/);
+      expect(JSON.parse(text)).toEqual({
+        kind: "world-reconstruction-capture-startup-diagnostic", schemaVersion: 1,
+        caseRef: value.input.caseRef, attemptIndex: 0, hostRecoveryIndex: null,
+        formalRequestHash: H("a"), worldPackageRootHash: H("8"), trace: startup.trace,
+      });
+      expect((await lstat(diagnosticPath)).mode & 0o777).toBe(0o600);
+    } else if (mode === "directory") expect((await lstat(diagnosticPath)).isDirectory()).toBe(true);
+    else {
+      expect(await readFile(diagnosticPath, "utf8")).toBe(prior);
+      if (mode === "symlink") expect((await lstat(diagnosticPath)).isSymbolicLink()).toBe(true);
+    }
+  });
+
+  it("CF-05 isolates recovery diagnostics and reuses the completed generation checkpoint", async () => {
+    const value = await fixture();
+    const input = { ...value.input, executionPurpose: "production" as const };
+    for (const file of ["source/scene.ts", "inputs/context.json", "context/case.json", "advisory/top-down.png",
+      "attempt.json", "generation-request.json", "scene-authoring-route-decision.json", "generation-dispatch.json"]) {
+      const target = path.join(value.attemptDirectoryPath, file);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, "frozen-test-owner-artifact");
+    }
+    const stageInput = { attemptIndex: 0 as const, backend: "local" as const, runId: RUN_ID,
+      requestId: value.prepared.routerRequestId, frozenOwnerIdentities: value.frozenOwnerIdentities };
+    const first = await createProductionWorldReconstructionRunPortsV1(input, owners(value, []));
+    const generated = await first.generate(stageInput);
+    const originalPath = path.join(value.attemptDirectoryPath, "capture-startup-diagnostic.json");
+    await writeFile(originalPath, "earlier-failed-host-evidence");
+    const runtimeDiagnostic = { ...runtimeDiagnosticFixture(), formalRequestHash: H("c") };
+    const runtimeDiagnosticFile = `capture-runtime-diagnostic.${runtimeDiagnostic.runtimeSessionId}.json`;
+    await writeFile(path.join(value.attemptDirectoryPath, runtimeDiagnosticFile), "earlier-runtime-history");
+    const recoveryRoot = path.join(value.attemptDirectoryPath, "host-recoveries", "1");
+    const startup = new CaptureStartupErrorV1({
+      kind: "capture-startup-trace", schemaVersion: 1, outcome: "aborted",
+      budget: CAPTURE_STARTUP_BUDGET_V1, droppedEntryCount: 0, entries: [],
+    });
+    const ownerPorts = {
+      ...owners(value, []),
+      packageAttempt: vi.fn(async ({ outputDirectoryPath }: { outputDirectoryPath: string }) => {
+        expect(outputDirectoryPath).toBe(path.join(recoveryRoot, "world-package"));
+        // Fake Package owner writes its own artifact set; the real checkpoint
+        // owner inventories these bytes. This test makes no geometry claim.
+        for (const file of ["world-package/package.json", "attempt-result.json", "native-check-result.json",
+          "native-explain.txt", "ground-analysis-report.json", "logical-ground-model.json", "ground-analysis-diagnostics.json"]) {
+          const target = path.join(recoveryRoot, file);
+          await mkdir(path.dirname(target), { recursive: true });
+          await writeFile(target, "synthetic-package-owner-artifact");
+        }
+        return { ...value.packageResult, outputDirectoryPath,
+          groundAnalysisReportPath: path.join(recoveryRoot, "ground-analysis-report.json") } as never;
+      }),
+      materializeCaptureRequest: vi.fn(async ({ outputMode }: { outputMode: string }) => {
+        expect(outputMode).toBe("verify-or-create");
+        return { formalRequestHash: H("c") } as never;
+      }),
+      capturePackage: vi.fn(async (captureInput) => {
+        await captureInput.onRuntimeFlightDiagnostic!(runtimeDiagnostic);
+        throw new FormalCaptureCommandClosedErrorV1({ stage: "hosted-session",
+          cleanupOutcomes: { hostedBrowserSession: "completed", viteServer: "completed" }, cause: startup });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const resumed = await createProductionWorldReconstructionRunPortsV1({ ...input, hostRecoveryIndex: 1 }, ownerPorts);
+    expect(await resumed.generate(stageInput)).toEqual(generated);
+    const packaged = await resumed.package({ attemptIndex: 0,
+      frozenOwnerIdentities: value.frozenOwnerIdentities, generate: generated });
+    expect(await resumed.capture({ attemptIndex: 0, packaged })).toMatchObject({
+      outcome: "failed", diagnosticCodes: ["WORLDKIT_CAPTURE_STARTUP_ABORTED"],
+    });
+    expect(JSON.parse(await readFile(path.join(recoveryRoot, "capture-startup-diagnostic.json"), "utf8")))
+      .toMatchObject({ hostRecoveryIndex: 1, attemptIndex: 0, formalRequestHash: H("c"), trace: startup.trace });
+    expect(await readFile(originalPath, "utf8")).toBe("earlier-failed-host-evidence");
+    expect(JSON.parse(await readFile(path.join(recoveryRoot, runtimeDiagnosticFile), "utf8")))
+      .toMatchObject({ hostRecoveryIndex: 1, attemptIndex: 0, ...runtimeDiagnostic });
+    expect(await readFile(path.join(value.attemptDirectoryPath, runtimeDiagnosticFile), "utf8"))
+      .toBe("earlier-runtime-history");
+    expect(await readFile(path.join(value.attemptDirectoryPath, "source/scene.ts"), "utf8"))
+      .toBe("frozen-test-owner-artifact");
+    expect(ownerPorts.prepareGeneration).not.toHaveBeenCalled();
+    expect(ownerPorts.runGeneration).not.toHaveBeenCalled();
+    expect(ownerPorts.capturePackage).toHaveBeenCalledOnce();
   });
 
   it("preserves a typed Worldkit server start code from nested closure causes", async () => {

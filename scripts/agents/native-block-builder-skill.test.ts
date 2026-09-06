@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import {
+  copyFile,
   mkdtemp,
   mkdir,
   readFile,
@@ -25,13 +26,50 @@ import {
 import {
   sha256CanonicalJson,
   sha256Bytes,
-  type Sha256HashV1,
 } from "@whitebox-world/protocol";
 
 import packageJson from "../../package.json";
-import {
-  createNativeBlockSubjectVisualReviewProxyV1,
-} from "../reconstruction/native-block-subject-visual-review-proxy.js";
+import { createNativeSubjectHostContextV1 } from "../reconstruction/native-subject-host-context.js";
+import { runBuilderSelfCheckV1 } from "../reconstruction/production-run-ports.js";
+import { clusterNativeBlockVisualReviewV1 } from "../reconstruction/native-block-visual-review-clusters.js";
+
+describe("CF-20 legacy advisory volume projection", () => {
+  const block = (id: string, centerMetersXYZ: readonly [number, number, number]) => ({
+    id, centerMetersXYZ, shape: "full" as const,
+    rotationQuarterTurnsY: 0 as const, paletteRole: "structure",
+  });
+  it("keeps the old X then Z then Y greedy volumes and source coverage", () => {
+    const rows = [block("a", [0, 0, 0]), block("b", [1, 0, 0]),
+      block("c", [0, 0, 1]), block("d", [0, 1, 0]), block("e", [1, 1, 0])];
+    const clusters = clusterNativeBlockVisualReviewV1(rows);
+    expect(clusters.map(({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }) =>
+      ({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }))).toEqual([
+      { sourceBlockIds: ["a", "b", "d", "e"], minimumMetersXYZ: [-0.5, -0.5, -0.5], maximumMetersXYZ: [1.5, 1.5, 0.5] },
+      { sourceBlockIds: ["c"], minimumMetersXYZ: [-0.5, -0.5, 0.5], maximumMetersXYZ: [0.5, 0.5, 1.5] },
+    ]);
+    expect(clusterNativeBlockVisualReviewV1([...rows].reverse())).toEqual(clusters);
+  });
+  it("partitions at old center-owned 32m boundaries including negative coordinates", () => {
+    const rows = [-1, 0, 31, 32].map((x) => block(`x-${x}`, [x, 0, 0]));
+    expect(clusterNativeBlockVisualReviewV1(rows)).toHaveLength(4);
+    expect(clusterNativeBlockVisualReviewV1([block("a", [30, 0, 0]), block("b", [31, 0, 0])]))
+      .toHaveLength(1);
+  });
+  it("never merges distinct visual roles, identities or effective shapes", () => {
+    const rows = [block("a", [0, 0, 0]), { ...block("b", [1, 0, 0]), paletteRole: "ground" },
+      { ...block("c", [2, 0, 0]), visualGroupId: "target-a" },
+      { ...block("d", [3, 0, 0]), visualGroupId: "target-b" },
+      { ...block("e", [4.25, 0, 0]), shape: "quarter" as const },
+      { ...block("f", [5, 0, 0.25]), shape: "quarter" as const, rotationQuarterTurnsY: 1 as const }];
+    expect(clusterNativeBlockVisualReviewV1(rows)).toHaveLength(rows.length);
+  });
+  it("extends the same volume rule to Native quarter-meter treads without aliasing centers", () => {
+    const rows = [0.125, 0.375].map((y, index) => ({ ...block(`step-${index}`, [0, y, 0]), shape: "step" as const }));
+    expect(clusterNativeBlockVisualReviewV1(rows)).toMatchObject([{
+      sourceBlockIds: ["step-0", "step-1"], minimumMetersXYZ: [-0.5, 0, -0.5], maximumMetersXYZ: [0.5, 0.5, 0.5],
+    }]);
+  });
+});
 
 const execFileAsync = promisify(execFile);
 const CHECKER = path.resolve(
@@ -44,6 +82,18 @@ const VISUAL_REVIEW_BUILD = path.resolve(
   ".codex/skills/worldkit-native-block-builder/scripts/build-visual-review.mjs",
 );
 const temporaryDirectories: string[] = [];
+
+const SUBJECT_HOST_CONTEXT = createNativeSubjectHostContextV1("builder-test", "camera-main");
+const NATIVE_BOOTSTRAP = {
+  kind: "babylon-native-scene-bootstrap", schemaVersion: 1, id: "builder-test-native",
+  sceneModuleRef: "worldkit://native-scene/builder-test@1",
+  nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+  gameplayBootstrapRef: "worldkit://gameplay-bootstrap/builder-test.17@1",
+  seed: 17, spawnMarkerId: "spawn", initialControlledEntityId: "subject",
+  gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+  initialCamera: { mode: "third-person", distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
+};
 
 it("keeps legacy bounded visual review completion without an extra similarity veto", async () => {
   const skill = await readFile(path.resolve(".codex/skills/worldkit-native-block-builder/SKILL.md"), "utf8");
@@ -103,8 +153,8 @@ async function createWorkspace(): Promise<string> {
     mkdir(path.join(workspace, "inputs"), { recursive: true }),
   ]);
   await Promise.all([
-    writeFile(path.join(workspace, "inputs/world-runtime-bootstrap.json"), await readFile(
-      "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json")),
+    writeFile(path.join(workspace, "inputs/subject-host-context.json"), JSON.stringify(SUBJECT_HOST_CONTEXT)),
+    writeFile(path.join(workspace, "inputs/native-scene.bootstrap.json"), JSON.stringify(NATIVE_BOOTSTRAP)),
     writeFile(path.join(workspace, "scene.ts"), `
 import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
@@ -122,6 +172,7 @@ export default defineBabylonNativeScene({
 `.trimStart()),
     writeFile(path.join(workspace, "native-block-authoring.json"), `${JSON.stringify({
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -148,7 +199,7 @@ export default defineBabylonNativeScene({
       id: "valid-native-block-world",
       sceneBriefHash: `sha256:${"a".repeat(64)}`,
       expected: {
-        groundConnectivity: { mode: "case-defined" },
+        groundConnectivity: { mode: "case-defined", requireSingleReachableComponent: true },
         spawnSupport: { expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
         semanticSilhouetteTargets: [{
           acceptanceTargetRef:
@@ -202,7 +253,7 @@ export default defineBabylonNativeScene({
   return workspace;
 }
 
-async function runSelfCheck(workspace: string, checkerPath = CHECKER): Promise<Readonly<{
+async function runSelfCheck(workspace: string, checkerPath = CHECKER, inputWorkspace = workspace): Promise<Readonly<{
   exitCode: number;
   stdout: string;
   stderr: string;
@@ -210,17 +261,18 @@ async function runSelfCheck(workspace: string, checkerPath = CHECKER): Promise<R
 }>> {
   try {
     const canonicalWorkspace = await realpath(workspace);
+    const canonicalInputWorkspace = await realpath(inputWorkspace);
     const result = await execFileAsync(process.execPath, [
       checkerPath,
       "--workspace",
       canonicalWorkspace,
       "--case",
-      path.join(canonicalWorkspace, "context", "case.json"),
+      path.join(canonicalInputWorkspace, "context", "case.json"),
       "--scene-brief",
-      path.join(canonicalWorkspace, "inputs", "scene-brief.md"),
+      path.join(canonicalInputWorkspace, "inputs", "scene-brief.md"),
       "--visual-identity-palette",
       path.join(
-        canonicalWorkspace,
+        canonicalInputWorkspace,
         "inputs",
         "visual-identity-palette.json",
       ),
@@ -246,8 +298,58 @@ async function runSelfCheck(workspace: string, checkerPath = CHECKER): Promise<R
   }
 }
 
+it("replays source-only delivery against the same frozen Subject inputs as the isolated task", async () => {
+  const inputs = await createWorkspace();
+  const task = await runSelfCheck(inputs);
+  expect(task.exitCode).toBe(0);
+  const source = path.join(inputs, "source-only");
+  await mkdir(source);
+  for (const name of ["scene.ts", "native-block-authoring.json", "native-resources.json"]) {
+    await copyFile(path.join(inputs, name), path.join(source, name));
+  }
+  const host = await runSelfCheck(source, CHECKER, inputs);
+  expect(host.exitCode).toBe(0);
+  expect(host.report).toEqual(task.report);
+  // Candidate-local files are not a second source of trusted Subject context.
+  await mkdir(path.join(source, "inputs"));
+  await writeFile(path.join(source, "inputs/subject-host-context.json"), "{}");
+  await writeFile(path.join(source, "inputs/native-scene.bootstrap.json"), "{}");
+  expect((await runSelfCheck(source, CHECKER, inputs)).report).toEqual(task.report);
+  // Exercise the actual production subprocess adapter and its split layout.
+  await mkdir(path.join(inputs, ".task/context"), { recursive: true });
+  await copyFile(path.join(inputs, "context/case.json"), path.join(inputs, ".task/context/case.json"));
+  expect(await runBuilderSelfCheckV1(CHECKER, await realpath(source),
+    path.join(await realpath(inputs), "inputs/scene-brief.md")))
+    .toEqual({ ok: true, diagnosticCodes: [] });
+}, 30_000);
+
+it.each(["subject-host-context.json", "native-scene.bootstrap.json"])(
+  "does not fall back to candidate inputs when frozen %s is invalid", async (name) => {
+    const source = await createWorkspace();
+    const inputs = await createWorkspace();
+    await writeFile(path.join(inputs, "inputs", name), "{}");
+    const result = await runSelfCheck(source, CHECKER, inputs);
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+  },
+);
+
 async function createVisualReviewWorkspace(): Promise<string> {
   const workspace = await createWorkspace();
+  const authoringPath = path.join(workspace, "native-block-authoring.json");
+  const authoring = JSON.parse(await readFile(authoringPath, "utf8"));
+  // Preserve the former proxy fixture's exact cuboid, now supplied through the
+  // real design compiler. This keeps the pre-migration pixel goldens meaningful.
+  authoring.controlledSubject = { visualTargetId: "visual-target-1", design: {
+    kind: "composed", definition: {
+      id: "review-body", category: "human", bodyTopology: "biped",
+      semanticClassId: "subject.review", displayName: "Review body", description: "Fixed pixel regression body.",
+      visualParts: [{ id: "body-asset", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [1.8, 1.8, 0.32] },
+        localTransform: { positionMetersXYZ: [0, 0.9, 0.01] }, colliderContribution: "include", semanticTags: ["body"] }],
+      visualBinding: { mode: "static" },
+    },
+  } };
+  await writeFile(authoringPath, JSON.stringify(authoring));
   await mkdir(path.join(workspace, "inputs"), { recursive: true });
   await Promise.all([
     writeFile(path.join(workspace, "scene.ts"), `
@@ -282,7 +384,7 @@ export default defineBabylonNativeScene({
       paletteRole: "water-like-visual",
       centerMetersXYZ: [2.25, 0.25, -2.25],
     });
-    session.finalize({ displayGapMeters: 0.04, staticColliders: [] });
+    session.finalize({ staticColliders: [] });
     context.registration.registerSpawnMarker({
       id: context.bootstrap.spawnMarkerId,
       positionMetersXYZ: [0, 0, 0],
@@ -291,46 +393,8 @@ export default defineBabylonNativeScene({
   },
 });
 `.trimStart()),
-    writeFile(path.join(workspace, "inputs", "native-scene.bootstrap.json"), JSON.stringify({
-      seed: 17,
-      spawnMarkerId: "spawn",
-      initialControlledEntityId: "subject",
-      initialCamera: {
-        mode: "third-person",
-        distanceMeters: 5,
-        targetHeightMeters: 1.2,
-        pitchRadians: 0.18,
-        fovDegrees: 56,
-      },
-    })),
-    writeFile(
-      path.join(workspace, "inputs", "subject-visual-review-proxy.json"),
-      JSON.stringify(createNativeBlockSubjectVisualReviewProxyV1({
-        initialControlledEntityId: "subject",
-        subjectDefinitionRef: "worldkit://subject-definition/test@1",
-        subjectDefinitionHash:
-          sha256CanonicalJson({ subjectDefinition: "test" }) as Sha256HashV1,
-        subjectRuntimeDescriptorHash:
-          sha256CanonicalJson({
-            subjectRuntimeDescriptor: "test",
-          }) as Sha256HashV1,
-        worldRuntimeBootstrapRef:
-          "worldkit://world-runtime-bootstrap/test@1",
-        worldRuntimeBootstrapContentHash:
-          sha256CanonicalJson({
-            worldRuntimeBootstrap: "test",
-          }) as Sha256HashV1,
-        worldRuntimeBootstrapBytesHash:
-          sha256CanonicalJson({
-            worldRuntimeBootstrapBytes: "test",
-          }) as Sha256HashV1,
-        cuboids: [{
-          id: "body.asset",
-          minimumMetersXYZ: [-0.9, 0, -0.15],
-          maximumMetersXYZ: [0.9, 1.8, 0.17],
-        }],
-      })),
-    ),
+    writeFile(path.join(workspace, "inputs", "native-scene.bootstrap.json"), JSON.stringify(NATIVE_BOOTSTRAP)),
+    writeFile(path.join(workspace, "inputs", "subject-host-context.json"), JSON.stringify(SUBJECT_HOST_CONTEXT)),
     writeFile(path.join(workspace, "inputs", "world-plan.png"), ONE_PIXEL_PNG),
     writeFile(path.join(workspace, "inputs", "entry-whitebox-target.png"), ONE_PIXEL_PNG),
   ]);
@@ -406,6 +470,65 @@ afterEach(async () => {
 
 // This suite now runs a real semantic compiler (often twice per repair fixture).
 describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
+  it("keeps the old registered ordinary-human proxy exclusion local to Hosted selection", async () => {
+    const workspace = await createWorkspace();
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.controlledSubject.design.subjectDefinitionRef = "worldkit://subject-definition/humanoid.third-person@1";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const result = await runSelfCheck(workspace);
+    expect(result.report).toMatchObject({ ok: false,
+      diagnosticCodes: ["NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED"],
+    });
+    expect(result.exitCode).toBe(2);
+    manifest.controlledSubject.design.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, diagnosticCodes: [] });
+  });
+
+  it.each(["registered", "composed"])("rejects all unavailable Brief modes for a compiled %s Subject inside the same task", async (kind) => {
+    const workspace = kind === "composed" ? await createVisualReviewWorkspace() : await createWorkspace();
+    const briefPath = path.join(workspace, "inputs/scene-brief.md");
+    const brief = (await readFile(briefPath, "utf8")).replace(
+      /## 运动模式\n[^]*?\n## 空间/,
+      "## 运动模式\n- 空中飞行（滑翔翼）：飞越峡谷。\n- 陆地步行：沿路行走。\n- 磁力墙面行走：沿墙面行走。\n\n## 空间",
+    );
+    const parsed = parseSceneBriefV1(brief);
+    if (!parsed.ok) throw new Error("movement fixture must parse");
+    const casePath = path.join(workspace, "context/case.json");
+    const palettePath = path.join(workspace, "inputs/visual-identity-palette.json");
+    const caseValue = JSON.parse(await readFile(casePath, "utf8"));
+    const palette = JSON.parse(await readFile(palettePath, "utf8"));
+    caseValue.sceneBriefHash = sha256Bytes(Buffer.from(brief));
+    palette.sceneBriefHash = parsed.sceneBriefHash;
+    palette.movementModes = parsed.value.movementModes.map(({ mode }) => mode);
+    palette.movementModeLabels = parsed.value.movementModes.map(({ label }) => label);
+    await Promise.all([
+      writeFile(briefPath, brief), writeFile(casePath, JSON.stringify(caseValue)),
+      writeFile(palettePath, JSON.stringify(palette)),
+    ]);
+    const result = await runSelfCheck(workspace);
+    expect(result.report).toMatchObject({ ok: false,
+      diagnosticCodes: ["NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED"],
+      subjectSelectionDiagnostics: [{ details: {
+        subjectKind: kind, requestedMovementModes: ["flight", "ground-walk", "custom"],
+        executableMovementModes: ["ground-walk"], missingMovementModes: ["flight", "custom"],
+      } }],
+    });
+    expect(result.exitCode).toBe(2);
+  });
+
+  it("rejects Runtime-field injection inside the same-task Subject design", async () => {
+    const workspace = await createWorkspace();
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.controlledSubject.design.activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const result = await runSelfCheck(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+  });
+
   it("checks source-authored exploration with the same Host parser and no fixed corridor", async () => {
     const workspace = await createWorkspace();
     const casePath = path.join(workspace, "context/case.json");
@@ -422,10 +545,12 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     manifest.groundExploration = {
       mode: "source-authored",
       requiredTargets: [
-        { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
         { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 0, -5] },
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
       ],
-      requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+      requiredTraversalBands: [{ id: "middle-garden", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[4, 0, -3], [8, 0, -5]] },
+      { id: "entry-court", halfWidthMeters: 1, isBidirectional: false,
         centerlineStandPositionsMetersXYZ: [[0, 0, 0], [4, 0, 0], [4, 0, -3]] }],
     };
     await writeFile(manifestPath, JSON.stringify(manifest));
@@ -434,6 +559,59 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     await writeFile(manifestPath, JSON.stringify(manifest));
     expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: false,
       diagnosticCodes: expect.arrayContaining(["NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"]) });
+  });
+
+  it("uses the frozen optional-ground policy without bypassing declared-row validation", async () => {
+    const workspace = await createWorkspace();
+    const casePath = path.join(workspace, "context/case.json");
+    const sourceCase = JSON.parse(await readFile(casePath, "utf8"));
+    sourceCase.expected.groundConnectivity = {
+      mode: "source-authored", requireSingleReachableComponent: false, requiredTraversalBands: [],
+    };
+    await writeFile(casePath, JSON.stringify(sourceCase));
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.groundExploration = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, diagnosticCodes: [] });
+    sourceCase.expected.groundConnectivity.requireSingleReachableComponent = true;
+    await writeFile(casePath, JSON.stringify(sourceCase));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: false,
+      diagnosticCodes: expect.arrayContaining(["NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"]) });
+    sourceCase.expected.groundConnectivity.requireSingleReachableComponent = false;
+    await writeFile(casePath, JSON.stringify(sourceCase));
+    manifest.groundExploration.requiredTargets = [
+      { id: "at-spawn", region: "middle", standPositionMetersXYZ: [0, 0, 0] },
+    ];
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: false,
+      diagnosticCodes: expect.arrayContaining(["NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"]) });
+  });
+
+  it("preserves the old exploration anchor count through the portable checker", async () => {
+    const workspace = await createWorkspace();
+    const casePath = path.join(workspace, "context/case.json");
+    const sourceCase = JSON.parse(await readFile(casePath, "utf8"));
+    sourceCase.expected.groundConnectivity = {
+      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+    };
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.groundExploration = {
+      mode: "source-authored",
+      requiredTargets: Array.from({ length: 257 }, (_, index) => ({
+        id: `target-${String(index).padStart(3, "0")}`,
+        region: index === 0 ? "middle" : "remote",
+        standPositionMetersXYZ: [index + 1, 0, 0],
+      })),
+      requiredTraversalBands: [{ id: "entry", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]] }],
+    };
+    await Promise.all([
+      writeFile(casePath, JSON.stringify(sourceCase)),
+      writeFile(manifestPath, JSON.stringify(manifest)),
+    ]);
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, diagnosticCodes: [] });
   });
 
   it("states the closed outputs and keeps all product authorities with the Host", async () => {
@@ -465,6 +643,10 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(skill).toContain("including important scenery that has no visual-target");
     expect(skill).toContain("never erase a major region or flatten a required rise to free budget");
     expect(skill).toContain("Mere target presence is");
+    for (const instructions of [skill, outputContract]) {
+      expect(instructions).toContain("the ground evidence arrays may be empty");
+      expect(instructions).toContain("Optional ground evidence does not grant unsupported movement");
+    }
     expect(skill).toContain(
       "`WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED` is advisory only",
     );
@@ -494,8 +676,11 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     );
     expect(agentsRules).toContain("Local execution remains one physical task");
     expect(agentsRules).toContain("Provider Task Attempts do not allocate Native source-repair Attempts or extra in-task repair cycles");
-    expect(await readFile(CHECKER, "utf8"))
+    // The portable task consumes the frozen Registry, not a bundled default
+    // catalog or Runtime state owner. Keep failures bounded for minified bundles.
+    expect(await readFile(path.resolve("scripts/agents/agent-native-block-builder-self-check.mjs"), "utf8"))
       .not.toContain("activeMotionKernelRef");
+    expect((await readFile(CHECKER, "utf8")).includes("activeMotionKernelRef")).toBe(false);
     expect(agentsRules).toContain(
       "Never describe or implement an external Native Attempt as same-task self-repair, a hidden retry, or a fallback",
     );
@@ -655,15 +840,18 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(outputContract).toContain(
       "Give each frozen point a flat landing with full Capsule-footprint support",
     );
-    expect(outputContract).toContain(
-      "`isBidirectional` and one-way fields are invalid",
-    );
     expect(outputContract).not.toContain(
       "The representative Case needs a readable central ascent, T-shaped upper platform",
     );
-    expect(outputContract).toContain(
-      "every non-root structural or playable block needs a face-contact support chain to the lowest occupied stratum.",
+    expect(outputContract).not.toContain(
+      "every non-root structural or playable block needs a face-contact support chain to the lowest occupied stratum",
     );
+    expect(skill).not.toContain("Every floor needs visible support depth down to the shared root stratum");
+    for (const instructions of [skill, outputContract]) {
+      expect(instructions).toContain("`WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING` is advisory only");
+      expect(instructions).toContain("Do not extend all floors to the global lowest Block");
+      expect(instructions).toContain("no floating-intent approval or support-disposition output");
+    }
     expect(outputContract).toContain(
       "The Host Profile reports unsupported blocks as warnings",
     );
@@ -740,7 +928,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       outputDirectoryPath,
       "render-visual-review.mjs",
     ))).resolves.toEqual(await readFile(VISUAL_REVIEW_RENDERER));
-  }, 30_000);
+  }, 60_000);
 
   it("teaches only the atomic Block drawing dialect", async () => {
     const outputContract = await readFile(path.resolve(
@@ -970,6 +1158,37 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(result.report).toMatchObject({ ok: true, typecheckDiagnostics: [] });
   }, 20_000);
 
+  it.each([
+    { extent: 100, shape: "full", rotation: 0, center: [10, 0.5, -10], sizeXZ: [1, 1], outlined: false },
+    { extent: 60, shape: "full", rotation: 0, center: [10, 0.5, -10], sizeXZ: [1, 1], outlined: true },
+    { extent: 60, shape: "quarter", rotation: 0, center: [10.25, 0.25, -10], sizeXZ: [0.5, 1], outlined: false },
+    { extent: 60, shape: "quarter", rotation: 1, center: [10, 0.25, -10.25], sizeXZ: [1, 0.5], outlined: false },
+  ] as const)("keeps old top-down outline pixels for $shape rotation=$rotation extent=$extent", async ({ extent, shape, rotation, center, sizeXZ, outlined }) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const calls = [-extent, extent].map(x =>
+      `session.createBlock({ id: "extent-${x}", shape: "full", paletteRole: "ground", centerMetersXYZ: [${x}, -0.5, 0] });`,
+    ).join("\n") + `\nsession.createBlock({ id: "outline-probe", shape: "${shape}", rotationQuarterTurnsY: ${rotation}, paletteRole: "structure", visualGroupId: "central-gate", centerMetersXYZ: ${JSON.stringify(center)} });\n`;
+    await writeFile(sourcePath, source.replace("session.finalize(", `${calls}session.finalize(`));
+    expect(await runVisualReview(workspace)).toMatchObject({ exitCode: 0, stderr: "" });
+
+    // Pinned 9e35ab53 drawTopDown: 768px panel, 40px padding, outline only
+    // when BOTH dimensions are at least 4px; edge RGB is round(base * .72).
+    // The isolated far extents control scale; the probe is the minimum Z face.
+    const scale = 688 / (extent * 2 + 1);
+    expect(sizeXZ.every(size => size * scale >= 4)).toBe(outlined);
+    const minimumZ = center[2] - sizeXZ[1] / 2;
+    const left = 40 + (center[0] - sizeXZ[0] / 2 + extent + 0.5) * scale;
+    const top = (768 - (1 - minimumZ) * scale) / 2;
+    const { data, info } = await sharp(path.join(workspace, "attempts/advisory/builder-top-down-comparison.png"))
+      .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const offset = (Math.round(top) * info.width + 776 + Math.round(left)) * 4;
+    expect([...data.subarray(offset, offset + 4)]).toEqual(
+      outlined ? [13, 37, 62, 255] : [18, 52, 86, 255],
+    );
+  });
+
   it("renders byte-stable source-derived top-down and entry comparisons without Babylon", async () => {
     const workspace = await createVisualReviewWorkspace();
     const first = await runVisualReview(workspace);
@@ -1004,8 +1223,8 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const topRgba = await sharp(firstTop).ensureAlpha().raw().toBuffer();
     const entryRgba = await sharp(firstEntry).ensureAlpha().raw().toBuffer();
     expect({ top: sha256Bytes(topRgba), entry: sha256Bytes(entryRgba) }).toEqual({
-      top: "sha256:fd0f08013bd131e103701aa364fe0679f1d99357a1031e96750dc59abce9f4d0",
-      entry: "sha256:ec9a8b77f1ece977738a1e360fe99df4f6145f94016415f4bd6eace728300e6b",
+      top: "sha256:3dd59ad6c9b2476597d91bae9775ad5be6f67dacbcfb67f6b0fce9432fbd33dd",
+      entry: "sha256:d35c729bc3a7c38f9a1eb8bb9e5483b8e539b57e84c4f5d6d7b40d6e5e767c09",
     });
     const hasColor = (expected: readonly [number, number, number]): boolean => {
       for (let offset = 0; offset < topRgba.byteLength; offset += 4) {
@@ -1188,7 +1407,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       identity: {
         kind: "native-block-builder-captured-layout-identity",
         schemaVersion: 1,
-        displayGapMeters: 0.04,
+        displayScaleRatio: 0.985,
         spawn: {
           id: "spawn",
           positionMetersXYZ: [0, 0, 0],
@@ -1254,6 +1473,27 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("NATIVE_BLOCK_VISUAL_REVIEW_SOURCE_REJECTED");
     expect(result.stderr).toContain("context.scene");
+  });
+
+  it("renders the registered G Bot with the old advisory cuboid pixels", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const authoringPath = path.join(workspace, "native-block-authoring.json");
+    const authoring = JSON.parse(await readFile(authoringPath, "utf8"));
+    const legacyDesign = structuredClone(authoring.controlledSubject.design);
+    // Literal 9e35ab53 registered G Bot software-review proxy. Keep this
+    // independent of the Host's current derived proxy, so both cannot drift.
+    legacyDesign.definition.visualParts[0].shape.sizeMetersXYZ = [1.8051320314407349, 1.8092343450989574, 0.32069878280162833];
+    legacyDesign.definition.visualParts[0].localTransform.positionMetersXYZ = [-1.7881393432617188e-7, 0.9042660176055506, 0.011392287909984589];
+    authoring.controlledSubject.design = { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" };
+    await writeFile(authoringPath, JSON.stringify(authoring));
+    expect(await runVisualReview(workspace)).toMatchObject({ exitCode: 0, stderr: "" });
+    const entryPath = path.join(workspace, "attempts/advisory/builder-entry-comparison.png");
+    const registeredPixels = await sharp(await readFile(entryPath)).ensureAlpha().raw().toBuffer();
+    authoring.controlledSubject.design = legacyDesign;
+    await writeFile(authoringPath, JSON.stringify(authoring));
+    expect(await runVisualReview(workspace)).toMatchObject({ exitCode: 0, stderr: "" });
+    const legacyPixels = await sharp(await readFile(entryPath)).ensureAlpha().raw().toBuffer();
+    expect(registeredPixels.equals(legacyPixels)).toBe(true);
   });
 
   it("renders the Host-owned Subject shape in Spawn-facing space", async () => {
@@ -1394,6 +1634,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
   it.each([
     ["authoring top-level field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1410,6 +1651,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID"],
     ["visual-group authority field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1425,6 +1667,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
     ["controlled Subject semantic class", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1439,6 +1682,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN"],
     ["unsorted visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1458,6 +1702,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_UNSORTED"],
     ["duplicate visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1477,6 +1722,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE"],
     ["forbidden nested gameplay field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1497,6 +1743,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const workspace = await createWorkspace();
     await writeFile(path.join(workspace, "native-block-authoring.json"), JSON.stringify({
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -1532,7 +1779,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       id: "valid-native-block-world",
       sceneBriefHash: sha256Bytes(Buffer.from(brief)),
       expected: {
-        groundConnectivity: { mode: "case-defined" },
+        groundConnectivity: { mode: "case-defined", requireSingleReachableComponent: true },
         spawnSupport: { expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
         semanticSilhouetteTargets: [{
         acceptanceTargetRef:
@@ -1555,6 +1802,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     };
     const authoring = (identityColorHex: string) => ({
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,

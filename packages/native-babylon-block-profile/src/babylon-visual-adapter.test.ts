@@ -24,7 +24,6 @@ interface VisualAdapterModule {
     scene: Scene;
     buildEpochId: string;
     checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-    displayGapMeters?: number;
   }>): Readonly<{
     kind: "babylon-native-block-visuals";
     schemaVersion: 1;
@@ -241,7 +240,6 @@ describe("Babylon Native block visual adapter", () => {
         scene,
         buildEpochId: "candidate-epoch-001",
         checkedLayout,
-        displayGapMeters: 0.04,
       });
 
       expect(visuals).toMatchObject({
@@ -269,9 +267,9 @@ describe("Babylon Native block visual adapter", () => {
       const halfExtents = quarter.mesh.getBoundingInfo()
         .boundingBox.extendSizeWorld.asArray().sort((left, right) =>
           left - right);
-      expect(halfExtents[0]).toBeCloseTo(0.23, 5);
-      expect(halfExtents[1]).toBeCloseTo(0.23, 5);
-      expect(halfExtents[2]).toBeCloseTo(0.48, 5);
+      expect(halfExtents[0]).toBeCloseTo(0.24625, 5);
+      expect(halfExtents[1]).toBeCloseTo(0.24625, 5);
+      expect(halfExtents[2]).toBeCloseTo(0.4925, 5);
       const quarterMaterial = quarter.mesh.material;
       expect(quarterMaterial?.name).toBe(
         "candidate-epoch-001.palette.structure",

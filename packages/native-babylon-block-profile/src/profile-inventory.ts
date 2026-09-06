@@ -10,6 +10,7 @@ import type {
 } from "./collider-contribution.js";
 import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from "./profile.js";
 import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
+import { BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 } from "./shapes.js";
 
 export interface BabylonNativeBlockProfileColliderJoinV1 {
   readonly colliderId: string;
@@ -79,7 +80,6 @@ function canonicalBlocks(checkedLayout: BabylonNativeBlockCheckedLayoutV1) {
 
 function identity(
   checkedLayout: BabylonNativeBlockCheckedLayoutV1,
-  displayGapMeters: number,
   colliderJoins: readonly BabylonNativeBlockProfileColliderJoinV1[],
 ): BabylonNativeBlockProfileInventoryIdentityV1 {
   const canonicalJoins = Object.freeze([...colliderJoins]
@@ -121,7 +121,7 @@ function identity(
     kind: "babylon-native-block-profile-inventory" as const,
     schemaVersion: 1 as const,
     profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
-    displayGapMeters: Object.is(displayGapMeters, -0) ? 0 : displayGapMeters,
+    displayScaleRatio: BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
     blocks: Object.freeze(canonicalBlocks(checkedLayout)),
     colliderJoins: canonicalJoins,
   });
@@ -134,13 +134,11 @@ function identity(
 export function createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1(
   input: Readonly<{
     checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-    displayGapMeters: number;
     selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
   }>,
 ): BabylonNativeBlockProfileInventoryIdentityV1 {
   return identity(
     input.checkedLayout,
-    input.displayGapMeters,
     input.selections.map((selection) => {
       const sourceBlockIds = sourceBlockIdsForSelection(
         input.checkedLayout,
@@ -176,14 +174,12 @@ export function createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1
 export function createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1(
   input: Readonly<{
     checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-    displayGapMeters: number;
     colliderInventory:
       readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
   }>,
 ): BabylonNativeBlockProfileInventoryIdentityV1 {
   return identity(
     input.checkedLayout,
-    input.displayGapMeters,
     input.colliderInventory.map((entry) => Object.freeze({
       colliderId: entry.colliderId,
       sourceBlockIds: entry.sourceBlockIds,

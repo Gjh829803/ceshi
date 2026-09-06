@@ -329,16 +329,22 @@ async function measurePaletteTargets(
  */
 export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   sceneId: string;
-  sceneBriefSemanticHash: Sha256HashV1;
+  sceneBriefBytes: Uint8Array;
   visualIdentityPalettePath: string;
   entryWhiteboxTargetPath: string;
 }>): Promise<unknown> {
+  // Parse one byte snapshot before any await. The Brief, not a Palette label or
+  // a guessed Subject shape, owns the ordered motion semantics.
+  const brief = parseSceneBriefV1(new TextDecoder().decode(input.sceneBriefBytes));
+  if (!brief.ok) throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
+  const requireSingleReachableComponent = brief.value.movementModes.every(({ mode }) =>
+    ["ground-walk", "ground-slide", "ground-ride", "ground-drive"].includes(mode));
   const palette = parseVisualIdentityPaletteV1(
     JSON.parse(await readFile(input.visualIdentityPalettePath, "utf8")),
     {
       sceneSourceKind: "babylon-native",
       sceneId: input.sceneId,
-      sceneBriefHash: input.sceneBriefSemanticHash,
+      sceneBriefHash: brief.sceneBriefHash as Sha256HashV1,
     },
   ).targets;
   const landmarkTargets = await measurePaletteTargets(
@@ -419,7 +425,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     ], ({ contributionId }) => contributionId)),
     groundConnectivity: Object.freeze({
       mode: "source-authored" as const,
-      requireSingleReachableComponent: true,
+      requireSingleReachableComponent,
       requiredTraversalBands: Object.freeze([]),
     }),
     criticalTraversalChecks: Object.freeze([]),
@@ -1164,7 +1170,8 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "Before detail, follow the Skill construction-and-budget inventory: allocate the actual Request budget across complete floor/support, terrain, landmarks and real connecting courses; do not reuse a remembered 2,000-Block cap or sacrifice major geography for ornament.",
       "The Case ground obligation is support/exploration evidence, not a world-design template or a visual identity. Author middle/remote exploration anchors and honest-width bands from the actual Brief geography; do not invent entry/remote visual groups, a second floor Collider, or a straight scripted approach. Preserve all significant reference/Brief formations, actual bridge and staircase courses, elevation changes, negative space and meaningful side/rear/remote continuation in both visual comparisons.",
       "Write exactly scene.ts, native-block-authoring.json, and native-resources.json as the Native Source, plus the two Host-declared advisory comparison PNGs under attempts/advisory/; write no other outputs.",
-      "Write required openingCamera numeric intent in native-block-authoring.json using exactly mode: third-person, distanceMeters, targetHeightMeters, pitchRadians and fovDegrees. Start from the frozen Bootstrap values, tune in this same visual-feedback task within the selected Subject's third-person Profile ranges, and regenerate both comparisons after any edit. Never edit the frozen Bootstrap/WRT, select resource refs or create a Camera; Host alone admits the data and binds its Package identity.",
+      "Select controlledSubject using the frozen Skill's old behavior-first order: match every ordered movement mode and necessary body topology, reuse the closest complete admitted registered Subject, then tune its Camera. Compose only when no registered whole represents the required locomotion/body topology, not to reproduce clothing, weapons or other appearance-only detail. Later visual generation owns likeness. Never default to a fixed Subject, claim unavailable movement or enlarge the Subject to fill the frame.",
+      "Write required openingCamera numeric intent in native-block-authoring.json using exactly mode: third-person, distanceMeters, targetHeightMeters, pitchRadians and fovDegrees. Start from the frozen Bootstrap values, tune in this same visual-feedback task within the selected Subject's third-person Profile ranges, and regenerate both comparisons after any edit. Never edit the frozen Bootstrap/WRT, select Camera resource refs or create a Camera; Host alone admits the data and binds its Package identity.",
       "Run the frozen Builder self-check and visual-review renderer, actually open both comparison PNGs, and keep structural and visual repairs inside the one shared three-cycle Builder budget.",
       "Before finishing, run: node inputs/builder-skill/scripts/self-check.mjs --workspace . --case context/case.json --scene-brief inputs/scene-brief.md --visual-identity-palette inputs/visual-identity-palette.json",
       "After each passing structural check, run: node inputs/builder-skill/scripts/render-visual-review.mjs --workspace . --top-down-output attempts/advisory/builder-top-down-comparison.png --entry-output attempts/advisory/builder-entry-comparison.png",
@@ -1176,7 +1183,8 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported. For case-defined ground policy preserve every fixed-input pass or block check without adding undeclared input; source-authored ground policy follows the Brief's actual course, not a generic strict diagnostic template.",
-      "Read groundConnectivity.mode. For source-authored, declare required groundExploration middle/remote stand anchors and honest spawn-to-middle/Brief-required bands in native-block-authoring.json; Host Ground consumes these, not the generic fixed-input diagnostic course. For case-defined, write groundExploration: { mode: 'case-defined' } and preserve the frozen metric bands. Keep all intended explicitly contributed ground Spawn-reachable. Do not invent geometry for a source-authored Case's fixed-input diagnostic template.",
+      "Read groundConnectivity.mode and the frozen requireSingleReachableComponent. For source-authored with true policy, declare groundExploration middle/remote stand anchors and an honest spawn-to-middle band in native-block-authoring.json. With false policy those ground evidence arrays may be empty; retain any Brief-required ground courses without inventing ground-only requirements for mixed/free-space movement. Any declared targets/bands still undergo the actual Host Ground checks; this does not grant unsupported motion. For case-defined, write groundExploration: { mode: 'case-defined' } and preserve the frozen metric bands. Keep all intended explicitly contributed ground Spawn-reachable when the Case requires one component. Do not invent geometry for a source-authored Case's fixed-input diagnostic template.",
+      "For each source-authored traversal band, write explicit isBidirectional: true unless the Brief calls for physically one-way traversal. False requires forward traversal, true also requires the reverse; neither value changes geometry, grants directed motion, or skips support/clearance checks. Case-defined bands retain their frozen bidirectional contract.",
       "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
       "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
       "",

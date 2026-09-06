@@ -30852,7 +30852,7 @@ function requireFormats() {
   return formats;
 }
 var limit = {};
-var ajv$2 = { exports: {} };
+var ajv$1 = { exports: {} };
 var draft7 = {};
 var hasRequiredDraft7;
 function requireDraft7() {
@@ -30892,7 +30892,7 @@ const require$$3 = {
 };
 var hasRequiredAjv;
 function requireAjv() {
-  if (hasRequiredAjv) return ajv$2.exports;
+  if (hasRequiredAjv) return ajv$1.exports;
   hasRequiredAjv = 1;
   (function(module2, exports2) {
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -30958,8 +30958,8 @@ function requireAjv() {
     Object.defineProperty(exports2, "MissingRefError", { enumerable: true, get: function() {
       return ref_error_1.default;
     } });
-  })(ajv$2, ajv$2.exports);
-  return ajv$2.exports;
+  })(ajv$1, ajv$1.exports);
+  return ajv$1.exports;
 }
 var hasRequiredLimit;
 function requireLimit() {
@@ -31113,62 +31113,62 @@ const subjectDefinitionV1Schema = {
   allOf,
   $defs
 };
-const ajv$1 = new Ajv2020({
+const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
   validateFormats: true
 });
-addFormats(ajv$1);
-ajv$1.addFormat("worldkit-resource-ref", {
+addFormats(ajv);
+ajv.addFormat("worldkit-resource-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
 });
-ajv$1.addFormat("subject-definition-ref", {
+ajv.addFormat("subject-definition-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("capability-ref", {
+ajv.addFormat("capability-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("physics-body-profile-ref", {
+ajv.addFormat("physics-body-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("locomotion-profile-ref", {
+ajv.addFormat("locomotion-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("collider-derivation-profile-ref", {
+ajv.addFormat("collider-derivation-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("package-prototype-ref", {
+ajv.addFormat("package-prototype-ref", {
   type: "string",
   validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("layout-solver-profile-ref", {
+ajv.addFormat("layout-solver-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/layout-solver-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("traversal-surface-profile-ref", {
+ajv.addFormat("traversal-surface-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/traversal-surface-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addSchema(subjectDefinitionV1Schema);
-const validateCanonicalAuthoringSpecV4 = ajv$1.compile(
+ajv.addSchema(subjectDefinitionV1Schema);
+const validateCanonicalAuthoringSpecV4 = ajv.compile(
   authoringSpecV4Schema
 );
 function canonicalJsonAdmissionResult(value) {
@@ -33839,56 +33839,8 @@ function parseSceneBriefV1(source) {
     diagnostics: []
   };
 }
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: true,
-  validateFormats: true
-});
-addFormats(ajv);
-ajv.addFormat("worldkit-resource-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
-});
-ajv.addFormat("subject-definition-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("capability-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("physics-body-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("locomotion-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("collider-derivation-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("package-prototype-ref", {
-  type: "string",
-  validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addSchema(subjectDefinitionV1Schema);
-(() => {
-  const registeredValidator = ajv.getSchema(
-    "worldkit://schema/subject-definition@1"
-  );
-  if (registeredValidator === void 0) {
-    throw new Error("SUBJECT_DEFINITION_SCHEMA_NOT_REGISTERED");
-  }
-  return registeredValidator;
-})();
+typeof func2Module === "function" ? func2Module : func2Module.default;
+typeof func0Module === "function" ? func0Module : func0Module.default;
 function lattice(seed, x, z) {
   let value = seed ^ Math.imul(x, 521288629) ^ Math.imul(z, 1597334677);
   value = Math.imul(value ^ value >>> 16, 73244475);
@@ -34826,6 +34778,13 @@ function pushBudgetDiagnosticV3(diagnostics, field, actual, maximum) {
     details: { actual, maximum }
   });
 }
+function evaluateCompiledWorldResourceBudgetV1(input) {
+  const diagnostics = [];
+  pushBudgetDiagnosticV3(diagnostics, "maxVertices", input.usage.vertices, input.budget.maxVertices);
+  pushBudgetDiagnosticV3(diagnostics, "maxTriangles", input.usage.triangles, input.budget.maxTriangles);
+  pushBudgetDiagnosticV3(diagnostics, "maxColliders", input.usage.colliders, input.budget.maxColliders);
+  return diagnostics;
+}
 function compileWorldCore(input) {
   const world = input.normalizedWorldIr;
   try {
@@ -34869,26 +34828,10 @@ function compileWorldCore(input) {
       ),
       colliders: 1 + subjectResourceCost.colliders + objects.filter((object) => object.collisionEnabled).length
     };
-    const diagnostics = [];
-    const budget = world.world.resourceBudget;
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxVertices",
-      usage.vertices,
-      budget.maxVertices
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxTriangles",
-      usage.triangles,
-      budget.maxTriangles
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxColliders",
-      usage.colliders,
-      budget.maxColliders
-    );
+    const diagnostics = evaluateCompiledWorldResourceBudgetV1({
+      usage,
+      budget: world.world.resourceBudget
+    });
     if (diagnostics.length > 0) return { ok: false, diagnostics };
     const rig = cameraNode.components.cameraRig;
     const components = {
@@ -35620,13 +35563,16 @@ function createCoreControlFeatureFactoryV1() {
     })
   });
 }
+function coreGameplayBootstrapResourceRefV1(input) {
+  return `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`;
+}
 function createCoreGameplayBootstrapV1(input) {
   const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
   return createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: `${input.worldId}.gameplay`,
     version: 1,
-    resourceRef: `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`,
+    resourceRef: coreGameplayBootstrapResourceRefV1(input),
     semanticFactProjectorProfileResource: RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: input.entityDescriptors,
     featureResourceLocks: [{

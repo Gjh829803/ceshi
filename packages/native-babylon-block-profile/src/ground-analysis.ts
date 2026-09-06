@@ -40,6 +40,7 @@ export interface BabylonNativeBlockGroundTraversalBandV1 {
   readonly centerlineStandPositionsMetersXYZ:
     readonly BabylonNativeBlockGroundStandPositionV1[];
   readonly halfWidthMeters: number;
+  readonly isBidirectional: boolean;
 }
 
 export interface BabylonNativeBlockGroundCaseIntentV1 {
@@ -1006,9 +1007,6 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     input.caseIntent.spawn.openingFovDegrees >= 180 ||
     ![0, 1, 2, 3].includes(input.caseIntent.spawn.openingYawQuarterTurnsY)
   ) return fail(INPUT_CODE, "opening camera measurement inputs are invalid");
-  if (input.caseIntent.requiredTargets.length > 256) {
-    return fail(INPUT_CODE, "caseIntent supports at most 256 required targets");
-  }
   const ids = new Set<string>();
   const positions = new Set<string>();
   for (const [index, target] of input.caseIntent.requiredTargets.entries()) {
@@ -1044,6 +1042,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       "acceptanceTargetRef",
       "centerlineStandPositionsMetersXYZ",
       "halfWidthMeters",
+      "isBidirectional",
     ], [], `requiredTraversalBands[${index}]`);
     requireId(band.id, `requiredTraversalBands[${index}].id`);
     requireRef(band.acceptanceTargetRef,
@@ -1056,6 +1055,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       `requiredTraversalBands[${index}].halfWidthMeters`);
     if (
       bandIds.has(band.id) ||
+      typeof band.isBidirectional !== "boolean" ||
       band.halfWidthMeters <= 0 ||
       band.centerlineStandPositionsMetersXYZ.length < 2 ||
       band.centerlineStandPositionsMetersXYZ.length > 256
@@ -1513,7 +1513,10 @@ export function analyzeBabylonNativeBlockGroundV1(
       reachableTargetCount += 1;
       continue;
     }
-    if (!evaluation.isStandable || isNil(targetNodeId)) continue;
+    // Match the old optional-connectivity policy without hiding measurements
+    // or weakening the standability/topology checks already performed above.
+    if (!evaluation.isStandable || isNil(targetNodeId) ||
+        !input.caseIntent.requireSingleReachableComponent) continue;
     failureFacts.push(stateFailureFact({
       acceptanceTargetRef: target.acceptanceTargetRef,
       targetId: target.id,
@@ -1633,7 +1636,14 @@ export function analyzeBabylonNativeBlockGroundV1(
                   destination,
                   band.halfWidthMeters,
                   nodesById,
-                )
+                ) && (!band.isBidirectional || canReachInsideBand(
+                  destinationNodeId,
+                  startNodeId,
+                  destination,
+                  start,
+                  band.halfWidthMeters,
+                  nodesById,
+                ))
                 ? undefined
                 : "disconnected-inside-band";
       if (isNil(reason)) continue;

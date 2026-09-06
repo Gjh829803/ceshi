@@ -19,6 +19,7 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function manifestValue() {
   return {
     kind: "native-block-authoring",
+    controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
     groundExploration: { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
@@ -383,6 +384,7 @@ describe("Native Block authoring manifest", () => {
     ["extra top-level field", { ...manifestValue(), camera: { mode: "third-person" } }],
     ["missing entry module", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
       groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
@@ -445,13 +447,31 @@ describe("Native Block authoring manifest", () => {
 });
 
 describe("Native Block authoring to checked Layout binding", () => {
+  it("binds empty source ground evidence only when the frozen Case makes it optional", () => {
+    const base = bindingInput();
+    const groundExploration = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    const authoringManifest = parseNativeBlockAuthoringManifestV1({ ...manifestValue(), groundExploration });
+    const authoringManifestHash = hashNativeBlockAuthoringManifestV1(authoringManifest);
+    for (const requireSingleReachableComponent of [false, true]) {
+      const reconstructionCase = parseWorldReconstructionCaseV1({
+        ...base.reconstructionCase, expected: { ...base.reconstructionCase.expected,
+          groundConnectivity: { mode: "source-authored", requireSingleReachableComponent, requiredTraversalBands: [] } },
+      });
+      const bind = () => bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+        ...base, authoringManifest, authoringManifestHash, reconstructionCase,
+      });
+      if (requireSingleReachableComponent) expect(bind).toThrow(/middle and remote/);
+      else expect(bind().groundExploration).toEqual(groundExploration);
+    }
+  });
+
   it("binds source-authored exploration identity and cannot override a case-defined route", () => {
     const base = bindingInput();
     const spawn = base.reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
     const groundExploration = { mode: "source-authored", requiredTargets: [
       { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
       { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 0, -5] },
-    ], requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+    ], requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1, isBidirectional: true,
       centerlineStandPositionsMetersXYZ: [[spawn.xMeters, spawn.yMeters, spawn.zMeters], [4, 0, 0], [4, 0, -3]] }] };
     const authoringManifest = parseNativeBlockAuthoringManifestV1({ ...manifestValue(), groundExploration });
     const authoringManifestHash = hashNativeBlockAuthoringManifestV1(authoringManifest);

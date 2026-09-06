@@ -45,5 +45,14 @@ When several complete instances intentionally share one appearance, replace the 
 List 1-8 movement rows in requested order; the first is the initial mode. The seven common labels are examples. A custom row such as `- 磁力墙面行走：主体可吸附墙面并沿连续墙体移动。` is valid when it better matches the request. Standard labels may include equipment in parentheses. Preserve all requested modes without repeating an identical label; do not invent additional modes to fill the list.
 The `用户事实`, `可见参考证据`, `推断的世界延伸`, and `仅视觉层设想` sections keep provenance explicit. Never present an inferred continuation or a visual-only idea as observed geometry.
 The `空间` section must identify an entry slice, middle area, and meaningful off-camera/remote exploration appropriate to the request. Do not add dimensions or coordinates; the Builder derives and validates them against the current resource budget and traversability contracts.
+For Babylon Native, apply the Skill's three-dimensional spatial reasoning in the
+existing prose sections. Record observed lower/higher levels and over/under
+relationships in `可见参考证据`, explain their coherent depth and connections in
+`空间` and `通行`, and keep unseen continuation in `推断的世界延伸`. For a visible
+stair, describe its actual lower start, upper destination, course, landings,
+relative width, enclosure/drop and supporting mass. Do not add a stair, bridge or
+other formation absent from the current reference just because an example names
+one. These relationships do not require extra visual-target entries, a new
+section, JSON inventory, coordinates or another Planner output.
 Keep the four-times coverage intent in inferred continuation, never in user facts or visible evidence. It is not a new area or similarity admission gate and does not increase the resource or repair budget.
 The entry whitebox image derived from this Brief always uses the Skill's uniform neutral clear daytime inspection light. Any moonlight, night, sunset, fog-darkness, interior darkness, or stylized exposure described by the reference is deferred to the later styled first-frame stage and never changes whitebox illumination.

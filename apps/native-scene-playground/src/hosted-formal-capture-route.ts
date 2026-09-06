@@ -2,6 +2,7 @@ import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { createFormalCaptureStartupReporterV1 } from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
+  installRuntimeFlightRecorderV1,
   type FormalHostedWorldCapturePayloadV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
@@ -180,13 +181,51 @@ export async function startHostedFormalCaptureShellRouteV1(input: Readonly<{
   return bridge;
 }
 
-function captureOnlyEntryPort(
-  value: Awaited<ReturnType<typeof createBabylonNativeIsolatedRuntimeEntryV1>>,
+export function createObservedFormalCaptureEntryPortV1(
+  value: Pick<Awaited<ReturnType<typeof createBabylonNativeIsolatedRuntimeEntryV1>>,
+    "initialSnapshot" | "executeFormalCapture" | "dispose">,
+  options?: Readonly<{
+    target: Parameters<typeof installRuntimeFlightRecorderV1>[0]["target"];
+    visibilityState: () => "visible" | "hidden";
+    diagnosticSessionId: string;
+  }>,
 ): FormalCaptureOnlyRuntimeEntryPortV1 {
+  let observer: ReturnType<typeof installRuntimeFlightRecorderV1> | undefined;
+  let hasCaptureFailed = false;
+  try {
+    const environment = options ?? { target: window, visibilityState: () => document.visibilityState,
+      diagnosticSessionId: window.crypto.randomUUID() };
+    observer = installRuntimeFlightRecorderV1({ ...environment,
+      source: { read: () => {
+        // Despite its historical method name, this is a fresh owner projection.
+        const snapshot = value.initialSnapshot();
+        return { worldSessionId: snapshot.worldSessionId, progressMode: "on-demand",
+          hasRuntimeFailure: hasCaptureFailed || snapshot.runtime.phase === "failed",
+          snapshot: { frame: null, tick: snapshot.world.simulationTick, paused: snapshot.runtime.isPaused,
+            performance: { fps: null, triangles: null, drawCalls: null } } };
+      } },
+    });
+  } catch {
+    // Unavailable diagnostics do not prevent the original Capture operation.
+  }
+  const sample = () => { try { observer?.sampleNow(); } catch { /* advisory only */ } };
   return Object.freeze({
-    executeFormalCapture: (request: FormalWorldCaptureRequestV1) =>
-      value.executeFormalCapture(request),
-    dispose: () => value.dispose(),
+    async executeFormalCapture(request: FormalWorldCaptureRequestV1) {
+      sample();
+      try {
+        const payload = await value.executeFormalCapture(request);
+        sample();
+        return payload;
+      } catch (error) {
+        hasCaptureFailed = true;
+        sample();
+        throw error;
+      }
+    },
+    dispose: () => {
+      try { observer?.dispose(); } catch { /* preserve the entry cleanup outcome */ }
+      return value.dispose();
+    },
   });
 }
 
@@ -262,14 +301,18 @@ async function initializeFormalCaptureFrameV1(input: Readonly<{
     sdkOwnerIdentities: input.constants.sdkOwnerIdentities,
     onInitializationStage: (stage) => reporter.progress(`runtime-${stage}`),
   });
-  const captureEntry = captureOnlyEntryPort(entry);
+  const captureEntry = createObservedFormalCaptureEntryPortV1(entry);
   reporter.progress("bridge");
-  const hostedFrame = startHostedFormalCaptureFrameV1({
-    entry: captureEntry,
-    shellOrigin,
-    ...identity,
-    protocolBudget: HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
-  });
+  let hostedFrame: ReturnType<typeof startHostedFormalCaptureFrameV1>;
+  try {
+    hostedFrame = startHostedFormalCaptureFrameV1({
+      entry: captureEntry, shellOrigin, ...identity,
+      protocolBudget: HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
+    });
+  } catch (error) {
+    try { await captureEntry.dispose(); } catch { /* preserve the bridge failure */ }
+    throw error;
+  }
   window.addEventListener("beforeunload", () => {
     void hostedFrame.dispose();
   }, { once: true });

@@ -1555,8 +1555,9 @@ function assertGroundConnectivityMatchesExpectedRuntimeV1(
 ): void {
   const bands = groundConnectivity.requiredTraversalBands;
   if (groundConnectivity.mode === "source-authored") {
-    if (spawnSupport.expectedMedium !== "ground" || !groundConnectivity.requireSingleReachableComponent || bands.length !== 0) {
-      fail(contract, "expected/groundConnectivity", "source-authored policy requires ground Spawn, one component and no pre-invented metric bands");
+    if (bands.length !== 0 ||
+        (spawnSupport.expectedMedium === "air" && groundConnectivity.requireSingleReachableComponent)) {
+      fail(contract, "expected/groundConnectivity", "source-authored policy requires no pre-invented metric bands and air Spawn requires false single-component policy");
     }
     return;
   }

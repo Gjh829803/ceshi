@@ -47,7 +47,7 @@ try {
         { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, 10] },
         { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, 3] },
       ],
-      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     },
   } : { ...NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1[geometryFixtureId].options,

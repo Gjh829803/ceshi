@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
@@ -67,7 +69,6 @@ interface SessionModule {
       colliderGroupId?: string;
     }>): readonly Mesh[];
     finalize(input: Readonly<{
-      displayGapMeters?: number;
       staticColliders: readonly Readonly<{
         id: string;
         colliderGeometrySource:
@@ -172,6 +173,69 @@ function hostPublishableFailure(run: () => void): string {
 }
 
 describe("Babylon Native block profile session", () => {
+  it.each([
+    ["full", [0, 0, 0]], ["half", [0, 0, 0]],
+    ["quarter", [0.25, 0, 0]], ["small", [0.25, 0, 0.25]],
+    ["step", [0, 0.125, 0]],
+  ] as const)("CF-20 preserves the old fixed 0.985 visual ratio for %s", async (shape, centerMetersXYZ) => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene), { maximumBlockCount: 1 });
+      const mesh = session.createBlock({
+        id: "fixed-scale", shape, paletteRole: "structure", centerMetersXYZ,
+      });
+      const rawGeometry = Array.from(mesh.getVerticesData("position")!);
+      session.finalize({ staticColliders: [] });
+      expect(mesh.scaling.asArray()).toEqual([0.985, 0.985, 0.985]);
+      expect(mesh.getVerticesData("position")).toEqual(rawGeometry);
+      session.dispose();
+    });
+  });
+
+
+  it("CF-20 releases per-allocation Scene snapshots while keeping the live session and its disposers", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const bootstrap = createContext(scene).bootstrap;
+    scene.dispose();
+    engine.dispose();
+    // Isolated GC instrumentation: do not replace Set or enable GC in the
+    // shared test worker. This checks retained objects, not noisy RSS timing.
+    const script = `
+      import assert from 'node:assert/strict';
+      import { setImmediate } from 'node:timers/promises';
+      import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+      import { Scene } from '@babylonjs/core/scene.js';
+      import { createBabylonNativeBlockProfileSessionV1 } from ${JSON.stringify(new URL("./session.ts", import.meta.url).href)};
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      const session = createBabylonNativeBlockProfileSessionV1({scene, bootstrap: ${JSON.stringify(bootstrap)}}, {maximumBlockCount:64});
+      const originalSet = globalThis.Set;
+      const snapshots = [];
+      try {
+        globalThis.Set = class extends originalSet {
+          constructor(values) {
+            super(values);
+            if (values === scene.meshes) snapshots.push(new WeakRef(this));
+          }
+        };
+        session.createBlockGrid({idPrefix:'memory',shape:'full',paletteRole:'ground',minimumCenterMetersXYZ:[0,0,0],repeatCountXYZ:[64,1,1]});
+      } finally { globalThis.Set = originalSet; }
+      assert.equal(snapshots.length, 64, 'must observe every allocation snapshot');
+      for (let round = 0; round < 4; round++) { await setImmediate(); globalThis.gc(); }
+      const retained = snapshots.filter(reference => reference.deref() !== undefined).length;
+      assert.equal(retained, 0, 'live cleanup closures must not retain quadratic Scene snapshots');
+      assert.equal(scene.meshes.length, 64, 'do not satisfy collection by destroying live Blocks');
+      session.dispose();
+      assert.equal(scene.meshes.length, 0, 'all live cleanup callbacks still work');
+      scene.dispose(); engine.dispose();
+    `;
+    await promisify(execFile)(process.execPath,
+      ["--expose-gc", "--import", "tsx", "--input-type=module", "--eval", script],
+      { timeout: 30_000 });
+  }, 35_000);
+
   it("creates one real Babylon Mesh with the exact fixed shape", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
@@ -652,7 +716,7 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("validates display gap against the actual Layout before any side effect", async () => {
+  it("rejects the removed display-gap override before any side effect", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -690,7 +754,7 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("allows a display gap larger than the step height when the Layout uses only full blocks", async () => {
+  it("rejects per-scene scale overrides instead of silently changing the fixed display", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -706,11 +770,11 @@ describe("Babylon Native block profile session", () => {
       });
 
       expect(() => session.finalize(Object.freeze({
-        displayGapMeters: 0.6,
+        displayScaleRatio: 0.4,
         staticColliders: Object.freeze([]),
-      }))).not.toThrow();
-      expect(full.scaling.asArray()).toEqual([0.4, 0.4, 0.4]);
-      expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
+      }))).toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
+      expect(full.scaling.asArray()).toEqual([1, 1, 1]);
+      expect(commitProfileSettlement).not.toHaveBeenCalled();
     });
   });
 

@@ -1,3 +1,4 @@
+import { parseTraversalColliderSourceV1 } from "./lock.js";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1,
@@ -271,8 +272,7 @@ const CAPABILITY_FIELDS = [
   "traversalMode",
   "subjectEntityId",
   "resourceLockHash",
-  "colliderProfileRef",
-  "colliderProfileHash",
+  "colliderSource",
   "physicsBodyProfileRef",
   "physicsBodyProfileHash",
   "locomotionProfileRef",
@@ -453,7 +453,6 @@ function validateCapabilityEnvelope(
 
   for (const field of [
     "subjectEntityId",
-    "colliderProfileRef",
     "physicsBodyProfileRef",
     "locomotionProfileRef",
     "locomotionCapabilityRef",
@@ -468,7 +467,6 @@ function validateCapabilityEnvelope(
   }
   for (const field of [
     "resourceLockHash",
-    "colliderProfileHash",
     "physicsBodyProfileHash",
     "locomotionProfileHash",
     "locomotionCapabilityHash",
@@ -478,6 +476,11 @@ function validateCapabilityEnvelope(
     "graphBuilderProfileHash",
   ] as const) {
     requireHash(record[field], `${path}/${field}`);
+  }
+  try {
+    parseTraversalColliderSourceV1(record.colliderSource);
+  } catch {
+    fail(path + "/colliderSource", "must contain one valid locked collider source");
   }
   requirePositive(record.capsuleRadiusMeters, `${path}/capsuleRadiusMeters`);
   requirePositive(record.capsuleHeightMeters, `${path}/capsuleHeightMeters`);

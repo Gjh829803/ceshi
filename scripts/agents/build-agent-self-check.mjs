@@ -62,13 +62,19 @@ for (const target of targets) {
       ssr: path.join(projectRoot, "scripts", "agents", target.sourceFileName),
       outDir: path.join(outputRoot, target.skillName, "scripts"),
       rollupOptions: {
-        // These new portable tools consume only the pure Scene Brief exports.
-        // Skip unrelated re-export initialization, not any used parser checks.
+        // Portable tools consume pure parsers/Subject compilation through these
+        // export-only barrels. Skip unrelated re-export initialization, never
+        // the used validators or the Registry constructor's resource checks.
         // Keep existing Planner/Canonical bundle inputs unchanged.
         ...(target.sourceFileName === "agent-native-block-builder-self-check.mjs" ||
           target.sourceFileName === "agent-planner-palette-authoring.ts" ? {
             treeshake: {
-              moduleSideEffects: (id) => id !== path.join(projectRoot, "packages/authoring/src/index.ts"),
+              moduleSideEffects: (id) => ![
+                "packages/authoring/src/index.ts",
+                ...(isNative ? ["packages/native-babylon-block-profile/src/index.ts",
+                  "packages/compiler/src/index.ts", "packages/gameplay/src/index.ts",
+                  "packages/subject-registry/src/index.ts"] : []),
+              ].some((relativePath) => id === path.join(projectRoot, relativePath)),
             },
           } : {}),
         output: {

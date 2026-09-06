@@ -7,11 +7,12 @@ import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1, 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
+import * as nativePackageInput from "../native-scene/native-package-input.js";
 import { createProductionWorldReconstructionRunPortsV1, type ProductionWorldReconstructionRunPortOwnersV1 } from "./production-run-ports.js";
 import { assertProductionNativeBlockGroundTopologyCompatibleV1 } from "./native-ground-analysis-admission.js";
 import { assertNativeBlockProductionSourceImportsV1, NativeBlockPackageErrorV1, packageNativeBlockAttemptV1 } from "./native-package.js";
 
-import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, HOST_CLOSURE_ROOT, SCENE_SOURCE, REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE, REGENERATED_GRID_SCENE_SOURCE, MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE, MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE, MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE, MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE, MISSING_GRID_CHILD_SCENE_SOURCE, NARROW_SPAWN_GROUND_SCENE_SOURCE, SPAWN_ADJACENT_STEP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_AUTHORING } from "./native-package.test-support.js";
+import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, HOST_CLOSURE_ROOT, SCENE_SOURCE, REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE, REGENERATED_GRID_SCENE_SOURCE, MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE, REMOVED_DISPLAY_GAP_SCENE_SOURCE, MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE, MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE, MISSING_GRID_CHILD_SCENE_SOURCE, NARROW_SPAWN_GROUND_SCENE_SOURCE, SPAWN_ADJACENT_STEP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_AUTHORING } from "./native-package.test-support.js";
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -52,6 +53,57 @@ async function expectVisualReviewRejectedBeforeGround(
 }
 
 describe("packageNativeBlockAttemptV1", () => {
+  it("rejects the SDK humanoid proxy under the old Hosted policy without changing Registry compilation", async () => {
+    const fixture = await completedAttempt({ subjectDesign: {
+      kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+    } });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED"] });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
+  it("replays the old complete movement check on frozen Brief inputs before admitting a Package", async () => {
+    const fixture = await completedAttempt({ movementModeRows: [
+      "- 陆地步行：沿路行走。", "- 空中飞行（滑翔翼）：飞越峡谷。",
+    ] });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED"] });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
+  it("publishes the authored composed Subject, not a fixed G Bot, through real Host Package closure", async () => {
+    const fixture = await completedAttempt({ subjectDesign: {
+      kind: "composed", definition: {
+        id: "cf12-authored-traveler", category: "human", bodyTopology: "biped",
+        semanticClassId: "subject.traveler", displayName: "Authored traveler",
+        description: "Deterministic primitive Subject for Native Host integration.",
+        visualParts: [{
+          id: "body-main", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.5, 1.8, 0.4] },
+          localTransform: { positionMetersXYZ: [0, 0.9, 0] },
+          colliderContribution: "include", semanticTags: ["body"],
+        }],
+        visualBinding: { mode: "static" },
+      },
+    } });
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    const runtime = packaged.verifiedWorldPackage.worldRuntimeBootstrap;
+    const subject = runtime.subjectRuntimeDescriptors[0]!;
+    expect(subject.subjectDefinitionRef).toBe("package://subject-definition/cf12-authored-traveler@1");
+    expect(subject.visualParts.map(({ id }) => id)).toEqual(["body-main"]);
+    expect(runtime.subjectAssets).toEqual([]);
+    expect(packaged.verifiedWorldPackage.gameplayBootstrap.entityDescriptors[0]!.entityDefinitionRef)
+      .toBe(subject.subjectDefinitionRef);
+    expect(packaged.verifiedWorldPackage.receipt.manifest.worldRuntimeBootstrapHash).toBe(runtime.contentHash);
+    expect(packaged.checkResult.outcome).toBe("passed");
+  }, 120_000);
+
   it.each([false, true])("freezes a no-script fixture with empty semantic targets=%s before generation", async (withoutSemanticTargets) => {
     const groundExploration: NativeBlockGroundExplorationV1 = {
       mode: "source-authored",
@@ -59,7 +111,7 @@ describe("packageNativeBlockAttemptV1", () => {
         { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, 10] },
         { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, 3] },
       ],
-      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     };
     const fixture = await completedAttempt({ withoutScriptedTraversal: true, withoutSemanticTargets, groundExploration });
@@ -263,6 +315,63 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
   }, 60_000);
 
+  it("preserves optional ground evidence through real Package and Ground without changing Case bytes", async () => {
+    const groundExploration = { mode: "source-authored" as const, requiredTargets: [], requiredTraversalBands: [] };
+    const fixture = await completedAttempt({ groundExploration, requireSingleReachableComponent: false });
+    const originalCase = await readFile(fixture.casePath);
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
+      attemptDirectoryPath: fixture.attemptDirectoryPath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.outcome).toBe("completed");
+    expect(packaged.groundAnalysisReport).toMatchObject({ admissionOutcome: "passed",
+      metrics: { requiredTargetCount: 0, requiredTraversalBandCount: 0 } });
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.groundExploration).toEqual(groundExploration);
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    const unsupported = await completedAttempt({
+      groundExploration, requireSingleReachableComponent: false, sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,
+    });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: unsupported.casePath,
+      attemptDirectoryPath: unsupported.attemptDirectoryPath, outputDirectoryPath: unsupported.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: expect.arrayContaining(["native-ground-analysis-rejected"]) });
+  }, 120_000);
+
+  it("admits an optional disconnected ground target through Host without pretending it is reachable", async () => {
+    const groundExploration: NativeBlockGroundExplorationV1 = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] },
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [0, 0, 7] },
+      ],
+      requiredTraversalBands: [],
+    };
+    const fixture = await completedAttempt({
+      groundExploration, requireSingleReachableComponent: false, maximumBlockCount: 128,
+      sceneSource: SCENE_SOURCE.replace("maximumBlockCount: 64", "maximumBlockCount: 128")
+        .replace('    session.finalize({',
+          '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
+    });
+    const originalCase = await readFile(fixture.casePath);
+    const requestPath = path.join(fixture.attemptDirectoryPath, "generation-request.json");
+    const originalRequest = await readFile(requestPath);
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
+      attemptDirectoryPath: fixture.attemptDirectoryPath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.groundAnalysisReport).toMatchObject({
+      analysisOutcome: "passed", admissionOutcome: "passed", failureFacts: [],
+      metrics: { requiredTargetCount: 2, reachableRequiredTargetCount: 1, requiredTraversalBandCount: 0 },
+    });
+    expect(packaged.groundAnalysisReport.metrics.disconnectedStandablePositionCount).toBeGreaterThan(0);
+    expect(packaged.groundAnalysisReport.standableNodes).toContainEqual(expect.objectContaining({
+      positionMetersXYZ: [30, 0, 2], isReachableFromSpawn: false,
+    }));
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.groundExploration).toEqual(groundExploration);
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    expect(await readFile(requestPath)).toEqual(originalRequest);
+  }, 60_000);
+
   it("admits source-authored curved exploration and rejects unsupported or disconnected remote anchors", async () => {
     const groundExploration: NativeBlockGroundExplorationV1 = {
       mode: "source-authored",
@@ -270,10 +379,10 @@ describe("packageNativeBlockAttemptV1", () => {
         { id: "middle-court", region: "middle", standPositionMetersXYZ: [6, 0, 7] },
         { id: "remote-garden", region: "remote", standPositionMetersXYZ: [6, 0, 2] },
       ],
-      requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
-        centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 11], [6, 0, 11], [6, 0, 7]] },
-      { id: "middle-garden", halfWidthMeters: 1,
-        centerlineStandPositionsMetersXYZ: [[6, 0, 7], [6, 0, 2]] }],
+      requiredTraversalBands: [{ id: "middle-garden", halfWidthMeters: 1, isBidirectional: false,
+        centerlineStandPositionsMetersXYZ: [[6, 0, 7], [6, 0, 2]] },
+      { id: "entry-court", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 11], [6, 0, 11], [6, 0, 7]] }],
     };
     const curvedSource = SCENE_SOURCE
       .replace("maximumBlockCount: 64", "maximumBlockCount: 128")
@@ -292,6 +401,7 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(packaged.groundAnalysisReport).toMatchObject({ admissionOutcome: "passed",
       metrics: { requiredTargetCount: 2, reachableRequiredTargetCount: 2,
         requiredTraversalBandCount: 2, reachableRequiredTraversalBandCount: 2 } });
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata!.groundExploration).toEqual(groundExploration);
     expect(await readFile(fixture.casePath)).toEqual(originalCase);
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
     const failedFixture = await completedAttempt({ sceneSource: curvedSource, maximumBlockCount: 128,
@@ -503,6 +613,73 @@ describe("packageNativeBlockAttemptV1", () => {
     ), "utf8")).toBe("outcome: passed\n");
   }, 60_000);
 
+  it("publishes real Ground and Package despite global-root support warnings from lower decoration", async () => {
+    // An unrelated low visual changes the structural metric's global root but
+    // neither the contributed playable floor nor its actual Capsule support.
+    const fixture = await completedAttempt({
+      sceneSource: SCENE_SOURCE.replace(
+        "    session.finalize({ staticColliders: [",
+        '    session.createBlock({ id: "low-decoration", shape: "full", paletteRole: "background-mass", centerMetersXYZ: [12, -8.5, 12] });\n    session.finalize({ staticColliders: [',
+      ),
+    });
+    const prepare = nativePackageInput.prepareFrozenBabylonNativeWorldPackageBuildInputV1;
+    const preparedInputs: Awaited<ReturnType<typeof prepare>>[] = [];
+    // Observe the actual checked epoch consumed by Ground. The generic Native
+    // Check receipt does not expose Block Profile metrics; no result is faked.
+    const observer = vi.spyOn(nativePackageInput, "prepareFrozenBabylonNativeWorldPackageBuildInputV1")
+      .mockImplementation(async (...args) => {
+        const prepared = await prepare(...args);
+        preparedInputs.push(prepared);
+        return prepared;
+      });
+    try {
+      const packaged = await packageNativeBlockAttemptV1({
+        repositoryRoot: REPOSITORY_ROOT,
+        attemptDirectoryPath: fixture.attemptDirectoryPath,
+        casePath: fixture.casePath,
+        outputDirectoryPath: fixture.outputDirectoryPath,
+      });
+      expect(packaged.outcome).toBe("completed");
+      expect(packaged.checkResult.outcome).toBe("passed");
+      expect(preparedInputs).toHaveLength(1);
+      const profileCheck = preparedInputs[0]?.nativeBlockCheckedEpochEvidence?.checkedLayout.checkResult;
+      expect(profileCheck).toBeDefined();
+      if (profileCheck === undefined) throw new Error("real checked epoch evidence missing");
+      expect(profileCheck.outcome).toBe("passed");
+      expect(profileCheck.metrics.unsupportedBlockCount).toBe(profileCheck.metrics.blockCount - 1);
+      expect(profileCheck.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+            severity: "warning",
+            location: { kind: "block", blockId: "gate" },
+          }),
+          expect.objectContaining({
+            code: "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+            severity: "warning",
+            location: { kind: "block", blockId: "foreground-x1-y0-z7" },
+          }),
+        ]),
+      );
+      expect(packaged.groundAnalysisReport.admissionOutcome).toBe("passed");
+      expect(packaged.groundAnalysisReport.standableNodes).toEqual(
+        expect.arrayContaining([expect.objectContaining({
+          positionMetersXYZ: [0, 0, 18], isReachableFromSpawn: true,
+        })]),
+      );
+      expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.blocks).toEqual(
+        expect.arrayContaining([expect.objectContaining({
+          blockId: "low-decoration", centerMetersXYZ: [12, -8.5, 12],
+        })]),
+      );
+      expect(packaged.worldPackageRef).toBe(
+        packaged.verifiedWorldPackage.receipt.worldPackageRef,
+      );
+    } finally {
+      observer.mockRestore();
+    }
+  }, 60_000);
+
   it("fails closed after Native Check when one Builder advisory output is missing", async () => {
     const fixture = await completedAttempt();
     await rm(path.join(
@@ -548,15 +725,10 @@ describe("packageNativeBlockAttemptV1", () => {
     );
   }, 60_000);
 
-  it("joins captured displayGap through the checked Profile inventory identity", async () => {
-    const fixture = await completedAttempt({
-      sceneSource: MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE,
-    });
-
-    await expectVisualReviewRejectedBeforeGround(
-      fixture,
-      "native-block-visual-review-layout-mismatch",
-    );
+  it("rejects the removed display-gap override before producing advisory artifacts", async () => {
+    await expect(completedAttempt({
+      sceneSource: REMOVED_DISPLAY_GAP_SCENE_SOURCE,
+    })).rejects.toThrow(/session.finalize requires only staticColliders/);
   }, 60_000);
 
   it("joins captured Spawn exactly to the checked Native contribution", async () => {
@@ -638,21 +810,23 @@ describe("packageNativeBlockAttemptV1", () => {
     );
   }, 60_000);
 
-  it("fails closed when the Host-owned Subject visual proxy bytes drift", async () => {
+  it("fails closed when frozen Subject resource context bytes drift", async () => {
     const fixture = await completedAttempt();
     const proxyPath = path.join(
       fixture.attemptDirectoryPath,
-      "inputs/subject-visual-review-proxy.json",
+      "inputs/subject-host-context.json",
     );
     await writeFile(
       proxyPath,
       Buffer.concat([await readFile(proxyPath), Buffer.from("\n")]),
     );
 
-    await expectVisualReviewRejectedBeforeGround(
-      fixture,
-      "native-block-subject-visual-review-proxy-stale",
-    );
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["host-identity-closure-mismatch"] });
+    await expect(lstat(path.join(fixture.attemptDirectoryPath, "native-check-result.json")))
+      .rejects.toMatchObject({ code: "ENOENT" });
   }, 60_000);
 
   it("fails closed when a durable planning image no longer closes Case and Request identity", async () => {

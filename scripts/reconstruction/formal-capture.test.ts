@@ -486,7 +486,7 @@ describe("formal Package Capture preflight join", () => {
     });
   });
 
-  it("uses the concrete capture-only Hosted starter by default", async () => {
+  it.each([false, true])("uses the concrete capture-only Hosted starter by default (diagnostic sink: %s)", async (withDiagnostic) => {
     const root = await realpath(
       await mkdtemp(path.join(tmpdir(), "formal-capture-test-")),
     );
@@ -509,6 +509,7 @@ describe("formal Package Capture preflight join", () => {
       "utf8",
     );
     const sentinel = new Error("concrete starter reached");
+    const diagnosticInput = withDiagnostic ? { onRuntimeFlightDiagnostic: vi.fn() } : {};
     createDefaultTransportStarter.mockReturnValueOnce(async () => {
       throw sentinel;
     });
@@ -518,6 +519,7 @@ describe("formal Package Capture preflight join", () => {
       outputPath: path.join(outputDirectoryPath, "opening.png"),
       triviewOutputPath: outputDirectoryPath,
       port: 6_123,
+      ...diagnosticInput,
     })).rejects.toMatchObject({
       name: "FormalCaptureCommandClosedErrorV1",
       stage: "hosted-session",
@@ -530,6 +532,7 @@ describe("formal Package Capture preflight join", () => {
     expect(createDefaultTransportStarter).toHaveBeenCalledWith({
       packageDirectoryPath,
       port: 6_123,
+      ...diagnosticInput,
     });
     await expect(readdir(outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",

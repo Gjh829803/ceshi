@@ -62,6 +62,7 @@ import {
   type WorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
 import { NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 } from "./native-block-production-budget.js";
+import { createNativeSubjectHostContextV1 } from "./native-subject-host-context.js";
 import {
   createProductionWorldReconstructionRunPortsV1,
 } from "./production-run-ports.js";
@@ -86,13 +87,6 @@ const DEFAULT_REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url)),
 );
 const CASE_CORPUS_RELATIVE_PATH = path.join("artifacts", "scenes");
-const HOST_CLOSURE_RELATIVE_PATH = path.join(
-  "apps",
-  "playground",
-  "public",
-  "world-packages",
-  "cloud-ridge",
-);
 const NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -235,31 +229,6 @@ function parseIntent(bytes: Uint8Array) {
       { cause: error },
     );
   }
-}
-
-function registryOwnerRef(
-  registryLockValue: unknown,
-  resourceKind: "gameplay-bootstrap" | "world-runtime-bootstrap",
-  contentHash: Sha256HashV1,
-): string {
-  if (!Array.isArray(registryLockValue)) {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  const matches = registryLockValue.filter((entry) => {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      return false;
-    }
-    const record = entry as Record<string, unknown>;
-    return record.resourceKind === resourceKind &&
-      record.contentHash === contentHash &&
-      typeof record.resourceRef === "string" &&
-      typeof record.resolvedVersion === "string" &&
-      record.resourceRef.endsWith(`@${record.resolvedVersion}`);
-  }) as Record<string, unknown>[];
-  if (matches.length !== 1) {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  return matches[0]!.resourceRef as string;
 }
 
 interface WorldReconstructionInputFreezerHooksV1 {
@@ -659,8 +628,7 @@ function assertFrozenOwnerIdentitiesMatch(
   if (
     actual.caseHash !== expected.caseHash ||
     actual.evaluationProfileHash !== expected.evaluationProfileHash ||
-    actual.gameplayBootstrapHash !== expected.gameplayBootstrapHash ||
-    actual.worldRuntimeBootstrapHash !== expected.worldRuntimeBootstrapHash ||
+    actual.subjectHostContextHash !== expected.subjectHostContextHash ||
     actual.worldBoundsPolicyHash !== expected.worldBoundsPolicyHash ||
     actual.bootstrapInputHash !== expected.bootstrapInputHash
   ) throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_OWNER_INVALID");
@@ -830,67 +798,12 @@ async function runProduction(
     ),
     "WORLD_RECONSTRUCTION_WORLD_BOUNDS_POLICY_INVALID",
   ));
-  const hostClosureRootPath = await canonicalDirectory(
-    path.join(repositoryRoot, HOST_CLOSURE_RELATIVE_PATH),
-    "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-  );
-  const gameplayBootstrapPath = path.join(
-    hostClosureRootPath,
-    "gameplay",
-    "bootstrap.json",
-  );
-  const worldRuntimeBootstrapPath = path.join(
-    hostClosureRootPath,
-    "runtime",
-    "world-runtime-bootstrap.json",
-  );
-  const [gameplayBootstrap, worldRuntimeBootstrap, registryLock] =
-    await Promise.all([
-      readCanonicalRegularFile(
-        gameplayBootstrapPath,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-      readCanonicalRegularFile(
-        worldRuntimeBootstrapPath,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-      readCanonicalRegularFile(
-        path.join(hostClosureRootPath, "registry-lock.json"),
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-    ]);
-  const gameplayHash = (gameplayBootstrap as { contentHash?: unknown })
-    .contentHash;
-  const runtimeHash = (worldRuntimeBootstrap as { contentHash?: unknown })
-    .contentHash;
-  if (typeof gameplayHash !== "string" || typeof runtimeHash !== "string") {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  registryOwnerRef(
-    registryLock,
-    "gameplay-bootstrap",
-    gameplayHash as Sha256HashV1,
-  );
-  const worldRuntimeBootstrapRef = registryOwnerRef(
-    registryLock,
-    "world-runtime-bootstrap",
-    runtimeHash as Sha256HashV1,
-  );
+  const subjectHostContext = createNativeSubjectHostContextV1(reconstructionCase.id, "camera-main");
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
   const seed = Number.parseInt(caseHash.slice("sha256:".length, 15), 16);
   const derived = deriveNativeBlockGenerationBootstrapV1({
     reconstructionCase,
-    gameplayBootstrap,
-    worldRuntimeBootstrap,
+    subjectHostContext,
     worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
@@ -902,8 +815,7 @@ async function runProduction(
     resolveWorldReconstructionFrozenOwnerIdentitiesV1({
       reconstructionCase,
       evaluationProfile,
-      gameplayBootstrap,
-      worldRuntimeBootstrap,
+      subjectHostContext,
       worldBoundsPolicy: derived.worldBoundsPolicy,
       bootstrap: derived.bootstrap,
     });
@@ -938,10 +850,7 @@ async function runProduction(
       "native-scene-profile.json",
     ),
     blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"),
-    hostClosureRootPath,
-    gameplayBootstrapPath,
-    worldRuntimeBootstrapPath,
-    worldRuntimeBootstrapRef,
+    subjectHostContext,
     worldBoundsPolicyPath,
     worldBoundsPolicy: derived.worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,

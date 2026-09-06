@@ -152,7 +152,7 @@ export function parseNativeBlockRepairInstructionV1(
   }
   const priorEvidence = parseRepairEvidence(value.priorEvidence);
   const owner = value.frozenOwnerIdentities as Record<string, unknown>;
-  const ownerKeys = ["caseHash", "evaluationProfileHash", "gameplayBootstrapHash", "worldRuntimeBootstrapHash", "worldBoundsPolicyHash", "bootstrapInputHash"];
+  const ownerKeys = ["caseHash", "evaluationProfileHash", "subjectHostContextHash", "worldBoundsPolicyHash", "bootstrapInputHash"];
   if (typeof owner !== "object" || isNil(owner) || Array.isArray(owner) || Object.keys(owner).length !== ownerKeys.length || ownerKeys.some((key) => typeof owner[key] !== "string" || !SHA256_PATTERN.test(owner[key] as string))) {
     fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "owner identities");
   }

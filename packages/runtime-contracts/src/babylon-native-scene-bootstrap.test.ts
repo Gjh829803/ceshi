@@ -2,8 +2,8 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 
 import bootstrapSchema from "./babylon-native-scene-bootstrap-v1.schema.json";
-import runtimeFixture from "../../../apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json";
-import { parseWorldRuntimeBootstrapV1 } from "./world-runtime-bootstrap.js";
+import { createWorldRuntimeBootstrapV1 } from "./world-runtime-bootstrap.js";
+import { createWorldRuntimeBootstrapBodyFixtureV1 } from "./world-runtime-bootstrap.test-support.js";
 import {
   hashBabylonNativeSceneBootstrapV1,
   admitBabylonNativeOpeningCameraV1,
@@ -41,7 +41,7 @@ function expectInvalid(input: unknown): void {
 
 describe("BabylonNativeSceneBootstrapV1", () => {
   it("admits opening intent within the locked third-person Profile ranges without rewriting WRT", () => {
-    const runtime = parseWorldRuntimeBootstrapV1(runtimeFixture);
+    const runtime = createWorldRuntimeBootstrapV1(createWorldRuntimeBootstrapBodyFixtureV1());
     const before = JSON.stringify(runtime);
     const intent = { ...VALID_BOOTSTRAP.initialCamera, distanceMeters: 5.5, fovDegrees: 54 };
     expect(admitBabylonNativeOpeningCameraV1(intent, runtime)).toEqual(intent);

@@ -30,6 +30,17 @@ await build({
     ssr: path.join(scriptRoot, "render-visual-review.source.ts"),
     outDir: outputDirectoryPath,
     rollupOptions: {
+      treeshake: {
+        // These barrels only re-export; retain the used parser/compiler owners
+        // without loading unrelated Native scene/engine initialization.
+        moduleSideEffects: (id) => ![
+          "packages/authoring/src/index.ts",
+          "packages/native-babylon-block-profile/src/index.ts",
+          "packages/compiler/src/index.ts",
+          "packages/gameplay/src/index.ts",
+          "packages/subject-registry/src/index.ts",
+        ].some((relativePath) => id === path.join(repositoryRoot, relativePath)),
+      },
       output: {
         entryFileNames: "render-visual-review.mjs",
         inlineDynamicImports: true,

@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runPlannerSelfCheck } from "../agents/agent-planner-self-check.js";
-import { preparePlannerExecutionV1, replayPlannerExecutionV1 } from "../agents/planner-execution.js";
+import { preparePlannerExecutionV1, replayPlannerExecutionV1, verifyAcceptedPlannerExecutionV1 } from "../agents/planner-execution.js";
 import { parseWorldAgentArgumentsV1 } from "../agents/run-world-agent.js";
 import { writeVisualIdentityPalette } from "../visual/write-visual-identity-palette.js";
 import { runNativeWorldAgentV1 } from "./run-native-world-agent.js";
@@ -90,6 +90,40 @@ async function fixture() {
 }
 
 describe("Native staged world production", () => {
+  it("classifies Host copy failure after passed planning and preserves delivery without launching Builder", async () => {
+    const { root, calls, options, request } = await fixture();
+    const artifactRoot = path.join(root, "artifacts/scenes/staged-palace");
+    const publicPlanRoot = path.join(root, "apps/playground/public/scene-plans/staged-palace");
+    const paths = [path.join(artifactRoot, "scene-brief.md"),
+      path.join(artifactRoot, "planner-self-check.json"),
+      path.join(artifactRoot, "planner-execution.json"),
+      path.join(publicPlanRoot, "world-plan.png"),
+      path.join(publicPlanRoot, "entry-whitebox-target.png")];
+    let deliveredBytes: Buffer[] = [];
+    const failure = runNativeWorldAgentV1(request, { ...options, runProcess: async (...args) => {
+      const exitCode = await options.runProcess(...args);
+      deliveredBytes = await Promise.all(paths.map((file) => readFile(file)));
+      // Inject a genuine exclusive-copy conflict only after the real synthetic
+      // Planner check/replay passed, not a rejected or missing model output.
+      const parent = path.dirname(artifactRoot);
+      const stagedName = (await readdir(parent)).find((name) => name.startsWith(".staged-palace.native-case-"));
+      expect(stagedName).toBeDefined();
+      await mkdir(path.join(parent, stagedName!, "planner-executions", "planner-stage-test"), { recursive: true });
+      return exitCode;
+    } });
+    await expect(failure).rejects.toMatchObject({
+      message: "NATIVE_WORLD_PLANNER_HANDOFF_FAILED:EEXIST", cause: { code: "EEXIST" },
+    });
+    expect(calls).toEqual(["bash"]);
+    expect(await Promise.all(paths.map((file) => readFile(file)))).toEqual(deliveredBytes);
+    await expect(verifyAcceptedPlannerExecutionV1({ artifactRoot, sceneId: request.sceneId,
+      sceneSourceKind: "babylon-native", plannerSelfCheckPath: paths[1]!,
+    })).resolves.toMatchObject({ taskId: "planner-stage-test" });
+    await expect(readFile(path.join(artifactRoot, "case.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(path.dirname(artifactRoot))).filter((name) => name.startsWith(".staged-palace.native-case-")))
+      .toEqual([]);
+  });
+
   it("full production without a user appearance image does not start a visual task", async () => {
     const { calls, options, request } = await fixture();
     const result = await runNativeWorldAgentV1({ ...request, mode: "full", imagePaths: [] }, options);

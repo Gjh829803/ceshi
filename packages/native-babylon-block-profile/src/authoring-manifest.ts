@@ -1,4 +1,5 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import { validateSubjectDesignV1, type SubjectDesignV1 } from "@whitebox-world/authoring/subject-design";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
@@ -44,6 +45,10 @@ export interface NativeBlockAuthoringManifestV1 {
   readonly blockProfileRef:
     typeof BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1;
   readonly visualGroups: readonly NativeBlockAuthoringVisualGroupV1[];
+  readonly controlledSubject: Readonly<{
+    visualTargetId: string;
+    design: SubjectDesignV1;
+  }>;
   readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly groundExploration: NativeBlockGroundExplorationV1;
 }
@@ -248,16 +253,25 @@ export function parseNativeBlockAuthoringManifestV1(
     "entryModulePath",
     "blockProfileRef",
     "visualGroups",
+    "controlledSubject",
     "openingCamera",
     "groundExploration",
   ], code, "manifest");
-  const { openingCamera: cameraIntent, ...declarations } = source;
+  const { openingCamera: cameraIntent, controlledSubject: subjectIntent, ...declarations } = source;
   if (containsAuthorityField(declarations)) {
     return fail(code, "Subject, Camera, Physics, Runtime and Gameplay authority fields are forbidden");
   }
   let openingCamera: BabylonNativeInitialCameraV1;
   try { openingCamera = parseBabylonNativeInitialCameraV1(cameraIntent); }
   catch { return fail(code, "openingCamera must contain only the closed third-person numeric intent"); }
+  const subject = exactRecord(subjectIntent, ["visualTargetId", "design"], code, "controlledSubject");
+  if (typeof subject.visualTargetId !== "string" || !/^visual-target-[1-5]$/.test(subject.visualTargetId)) {
+    return fail(code, "controlledSubject requires one declared visualTargetId");
+  }
+  const subjectDesign = validateSubjectDesignV1(subject.design);
+  if (!subjectDesign.ok || subjectDesign.value === undefined) {
+    return fail(code, "controlledSubject requires the closed registered/composed Subject design");
+  }
   if (
     source.kind !== "native-block-authoring" ||
     source.schemaVersion !== 1 ||
@@ -324,6 +338,7 @@ export function parseNativeBlockAuthoringManifestV1(
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+    controlledSubject: Object.freeze({ visualTargetId: subject.visualTargetId, design: structuredClone(subjectDesign.value) }),
     openingCamera,
     groundExploration: parseNativeBlockGroundExplorationV1(source.groundExploration),
     visualGroups: Object.freeze(visualGroups),
@@ -493,6 +508,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
     authoringManifest.groundExploration,
     reconstructionCase.expected.groundConnectivity.mode,
     [expectedSpawn.xMeters, expectedSpawn.yMeters, expectedSpawn.zMeters],
+    reconstructionCase.expected.groundConnectivity.requireSingleReachableComponent,
   );
   const caseHash = hashWorldReconstructionCaseV1(
     reconstructionCase,

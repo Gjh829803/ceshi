@@ -101,9 +101,12 @@ function exactPlanAndReceiptLock(
     fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
   }
   const assembly = subject.capabilityAssembly;
-  const colliderProfile = runtimeBootstrap.colliderProfiles.find(
-    (candidate) => candidate.colliderProfileRef === lock.colliderProfileRef,
-  );
+  const colliderSource = lock.colliderSource;
+  const colliderProfile = colliderSource.kind === "profile"
+    ? runtimeBootstrap.colliderProfiles.find(
+        (candidate) => candidate.colliderProfileRef === colliderSource.colliderProfileRef,
+      )
+    : undefined;
   const motionKernel = assembly.motionKernels.find(
     (candidate) => candidate.resourceRef === lock.motionKernelRef,
   );
@@ -134,11 +137,15 @@ function exactPlanAndReceiptLock(
   }
   const resourceLocksMatch =
     sha256CanonicalJson(canonicalResourceLock) === lock.resourceLockHash &&
-    resourceLockEntryMatches(
-      lock.colliderProfileRef,
+    (colliderSource.kind === "profile" ? resourceLockEntryMatches(
+      colliderSource.colliderProfileRef,
       "collider-profile",
-      lock.colliderProfileHash,
-    ) &&
+      colliderSource.colliderProfileHash,
+    ) : resourceLockEntryMatches(
+      colliderSource.colliderDerivationProfileRef,
+      "collider-derivation-profile",
+      colliderSource.colliderDerivationProfileHash,
+    )) &&
     resourceLockEntryMatches(
       lock.physicsBodyProfileRef,
       "physics-body-profile",
@@ -211,7 +218,7 @@ function exactPlanAndReceiptLock(
     motionKernel.supportedMediums.includes("ground") &&
     lock.locomotionCapabilityRef ===
       "worldkit://capability/locomotion.ground@1" &&
-    !isNil(colliderProfile) &&
+    (colliderSource.kind === "derive" || (!isNil(colliderProfile) &&
     colliderProfile.supportedBodyTopologies.some(
       (bodyTopology) => bodyTopology === subject.bodyTopology,
     ) &&
@@ -221,7 +228,7 @@ function exactPlanAndReceiptLock(
       heightMeters: subject.collider.heightMeters,
       centerOffsetFromSubjectOriginMetersXYZ:
         subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-    });
+    })));
   if (!compiledMatches) {
     fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
   }

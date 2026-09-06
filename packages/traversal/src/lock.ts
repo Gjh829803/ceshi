@@ -4,6 +4,7 @@ import { isEmpty, isNil, isPlainObject } from "lodash-es";
 import type {
   ResolvedTraversalLockReceiptV1,
   ResolvedTraversalLockV1,
+  TraversalColliderSourceV1,
 } from "./types.js";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -15,8 +16,7 @@ const TRAVERSAL_LOCK_FIELDS = [
   "resourceLockHash",
   "subjectDefinitionRef",
   "subjectDefinitionHash",
-  "colliderProfileRef",
-  "colliderProfileHash",
+  "colliderSource",
   "physicsBodyProfileRef",
   "physicsBodyProfileHash",
   "locomotionProfileRef",
@@ -49,7 +49,6 @@ const TRAVERSAL_LOCK_FIELDS = [
 const TRAVERSAL_LOCK_HASH_FIELDS = [
   "resourceLockHash",
   "subjectDefinitionHash",
-  "colliderProfileHash",
   "physicsBodyProfileHash",
   "locomotionProfileHash",
   "locomotionCapabilityHash",
@@ -65,7 +64,6 @@ const TRAVERSAL_LOCK_HASH_FIELDS = [
 const TRAVERSAL_LOCK_STRING_FIELDS = [
   "subjectEntityId",
   "subjectDefinitionRef",
-  "colliderProfileRef",
   "physicsBodyProfileRef",
   "locomotionProfileRef",
   "locomotionCapabilityRef",
@@ -101,6 +99,31 @@ function requireFiniteNumber(value: unknown, field: string): number {
     failLock(`'${field}' must be a finite number.`);
   }
   return value;
+}
+
+/** Shared exact parser for Lock and Envelope; no Registry lookups or shape inference. */
+export function parseTraversalColliderSourceV1(value: unknown): TraversalColliderSourceV1 {
+  if (!isPlainObject(value)) return failLock("colliderSource must be an object.");
+  const source = value as Record<string, unknown>;
+  const fields = source.kind === "profile"
+    ? ["kind", "colliderProfileRef", "colliderProfileHash"]
+    : source.kind === "derive"
+      ? ["kind", "colliderDerivationProfileRef", "colliderDerivationProfileHash"]
+      : failLock("colliderSource kind must be profile or derive.");
+  if (Object.keys(source).length !== fields.length ||
+    Object.keys(source).some((field) => !fields.includes(field))) {
+    return failLock("colliderSource must contain exactly its declared source fields.");
+  }
+  const ref = source[fields[1]!];
+  const hash = source[fields[2]!];
+  if (typeof ref !== "string" || ref.length === 0 || !isSha256Hash(hash)) {
+    return failLock("colliderSource requires a non-empty ref and lowercase sha256 hash.");
+  }
+  return Object.freeze(source.kind === "profile" ? {
+    kind: "profile", colliderProfileRef: ref, colliderProfileHash: hash,
+  } : {
+    kind: "derive", colliderDerivationProfileRef: ref, colliderDerivationProfileHash: hash,
+  });
 }
 
 export function resolveTraversalLockV1(
@@ -189,8 +212,7 @@ export function resolveTraversalLockV1(
       resourceLockHash: record.resourceLockHash,
       subjectDefinitionRef: record.subjectDefinitionRef,
       subjectDefinitionHash: record.subjectDefinitionHash,
-      colliderProfileRef: record.colliderProfileRef,
-      colliderProfileHash: record.colliderProfileHash,
+      colliderSource: parseTraversalColliderSourceV1(record.colliderSource),
       physicsBodyProfileRef: record.physicsBodyProfileRef,
       physicsBodyProfileHash: record.physicsBodyProfileHash,
       locomotionProfileRef: record.locomotionProfileRef,

@@ -92,12 +92,12 @@ describe("single-job Planner and Builder self-check bundles", () => {
 
       expect(buildBundle.status, buildBundle.stderr || buildBundle.stdout).toBe(0);
       for (const { id, relativePath } of bundles) {
-        expect(await readFile(path.join(root, relativePath))).toEqual(
-          trackedBytesBefore.get(id),
-        );
-        expect(await readFile(path.join(".codex/skills", relativePath))).toEqual(
-          trackedBytesBefore.get(id),
-        );
+        // Compare exact bytes without asking the reporter to expand multi-MB
+        // Buffer diffs on drift; that can exhaust memory before showing a result.
+        expect((await readFile(path.join(root, relativePath)))
+          .equals(trackedBytesBefore.get(id)!), relativePath).toBe(true);
+        expect((await readFile(path.join(".codex/skills", relativePath)))
+          .equals(trackedBytesBefore.get(id)!), `tracked ${relativePath}`).toBe(true);
       }
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -10,6 +10,9 @@ import {
 import {
   HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
   parseHostedFormalCapturePayloadV1,
+  parseRuntimeFlightReportV1,
+  RUNTIME_FLIGHT_REPORT_MAXIMUM_JSON_BYTES_V1,
+  type RuntimeFlightReportV1,
   type FormalHostedWorldCapturePayloadV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
@@ -91,6 +94,15 @@ export interface StartConcreteCaptureOnlyHostedTransportInputV1 {
   readonly readyTimeoutMilliseconds?: number;
   readonly startupStallTimeoutMilliseconds?: number;
   readonly captureTimeoutMilliseconds?: number;
+  /** Advisory only: sink failures never change Capture, cleanup or retry. */
+  readonly onRuntimeFlightDiagnostic?: (value: CaptureRuntimeFlightDiagnosticV1) => void | Promise<void>;
+}
+
+export interface CaptureRuntimeFlightDiagnosticV1 {
+  readonly runtimeSessionId: string;
+  readonly formalRequestHash: `sha256:${string}`;
+  readonly worldPackageRootHash: `sha256:${string}`;
+  readonly report: RuntimeFlightReportV1;
 }
 
 type ServerPortV1 = Pick<
@@ -219,6 +231,46 @@ export async function startCaptureOnlyHostedTransportV1(
   const onFrameNavigated = (frame: Frame) => {
     if (page !== undefined && frame !== page.mainFrame()) fail("FRAME_NAVIGATED");
   };
+  const runtimeFrame = (target: Page | undefined): Frame | undefined => target?.frames().find((candidate) => {
+    if (candidate === target.mainFrame()) return false;
+    try {
+      const url = new URL(candidate.url());
+      return url.protocol === "http:" && url.hostname === "127.0.0.1" &&
+        url.searchParams.get("hosted-formal-capture-frame") === "1" &&
+        url.searchParams.get("runtimeSessionId") === runtimeSessionId &&
+        url.searchParams.get("sessionNonce") === sessionNonce &&
+        url.searchParams.get("formalRequestHash") === formalRequestHash;
+    } catch { return false; }
+  });
+  const collectRuntimeDiagnostic = async (): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const sink = input.onRuntimeFlightDiagnostic;
+      const frame = runtimeFrame(page);
+      if (sink === undefined || frame === undefined) return;
+      // One existing watchdog poll interval for advisory collection, not a new
+      // Capture success gate or an extension of its execution deadline.
+      const deadline = new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), CAPTURE_STARTUP_BUDGET_V1.pollIntervalMilliseconds);
+        timer.unref?.();
+      });
+      const raw = await Promise.race([frame.evaluate((maximumBytes) => {
+        try {
+          const text = window.__WORLDKIT_RUNTIME_DIAGNOSTICS__?.exportJson();
+          return typeof text === "string" && text.length <= maximumBytes &&
+            new TextEncoder().encode(text).byteLength <= maximumBytes ? text : undefined;
+        } catch { return undefined; }
+      }, RUNTIME_FLIGHT_REPORT_MAXIMUM_JSON_BYTES_V1), deadline]);
+      if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > RUNTIME_FLIGHT_REPORT_MAXIMUM_JSON_BYTES_V1) return;
+      const report = parseRuntimeFlightReportV1(JSON.parse(raw));
+      await Promise.race([Promise.resolve().then(() => sink(Object.freeze({
+        runtimeSessionId, formalRequestHash, worldPackageRootHash: request.worldPackageRootHash, report,
+      }))), deadline]);
+    } catch {
+      // Missing/stale/closed frames, malformed data and sink failures are not
+      // business failures. Never expose provider errors or retry the read.
+    } finally { clearTimeout(timer); }
+  };
   const cleanup = (): Promise<CaptureOnlyHostedCleanupOutcomesV1> => {
     if (disposePromise !== undefined) return disposePromise;
     isDisposing = true;
@@ -229,12 +281,14 @@ export async function startCaptureOnlyHostedTransportV1(
     page?.off("crash", onPageCrashed);
     page?.off("framedetached", onFrameDetached);
     page?.off("framenavigated", onFrameNavigated);
-    disposePromise = cleanupOwnedResources({
+    const closeResources = () => cleanupOwnedResources({
       ...(page === undefined ? {} : { page }),
       ...(context === undefined ? {} : { context }),
       ...(browser === undefined ? {} : { browser }),
       ...(server === undefined ? {} : { server }),
     });
+    disposePromise = input.onRuntimeFlightDiagnostic === undefined ? closeResources()
+      : collectRuntimeDiagnostic().then(closeResources);
     return disposePromise;
   };
 
@@ -284,17 +338,7 @@ export async function startCaptureOnlyHostedTransportV1(
       probe: async () => {
         if (!hasCommitted) return { isReady: false, isTerminal: false };
         const phase = await startupPage.evaluate(() => window.__WORLDKIT_HOSTED_FORMAL_CAPTURE__?.phase());
-        const frame = startupPage.frames().find((candidate) => {
-          if (candidate === startupPage.mainFrame()) return false;
-          try {
-            const url = new URL(candidate.url());
-            return url.protocol === "http:" && url.hostname === "127.0.0.1" &&
-              url.searchParams.get("hosted-formal-capture-frame") === "1" &&
-              url.searchParams.get("runtimeSessionId") === runtimeSessionId &&
-              url.searchParams.get("sessionNonce") === sessionNonce &&
-              url.searchParams.get("formalRequestHash") === formalRequestHash;
-          } catch { return false; }
-        });
+        const frame = runtimeFrame(startupPage);
         const runtime = await frame?.evaluate(() => window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__);
         return { isReady: phase === "ready", isTerminal: phase === "terminated" || phase === "disposed",
           ...(runtime === undefined ? {} : { runtime }) };
@@ -389,6 +433,7 @@ export function createCaptureOnlyHostedTransportStarterV1(
     readyTimeoutMilliseconds?: number;
     startupStallTimeoutMilliseconds?: number;
     captureTimeoutMilliseconds?: number;
+    onRuntimeFlightDiagnostic?: NonNullable<StartConcreteCaptureOnlyHostedTransportInputV1["onRuntimeFlightDiagnostic"]>;
   }>,
   ports: CaptureOnlyHostedTransportPortsV1 = defaultPorts,
 ): StartCaptureOnlyHostedTransportV1<

@@ -99,6 +99,7 @@ export type NativeBlockGroundExplorationV1 =
         id: string;
         centerlineStandPositionsMetersXYZ: readonly (readonly [number, number, number])[];
         halfWidthMeters: number;
+        isBidirectional: boolean;
       }>[];
     }>;
 
@@ -121,30 +122,31 @@ export function parseNativeBlockGroundExplorationV1(input: unknown): NativeBlock
       standPositionMetersXYZ: tuple3(row.standPositionMetersXYZ, `${itemPath}/standPositionMetersXYZ`),
     });
   });
-  sortedUnique(requiredTargets.map(({ id }) => id), "requiredTargets/id");
-  if (requiredTargets.length > 256 || !requiredTargets.some(({ region }) => region === "middle") ||
-      !requiredTargets.some(({ region }) => region === "remote") ||
-      new Set(requiredTargets.map(({ standPositionMetersXYZ }) => JSON.stringify(standPositionMetersXYZ))).size !== requiredTargets.length) {
-    fail("requiredTargets", "must contain sorted unique IDs, distinct positions, and both middle and remote anchors");
+  if (new Set(requiredTargets.map(({ id }) => id)).size !== requiredTargets.length) {
+    fail("requiredTargets/id", "must contain unique IDs");
+  }
+  if (new Set(requiredTargets.map(({ standPositionMetersXYZ }) => JSON.stringify(standPositionMetersXYZ))).size !== requiredTargets.length) {
+    fail("requiredTargets", "must contain distinct positions");
   }
   const requiredTraversalBands = exactArray(probe.requiredTraversalBands, "requiredTraversalBands").map((entry, index) => {
     const itemPath = `requiredTraversalBands/${index}`;
-    const row = exactRecord(entry, ["id", "centerlineStandPositionsMetersXYZ", "halfWidthMeters"], [], itemPath);
+    const row = exactRecord(entry, ["id", "centerlineStandPositionsMetersXYZ", "halfWidthMeters", "isBidirectional"], [], itemPath);
     const points = exactArray(row.centerlineStandPositionsMetersXYZ, `${itemPath}/centerlineStandPositionsMetersXYZ`)
       .map((point, pointIndex) => tuple3(point, `${itemPath}/centerlineStandPositionsMetersXYZ/${pointIndex}`));
     if (points.length < 2 || points.length > 256 || points.some((point, pointIndex) => pointIndex > 0 && isEqual(point, points[pointIndex - 1]))) {
       fail(itemPath, "must contain 2-256 distinct consecutive waypoints");
     }
     if (typeof row.halfWidthMeters !== "number" || !Number.isFinite(row.halfWidthMeters) || row.halfWidthMeters <= 0) fail(itemPath, "halfWidthMeters must be positive and finite");
+    if (typeof row.isBidirectional !== "boolean") fail(itemPath, "isBidirectional must be an explicit boolean");
     return Object.freeze({
       id: stableId(row.id, `${itemPath}/id`),
       centerlineStandPositionsMetersXYZ: Object.freeze(points),
       halfWidthMeters: row.halfWidthMeters as number,
+      isBidirectional: row.isBidirectional as boolean,
     });
   });
-  sortedUnique(requiredTraversalBands.map(({ id }) => id), "requiredTraversalBands/id");
-  if (requiredTraversalBands.length === 0) {
-    fail("requiredTraversalBands", "must contain at least one band");
+  if (new Set(requiredTraversalBands.map(({ id }) => id)).size !== requiredTraversalBands.length) {
+    fail("requiredTraversalBands/id", "must contain unique IDs");
   }
   return Object.freeze({ mode: "source-authored", requiredTargets: Object.freeze(requiredTargets), requiredTraversalBands: Object.freeze(requiredTraversalBands) });
 }
@@ -153,12 +155,23 @@ export function admitNativeBlockGroundExplorationV1(
   input: unknown,
   mode: NativeBlockGroundExplorationV1["mode"],
   spawnPositionMetersXYZ: readonly [number, number, number],
+  requireSingleReachableComponent: boolean,
 ): NativeBlockGroundExplorationV1 {
+  if (typeof requireSingleReachableComponent !== "boolean") {
+    fail("groundExploration", "requires the explicit frozen Case connectivity policy");
+  }
   const intent = parseNativeBlockGroundExplorationV1(input);
   if (intent.mode !== mode) fail("groundExploration/mode", "must match the frozen Case policy");
   if (intent.mode === "case-defined") return intent;
   if (intent.requiredTargets.some(({ standPositionMetersXYZ }) => isEqual(standPositionMetersXYZ, spawnPositionMetersXYZ))) {
     fail("requiredTargets", "exploration anchors must not duplicate Spawn");
+  }
+  // Pinned old Builder requires the region/entry minima only for ground-only
+  // intent. Optional declared rows remain valid evidence under either policy.
+  if (!requireSingleReachableComponent) return intent;
+  if (!intent.requiredTargets.some(({ region }) => region === "middle") ||
+      !intent.requiredTargets.some(({ region }) => region === "remote")) {
+    fail("requiredTargets", "connected ground requires both middle and remote anchors");
   }
   if (!intent.requiredTraversalBands.some((band) =>
     isEqual(band.centerlineStandPositionsMetersXYZ[0], spawnPositionMetersXYZ) &&

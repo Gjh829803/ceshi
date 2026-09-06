@@ -447,20 +447,46 @@ production palette acceptance to hide this rendering defect.
 
 ### CF-11 source-authored ground exploration
 
-Legacy `9e35ab53` Block Builder Skill requires real middle/remote exploration
-anchors and a spawn-to-middle honest-width band, authored in the same Builder
-task from the frozen Brief and World Plan. Current Native restores this as pure
+Legacy `9e35ab53` Block Builder requires real middle/remote exploration
+anchors and a spawn-to-middle honest-width band when every Brief movement mode
+is ground-walk, ground-slide, ground-ride or ground-drive. These are authored in
+the same Builder task from the frozen Brief and World Plan. Current Native restores this as pure
 `groundExploration` data in the existing authoring sidecar, not a third Source,
 Planner Runtime coordinates, new model task or product Route/Nav authority.
 
 The required Case `groundConnectivity.mode` selects `case-defined` or
 `source-authored`. Case-defined keeps immutable metric bands and their existing
-strict bindings. Source-authored requires ground Spawn, one reachable component
-and no pre-invented metric bands; the required sidecar selects the same mode and
-declares distinct sorted middle/remote stand anchors and honest-width waypoint
-bands. At least one band starts at exact Spawn and ends at a middle anchor.
-Current ground is bidirectional; directed transitions are not activated here.
+strict bindings. Source-authored requires no pre-invented metric bands. Host
+derives the existing single-component boolean from the same parsed Brief byte
+snapshot used to bind the Palette semantic Hash, not from Palette mode labels
+or a guessed Subject shape. All-ground intent requires one reachable component;
+mixed/free-space intent permits false, including with a ground Spawn. An air
+Spawn cannot require a single ground component. The required sidecar selects the
+same mode. With true policy it declares distinct middle/remote stand
+anchors and honest-width bands, including exact Spawn to a middle anchor. With
+false policy the arrays may be empty; every declared row still undergoes validity
+and actual Ground checks. Match the old target rule: false permits a standable
+target disconnected from Spawn, retaining its unreachable measurement without a
+target-connectivity failure or forced step-frontier repair. It does not waive
+target support, clearance, exact topology or a declared band's local reachability.
+True still requires both target and whole-component connectivity. Optional
+evidence does not implement unsupported motion.
+Each source-authored band preserves the old explicit `isBidirectional` boolean:
+forward reachability is always required, reverse reachability only when true.
+Authors use true unless the Brief explicitly calls for one-way traversal. The
+flag binds validation intent and metadata/Package hashes; it does not create
+one-way geometry or activate directed transitions. Current ground remains
+bidirectional. Existing case-defined bands retain that bidirectional contract;
+the Host projects true without adding a sidecar override or changing Case bytes.
 There are no new distance, area or chunk minima and no image-quality veto.
+The old per-band 2-256 waypoint constraint remains exact; it is not a ceiling on
+the total number of exploration anchors. Parser and Ground must validate all
+declared anchors rather than introduce a separate 256-target veto. Existing
+output-byte, geometry and Ground cell budgets remain unchanged.
+Target and band IDs are unique within their own lists, as in the old checker;
+authored list order is preserved through metadata and bound by its Hash, not
+rejected or silently sorted. Waypoint order remains the actual traversal course.
+This does not relax ordering of derived materializer inventories or resource refs.
 
 One shared parser/admission checks syntax and policy in the portable Builder
 self-check and Host. Host binds the complete source intent through the existing
@@ -470,7 +496,9 @@ Frozen Contributions. Ground anchors/bands have independent local IDs but may
 diagnose the same Case ground obligation; they do not create visual-target rows.
 The original Case/Request/Bootstrap bytes and hashes are never rewritten after
 generation. Case-defined source cannot override fixed routes; source-authored source
-cannot downgrade to empty exploration or measurement-only ground.
+cannot change the frozen policy. Optional arrays do not waive actual ground-Spawn
+support, footprint or clearance, and do not change the existing expected-medium
+failure policy.
 
 This changes ordinary Ground input ownership to the old-equivalent declaration
 pattern, not the production success authority or repair budget. R5 below removes

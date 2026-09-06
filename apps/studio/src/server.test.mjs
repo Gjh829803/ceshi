@@ -1634,7 +1634,7 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "interrupted-r
   });
 }
 
-for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-run", "stale-capture", "explicit-failure", "late-exit-one", "late-host-finalization", "late-alignment", "late-poll-retry", "late-poll-shutdown", "cancelled"]) {
+for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-run", "stale-capture", "explicit-failure", "late-exit-one", "late-host-finalization", "late-alignment", "late-poll-retry", "late-poll-shutdown", "cancelled", "full-delivered", "full-old-pixels", "full-pending", "full-stale-run", "full-stale-capture", "full-cancelled", "full-running"]) {
   test(`Native visual restart ${recoveryMode} uses retained whitebox without launching tasks`, async () => {
     const dataRoot = await temporaryRoot(".native-restart-data-");
     const fakeRepoRoot = await temporaryRoot(".native-restart-repo-");
@@ -1685,18 +1685,24 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
     const stopped = JSON.parse(await readFile(recordPath, "utf8"));
     assert.equal(stopped.failedStage, "visual-imagegen");
     assert.equal(stopped.captureStatus, "passed");
-    if (recoveryMode === "old-pixels") {
+    if (recoveryMode.startsWith("full-")) {
+      const run = JSON.parse(await readFile(path.join(root, "evaluation-run.json"), "utf8"));
+      assert.equal(run.executionMode, "full", "this must not depend on a prior explicit visual retry");
+      assert.equal(stopped.codexBackend, "cloud");
+      if (recoveryMode !== "full-old-pixels") await rm(path.join(root, "styled-triviews-report.json"));
+    }
+    if (["old-pixels", "full-old-pixels"].includes(recoveryMode)) {
       const manifest = JSON.parse(await readFile(path.join(root, "styled-triviews-manifest.json"), "utf8"));
       for (const file of ["styled-opening-frame.png", ...manifest.targets.map(target => target.styledTriview.path)])
         await utimes(path.join(root, file), new Date(0), new Date(0));
     }
     if (recoveryMode === "missing-image") await rm(path.join(root, "triviews/visual-target-1/styled-triview.png"));
-    if (recoveryMode === "stale-run") {
+    if (["stale-run", "full-stale-run"].includes(recoveryMode)) {
       const file = path.join(root, "evaluation-run.json");
       const run = JSON.parse(await readFile(file, "utf8"));
       await writeFile(file, JSON.stringify({ ...run, attempt: run.attempt + 1 }));
     }
-    if (recoveryMode === "stale-capture") await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
+    if (["stale-capture", "full-stale-capture"].includes(recoveryMode)) await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
     if (recoveryMode === "explicit-failure") await writeFile(recordPath, JSON.stringify({ ...stopped,
       status: "failed", stage: "failed", error: "visual generation failed", failedStage: "visual-imagegen" }));
     if (recoveryMode.startsWith("late-")) {
@@ -1706,18 +1712,19 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
       if (recoveryMode === "late-host-finalization" || recoveryMode.startsWith("late-poll")) await rm(path.join(root, "styled-triviews-report.json"));
       if (recoveryMode === "late-alignment") await writeFile(path.join(dataRoot, "worlds", created.id, "agent.log"), "alignment failed\n");
     }
-    if (recoveryMode === "cancelled") await writeFile(recordPath, JSON.stringify({ ...stopped, outcome: "cancelled" }));
+    if (["cancelled", "full-cancelled"].includes(recoveryMode)) await writeFile(recordPath, JSON.stringify({ ...stopped, outcome: "cancelled" }));
+    if (recoveryMode === "full-running") await writeFile(recordPath, JSON.stringify({ ...stopped, status: "running", stage: "visual-imagegen", failedStage: null }));
     const receiptPath = path.join(root, "final/capture/formal-world-capture-receipt.json");
     const receiptBefore = await readFile(receiptPath);
     let dispatchCount = 0;
     let replayCount = 0;
-    let allowDelivery = !recoveryMode.startsWith("late-poll");
+    let allowDelivery = !recoveryMode.startsWith("late-poll") && recoveryMode !== "full-pending";
     let entered;
     let release;
     const enteredReplay = new Promise(resolve => { entered = resolve; });
     const releaseReplay = new Promise(resolve => { release = resolve; });
     const second = createStudio({ ...config, autoRunJobs: true,
-      autoRecoverVisualDeliveries: recoveryMode.startsWith("late-poll"),
+      autoRecoverVisualDeliveries: recoveryMode.startsWith("late-poll") || recoveryMode.startsWith("full-"),
       nativeVisualRecoveryImplementation: async input => {
         replayCount++;
         if (!allowDelivery) throw new Error("VISUAL_TASK_NOT_DELIVERED");
@@ -1734,6 +1741,15 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
       worldSpawnImplementation: () => { dispatchCount++; throw new Error("recovery must not launch a task"); } });
     const nextOrigin = await listen(second);
     try {
+      if (recoveryMode === "full-pending") {
+        await second.reconcileVisualDeliveries();
+        assert.ok(replayCount > 0, "an interrupted full run must reconcile its original delivery");
+        const pending = JSON.parse(await readFile(recordPath, "utf8"));
+        assert.equal(pending.status, "interrupted");
+        assert.equal(pending.attempt, 1);
+        allowDelivery = true;
+        await second.reconcileVisualDeliveries();
+      }
       if (recoveryMode.startsWith("late-poll")) {
         await second.reconcileVisualDeliveries();
         allowDelivery = true;
@@ -1754,9 +1770,10 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
         assert.equal((await retry).status, 409, "recovery completed before retry; do not start a second attempt");
       }
       const { world } = await (await fetch(`${nextOrigin}/api/worlds/${created.id}`)).json();
-      assert.equal(world.status, ["complete", "late-exit-one", "late-host-finalization", "late-poll-retry"].includes(recoveryMode) ? "ready" :
+      assert.equal(world.status, ["complete", "late-exit-one", "late-host-finalization", "late-poll-retry", "full-delivered", "full-old-pixels", "full-pending", "full-running"].includes(recoveryMode) ? "ready" :
         ["explicit-failure", "late-alignment"].includes(recoveryMode) ? "failed" : "interrupted", world.error);
-      if (recoveryMode !== "late-poll-retry") assert.equal(replayCount, recoveryMode === "late-host-finalization" ? 1 : 0);
+      if (!["late-poll-retry", "full-pending"].includes(recoveryMode)) assert.equal(replayCount,
+        ["late-host-finalization", "full-delivered", "full-old-pixels", "full-running"].includes(recoveryMode) ? 1 : 0);
       assert.equal(world.productionOutcome, "passed");
       assert.equal(world.strictDiagnosticOutcome, "failed");
       assert.equal(dispatchCount, 0);

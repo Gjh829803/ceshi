@@ -564,7 +564,7 @@ describe("world reconstruction contracts", () => {
     })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
-  it("binds source-authored ground policy without inventing metric bands or allowing an air downgrade", () => {
+  it("binds source-authored ground policy without inventing metric bands or ignoring optional ground", () => {
     const value = caseValue();
     const expected = { ...value.expected, groundConnectivity: {
       mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
@@ -574,9 +574,16 @@ describe("world reconstruction contracts", () => {
     expect(hashWorldReconstructionCaseV1(parsed)).not.toBe(hashWorldReconstructionCaseV1(value));
     for (const groundConnectivity of [
       { ...expected.groundConnectivity, mode: undefined },
-      { ...expected.groundConnectivity, requireSingleReachableComponent: false },
       { ...expected.groundConnectivity, requiredTraversalBands: value.expected.groundConnectivity.requiredTraversalBands },
     ]) expect(() => parseWorldReconstructionCaseV1({ ...value, expected: { ...expected, groundConnectivity } })).toThrow();
+    const optional = parseWorldReconstructionCaseV1({ ...value, expected: { ...expected,
+      groundConnectivity: { ...expected.groundConnectivity, requireSingleReachableComponent: false },
+    } });
+    expect(optional.expected.groundConnectivity.requireSingleReachableComponent).toBe(false);
+    expect(hashWorldReconstructionCaseV1(optional)).not.toBe(hashWorldReconstructionCaseV1(parsed));
+    expect(parseWorldReconstructionCaseV1({ ...optional, expected: { ...optional.expected,
+      spawnSupport: { ...optional.expected.spawnSupport, expectedMedium: "air" },
+    } }).expected.groundConnectivity.requireSingleReachableComponent).toBe(false);
     expect(() => parseWorldReconstructionCaseV1({ ...value, expected: {
       ...expected, spawnSupport: { ...expected.spawnSupport, expectedMedium: "air" },
     } })).toThrow();

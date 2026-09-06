@@ -819,7 +819,7 @@ export class CameraDirectorV1 {
     deltaSeconds: number,
     cameraContextSample: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
-  ): void {
+  ): "unchanged" | "committed" | "reset" {
     if (this.disposed) {
       throw new Error("3C_RUNTIME_DISPOSED: CameraDirector is disposed.");
     }
@@ -845,8 +845,8 @@ export class CameraDirectorV1 {
         );
       }
       // Profile, preview, and Orbit mutations are staged in Director state.
-      // A committed Tick owns at most one collision query and one pose commit.
-      return;
+      // A committed Tick owns at most one collision query batch and pose commit.
+      return "unchanged";
     }
     this.latestCommittedTick = committedContext.committedTick;
     this.latestCommittedContextIdentity = committedContextIdentity;
@@ -854,6 +854,7 @@ export class CameraDirectorV1 {
     const beforeTransaction = this.captureTransactionState();
     const beforeSpringArmTransaction = springArm.captureTransactionState();
     try {
+    let didResetPose = !this.initialized;
     const sample = viewTargetFromCommittedCameraContextV2(
       viewTargetSample,
       committedContext,
@@ -943,6 +944,7 @@ export class CameraDirectorV1 {
     const targetIdentityChanged = this.initialized &&
       this.activeTargetEntityId !== undefined &&
       this.activeTargetEntityId !== sample.entityId;
+    if (targetIdentityChanged) didResetPose = true;
     const selectionChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
@@ -998,6 +1000,7 @@ export class CameraDirectorV1 {
       this.initialized = false;
       springArm.reset();
       this.transitionDurationSeconds = 0;
+      didResetPose = true;
     }
     this.lastBaseTarget = baseTarget.clone();
     if (
@@ -1122,10 +1125,7 @@ export class CameraDirectorV1 {
           this.smoothedTarget.z +
             (view.desiredTarget.z - this.smoothedTarget.z) * yawAlpha,
         );
-    const targetDelta = resolvedTarget.subtract(view.desiredTarget);
-    const idealPosition = firstPerson
-      ? view.desiredPosition
-      : view.desiredPosition.add(targetDelta);
+    const idealPosition = view.desiredPosition;
     const requestedArmLengthMeters = view.requestedArmLengthMeters;
     let dampedPosition = new Vector3(
       this.camera.position.x +
@@ -1183,16 +1183,6 @@ export class CameraDirectorV1 {
         (nextFov - this.transitionStartFovRadians) * transitionAlpha;
     }
     if (targetIdentityChanged) proposedTarget = resolvedTarget;
-    if (!firstPerson && requestedArmLengthMeters !== undefined &&
-      profileTransitionProgressRatio >= 1) {
-      const proposedArm = proposedPosition.subtract(proposedTarget);
-      if (proposedArm.lengthSquared() >
-        requestedArmLengthMeters * requestedArmLengthMeters) {
-        proposedPosition = proposedTarget.add(
-          proposedArm.normalize().scale(requestedArmLengthMeters),
-        );
-      }
-    }
 
     let finalPosition = proposedPosition;
     let finalTarget = proposedTarget;
@@ -1212,8 +1202,10 @@ export class CameraDirectorV1 {
         collision = springArm.solve({
           committedTick: committedContext.committedTick,
           excludedEntityIds: [sample.entityId],
-          desiredTarget: proposedTarget,
-          desiredPosition: proposedPosition,
+          desiredTarget: view.desiredTarget,
+          resolvedTarget: proposedTarget,
+          desiredPosition: idealPosition,
+          unconstrainedPosition: proposedPosition,
           // Before the Director has published a pose, Babylon's FreeCamera is
           // still at its construction origin. Treat the proposed first pose as
           // the emergency candidate and let SpringArm's second geometry query
@@ -1312,10 +1304,49 @@ export class CameraDirectorV1 {
       ),
     };
     this.latestUpdateFailed = false;
+    return didResetPose ? "reset" : "committed";
     } catch (error) {
       this.restoreTransactionState(beforeTransaction);
       springArm.restoreTransactionState(beforeSpringArmTransaction);
       throw error;
+    }
+  }
+
+  /** Read-only validation of a display-only sample; never advances Camera state. */
+  isRenderPoseSafe(
+    previousPosition: RuntimeVec3V1,
+    currentPosition: RuntimeVec3V1,
+    sampledPosition: Vector3,
+    sampledTarget: Vector3,
+  ): boolean {
+    if (!this.initialized || this.latestUpdateFailed || this.latestCommittedTick === undefined ||
+      this.activeTargetEntityId === undefined || this.activeParameters === undefined) return false;
+    const committedTick = this.latestCommittedTick;
+    const radiusMeters = this.activeParameters.collisionRadiusMeters;
+    const excludedEntityIds = Object.freeze([this.activeTargetEntityId]);
+    const queryIsClear = (start: RuntimeVec3V1, end: RuntimeVec3V1): boolean => {
+      const hit = this.cameraGeometryQuery.query({
+        schemaVersion: 2,
+        committedTick,
+        startPositionMetersXYZ: start,
+        endPositionMetersXYZ: end,
+        radiusMeters,
+        collisionMask: "camera-hard",
+        excludedEntityIds,
+        maximumHitCount: 1,
+      });
+      return hit === undefined || (!hit.startedOverlapping &&
+        hit.travelDistanceMeters >= Vector3.Distance(new Vector3(...start), new Vector3(...end)) - 1e-5);
+    };
+    try {
+      // Safe endpoints do not prove a safe interpolation segment across a corner.
+      if (!new Vector3(...previousPosition).equals(new Vector3(...currentPosition)) &&
+        !queryIsClear(previousPosition, currentPosition)) return false;
+      return queryIsClear(freezeVec3(sampledTarget), freezeVec3(sampledPosition));
+    } catch {
+      // A rendering sample cannot fail ordinary production or create a repair;
+      // retain the already committed pose when interpolation cannot be verified.
+      return false;
     }
   }
 

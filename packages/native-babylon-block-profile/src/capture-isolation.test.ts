@@ -206,7 +206,7 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(isolation.maskedThinInstanceCount).toBe(0);
     expect(fixture.batchMesh.isVisible).toBe(false);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.96, 0.96, 0.96]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
 
     isolation.restore();
     expect(fixture.batchMesh.isVisible).toBe(true);
@@ -268,6 +268,6 @@ describe("NBR-65F formal Capture target isolation", () => {
       targetBlockIds: ["route-0", "route-0"],
     })).toThrow(/WORLDKIT_NATIVE_BLOCK_CAPTURE_ISOLATION_INVALID/);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.96, 0.96, 0.96]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
   });
 });

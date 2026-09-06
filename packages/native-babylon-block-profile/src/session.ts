@@ -12,7 +12,6 @@ import { isEqual, isNil } from "lodash-es";
 
 import {
   createBabylonNativeBlockVisualsV1,
-  validateBabylonNativeBlockDisplayGapV1,
 } from "./babylon-visual-adapter.js";
 import {
   failBabylonNativeBlockProfileBuildV1 as fail,
@@ -99,7 +98,6 @@ export interface BabylonNativeBlockGridCreateInputV1 {
 }
 
 export interface BabylonNativeBlockProfileFinalizeInputV1 {
-  readonly displayGapMeters?: number;
   readonly staticColliders:
     readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }
@@ -153,7 +151,6 @@ const PALETTE_ROLES = new Set<BabylonNativeBlockPaletteRoleV1>(
 const QUARTER_TURNS = new Set<number>(
   BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
 );
-const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 const GROUND_BOUNDARY_POLICY = Object.freeze({
   kind: "babylon-native-block-ground-boundary-policy" as const,
   schemaVersion: 1 as const,
@@ -538,19 +535,10 @@ function stableCompare(left: string, right: string): number {
 function parseFinalizeInput(
   input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
 ): Readonly<{
-  displayGapMeters: number;
   staticColliders: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }> {
   const code = "WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID";
-  const record = exactPlainRecord(input, ["staticColliders"],
-    ["displayGapMeters"], code);
-  const displayGapMeters = Object.hasOwn(record, "displayGapMeters")
-    ? record.displayGapMeters
-    : DEFAULT_DISPLAY_GAP_METERS;
-  if (typeof displayGapMeters !== "number" ||
-      !Number.isFinite(displayGapMeters) || displayGapMeters < 0) {
-    return fail(code, "displayGapMeters must be finite and non-negative");
-  }
+  const record = exactPlainRecord(input, ["staticColliders"], [], code);
   const staticColliders = exactArray(record.staticColliders, code)
     .map(parseSelection)
     .sort((left, right) => stableCompare(left.id, right.id));
@@ -572,7 +560,6 @@ function parseFinalizeInput(
     geometrySourceKeys.add(geometrySourceKey);
   }
   return Object.freeze({
-    displayGapMeters: Object.is(displayGapMeters, -0) ? 0 : displayGapMeters,
     staticColliders: Object.freeze(staticColliders),
   });
 }
@@ -714,7 +701,6 @@ export function createBabylonNativeBlockProfileSessionV1(
     for (const key of microCellKeys) {
       blockIdByMicroCellKey.set(key, parsedInput.id);
     }
-    acquisitions.push(() => mesh.dispose());
     return mesh;
   }
 
@@ -745,7 +731,11 @@ export function createBabylonNativeBlockProfileSessionV1(
     const meshes: Mesh[] = [];
     try {
       for (const [index, parsedInput] of parsedInputs.entries()) {
-        meshes.push(allocate(parsedInput, microCellKeysByInput[index]!));
+        const mesh = allocate(parsedInput, microCellKeysByInput[index]!);
+        // Capture only this iteration's Mesh, outside allocate's lexical
+        // environment: retaining its sceneMeshesBefore Set costs O(n²) space.
+        acquisitions.push(() => mesh.dispose());
+        meshes.push(mesh);
       }
     } catch (error) {
       const primaryError = error instanceof AllocationFailure
@@ -816,15 +806,9 @@ export function createBabylonNativeBlockProfileSessionV1(
             checkedLayout.checkResult.diagnostics.map(({ code }) => code)
               .join(", ") || "the checked Layout was rejected");
         }
-        validateBabylonNativeBlockDisplayGapV1(
-          checkedLayout.layout,
-          parsedInput.displayGapMeters,
-          "WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID",
-        );
         const profileInventory =
           createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1({
             checkedLayout,
-            displayGapMeters: parsedInput.displayGapMeters,
             selections: parsedInput.staticColliders,
           });
         const logicalGroundModel =
@@ -844,7 +828,6 @@ export function createBabylonNativeBlockProfileSessionV1(
           scene: context.scene,
           buildEpochId: context.bootstrap.id,
           checkedLayout,
-          displayGapMeters: parsedInput.displayGapMeters,
         });
         acquisitions.push(() => visuals.dispose());
         const colliders = materializeBabylonNativeBlockWalkableTopologyV1({
@@ -865,7 +848,6 @@ export function createBabylonNativeBlockProfileSessionV1(
         const profileInventoryHash = settleBabylonNativeBlockProfileV1({
           context,
           checkedLayout,
-          displayGapMeters: parsedInput.displayGapMeters,
           colliderInventory: colliders.colliderInventory,
           walkableOverlays: colliders.walkableOverlays,
           expectedProfileInventoryHash: profileInventory.profileInventoryHash,

@@ -117,7 +117,6 @@ function moduleFixture(
           }
         }
         session.finalize({
-          displayGapMeters: 0.04,
           staticColliders: [{
             id: "ground",
             colliderGeometrySource: Object.freeze({
@@ -150,7 +149,6 @@ function moduleFixture(
         centerMetersXYZ: [0, -0.5, 0],
       });
       session.finalize({
-        displayGapMeters: 0.04,
         staticColliders: [{
           id: "ground",
           colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "ground-block" }),

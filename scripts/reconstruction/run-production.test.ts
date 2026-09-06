@@ -79,14 +79,6 @@ const REAL_CASE_ROOT = path.join(
   "scenes",
   "cloud-temple-t-gate-native-block",
 );
-const REAL_HOST_CLOSURE_ROOT = path.join(
-  REPOSITORY_ROOT,
-  "apps",
-  "playground",
-  "public",
-  "world-packages",
-  "cloud-ridge",
-);
 const CASE_ID = "cloud-temple-t-gate-native-block";
 const RUN_ID = "p-test-run";
 const CASE_REF =
@@ -170,16 +162,6 @@ async function fixture(): Promise<ProductionFixtureV1> {
     recursive: true,
     filter: (sourcePath) => !excludedEvidenceRoots.has(sourcePath),
   });
-  const hostClosureRoot = path.join(
-    repositoryRoot,
-    "apps",
-    "playground",
-    "public",
-    "world-packages",
-    "cloud-ridge",
-  );
-  await mkdir(path.dirname(hostClosureRoot), { recursive: true });
-  await cp(REAL_HOST_CLOSURE_ROOT, hostClosureRoot, { recursive: true });
   return Object.freeze({
     repositoryRoot,
     caseRoot,
@@ -1581,8 +1563,7 @@ describe("runWorldReconstructionProductionV1", () => {
     bundle.corePorts.rehashOwnerIdentities.mockImplementationOnce(async () => ({
       caseHash: H("a"),
       evaluationProfileHash: H("b"),
-      gameplayBootstrapHash: H("c"),
-      worldRuntimeBootstrapHash: H("d"),
+      subjectHostContextHash: H("c"),
       worldBoundsPolicyHash: H("e"),
       bootstrapInputHash: H("f"),
     }));
@@ -1769,31 +1750,19 @@ describe("runWorldReconstructionProductionV1", () => {
       .toMatchObject({ code: "ENOENT" });
   });
 
-  it("does not create a run directory when Host closure validation fails", async () => {
+  it("does not read a preselected Cloud Ridge Host closure when starting production", async () => {
     const value = await fixture();
-    await writeFile(
-      path.join(
-        value.repositoryRoot,
-        "apps",
-        "playground",
-        "public",
-        "world-packages",
-        "cloud-ridge",
-        "registry-lock.json",
-      ),
-      "{}\n",
-    );
+    const retiredPath = path.join(value.repositoryRoot,
+      "apps/playground/public/world-packages/cloud-ridge/registry-lock.json");
+    await mkdir(path.dirname(retiredPath), { recursive: true });
+    await writeFile(retiredPath, "{}\n");
     const receipt = await receiptFor(value);
     const { owners } = ownersFor(value, receipt);
-
-    await expect(run(value, owners)).rejects.toThrow(
-      "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-    );
-    await expect(lstat(value.outputDirectoryPath)).rejects.toMatchObject({
-      code: "ENOENT",
+    await expect(run(value, owners)).resolves.toMatchObject({
+      productionOutcome: "passed", publicationOutcome: "published",
     });
-    expect(owners.createRunPorts).not.toHaveBeenCalled();
-    expect(owners.runCore).not.toHaveBeenCalled();
+    expect(owners.createRunPorts).toHaveBeenCalledOnce();
+    expect(owners.runCore).toHaveBeenCalledOnce();
   });
 
   it("records returned strict diagnostics without vetoing production publication", async () => {

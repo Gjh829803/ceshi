@@ -490,6 +490,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../native-babylon

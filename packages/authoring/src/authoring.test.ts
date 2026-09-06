@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 
@@ -18,6 +20,13 @@ import {
 } from "./test-fixture";
 
 const validSpec = createValidAuthoringSpec();
+
+it("keeps the browser Subject validators byte-identical to their Authoring schemas", () => {
+  const result = spawnSync(process.execPath, [
+    "--import", "tsx", "scripts/contracts/build-subject-validators.ts",
+  ], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), encoding: "utf8" });
+  expect(result.status, result.stderr.slice(-1200)).toBe(0);
+}, 15_000);
 
 describe("current AuthoringSpec", () => {
   it("admits only an exact registered Subject design, without silently composing or selecting a fallback", () => {

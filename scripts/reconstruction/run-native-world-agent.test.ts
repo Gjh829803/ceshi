@@ -38,8 +38,10 @@ describe("Native-default world agent Host route", () => {
     expect(source).toContain('"babylon-native"');
     expect(source).toContain("deriveNativeWorldBaselineProposalV1");
     expect(source).toContain("parseSceneBriefV1");
-    expect(source).toContain("sceneBriefSemanticHash:");
-    expect(source).toContain("sceneBrief.sceneBriefHash");
+    expect(source).toContain("const sceneBriefBytes = await readFile(briefPath)");
+    expect(source).toContain("parseSceneBriefV1(sceneBriefBytes.toString(\"utf8\"))");
+    expect(source).toMatch(/deriveNativeWorldBaselineProposalV1\(\{\s*sceneId: request.sceneId,\s*sceneBriefBytes,/);
+    expect(source).not.toContain("sceneBriefSemanticHash:");
     expect(source).toContain("validateNativeWorldPlannerInputClosureV1");
     expect(source).toContain("copyAcceptedPlannerExecutionV1({");
     expect(source).toContain("verifyAcceptedPlannerExecutionV1({");

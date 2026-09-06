@@ -29,7 +29,7 @@ function extent(
 describe("NBR-65F Chunk policy owner", () => {
   it("publishes a closed candidate set with one frozen current policy", () => {
     expect(BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1.map(({ id }) => id))
-      .toEqual(["chunk-xz-2m", "chunk-xz-4m", "chunk-xz-8m", "chunk-xz-16m"]);
+      .toEqual(["chunk-xz-2m", "chunk-xz-4m", "chunk-xz-8m", "chunk-xz-16m", "chunk-xz-32m"]);
     expect(BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1).toContain(CURRENT);
     expect(CURRENT.sizeMetersXZ).toEqual([4, 4]);
     expect(CURRENT.originMetersXZ).toEqual([-0.5, -0.5]);
@@ -43,14 +43,35 @@ describe("NBR-65F Chunk policy owner", () => {
         .toEqual(candidate);
     }
     expect(new Set(BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1
-      .map(hashBabylonNativeBlockChunkPolicyV1)).size).toBe(4);
+      .map(hashBabylonNativeBlockChunkPolicyV1)).size).toBe(5);
+  });
+
+  it("CF-20 exposes the old 32m edge for measurement without inventing old cluster identity", () => {
+    const candidate = BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1.find(({ id }) => id === "chunk-xz-32m");
+    expect(candidate).toBeDefined();
+    expect(candidate!.sizeMetersXZ).toEqual([32, 32]);
+    expect(babylonNativeBlockChunkBoundsMetersXZV1(candidate!, [-1, 1])).toEqual({
+      minimumMetersXZ: [-32.5, 31.5], maximumMetersXZ: [-0.5, 63.5],
+    });
+    for (const center of [-65, -64, -33, -32, -1, 0, 31, 32, 63, 64]) {
+      expect(resolveBabylonNativeBlockChunkAssignmentV1(candidate!,
+        extent([center - 0.5, 0, -0.5], [center + 0.5, 1, 0.5])))
+        .toMatchObject({ kind: "grid-chunk", chunkIndexXZ: [Math.floor(center / 32), 0] });
+    }
+    expect(resolveBabylonNativeBlockChunkAssignmentV1(candidate!,
+      extent([31.25, 0, -0.5], [31.75, 1, 0.5]))).toMatchObject({ kind: "chunk-straddling" });
+    // Pinned old groups by center, whereas Native residency owns whole extents.
+    // Matching edge size does not make either count a legacy merged-cluster count.
+    expect(Math.floor(31.5 / 32)).toBe(0);
+    expect(babylonNativeBlockChunkAxisIndexV1(candidate!, 0, 31.5)).toBe(1);
+    expect(CURRENT.id).toBe("chunk-xz-4m");
   });
 
   it("keeps every Chunk boundary on a Block face across the origin", () => {
     for (const candidate of BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1) {
       // A one-meter Block centered on an integer spans [c - 0.5, c + 0.5].
       // The Chunk grid must never cut that span.
-      for (let center = -8; center <= 8; center += 1) {
+      for (let center = -2 * candidate.sizeMetersXZ[0] - 1; center <= 2 * candidate.sizeMetersXZ[0] + 1; center += 1) {
         const assignment = resolveBabylonNativeBlockChunkAssignmentV1(
           candidate,
           extent([center - 0.5, 0, -0.5], [center + 0.5, 1, 0.5]),

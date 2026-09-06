@@ -4,14 +4,14 @@ This reference is an AI-facing authoring guide. The installed package types and 
 
 ## Inputs and outputs
 
-Treat the frozen Generation Request, Scene Brief, reference inputs, API/Profile context, `native-scene.bootstrap.json`, and Host-owned `subject-visual-review-proxy.json` as immutable. The Host derives the Bootstrap as a read-only Native startup projection: it carries the seed, Gameplay Bootstrap ref, controlled Subject identity, opening-camera numeric values, and Spawn Marker identity. The Host derives the read-only Subject proxy from that controlled Subject's closed Runtime descriptor and Registry-bound visual bounds; Native Source must never duplicate or override it. The separate immutable `inputs/world-bounds-policy.json` selects exactly `{ "mode": "checked-block-layout" }` or `{ "mode": "fixed", "worldBounds": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [16, 16], "heightRangeMeters": [-65, 17] } }` (fixed numbers illustrate shape only). Ordinary generation uses checked-block-layout: after Native Check the trusted Host computes concrete Package bounds from all actual Blocks, including ungrouped visual-only scenery. No fixed 128m limit, generated bounds output, hidden foundation or required empty padding is introduced. Fixed inputs retain their declared metric bounds. Policy bytes/Hash remain frozen through repair and resume; final WorldPackage identity binds the computed bounds. Subject and Camera resource closure remain owned by `WorldRuntimeBootstrapV1`.
+Treat the frozen Generation Request, Scene Brief, reference inputs, API/Profile context, `native-scene.bootstrap.json`, and `subject-host-context.json` as immutable. The Host derives the Bootstrap as a read-only Native startup projection: it carries the seed, Gameplay Bootstrap ref, controlled Subject identity, opening-camera numeric values, and Spawn Marker identity. The frozen resource context contains the Registry catalog, not a preselected Subject. The checker, renderer and Host compile the sidecar's controlledSubject design through the same shared Subject compiler and derive its visual proxy; scene.ts never duplicates that Subject. The separate immutable `inputs/world-bounds-policy.json` selects exactly `{ "mode": "checked-block-layout" }` or `{ "mode": "fixed", "worldBounds": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [16, 16], "heightRangeMeters": [-65, 17] } }` (fixed numbers illustrate shape only). Ordinary generation uses checked-block-layout: after Native Check the trusted Host computes concrete Package bounds from all actual Blocks, including ungrouped visual-only scenery. No fixed 128m limit, generated bounds output, hidden foundation or required empty padding is introduced. Fixed inputs retain their declared metric bounds. Policy bytes/Hash remain frozen through repair and resume; final WorldPackage identity binds the computed bounds. Subject and Camera resource closure remain owned by `WorldRuntimeBootstrapV1`.
 
 Reference inputs have stable semantic filenames. Read `world-plan.png` for complete-world orientation, footprint, routes, junctions and hidden continuation. Read `entry-whitebox-target.png` for opening-frame placement, silhouette scale, depth order and occlusion. Read `reference-<index>.*` for the user's visible evidence. A Builder that omits either named planning image has not completed reconstruction preflight.
 
 Write only:
 
 1. `scene.ts`: the Babylon Native Scene Module.
-2. `native-block-authoring.json`: entry-module, semantic visual-group declarations, closed openingCamera numeric intent and groundExploration validation intent only.
+2. `native-block-authoring.json`: entry-module, semantic visual groups, controlledSubject design, openingCamera numeric intent and groundExploration validation intent.
 3. `native-resources.json`: the closed, currently asset-free Native visual resource list.
 
 Those remain the only Native Source files. The task-level files
@@ -61,7 +61,6 @@ export default defineBabylonNativeScene({
     }
 
     session.finalize({
-      displayGapMeters: 0.04,
       staticColliders: [{
         id: "entry-ground-collider",
         colliderGeometrySource: {
@@ -128,9 +127,17 @@ Here `n` is any integer, including negative values. A Y quarter turn swaps the e
 
 Profile meshes remain direct, unparented members of the Host Candidate Scene. Keep them enabled, visible, non-instanced, non-thin-instanced, and physics-free. Do not attach parents, bake/replace geometry, or create an alternate visual/collider mesh for a Block.
 
+The Host applies the fixed legacy `0.985` visual scale on all three local axes;
+the checker and Collider geometry retain the complete metric Block dimensions.
+`session.finalize()` accepts only `staticColliders`. Do not supply a display-gap
+or display-scale override, or shrink the authored Block geometry to imitate seams.
+As in the old software reviewer, advisory comparisons use complete metric merged
+volumes, not the Runtime's per-cell display seams. This is a projection convention,
+not simplified source geometry or a replacement Collider/Runtime representation.
+
 Use only palette roles `ground`, `route`, `structure`, `hazard`, `water-like-visual`, and `background-mass`. Stable lowercase IDs are mandatory. Blocks may touch at faces but their occupied volumes must never overlap. Never place a support block through the occupied volume of the block it supports.
 
-For this production reconstruction Case, every non-root structural or playable block needs a face-contact support chain to the lowest occupied stratum. The root stratum is global: if one decorative cliff block extends below the rest of the world, every raised surface must still have continuous visible support down to that same lowest stratum. Prefer one shared root bottom and build upward. The Host Profile reports unsupported blocks as warnings because other Native worlds may intentionally contain explicit floating visual mass, but this Case must not use that advisory allowance to fake cliffs, route support, gate mass, or platforms.
+The Host Profile reports unsupported blocks as warnings: `WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING` is advisory only for every palette role, including structure, ground and route. The metric follows face contacts to the global lowest occupied stratum; it does not prove that a playable surface lacks Capsule support or that a reference-supported suspended form is wrong. Do not extend all floors to the global lowest Block or add a hidden foundation merely because an unrelated decorative cliff extends below the world. Preserve deck thickness, piers, cliff volume, arches, openings and intentional floating/background forms from the reference and frozen plan. There is no floating-intent approval or support-disposition output, no new Case policy, and no automatic repair or rejection based only on this warning. A real visual mismatch is repaired within the existing same-task image-review budget. The unchanged Case Ground Analysis still rejects missing actual Spawn/footprint support, inadequate clearance and required-course disconnection; an advisory structural warning never waives those checks.
 
 The Profile deterministically reports the number of edge-adjacent `route`-palette components. More than one component is an advisory warning, not Native Check rejection: ordinary `ground` may connect route-colored segments, and one world may contain multiple independent routes. Never add hidden geometry or relabel honest Blocks merely to erase that warning. Case-declared Ground Analysis and traversal evidence exclusively decide whether required waypoints and courses are connected and passable. Within one continuous route-only staircase, neighboring route tops may differ by at most `0.25` meters. A safe quarter-meter stair column starts with a `full` ground block centered at `y=-0.5`; for a tread top at `0.25 * n`, stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j` for `j=0..n-1`, and expose/collide only the top tread as appropriate. Put successive tread columns exactly one meter apart along X or Z so their route blocks touch at an edge without overlap. Never fill through a `step` using a `full` block whose volume reaches into the tread.
 
@@ -148,7 +155,7 @@ Each `staticColliders` row uses the exact required fields `id`, `colliderGeometr
 
 `traversalBinding` is one exact discriminated union. A blocker is exactly `{ kind: "not-traversable" }` and has no `surfaceEntityId`, `logicalSubshapeId`, or `traversalSurfaceProfileRef`. A walkable selection is exactly `{ kind: "static-surface", surfaceEntityId, logicalSubshapeId, traversalSurfaceProfileRef }`. Never mix fields from the two branches.
 
-In `case-defined` mode, scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the controlled Subject descriptor selected by `initialControlledEntityId` from `inputs/world-runtime-bootstrap.json`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
+In `case-defined` mode, scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the selected Subject design with its exact profiles in `inputs/subject-host-context.json.resources`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
 
 The Case-bound Formal Capture Intent is Capture-only Host input, not generation context and not a Builder output. Do not predict or write `sourceBoundsMeters` or `planeMeters`. The trusted Host preserves exact frozen reach-position endpoints, resolves pass planes from checked group bounds, and resolves block planes from exact frozen Collider geometry after the collider-to-Block-to-visual-group join closes.
 
@@ -168,9 +175,74 @@ Before detailing a non-Subject semantic visual group, lock its footprint center,
 
 Formal opening depth order is measured from the center of each declared visual group's complete checked bounds, not from its nearest visible face. Extending a midground ridge, cliff, landmark, structure, or background group toward Spawn shifts that measurement and may turn the group into foreground evidence. Ground or traversal repair must use the actual support Blocks and explicit Collider Groups without inventing visual membership, and preserve every frozen opening region, anchor, and ordered target in `context/case.json.expected.openingComposition`, even when Ground Analysis produced no prior Capture.
 
-For an Opening repair, treat the target's four projected region edges, projected anchor and depth order as one coupled constraint envelope. Group all diagnostics for the same `targetId`, compare the complete frozen expectation with the complete prior `opening-observation.json`, and preserve axes already within tolerance. Values clipped at `0` or `10000` identify geometry extending beyond the frame rather than a harmless exact edge. Correct vertical clipping with a coordinated near-camera footprint/depth and height change; do not merely move the crown and trade the opposite edge or anchor into failure. Widening at a substantially nearer depth can also move the vertical projection and anchor, so add mass at comparable depth and height unless the frozen target requires a depth change.
+For an Opening repair, treat the target's four projected region edges, projected anchor and depth order as one coupled constraint envelope. Group all diagnostics for the same `targetId`, compare the complete frozen expectation with the complete prior `opening-observation.json`, and preserve axes already within tolerance. A value at `0` or `10000` alone does not prove clipping; inspect the bound identity/display PNGs before deciding whether geometry extends beyond the frame. Correct vertical clipping with a coordinated near-camera footprint/depth and height change; do not merely move the crown and trade the opposite edge or anchor into failure. Widening at a substantially nearer depth can also move the vertical projection and anchor, so add mass at comparable depth and height unless the frozen target requires a depth change.
 
 ## Semantic JSON
+
+### Controlled Subject
+
+Required `controlledSubject` contains exactly `visualTargetId` and `design`. The ID
+must be the Palette's `primary-subject` visual target, not a Native visual group.
+Follow the Skill's behavior-first Subject selection: reuse an admitted complete
+registered Subject before considering necessary locomotion/body-topology
+composition. Appearance-only differences do not require a new shape. Write one
+closed design below; this guidance adds no automatic likeness/composition gate:
+
+- Registered: `{ "kind": "registered", "subjectDefinitionRef": "<exact frozen subject-definition ref>" }`.
+  Select an admitted row from `inputs/subject-host-context.json.authoringCatalog.subjects`,
+  then resolve its Definition and dependencies from the same context's `resources`.
+  The catalog is compiler-derived and rechecked against those resources, not a
+  second authority. It exposes executable modes, actual Collider, Camera context
+  and visual-review cuboids; `rejectedSubjects` gives the reasons for exclusions.
+  Registered ordinary human/biped entries require an asset visual and rigged
+  binding, exactly as in the old Hosted catalog. Primitive humanoid test fixtures
+  remain valid SDK resources but are not Hosted character substitutes. Do not
+  choose a convenient preset solely because it compiles or matches a name.
+- Composed: `{ "kind": "composed", "definition": { ... } }`. Definition has exactly
+  `id`, `category`, `bodyTopology`, `semanticClassId`, `displayName`, `description`,
+  `visualParts`, and `visualBinding`. Category is `human | animal | custom`; topology
+  is `biped | quadruped | custom`. Coordinates are meters, +Y up, -Z forward, with
+  a support-center pivot. Preserve the complete Subject and reference scale.
+
+Each primitive part contains exactly `id`, `kind: "primitive"`, `shape`,
+`localTransform`, `colliderContribution: "include" | "exclude"`, and `semanticTags`.
+Shapes are `box` with `sizeMetersXYZ`, `sphere` with `radiusMeters`, or `cylinder` /
+`capsule` with `radiusMeters` and `heightMeters`. Local transforms have required
+`positionMetersXYZ` and optional `rotationEulerRadiansXYZ`, both three-number tuples.
+These Subject shapes are not Native world Blocks and do not use the Block lattice.
+
+An asset part has exactly `id`, `kind: "asset"`, `subjectAssetRef`, `localTransform`
+and `semanticTags`. Use an exact frozen Subject Asset ref; its localTransform also
+requires `scaleXYZ`. Do not author appearance/material overrides: Host supplies
+the legacy whitebox-neutral appearance. Static binding is exactly `{ "mode": "static" }`.
+Rigged binding has exactly `mode: "rigged"`, `rigProfileRef`, `animationSetRef`, and
+`colliderProfileRef`; use the frozen compatible resources, including an asset part.
+
+Keep the old composed-Subject policy: 1–48 uniquely identified parts, stable
+lowercase hyphenated IDs, nonempty displayName/description and semanticTags.
+An ordinary human/biped primitive Subject is 1.6–2.1m tall; its asset parts must
+not exceed 1.25x Registry scale on any axis. Do not resize it just to fill the
+entry frame. Host owns capability/profile selection, Collider derivation, Gameplay
+and WRT; do not add those fields to a shape proposal or claim unsupported movement
+from a visual approximation. Missing/invalid design does not fall back to G Bot.
+
+Movement compatibility uses the pinned old capability mapping only after the
+actual Subject compiles. Registered ground-walk requires locomotion.ground;
+ground-slide requires locomotion.surface-slide; ground-ride requires both
+locomotion.forward-steer and relationship.mounted-on; ground-drive requires
+locomotion.wheeled; water-surface requires locomotion.water-surface; flight
+requires locomotion.unpowered-glide (each exact `worldkit://capability/<name>@1`
+ref). Composed designs supply ground-walk only. Underwater or custom labels have
+no mapping in this Hosted policy and must remain explicitly unsupported, not
+silently changed to a supported label. The checker returns ordered requested,
+executable and missing modes under subjectSelectionDiagnostics. This is the
+existing in-task structural check and Host replay, not a new dispatch stage,
+similarity gate, repair budget or authorization to invent a Runtime kernel.
+
+The same task self-check and software renderer compile this design with the frozen
+resources. Never emit the derived Gameplay, WRT, Registry locks or visual proxy as
+extra files, or create them inside scene.ts. A design edit invalidates both review
+PNGs and uses the existing shared repair budget, not another task or review cycle.
 
 Ordinary ground support/exploration is an acceptance obligation, not an identity
 target. Do not create entry-ground/remote-ground visual groups or an extra floor
@@ -192,18 +264,29 @@ the exact shape is:
     { "id": "remote-garden", "region": "remote", "standPositionMetersXYZ": [8, 0, -5] }
   ],
   "requiredTraversalBands": [
-    { "id": "entry-court", "centerlineStandPositionsMetersXYZ": [[0, 0, 0], [4, 0, 0], [4, 0, -3]], "halfWidthMeters": 1 }
+    { "id": "entry-court", "centerlineStandPositionsMetersXYZ": [[0, 0, 0], [4, 0, 0], [4, 0, -3]], "halfWidthMeters": 1, "isBidirectional": true }
   ]
 }
 ```
 
 These coordinates illustrate the shape, not a preset. Use the actual Brief/World Plan
-regions and real support positions. IDs are stable, sorted and unique within each list.
-At least one middle and one remote anchor must be distinct from
-each other and the registered Spawn. At least one band begins at exact Spawn and ends
-at a middle anchor; add honest-width bands for explicitly required restricted courses.
+regions and real support positions. IDs are stable and unique within each list.
+Target and band lists retain authored order; alphabetical sorting is not required.
+Waypoint order continues to define each actual course and must not be sorted.
+When the frozen Case's `requireSingleReachableComponent` is `true`, require at
+least one middle and one remote anchor and a band from exact Spawn to a middle anchor.
+When it is `false`, the ground evidence arrays may be empty; do not impose these
+ground-only minima on mixed/free-space intent. Any declared anchors remain distinct
+from each other and the registered Spawn, and declared bands remain valid honest-width
+courses checked by Ground. Never change the frozen policy to bypass required geometry.
+Optional ground evidence does not grant unsupported movement or skip actual Ground
+checks; the selected Subject must still implement every requested movement mode.
 All waypoints and width describe the authored world, never an invented straight test
-corridor. The current ground graph is bidirectional. The Host validates this pure intent
+corridor. Each band requires explicit `isBidirectional`: use true unless the Brief
+describes physically one-way traversal. Forward reachability is always checked;
+true also checks reverse reachability. False does not skip support, clearance or
+single-component obligations and does not create one-way geometry or motion.
+The current ground graph remains bidirectional. The Host validates this pure intent
 against its checked explicit support, not visual groups, labels, mesh names or an Agent BFS.
 Multiple anchors/bands can diagnose the same Case ground obligation; do not create new
 acceptance refs or visual groups for them. No distance or chunk minimum is imposed.
@@ -237,7 +320,7 @@ Do not bind unrelated background/support to a target to satisfy grouping. Explic
 are separate and never inferred from visual membership. This reproduces the old distinction between
 ordinary functional presets and landmark identity colors without restoring the old Compiler.
 
-`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, required `openingCamera`, and required `groundExploration`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind support to explicitly selected Blocks/Collider Groups; ordinary ground may have no visual group. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, `identityColorHex`, and required `frontDirectionWorldXZ`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent and groundExploration validation coordinates, it contains no Subject, Spawn ownership, Camera objects, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, required `controlledSubject`, required `openingCamera`, and required `groundExploration`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part as Native Blocks, and never use a `subject` semantic class for a Native visual group. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind support to explicitly selected Blocks/Collider Groups; ordinary ground may have no visual group. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, `identityColorHex`, and required `frontDirectionWorldXZ`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed controlledSubject design, openingCamera numeric intent and groundExploration validation coordinates, it contains no Subject state, Spawn ownership, Camera objects, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
 `frontDirectionWorldXZ` declares the complete object's semantic front from reference and frozen planning evidence. Use exactly one cardinal unit vector in world XZ: `[0, -1]`, `[-1, 0]`, `[0, 1]`, or `[1, 0]`. It preserves the legacy Front/Right/Back review orientation and is frozen in the existing authoring/layout/Package identity. There is no missing-field default, Camera-derived front, longest-axis inference, or geometry rotation. It grants no Subject, Camera or Runtime authority.
 

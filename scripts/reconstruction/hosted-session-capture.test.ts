@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { CaptureStartupErrorV1 } from "./capture-startup-watchdog.js";
+import type { RuntimeFlightReportV1 } from "@whitebox-world/runtime-babylon";
 import {
   FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
+  hashFormalWorldCaptureRequestV1,
   type FormalWorldCaptureSdkOwnerIdentityV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -402,6 +405,86 @@ describe("capture-only Hosted session transaction", () => {
 });
 
 describe("concrete capture-only Hosted transport", () => {
+  it.each(["valid", "full-history", "wrong-frame", "missing-frame", "malformed", "oversized", "oversized-utf8", "read-failed", "read-hung", "read-late", "sink-failed", "sink-hung", "capture-failed"])(
+    "CF-05 collects bounded runtime history before cleanup without changing Capture: %s", async (mode) => {
+      vi.useFakeTimers();
+      try {
+        const captureFailure = new Error("original Capture error");
+        const h = concreteHarness(mode === "capture-failed" ? { captureFailure } : {});
+        let report: RuntimeFlightReportV1 = { kind: "runtime-flight-report", schemaVersion: 1,
+          diagnosticSessionId: "00000000-0000-4000-8000-000000000001", droppedSampleCount: 0,
+          samples: [{ sequence: 1, epoch: 0, elapsedMilliseconds: 0, heartbeatDelayMilliseconds: 0,
+            visibilityState: "visible", health: "healthy", metrics: { frame: null, tick: 0, paused: false,
+              fps: null, triangleCount: null, drawCallCount: null, progressMode: "on-demand" } }],
+        };
+        if (mode === "full-history") report = { ...report, samples: Array.from({ length: 300 }, (_, index) => ({
+          sequence: index + 1, epoch: Number.MAX_SAFE_INTEGER, elapsedMilliseconds: Number.MAX_VALUE,
+          heartbeatDelayMilliseconds: Number.MAX_VALUE, visibilityState: "visible", health: "simulation-stalled",
+          metrics: { frame: Number.MAX_SAFE_INTEGER, tick: Number.MAX_SAFE_INTEGER, paused: false,
+            fps: Number.MAX_VALUE, triangleCount: Number.MAX_SAFE_INTEGER, drawCallCount: Number.MAX_SAFE_INTEGER,
+            progressMode: "continuous" },
+        })) };
+        const sink = vi.fn(async () => {
+          h.events.push("diagnostic.sink");
+          if (mode === "sink-failed") throw new Error("private sink failure");
+          if (mode === "sink-hung") await new Promise(() => undefined);
+        });
+        const starting = startCaptureOnlyHostedTransportV1({ packageDirectoryPath: "/tmp/verified-world-package",
+          request: h.request, onRuntimeFlightDiagnostic: sink,
+        }, h.ports as never);
+        await vi.advanceTimersByTimeAsync(250);
+        const transport = await starting;
+        const frameUrl = new URL("http://127.0.0.1:5175/?hosted-formal-capture-frame=1");
+        frameUrl.searchParams.set("runtimeSessionId", h.runtimeSessionId);
+        frameUrl.searchParams.set("sessionNonce", mode === "wrong-frame" ? "wrong" : "nonce.formal-capture.capture-transport-nonce-001");
+        frameUrl.searchParams.set("formalRequestHash", hashFormalWorldCaptureRequestV1(h.request));
+        let resolveRead: ((value: string) => void) | undefined;
+        const evaluate = vi.fn(async () => {
+          h.events.push("diagnostic.read");
+          if (mode === "read-failed") throw new Error("private browser failure");
+          if (mode === "read-hung") return new Promise(() => undefined);
+          if (mode === "read-late") return new Promise<string>((resolve) => { resolveRead = resolve; });
+          if (mode === "malformed") return JSON.stringify({ ...report, token: "private-secret" });
+          if (mode === "oversized") return "x".repeat(256001);
+          if (mode === "oversized-utf8") return "界".repeat(90000);
+          return JSON.stringify(report);
+        });
+        Object.assign(h.page, { frames: () => mode === "missing-frame" ? [] : [{ url: () => frameUrl.href, evaluate }] });
+        const payload = await transport.executeFormalCapture(h.request).catch((error) => error);
+        const cleanup = transport.dispose();
+        await vi.advanceTimersByTimeAsync(250);
+        expect(await cleanup).toEqual({ hostedBrowserSession: "completed", viteServer: "completed" });
+        if (mode === "capture-failed") expect(payload).toBe(captureFailure);
+        else expect(payload).toMatchObject({ receiptWithoutCleanup: { runtimeSessionId: h.runtimeSessionId } });
+        expect(h.events.filter((event) => event === "page.capture")).toHaveLength(1);
+        expect(h.events.slice(-4)).toEqual(["page.close", "context.close", "browser.close", "server.stop"]);
+        resolveRead?.(JSON.stringify(report));
+        await Promise.resolve();
+        const accepted = ["valid", "full-history", "sink-failed", "sink-hung", "capture-failed"].includes(mode);
+        expect(sink).toHaveBeenCalledTimes(accepted ? 1 : 0);
+        if (accepted) expect(sink).toHaveBeenCalledWith({ runtimeSessionId: h.runtimeSessionId,
+          formalRequestHash: hashFormalWorldCaptureRequestV1(h.request), worldPackageRootHash: h.request.worldPackageRootHash, report });
+        if (mode === "wrong-frame" || mode === "missing-frame") expect(evaluate).not.toHaveBeenCalled();
+        await transport.dispose();
+        expect(sink).toHaveBeenCalledTimes(accepted ? 1 : 0);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally { vi.useRealTimers(); }
+    },
+  );
+  it("preserves startup flight evidence through cleanup without retrying or capturing", async () => {
+    const h = concreteHarness({ readyPending: true });
+    const startTransport = vi.fn(() => startCaptureOnlyHostedTransportV1({
+      packageDirectoryPath: "/tmp/verified-world-package", request: h.request,
+      readyTimeoutMilliseconds: 100, startupStallTimeoutMilliseconds: 10,
+    }, h.ports as never));
+    const error = await runCaptureOnlyHostedSessionV1({ request: h.request, startTransport }).catch((e) => e);
+    expect(error.cause).toBeInstanceOf(CaptureStartupErrorV1);
+    expect(error.cause.trace.outcome).toBe("stalled");
+    expect(error.cleanupOutcomes).toEqual({ hostedBrowserSession: "completed", viteServer: "completed" });
+    expect(startTransport).toHaveBeenCalledOnce();
+    expect(h.events).not.toContain("page.capture");
+    expect(h.events.slice(-4)).toEqual(["page.close", "context.close", "browser.close", "server.stop"]);
+  });
   it("starts the verified Package server, one credentialless route, and cleans in reverse", async () => {
     const h = concreteHarness();
     const transport = await startCaptureOnlyHostedTransportV1({

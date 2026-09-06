@@ -147,7 +147,6 @@ async function start(): Promise<void> {
         );
         buildFixture(session);
         finalizedEpoch = session.finalize(Object.freeze({
-          displayGapMeters: 0.035,
           staticColliders: Object.freeze([]),
         }));
         context.registration.registerSpawnMarker(Object.freeze({

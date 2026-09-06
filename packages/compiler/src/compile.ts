@@ -525,6 +525,18 @@ function pushBudgetDiagnosticV3(
   });
 }
 
+/** Shared source-budget predicate; callers supply their owner-derived usage. */
+export function evaluateCompiledWorldResourceBudgetV1(input: Readonly<{
+  usage: Readonly<{ vertices: number; triangles: number; colliders: number }>;
+  budget: NormalizedWorldIRV4["world"]["resourceBudget"];
+}>): readonly CompileDiagnostic[] {
+  const diagnostics: CompileDiagnostic[] = [];
+  pushBudgetDiagnosticV3(diagnostics, "maxVertices", input.usage.vertices, input.budget.maxVertices);
+  pushBudgetDiagnosticV3(diagnostics, "maxTriangles", input.usage.triangles, input.budget.maxTriangles);
+  pushBudgetDiagnosticV3(diagnostics, "maxColliders", input.usage.colliders, input.budget.maxColliders);
+  return diagnostics;
+}
+
 function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult {
   const world = input.normalizedWorldIr;
   try {
@@ -581,26 +593,9 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
         subjectResourceCost.colliders +
         objects.filter((object) => object.collisionEnabled).length,
     };
-    const diagnostics: CompileDiagnostic[] = [];
-    const budget = world.world.resourceBudget;
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxVertices",
-      usage.vertices,
-      budget.maxVertices,
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxTriangles",
-      usage.triangles,
-      budget.maxTriangles,
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxColliders",
-      usage.colliders,
-      budget.maxColliders,
-    );
+    const diagnostics = evaluateCompiledWorldResourceBudgetV1({
+      usage, budget: world.world.resourceBudget,
+    });
     if (diagnostics.length > 0) return { ok: false, diagnostics };
 
     const rig = cameraNode.components.cameraRig;

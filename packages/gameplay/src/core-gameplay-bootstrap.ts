@@ -18,6 +18,12 @@ export interface CoreGameplayBootstrapInputV1 {
   readonly initialRelationshipStates: readonly GameplayRelationshipStateV1[];
 }
 
+export function coreGameplayBootstrapResourceRefV1(
+  input: Pick<CoreGameplayBootstrapInputV1, "worldId" | "worldSeed">,
+): string {
+  return `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`;
+}
+
 /**
  * Creates the canonical Gameplay bootstrap required by the built-in Runtime
  * Host. Authoring loaders and CLI pipelines must share this constructor so an
@@ -31,8 +37,7 @@ export function createCoreGameplayBootstrapV1(
     kind: "gameplay-bootstrap",
     id: `${input.worldId}.gameplay`,
     version: 1,
-    resourceRef:
-      `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`,
+    resourceRef: coreGameplayBootstrapResourceRefV1(input),
     semanticFactProjectorProfileResource:
       RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: input.entityDescriptors,

@@ -3777,10 +3777,14 @@ export function createStudio(options = {}) {
           closure.publicationOutcome !== "published" ||
           !await hasNativeLaunchEvidence(record)) return false;
       if (!await hasNativeStyledArtifacts(record, freshnessFloor)) {
-        // Ordinary generations retain the old freshness rule. An interrupted
-        // explicit resume may reuse original pixels only through the same
-        // request/delivery owner, with model dispatch disabled.
-        if (evaluationRun.executionMode !== "visual-resume" && !recoverableNativeFailure) return false;
+        // Old Cloud recovery also retrieves late delivery after a full run is
+        // interrupted, not only after an explicit visual retry. Old pixels
+        // still require original request/delivery replay; never waive freshness
+        // without that owner, and never submit a replacement model task.
+        const recoverableInterruptedCloud = autoRecoverVisualDeliveries &&
+          effectiveCodexBackend(record) === "cloud" && ["interrupted", "running"].includes(record.status);
+        if (evaluationRun.executionMode !== "visual-resume" && !recoverableNativeFailure &&
+            !recoverableInterruptedCloud) return false;
         try {
           const resume = await prepareNativeVisualResume(record);
           if (!resume) return false;

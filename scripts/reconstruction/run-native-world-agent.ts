@@ -314,9 +314,8 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         artifactRoot,
         "visual-identity-palette.json",
       );
-      const sceneBrief = parseSceneBriefV1(
-        await readFile(briefPath, "utf8"),
-      );
+      const sceneBriefBytes = await readFile(briefPath);
+      const sceneBrief = parseSceneBriefV1(sceneBriefBytes.toString("utf8"));
       if (!sceneBrief.ok) {
         throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
       }
@@ -325,8 +324,7 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         proposalPath,
         stringifyCanonicalJson(await deriveNativeWorldBaselineProposalV1({
           sceneId: request.sceneId,
-          sceneBriefSemanticHash:
-            sceneBrief.sceneBriefHash as Sha256HashV1,
+          sceneBriefBytes,
           visualIdentityPalettePath,
           entryWhiteboxTargetPath: entryTargetPath,
         })),
@@ -351,14 +349,24 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         plannerSelfCheckPath,
         outputCaseRoot: stagedCaseRoot,
       });
-      await copyAcceptedPlannerExecutionV1({
-        artifactRoot,
-        destinationArtifactRoot: stagedCaseRoot,
-        sceneId: request.sceneId,
-        sceneSourceKind: "babylon-native",
-        sourcePlannerSelfCheckPath: plannerSelfCheckPath,
-        destinationPlannerSelfCheckPath: path.join(stagedCaseRoot, "inputs/planner-self-check.json"),
-      });
+      try {
+        await copyAcceptedPlannerExecutionV1({
+          artifactRoot,
+          destinationArtifactRoot: stagedCaseRoot,
+          sceneId: request.sceneId,
+          sceneSourceKind: "babylon-native",
+          sourcePlannerSelfCheckPath: plannerSelfCheckPath,
+          destinationPlannerSelfCheckPath: path.join(stagedCaseRoot, "inputs/planner-self-check.json"),
+        });
+      } catch (cause) {
+        // Planning and its checker already passed. Expose the Host phase and
+        // bounded system code, never arbitrary paths or subprocess text. Keep
+        // the original exception for in-process diagnosis; do not resubmit.
+        const code = !isNil(cause) && typeof cause === "object" && "code" in cause &&
+          typeof cause.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(cause.code)
+          ? cause.code : "UNKNOWN";
+        throw new Error(`NATIVE_WORLD_PLANNER_HANDOFF_FAILED:${code}`, { cause });
+      }
       for (const fileName of [
         "scene-brief.md",
         "visual-identity-palette.json",

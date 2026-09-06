@@ -32,7 +32,6 @@ function overlayElementId(overlay: BabylonNativeBlockWalkableOverlayHandleV1): s
 export function settleBabylonNativeBlockProfileV1(input: Readonly<{
   context: BabylonNativeSceneBuildContextV1;
   checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-  displayGapMeters: number;
   colliderInventory:
     readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
   walkableOverlays: readonly BabylonNativeBlockWalkableOverlayHandleV1[];
@@ -144,7 +143,6 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
   const profileInventoryHash =
     createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1({
       checkedLayout: input.checkedLayout,
-      displayGapMeters: input.displayGapMeters,
       colliderInventory: input.colliderInventory,
     }).profileInventoryHash;
   if (profileInventoryHash !== input.expectedProfileInventoryHash) {

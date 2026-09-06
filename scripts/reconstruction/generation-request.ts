@@ -1,7 +1,6 @@
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   decideSceneAuthoringRouteV1,
   hashNativeBlockGenerationRequestV1,
@@ -15,24 +14,15 @@ import {
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
-import {
-  gameplayBootstrapCanonicalBytesV1,
-  parseGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
+import { coreGameplayBootstrapResourceRefV1 } from "@whitebox-world/gameplay";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashWorldReconstructionCaseV1, hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, worldReconstructionEvidenceProfileClosureMatchesV1, type WorldReconstructionAttemptIndexV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneBootstrapV1,
-  parseWorldRuntimeBootstrapV1,
-  worldRuntimeBootstrapCanonicalBytesV1,
-  worldResourceLockEntriesV1,
   type BabylonNativeSceneBootstrapV1,
-  type RuntimeSubjectVisualPartV1,
-  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   hashNativeSceneWorldBoundsPolicyV1,
   parseNativeSceneWorldBoundsPolicyV1,
@@ -44,15 +34,9 @@ import {
   parseNativeBlockRepairInstructionV1,
   type NativeBlockRepairInstructionV1,
 } from "./repair-request.js";
-import {
-  createNativeBlockSubjectVisualReviewProxyV1,
-  type NativeBlockSubjectVisualReviewProxyCuboidV1,
-  type NativeBlockSubjectVisualReviewProxyV1,
-  type NativeBlockSubjectVisualReviewVec3V1,
-} from "./native-block-subject-visual-review-proxy.js";
+import { parseNativeSubjectHostContextV1, type NativeSubjectHostContextV1 } from "./native-subject-host-context.js";
 import { validateNativeWorldPlannerInputClosureV1 } from
   "./native-world-case-preparation.js";
-import { compileNativeSubjectProjectionV1 } from "./native-subject-host-closure.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 const BUILDER_ADVISORY_OUTPUTS = Object.freeze([
@@ -61,8 +45,6 @@ const BUILDER_ADVISORY_OUTPUTS = Object.freeze([
 ] as const);
 const BUILDER_VISUAL_REVIEW_RENDERER_PATH =
   "builder-skill/scripts/render-visual-review.mjs";
-const SUBJECT_VISUAL_REVIEW_PROXY_PATH =
-  "subject-visual-review-proxy.json";
 const BUILDER_VISUAL_REVIEW_REFERENCE_PATHS = Object.freeze([
   "entry-whitebox-target.png",
   "world-plan.png",
@@ -226,10 +208,7 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly nativeSceneApiPath: string;
   readonly nativeSceneProfilePath: string;
   readonly blockProfilePath: string;
-  readonly hostClosureRootPath: string;
-  readonly gameplayBootstrapPath: string;
-  readonly worldRuntimeBootstrapPath: string;
-  readonly worldRuntimeBootstrapRef: string;
+  readonly subjectHostContext: NativeSubjectHostContextV1;
   readonly worldBoundsPolicyPath: string;
   readonly worldBoundsPolicy: NativeSceneWorldBoundsPolicyV1;
   readonly bootstrapId: string;
@@ -255,21 +234,16 @@ export interface PreparedNativeBlockGenerationTaskV1 {
   readonly sourceDirectoryPath: string;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
   readonly bootstrapBytes: Uint8Array;
-  readonly gameplayBootstrapBytes: Uint8Array;
-  readonly worldRuntimeBootstrapBytes: Uint8Array;
-  readonly subjectVisualReviewProxy: NativeBlockSubjectVisualReviewProxyV1;
-  readonly subjectVisualReviewProxyBytes: Uint8Array;
+  readonly subjectHostContext: NativeSubjectHostContextV1;
+  readonly subjectHostContextBytes: Uint8Array;
   readonly worldBoundsPolicyBytes: Uint8Array;
-  readonly hostClosure: NativeBlockGenerationHostClosureV1;
-  readonly hostClosureBytes: Uint8Array;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
 }
 
 export interface WorldReconstructionFrozenOwnerIdentitiesV1 {
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileHash: Sha256HashV1;
-  readonly gameplayBootstrapHash: Sha256HashV1;
-  readonly worldRuntimeBootstrapHash: Sha256HashV1;
+  readonly subjectHostContextHash: Sha256HashV1;
   readonly worldBoundsPolicyHash: Sha256HashV1;
   readonly bootstrapInputHash: Sha256HashV1;
 }
@@ -277,35 +251,21 @@ export interface WorldReconstructionFrozenOwnerIdentitiesV1 {
 export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonly<{
   reconstructionCase: unknown;
   evaluationProfile: unknown;
-  gameplayBootstrap: unknown;
-  worldRuntimeBootstrap: unknown;
+  subjectHostContext: unknown;
   worldBoundsPolicy: unknown;
   bootstrap: unknown;
 }>): WorldReconstructionFrozenOwnerIdentitiesV1 {
   const reconstructionCase = parseWorldReconstructionCaseV1(input.reconstructionCase);
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(input.evaluationProfile);
-  const gameplayBootstrap = parseGameplayBootstrapV1(input.gameplayBootstrap);
-  const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
+  const subjectHostContext = parseNativeSubjectHostContextV1(input.subjectHostContext);
   const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(input.worldBoundsPolicy);
   const bootstrap = parseBabylonNativeSceneBootstrapV1(input.bootstrap);
   const evaluationProfileHash = hashWorldReconstructionEvaluationProfileV1(evaluationProfile);
   if (
     reconstructionCase.evaluationProfileHash !== evaluationProfileHash ||
     !worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, evaluationProfile) ||
-    worldRuntimeBootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
-    worldRuntimeBootstrap.gameplayBootstrapHash !== gameplayBootstrap.contentHash ||
-    bootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
-    bootstrap.initialControlledEntityId !== worldRuntimeBootstrap.initialControlledEntityId ||
-    !isEqual(
-      bootstrap.gravityMetersPerSecondSquaredXYZ,
-      worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ,
-    ) ||
-    !isEqual(bootstrap.initialCamera, {
-      mode: worldRuntimeBootstrap.initialCamera.mode,
-      pitchRadians: worldRuntimeBootstrap.initialCamera.pitchRadians,
-      distanceMeters: worldRuntimeBootstrap.initialCamera.distanceMeters,
-      fovDegrees: worldRuntimeBootstrap.initialCamera.fovDegrees,
-      targetHeightMeters: worldRuntimeBootstrap.initialCamera.targetHeightMeters,
+    bootstrap.gameplayBootstrapRef !== coreGameplayBootstrapResourceRefV1({
+      worldId: subjectHostContext.worldId, worldSeed: bootstrap.seed,
     })
   ) {
     throw new TypeError("World reconstruction frozen owner identity closure failed.");
@@ -313,215 +273,12 @@ export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonl
   return Object.freeze({
     caseHash: hashWorldReconstructionCaseV1(reconstructionCase),
     evaluationProfileHash,
-    gameplayBootstrapHash: gameplayBootstrap.contentHash,
-    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+    subjectHostContextHash: sha256CanonicalJson(subjectHostContext) as Sha256HashV1,
     worldBoundsPolicyHash: hashNativeSceneWorldBoundsPolicyV1(worldBoundsPolicy),
     bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(bootstrap),
   });
 }
 
-function codePointCompare(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function subjectVisualPartBoundsV1(
-  part: RuntimeSubjectVisualPartV1,
-): Readonly<{
-  minimumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
-  maximumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
-  scaleXYZ: NativeBlockSubjectVisualReviewVec3V1;
-}> {
-  if (part.kind === "asset") {
-    const assetManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
-      part.subjectAssetRef,
-    );
-    if (assetManifest === undefined) {
-      throw new TypeError(
-        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: unresolved Subject Asset '${part.subjectAssetRef}'.`,
-      );
-    }
-    return Object.freeze({
-      minimumMetersXYZ: assetManifest.bounds.minimumMetersXYZ,
-      maximumMetersXYZ: assetManifest.bounds.maximumMetersXYZ,
-      scaleXYZ: part.localTransform.scaleXYZ,
-    });
-  }
-  const shape = part.shape;
-  const sizeMetersXYZ: NativeBlockSubjectVisualReviewVec3V1 =
-    shape.kind === "box"
-      ? shape.sizeMetersXYZ
-      : shape.kind === "sphere"
-        ? [
-            shape.radiusMeters * 2,
-            shape.radiusMeters * 2,
-            shape.radiusMeters * 2,
-          ]
-        : [
-            shape.radiusMeters * 2,
-            shape.heightMeters,
-            shape.radiusMeters * 2,
-          ];
-  return Object.freeze({
-    minimumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
-      -value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
-    maximumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
-      value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
-    scaleXYZ: Object.freeze([1, 1, 1]) as NativeBlockSubjectVisualReviewVec3V1,
-  });
-}
-
-function transformedSubjectVisualPartBoundsV1(
-  part: RuntimeSubjectVisualPartV1,
-): NativeBlockSubjectVisualReviewProxyCuboidV1 {
-  const bounds = subjectVisualPartBoundsV1(part);
-  const transform = Matrix.Compose(
-    new Vector3(...bounds.scaleXYZ),
-    Quaternion.FromEulerAngles(...part.localTransform.rotationEulerRadiansXYZ),
-    new Vector3(...part.localTransform.positionMetersXYZ),
-  );
-  const transformedCorners: Vector3[] = [];
-  for (const x of [bounds.minimumMetersXYZ[0], bounds.maximumMetersXYZ[0]]) {
-    for (const y of [bounds.minimumMetersXYZ[1], bounds.maximumMetersXYZ[1]]) {
-      for (const z of [bounds.minimumMetersXYZ[2], bounds.maximumMetersXYZ[2]]) {
-        transformedCorners.push(Vector3.TransformCoordinates(
-          new Vector3(x, y, z),
-          transform,
-        ));
-      }
-    }
-  }
-  const finiteCoordinate = (value: number): number => {
-    if (!Number.isFinite(value)) {
-      throw new TypeError(
-        "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: transformed Subject bounds are not finite.",
-      );
-    }
-    return Object.is(value, -0) ? 0 : value;
-  };
-  return Object.freeze({
-    id: part.id,
-    minimumMetersXYZ: Object.freeze([
-      finiteCoordinate(Math.min(...transformedCorners.map(({ x }) => x))),
-      finiteCoordinate(Math.min(...transformedCorners.map(({ y }) => y))),
-      finiteCoordinate(Math.min(...transformedCorners.map(({ z }) => z))),
-    ]) as NativeBlockSubjectVisualReviewVec3V1,
-    maximumMetersXYZ: Object.freeze([
-      finiteCoordinate(Math.max(...transformedCorners.map(({ x }) => x))),
-      finiteCoordinate(Math.max(...transformedCorners.map(({ y }) => y))),
-      finiteCoordinate(Math.max(...transformedCorners.map(({ z }) => z))),
-    ]) as NativeBlockSubjectVisualReviewVec3V1,
-  });
-}
-
-export function deriveNativeBlockSubjectVisualReviewProxyV1(input: Readonly<{
-  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
-  worldRuntimeBootstrapRef: string;
-  worldRuntimeBootstrapBytesHash: Sha256HashV1;
-}>): NativeBlockSubjectVisualReviewProxyV1 {
-  const runtime = input.worldRuntimeBootstrap;
-  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
-    entityId === runtime.initialControlledEntityId
-  );
-  if (subjects.length !== 1 || subjects[0]!.visualParts.length === 0) {
-    throw new TypeError(
-      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: controlled Subject visual descriptor is missing.",
-    );
-  }
-  const subject = subjects[0]!;
-  const definitionLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
-    entry.resourceKind === "subject-definition" &&
-    entry.resourceRef === subject.subjectDefinitionRef
-  );
-  const isPackageDefinition = /^package:\/\/subject-definition\/[a-z0-9][a-z0-9.-]*@[1-9][0-9]*$/.test(subject.subjectDefinitionRef);
-  let definitionMatches = false;
-  if (definitionLocks.length === 1 && isPackageDefinition) {
-    // Package Definitions are normalized and compiled by the Host, not global
-    // Registry entries. Their lock binds the normalized Definition hash; the
-    // parsed WRT and frozen Request bind the exact compiled visual descriptor.
-    definitionMatches = definitionLocks[0]!.contentHash === subject.subjectDefinitionHash;
-  } else if (definitionLocks.length === 1) {
-    const registered = compileNativeSubjectProjectionV1({
-      controlledEntityId: subject.entityId,
-      subject: { source: "registry", subjectDefinitionRef: subject.subjectDefinitionRef },
-    });
-    if (registered.ok) {
-      const expectedLock = registered.resources.resourceLock.find((entry) =>
-        entry.resourceKind === "subject-definition" && entry.resourceRef === subject.subjectDefinitionRef);
-      const expectedSubject = registered.projection.subjects[0]!;
-      definitionMatches = expectedLock?.contentHash === definitionLocks[0]!.contentHash &&
-        isEqual(expectedSubject.visualParts, subject.visualParts);
-    }
-  }
-  if (!definitionMatches) {
-    throw new TypeError(
-      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject definition Registry closure failed.",
-    );
-  }
-  for (const part of subject.visualParts) {
-    if (part.kind !== "asset") continue;
-    const assetManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
-      part.subjectAssetRef,
-    );
-    const runtimeAssets = runtime.subjectAssets.filter(({ subjectAssetRef }) =>
-      subjectAssetRef === part.subjectAssetRef
-    );
-    const assetLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
-      entry.resourceKind === "subject-asset" &&
-      entry.resourceRef === part.subjectAssetRef
-    );
-    const runtimeAsset = runtimeAssets[0];
-    if (
-      assetManifest === undefined ||
-      runtimeAssets.length !== 1 ||
-      runtimeAsset === undefined ||
-      assetLocks.length !== 1 ||
-      assetLocks[0]!.contentHash !== assetManifest.contentHash ||
-      runtimeAsset.artifactContentHash !== assetManifest.artifact.contentHash ||
-      runtimeAsset.byteLength !== assetManifest.artifact.byteLength ||
-      runtimeAsset.mediaType !== assetManifest.artifact.mediaType ||
-      runtimeAsset.format !== assetManifest.format ||
-      runtimeAsset.inventory.meshCount !== assetManifest.inventory.meshCount ||
-      runtimeAsset.inventory.vertexCount !== assetManifest.inventory.vertexCount ||
-      runtimeAsset.inventory.triangleCount !== assetManifest.inventory.triangleCount ||
-      runtimeAsset.inventory.skeletonCount !== assetManifest.inventory.skeletonCount ||
-      runtimeAsset.inventory.boneCount !== assetManifest.inventory.boneCount ||
-      !isEqual(
-        runtimeAsset.inventory.animationClipNames,
-        assetManifest.inventory.animationClipNames,
-      )
-    ) {
-      throw new TypeError(
-        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject Asset Registry closure failed for '${part.subjectAssetRef}'.`,
-      );
-    }
-  }
-  const cuboids = subject.visualParts
-    .map(transformedSubjectVisualPartBoundsV1)
-    .sort((left, right) => codePointCompare(left.id, right.id));
-  return createNativeBlockSubjectVisualReviewProxyV1({
-    initialControlledEntityId: runtime.initialControlledEntityId,
-    subjectDefinitionRef: subject.subjectDefinitionRef,
-    subjectDefinitionHash: subject.subjectDefinitionHash,
-    subjectRuntimeDescriptorHash:
-      sha256CanonicalJson(subject) as Sha256HashV1,
-    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
-    worldRuntimeBootstrapContentHash: runtime.contentHash,
-    worldRuntimeBootstrapBytesHash: input.worldRuntimeBootstrapBytesHash,
-    cuboids,
-  });
-}
-
-export interface NativeBlockGenerationHostClosureV1 {
-  readonly kind: "native-block-generation-host-closure";
-  readonly schemaVersion: 1;
-  readonly gameplayBootstrapRef: string;
-  readonly gameplayBootstrapHash: Sha256HashV1;
-  readonly worldRuntimeBootstrapRef: string;
-  readonly worldRuntimeBootstrapResolvedVersion: string;
-  readonly worldRuntimeBootstrapHash: Sha256HashV1;
-  readonly worldBoundsPolicyHash: Sha256HashV1;
-  readonly initialControlledEntityId: string;
-}
 
 export interface ResolvedNativeBlockGenerationResourceV1 {
   readonly kind: "worldkit-resolved-resource";
@@ -602,56 +359,10 @@ export function parseResolvedNativeBlockGenerationResourceV1(
   return resolution;
 }
 
-export function parseNativeBlockGenerationHostClosureV1(
-  input: unknown,
-): NativeBlockGenerationHostClosureV1 {
-  const record = exactPlainRecord(input, [
-    "kind",
-    "schemaVersion",
-    "gameplayBootstrapRef",
-    "gameplayBootstrapHash",
-    "worldRuntimeBootstrapRef",
-    "worldRuntimeBootstrapResolvedVersion",
-    "worldRuntimeBootstrapHash",
-    "worldBoundsPolicyHash",
-    "initialControlledEntityId",
-  ], "Native Block generation Host closure");
-  if (
-    record.kind !== "native-block-generation-host-closure" ||
-    record.schemaVersion !== 1 ||
-    typeof record.gameplayBootstrapRef !== "string" ||
-    !/^worldkit:\/\/gameplay-bootstrap\/[a-z0-9][a-z0-9.-]*@[1-9][0-9]*$/.test(record.gameplayBootstrapRef) ||
-    typeof record.worldRuntimeBootstrapRef !== "string" ||
-    !/^worldkit:\/\/world-runtime-bootstrap\/[a-z0-9][a-z0-9.-]*@[1-9][0-9]*$/.test(record.worldRuntimeBootstrapRef) ||
-    typeof record.worldRuntimeBootstrapResolvedVersion !== "string" ||
-    !/^[1-9][0-9]*$/.test(record.worldRuntimeBootstrapResolvedVersion) ||
-    !record.worldRuntimeBootstrapRef.endsWith(`@${record.worldRuntimeBootstrapResolvedVersion}`) ||
-    typeof record.gameplayBootstrapHash !== "string" ||
-    !SHA256_PATTERN.test(record.gameplayBootstrapHash) ||
-    typeof record.worldRuntimeBootstrapHash !== "string" ||
-    !SHA256_PATTERN.test(record.worldRuntimeBootstrapHash) ||
-    typeof record.worldBoundsPolicyHash !== "string" ||
-    !SHA256_PATTERN.test(record.worldBoundsPolicyHash) ||
-    typeof record.initialControlledEntityId !== "string" ||
-    record.initialControlledEntityId.length === 0
-  ) throw new TypeError("Invalid Native Block generation Host closure.");
-  return Object.freeze({
-    kind: "native-block-generation-host-closure",
-    schemaVersion: 1,
-    gameplayBootstrapRef: record.gameplayBootstrapRef,
-    gameplayBootstrapHash: record.gameplayBootstrapHash as Sha256HashV1,
-    worldRuntimeBootstrapRef: record.worldRuntimeBootstrapRef,
-    worldRuntimeBootstrapResolvedVersion: record.worldRuntimeBootstrapResolvedVersion,
-    worldRuntimeBootstrapHash: record.worldRuntimeBootstrapHash as Sha256HashV1,
-    worldBoundsPolicyHash: record.worldBoundsPolicyHash as Sha256HashV1,
-    initialControlledEntityId: record.initialControlledEntityId,
-  });
-}
 
 export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
   reconstructionCase: WorldReconstructionCaseV1;
-  gameplayBootstrap: unknown;
-  worldRuntimeBootstrap: unknown;
+  subjectHostContext: unknown;
   worldBoundsPolicy: unknown;
   bootstrapId: string;
   sceneModuleRef: string;
@@ -663,25 +374,8 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
   worldBoundsPolicy: NativeSceneWorldBoundsPolicyV1;
 }> {
   const reconstructionCase = parseWorldReconstructionCaseV1(input.reconstructionCase);
-  const gameplay = parseGameplayBootstrapV1(input.gameplayBootstrap);
-  const runtime = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
+  const subjectHostContext = parseNativeSubjectHostContextV1(input.subjectHostContext);
   const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(input.worldBoundsPolicy);
-  const controlledRuntimeSubjects = runtime.subjectRuntimeDescriptors.filter(
-    (subject) => subject.entityId === runtime.initialControlledEntityId,
-  );
-  const controlledGameplayEntities = gameplay.entityDescriptors.filter(
-    (entity) => entity.id === runtime.initialControlledEntityId,
-  );
-  if (
-    runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
-    runtime.gameplayBootstrapHash !== gameplay.contentHash ||
-    runtime.subjectRuntimeDescriptors.length !== 1 ||
-    controlledRuntimeSubjects.length !== 1 ||
-    controlledGameplayEntities.length !== 1 ||
-    controlledGameplayEntities[0]!.entityDefinitionRef !==
-      controlledRuntimeSubjects[0]!.subjectDefinitionRef ||
-    runtime.initialCamera.targetEntityId !== runtime.initialControlledEntityId
-  ) throw new TypeError("Native generation Gameplay/Runtime owner closure failed.");
   const bootstrap = parseBabylonNativeSceneBootstrapV1({
     kind: "babylon-native-scene-bootstrap",
     schemaVersion: 1,
@@ -689,15 +383,15 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
     sceneModuleRef: input.sceneModuleRef,
     nativeSceneApiRef: input.nativeSceneApiRef,
     nativeSceneProfileRef: input.nativeSceneProfileRef,
-    gameplayBootstrapRef: gameplay.resourceRef,
-    initialControlledEntityId: runtime.initialControlledEntityId,
-    gravityMetersPerSecondSquaredXYZ: runtime.gravityMetersPerSecondSquaredXYZ,
+    gameplayBootstrapRef: coreGameplayBootstrapResourceRefV1({ worldId: subjectHostContext.worldId, worldSeed: input.seed }),
+    initialControlledEntityId: `${reconstructionCase.id}-subject`,
+    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
     initialCamera: {
-      mode: runtime.initialCamera.mode,
-      pitchRadians: runtime.initialCamera.pitchRadians,
-      distanceMeters: runtime.initialCamera.distanceMeters,
-      fovDegrees: runtime.initialCamera.fovDegrees,
-      targetHeightMeters: runtime.initialCamera.targetHeightMeters,
+      mode: "third-person",
+      pitchRadians: 0.12,
+      distanceMeters: 5,
+      fovDegrees: 56,
+      targetHeightMeters: 1.25,
     },
     seed: input.seed,
     spawnMarkerId: reconstructionCase.expected.spawnSupport.spawnMarkerId,
@@ -880,7 +574,6 @@ export async function prepareNativeBlockGenerationTaskV1(
     throw new TypeError("Native generation Route Decision does not match the trusted recomputed decision.");
   }
   const inputRoot = await canonicalRoot(input.inputDirectoryPath, "Generation input root");
-  const hostClosureRoot = await canonicalRoot(input.hostClosureRootPath, "Host closure root");
   const caseRoot = await canonicalRoot(path.dirname(inputRoot.requestedPath), "Generation Case root");
   const requestedRunDirectoryPath = path.resolve(input.runDirectoryPath);
   if (path.basename(requestedRunDirectoryPath) !== input.runId) {
@@ -954,16 +647,13 @@ export async function prepareNativeBlockGenerationTaskV1(
       );
     }
   }
-  const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, gameplaySource, runtimeSource, registryLockSource, ...caseReferenceFiles] = await Promise.all([
+  const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, ...caseReferenceFiles] = await Promise.all([
     freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reconstructionCase.sceneBriefRef)),
     freezeFile(inputRoot, input.taskInstructionPath),
     freezeFile(inputRoot, input.builderSkillPath),
     freezeFile(inputRoot, input.nativeSceneApiPath),
     freezeFile(inputRoot, input.nativeSceneProfilePath),
     freezeFile(inputRoot, input.blockProfilePath),
-    freezeFile(hostClosureRoot, input.gameplayBootstrapPath),
-    freezeFile(hostClosureRoot, input.worldRuntimeBootstrapPath),
-    freezeFile(hostClosureRoot, path.join(hostClosureRoot.requestedPath, "registry-lock.json")),
     ...reconstructionCase.referenceInputs.map((reference) => freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reference.inputRef))),
   ]);
   const effectiveTaskInstruction = repairInstruction === undefined
@@ -980,32 +670,11 @@ export async function prepareNativeBlockGenerationTaskV1(
       });
     })();
   if (sceneBrief.hash !== reconstructionCase.sceneBriefHash) throw new TypeError("Frozen Scene Brief bytes do not match the Case hash.");
-  const gameplayBootstrap = parseGameplayBootstrapV1(
-    JSON.parse(new TextDecoder().decode(gameplaySource.bytes)),
+  const subjectHostContext = parseNativeSubjectHostContextV1(input.subjectHostContext);
+  const subjectHostContextFile = frozenCanonicalFile(
+    "subject-host-context.json",
+    new TextEncoder().encode(stringifyCanonicalJson(subjectHostContext)),
   );
-  const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(
-    JSON.parse(new TextDecoder().decode(runtimeSource.bytes)),
-  );
-  const admittedResourceLocks = worldResourceLockEntriesV1(
-    JSON.parse(new TextDecoder().decode(registryLockSource.bytes)),
-  );
-  const admittedGameplayRows = admittedResourceLocks.filter((row) =>
-    row.resourceKind === "gameplay-bootstrap" &&
-    row.resourceRef === gameplayBootstrap.resourceRef
-  );
-  const admittedRuntimeRows = admittedResourceLocks.filter((row) =>
-    row.resourceKind === "world-runtime-bootstrap" &&
-    row.resourceRef === input.worldRuntimeBootstrapRef
-  );
-  if (
-    admittedGameplayRows.length !== 1 ||
-    admittedGameplayRows[0]!.contentHash !== gameplayBootstrap.contentHash ||
-    admittedRuntimeRows.length !== 1 ||
-    admittedRuntimeRows[0]!.contentHash !== worldRuntimeBootstrap.contentHash ||
-    !input.worldRuntimeBootstrapRef.endsWith(`@${admittedRuntimeRows[0]!.resolvedVersion}`)
-  ) {
-    throw new TypeError("Generation Host owner resources are not admitted by the selected Registry Lock.");
-  }
   const nativeSceneApiResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneApi.bytes,
     "native-scene-api",
@@ -1023,8 +692,7 @@ export async function prepareNativeBlockGenerationTaskV1(
   );
   const derived = deriveNativeBlockGenerationBootstrapV1({
     reconstructionCase,
-    gameplayBootstrap,
-    worldRuntimeBootstrap,
+    subjectHostContext,
     worldBoundsPolicy: input.worldBoundsPolicy,
     bootstrapId: input.bootstrapId,
     sceneModuleRef: input.sceneModuleRef,
@@ -1037,23 +705,6 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (bootstrap.hash !== hashBabylonNativeSceneBootstrapV1(derived.bootstrap)) {
     throw new TypeError("Canonical Bootstrap materialization hash mismatch.");
   }
-  const gameplay = frozenCanonicalFile(
-    "gameplay-bootstrap.json",
-    gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
-  );
-  const runtime = frozenCanonicalFile(
-    "world-runtime-bootstrap.json",
-    worldRuntimeBootstrapCanonicalBytesV1(worldRuntimeBootstrap),
-  );
-  const subjectVisualReviewProxy = deriveNativeBlockSubjectVisualReviewProxyV1({
-    worldRuntimeBootstrap,
-    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
-    worldRuntimeBootstrapBytesHash: runtime.hash,
-  });
-  const subjectVisualReviewProxyFile = frozenCanonicalFile(
-    SUBJECT_VISUAL_REVIEW_PROXY_PATH,
-    new TextEncoder().encode(stringifyCanonicalJson(subjectVisualReviewProxy)),
-  );
   const worldBoundsPolicy = frozenCanonicalFile(
     "world-bounds-policy.json",
     new TextEncoder().encode(stringifyCanonicalJson(derived.worldBoundsPolicy)),
@@ -1061,26 +712,10 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (worldBoundsPolicy.hash !== hashNativeSceneWorldBoundsPolicyV1(derived.worldBoundsPolicy)) {
     throw new TypeError("Canonical World Bounds Policy materialization hash mismatch.");
   }
-  const hostClosure = parseNativeBlockGenerationHostClosureV1({
-    kind: "native-block-generation-host-closure",
-    schemaVersion: 1,
-    gameplayBootstrapRef: gameplayBootstrap.resourceRef,
-    gameplayBootstrapHash: gameplayBootstrap.contentHash,
-    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
-    worldRuntimeBootstrapResolvedVersion: admittedRuntimeRows[0]!.resolvedVersion,
-    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
-    worldBoundsPolicyHash: worldBoundsPolicy.hash,
-    initialControlledEntityId: worldRuntimeBootstrap.initialControlledEntityId,
-  });
-  const hostClosureFile = frozenCanonicalFile(
-    "host-closure.json",
-    new TextEncoder().encode(stringifyCanonicalJson(hostClosure)),
-  );
   const frozenOwnerIdentities = resolveWorldReconstructionFrozenOwnerIdentitiesV1({
     reconstructionCase,
     evaluationProfile: profile,
-    gameplayBootstrap,
-    worldRuntimeBootstrap,
+    subjectHostContext,
     worldBoundsPolicy: derived.worldBoundsPolicy,
     bootstrap: derived.bootstrap,
   });
@@ -1143,7 +778,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       }
     },
   );
-  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBoundsPolicy, hostClosureFile, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
+  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, subjectHostContextFile, worldBoundsPolicy, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const repairInstructionFile = repairInstruction === undefined
     ? undefined
@@ -1151,7 +786,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       "repair-instruction.json",
       new TextEncoder().encode(stringifyCanonicalJson(repairInstruction)),
     );
-  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBoundsPolicy, hostClosureFile, builderSkill, ...builderBundle, ...caseContextReferenceFiles, ...repairContextFiles]
+  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, subjectHostContextFile, worldBoundsPolicy, builderSkill, ...builderBundle, ...caseContextReferenceFiles, ...repairContextFiles]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
@@ -1313,13 +948,9 @@ export async function prepareNativeBlockGenerationTaskV1(
     sourceDirectoryPath,
     bootstrap: derived.bootstrap,
     bootstrapBytes,
-    gameplayBootstrapBytes: gameplay.bytes,
-    worldRuntimeBootstrapBytes: runtime.bytes,
-    subjectVisualReviewProxy,
-    subjectVisualReviewProxyBytes: subjectVisualReviewProxyFile.bytes,
+    subjectHostContext,
+    subjectHostContextBytes: subjectHostContextFile.bytes,
     worldBoundsPolicyBytes: worldBoundsPolicy.bytes,
-    hostClosure,
-    hostClosureBytes: hostClosureFile.bytes,
     frozenOwnerIdentities,
   });
 }
