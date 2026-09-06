@@ -1270,9 +1270,89 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(rendererSource).not.toContain("localeCompare");
   });
 
+  it.each(["id", "visualGroupId", "colliderGroupId"] as const)(
+    "rejects decimal-coordinate %s with the Host Profile rule before advisory completion", async (field) => {
+      const workspace = await createVisualReviewWorkspace();
+      const sourcePath = path.join(workspace, "scene.ts");
+      const source = await readFile(sourcePath, "utf8");
+      const row = { id: "tower-probe", shape: "full", paletteRole: "structure",
+        centerMetersXYZ: [10, 9.5, 0], [field]: "tower-lower-p9.5" };
+      await writeFile(sourcePath, source.replace("session.finalize(",
+        `session.createBlock(${JSON.stringify(row)});\nsession.finalize(`));
+      const result = await runVisualReview(workspace);
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID");
+      expect(result.stderr).toContain(field);
+      expect(result.stderr).toContain("tower-lower-p9.5");
+    },
+  );
+
+  it.each([
+    ["extra create field", 'id: "gate",', 'id: "gate", unexpected: true,', "CREATE_INPUT_INVALID"],
+    ["null create rotation", 'id: "gate",', 'id: "gate", rotationQuarterTurnsY: null,', "CREATE_INPUT_INVALID"],
+    ["explicit undefined rotation", 'id: "gate",', 'id: "gate", rotationQuarterTurnsY: undefined,', "CREATE_INPUT_INVALID"],
+    ["extra grid field", 'idPrefix: "ground",', 'idPrefix: "ground", unexpected: true,', "GRID_CREATE_INPUT_INVALID"],
+    ["short grid prefix", 'idPrefix: "ground",', 'idPrefix: "ab",', "GRID_CREATE_INPUT_INVALID"],
+    ["null grid rotation", 'idPrefix: "ground",', 'idPrefix: "ground", rotationQuarterTurnsY: null,', "GRID_CREATE_INPUT_INVALID"],
+    ["empty Collider row", 'staticColliders: []', 'staticColliders: [{}]', "COLLIDER_SELECTION_INVALID"],
+    ["unknown finalize field", 'staticColliders: []', 'staticColliders: [], unexpected: true', "FINALIZE_INPUT_INVALID"],
+    ["invalid Collider ratio", 'staticColliders: []', 'staticColliders: [{ id: "gate-solid", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none", frictionRatio: 2 }]', "COLLIDER_SELECTION_INVALID"],
+    ["invalid edge policy join", 'staticColliders: []', 'staticColliders: [{ id: "gate-solid", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "protect-ground-subject" }]', "COLLIDER_SELECTION_INVALID"],
+    ["mixed Collider source branches", 'staticColliders: []', 'staticColliders: [{ id: "gate-solid", colliderGeometrySource: { kind: "block", blockId: "gate", colliderGroupId: "another-group" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" }]', "COLLIDER_SELECTION_INVALID"],
+  ] as const)("matches Host input rejection for %s", async (_name, search, replacement, suffix) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    expect(source).toContain(search);
+    await writeFile(sourcePath, source.replace(search, replacement));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(`WORLDKIT_NATIVE_BLOCK_${suffix}`);
+  });
+
+
+  it("preflights a whole grid before a caught duplicate-ID failure can leave Blocks", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const calls = [
+      'session.createBlock({ id: "batch-x1-y0-z0", shape: "full", paletteRole: "structure", centerMetersXYZ: [10, 0.5, 0] });',
+      'try { session.createBlockGrid({ idPrefix: "batch", shape: "full", paletteRole: "structure", minimumCenterMetersXYZ: [20, 0.5, 0], repeatCountXYZ: [2, 1, 1] }); } catch {}',
+      'session.createBlock({ id: "batch-x0-y0-z0", shape: "full", paletteRole: "structure", centerMetersXYZ: [20, 0.5, 0] });',
+    ].join("\n");
+    await writeFile(sourcePath, source.replace("maximumBlockCount: 8", "maximumBlockCount: 20")
+      .replace("session.finalize(", calls + "\nsession.finalize("));
+    const result = await runVisualReview(workspace);
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it.each([
+    ['session.createBlock({ id: "late-block", shape: "full", paletteRole: "structure", centerMetersXYZ: [10, 0.5, 0] });', "SESSION_CLOSED"],
+    ['session.createBlockGrid({ idPrefix: "late-grid", shape: "full", paletteRole: "structure", minimumCenterMetersXYZ: [10, 0.5, 0], repeatCountXYZ: [1, 1, 1] });', "SESSION_CLOSED"],
+    ['session.finalize({ staticColliders: [{ id: "gate-solid", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" }] });', "FINALIZE_INPUT_MISMATCH"],
+  ] as const)("matches Host post-finalize rejection for %s", async (call, code) => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, source.replace('session.finalize({ staticColliders: [] });',
+      'session.finalize({ staticColliders: [] });\n' + call));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_" + code);
+  });
+  it("matches Host idempotent finalization without another captured output", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    await writeFile(sourcePath, source.replace('session.finalize({ staticColliders: [] });',
+      'session.finalize({ staticColliders: [] });\nsession.finalize({ staticColliders: [] });'));
+    expect((await runVisualReview(workspace)).exitCode).toBe(0);
+  });
+
   it.each([
     ["overlap", [0.5, -0.5, 0], "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP"],
-    ["off-grid", [0.1, 0.5, -2], "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID"],
+    ["off-grid", [0.1, 0.5, -2], "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID"],
   ] as const)("feeds %s back before advisory images can claim completion", async (_kind, center, code) => {
     const workspace = await createVisualReviewWorkspace();
     const sourcePath = path.join(workspace, "scene.ts");
@@ -1328,7 +1408,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     ]);
   });
 
-  it("bounds occupancy feedback for long IDs and escapes control characters without losing pair identity", async () => {
+  it("rejects invalid long IDs with bounded escaped Profile feedback before occupancy", async () => {
     const workspace = await createVisualReviewWorkspace();
     const sourcePath = path.join(workspace, "scene.ts");
     const source = await readFile(sourcePath, "utf8");
@@ -1340,8 +1420,9 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       .replace("session.finalize(", `${calls}\nsession.finalize(`));
     const result = await runVisualReview(workspace);
     expect(result.exitCode).toBe(2);
-    expect(result.stderr.match(/ at cell /g)).toHaveLength(32);
-    expect(result.stderr).toContain(sha256Bytes(Buffer.from(`${prefix}overlap-31`)));
+    expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID");
+    expect(result.stderr).not.toContain(" at cell ");
+    expect(result.stderr).toContain(sha256Bytes(Buffer.from(`${prefix}base-0`)));
     expect(Buffer.byteLength(result.stderr)).toBeLessThan(40_000);
     expect(result.stderr.trimEnd()).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/);
     expect(result.stderr).toContain("\\u0027");

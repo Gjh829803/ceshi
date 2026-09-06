@@ -208,10 +208,12 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "bindBlockMaterializerMetadataToSemanticCaptureTargetsV1",
       "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
+      "createBabylonNativeBlockInputParsersV1",
       "createBabylonNativeBlockProfileSessionV1",
       "hashBabylonNativeBlockCheckedLayoutInventoryV1",
       "hashNativeBlockAuthoringManifestV1",
       "hashNativeBlockVisualResourceListV1",
+      "isBabylonNativeBlockIdV1",
       "parseNativeBlockAuthoringManifestV1",
       "parseNativeBlockVisualResourceListV1",
     ]);

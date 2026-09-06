@@ -2,6 +2,7 @@ export {
   BABYLON_NATIVE_BLOCK_PALETTE_COLOR_HEX_BY_ROLE_V1,
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  isBabylonNativeBlockIdV1,
 } from "./profile.js";
 export type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
 export {
@@ -28,6 +29,7 @@ export type {
 } from "./check.js";
 export { BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 } from "./check.js";
 export type { BabylonNativeBlockProfileDiagnosticCodeV1 } from "./check.js";
+export { createBabylonNativeBlockInputParsersV1 } from "./session-input.js";
 export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
   BabylonNativeBlockCheckedLayoutV1,

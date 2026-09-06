@@ -2536,3 +2536,70 @@ failure ownership remain, without another diagnostic global or production gate.
 The original `goto` domcontentloaded/30s timeout is unchanged, as in the old branch.
 Focused regressions are not real Browser or final production Case acceptance; those
 remain after all CF implementation, in the order above.
+
+### Latest trial outcome and CF-19/ID1 (2026-09-06 20:20 CST)
+
+The latest user scheduling supersedes the previous merge condition: after this real Case
+completes production and necessary integration checks, merge the candidate into main, then
+branch from that main to continue the remaining CF scope. A second reference image belongs
+to that follow-up branch and is no longer a prerequisite for this merge. No incomplete CF
+item becomes complete merely because production succeeds.
+
+The fixed `fda2ced35e97f957126ca6619aa093615ac2eeb2` local run is now terminal:
+`paper-moon-054-cf-trial-fda2ced-0906/runs/run-20260906120237-85763`.
+Planner task `planner-20260906-115054-85778`, self-check, Host replay and directory promotion
+passed. Builder completed with exit 0 after 1,009,828 ms. Native Check rejected with
+`WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID`; production exit 1, not published, cleanup
+completed, Ground/Capture/Evaluation not run. The original receipts and generated source
+remain immutable. Advisory images still omit major terrain/valley mass; CF-11/20/21 fidelity
+is unresolved independently of the structural failure.
+
+CF-19/ID1 is main-agent-only and sequential. Its bounded ownership is the existing Profile
+identifier predicate, session use, advisory renderer feedback, their tests and frozen tools.
+Pinned old `9e35ab53:packages/block-world/src/check.ts:30` and the current session use the
+same 3-80-character lowercase/digit/hyphen ID rule. The generated coordinate-to-ID helper
+emits `middle-gate-pillar-n7-p2.5`; the renderer previously accepted it. Share the actual Host
+predicate instead of copying another regex, changing geometry, weakening admission, or
+adding a task/retry/ordinary gate. Invalid group IDs use the same existing contract.
+
+Evidence so far: the three new renderer cases were RED (Block and Collider group IDs
+incorrectly exited 0; visual group reached a later generic undeclared-group diagnostic).
+The repair passes 18 ID/boundary/escaped-feedback cases and typecheck. A private replay at
+`/tmp/worldkit-cf19-id-replay.g3wOZ2` rejects the exact ID before emitting comparisons; both
+its source and the original have SHA-256
+`fa8f69da0cf782ddaa2ca8d31b4504c2a5ada9f090e39a5b53647af86e1fb76d`.
+This is diagnostic feedback evidence, not a successful production replay. Full affected
+Profile/session/package-boundary/Builder Skill regressions subsequently passed 153/153.
+
+Integration preflight refreshed remote main to `0d7662791355337020230eb6d34084b158839dcf`.
+The simulated merge has two test-only conflicts: semantically equivalent viewRequirements
+fixture formatting and main's 120-second renderer-build test timeout. Preserve main's CI
+fixes when the success condition is met; do not alter the in-flight/source-pinned trial or
+another task's checkout. No merge or PR has been performed.
+
+### CF-19/INPUT2: shared authoring-input grammar (2026-09-06)
+
+Depends on ID1; main-agent-only, sequential. Exclusive ownership is Profile pure input
+parsing, the existing advisory consumer, focused tests and frozen Builder tools. Twelve
+new regressions reproduced broader drift: unknown fields, explicit null/undefined,
+short grid prefixes, Collider selection branches/ratios and canonical repeat finalization.
+The Host's existing parser is extracted unchanged in acceptance semantics; the feedback
+consumer calls that owner instead of retaining a second parser. Invalid ID diagnostics
+now name and safely bound the field value. No new production gate, retry or task is added.
+
+The feedback VM declares its ordinary Object/Array prototypes before source execution;
+the Host still accepts only its own ordinary realm. Accessors and custom prototypes are
+not coerced. Successful normalization and grid ordering are identical; grid duplicate-ID
+preflight leaves no partial batch; repeated equal canonical finalization is idempotent.
+Collider geometry admission, membership, Ground, Runtime and capacity remain with their
+existing owners, not the disposable comparison renderer.
+
+Evidence: 12 regression cases RED before wiring; renderer input/ID 16/16 GREEN; grid
+atomicity and post-finalization 4/4; realm/adversarial/Profile/actual Host Session 79/79;
+typecheck passed. The generated renderer/self-check and representative frozen copies
+are synchronized. Full affected five-file regression passed 199/199 in 263.36 seconds,
+including the Builder Skill drift gate and Collider settlement. Current shared-parser
+feedback replay of the unchanged private source again rejects the exact decimal ID before
+PNG output. This is not a final full-CI checkpoint or independent review.
+The original failed 054 Run remains failed and immutable;
+no fresh real Case has been launched and the main merge condition remains unmet.

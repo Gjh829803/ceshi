@@ -3108,6 +3108,30 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   opening PNG 已打开检查；CSP 启动缺陷已关闭。六组捕获/七条像素对照已通过，第一张完整
   Case、容量对齐与 main 合入仍未完成。快照提交只存在于临时验证仓库，不是 CF 提交。
 
+- CF-19/ID1 真实试跑与反馈修复（2026-09-06 20:20 CST）：固定 `fda2ced3` 的
+  `paper-moon-054-cf-trial-fda2ced-0906` / `run-20260906120237-85763` 已结束。
+  Planner 自检、Host 复检和目录交接通过，Builder 退出 0；Native Check 因
+  `WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID` 拒绝，顶层退出 1、未发布、清理完成，
+  Ground/Capture/Evaluation 未运行。新旧 Profile 的 ID 规则相同；生成源码将小数坐标
+  拼为 `middle-gate-pillar-n7-p2.5`，任务内比较图漏检该 ID。现将既有 Host ID 谓词共享给
+  比较图渲染器，不放宽规则、不加普通生产 gate/重试；最小 RED 3 项已复现，修复后
+  ID/边界/有界反馈 18/18、typecheck 通过，该版完整受影响回归随后 153/153 通过。原始源码不变的
+  私有回放已精确拒绝上述 ID，不升级原 Run 收据。实际对比图仍有明显山体/谷地缺失，
+  保留 CF-20/21/11 还原缺口。最新用户安排允许本次真实链路跑通并完成合入检查后先合
+  main，再从 main 新分支继续 CF；第二张图不再作为这次合入前置。目前失败，尚未合入。
+
+- CF-19/INPUT2（2026-09-06，主会话独占、顺序执行）：ID1 后继续核对发现比较图仍在
+  复制简化版 Session 输入校验，额外字段、显式 null/undefined、短网格前缀、Collider 行、
+  重复 finalize 等 12 项回归均 RED。现抽取既有 Host 的纯输入解析器，由 Host 和任务内
+  反馈共同使用；VM 仅显式承认自身普通 Object/Array 原型，不放宽 Host，拒绝访问器和
+  任意对象字符串化。创建/网格/提交采用同一字段与规范化规则，网格 ID 冲突整批预检，
+  相同规范化 finalize 幂等。无新增 gate/任务/重试，无 Runtime 或物理所有权迁移。
+  已通过：渲染输入/ID 16/16、网格原子性/提交后行为 4/4、跨环境与 Host Session 79/79、
+  typecheck。冻结工具已同步，完整受影响五文件回归 199/199 通过（263.36s，包含 Builder
+  Skill 漂移门禁和 Collider 结算）；修复后再次回放原源码副本仍在 PNG 前精确拒绝该 ID。
+  这些不替代新真实 Case，不标 CF-19
+  全完成，Collider 几何准入/地面/容量和实际山谷还原仍是独立未完成证据。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

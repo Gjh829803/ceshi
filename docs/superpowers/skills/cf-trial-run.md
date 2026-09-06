@@ -55,4 +55,10 @@ Builder 同任务内自修复，以及 Host 的交接、Check、Ground、Package
   最终 exact-SHA 全仓 CI 或独立审查证明。
 - CF-20 的全世界容量/预算映射、部分地理还原仍在开发；生产方块上限目前为 8,000。
   不要据此声称已达到老分支的大场景容量或还原效果。
-- 两张不同参考图的真实验收通过前，不将这个试跑分支合入 main。
+- 用户最新安排：本次真实 Case 完整跑通并完成必要合入检查后，可以先合入 main，
+  再从最新 main 拉新分支继续 CF；第二张图在后续分支验证，不再是本次合入前置。
+  这不把容量、地理还原或其他未完成 CF 项标记为完成。
+- 固定 `fda2ced3` 的 054 试跑已结束于 Native Check：Planner/Host 交接通过，
+  Builder 退出 0，但源码包含小数点 ID，触发 `WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID`。
+  Ground/Capture/发布未启动，因此当前尚不满足合入条件。CF-19 正修复任务内 ID 反馈遗漏，
+  不能把私有诊断回放称为原 Run 成功。

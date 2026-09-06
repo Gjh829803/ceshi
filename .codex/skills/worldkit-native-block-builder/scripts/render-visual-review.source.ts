@@ -8,13 +8,13 @@ import vm from "node:vm";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import ts from "typescript";
+import { isEqual } from "lodash-es";
+import { createBabylonNativeBlockInputParsersV1 } from "@whitebox-world/native-babylon-block-profile";
 import { parseBabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 as SHAPE_SIZE_BY_KIND,
   BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
-  babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
-  effectiveBabylonNativeBlockSizeMetersXYZV1 as effectiveSize,
 } from "@whitebox-world/native-babylon-block-profile/shapes";
 import {
   sha256CanonicalJson,
@@ -347,12 +347,6 @@ function vec3(value: unknown, fieldName: string): Vec3 {
   return Object.freeze([value[0], value[1], value[2]]) as Vec3;
 }
 
-function positiveSafeInteger(value: unknown, fieldName: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
-    return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `${fieldName} must be a positive safe integer`);
-  }
-  return value as number;
-}
 
 function text(value: unknown, fieldName: string): string {
   if (typeof value !== "string" || value.length === 0) {
@@ -441,6 +435,9 @@ function captureSource(
       : [])].join("; "),
   );
   let finalized = false;
+  let inputParsers: ReturnType<typeof createBabylonNativeBlockInputParsersV1>;
+  let finalizedInput: ReturnType<typeof inputParsers.parseFinalizeInput> | undefined;
+  const finalizedResult = Object.freeze({});
   let sessionCreated = false;
   let spawn: Readonly<{
     id: string;
@@ -449,41 +446,22 @@ function captureSource(
   }> | undefined;
 
   const addBlock = (input: unknown): Readonly<Record<string, never>> => {
-    if (finalized || input === null || typeof input !== "object" || Array.isArray(input)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "createBlock input is invalid");
+    if (finalized) {
+      return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+        "createBlock is unavailable after finalization begins");
     }
-    const row = input as Record<string, unknown>;
-    const id = text(row.id, "block.id");
+    const row = inputParsers.parseCreateInput(input);
+    const { id, shape, paletteRole, centerMetersXYZ, visualGroupId, colliderGroupId } = row;
+    const rotation = row.rotationQuarterTurnsY!;
     if (blockIds.has(id)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `duplicate Block id '${id}'`);
+      return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE", `duplicate Block id '${id}'`);
     }
-    const shape = text(row.shape, "block.shape") as keyof typeof SHAPE_SIZE_BY_KIND;
-    const paletteRole = text(row.paletteRole, "block.paletteRole") as keyof typeof COLOR_BY_PALETTE_ROLE;
-    if (!Object.hasOwn(SHAPE_SIZE_BY_KIND, shape) || !Object.hasOwn(COLOR_BY_PALETTE_ROLE, paletteRole)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Block '${id}' uses an unknown shape or palette role`);
+    if (maximumBlockCount === undefined || blocks.length >= maximumBlockCount ||
+        blocks.length >= MAXIMUM_CAPTURED_BLOCK_COUNT) {
+      return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
+        "block creation exceeds the caller-authorized hard cap");
     }
-    const rotation = row.rotationQuarterTurnsY ?? 0;
-    if (![0, 1, 2, 3].includes(rotation as number)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Block '${id}' rotation is invalid`);
-    }
-    if (
-      maximumBlockCount === undefined ||
-      blocks.length >= maximumBlockCount ||
-      blocks.length >= MAXIMUM_CAPTURED_BLOCK_COUNT
-    ) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "captured Block count exceeds its hard cap");
-    }
-    const visualGroupId = row.visualGroupId === undefined
-      ? undefined
-      : text(row.visualGroupId, "block.visualGroupId");
-    const colliderGroupId = row.colliderGroupId === undefined
-      ? undefined
-      : text(row.colliderGroupId, "block.colliderGroupId");
-    const centerMetersXYZ = vec3(row.centerMetersXYZ, "block.centerMetersXYZ");
-    const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation as number };
-    if (!babylonNativeBlockCenterAlignsToGridV1(placement)) {
-      return fail("WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID", `Block '${id}' is off its shape-specific grid`);
-    }
+    const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation };
     // Disposable feedback only. Use the Profile's exact occupied cells, not a
     // second bounds/intersection approximation or a Runtime collision inference.
     const keys = babylonNativeBlockOccupiedMicroCellKeysV1(placement);
@@ -521,71 +499,41 @@ function captureSource(
   };
 
   const createSession = (_context: unknown, budgetInput: unknown) => {
-    if (sessionCreated || budgetInput === null || typeof budgetInput !== "object") {
+    if (sessionCreated) {
       return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "exactly one Block Profile session is required");
     }
     sessionCreated = true;
-    maximumBlockCount = positiveSafeInteger(
-      (budgetInput as Record<string, unknown>).maximumBlockCount,
-      "maximumBlockCount",
-    );
+    maximumBlockCount = inputParsers.parseBudget(budgetInput).maximumBlockCount;
     if (maximumBlockCount > MAXIMUM_CAPTURED_BLOCK_COUNT) {
       return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "maximumBlockCount exceeds advisory capture limit");
     }
     return Object.freeze({
       createBlock: addBlock,
       createBlockGrid(input: unknown) {
-        if (input === null || typeof input !== "object" || Array.isArray(input)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "createBlockGrid input is invalid");
+        if (finalized) {
+          return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+            "createBlockGrid is unavailable after finalization begins");
         }
-        const row = input as Record<string, unknown>;
-        const idPrefix = text(row.idPrefix, "grid.idPrefix");
-        const shape = text(row.shape, "grid.shape") as keyof typeof SHAPE_SIZE_BY_KIND;
-        if (!Object.hasOwn(SHAPE_SIZE_BY_KIND, shape)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Grid '${idPrefix}' shape is invalid`);
-        }
-        const rotation = row.rotationQuarterTurnsY ?? 0;
-        if (![0, 1, 2, 3].includes(rotation as number)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Grid '${idPrefix}' rotation is invalid`);
-        }
-        const minimum = vec3(row.minimumCenterMetersXYZ, "grid.minimumCenterMetersXYZ");
-        const counts = vec3(row.repeatCountXYZ, "grid.repeatCountXYZ");
-        const countX = positiveSafeInteger(counts[0], "grid.repeatCountXYZ[0]");
-        const countY = positiveSafeInteger(counts[1], "grid.repeatCountXYZ[1]");
-        const countZ = positiveSafeInteger(counts[2], "grid.repeatCountXYZ[2]");
-        const spacing = effectiveSize(shape, rotation as number);
-        const created: Readonly<Record<string, never>>[] = [];
-        for (let y = 0; y < countY; y += 1) {
-          for (let z = 0; z < countZ; z += 1) {
-            for (let x = 0; x < countX; x += 1) {
-              created.push(addBlock({
-                id: `${idPrefix}-x${x}-y${y}-z${z}`,
-                shape,
-                paletteRole: row.paletteRole,
-                centerMetersXYZ: [
-                  minimum[0] + x * spacing[0],
-                  minimum[1] + y * spacing[1],
-                  minimum[2] + z * spacing[2],
-                ],
-                rotationQuarterTurnsY: rotation,
-                ...(row.visualGroupId === undefined ? {} : { visualGroupId: row.visualGroupId }),
-                ...(row.colliderGroupId === undefined ? {} : { colliderGroupId: row.colliderGroupId }),
-              }));
-            }
+        const rows = inputParsers.parseGridCreateInput(input, maximumBlockCount! - blocks.length);
+        // Match Host batch preflight: an ID collision must not leave a partial grid.
+        for (const row of rows) {
+          if (blockIds.has(row.id)) {
+            return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE",
+              `block id '${row.id}' is already used in this session`);
           }
         }
-        return Object.freeze(created);
+        return Object.freeze(rows.map(addBlock));
       },
       finalize(input: unknown) {
-        if (finalized || input === null || typeof input !== "object" || Array.isArray(input)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "session.finalize input is invalid");
+        const parsedInput = inputParsers.parseFinalizeInput(input);
+        if (finalized) {
+          if (isEqual(parsedInput, finalizedInput)) return finalizedResult;
+          return fail("WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_MISMATCH",
+            "repeated finalize must use the exact same canonical input");
         }
-        if (Object.keys(input).length !== 1 ||
-            !Array.isArray((input as Record<string, unknown>).staticColliders)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "session.finalize requires only staticColliders");
-        }
+        finalizedInput = parsedInput;
         finalized = true;
-        return Object.freeze({});
+        return finalizedResult;
       },
       dispose() {
         return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "Builder may not dispose the advisory session");
@@ -619,6 +567,15 @@ function captureSource(
     codeGeneration: { strings: false, wasm: false },
     name: "worldkit-native-block-advisory-capture",
   });
+  const inputRealm = new vm.Script(
+    "({ objectPrototype: Object.prototype, arrayPrototype: Array.prototype })",
+  ).runInContext(context, { timeout: BUILD_TIMEOUT_MILLISECONDS }) as {
+    objectPrototype: object; arrayPrototype: object;
+  };
+  inputParsers = createBabylonNativeBlockInputParsersV1(
+    (code, detail) => { throw new TypeError(`${code}: ${detail}`); },
+    inputRealm,
+  );
   const script = new vm.Script(`"use strict";\n${transpiled.outputText}`, {
     filename: sourcePath,
   });

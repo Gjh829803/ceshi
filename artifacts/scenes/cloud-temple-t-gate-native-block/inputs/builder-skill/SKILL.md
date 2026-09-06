@@ -249,6 +249,14 @@ node <resolved-bundled-renderer-path> \
 
 The renderer performs a source-only restricted mock capture of the Block Profile calls. It reads the frozen Native Bootstrap, `subject-host-context.json`, `native-block-authoring.json`, World Plan, and Entry Whitebox Target. Its bundled Host compiler derives the controlled Subject's visual-review proxy from the sidecar design and frozen resources, never from Native geometry. It does not instantiate Babylon, Engine, Scene, Runtime, Physics, Camera, Package, or Formal Capture. A passing renderer report proves only that the current source produced deterministic advisory pixels.
 
+Before emitting comparisons, it checks Block, visual-group and Collider-group IDs with the Host
+Profile's exact identifier rule. Coordinates belong in metric fields; a fractional coordinate must
+not introduce a decimal point into an ID. Repair the named field without changing geometry merely
+to make its identifier legal. It also shares the Host input parsers for the caller budget,
+individual Blocks, grids and final Collider selections, including closed fields and repeated
+canonical finalization. This checks authoring input grammar only; Collider geometry admission,
+Ground and Runtime checks remain Host-owned. This feedback uses the same shared repair budget.
+
 Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
 functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and
 one representative occupied cell for each of at most 32 distinct pairs, in deterministic discovery
