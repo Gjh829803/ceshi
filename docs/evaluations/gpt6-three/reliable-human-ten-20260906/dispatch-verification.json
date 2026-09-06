@@ -1,0 +1,100 @@
+{
+  "observedAt": "2026-09-06T13:47:01.777Z",
+  "count": 10,
+  "allActualCliStarted": true,
+  "maximumTaskSeconds": 5400,
+  "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141",
+  "sdkRuntimeHash": "1c5b8333cd1a54ed9162f7c15ba90798f3649ef9b4a67159e4b73ae38b508d8d",
+  "cases": [
+    {
+      "taskId": "gpt6-human-open-01-lbd-5d074906d420411bbd45d887--three-sdk",
+      "jobId": "gen_cbbdc6cfe8080ebc",
+      "requestedAccountLabel": "A",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:44:44.666Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-02-lbd-7aa1c6669484c2697b8978b1--three-sdk",
+      "jobId": "gen_9065b780e33b3874",
+      "requestedAccountLabel": "B",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:42:31.386Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-03-lbd-b805ae1edf2674775be2818b--three-sdk",
+      "jobId": "gen_d5e5e426a97741aa",
+      "requestedAccountLabel": "C",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:38:36.853Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-04-lbd-403b678af8a82e1d7079a922--three-sdk",
+      "jobId": "gen_8bfc05a04d64e26e",
+      "requestedAccountLabel": "G",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:38:14.223Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-05-lbd-5b81ee7a09f01166b55d3e53--three-sdk",
+      "jobId": "gen_53f6487440ace3e1",
+      "requestedAccountLabel": "A",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:40:04.778Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-06-lbd-34b24c6395229e0ff138ff6b--three-sdk",
+      "jobId": "gen_6b409f9d7c8b9878",
+      "requestedAccountLabel": "B",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:42:04.266Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-07-lbd-183b265b63084e99146ebf85--three-sdk",
+      "jobId": "gen_71d09adec0c2093e",
+      "requestedAccountLabel": "C",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:36:55.563Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-08-lbd-d8304b1a556ce4dbd0d94a1f--three-sdk",
+      "jobId": "gen_c43283dc26badd1c",
+      "requestedAccountLabel": "G",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:40:25.356Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-09-lbd-f491483977a7055d31ed243e--three-sdk",
+      "jobId": "gen_fa8d08021b7770b9",
+      "requestedAccountLabel": "A",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:42:11.825Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    },
+    {
+      "taskId": "gpt6-human-open-10-lbd-bc84eac9585d541f3e46b8b0--three-sdk",
+      "jobId": "gen_29c057dce0f07d3b",
+      "requestedAccountLabel": "B",
+      "apiAcceptedSelection": true,
+      "actualCliStarted": true,
+      "startedAt": "2026-09-06T13:44:39.188Z",
+      "runtimeHash": "8abd071c4d19c9a0b0dee0a535b362440fa205c789b7700bf96bc29211fbf141"
+    }
+  ]
+}
