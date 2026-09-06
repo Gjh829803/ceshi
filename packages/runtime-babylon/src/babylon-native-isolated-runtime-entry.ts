@@ -120,7 +120,7 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   readonly runtimeSessionId: string;
   initialSnapshot(): WorldRuntimeSnapshotV4;
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
-  renderFrame(): RenderReadyReceiptV1;
+  renderFrame(interpolationAlphaRatio?: number): RenderReadyReceiptV1;
   resize(): void;
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
@@ -347,8 +347,8 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     return observeRuntimeUsage(handle.runtime.snapshot(), handle.engine);
   }
 
-  renderFrame(): RenderReadyReceiptV1 {
-    return this.activeHandle().runtime.renderFrame();
+  renderFrame(interpolationAlphaRatio = 1): RenderReadyReceiptV1 {
+    return this.activeHandle().runtime.renderFrame(interpolationAlphaRatio);
   }
 
   resize(): void {

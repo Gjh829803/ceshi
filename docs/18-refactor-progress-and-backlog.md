@@ -3255,6 +3255,14 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   opacity 1、支撑采样 Tick 1 opacity 0.888889，完整证据见当日参数审计。没有改变生产 gate 或淡化参数，
   完整 CF-04/12、交互时序对齐和最终新 Case 仍未完成。
 
+- CF-04/R7 Native Hosted 交互时序（2026-09-07，`77d02f73` 后）：已修复真实入口
+  排队但不等待 input、固定 alpha=1 和保留长帧积压的问题。沿用老代码五 Tick 总积累
+  上限、1e-12 边界与首帧零推进；输入完成后渲染剩余时间 alpha，销毁/失败不再渲染。
+  实际 Native Camera alpha=0 的约 4cm 偏差已 RED→GREEN；入口/帧两文件 24/24，
+  后补 30/60/120Hz 后帧文件 12/12；typecheck、原 3C 和现有 Hosted Browser 的真实
+  页面启动/键盘移动/协议/清理验证通过。未跑新模型 Case、全仓 CI 或独立审查；
+  多入口像素/手感、主体完整能力及整个 CF-04/12 仍不能据此结项。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

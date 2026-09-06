@@ -33,7 +33,7 @@ import {
   startHostedFormalCaptureFrameRouteV1,
   startHostedFormalCaptureShellRouteV1,
 } from "./hosted-formal-capture-route.js";
-import { consumeHostedInteractiveInputV1 } from
+import { renderHostedInteractiveFrameV1 } from
   "./hosted-interactive-input.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { presentPageFailureV1 } from "./page-failure.js";
@@ -522,44 +522,42 @@ async function startHostedFrame(): Promise<void> {
     "ShiftLeft", "ShiftRight", "Space",
   ]);
   let localRequestSequence = 0;
-  let localInputTail = Promise.resolve();
-  let previousTimestamp = performance.now();
+  let previousTimestamp: number | undefined;
   let accumulatedSeconds = 0;
   let frameRequest = 0;
-  const runLocalInput = (input: FixedInputV1): void => {
+  const runLocalInput = async (input: FixedInputV1): Promise<void> => {
     const requestSequence = ++localRequestSequence;
-    localInputTail = localInputTail.then(async () => {
-      const receipt = await entry.submit({
-        kind: "worldkit-runtime-session-request",
-        schemaVersion: 1,
-        id: `request.browser-local-input.${requestSequence}`,
-        runtimeSessionId,
-        type: "fixed-input.run",
-        input,
-      });
-      if (receipt.status !== "succeeded") {
-        throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
-      }
-    }).catch(showFailure);
+    const receipt = await entry.submit({
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: `request.browser-local-input.${requestSequence}`,
+      runtimeSessionId,
+      type: "fixed-input.run",
+      input,
+    });
+    if (receipt.status !== "succeeded") {
+      throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+    }
   };
-  const renderLoop = (timestamp: number): void => {
+  const renderLoop = async (timestamp: number): Promise<void> => {
     if (hostedFrame.isDisposed()) return;
-    const elapsedSeconds = Math.min(
-      0.1,
-      Math.max(0, (timestamp - previousTimestamp) / 1_000),
-    );
+    const elapsedSeconds = previousTimestamp === undefined
+      ? 0 : Math.max(0, (timestamp - previousTimestamp) / 1_000);
     previousTimestamp = timestamp;
     accumulatedSeconds += elapsedSeconds;
-    const consumedInput = consumeHostedInteractiveInputV1({
+    accumulatedSeconds = await renderHostedInteractiveFrameV1({
       accumulatedSeconds,
       pressedCodes,
+      runFixedInput: runLocalInput,
+      renderFrame: (alpha) => { entry.renderFrame(alpha); },
+      isDisposed: () => hostedFrame.isDisposed(),
     });
-    accumulatedSeconds = consumedInput.remainingSeconds;
-    if (consumedInput.input !== undefined) runLocalInput(consumedInput.input);
-    entry.renderFrame();
     if (!hostedFrame.isDisposed()) {
-      frameRequest = requestAnimationFrame(renderLoop);
+      frameRequest = requestAnimationFrame(scheduleRender);
     }
+  };
+  const scheduleRender = (timestamp: number): void => {
+    void renderLoop(timestamp).catch(showFailure);
   };
   window.addEventListener("keydown", (event) => {
     if (!contextualCodes.has(event.code)) return;
@@ -586,7 +584,7 @@ async function startHostedFrame(): Promise<void> {
     pressedCodes.clear();
     void hostedFrame.dispose();
   }, { once: true });
-  frameRequest = requestAnimationFrame(renderLoop);
+  frameRequest = requestAnimationFrame(scheduleRender);
   canvas.focus();
 }
 

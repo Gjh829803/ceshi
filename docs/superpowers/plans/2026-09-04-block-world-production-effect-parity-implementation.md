@@ -1085,6 +1085,24 @@ and actual Native entry alpha 0/0.5/1 with unchanged committed snapshots. Run
 focused consumers, typecheck and 3C migration; full Browser/feel remains a distinct
 acceptance layer. R7 does not close all CF-04/12 or authorize an early final Case.
 
+R7 implementation evidence: long-frame backlog and Tick-boundary tests reproduced
+0.4166666666666667 excess seconds and a skipped boundary Tick. The actual Native
+entry test initially had no camera displacement inside its dead zone; after
+warming up 60 fixed Ticks it reproduced alpha=0 rendering the latest camera with
+a 0.0399987845m error. The existing entry now forwards alpha to Runtime, and the
+Hosted display adapter awaits input before rendering; it neither queues another
+frame while pending nor renders after disposal/rejected input. First RAF starts
+at zero elapsed time. Five-Tick accumulator cap and 1e-12 epsilon match old code.
+
+Focused entry/frame run passed 24/24; adding 30/60/120Hz cases left the frame
+file at 12/12. Typecheck and the unchanged 3C gate (11 entries / 39 live references /
+10 invariants) passed. `pnpm verify:hosted-native-browser` passed real dedicated-
+origin startup, physical keyboard movement, protocol input and disposal. The
+logged Vite /@fs denial is an expected negative isolation probe, not a startup
+failure. This Browser run is not a pixel/feel review; alpha 0/0.5/1 and committed
+Snapshot invariance are real Babylon/Havok NullEngine evidence. No new model
+Case, full CI or independent final review occurred.
+
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 
 Main-agent-only, sequential; depends on the existing CF-02 watchdog, not on a new

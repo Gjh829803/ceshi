@@ -456,6 +456,41 @@ describe("Babylon Native isolated Runtime entry", () => {
     await entry.dispose();
   });
 
+  it("renders actual Native Camera interpolation through the isolated entry without changing committed state", async () => {
+    const input = await entryInput();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.interpolation`);
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({ ...input, engineFactory: () => engine });
+    try {
+      const run = async (id: string, ticks: number) => {
+        const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, id, {
+          type: "fixed-input.run", input: { actions: ["move-right"], ticks },
+        }));
+        if (receipt.status !== "succeeded" || receipt.requestType !== "fixed-input.run") throw new Error("fixed input failed");
+        return receipt.snapshot;
+      };
+      const previous = await run("request.interpolation.warmup", 60);
+      const current = await run("request.interpolation.next", 1);
+      if (previous.view.camera.mode !== "tracking" || current.view.camera.mode !== "tracking") throw new Error("tracking camera missing");
+      const a = previous.view.camera.actualPositionMetersXYZ;
+      const b = current.view.camera.actualPositionMetersXYZ;
+      if (a === undefined || b === undefined) throw new Error("resolved camera pose missing");
+      expect(Math.hypot(...b.map((value, axis) => value - a[axis]!))).toBeGreaterThan(1e-5);
+      const scene = engine.scenes[0]!;
+      const positions: number[][] = [];
+      scene.onBeforeRenderObservable.add(() => positions.push(scene.activeCamera!.position.asArray()));
+      for (const alpha of [0, 0.5, 1]) entry.renderFrame(alpha);
+      for (const [index, alpha] of [0, 0.5, 1].entries()) {
+        for (let axis = 0; axis < 3; axis++) {
+          expect(positions[index]![axis]).toBeCloseTo(a[axis]! + (b[axis]! - a[axis]!) * alpha, 6);
+        }
+      }
+      const after = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.interpolation.snapshot", { type: "snapshot.get" }));
+      if (after.status !== "succeeded" || after.requestType !== "snapshot.get") throw new Error("snapshot failed");
+      expect(after.snapshot.world).toEqual(current.world);
+      expect(after.snapshot.view).toEqual(current.view);
+    } finally { await entry.dispose(); }
+  });
+
   it("routes fixed input, snapshot and close through Runtime Session Protocol V1", async () => {
     const input = await entryInput();
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
