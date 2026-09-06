@@ -1,6 +1,7 @@
 """Durable campaign queue. Quality decisions are separate, evidence-backed Host inputs."""
 from pathlib import Path
 import json,os,sys,time,datetime,hashlib,subprocess,fcntl,collections
+from account_availability import update_availability
 REPO=Path(__file__).resolve().parents[3];OUT=REPO/'.codex-tmp/overnight-human-300-20260906';TERMINAL={'delivered','failed','stopped','cancelled'}
 def read(p,default=None):
  try:return json.loads(p.read_text())
@@ -40,7 +41,7 @@ def rows_of(config):
   for task in plan.get('selectedTaskIds',[]):
    state=read(root/task/'state.json',{});payload=read(root/task/'payload.json',{});ids=payload.get('options',{}).get('codex_account_ids',[])
    recovery=read(root/task/'host-recovered-delivery.json',{});recovered=recovery.get('kind')=='three-creator-recovered-delivery' and recovery.get('status')=='artifact-verified' and recovery.get('jobId')==state.get('jobId') and all(recovery.get(k)==state.get(k) and state.get(k) for k in ['sourceHash','worldBuildHash'])
-   rows.append({'executionComplete':state.get('rayCleanupConfirmed') is True and state.get('providerStatus') in ['succeeded','completed','failed','cancelled','stopped'],'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
+   rows.append({'availabilityFacts':live.get(task,{}).get('failureFacts',[]),'executionComplete':state.get('rayCleanupConfirmed') is True and state.get('providerStatus') in ['succeeded','completed','failed','cancelled','stopped'],'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
  return rows
 
 def main():
@@ -53,6 +54,10 @@ def main():
     except Exception as e:write(OUT/'health-warning.json',{'at':now(),'reason':type(e).__name__});lasthealth=time.time()-480
    for wave in config['waves']:start_supervisor(Path(wave['runRoot']))
    rows=rows_of(config);byCase={}
+   auto=update_availability(rows,read(OUT/'automatic-availability.json'),{v['identitySha256']:k for k,v in decisions.items()},now())
+   for identity,block in list(auto['blockedAccounts'].items()):
+    if block['jobId'] in decisions.get(block['label'],{}).get('availabilityClearedForJobIds',[]):del auto['blockedAccounts'][identity]
+   write(OUT/'automatic-availability.json',auto)
    for row in rows:byCase.setdefault(row['caseId'],[]).append(row)
    completed={cid for cid,attempts in byCase.items() if any(r['phase']=='delivered' for r in attempts)}
    recovered={r['caseId'] for r in rows if r.get('recoveredArtifact')};available=completed|recovered
@@ -68,6 +73,7 @@ def main():
    write(OUT/'review-queue.json',{'updatedAt':now(),'cases':reviewqueue})
    elapsed=time.time()-datetime.datetime.fromisoformat(config['createdAt']).timestamp();remainingSeconds=datetime.datetime.fromisoformat(config['deadline'].replace('Z','+00:00')).timestamp()-time.time()
    status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'recoveredArtifacts':len(recovered-completed),'availableArtifacts':len(available),'active':len(active),'pendingDeliveries':sum(r['phase']=='delivery-pending' for r in rows),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
+   status['automaticAccountBlocks']={v['label']:v['kind'] for v in auto['blockedAccounts'].values()}
    write(OUT/'status.json',status)
    if len(available)==300:write(OUT/'complete.json',status);return
    if (OUT/'halt.json').exists():time.sleep(30);continue
@@ -84,6 +90,7 @@ def main():
     decision=decisions.get(a['label'],{});state=decision.get('status');
     if not a['eligible'] or a['healthStatus']!='active' or a['identitySha256'] in denied:continue
     if decision.get('availability','').startswith('blocked-'):continue
+    if a['identitySha256'] in auto['blockedAccounts']:continue
     if state not in ['verified-good','promising','production-good']:continue
     if a['label'] not in ['A','B','C','G'] and not decision.get('qualityEvidence'):continue
     unreviewed=sum(r['requestedAccountSha256']==a['identitySha256'] and r['taskId'] not in reviews for r in rows)

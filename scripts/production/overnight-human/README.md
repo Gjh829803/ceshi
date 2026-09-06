@@ -155,3 +155,16 @@ even if those attempts are already terminal. Completing a trial does not silentl
 authorize more trials before its outcome is reviewed. Completed provider execution
 with confirmed cleanup releases Host execution capacity during artifact download;
 `pendingDeliveries` remains separate and retrieval continues through final drain.
+
+## Automatic account availability circuit breaker
+
+`automatic-availability.json` is controller-owned. It blocks new assignments
+immediately after an observed CLI usage-limit/model-capacity error, or after
+three startup failures for the same requested account in 15 minutes. This is
+independent of quality and does not stop in-flight tasks. Health snapshots alone
+are not sufficient: G exhausted its usage window (CLI reset Sep 11) while an older
+health snapshot remained eligible, causing a pre-model rejection burst. G and U14
+remain availability-blocked. A deliberate recovery may acknowledge the current
+block by adding its `jobId` to that account decision’s `availabilityClearedForJobIds`,
+only after verified reset/health recovery; a new failure blocks again. Never clear
+quota blocks just because the weekly snapshot says 100%.

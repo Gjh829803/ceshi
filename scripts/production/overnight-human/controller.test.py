@@ -15,6 +15,25 @@ class EndCycle(BaseException):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_usage_failure_blocks_before_terminal_and_other_accounts_stay_eligible(self):
+        row = {'requestedAccountSha256': 'a', 'jobId': 'gen_one', 'taskId': 'one', 'phase': 'submitted',
+               'availabilityFacts': [{'code': 'MODEL_USAGE_LIMIT'}]}
+        result = controller.update_availability([row], None, {'a': 'A', 'b': 'B'}, '2026-09-07T00:00:00+00:00')
+        self.assertEqual(result['blockedAccounts']['a']['kind'], 'usage-limit')
+        self.assertNotIn('b', result['blockedAccounts'])
+        again = controller.update_availability([row], result, {'a': 'A'}, '2026-09-07T00:01:00+00:00')
+        self.assertEqual(len(again['observations']), 1)
+
+    def test_three_startup_failures_block_without_changing_quality(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = [{'requestedAccountSha256': 'a', 'jobId': f'gen_{i}', 'taskId': str(i), 'root': temporary,
+                     'phase': 'failed', 'failure': {'message': 'Ray generation job generation failed with exit code 1'}} for i in range(3)]
+            first = controller.update_availability(rows[:2], None, {'a': 'A'}, '2026-09-07T00:00:00+00:00')
+            self.assertFalse(first['blockedAccounts'])
+            third = controller.update_availability(rows, first, {'a': 'A'}, '2026-09-07T00:01:00+00:00')
+            self.assertEqual(third['blockedAccounts']['a']['kind'], 'startup-failure')
+            self.assertNotIn('quality', third['blockedAccounts']['a'])
+
     def test_finished_unreviewed_trials_do_not_authorize_more_trials(self):
         self.assertEqual(controller.free_account_slots('promising', 0, 2), 0)
         self.assertEqual(controller.free_account_slots('promising', 1, 1), 1)
