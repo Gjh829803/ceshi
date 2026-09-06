@@ -465,7 +465,6 @@ export async function createNativeScenePlaygroundViteConfigV1(
         "WORLDKIT_NATIVE_PACKAGE_SOURCE_KIND_REQUIRED: the Native Harness accepts only babylon-native-scene Packages",
       );
     }
-    const receiptBytes = await transport.readReceipt();
     const recordingBinding = environment.WORLDKIT_STUDIO_RECORDING_BINDING === undefined ? undefined
       : parseNativeRecordingBinding(JSON.parse(environment.WORLDKIT_STUDIO_RECORDING_BINDING));
     if (recordingBinding !== undefined && (serverRole !== "shell" ||
@@ -485,7 +484,11 @@ export async function createNativeScenePlaygroundViteConfigV1(
     if (sceneModuleEntry === undefined) {
       throw new Error("WORLDKIT_NATIVE_PACKAGE_SCENE_MODULE_MISSING");
     }
-    const nativeModuleBytes = await transport.read(NATIVE_SCENE_MODULE_PATH);
+    // Config construction needs one coherent, already-verified startup snapshot.
+    // Re-reading the full Package twice here can exceed the unchanged readiness
+    // deadline. Request handlers below still perform their fresh disk checks.
+    const { receiptBytes, fileBytes: nativeModuleBytes } =
+      transport.readStartupSnapshot(NATIVE_SCENE_MODULE_PATH);
     const nativeModuleSource = Buffer.from(nativeModuleBytes).toString("utf8");
     const nativeModuleBundleContentHash = sceneModuleEntry.contentHash;
     const receiptContentHash =

@@ -28,6 +28,12 @@ export interface WorldPackageBrowserTransportV1 {
     | "babylon-native-scene";
   readonly fileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
   readonly receipt: WorldPackageBuildReceiptV1;
+  /** Already-admitted bytes for startup construction only, not a freshness
+   * assertion. HTTP handlers must keep using readReceipt()/read(). */
+  readStartupSnapshot(packagePath: string): Readonly<{
+    receiptBytes: Uint8Array;
+    fileBytes: Uint8Array;
+  }>;
   readReceipt(): Promise<Uint8Array>;
   read(packagePath: string): Promise<Uint8Array>;
   dispose(): void;
@@ -158,6 +164,17 @@ export async function createWorldPackageBrowserTransportV1(
     sceneSourceKind: initialVerified.kind,
     fileIntegrityEntries,
     receipt,
+    readStartupSnapshot(packagePath: string) {
+      requireActive();
+      const admittedPath = requireAdmittedPackagePath(packagePath, admittedPaths);
+      const bytes = initialBytesByPath.get(admittedPath);
+      if (isNil(bytes)) return fail("WORLD_PACKAGE_BROWSER_PATH_UNADMITTED",
+        "the requested file is absent from the admitted startup snapshot");
+      return Object.freeze({
+        receiptBytes: new Uint8Array(receiptBytes),
+        fileBytes: new Uint8Array(bytes),
+      });
+    },
     async readReceipt(): Promise<Uint8Array> {
       requireActive();
       await verifyStillAdmitted();

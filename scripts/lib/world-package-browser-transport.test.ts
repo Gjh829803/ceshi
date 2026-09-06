@@ -70,6 +70,30 @@ afterEach(async () => {
 });
 
 describe("WorldPackage browser transport", () => {
+  it("reads startup bytes from the admitted snapshot without weakening later freshness checks", async () => {
+    let readCount = 0;
+    const transport = await createWorldPackageBrowserTransportV1({ packageDirectoryPath }, {
+      readDirectory: async input => { readCount += 1; return readWorldPackageDirectoryV1(input); },
+    });
+    const expectedBytes = packageDirectory.files.find(file => file.path === "native/scene.mjs")!.bytes;
+    const snapshot = transport.readStartupSnapshot("native/scene.mjs");
+    expect(snapshot.fileBytes).toEqual(expectedBytes);
+    expect(snapshot.receiptBytes).toEqual(canonicalJsonBytes(packageDirectory.receipt));
+    snapshot.fileBytes[0] = snapshot.fileBytes[0]! ^ 1;
+    snapshot.receiptBytes[0] = snapshot.receiptBytes[0]! ^ 1;
+    expect(transport.readStartupSnapshot("native/scene.mjs").fileBytes).toEqual(expectedBytes);
+    expect(readCount).toBe(1);
+    expect(() => transport.readStartupSnapshot("../scene.mjs")).toThrow("WORLD_PACKAGE_BROWSER_PATH_UNADMITTED");
+    await replaceBytes("native/scene.mjs", bytes => { bytes[0] = bytes[0]! ^ 1; return bytes; });
+    // A startup snapshot makes no freshness claim. Browser requests still fail
+    // closed on on-disk drift instead of falling back to these earlier bytes.
+    expect(transport.readStartupSnapshot("native/scene.mjs").fileBytes).toEqual(expectedBytes);
+    await expect(transport.read("native/scene.mjs")).rejects.toThrow("WORLD_PACKAGE_BROWSER_PACKAGE_DRIFTED");
+    await expect(transport.readReceipt()).rejects.toThrow("WORLD_PACKAGE_BROWSER_PACKAGE_DRIFTED");
+    transport.dispose();
+    expect(() => transport.readStartupSnapshot("native/scene.mjs")).toThrow("WORLD_PACKAGE_BROWSER_TRANSPORT_DISPOSED");
+  });
+
   it("coalesces overlapping Package freshness verification", async () => {
     let readCount = 0;
     let signalVerificationStarted!: () => void;

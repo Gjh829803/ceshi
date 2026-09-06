@@ -1379,6 +1379,25 @@ on the requested new worktree without labeling the overall goal complete.
 
 ### CF-19/GROUND-FEEDBACK minimum flow blocker (2026-09-07)
 
+`CF-02/STARTUP-SNAPSHOT` follow-up (main-agent-only/sequential): `1e1f572f`
+Case `paper-moon-054-cf-scan-0907`, Run `run-20260906221617-80057`, passed
+Builder delivery, Host self-check, Native Check and Ground (28,320 standable
+positions, one component, two targets and three bands all reachable). Package
+Root is `sha256:e1d3d41846c5ecc9fd08f972210b4f1f7992c50f3054318b2285720b12f344ac`.
+Capture failed before Browser launch with `WORLDKIT_SERVER_START_TIMEOUT`.
+The unchanged 30s startup deadline matches pinned old `worldkit-server.ts`.
+Direct reproduction fails at the same deadline. Measuring the actual 22,893,026
+byte Package gives transport initialization 15,959ms, receipt refresh 16,107ms,
+then module refresh 15,784ms: 47,849ms before config can finish. Native Vite reads
+the already-admitted receipt/module through sequential whole-Package refreshes.
+Add an explicit startup-only immutable snapshot read to the existing transport
+owner; use it only for config construction. Keep full initial verification,
+request-time filesystem freshness/hash checks, path allowlists, defensive copies,
+disposal and all timeouts unchanged. Never use the snapshot as an HTTP fallback.
+Prove byte-copy isolation and post-start drift rejection, Vite/transport focused
+tests, then real default-budget startup and Host-only recovery of this retained
+Run. Do not rerun Planner or Builder or overwrite prior failed evidence.
+
 Follow-up `CF-19/OVERLAP-SCAN` (main-agent-only, sequential): fresh `67c0b729`
 Case `paper-moon-054-cf-ground-0907`, Run `run-20260906214232-75736`, passed
 Planner and Host planning replay but Builder exhausted its existing three-cycle

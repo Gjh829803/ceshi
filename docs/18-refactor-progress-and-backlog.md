@@ -3332,6 +3332,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   因此没有错误地改动该值。用户最新安排是本批修复后先跑一个新 Case，通过及必要
   合入检查完成后合 main，再从最新 main 新建 worktree 继续 CF；不等待全部 CF。
 
+- `1e1f572f` 新 Case `paper-moon-054-cf-scan-0907` / `run-20260906221617-80057`
+  已通过 Planner/Host 规划复验、Builder 交付、Host 自检、Native Check、Ground 和
+  Package 构建。Ground 为一个连通区域、28,320 可站点，2 个目标与 3 条通行带全部
+  可达。随后 Capture 服务启动 30s 超时，未进入评估/发布；原 Package 已保留。
+  对应最小修复 `CF-02/STARTUP-SNAPSHOT`：23MB Package 在 Vite 配置阶段重复完整
+  校验三遍约 48s，超过旧分支同样的 30s 预算。改为读取同一已验证的启动快照，
+  HTTP 请求仍保留原目录漂移检查，不修改超时。transport/Vite 19/19 与 typecheck
+  通过；需冻结提交后实测启动，再通过原 Run 的 Host-only 恢复继续，不重跑模型。
+
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
   用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。
