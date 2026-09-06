@@ -42,13 +42,17 @@ def used_model_output(row):
  if final.get('timing',{}).get('available') and final['timing'].get('first_item_started_at')=='':return False
  return True
 
+def recorded_host_queue_stop(row):
+ state=read(Path(row['root'])/'state.json',{});stop=state.get('stop',{});guard=state.get('lastGuard',{})
+ return bool(state.get('jobId') and state['jobId']==row.get('jobId')==stop.get('jobId') and state.get('requestId') and state['requestId']==stop.get('requestId') and state.get('rayCleanupConfirmed') is True and stop.get('kind')=='three-creator-controlled-stop' and stop.get('reason')=='queue-deadline' and stop.get('apiStopRequested') is True and guard.get('action')=='stop' and guard.get('reason')=='queue-deadline')
+
 def can_retry_attempts(attempts):
  if len(attempts)>=4 or sum(used_model_output(r) for r in attempts)>=2:return False
  if any(Path(r['root'],name).exists() for r in attempts for name in ['creator-result.json','checkpoint-latest.json']):return False
  for r in attempts:
   if r['phase']!='failed':return False
   normal=r.get('providerStatus') in ['failed','completed','succeeded','submit_failed']
-  stopped_before_model=r.get('providerStatus') in ['stopped','cancelled'] and r.get('executionComplete') and (r.get('failure') or {}).get('message')=='THREE_EXECUTION_GUARD: queue-deadline' and not used_model_output(r)
+  stopped_before_model=r.get('providerStatus') in ['stopped','cancelled'] and r.get('executionComplete') and ((r.get('failure') or {}).get('message')=='THREE_EXECUTION_GUARD: queue-deadline' or recorded_host_queue_stop(r)) and not used_model_output(r)
   if not normal and not stopped_before_model:return False
  return True
 

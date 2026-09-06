@@ -256,7 +256,7 @@ Remote source files and Agent prompt are never modified.
 Public HTTP pages receive the existing host-compat UUID shim. Verification
 checks that exact shim's SHA and excludes only its known tag when comparing
 HTML; compiled world bytes remain identical. `checkpoint-public-verification.json`
-records real public browser readiness, intermediate notice and links. Ten
+records real public browser readiness, intermediate notice and links. Eleven
 controller tests and two publisher tests cover identity, retry holds and
 cross-attempt precedence. Original frozen runtime lock remains unchanged.
 
@@ -267,3 +267,22 @@ pre-model quota/capacity/slot rejections do not consume both world attempts. A H
 queue-deadline cancellation can retry only after confirmed cleanup and no model
 work; user cancellations never qualify. A final receipt always holds regeneration
 for artifact recovery.
+
+At 05:40, all 300 unique inputs had been submitted; this does not mean 300
+deliveries. The controller then continued confirmed eligible failures. Case 083
+has a same-job/request controlled-stop record and lastGuard queue-deadline with
+confirmed cleanup and no model work. A later provider timeout message had hidden
+that reason; retry eligibility now reads those explicit records as well, while
+rejecting user cancellation, mismatched job/request IDs and incomplete cleanup.
+
+Older timeouts 034 and 096 also had clean 180+ second same-build evidence and
+were recovered without another model call. 065 had no qualifying pair and is
+not presented as runnable. The recovery helpers accept optional case numbers
+to isolate dependent steps per case. Their original byte/hash verification is
+unchanged. Some kubectl WebSocket reads ended with truncated data or a nil-stream
+error; scoped reads can use the documented
+[kubectl streaming environment flag](https://v1-32.docs.kubernetes.io/docs/reference/kubectl/kubectl/)
+with WebSockets disabled. Read retries always target the same job/files; a
+transport-exit warning is not discarded unless the complete returned archive
+length and SHA verify. `timeout-transfer-attempts.json` records the actual result.
+Public verification now preserves timestamped reports as well as the aggregate.

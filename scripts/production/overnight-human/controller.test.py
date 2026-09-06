@@ -121,6 +121,17 @@ class CapacityTests(unittest.TestCase):
             self.assertFalse(controller.can_retry_attempts([{**row, 'executionComplete': False}]))
             self.assertFalse(controller.can_retry_attempts([{**row, 'failure': {'message': 'User cancelled'}}]))
 
+    def test_host_queue_stop_survives_provider_overwriting_the_failure_message(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            row={'root':str(root),'jobId':'gen_one','phase':'failed','providerStatus':'cancelled','executionComplete':True,'failure':{'message':'TimeoutError: timed out waiting 1800.0s for one of 8 Codex account slots'}}
+            state={'jobId':'gen_one','requestId':'request-one','rayCleanupConfirmed':True,'lastGuard':{'action':'stop','reason':'queue-deadline'},'stop':{'kind':'three-creator-controlled-stop','jobId':'gen_one','requestId':'request-one','reason':'queue-deadline','apiStopRequested':True}}
+            controller.write(root/'state.json',state)
+            self.assertTrue(controller.can_retry_attempts([row]))
+            for changed in [{**state,'stop':{**state['stop'],'reason':'user-cancelled'}},{**state,'stop':{**state['stop'],'jobId':'gen_other'}},{**state,'rayCleanupConfirmed':False},{**state,'lastGuard':{'action':'continue'}}]:
+                controller.write(root/'state.json',changed)
+                self.assertFalse(controller.can_retry_attempts([row]))
+
     def test_usage_failure_blocks_before_terminal_and_other_accounts_stay_eligible(self):
         row = {'requestedAccountSha256': 'a', 'jobId': 'gen_one', 'taskId': 'one', 'phase': 'submitted',
                'availabilityFacts': [{'code': 'MODEL_USAGE_LIMIT'}]}
