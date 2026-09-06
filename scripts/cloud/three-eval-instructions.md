@@ -15,8 +15,12 @@ the SDK profile offers the thin SDK and its examples. Both have the same referen
 creative request, catalog assets, budget and browser evidence tools. Search assets
 by exact identity and inspect their limitations; diagnostic samples are not proof
 of faithful subject appearance. Do not install dependencies or change supplied tools.
-For humanoid leads, prefer reusable G-bot or a custom humanoid mesh with working
-walk/run/jump animations, preserving the reference silhouette and appearance.
+For humanoid leads, default to G-bot and its supplied idle/walk/run/jump actions.
+Clothing, colors or headwear alone do not justify rebuilding locomotion. Customize
+appearance where practical; if a custom humanoid is needed, prefer proven motions.
+Inspect actual walking and running from the side: forward-facing travel, natural
+knee/elbow flexion, foot contact and strides matching movement speed. Verify jump
+and landing transitions too; moving limbs alone do not establish correct animation.
 
 For the SDK world, WASD moves the character and the arrow keys rotate the camera;
 Shift stays held to run and each new Space press jumps once. Keep the verified

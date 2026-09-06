@@ -1,3 +1,12 @@
+## Humanoid motion repair and guidance — 2026-09-06
+
+The user now authorizes correcting the humanoid prompt and SDK guidance/examples,
+manually repairing delivered cases 07, 01 and 04, and checking this ten-case batch
+for equivalent skeletal-motion mistakes. Preserve scenes/gameplay/cameras and
+original cloud evidence. Publish manual repairs with separate source/build identity
+and explicit attribution. New cases should default to verified G-bot actions;
+custom appearance remains possible, but moving limbs are not motion validation.
+
 ## Known-good historical Creator baseline — 2026-09-06
 
 The user additionally requests one concise humanoid guideline: prefer reusable

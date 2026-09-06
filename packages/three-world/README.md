@@ -24,6 +24,8 @@ same-origin './asset-definitions.json'. A custom complete character is an ordina
 Group passed as `addCharacter({id,object,body:{heightMeters,radiusMeters}})`.
 Its tails, clothes and other visual descendants move with the root; keep their
 collisions out of the character body.
+An `object` character has no supplied limb animation. For a humanoid, prefer the
+G-bot asset path above; see Assets below for custom-rig axes and motion checks.
 
 An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
 
@@ -59,6 +61,19 @@ packaged selection; `world.assets.load(assetId)` creates an independent instance
 The SDK initializes available idle pose and owns animation after addCharacter.
 No manual AnimationMixer/update(0), hash entry, retargeting or private file path is
 needed. An actionId in an asset is an animation, not a physical movement ability.
+
+For humanoid leads, start with `humanoid.g-bot` and pass the loaded `asset` to
+`addCharacter`; this enables the supplied idle/walk/run/jump actions. A custom
+`object` gets physics and movement, but no automatic limb animation. Differences
+in clothing or color alone do not require writing a new gait.
+
+The actor's default local front is **-Z**, up is **+Y**, and limbs usually extend
+down **-Y**. In that frame a knee flexes backward with **negative X** rotation;
+an elbow flexes forward with **positive X** rotation. A +Z-facing animation recipe
+cannot be copied unchanged. For a differently oriented rig, derive directions
+from its actual bind pose. Inspect walk/run from the side, checking knees, elbows,
+foot contact, facing and speed; also test jumping, landing and reset. A technical
+playtest pass does not assess anatomical motion.
 
 For asynchronous changes in a running world:
 

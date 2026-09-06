@@ -23,6 +23,19 @@ async function fixture(source = `import * as THREE from 'three'; window.authorSc
 }
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 describe('Three semantic target views', () => {
+  it('packages a runnable animated humanoid in the SDK starter', async () => {
+    const root = await fixture(), service = new ThreeCreatorTools(root, 'three-sdk');
+    try {
+      const example = await service.examples();
+      for (const [name, source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
+      const candidate = await service.compiler.prepare();
+      const catalog = JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
+      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.g-bot');
+      expect(humanoid).toBeDefined();
+      for (const action of ['idle','walk','run','jump']) expect(humanoid.actions[action].clipName).toBeTruthy();
+      expect(sha256(await readFile(path.join(candidate.playableRoot,humanoid.uri)))).toBe(humanoid.sha256);
+    } finally { await service.close(); }
+  });
   it('uses local -Z front and +X right at zero semantic yaw', () => {
     const basis = targetTriviewBasis(new THREE.Group());
     expect(basis.front.toArray()).toEqual([0, 0, -1]); expect(basis.right.toArray()).toEqual([1, -0, 0]); expect(basis.back.toArray()).toEqual([-0, -0, 1]);

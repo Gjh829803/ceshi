@@ -27,15 +27,15 @@ const world = await createWorld({scene,camera,canvas});
 scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
 const ground = new THREE.Mesh(new THREE.BoxGeometry(60,0.2,60),new THREE.MeshStandardMaterial({color:0x759955}));
 ground.position.y=-0.1; world.addEntity({id:'ground',object:ground,role:'terrain'});
-const player = new THREE.Group();
-const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xe87836}));
-body.position.y=0.7; player.add(body);
-world.addCharacter({id:'player',object:player,body:{heightMeters:1.4,radiusMeters:0.35}});
+// Select humanoid.g-bot in project.json. The asset path uses its supplied motions.
+const player = await world.assets.load('humanoid.g-bot');
+world.addCharacter({id:'player',asset:player});
 world.setControlledEntity('player');
 world.setCameraFollow(); // follow from the authored camera without reframing
 world.setCaptureTargets(['player']);
 await world.start(); // prepares baseline and installs the real same-scene observer
 // WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.
-// Author pure visual child motion with onUpdate; managed root motion uses execute.
+// A custom object has no automatic limb animation; prefer supplied humanoid actions.
+// Local front is -Z. Inspect custom knees/elbows from the side during movement.
 // This is a minimal integration example, not a completed reference reconstruction.
 `;
