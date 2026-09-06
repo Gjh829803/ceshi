@@ -1,0 +1,55 @@
+{
+  "kind": "three-episode-user-review-calibration",
+  "schemaVersion": 1,
+  "reviewPolicyId": "three-episode-review@2-practical-correspondence",
+  "decisions": [
+    {
+      "id": "gvs2-opening-user-acceptance-20260906",
+      "authority": "user",
+      "scope": "opening-anchor-only",
+      "recordedAt": "2026-09-05T23:47:37.028Z",
+      "userInstruction": "十个样式候选图，我觉得可以稍微放宽一点评价标准，00 01 05 06 07 08 09 都可以算通过，你能稍微调整一下标准吗",
+      "worldId": "gpt6-holdout-gvs2-00007837--three-sdk",
+      "worldBuildHash": "522c7853c0be537848de0a13a79d9cd5807e61eebfd91576aae0972ac997c181",
+      "planHash": "c8667f6e5ba7e4a930096d2a9152588b983848e5d704effa0f08cfcd2c8a1056",
+      "whiteboxOpeningSha256": "f04985f5398306f7886e8a40497f042864cdaf3a629773e245a820112e3803c6",
+      "approvedAnchors": [
+        {
+          "styleVariantId": "style-00",
+          "imageSha256": "ba415af400ada3dceb1b93a95f562cbe3cbf7db16625a7f76d683bf510e8a730",
+          "attemptNumber": 4
+        },
+        {
+          "styleVariantId": "style-01",
+          "imageSha256": "a956b7819533a55c8a06dc4bf0a23e3ba518cff0eb9fa1bbfdc0524e1a37ae32",
+          "attemptNumber": 2
+        },
+        {
+          "styleVariantId": "style-05",
+          "imageSha256": "5796136b024cf0f761cf9527eccea9e65b95929616f99b61b43eced8bc441a76",
+          "attemptNumber": 4
+        },
+        {
+          "styleVariantId": "style-06",
+          "imageSha256": "16881e3b202cee457a7785e0c806d433da82148e9ce40a248988a0af772f8812",
+          "attemptNumber": 4
+        },
+        {
+          "styleVariantId": "style-07",
+          "imageSha256": "6816f4d8bfecac3cefbfd49b96d15e157640d6fe013af01a4f961c362854d495",
+          "attemptNumber": 4
+        },
+        {
+          "styleVariantId": "style-08",
+          "imageSha256": "e84867f68278483e110564a3a03f9124e97a6974d6f43fc9bcf152003279f232",
+          "attemptNumber": 4
+        },
+        {
+          "styleVariantId": "style-09",
+          "imageSha256": "202f1673ee892897733755fd9793902295112a04b2be7817867d56240406b24e",
+          "attemptNumber": 4
+        }
+      ]
+    }
+  ]
+}

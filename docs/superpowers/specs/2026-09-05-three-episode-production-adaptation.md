@@ -1,6 +1,6 @@
 # Three 白模世界接入 Episode 数据生产：Agent 自主路线版
 
-状态：设计 v2 的 SDK、云端工具、录制及样式适配已实现并完成本地验证；指定案例已完成真实云端路线规划与六段无 UI 录制；样式锚点最终 1/10 通过，其余达到修正上限，尚未完成三视图、事件与 60 份请求的端到端验收，Seedance 提交为 0。全局自动交付消费者尚未接入。2026-09-06。此版取代前版“先由 Host 提取可通行区域，再由 Agent 选路线”的建议。当前证据和未接通边界见 [续接记录](../plans/2026-09-06-three-episode-continuation.md) 和 [实现入口](../../../scripts/three-episode/README.md)。
+状态：设计 v2 的 SDK、云端工具、录制及样式适配已实现并完成本地验证；指定案例已完成真实云端路线规划与六段无 UI 录制；旧标准机审曾仅 1/10 通过；用户随后明确认可 00、01、05、06、07、08、09，当前为 7/10 人工确认通过，02/03/04 待按适度放宽的新标准复评，尚未完成三视图、事件与 60 份请求的端到端验收，Seedance 提交为 0。全局自动交付消费者尚未接入。2026-09-06。此版取代前版“先由 Host 提取可通行区域，再由 Agent 选路线”的建议。当前证据和未接通边界见 [续接记录](../plans/2026-09-06-three-episode-continuation.md) 和 [实现入口](../../../scripts/three-episode/README.md)。
 
 研究基线：`codex/gpt6-world-agent-refactor@2b2d416d`；生产参考分支 `codex/episode-qualified-rerun-repair@3f17d4bc`。用户随后授权在 `codex/three-episode-agent-production` 实施并测试，必须停在 Seedance 提交之前；原创建分支及已发布案例不被替换。
 

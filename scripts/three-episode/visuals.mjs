@@ -11,6 +11,8 @@ import {
   assertAnchorHashesUnchanged, buildThreeEpisodeRenderPrompt,
 } from './visual-contracts.mjs';
 
+import {THREE_EPISODE_REVIEW_POLICY_ID, validateReviewCalibration, resolveUserAnchorAcceptance} from './review-policy.mjs';
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CODEX_MODEL = 'gpt-6-astra';
 const CODEX_REASONING = 'xhigh';
@@ -109,7 +111,7 @@ export function prepareThreeEpisodeRenderRequests({source, capture, variant, ope
  * cloud.generateEvents writes {events:[five Gemini outputs]} to outputPath.
  * Each helper owns provider idempotence/reconciliation for the stable task ID.
  */
-export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate}) {
+export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate, reviewCalibration}) {
   if (stopBeforeSeedance !== true) throw new Error('THREE_EPISODE_SEEDANCE_DISABLED: this worker only prepares pre-Seedance artifacts');
   assertThreeEpisodeVisualInputs(source, capture);
   if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(episodeId ?? '')) throw new Error('THREE_EPISODE_VISUAL_EPISODE_ID_INVALID');
@@ -125,6 +127,8 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     json(path.join(repoRoot, 'config/episode-visual-event-director.json')),
     readFile(path.join(repoRoot, 'config/prompts/episode-visual-event-director.zh-CN.md'), 'utf8'),
   ]);
+  const calibration = validateReviewCalibration(reviewCalibration ?? await json(path.join(repoRoot, 'config/three-episode-review-calibration.json')));
+  const reviewPolicyHash = hashVisualInput({id:THREE_EPISODE_REVIEW_POLICY_ID,prompt:reviewPrompt});
   const saveState = createJsonAtomicWriter(path.join(outputRoot, 'visual-state.json'));
   const generateImageWithSlot = concurrencyGate(config.visualConcurrency);
   const runCodexWithSlot = concurrencyGate(config.reviewConcurrency);
@@ -166,6 +170,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     }
   }
   async function codexJson(kind, input, assets, instruction, validate) {
+    if (kind.includes('review')) input = {...input, reviewPolicyId:THREE_EPISODE_REVIEW_POLICY_ID};
     const attachedImages = assets.map(asset => ({ assetId: asset.id, logicalImageId: asset.logicalImageId ?? asset.id,
       ...(kind.includes('review') ? { name: `${asset.id}${path.extname(asset.path).toLowerCase()}`, attachmentPolicy: REVIEW_ATTACHMENT_POLICY } : {}) }));
     return stage(kind, {...input, attachedImages, instruction, model: CODEX_MODEL, reasoningEffort: CODEX_REASONING}, async ({root, inputHash, taskId}) => {
@@ -220,6 +225,19 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       styles: Object.fromEntries(THREE_EPISODE_STYLE_IDS.map(id => [id, {attempts: [], currentAnchor: null, currentReview: null, pendingFeedback: '', revisionReview: null}]))};
     const saveAnchorHistory = createJsonAtomicWriter(anchorHistoryPath);
     const persistAnchorHistory = () => saveAnchorHistory(structuredClone(anchorHistory));
+    const userAcceptance = (styleVariantId,image) => resolveUserAnchorAcceptance(calibration,{scope:'opening-anchor-only',worldId:source.worldId,worldBuildHash:source.worldBuildHash,planHash,whiteboxOpeningSha256:openingWhiteboxes[0].sha256,styleVariantId,imageSha256:image.sha256});
+    async function acceptUserAnchor(styleId,image,acceptance) {
+      await verifyRef(image);
+      const entry=anchorHistory.styles[styleId],attempt=entry.attempts.find(item=>item.image?.sha256===image.sha256);
+      if(!attempt)throw new Error('EPISODE_USER_ACCEPTANCE_ATTEMPT_MISSING');
+      attempt.userAcceptances??=[];
+      if(!attempt.userAcceptances.some(item=>item.decisionHash===acceptance.decisionHash))attempt.userAcceptances.push(acceptance);
+      // Keep the original cloud verdict/status; this is a separate user admission.
+      entry.userAcceptance=acceptance;entry.currentAnchor=image;entry.currentReview=acceptance;
+      state.userAcceptedAnchors=[...(state.userAcceptedAnchors??[]).filter(item=>item.styleVariantId!==styleId),acceptance].sort((a,b)=>a.styleVariantId.localeCompare(b.styleVariantId));
+      entry.revisionReview=null;entry.pendingFeedback='';entry.lastEvaluationPolicyHash=reviewPolicyHash;
+      await persistAnchorHistory();
+    }
     let currentAnchorLock;
     async function persistAnchorLock() {
       const accepted = THREE_EPISODE_STYLE_IDS.map(id => ({id, anchor: anchorHistory.styles[id].currentAnchor, reviewHash: hashVisualInput(anchorHistory.styles[id].currentReview)}));
@@ -240,7 +258,14 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     }
     async function obtainAnchor(variant) {
       const entry = anchorHistory.styles[variant.id];
+      for(const attempt of [...entry.attempts].reverse())if(attempt.image){
+        const acceptance=userAcceptance(variant.id,attempt.image);
+        if(acceptance){await acceptUserAnchor(variant.id,attempt.image,acceptance);return attempt.image;}
+      }
       if (entry.currentAnchor && !entry.revisionReview) { await verifyRef(entry.currentAnchor); return entry.currentAnchor; }
+      // A changed rubric first re-evaluates existing bytes, without spending another image attempt.
+      const latest=entry.attempts.at(-1);
+      if(latest?.image && entry.lastEvaluationPolicyHash!==reviewPolicyHash){await verifyRef(latest.image);return latest.image;}
       const feedback = entry.pendingFeedback || '', feedbackHash = hashVisualInput(feedback);
       let attempt = entry.attempts.at(-1);
       if (!attempt || !['pending', 'generated'].includes(attempt.status) || attempt.feedbackHash !== feedbackHash) {
@@ -257,12 +282,14 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     async function acceptAnchor(styleId, image, review) {
       const entry = anchorHistory.styles[styleId], attempt = entry.attempts.find(item => item.image?.path === image.path);
       if (!attempt) throw new Error('THREE_EPISODE_ANCHOR_ATTEMPT_MISSING');
+      entry.lastEvaluationPolicyHash=reviewPolicyHash;
       attempt.status = 'accepted'; attempt.acceptedByReviewHash ??= hashVisualInput(review);
       entry.currentAnchor = image; entry.currentReview = review; entry.revisionReview = null; entry.pendingFeedback = '';
       await persistAnchorHistory();
     }
     async function rejectAnchor(styleId, image, feedback, review) {
       const entry = anchorHistory.styles[styleId], attempt = entry.attempts.find(item => item.image?.path === image.path);
+      entry.lastEvaluationPolicyHash=reviewPolicyHash;
       // Do not rewrite the historical acceptance. A later independent rejection
       // requests a new revision and preserves the old immutable image/lock.
       if (attempt && attempt.status !== 'accepted') attempt.status = 'needs-repair';
@@ -296,6 +323,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     let diversityReview;
     let anchors;
     let anchorReview;
+    let anchorGatePassed=false;
     for (let visualRound = 0; visualRound < config.maximumVisualAttempts; visualRound++) {
       for (let attempt = 0; attempt < config.maximumOpeningAttempts; attempt++) {
         await update('opening-anchors', null, {visualRound, openingAttempt: attempt});
@@ -303,22 +331,25 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
           await update('opening-anchor', variant.id);
           return obtainAnchor(variant);
         });
-        const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variants: plan.variants, planHash: hashVisualInput(plan), anchors: anchors.map((ref, index) => ({id: THREE_EPISODE_STYLE_IDS[index], ...identityRef(ref)})), whitebox: identityRef(openingWhiteboxes[0]), outputSchema: reviewSchema('anchors', THREE_EPISODE_STYLE_IDS)};
+        const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variants: plan.variants, userAnchorAcceptances:anchors.map((image,index)=>userAcceptance(THREE_EPISODE_STYLE_IDS[index],image)).filter(Boolean), planHash: hashVisualInput(plan), anchors: anchors.map((ref, index) => ({id: THREE_EPISODE_STYLE_IDS[index], ...identityRef(ref)})), whitebox: identityRef(openingWhiteboxes[0]), outputSchema: reviewSchema('anchors', THREE_EPISODE_STYLE_IDS)};
         anchorReview = await codexJson('anchor-review', input, [imageAsset('whitebox-opening', openingWhiteboxes[0]), ...anchors.map((ref, index) => imageAsset(THREE_EPISODE_STYLE_IDS[index], ref))], reviewPrompt, (result, inputHash) => assertThreeEpisodeVisualReview(result, {worldId: source.worldId, episodeId, inputHash, mode: 'anchors', imageIds: THREE_EPISODE_STYLE_IDS}));
         for (const finding of anchorReview.imageReviews) {
           const image = anchors[THREE_EPISODE_STYLE_IDS.indexOf(finding.id)];
-          if (finding.verdict === 'passed') await acceptAnchor(finding.id, image, anchorReview);
+          const acceptance=userAcceptance(finding.id,image);
+          if(acceptance)await acceptUserAnchor(finding.id,image,acceptance);
+          else if (finding.verdict === 'passed') await acceptAnchor(finding.id, image, anchorReview);
           else await rejectAnchor(finding.id, image, `Independent review correction: ${finding.observations}\n${anchorReview.repairInstructions}`, anchorReview);
         }
-        if (anchorReview.verdict === 'passed') break;
+        anchorGatePassed=anchorReview.imageReviews.every((finding,index)=>finding.verdict==='passed'||userAcceptance(finding.id,anchors[index]));
+        if (anchorGatePassed) break;
       }
-      if (anchorReview.verdict !== 'passed') throw new Error('THREE_EPISODE_OPENING_REPAIR_BUDGET_EXHAUSTED');
+      if (!anchorGatePassed) throw new Error('THREE_EPISODE_OPENING_REPAIR_BUDGET_EXHAUSTED');
       const lockedAnchorRefs = [...anchors], anchorHashes = lockedAnchorRefs.map(item => item.sha256);
       await persistAnchorLock();
       variants = await mapConcurrent(plan.variants, config.visualConcurrency, async (variant, styleIndex) => {
         let anchor = anchors[styleIndex];
         const feedback = new Map();
-        let images, review, lockedAppearance;
+        let images, review, lockedAppearance, styleGatePassed=false;
         const imageIds = [...capture.segments.map(item => item.id), ...targetIds.map(id => `target-${id}`)];
         for (let attempt = 0; attempt < config.maximumVisualAttempts; attempt++) {
           await update('appearance-lock', variant.id, {attempt});
@@ -335,18 +366,19 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
           });
           images = [anchor, ...images];
           await update('style-review', variant.id);
-          const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variant, anchor: identityRef(anchor), images: images.map((ref, index) => ({id: imageIds[index], ...identityRef(ref)})), whiteboxes: [...openingWhiteboxes, ...targetWhiteboxes].map(identityRef), outputSchema: reviewSchema('style', imageIds, variant.id)};
+          const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, userAnchorAcceptance:userAcceptance(variant.id,anchor), variant, anchor: identityRef(anchor), images: images.map((ref, index) => ({id: imageIds[index], ...identityRef(ref)})), whiteboxes: [...openingWhiteboxes, ...targetWhiteboxes].map(identityRef), outputSchema: reviewSchema('style', imageIds, variant.id)};
           review = await codexJson('style-review', input, [...openingWhiteboxes.map((ref, index) => imageAsset(`whitebox-${capture.segments[index].id}`, ref)), ...targetWhiteboxes.map((ref, index) => imageAsset(`whitebox-target-${targetIds[index]}`, ref)), ...images.map((ref, index) => imageAsset(`styled-${imageIds[index]}`, ref))], reviewPrompt, (result, inputHash) => assertThreeEpisodeVisualReview(result, {worldId: source.worldId, episodeId, inputHash, styleVariantId: variant.id, mode: 'style', imageIds}));
-          if (review.verdict === 'passed') break;
-          if (review.imageReviews[0].verdict !== 'passed') {
+          styleGatePassed=review.imageReviews.every((finding,index)=>finding.verdict==='passed'||(index===0&&userAcceptance(variant.id,anchor)));
+          if (styleGatePassed) break;
+          if (review.imageReviews[0].verdict !== 'passed' && !userAcceptance(variant.id,anchor)) {
             anchor = await repairLockedAnchor(variant, anchor, review); anchors[styleIndex] = anchor;
             feedback.clear(); attempt = -1; continue;
           }
           for (const finding of review.imageReviews.filter(item => item.verdict === 'needs-repair')) feedback.set(finding.id, `${feedback.get(finding.id) ?? ''}\nIndependent review correction: ${finding.observations}\n${review.repairInstructions}`);
         }
-        if (review.verdict !== 'passed') throw new Error(`THREE_EPISODE_VISUAL_REPAIR_BUDGET_EXHAUSTED: ${variant.id}`);
+        if (!styleGatePassed) throw new Error(`THREE_EPISODE_VISUAL_REPAIR_BUDGET_EXHAUSTED: ${variant.id}`);
         await update('images-ready', variant.id);
-        const result = {id: variant.id, variant, anchor, appearanceLock: lockedAppearance, imageInputPolicy: IMAGE_INPUT_POLICY, openings: images.slice(0, 6).map((ref, index) => ({...ref, segmentId: capture.segments[index].id})), styledTriviews: images.slice(6).map((ref, index) => ({...ref, targetId: targetIds[index], name: variant.targetInterpretations[index].finalIdentity})), review};
+        const result = {id: variant.id, variant, anchor, anchorAcceptance:userAcceptance(variant.id,anchor), appearanceLock: lockedAppearance, imageInputPolicy: IMAGE_INPUT_POLICY, openings: images.slice(0, 6).map((ref, index) => ({...ref, segmentId: capture.segments[index].id})), styledTriviews: images.slice(6).map((ref, index) => ({...ref, targetId: targetIds[index], name: variant.targetInterpretations[index].finalIdentity})), review};
         await writeJsonAtomic(path.join(outputRoot, 'variants', variant.id, 'visual-manifest.json'), result);
         return result;
       });
@@ -376,7 +408,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       await update('pre-seedance-ready', result.id, {preparedRequestCount: requests.length});
       return {...result, events: eventResult.events, requests};
     });
-    const output = {kind: 'worldkit-three-episode-pre-seedance', schemaVersion: 1, imageInputPolicy: IMAGE_INPUT_POLICY, worldIdentity, episodeId, status: 'pre-seedance-ready', stopBeforeSeedance: true, providerVideoSubmissionCount: 0, plan, anchors, anchorReview, currentAnchorLock, anchorHistoryPath, diversityReview, variants: prepared, preparedRequestCount: prepared.reduce((sum, item) => sum + item.requests.length, 0)};
+    const output = {kind: 'worldkit-three-episode-pre-seedance', schemaVersion: 1, imageInputPolicy: IMAGE_INPUT_POLICY, worldIdentity, episodeId, status: 'pre-seedance-ready', stopBeforeSeedance: true, providerVideoSubmissionCount: 0, plan, anchors, anchorReview, anchorAdmissions:plan.variants.map((v,index)=>({styleVariantId:v.id,imageSha256:anchors[index].sha256,verdict:'passed',userAcceptance:userAcceptance(v.id,anchors[index]),cloudReviewHash:hashVisualInput(anchorReview)})), reviewPolicyId:THREE_EPISODE_REVIEW_POLICY_ID, currentAnchorLock, anchorHistoryPath, diversityReview, variants: prepared, preparedRequestCount: prepared.reduce((sum, item) => sum + item.requests.length, 0)};
     if (output.preparedRequestCount !== 60) throw new Error('THREE_EPISODE_RENDER_REQUEST_CLOSURE_INVALID');
     await writeJsonAtomic(path.join(outputRoot, 'pre-seedance-manifest.json'), output);
     await update('pre-seedance-ready', null, {status: 'completed', preparedRequestCount: 60});

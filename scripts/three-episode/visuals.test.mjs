@@ -210,3 +210,52 @@ test('appearance dictionaries are bound to the exact accepted anchor and every o
  assert.throws(()=>assertThreeEpisodeAppearanceLock({...lock,lighting:''},expected),/lighting missing/);
  assert.equal(result.imageInputPolicy,'single-whitebox-text-appearance-v1');
 });
+
+async function calibratedFixture() {
+ const setup=await fixture(); const baseline=await runThreeEpisodeVisuals(setup.options);
+ const {hashVisualInput}=await import('./visual-contracts.mjs');const {THREE_EPISODE_REVIEW_POLICY_ID}=await import('./review-policy.mjs');
+ const decision={id:'fixture-explicit-user-decision',authority:'user',scope:'opening-anchor-only',userInstruction:'Fixture user accepts this exact opening',worldId:setup.source.worldId,worldBuildHash:setup.source.worldBuildHash,planHash:hashVisualInput(baseline.plan),whiteboxOpeningSha256:setup.capture.segments[0].firstFrame.sha256,approvedAnchors:[{styleVariantId:'style-00',imageSha256:baseline.anchors[0].sha256}]};
+ const calibration={kind:'three-episode-user-review-calibration',schemaVersion:1,reviewPolicyId:THREE_EPISODE_REVIEW_POLICY_ID,decisions:[decision]};
+ return {setup,baseline,calibration,decision};
+}
+
+test('user calibration is scoped to exact world, plan, opening bytes and opening-only decisions',async()=>{
+ const {setup,baseline,calibration,decision}=await calibratedFixture();const {resolveUserAnchorAcceptance,validateReviewCalibration}=await import('./review-policy.mjs');
+ const identity={...decision,styleVariantId:'style-00',imageSha256:baseline.anchors[0].sha256};
+ assert.equal(resolveUserAnchorAcceptance(calibration,identity).authority,'user');
+ for(const field of ['worldBuildHash','planHash','whiteboxOpeningSha256','imageSha256'])assert.equal(resolveUserAnchorAcceptance(calibration,{...identity,[field]:'f'.repeat(64)}),null);
+ assert.equal(resolveUserAnchorAcceptance(calibration,{...identity,scope:'later-frame'}),null);
+ assert.equal(resolveUserAnchorAcceptance(calibration,{...identity,styleVariantId:'style-02'}),null);
+ assert.throws(()=>validateReviewCalibration({...calibration,decisions:[{...decision,approvedAnchors:[...decision.approvedAnchors,...decision.approvedAnchors]}]}),/IMAGE_INVALID/);
+});
+
+test('explicit user approval admits the exact opening without regenerating it or rewriting cloud verdicts',async()=>{
+ const {setup,calibration}=await calibratedFixture();const before=setup.calls.images;const original=setup.options.cloud.runCodex;
+ setup.options.cloud.runCodex=async args=>{const evidence=await original(args);const file=args.outputs[0].path;const r=JSON.parse(await readFile(file,'utf8'));
+  if(r.kind==='worldkit-three-episode-visual-review' && (r.mode==='anchors'||r.styleVariantId==='style-00')){r.imageReviews[0].verdict='needs-repair';r.imageReviews[0].observations='Fixture cosmetic opening mismatch';r.verdict='needs-repair';r.repairInstructions='Fixture cosmetic correction';await writeFile(file,JSON.stringify(r));}return evidence;};
+ const result=await runThreeEpisodeVisuals({...setup.options,reviewCalibration:calibration});
+ assert.equal(result.preparedRequestCount,60);assert.equal(setup.calls.images,before);
+ assert.equal(result.anchorReview.verdict,'needs-repair');assert.equal(result.variants[0].review.verdict,'needs-repair');
+ assert.equal(result.anchorAdmissions[0].userAcceptance.authority,'user');assert.equal(result.variants[0].anchorAcceptance.scope,'opening-anchor-only');
+ const history=JSON.parse(await readFile(result.anchorHistoryPath,'utf8'));assert.equal(history.styles['style-00'].attempts.length,1);assert.equal(history.styles['style-00'].attempts[0].userAcceptances.length,1);
+});
+
+test('opening approval cannot turn a failed later frame into a passed full style set',async()=>{
+ const {setup,calibration}=await calibratedFixture();const original=setup.options.cloud.runCodex;
+ setup.options.cloud.runCodex=async args=>{const evidence=await original(args);const file=args.outputs[0].path;const r=JSON.parse(await readFile(file,'utf8'));
+  if(r.kind==='worldkit-three-episode-visual-review'&&r.mode==='style'&&r.styleVariantId==='style-00'){r.imageReviews[1].verdict='needs-repair';r.imageReviews[1].observations='A principal target blocks the actual route in segment-01';r.verdict='needs-repair';r.repairInstructions='Restore the segment-01 route';await writeFile(file,JSON.stringify(r));}return evidence;};
+ await assert.rejects(runThreeEpisodeVisuals({...setup.options,reviewCalibration:calibration}),/VISUAL_REPAIR_BUDGET_EXHAUSTED/);assert.equal(setup.calls.videos,0);
+});
+
+test('a revised rubric re-evaluates exhausted existing candidates once without resetting image budgets',async()=>{
+ const setup=await fixture();const baseline=await runThreeEpisodeVisuals(setup.options);const history=JSON.parse(await readFile(baseline.anchorHistoryPath,'utf8'));const entry=history.styles['style-00'];const image=entry.currentAnchor;
+ entry.attempts=[];
+ for(let index=0;index<4;index++){const file=path.join(setup.root,`old-policy-${index}.png`);await copyFile(image.path,file);entry.attempts.push({index,status:'needs-repair',feedbackHash:'old',image:{...image,path:file}});}
+ entry.currentAnchor=null;entry.currentReview=null;entry.revisionReview={verdict:'needs-repair'};entry.pendingFeedback='Old strict framing requirement';entry.lastEvaluationPolicyHash='old-policy';
+ await writeFile(baseline.anchorHistoryPath,JSON.stringify(history));const before=setup.calls.images;
+ const result=await runThreeEpisodeVisuals(setup.options);assert.equal(result.preparedRequestCount,60);assert.equal(setup.calls.images,before);
+ const updated=JSON.parse(await readFile(result.anchorHistoryPath,'utf8'));assert.equal(updated.styles['style-00'].attempts.length,4);assert.equal(updated.styles['style-00'].attempts[3].status,'accepted');
+ // The same-policy failure still exhausts the same four attempts.
+ Object.assign(updated.styles['style-00'],{currentAnchor:null,currentReview:null,revisionReview:{verdict:'needs-repair'},pendingFeedback:'Still invalid under this policy'});updated.styles['style-00'].attempts[3].status='needs-repair';await writeFile(result.anchorHistoryPath,JSON.stringify(updated));
+ await assert.rejects(runThreeEpisodeVisuals(setup.options),/OPENING_REPAIR_BUDGET_EXHAUSTED/);assert.equal(setup.calls.images,before);
+});

@@ -109,3 +109,21 @@ anchor SHA256 and every ordered target ID. This prevents additional image layout
 from competing with the current camera/tri-view composition; subsequent reviewers
 still compare the actual generated images against the accepted anchor. Histories
 are namespaced by image-input policy, preserving failed earlier-policy evidence.
+
+## User-calibrated review
+
+`config/prompts/three-episode-review.md` now evaluates practical spatial/motion
+correspondence, allowing modest framing, silhouette and decorative differences.
+Reject material changes to camera/visible side, principal entities, route space,
+readability or actual large-scale topology; do not turn cosmetic notes into failures.
+
+`config/three-episode-review-calibration.json` records explicit user decisions for
+exact opening-image hashes, world/plan/whitebox identities and policy version. Add a
+new decision for subsequent user feedback; do not fabricate decisions from source
+assets. Include this config and `review-policy.mjs` in the next frozen cloud release.
+An exact user-accepted anchor can be reused without regeneration. Original cloud
+verdicts remain unchanged; user admissions are separate records in histories and
+outputs. They never approve later frames, tri-views or videos. A changed rubric first
+re-evaluates the existing candidate before attempting another image, preserving the
+old attempt count. Changing review instructions/acceptances invalidates only the
+relevant review cache; it does not erase images or historical provider journals.
