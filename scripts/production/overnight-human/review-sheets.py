@@ -13,3 +13,17 @@ for off in range(0,len(queue),8):
 (DEST/'index.json').write_text(json.dumps(index,indent=2));print(json.dumps({'cases':len(queue),'sheets':(len(queue)+7)//8,'root':str(DEST)}))
 # For motion, use original playtest keyframes and ffmpeg timestamp frames; never
 # equate a static opening screenshot with verified gait. Evidence is retained.
+if '--motion' in sys.argv:
+ for row in queue:
+  root=Path(row['verifiedRoot']);report=root/'playtest/playtest.json'
+  if not report.exists():continue
+  played=json.loads(report.read_text());duration=played['videoMetadata']['durationSeconds'];dest=DEST/row['taskId'].split('-')[2];dest.mkdir(exist_ok=True)
+  sheet=Image.new('RGB',(1240,1440),'white');draw=ImageDraw.Draw(sheet)
+  for i,t in enumerate([2,15,35,duration*.3,duration*.5,duration*.7,duration*.85,duration-3]):
+   frame=dest/f'motion-{i}.jpg';subprocess.run(['ffmpeg','-v','error','-ss',str(t),'-i',str(root/'playtest/playtest.mp4'),'-frames:v','1','-y',str(frame)],check=True)
+   im=Image.open(frame);im.thumbnail((612,340));x=i%2*620;y=i//2*360;sheet.paste(im,(x,y));draw.text((x+4,y+344),f'{t:.1f} sec',fill='black')
+  sheet.save(dest/'motion-world.jpg');pair=Image.new('RGB',(1600,470),'white')
+  for i,key in enumerate(['referencePath','openingPath']):
+   im=Image.open(row[key]);im.thumbnail((796,446));pair.paste(im,(i*800,0))
+  ImageDraw.Draw(pair).text((5,450),row['taskId']+' '+row['actualAccount'].get('label','unknown'),fill='black');pair.save(dest/'comparison.jpg')
+  print(json.dumps({'taskId':row['taskId'],'account':row['actualAccount'].get('label'),'duration':duration,'travelledMeters':played.get('travelledMeters'),'targets':[(t['id'],t['reached']) for t in played.get('targetResults',[])],'pageErrors':played.get('pageErrors'),'runtimeErrors':played.get('runtimeErrors')},ensure_ascii=False))

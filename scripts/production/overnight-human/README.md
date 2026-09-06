@@ -136,3 +136,16 @@ failures are not admitted through this path. Per-case `host-recovered-delivery.j
 is Host evidence, not an Agent success receipt. Controller reports `delivered`,
 `recoveredArtifacts`, and their unique union `availableArtifacts` separately, and
 queues recovered builds for the same quality assessment. No regeneration occurs.
+
+## Account-slot starvation diagnosis at 01:12 local
+
+The deployed service (`5441829`, `codex_home.py`) scans only indices
+`0..account_concurrency-1` in its shared flock slot pool. Its configured default
+is 20. An actual nonblocking snapshot found A/B/G/U05 slots 0..7 occupied while
+8..19 were free. New wave requests therefore use provider `account_concurrency=20`
+to address the full configured pool; **Host caps remain 8 historically verified,
+4 newly proven, 2 promising, 64 overall**. This does not launch 20 cases per
+account or change Agent context. Existing payloads remain immutable. The snapshot
+and driver logs are in OUT. U14 passed its first scene but then hit its actual
+usage window; several following driver failures were health filtering, not model
+quality failures. Its `blocked-usage-limit` decision prevents new submissions.
