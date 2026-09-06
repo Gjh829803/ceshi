@@ -1377,6 +1377,77 @@ Physics presets from six visual roles. Under the latest user scheduling, finish
 the current candidate/Case/merge first, then resolve these remaining CF contracts
 on the requested new worktree without labeling the overall goal complete.
 
+### CF-19/GROUND-FEEDBACK minimum flow blocker (2026-09-07)
+
+Latest user priority: if the current Case fails, identify its CF owner and implement
+only the missing work required for a valid old-equivalent flow, then rerun. Do not
+relax an existing old check, invent another repair round, or repair historical
+generated Source in place and call the original Run successful.
+
+Frozen `13b52d17` Case `paper-moon-054-cf-g4-0907`, Run
+`run-20260906204436-65522`, terminated at Ground. Planner/self-check/Host replay,
+Builder exit 0, Host portable self-check and Native Check passed. Ground has one
+failure: `middle-to-remote-source`, segment 009, `[14,8,-60]` to `[17,8,-62]`,
+half-width 2m. All 34,686 standable nodes form one reachable component and both
+targets are reachable globally, but that local segment cannot remain in its band.
+The authored forecourt ends at x=15/z=-61 and bypass starts at x=16/z=-62: those
+surfaces meet only at a corner. No Package publication or Capture occurred.
+
+Pinned-old proof: running actual old Compiler/checker with the two local source
+rectangles rejects `BLOCK_GROUND_TRAVERSAL_BAND_DISCONNECTED`; adding one full
+Block centered at `[16,7.5,-61]` gives old compile success with no diagnostics.
+This is a diagnostic fixture, not a change to the retained failed source. The old
+`agent-block-builder-self-check.ts:126` invokes `compileBlockWorldV2`, including
+these Ground checks. Current portable self-check calls only
+`admitNativeBlockGroundExplorationV1` for declaration syntax/policy and never checks
+the captured geometry's connectivity. Therefore retaining the Host rejection is
+correct; the missing same-task feedback is the minimal CF development target.
+
+Main-agent-only/sequential ownership and integration:
+
+- Profile owns deterministic source layout/occupancy and Ground algorithms. Factor
+  their geometry-only computation from Host identity/report binding where needed;
+  reuse the same implementation in formal Host analysis and portable feedback.
+  Never copy the graph algorithm or fabricate Package/Runtime hashes for an
+  authoring-only check. Existing formal identities and receipts remain mandatory.
+- Reuse the existing restricted source-capture owner and finalized explicit
+  Collider selections, compiled frozen Subject capsule/envelope and Case policy.
+  No palette-to-Physics inference, Scene scan, Engine/Runtime authority, new task
+  output or external model job. Keep the same three-cycle in-task repair budget.
+- Keep delivery self-check non-executing: it precedes Native Check. Add source
+  Ground feedback to the existing task renderer (`builder-feedback`); Host uses
+  `host-replay` only after Native Check and retains its later formal Ground stage.
+  No additional Host check, time limit or production repair round is introduced.
+- Required evidence: actual portable self-check passes the corner fixture
+  before repair (RED); task renderer rejects it with actionable source/segment feedback,
+  admits the real connected counterpart; holes/headroom/optional-ground/readonly
+  input and Host result equivalence; frozen tool drift, typecheck, then a new
+  build from the accepted Planner inputs through the existing stage workflow.
+
+Separate pre-merge verification debt found on this candidate: Studio's old
+`Name exactly one movement mode` prose assertion contradicts the current/old
+ordered multi-mode contract. Clean-break census rejects five `scene.meshes` reads
+used only for partial-allocation cleanup in visual adapter/Capture. Prefer scoped
+Babylon allocation observation with the existing cleanup tests, not weakening the
+collider-inference rule. Both remain open and were not edited during the Case.
+Main has seven newer commits; merge-tree found only equivalent fixture formatting
+and renderer-test timeout conflicts. Do not merge the failed candidate.
+
+Implementation evidence: corner-only task renderer rejection and a real connecting
+Block acceptance pass. Profile layout/model/Ground/Host-boundary suites pass 93/93,
+including source/formal report equality for support, hole, headroom and optional
+policy with unchanged input data and no fabricated identity. Read-only replay of
+the retained failed Source reports exactly segment 009, the same two affected
+Blocks and all original Ground metrics. Typecheck and workspace boundaries pass
+(2227 public symbols, zero debt). Case preparation passes 11/11 and direct Host
+Package/Ground integration passes 3/3. Builder suite passes 107 tests; its sole
+failure was the 60s bundle-rebuild test timeout. After adopting main's already
+existing 120s test setting, bundle rebuild/byte drift/corner regression pass 3/3.
+Production timeouts and all admission/repair policies are unchanged.
+Build-only retains the old frozen Skill, so the next real
+validation must create a fresh Case with current tool bytes, not overwrite an old
+Case or silently substitute its inputs.
+
 ### CF-05/R1 prepared-input browser recovery parity (2026-09-07)
 
 Main-agent-only/sequential; depends on K1 and current Runtime prepared transactions.

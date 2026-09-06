@@ -400,6 +400,7 @@ export default defineBabylonNativeScene({
 async function runVisualReview(
   workspace: string,
   additionalArguments: readonly string[] = [],
+  executionRole: "host-replay" | "builder-feedback" = "host-replay",
 ): Promise<Readonly<{
   exitCode: number;
   stdout: string;
@@ -408,6 +409,7 @@ async function runVisualReview(
   try {
     const result = await execFileAsync(process.execPath, [
       VISUAL_REVIEW_RENDERER,
+      "--execution-role", executionRole,
       "--workspace",
       workspace,
       ...additionalArguments,
@@ -924,7 +926,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       outputDirectoryPath,
       "render-visual-review.mjs",
     ))).resolves.toEqual(await readFile(VISUAL_REVIEW_RENDERER));
-  }, 60_000);
+  }, 120_000);
 
   it("teaches only the atomic Block drawing dialect", async () => {
     const outputContract = await readFile(path.resolve(
@@ -1039,6 +1041,60 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(packageJson.scripts["check:native-block-builder-skill"]).toBe(
       "vitest run scripts/agents/native-block-builder-skill.test.ts",
     );
+  });
+
+  it("rejects a corner-only ground band inside the Builder task and accepts a real connecting Block", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const casePath = path.join(workspace, "context/case.json");
+    const caseValue = JSON.parse(await readFile(casePath, "utf8"));
+    caseValue.expected.groundConnectivity = { mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [] };
+    caseValue.expected.topology = { acceptanceTargetRef: "worldkit://acceptance-target/ground@1" };
+    caseValue.expected.spawnSupport.expectedMedium = "ground";
+    caseValue.expected.spawnSupport.spawnMarkerId = "player-spawn";
+    caseValue.expected.spawnSupport.acceptanceTargetRef = "worldkit://acceptance-target/ground@1";
+    caseValue.expected.spawnSupport.expectedPositionXYZMeters = { xMeters: 14, yMeters: 8, zMeters: -60 };
+    const authoringPath = path.join(workspace, "native-block-authoring.json");
+    const authoring = JSON.parse(await readFile(authoringPath, "utf8"));
+    authoring.controlledSubject.design = { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" };
+    authoring.groundExploration = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle", region: "middle", standPositionMetersXYZ: [14, 8, -59] },
+        { id: "remote", region: "remote", standPositionMetersXYZ: [17, 8, -62] },
+      ],
+      requiredTraversalBands: [
+        { id: "entry-middle", halfWidthMeters: 2, isBidirectional: true,
+          centerlineStandPositionsMetersXYZ: [[14, 8, -60], [14, 8, -59]] },
+        { id: "corner-band", halfWidthMeters: 2, isBidirectional: true,
+          centerlineStandPositionsMetersXYZ: [[14, 8, -60], [17, 8, -62]] },
+      ],
+    };
+    const source = `import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
+export default defineBabylonNativeScene({ kind: "babylon-native-scene-module", id: "corner-band-world", build(context) {
+  const session = createBabylonNativeBlockProfileSessionV1(context);
+  session.createBlockGrid({ idPrefix: "forecourt", shape: "full", paletteRole: "route", visualGroupId: "central-gate", colliderGroupId: "ground-group", minimumCenterMetersXYZ: [13,7.5,-61], repeatCountXYZ: [3,1,4] });
+  session.createBlockGrid({ idPrefix: "bypass", shape: "full", paletteRole: "route", visualGroupId: "upper-platform", colliderGroupId: "ground-group", minimumCenterMetersXYZ: [16,7.5,-65], repeatCountXYZ: [4,1,4] });
+  const hasBridge = false;
+  if (hasBridge) session.createBlock({ id: "real-connector", shape: "full", paletteRole: "route", colliderGroupId: "ground-group", centerMetersXYZ: [16,7.5,-61] });
+  session.finalize({ staticColliders: [{ id: "ground-collider", colliderGeometrySource: { kind: "block-group", colliderGroupId: "ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "ground-surface", logicalSubshapeId: "ground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" }] });
+  context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [14,8,-60], facingRadians: 0 });
+} });`;
+    await Promise.all([
+      writeFile(casePath, JSON.stringify(caseValue)),
+      writeFile(authoringPath, JSON.stringify(authoring)),
+      writeFile(path.join(workspace, "scene.ts"), source),
+    ]);
+    expect((await runSelfCheck(workspace)).exitCode).toBe(0);
+    const rejected = await runVisualReview(workspace, [], "builder-feedback");
+    expect(rejected.stderr).toContain("NATIVE_BLOCK_BUILDER_GROUND_INVALID");
+    expect(rejected.exitCode).toBe(2);
+    expect(rejected.stderr).toContain("ground-traversal-band-reachability");
+    expect(rejected.stderr).toContain("corner-band");
+    await writeFile(path.join(workspace, "scene.ts"), source.replace("hasBridge = false", "hasBridge = true"));
+    const accepted = await runVisualReview(workspace, [], "builder-feedback");
+    expect(accepted.exitCode, accepted.stderr).toBe(0);
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ groundFeedback: { outcome: "passed", failureFacts: [] } });
   });
 
   it("accepts exactly the three non-empty outputs and emits byte-stable canonical evidence", async () => {

@@ -15,6 +15,7 @@ import {
 } from "./chunk-policy.js";
 import {
   analyzeBabylonNativeBlockGroundV1,
+  analyzeBabylonNativeBlockSourceGroundV1,
   type BabylonNativeBlockGroundAnalysisBudgetV1,
   type BabylonNativeBlockGroundCaseIntentV1,
 } from "./ground-analysis.js";
@@ -285,6 +286,34 @@ const SPAWN = Object.freeze({
 });
 
 describe("Babylon Native Block Subject-relative ground analysis", () => {
+  it.each(["supported", "hole", "headroom", "optional"] as const)(
+    "keeps source feedback equal to formal Ground without forged identity: %s", (scenario) => {
+      const receipt = capability();
+      const groundModel = logicalModel({
+        capability: receipt,
+        supportTopCellKeys: scenario === "hole" ? [] : rectangle(-2, 3, -2, 3),
+        blockerCellKeys: scenario === "headroom" ? ["0,2,0"] : [],
+      });
+      const intent = caseIntent({ spawn: SPAWN,
+        ...(scenario === "optional" ? { groundFailurePolicy: "measure-only", requireSingleReachableComponent: false } : {}),
+      });
+      const { caseHash: _caseHash, ...sourceIntent } = intent;
+      const { identity: _identity, logicalGroundModelHash: _hash, kind: _kind, schemaVersion: _version, ...geometry } = groundModel;
+      const sourceInput = { groundModel: geometry, envelope: receipt.envelope,
+        caseIntent: sourceIntent, measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY, budget: ANALYSIS_BUDGET };
+      const before = JSON.stringify(sourceInput);
+      const source = analyzeBabylonNativeBlockSourceGroundV1(sourceInput);
+      const formal = analyzeBabylonNativeBlockGroundV1({ groundModel,
+        walkableTopology: buildBabylonNativeBlockWalkableTopologyV1({ groundModel, policy: BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1 }),
+        traversalCapabilityEnvelopeReceipt: receipt, caseIntent: intent,
+        worldPackageRootHash: PACKAGE_HASH, measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY, budget: ANALYSIS_BUDGET });
+      const { identity: _formalIdentity, kind: _formalKind, schemaVersion: _formalVersion, ...analysis } = formal;
+      expect(source).toEqual(analysis);
+      expect(source).not.toHaveProperty("identity");
+      expect(JSON.stringify(sourceInput)).toBe(before);
+    },
+  );
+
   it("uses the legacy Capsule radius without an added clearance footprint", () => {
     // Radius .35 reaches the four adjacent cells but not the diagonal corners
     // (.353553m away). The old catalog publishes exactly collider.radiusMeters.

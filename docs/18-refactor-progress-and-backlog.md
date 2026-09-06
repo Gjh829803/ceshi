@@ -3332,6 +3332,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   因此没有错误地改动该值。用户最新安排是本批修复后先跑一个新 Case，通过及必要
   合入检查完成后合 main，再从最新 main 新建 worktree 继续 CF；不等待全部 CF。
 
+- 最新真实 Case（2026-09-07，`13b52d17`，`paper-moon-054-cf-g4-0907` /
+  `run-20260906204436-65522`）已结束，ordinary production failed，未发布/未合 main。
+  Planner 自检及 Host 复验通过；Builder 退出 0，Host 自检与 Native Check 通过。
+  Ground 仅有一处失败：`middle-to-remote-source` 第 009 段从 `[14,8,-60]` 到
+  `[17,8,-62]` 无法在声明的 2m 半宽内连通。全图 34,686 个可站点为一个可达分量，
+  两个目标全局可达，不是整个世界失联；局部前庭/绕行平台只在角点接触。实际旧
+  Compiler 最小复现也拒绝此段，增加真实连接方块才通过，因此不删/放宽 Host 检查。
+  最小必需开发为 CF-19/GROUND-FEEDBACK：把现有源几何 Ground 检查接入同一个
+  Builder 既有 renderer 的任务内反馈与三轮修复预算；静态交接自检仍不执行源码，
+  Host 在 Native Check 后重放像素，原正式 Ground 阶段不变。角点失败/真实连接通过
+  的工具对照已通过；Profile 93 项回归通过（含源反馈与正式报告的支撑、空洞、净空、
+  可选 Ground 等价性）。对原失败源码只读诊断，精确复现同一 segment、两个方块与
+  34,686 可站点等全部统计。typecheck、零债务 boundaries、Case 准备 11 项及
+  Host Package/Ground 直接集成 3 项通过。Builder 整组 107 项通过，仅重新打包测试
+  60s 超时；同步 main 已有的 120s 测试设置后，该项、冻结字节及角点对照 3/3 通过。
+  修复已具备启动新 Case 的验证基础，尚不能标为生产流程跑通。
+  原失败产物保留。另有 Studio 单模式旧断言和五处资源回收 Scene 扫描的合入检查
+  待处理；具体依赖、所有权及所需证据已写入主实施计划。
+
 - CF-05/R1 浏览器异常恢复（2026-09-07，未提交树）：恢复旧分支精确 prepare 失败
   条件与一次 neutral Tick，不扩大到脚本或正式 Capture。Runtime 只提供原事务回滚
   后的一次性错误码/阶段证据，Native 对可恢复请求返回独立拒绝诊断并保留幂等收据；

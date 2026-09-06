@@ -146,8 +146,10 @@ a 12m straight corridor, 300 Tick approach, or remote checkpoint for it. If an e
 Case declares scripted checks, preserve those exact constraints; an empty declared
 set is not a successful strict traversal proof. Neither mode replaces Brief geography.
 Both modes keep the Case's single-component policy and exact registered Spawn.
-Only the existing Host Ground analyzer proves support and connectivity; the task
-self-check checks syntax and the Spawn/middle/remote policy join, not geometry.
+The static task self-check checks syntax and the Spawn/middle/remote policy join,
+not geometry. The task renderer's required `builder-feedback` role runs the shared
+source Ground analyzer before producing comparisons; the Host's existing formal
+Ground stage remains the sole trusted admission proof.
 
 ### Construction priorities
 
@@ -250,6 +252,7 @@ After the structural self-check passes for the current source, resolve `scripts/
 
 ```bash
 node <resolved-bundled-renderer-path> \
+  --execution-role builder-feedback --case context/case.json \
   --workspace . \
   --top-down-output attempts/advisory/builder-top-down-comparison.png \
   --entry-output attempts/advisory/builder-entry-comparison.png
@@ -262,8 +265,15 @@ Profile's exact identifier rule. Coordinates belong in metric fields; a fraction
 not introduce a decimal point into an ID. Repair the named field without changing geometry merely
 to make its identifier legal. It also shares the Host input parsers for individual Blocks,
 grids and final Collider selections, including closed fields and repeated
-canonical finalization. This checks authoring input grammar only; Collider geometry admission,
-Ground and Runtime checks remain Host-owned. This feedback uses the same shared repair budget.
+canonical finalization. The Builder role also reads the frozen Case and checks captured
+explicit support with the Host's shared Ground algorithm and compiled Subject Capsule:
+Spawn footprint, clearance, components, anchors and every traversal-band segment.
+`NATIVE_BLOCK_BUILDER_GROUND_INVALID` names failing facts and affected Blocks. Repair
+the real visible support/course in the same shared repair budget; corner-only contact
+is not a passable connection. Do not widen bands, move anchors, omit intended ground
+or create invisible bridges to hide failure. The `host-replay` role is reserved for
+the Host's existing post-Native-Check pixel replay, not a Builder shortcut. Formal
+Collider geometry admission, Ground and Runtime checks remain Host-owned.
 
 Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
 functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and
@@ -272,7 +282,7 @@ order. Repeated cells for the same pair appear once; a truncation notice means m
 Read all reported pairs together and repair their shared geometric cause within one existing cycle,
 rather than repairing only the first pair. Repair that geometry inside this task using the same shared repair counter;
 do not ignore a renderer failure or return stale PNGs. This is disposable authoring feedback, not
-full Native admission, support/Collider validation or a Runtime collision owner.
+full Native admission, a Package receipt or a Runtime collision owner.
 
 You must actually open and inspect both PNGs with the available image-viewing tool. Do not infer visual success from exit status, hashes, file size, or the fact that the renderer produced images. In each comparison the Planner target is on the left and the current Builder projection is on the right.
 

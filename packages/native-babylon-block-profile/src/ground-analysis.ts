@@ -10,6 +10,7 @@ import type {
   BabylonNativeBlockLogicalGroundModelV1,
   BabylonNativeBlockLogicalSolidOccupancyCellV1,
   BabylonNativeBlockLogicalSupportTopCellV1,
+  BabylonNativeBlockSourceGroundGeometryV1,
 } from "./logical-ground-model.js";
 import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
@@ -179,6 +180,20 @@ export interface AnalyzeBabylonNativeBlockGroundInputV1 {
   readonly measurementChunkPolicy: BabylonNativeBlockChunkPolicyV1;
   readonly budget: BabylonNativeBlockGroundAnalysisBudgetV1;
 }
+
+export interface AnalyzeBabylonNativeBlockSourceGroundInputV1 {
+  readonly groundModel: BabylonNativeBlockSourceGroundGeometryV1;
+  readonly envelope: Pick<TraversalCapabilityEnvelopeReceiptV1["envelope"],
+    "capsuleRadiusMeters" | "capsuleHeightMeters" | "clearanceMarginMeters">;
+  readonly caseIntent: Omit<BabylonNativeBlockGroundCaseIntentV1, "caseHash">;
+  readonly measurementChunkPolicy: BabylonNativeBlockChunkPolicyV1;
+  readonly budget: BabylonNativeBlockGroundAnalysisBudgetV1;
+}
+
+/** Authoring computation only: no Package identity or Runtime evidence. */
+export type BabylonNativeBlockSourceGroundAnalysisV1 = Omit<
+  BabylonNativeBlockGroundAnalysisReportV1, "kind" | "schemaVersion" | "identity"
+>;
 
 export interface BabylonNativeBlockGroundAnalysisBudgetV1 {
   readonly kind: "babylon-native-block-ground-analysis-budget";
@@ -1213,7 +1228,57 @@ export function analyzeBabylonNativeBlockGroundV1(
   input: AnalyzeBabylonNativeBlockGroundInputV1,
 ): BabylonNativeBlockGroundAnalysisReportV1 {
   verifyInput(input);
-  const envelope = input.traversalCapabilityEnvelopeReceipt.envelope;
+  const { caseHash: _caseHash, ...caseIntent } = input.caseIntent;
+  const analysis = computeGroundAnalysis({
+    groundModel: input.groundModel,
+    envelope: input.traversalCapabilityEnvelopeReceipt.envelope,
+    caseIntent, measurementChunkPolicy: input.measurementChunkPolicy, budget: input.budget,
+  }, input.walkableTopology);
+  return freeze({
+    kind: "babylon-native-block-ground-analysis-report" as const,
+    schemaVersion: 1 as const,
+    identity: {
+      logicalGroundModelHash: input.groundModel.logicalGroundModelHash,
+      walkableTopologyHash: input.walkableTopology.topologyHash,
+      traversalCapabilityEnvelopeHash:
+        input.traversalCapabilityEnvelopeReceipt.traversalCapabilityEnvelopeHash,
+      caseHash: input.caseIntent.caseHash,
+      worldPackageRootHash: input.worldPackageRootHash,
+      measurementChunkPolicyHash: sha256CanonicalJson(input.measurementChunkPolicy) as Sha256HashV1,
+    },
+    ...analysis,
+  });
+}
+
+export function analyzeBabylonNativeBlockSourceGroundV1(
+  input: AnalyzeBabylonNativeBlockSourceGroundInputV1,
+): BabylonNativeBlockSourceGroundAnalysisV1 {
+  assertAccessorFree(input);
+  requireRecord(input, "sourceGroundAnalysis");
+  requireClosedKeys(input, ["groundModel", "envelope", "caseIntent", "measurementChunkPolicy", "budget"], [], "sourceGroundAnalysis");
+  requireArray(input.groundModel.solidOccupancyCells, "solidOccupancyCells");
+  requireArray(input.groundModel.exposedSupportTopCells, "exposedSupportTopCells");
+  finite(input.envelope.capsuleRadiusMeters, "capsuleRadiusMeters");
+  finite(input.envelope.capsuleHeightMeters, "capsuleHeightMeters");
+  finite(input.envelope.clearanceMarginMeters, "clearanceMarginMeters");
+  if (input.envelope.capsuleRadiusMeters < 0 || input.envelope.capsuleHeightMeters <= 0 ||
+      input.envelope.clearanceMarginMeters < 0) return fail(INPUT_CODE, "source Capsule is invalid");
+  parseBabylonNativeBlockChunkPolicyV1(input.measurementChunkPolicy);
+  for (const key of ["maximumSolidOccupancyCellCount", "maximumSupportTopCellCount"] as const) {
+    if (!Number.isSafeInteger(input.budget[key]) || input.budget[key] <= 0) return fail(INPUT_CODE, "source geometry budget is invalid");
+  }
+  if (input.groundModel.solidOccupancyCells.length > input.budget.maximumSolidOccupancyCellCount ||
+      input.groundModel.exposedSupportTopCells.length > input.budget.maximumSupportTopCellCount) {
+    return fail(BUDGET_CODE, "source geometry exceeds its inventory-derived work bounds");
+  }
+  return computeGroundAnalysis(input);
+}
+
+function computeGroundAnalysis(
+  input: AnalyzeBabylonNativeBlockSourceGroundInputV1,
+  walkableTopology?: BabylonNativeBlockWalkableTopologyV1,
+): BabylonNativeBlockSourceGroundAnalysisV1 {
+  const envelope = input.envelope;
   const supportByTopCellKey = new Map(
     input.groundModel.exposedSupportTopCells.map((cell) =>
       [cell.topCellKey, cell] as const),
@@ -1428,7 +1493,7 @@ export function analyzeBabylonNativeBlockGroundV1(
     envelope.capsuleHeightMeters,
     input.caseIntent.groundModelEvidenceRef,
   ));
-  const spawnTopologyFacts = !spawnEvaluation.isStandable
+  const spawnTopologyFacts = !spawnEvaluation.isStandable || isNil(walkableTopology)
     ? Object.freeze([])
     : exactTopologyFailureFacts(
         input.caseIntent.spawn.standPositionMetersXYZ,
@@ -1437,7 +1502,7 @@ export function analyzeBabylonNativeBlockGroundV1(
           standabilityMetricId: "ground-spawn-standability" as const,
         }),
         input.caseIntent.groundModelEvidenceRef,
-        input.walkableTopology,
+        walkableTopology,
         spawnEvaluation.affectedSourceBlockIds,
       );
   failureFacts.push(...spawnTopologyFacts);
@@ -1480,7 +1545,7 @@ export function analyzeBabylonNativeBlockGroundV1(
       envelope.capsuleHeightMeters,
       input.caseIntent.groundModelEvidenceRef,
     ));
-    const targetTopologyFacts = !evaluation.isStandable
+    const targetTopologyFacts = !evaluation.isStandable || isNil(walkableTopology)
       ? Object.freeze([])
       : exactTopologyFailureFacts(
           target.standPositionMetersXYZ,
@@ -1489,7 +1554,7 @@ export function analyzeBabylonNativeBlockGroundV1(
             standabilityMetricId: "ground-target-standability" as const,
           }),
           input.caseIntent.groundModelEvidenceRef,
-          input.walkableTopology,
+          walkableTopology,
           evaluation.affectedSourceBlockIds,
         );
     failureFacts.push(...targetTopologyFacts);
@@ -1592,7 +1657,7 @@ export function analyzeBabylonNativeBlockGroundV1(
         envelope.capsuleHeightMeters,
         input.caseIntent.groundModelEvidenceRef,
       );
-      const waypointFacts = !waypointEvaluation.isStandable
+      const waypointFacts = !waypointEvaluation.isStandable || isNil(walkableTopology)
         ? Object.freeze([])
         : exactTopologyFailureFacts(
             waypoint,
@@ -1601,7 +1666,7 @@ export function analyzeBabylonNativeBlockGroundV1(
               standabilityMetricId: "ground-target-standability" as const,
             }),
             input.caseIntent.groundModelEvidenceRef,
-            input.walkableTopology,
+            walkableTopology,
             waypointEvaluation.affectedSourceBlockIds,
           );
       failureFacts.push(...waypointStandabilityFacts);
@@ -1770,19 +1835,6 @@ export function analyzeBabylonNativeBlockGroundV1(
       isReachableFromSpawn: node.isReachableFromSpawn,
     })));
   return freeze({
-    kind: "babylon-native-block-ground-analysis-report" as const,
-    schemaVersion: 1 as const,
-    identity: {
-      logicalGroundModelHash: input.groundModel.logicalGroundModelHash,
-      walkableTopologyHash: input.walkableTopology.topologyHash,
-      traversalCapabilityEnvelopeHash:
-        input.traversalCapabilityEnvelopeReceipt.traversalCapabilityEnvelopeHash,
-      caseHash: input.caseIntent.caseHash,
-      worldPackageRootHash: input.worldPackageRootHash,
-      measurementChunkPolicyHash: sha256CanonicalJson(
-        input.measurementChunkPolicy,
-      ) as Sha256HashV1,
-    },
     analysisOutcome,
     admissionOutcome,
     failureFacts: sortedFailureFacts,

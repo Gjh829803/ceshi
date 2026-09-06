@@ -66,13 +66,9 @@ function cellKey(x: number, y: number, z: number): string {
 }
 
 function deriveEntry(
-  scene: Scene,
   record: BabylonNativeBlockSessionRecordV1,
 ): Readonly<{ entry?: BabylonNativeBlockLayoutEntryV1; issue?: BabylonNativeBlockLayoutIssueV1 }> {
   const input = record.input;
-  if (scene.isDisposed) return Object.freeze({ issue: Object.freeze({
-    code: "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH", blockId: input.id,
-  }) });
   const rotationQuarterTurnsY = input.rotationQuarterTurnsY ?? 0;
   const placement = { shape: input.shape, centerMetersXYZ: input.centerMetersXYZ, rotationQuarterTurnsY };
   if (![0, 1, 2, 3].includes(rotationQuarterTurnsY) ||
@@ -257,14 +253,31 @@ export function deriveBabylonNativeBlockLayoutV1(
   scene: Scene,
   records: readonly BabylonNativeBlockSessionRecordV1[],
 ): BabylonNativeBlockLayoutV1 {
+  if (!scene.isDisposed) return deriveBabylonNativeBlockSourceLayoutV1(records);
+  return finishLayout([], records.map(({ input }) => Object.freeze({
+    code: "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH" as const, blockId: input.id,
+  })));
+}
+
+/** Pure source geometry; no Scene, material or Runtime authority is created. */
+export function deriveBabylonNativeBlockSourceLayoutV1(
+  records: readonly BabylonNativeBlockSessionRecordV1[],
+): BabylonNativeBlockLayoutV1 {
   const entries: BabylonNativeBlockLayoutEntryV1[] = [];
   const issues: BabylonNativeBlockLayoutIssueV1[] = [];
   for (const record of [...records].sort((left, right) =>
     stableCompare(left.input.id, right.input.id))) {
-    const derived = deriveEntry(scene, record);
+    const derived = deriveEntry(record);
     if (!isNil(derived.entry)) entries.push(derived.entry);
     if (!isNil(derived.issue)) issues.push(derived.issue);
   }
+  return finishLayout(entries, issues);
+}
+
+function finishLayout(
+  entries: BabylonNativeBlockLayoutEntryV1[],
+  issues: BabylonNativeBlockLayoutIssueV1[],
+): BabylonNativeBlockLayoutV1 {
   const blocks = Object.freeze(entries);
   issues.push(...overlapIssues(blocks));
   const topCells = exposedTopSurfaceCellKeys(blocks);

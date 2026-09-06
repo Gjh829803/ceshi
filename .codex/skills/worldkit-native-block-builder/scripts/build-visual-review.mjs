@@ -36,6 +36,8 @@ await build({
         moduleSideEffects: (id) => ![
           "packages/authoring/src/index.ts",
           "packages/native-babylon-block-profile/src/index.ts",
+          "packages/native-babylon-block-profile/src/host.ts",
+          "packages/native-babylon/src/host.ts",
           "packages/compiler/src/index.ts",
           "packages/gameplay/src/index.ts",
           "packages/subject-registry/src/index.ts",

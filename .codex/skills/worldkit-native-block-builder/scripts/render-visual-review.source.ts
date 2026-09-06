@@ -26,6 +26,9 @@ import {
 } from "../../../../scripts/reconstruction/native-block-subject-visual-review-proxy.js";
 import { resolveNativeSubjectAuthoringClosureV1 } from "../../../../scripts/reconstruction/native-subject-host-context.js";
 import { createBabylonNativeBlockVisualClustersV1 } from "@whitebox-world/native-babylon-block-profile";
+import type { BabylonNativeBlockStaticColliderSelectionV1, NativeBlockAuthoringManifestV1 } from "@whitebox-world/native-babylon-block-profile";
+import type { WorldReconstructionCaseV1 } from "@whitebox-world/validation";
+import { checkNativeBlockGroundFeedbackV1 } from "../../../../scripts/reconstruction/native-block-ground-feedback.js";
 
 const WIDTH_TOP = 768;
 const WIDTH_ENTRY = 960;
@@ -392,6 +395,7 @@ function captureSource(
   blocks: readonly CapturedBlock[];
   displayScaleRatio: number;
   spawn: Readonly<{ id: string; positionMetersXYZ: Vec3; facingRadians: number }>;
+  selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }> {
   validateSourceForAdvisoryCapture(sourceText, sourcePath);
   const transpiled = ts.transpileModule(sourceText, {
@@ -639,6 +643,7 @@ function captureSource(
     blocks: Object.freeze([...blocks].sort((left, right) => stableCompare(left.id, right.id))),
     displayScaleRatio: BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
     spawn,
+    selections: finalizedInput!.staticColliders,
   });
 }
 
@@ -1259,6 +1264,9 @@ async function writeAtomic(filePath: string, bytes: Uint8Array): Promise<void> {
 }
 
 export async function renderNativeBlockVisualReview(options: Readonly<{
+  execution:
+    | Readonly<{ role: "host-replay" }>
+    | Readonly<{ role: "builder-feedback"; casePath: string }>;
   sourcePath: string;
   authoringPath: string;
   bootstrapPath: string;
@@ -1301,9 +1309,29 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     colorsByVisualGroupId,
   );
   const topDown = drawTopDown(geometry, captured.spawn.positionMetersXYZ);
-  const { subjectVisualReviewProxy, subjectVisualReviewProxyBytes } = resolveNativeSubjectAuthoringClosureV1({
+  const { subjectVisualReviewProxy, subjectVisualReviewProxyBytes, worldRuntimeBootstrap } = resolveNativeSubjectAuthoringClosureV1({
     context: subjectHostContext, bootstrap, authoring,
   });
+  // The delivery checker remains non-executing. Source geometry runs here in
+  // the existing isolated Builder tool; Host replay still follows Native Check
+  // and leaves authoritative Ground admission to its existing Package stage.
+  let groundFeedback: ReturnType<typeof checkNativeBlockGroundFeedbackV1> | undefined;
+  let groundCaseHash: string | undefined;
+  if (options.execution.role === "builder-feedback") {
+    const caseBytes = await readFile(options.execution.casePath);
+    groundCaseHash = hash(caseBytes);
+    groundFeedback = checkNativeBlockGroundFeedbackV1({
+      reconstructionCase: JSON.parse(caseBytes.toString("utf8")) as WorldReconstructionCaseV1,
+      contribution: { spawnMarker: captured.spawn },
+      groundExploration: (authoring as unknown as NativeBlockAuthoringManifestV1).groundExploration,
+      openingCamera: parseBabylonNativeInitialCameraV1(authoring.openingCamera),
+      groundModelEvidenceRef: `artifact://native-block-source/${hash(sourceText)}/scene.ts`,
+      blocks: captured.blocks, selections: captured.selections, worldRuntimeBootstrap,
+    });
+    if (groundFeedback.outcome !== "passed") {
+      return fail("NATIVE_BLOCK_BUILDER_GROUND_INVALID", JSON.stringify(groundFeedback));
+    }
+  }
   if (
     subjectVisualReviewProxy.initialControlledEntityId !==
       bootstrap.initialControlledEntityId
@@ -1354,6 +1382,8 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     kind: "native-block-builder-visual-review",
     schemaVersion: 1,
     status: "passed",
+    executionRole: options.execution.role,
+    ...(groundFeedback === undefined ? {} : { groundFeedback, groundCaseHash }),
     blockCount: captured.blocks.length,
     capturedLayoutIdentityHash,
     sourceHash: hash(sourceText),
@@ -1372,7 +1402,14 @@ export async function main(arguments_ = process.argv.slice(2)): Promise<void> {
   const workspace = path.resolve(option(arguments_, "--workspace") ?? ".");
   const resolveFromWorkspace = (name: string, fallback: string): string =>
     path.resolve(workspace, option(arguments_, name) ?? fallback);
+  const role = option(arguments_, "--execution-role");
+  if (role !== "builder-feedback" && role !== "host-replay") {
+    return fail("NATIVE_BLOCK_VISUAL_REVIEW_INPUT_INVALID", "--execution-role must be builder-feedback or host-replay");
+  }
   const result = await renderNativeBlockVisualReview({
+    execution: role === "host-replay" ? { role } : {
+      role, casePath: resolveFromWorkspace("--case", "context/case.json"),
+    },
     sourcePath: resolveFromWorkspace("--source", "scene.ts"),
     authoringPath: resolveFromWorkspace("--authoring", "native-block-authoring.json"),
     bootstrapPath: resolveFromWorkspace("--bootstrap", "inputs/native-scene.bootstrap.json"),

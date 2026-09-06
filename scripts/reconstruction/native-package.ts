@@ -677,6 +677,7 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
     try {
       await execFileAsync(process.execPath, [
         path.join(replayInputDirectoryPath, "renderer.mjs"),
+        "--execution-role", "host-replay",
         "--workspace",
         replayInputDirectoryPath,
         "--source",

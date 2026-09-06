@@ -597,6 +597,8 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
         prepared.taskWorkspacePath,
         "inputs/builder-skill/scripts/render-visual-review.mjs",
       ),
+      "--execution-role",
+      "host-replay",
       "--workspace",
       prepared.taskWorkspacePath,
       "--source",

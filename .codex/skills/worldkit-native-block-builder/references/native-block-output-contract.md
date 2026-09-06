@@ -128,7 +128,7 @@ Here `n` is any integer, including negative values. A Y quarter turn swaps the e
 
 Profile meshes remain direct, unparented members of the Host Candidate Scene. Keep them enabled, visible, non-instanced, non-thin-instanced, and physics-free. Do not attach parents, bake/replace geometry, or create an alternate visual/collider mesh for a Block.
 
-The Host applies the fixed legacy `0.985` visual scale to each merged visual cuboid;
+The Host applies the fixed legacy `0.985` visual scale to each individual Block display instance;
 the checker and Collider geometry retain the complete metric Block dimensions.
 `session.finalize()` accepts only `staticColliders`. Do not supply a display-gap
 or display-scale override, or shrink the authored Block geometry to imitate seams.
@@ -298,7 +298,13 @@ fixed-input script or remote checkpoint; an explicit empty check set is not stri
 acceptance. Explicit Case-declared checks still retain their exact inputs and criteria;
 in case-defined mode the fixed-band/fixed-input sections above remain mandatory. Never write accepted intent
 back to the Case, Bootstrap or Generation Request. Any source intent edit requires fresh
-self-check and both comparison PNGs in the same shared repair budget.
+self-check and both comparison PNGs in the same shared repair budget. Run the renderer
+with `--execution-role builder-feedback --case context/case.json`: before PNG output,
+the shared source Ground analyzer checks actual explicit support, Capsule clearance,
+components, anchors and each band segment. Repair named geometry within the existing
+budget; corner-only contact is not a walkable connection. Never change validation
+coordinates or widths to hide missing support. The static self-check does not execute
+Source; Host pixel replay and subsequent formal Ground admission retain their owners.
 
 `openingCamera` uses the same exact third-person numeric shape as the frozen
 Bootstrap's `initialCamera`: `{ "mode": "third-person", "distanceMeters": 5,
