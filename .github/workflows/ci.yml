@@ -20,9 +20,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     # The resource-heavy Vitest lane alone can exceed 18 minutes on hosted
-    # runners. Keep one bounded job, but give the complete gate enough time to
-    # reach the final build and clean-tree assertions.
-    timeout-minutes: 45
+    # runners. After #202 the full contract-plus-resource-heavy suite exceeds
+    # the previous 45-minute job budget before Build Playground. Keep one
+    # bounded job, but give the complete gate enough time to reach the final
+    # build and clean-tree assertions.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
         with:
