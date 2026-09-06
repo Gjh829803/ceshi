@@ -1,7 +1,8 @@
-import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
+import Ajv2020, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
 import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
+import subjectDesignV1Schema from "./subject-design-v1.schema.json";
 import { isEmpty } from "lodash-es";
 
 import { FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 } from "./types";
@@ -9,6 +10,7 @@ import type {
   AuthoringDiagnostic,
   AuthoringResult,
   PackageSubjectDefinitionV1,
+  SubjectDesignV1,
 } from "./types";
 
 const ajv = new Ajv2020({
@@ -60,6 +62,7 @@ ajv.addFormat("package-prototype-ref", {
 });
 
 ajv.addSchema(subjectDefinitionV1Schema);
+let validateSubjectDesign: ValidateFunction<SubjectDesignV1> | undefined;
 
 const validateSubjectDefinitionV1 = (() => {
   const registeredValidator = ajv.getSchema<PackageSubjectDefinitionV1>(
@@ -149,4 +152,12 @@ export function validatePackageSubjectDefinition(
   return isEmpty(diagnostics)
     ? { ok: true, value: definition, diagnostics: [] }
     : { ok: false, diagnostics };
+}
+
+/** Uses the same Subject field schemas; does not resolve resources or select capabilities. */
+export function validateSubjectDesignV1(value: unknown): AuthoringResult<SubjectDesignV1> {
+  const validate = validateSubjectDesign ??= ajv.compile<SubjectDesignV1>(subjectDesignV1Schema);
+  return validate(value)
+    ? { ok: true, value, diagnostics: [] }
+    : { ok: false, diagnostics: (validate.errors ?? []).map(diagnosticFor) };
 }

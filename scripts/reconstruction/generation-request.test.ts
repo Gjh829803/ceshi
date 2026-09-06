@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
-import { normalizeAuthoringSpecV4, parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { normalizeAuthoringSpecV4, parseSceneBriefV1, type ComposedSubjectDesignV1 } from "@whitebox-world/authoring";
 import {
   createValidPackageSubjectWorldV4,
   createValidRiggedPackageSubjectWorldV4,
@@ -44,11 +44,12 @@ import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
   "../native-scene/admission-budget.js";
 import {
   compileNativeSubjectHostClosureV1,
+  compileNativeSubjectHostClosureFromDesignV1,
   type NativeSubjectHostClosureInputV1,
 } from "./native-subject-host-closure.js";
 import {
+  checkNativeComposedSubjectDesignV1,
   compileNativeComposedSubjectDefinitionV1,
-  type NativeComposedSubjectDesignV1,
 } from "./native-composed-subject-definition.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
@@ -420,7 +421,7 @@ function subjectHostInput(subject: NativeSubjectHostClosureInputV1["subject"]): 
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
-  function composedDesign(rigged = false): NativeComposedSubjectDesignV1 {
+  function composedDesign(rigged = false): ComposedSubjectDesignV1 {
     const definition = (rigged ? createValidRiggedPackageSubjectWorldV4() : createValidPackageSubjectWorldV4())
       .resources.subjectDefinitions[0]!;
     return {
@@ -440,6 +441,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         colliderProfileRef: definition.colliderPolicy.kind === "profile" ? definition.colliderPolicy.colliderProfileRef : "invalid",
       },
     };
+  }
+
+  function nativeComposedDesign(rigged = false): ComposedSubjectDesignV1 {
+    const design = composedDesign(rigged);
+    design.visualParts = design.visualParts.map((part) => ({ ...part, id: part.id.replaceAll(".", "-") }));
+    return design;
   }
 
   it.each([false, true])("compiles the complete old composed Subject defaults and real Host proxy (rigged=%s)", (rigged) => {
@@ -512,6 +519,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const invalid = composedDesign();
     invalid.visualParts[0]!.localTransform.positionMetersXYZ = [0, Number.NaN, 0];
     expect(compileNativeComposedSubjectDefinitionV1(invalid).ok).toBe(false);
+    expect(compileNativeComposedSubjectDefinitionV1({
+      ...composedDesign(), profiles: { physicsBodyProfileRef: "forged" },
+    } as ComposedSubjectDesignV1).ok).toBe(false);
+    const coerced = composedDesign();
+    coerced.visualParts[0]!.localTransform.positionMetersXYZ = ["0", 0.85, 0] as unknown as readonly [number, number, number];
+    expect(compileNativeComposedSubjectDefinitionV1(coerced).ok).toBe(false);
     const accessor = composedDesign();
     let executed = false;
     Object.defineProperty(accessor, "visualParts", { enumerable: true, get() { executed = true; throw new Error("accessor"); } });
@@ -562,6 +575,100 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     if (result.ok) throw new Error("Unavailable Subject was substituted.");
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === code)).toBe(true);
     expect(result).not.toHaveProperty("worldRuntimeBootstrap");
+  });
+
+  it("resolves registered Subject proposals through the same exact Host owner without fallback", () => {
+    const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
+    const input = subjectHostInput({ source: "registry", subjectDefinitionRef });
+    const { subject: _subject, ...hostInput } = input;
+    expect(compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "registered", subjectDefinitionRef },
+    })).toEqual(compileNativeSubjectHostClosureV1(input));
+    for (const subjectDesign of [undefined, { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/missing@1" },
+      { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/glider.paraglider.unpowered@1" },
+      { kind: "registered", subjectDefinitionRef, runtime: {} }]) {
+      const result = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign });
+      expect(result.ok).toBe(false);
+      expect(result).not.toHaveProperty("worldRuntimeBootstrap");
+    }
+    let executed = false;
+    const accessor = { kind: "registered" };
+    Object.defineProperty(accessor, "subjectDefinitionRef", { enumerable: true, get() { executed = true; return subjectDefinitionRef; } });
+    expect(compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign: accessor }).ok).toBe(false);
+    expect(executed).toBe(false);
+  });
+
+  it("preserves the old composed Subject part-count, identity and tag policies at Host compilation", () => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "composed", definition },
+    });
+    const base = nativeComposedDesign();
+    const parts = base.visualParts;
+    expect(compile(base).ok).toBe(true);
+    for (const definition of [
+      { ...base, id: "bad.id" }, { ...base, displayName: " " }, { ...base, description: "\t" },
+      { ...base, semanticClassId: "xx" },
+      { ...base, visualParts: [...parts, parts[0]!] },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, id: "bad.id" } : part) },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, semanticTags: [] } : part) },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, semanticTags: ["x"] } : part) },
+      { ...base, visualParts: Array.from({ length: 49 }, (_, i) => ({ ...parts[i % parts.length]!, id: `part-${i}` })) },
+    ]) {
+      expect(compile(definition)).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_INVALID" })] });
+    }
+    expect(compile({ ...base, visualParts: Array.from({ length: 48 }, (_, i) => ({ ...parts[i % parts.length]!, id: `part-${i}` })) }).ok).toBe(true);
+  });
+
+  it("keeps the old human/biped visual-height and asset-scale limits without applying them to other bodies", () => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "composed", definition },
+    });
+    const human = nativeComposedDesign();
+    human.category = "human";
+    human.bodyTopology = "biped";
+    const heightDesign = (height: number): ComposedSubjectDesignV1 => ({ ...human, visualParts: [{
+      id: "body", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.4, height, 0.4] },
+      localTransform: { positionMetersXYZ: [0, height / 2, 0] }, colliderContribution: "include", semanticTags: ["body"],
+    }] });
+    for (const height of [1.6, 2.1]) expect(compile(heightDesign(height)).ok).toBe(true);
+    for (const height of [1.59, 2.11]) {
+      expect(compile(heightDesign(height))).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_SCALE_INVALID" })] });
+    }
+    expect(compile({ ...heightDesign(1.4), category: "animal", bodyTopology: "quadruped" }).ok).toBe(true);
+    const rigged = nativeComposedDesign(true);
+    const asset = rigged.visualParts[0]!;
+    if (asset.kind !== "asset") throw new Error("Missing asset fixture.");
+    asset.localTransform.scaleXYZ = [1, 1.26, 1];
+    expect(compile(rigged)).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_SCALE_INVALID" })] });
+  });
+
+  it("preserves old Subject policy epsilon and rotated primitive measurements including excluded visual parts", () => {
+    const base = nativeComposedDesign();
+    const shapes = [
+      { kind: "box", sizeMetersXYZ: [1.4, 1.8, 1.4] },
+      { kind: "sphere", radiusMeters: 0.9 },
+      { kind: "cylinder", radiusMeters: 0.8, heightMeters: 1.8 },
+      { kind: "capsule", radiusMeters: 0.8, heightMeters: 1.8 },
+    ] as const;
+    for (const shape of shapes) {
+      for (const tilt of [0, 1e-8, 2e-8, Math.PI / 2]) {
+        const design: ComposedSubjectDesignV1 = { ...base, category: "human", bodyTopology: "biped", visualParts: [{
+          id: "body", kind: "primitive", shape, localTransform: { positionMetersXYZ: [0, 0.9, 0], rotationEulerRadiansXYZ: [tilt, 0, 0] },
+          colliderContribution: "exclude", semanticTags: ["body"],
+        }] };
+        const diagnostics = checkNativeComposedSubjectDesignV1(design);
+        expect(diagnostics.length).toBe(shape.kind === "sphere" || tilt <= 1e-8 ? 0 : 1);
+      }
+    }
+    const asset = nativeComposedDesign(true);
+    const part = asset.visualParts[0]!;
+    if (part.kind !== "asset") throw new Error("Missing asset fixture.");
+    for (const [scale, rejected] of [[1.25, false], [1.25 + 1e-8, false], [1.25 + 2e-8, true]] as const) {
+      part.localTransform.scaleXYZ = [1, scale, 1];
+      expect(checkNativeComposedSubjectDesignV1(asset).length > 0).toBe(rejected);
+    }
   });
 
   it("validates package Subject data with the existing schema before compilation", () => {
@@ -632,7 +739,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           ? createValidRiggedPackageSubjectWorldV4()
           : createValidPackageSubjectWorldV4();
         if (kind === "designed-primitive" || kind === "designed-rigged") {
-          const composed = compileNativeComposedSubjectDefinitionV1(composedDesign(kind === "designed-rigged"));
+          const composed = compileNativeComposedSubjectDefinitionV1(nativeComposedDesign(kind === "designed-rigged"));
           if (!composed.ok || composed.value === undefined) throw new Error(JSON.stringify(composed.diagnostics));
           sourceWorld.resources.subjectDefinitions = [composed.value];
         }
@@ -649,7 +756,13 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           resourceBudget: sourceWorld.world.resourceBudget,
         };
         const original = structuredClone(closureInput);
-        const closure = compileNativeSubjectHostClosureV1(closureInput);
+        const { subject: _subject, ...designHostInput } = closureInput;
+        const closure = kind === "designed-primitive" || kind === "designed-rigged"
+          ? compileNativeSubjectHostClosureFromDesignV1({
+            ...designHostInput,
+            subjectDesign: { kind: "composed", definition: nativeComposedDesign(kind === "designed-rigged") },
+          })
+          : compileNativeSubjectHostClosureV1(closureInput);
         expect(closure.ok).toBe(true);
         if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
         expect(closureInput).toEqual(original);

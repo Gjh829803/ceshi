@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts",
     "./schema": "./src/authoring-spec-v4.schema.json",
-    "./subject-definition-schema": "./src/subject-definition-v1.schema.json"
+    "./subject-definition-schema": "./src/subject-definition-v1.schema.json",
+    "./subject-design-schema": "./src/subject-design-v1.schema.json"
   },
   "dependencies": {
     "@whitebox-world/layout-solver": "workspace:*",

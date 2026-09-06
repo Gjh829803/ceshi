@@ -8,6 +8,7 @@ import {
   parseCanonicalJson,
   validateAuthoringSpecV4,
   validatePackageSubjectDefinition,
+  validateSubjectDesignV1,
 } from "./index";
 import {
   createValidAuthoringSpec,
@@ -19,6 +20,50 @@ import {
 const validSpec = createValidAuthoringSpec();
 
 describe("current AuthoringSpec", () => {
+  it("admits only an exact registered Subject design, without silently composing or selecting a fallback", () => {
+    const design = { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" };
+    expect(validateSubjectDesignV1(design)).toEqual({ ok: true, value: design, diagnostics: [] });
+    for (const value of [undefined, {}, { ...design, kind: "registry" },
+      { ...design, subjectDefinitionRef: "G Bot" },
+      { ...design, subjectDefinitionRef: "package://subject-definition/uncompiled@1" },
+      { ...design, definition: {} }, { ...design, capabilityRefs: [] }]) {
+      expect(validateSubjectDesignV1(value).ok).toBe(false);
+    }
+  });
+
+  it.each([false, true])("admits composed shape intent using the existing Subject schema (rigged=%s)", (rigged) => {
+    const definition = rigged ? createValidRiggedPackageDefinition()
+      : createValidPackageSubjectWorld().resources.subjectDefinitions[0]!;
+    const design = {
+      kind: "composed",
+      definition: {
+        id: definition.id, category: definition.category, bodyTopology: definition.bodyTopology,
+        semanticClassId: definition.semanticClassId,
+        displayName: definition.aiMetadata.displayName, description: definition.aiMetadata.description,
+        visualParts: definition.visualParts.map((part) => {
+          if (part.kind === "primitive") return part;
+          const { appearance: _appearance, ...designPart } = part;
+          return designPart;
+        }),
+        visualBinding: definition.visualBinding.mode === "static" ? { mode: "static" } : {
+          ...definition.visualBinding,
+          colliderProfileRef: definition.colliderPolicy.kind === "profile" ? definition.colliderPolicy.colliderProfileRef : "invalid",
+        },
+      },
+    };
+    const snapshot = structuredClone(design);
+    expect(validateSubjectDesignV1(design)).toEqual({ ok: true, value: design, diagnostics: [] });
+    expect(design).toEqual(snapshot);
+    for (const field of ["profiles", "capabilityRefs", "sockets", "mountSlots", "allowedOverridePaths", "coordinateConvention", "colliderPolicy", "runtime"]) {
+      expect(validateSubjectDesignV1({ ...design, definition: { ...design.definition, [field]: {} } }).ok).toBe(false);
+    }
+    const invalid = structuredClone(design);
+    invalid.definition.visualParts[0]!.localTransform.positionMetersXYZ = [0, Number.NaN, 0];
+    expect(validateSubjectDesignV1(invalid).ok).toBe(false);
+    expect(validateSubjectDesignV1({ ...design, definition: { ...design.definition, visualParts: [] } }).ok).toBe(false);
+    expect(validateSubjectDesignV1({ ...design, definition: { ...design.definition, visualBinding: { mode: "animated" } } }).ok).toBe(false);
+  });
+
   it("strictly parses a valid canonical V4 document", () => {
     const result = parseAuthoringSpecV4(JSON.stringify(validSpec));
 

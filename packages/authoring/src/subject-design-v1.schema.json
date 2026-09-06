@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "worldkit://schema/subject-design@1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "subjectDefinitionRef"],
+      "properties": {
+        "kind": { "const": "registered" },
+        "subjectDefinitionRef": {
+          "type": "string",
+          "pattern": "^worldkit://subject-definition/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "definition"],
+      "properties": {
+        "kind": { "const": "composed" },
+        "definition": { "$ref": "#/$defs/composedDefinition" }
+      }
+    }
+  ],
+  "$defs": {
+    "composedDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "bodyTopology", "semanticClassId", "displayName", "description", "visualParts", "visualBinding"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/subject-definition@1#/properties/id" },
+        "category": { "$ref": "worldkit://schema/subject-definition@1#/properties/category" },
+        "bodyTopology": { "$ref": "worldkit://schema/subject-definition@1#/properties/bodyTopology" },
+        "semanticClassId": { "$ref": "worldkit://schema/subject-definition@1#/properties/semanticClassId" },
+        "displayName": { "$ref": "worldkit://schema/subject-definition@1#/properties/aiMetadata/properties/displayName" },
+        "description": { "$ref": "worldkit://schema/subject-definition@1#/properties/aiMetadata/properties/description" },
+        "visualParts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "oneOf": [
+              { "$ref": "worldkit://schema/subject-definition@1#/$defs/visualPart/oneOf/0" },
+              { "$ref": "#/$defs/assetPart" }
+            ]
+          }
+        },
+        "visualBinding": {
+          "oneOf": [
+            { "$ref": "worldkit://schema/subject-definition@1#/$defs/visualBinding/oneOf/0" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "rigProfileRef", "animationSetRef", "colliderProfileRef"],
+              "properties": {
+                "mode": { "const": "rigged" },
+                "rigProfileRef": { "$ref": "worldkit://schema/subject-definition@1#/$defs/visualBinding/oneOf/1/properties/rigProfileRef" },
+                "animationSetRef": { "$ref": "worldkit://schema/subject-definition@1#/$defs/visualBinding/oneOf/1/properties/animationSetRef" },
+                "colliderProfileRef": { "$ref": "worldkit://schema/subject-definition@1#/$defs/colliderPolicy/oneOf/1/properties/colliderProfileRef" }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "visualBinding": { "$ref": "worldkit://schema/subject-definition@1#/allOf/0/if/properties/visualBinding" }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "visualParts": { "$ref": "worldkit://schema/subject-definition@1#/allOf/0/then/properties/visualParts" }
+            }
+          }
+        }
+      ]
+    },
+    "assetPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "subjectAssetRef", "localTransform", "semanticTags"],
+      "properties": {
+        "id": { "$ref": "worldkit://schema/subject-definition@1#/$defs/id" },
+        "kind": { "const": "asset" },
+        "subjectAssetRef": { "$ref": "worldkit://schema/subject-definition@1#/$defs/visualPart/oneOf/1/properties/subjectAssetRef" },
+        "localTransform": { "$ref": "worldkit://schema/subject-definition@1#/$defs/assetLocalTransform" },
+        "semanticTags": { "$ref": "worldkit://schema/subject-definition@1#/$defs/semanticTags" }
+      }
+    }
+  }
+}

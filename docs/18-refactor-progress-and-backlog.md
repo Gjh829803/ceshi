@@ -2396,6 +2396,33 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   任务内生成主体提案，由同一 Host 编译/重放，并一起迁移前置固定 Bootstrap 身份与
   后置编译闭包的 Request/Attempt/Package/Capture/resume 消费者；不得后改冻结请求。
 
+- CF-12/M-C2B-S 共享设计合同与 Host 入口（2026-09-06，输入 `b007a2e4`，
+  main-agent-only）：Authoring 新增闭合的 `SubjectDesignV1` registered/composed schema、
+  validator 与 `ComposedSubjectDesignV1`；形状、变换、资产/骨骼字段直接引用现有 Subject
+  schema。删除先前 script-only design type，不留 alias。组合转换和
+  `compileNativeSubjectHostClosureFromDesignV1` 共同消费此合同，后者经同一 C2A 构造器
+  产生 WRT/Gameplay/资源锁，并已用于两种组合设计的实际 Native Request 准备测试。
+  未知/不可用 registered 主体、额外 profiles/Runtime 字段、字符串数值不被替换或默默忽略；
+  所覆盖的 throwing accessor 不执行。共享 schema 不解释名称或 movement 文本。
+  源码核对补回了旧 `9e35ab53:packages/block-world/src/check.ts:88-152,591-608`
+  的组合主体 policy：1–48 部件、唯一稳定 ID、非空文本/tags、普通 human/biped 纯 primitive
+  高度 1.6–2.1m、asset 单轴最大 1.25 与旧 `1e-8` 容差/旋转量测。共享 Authoring 128
+  部件上限不是 Native 旧 policy；Host design 入口在同一编译路径、量化前应用旧 policy。
+  这没有新增 pre-Planner/pre-Builder gate，生产入口仍未切换。此前两个 Definition golden
+  的 dotted part IDs 只证明转换函数，不证明旧 checker 准入；新实际设计准备夹具改用旧规则
+  允许的 hyphenated IDs，未改旧 golden 来掩盖范围差异。
+  验证：共享接口初次 RED 为 missing function；AJV 引用旧条件片段丢失 object 类型上下文
+  后，改为带显式类型的 wrapper 引用相同字段约束，未放松 strict mode。Authoring/Request
+  首轮 82/82；新增 Host 路由后 Request 56/56。旧 policy 两个 RED 复现“应拒绝却被接受”，
+  修复后设计/实际准备定向 4/4。直接执行固定旧源码 helper 和原 composed-scale branch，
+  28 个边界样本的诊断分类完全一致（18 accepted / 10 rejected）。最终 Request 全文件
+  **59/59**、typecheck、portable checker drift 与 3C migration（11 entries / 39 live
+  references / 10 authority invariants）通过（exit 0）；各轮覆盖有重叠，不能累加。
+  Authoring 原 27 项证据输入未再改，Native/Canonical portable checker 与冻结副本未变。
+  **Native authoring 实际生产字段、派发/输出冻结、Package/Capture/resume、movement 选择
+  与整包成本接入仍未完成**；不提前更新 Skill 宣称新主体已经可用，也不使已接纳新提案被旧
+  G Bot 静默覆盖。没有真实 Browser/模型任务、最终本地 Case、全仓 CI 或独立审查。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

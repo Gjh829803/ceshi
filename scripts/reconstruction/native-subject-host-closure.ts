@@ -2,6 +2,7 @@ import {
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
   validatePackageSubjectDefinition,
+  validateSubjectDesignV1,
   type AuthoringDiagnostic,
   type AuthoringDocumentBase,
   type NormalizeSubjectDefinitionRequestV2,
@@ -28,6 +29,7 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
+import { checkNativeComposedSubjectDesignV1, compileNativeComposedSubjectDefinitionV1 } from "./native-composed-subject-definition.js";
 
 export interface NativeSubjectHostClosureInputV1 {
   readonly worldId: string;
@@ -52,6 +54,39 @@ export type NativeSubjectHostClosureResultV1 =
       registryLock: readonly WorldResourceLockEntryV1[];
       subjectResourceCost: Readonly<{ vertices: number; triangles: number; colliders: number }>;
     }>;
+
+export type NativeSubjectHostDesignInputV1 = Omit<NativeSubjectHostClosureInputV1, "subject"> & {
+  readonly subjectDesign: unknown;
+};
+
+/** Shape proposal -> the same Host constructor; no name matching or fallback. */
+export function compileNativeSubjectHostClosureFromDesignV1(
+  input: NativeSubjectHostDesignInputV1,
+  registry: SubjectResourceRegistryV3 = builtInSubjectResourceRegistry,
+): NativeSubjectHostClosureResultV1 {
+  let snapshot: NativeSubjectHostDesignInputV1;
+  try {
+    assertWorldPackageAccessorFreeDataGraphV1(input);
+    snapshot = structuredClone(input);
+  } catch {
+    return failure("NATIVE_SUBJECT_HOST_INPUT_INVALID", "Host Subject design input must be an accessor-free data graph.");
+  }
+  const { subjectDesign, ...hostInput } = snapshot;
+  const proposal = validateSubjectDesignV1(subjectDesign);
+  if (!proposal.ok || proposal.value === undefined) return { ok: false, diagnostics: proposal.diagnostics };
+  if (proposal.value.kind === "registered") {
+    return compileNativeSubjectHostClosureV1({ ...hostInput, subject: {
+      source: "registry", subjectDefinitionRef: proposal.value.subjectDefinitionRef,
+    } }, registry);
+  }
+  const policyDiagnostics = checkNativeComposedSubjectDesignV1(proposal.value.definition);
+  if (policyDiagnostics.length > 0) return { ok: false, diagnostics: policyDiagnostics };
+  const composed = compileNativeComposedSubjectDefinitionV1(proposal.value.definition);
+  if (!composed.ok || composed.value === undefined) return { ok: false, diagnostics: composed.diagnostics };
+  return compileNativeSubjectHostClosureV1({ ...hostInput, subject: {
+    source: "package", definition: composed.value,
+  } }, registry);
+}
 
 function failure(code: string, message: string): Readonly<{ ok: false; diagnostics: readonly AuthoringDiagnostic[] }> {
   return { ok: false, diagnostics: [{ severity: "error", code, instancePath: "/subject", message }] };

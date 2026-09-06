@@ -222,6 +222,27 @@ export type SubjectVisualBindingV1 =
       animationSetRef: string;
     };
 
+/** Shape proposal; executable profiles remain the Host's responsibility. */
+export interface ComposedSubjectDesignV1 {
+  id: string;
+  category: PackageSubjectDefinitionV1["category"];
+  bodyTopology: PackageSubjectDefinitionV1["bodyTopology"];
+  semanticClassId: string;
+  displayName: string;
+  description: string;
+  visualParts: readonly (
+    | Extract<SubjectVisualPartSpecV2, { kind: "primitive" }>
+    | Omit<Extract<SubjectVisualPartSpecV2, { kind: "asset" }>, "appearance">
+  )[];
+  visualBinding:
+    | { mode: "static" }
+    | { mode: "rigged"; rigProfileRef: string; animationSetRef: string; colliderProfileRef: string };
+}
+
+export type SubjectDesignV1 =
+  | { kind: "registered"; subjectDefinitionRef: string }
+  | { kind: "composed"; definition: ComposedSubjectDesignV1 };
+
 export type SubjectColliderPolicyV2 =
   | {
       kind: "derive";

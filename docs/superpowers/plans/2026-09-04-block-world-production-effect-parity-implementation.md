@@ -644,6 +644,65 @@ Skill/portable checker, Runtime or existing Host port changed. This is a
 prerequisite, not C2B activation or proof of visual/movement parity. The exact
 source comparison and exclusions are in docs/18.
 
+### CF-12/M-C2B activation boundary (input b007a2e4)
+
+Execution is main-agent-only and sequential. Preserve the same three declared
+source outputs and same Builder task/self-repair counter. `scene.ts` never owns
+the controlled Subject. The existing `native-block-authoring.json` is the pure
+data proposal surface, alongside its existing opening Camera intent. Host-owned
+subject compilation, not a Native Block Session, resolves the selected design.
+
+| Task | Owner and dependency | Required integrated result |
+| --- | --- | --- |
+| C2B-S | Authoring Subject design schema/parser/types; Native authoring consumer. Depends on C2B-D. | One closed registered/composed design, reusing current Subject part/shape definitions. A composed proposal cannot supply executable profiles, sockets, capabilities or Runtime state. The Host converter consumes this same type; no independent script-only schema or field aliases. |
+| C2B-H | Reconstruction preparation/self-check/Package; depends on S. | Freeze only known input policy/identities before dispatch. Resolve the Subject from the output proposal with the same compiler in task self-check and Host replay; bind the resulting WRT/Gameplay/locks and proxy to exact output bytes. Delete the Cloud Ridge closure read and old preselected WRT/proxy input assumptions together. Keep the immutable Native Bootstrap world/ref/seed/Spawn input; do not rewrite it or a Request after model delivery. |
+| C2B-R | Run/journal/repair/checkpoint/Capture; depends on H. | Separate upstream immutable policy identity from generated Subject closure identity. Resume the same source/Request without a model POST; reject stale outputs under the existing integrity contract. Subject geometry, budget cost, Camera target and Capture all consume the one compiled closure. |
+| C2B-I | Builder Skill/checker/catalog/context fixtures and generated copies; integrates S/H/R. | The same task selects/assembles the whole Subject, inspects the newly derived proxy and uses compiled executable modes/envelope. Retain pinned-old defaults, parameters, repair order and no new ordinary quality gate. Contract/consumer tests, focused Native Skill drift, typecheck and affected Host/3C checks precede the final all-CF Case. |
+
+S is not an alternative ingress or permission to accept ignored Subject data.
+The Native source field must be required when H/R/I activate; do not add a
+missing-proposal G Bot fallback or publish a tree as production-ready while an
+accepted proposal still has no consumer. The final input/output freeze transition
+must update the affected frozen Skill wording and its exact copies together.
+
+S source audit also identifies a separate existing legacy authoring policy:
+`9e35ab53:packages/block-world/src/check.ts:88-119,591-608` limits composed
+Subjects to 1–48 parts, unique part IDs matching `[a-z0-9][a-z0-9-]{2,79}`,
+nonempty trimmed display/description, semantic class `[a-z0-9][a-z0-9.-]{2,95}`,
+and nonempty part tags matching `[a-z0-9][a-z0-9.-]{1,63}`. Ordinary primitive-only
+human/biped visual height is 1.6–2.1 m with the old `1e-8` tolerance; its asset
+parts may not exceed 1.25 scale on any axis. These are old checker behaviors,
+not newly invented gates. The shared Authoring Subject schema has a wider
+1–128 part representation ceiling and is not this Profile's complete policy.
+The Host design constructor now applies this legacy policy before composed
+definition translation/normalization. I must connect that same constructor in
+the existing task-level check/Host replay,
+not promote it to a pre-Planner or pre-Builder veto or infer movement support
+from it. The earlier two fixture definition hashes prove the converter only;
+those fixtures' dotted part IDs do not prove old checker admission. No old
+full-Subject-check or full production parity claim follows from those hashes.
+
+S/Host entry checkpoint: `SubjectDesignV1` and `ComposedSubjectDesignV1` now
+belong to Authoring; the former script-local design type is deleted. The closed
+registered/composed schema references the existing Subject field schemas and is
+available through `@whitebox-world/authoring/subject-design-schema`. The same
+validator is consumed by the composed translator and
+`compileNativeSubjectHostClosureFromDesignV1`; exact registered lookup and
+composed Host compilation share the existing C2A owner, never a fallback.
+The Host design entry applies the above old policy. Directly executing the
+pinned old checker helpers and original composed-scale branch produces the same
+diagnostic classifications on 28 cases (18 accepted, 10 rejected), including
+count, identity, height/scale tolerance and primitive rotation branches. This is
+policy parity, not full Native admission, requested-mode support or Runtime pixels.
+
+The two actual designed Request-preparation fixtures use old-admissible hyphenated
+part IDs; the independent converter golden fixtures keep their earlier dotted IDs
+and limited conversion-only meaning. Existing generation Request/Attempt and
+production freeze code still has not switched to output-selected Subjects. The
+Native authoring field and Skill are intentionally not advertised as usable until
+H/R/I consume them together. No fourth output, schema fallback or new model task
+has been activated.
+
 C2A implementation checkpoint: the explicit Host constructor and shared Subject
 projection exist. Actual Native Request/proxy preparation accepts registered
 asset, registered primitive, package primitive and package rigged closures.
