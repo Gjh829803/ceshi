@@ -11,7 +11,7 @@ import {
   parseFormalSpawnSupportObservationV1, parseFormalColliderOverlayObservationV1,
   parseFormalScriptedTraversalObservationV1,
 } from "@whitebox-world/runtime-contracts";
-import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT } from "../reconstruction/native-package.test-support.js";
+import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, SCENE_SOURCE } from "../reconstruction/native-package.test-support.js";
 import { packageNativeBlockAttemptV1 } from "../reconstruction/native-package.js";
 import { materializeFormalWorldCaptureRequestV1 } from "../reconstruction/formal-capture-request.js";
 import { captureProductionHostedWorldPackageV1 } from "../reconstruction/formal-capture.js";
@@ -29,6 +29,7 @@ import {
 const json = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, "utf8"));
 const args = parseNativeNoScriptCaptureArgsV1(process.argv.slice(2), Object.keys(NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1));
 const withoutSemanticTargets = args.mode === "without-semantic-targets";
+const withSubjectOccluder = args.mode === "subject-occluder";
 const geometryFixtureId = "geometryFixtureId" in args
   ? args.geometryFixtureId as keyof typeof NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 : undefined;
 const semanticReference = args.mode === "semantic-geometry-reference"
@@ -40,6 +41,10 @@ try {
   fixture = await createNativeBlockPackageAttemptFixtureV1(geometryFixtureId === undefined ? {
     withoutScriptedTraversal: true,
     withoutSemanticTargets,
+    ...(withSubjectOccluder ? { sceneSource: SCENE_SOURCE.replace("    session.finalize(",
+      // Offset laterally so only part of the Subject is hidden; it is a visual
+      // occluder behind Spawn, outside the required traversable ground strip.
+      '    session.createBlock({id: "subject-occluder", shape: "full", paletteRole: "structure", centerMetersXYZ: [0.5, 1.5, 20] });\n    session.finalize(') } : {}),
     worldBoundsPolicy: { mode: "checked-block-layout" },
     groundExploration: {
       mode: "source-authored",
@@ -93,6 +98,15 @@ try {
   const openingCamera = receipt.readySnapshot.view.camera;
   assert.equal(openingCamera.mode, "tracking");
   if (openingCamera.mode === "tracking") assert.equal(openingCamera.subjectOcclusion?.selectionElapsedSeconds, 0);
+  if (withSubjectOccluder) {
+    assert(openingCamera.mode === "tracking" && openingCamera.subjectOcclusion);
+    assert(openingCamera.subjectOcclusion.selectedInstanceCount > 0, "actual Host batch must occlude Subject sample rays");
+    assert.equal(openingCamera.subjectOcclusion.fadedInstanceCount, 0, "Reset opening must not pre-advance the fade");
+    assert(openingCamera.subjectOcclusion.instances.every(row => row.opacityRatio === 1));
+    const sampledCamera = spawnSupport.sampledSnapshot.view.camera;
+    assert(sampledCamera.mode === "tracking" && sampledCamera.subjectOcclusion);
+    assert(sampledCamera.subjectOcclusion.fadedInstanceCount > 0, "the actual following fixed Tick must advance occlusion");
+  }
   const traversal = parseFormalScriptedTraversalObservationV1(await json(path.join(captureRoot, "scripted-traversal.json")));
   assert.deepEqual(traversal.checks, []);
   assert.equal(traversal.resetReadySnapshotHash, receipt.readySnapshotHash);
@@ -172,7 +186,7 @@ try {
     assert(topDown.targets.some((projection) =>
       projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible"),
     `Fixture target ${target.acceptanceTargetRef} must have visible top-down identity pixels`);
-    if (geometryFixtureId === undefined &&
+    if (geometryFixtureId === undefined && !withSubjectOccluder &&
       (target.acceptanceTargetRef === "worldkit://acceptance-target/gate-mass@1" ||
        target.acceptanceTargetRef === "worldkit://acceptance-target/mountain-cliff-layers@1")) {
       const pixels = openingPixels.targets.find((projection) => projection.acceptanceTargetRef === target.acceptanceTargetRef)!;
@@ -190,6 +204,10 @@ try {
     }
   }
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
+    ...(withSubjectOccluder ? { subjectOccluder: {
+      openingCamera: receipt.readySnapshot.view.camera,
+      sampledCamera: spawnSupport.sampledSnapshot.view.camera,
+    } } : {}),
     ...(geometryFixtureId === undefined ? {} : { geometryFixtureId }),
     ...(semanticReferenceReport === undefined ? {} : { semanticReference: semanticReferenceReport }),
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,

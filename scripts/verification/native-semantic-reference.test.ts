@@ -45,6 +45,7 @@ describe("test-only explicit semantic reference consumption", () => {
   it("keeps the old CLI modes and only permits rear-depth-wall with a separate solid reference", () => {
     expect(parseNativeNoScriptCaptureArgsV1([], fixtureIds)).toEqual({ mode: "default" });
     expect(parseNativeNoScriptCaptureArgsV1(["--without-semantic-targets"], fixtureIds)).toEqual({ mode: "without-semantic-targets" });
+    expect(parseNativeNoScriptCaptureArgsV1(["--subject-occluder"], fixtureIds)).toEqual({ mode: "subject-occluder" });
     expect(parseNativeNoScriptCaptureArgsV1(["--semantic-geometry", "hollow-wall"], fixtureIds)).toEqual({ mode: "semantic-geometry", geometryFixtureId: "hollow-wall" });
     expect(parseNativeNoScriptCaptureArgsV1(["--semantic-geometry-reference", "rear-depth-wall", "/tmp/reference"], fixtureIds))
       .toEqual({ mode: "semantic-geometry-reference", geometryFixtureId: "rear-depth-wall", baselineEvidenceRoot: "/tmp/reference" });

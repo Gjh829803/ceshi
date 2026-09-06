@@ -17,6 +17,7 @@ type SemanticEvidence = Readonly<{ observedDimensions: readonly Pick<WorldRecons
 export function parseNativeNoScriptCaptureArgsV1(args: readonly string[], geometryFixtureIds: readonly string[]) {
   if (args.length === 0) return { mode: "default" as const };
   if (args.length === 1 && args[0] === "--without-semantic-targets") return { mode: "without-semantic-targets" as const };
+  if (args.length === 1 && args[0] === "--subject-occluder") return { mode: "subject-occluder" as const };
   if (args.length === 2 && args[0] === "--semantic-geometry" && geometryFixtureIds.includes(args[1]!)) {
     return { mode: "semantic-geometry" as const, geometryFixtureId: args[1]! };
   }
@@ -25,7 +26,7 @@ export function parseNativeNoScriptCaptureArgsV1(args: readonly string[], geomet
     return { mode: "semantic-geometry-reference" as const, geometryFixtureId: "rear-depth-wall" as const,
       baselineEvidenceRoot: path.resolve(args[2]!) };
   }
-  throw new Error("Usage: verify:native-no-script-capture [--without-semantic-targets | --semantic-geometry <fixture-id> | --semantic-geometry-reference rear-depth-wall <solid-wall-evidence-root>]");
+  throw new Error("Usage: verify:native-no-script-capture [--without-semantic-targets | --subject-occluder | --semantic-geometry <fixture-id> | --semantic-geometry-reference rear-depth-wall <solid-wall-evidence-root>]");
 }
 
 function cameraSignature(receipt: FormalWorldCaptureReceiptV1, view: CaptureView) {
