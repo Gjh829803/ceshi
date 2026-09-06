@@ -1379,6 +1379,37 @@ on the requested new worktree without labeling the overall goal complete.
 
 ### CF-19/GROUND-FEEDBACK minimum flow blocker (2026-09-07)
 
+Follow-up `CF-19/OVERLAP-SCAN` (main-agent-only, sequential): fresh `67c0b729`
+Case `paper-moon-054-cf-ground-0907`, Run `run-20260906214232-75736`, passed
+Planner and Host planning replay but Builder exhausted its existing three-cycle
+budget with waterfall/scenery overlap. All three Source files were retained;
+both advisory PNGs were missing, so delivery rejected before Native Check/Ground.
+Top-level `WORLD_RECONSTRUCTION_NO_OUTPUT` is not a claim that no Source existed.
+Pinned old `check.ts:685-693` checks occupancy for every preset and traverses all
+Blocks with the first occupant of each cell as witness; its self-check forwards
+all compiler diagnostics. Current task renderer aborts source execution at pair
+33, hiding later conflict families until another source-repair cycle. Preserve
+overlap rejection, the VM timeout and the shared repair budget. Restore complete
+source traversal with linear first-occupant witnesses, keep the first 32 detailed
+pairs, and add bounded fixed-palette-pair summaries (counts, spatial extent,
+first/last witness IDs) so later terrain/water/landmark conflicts remain visible.
+This is advisory feedback, not inferred Physics or a new production gate.
+Required evidence: >32 early overlaps followed by a later water/cliff conflict
+must fail RED for missing late feedback, then pass GREEN; dense coincident input
+must remain bounded, no PNG on rejection, old first-witness behavior, existing
+parser/overlap/ground feedback tests, frozen bytes and original failed-source
+read-only diagnostic. Never repair historical Source in place or add a fourth
+cycle. CF-29 diagnostic summarization remains distinct from geometry acceptance.
+
+Evidence: late-family fixture failed because `late-waterfall` was absent from the
+old capped report, then passed with complete traversal. A 20,000-coincident-Block
+fixture completes with 19,999 conflicting Blocks and bounded feedback. Renderer,
+parser, Ground feedback, frozen-byte and rebuild selection passes 45/45;
+typecheck and real Host Package replay pass. Read-only diagnostic of the retained
+failed Source scans all 85,450 Blocks and reports 48 water/background conflicts,
+including both sides' first/last IDs and occupied-cell extent. No historical
+Source was edited, no PNG was fabricated, and no production pass is claimed.
+
 Latest user priority: if the current Case fails, identify its CF owner and implement
 only the missing work required for a valid old-equivalent flow, then rerun. Do not
 relax an existing old check, invent another repair round, or repair historical

@@ -1483,7 +1483,46 @@ export default defineBabylonNativeScene({ kind: "babylon-native-scene-module", i
     }
   });
 
-  it("deduplicates occupied microcells while retaining every pair of three coincident Blocks", async () => {
+  it("reports later conflict families even after the first 32 overlap witnesses", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const early = Array.from({ length: 40 }, (_, index) => ["base", "overlap"].map(role =>
+      `session.createBlock({ id: "${role}-${index}", shape: "full", paletteRole: "ground", centerMetersXYZ: [${10 + index * 2}, -0.5, 0] });`,
+    ).join("\n")).join("\n");
+    const late = [
+      'session.createBlock({ id: "late-cliff", shape: "full", paletteRole: "background-mass", centerMetersXYZ: [400, 0.5, 0] });',
+      'session.createBlock({ id: "late-waterfall", shape: "full", paletteRole: "water-like-visual", centerMetersXYZ: [400, 0.5, 0] });',
+    ].join("\n");
+    await writeFile(sourcePath, source.replace("session.finalize(", `${early}\n${late}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("late-waterfall");
+    expect(result.stderr).toContain("late-cliff");
+    expect(result.stderr).toContain('"isComplete":true');
+    expect(result.stderr).toContain('"conflictingBlockCount":41');
+    expect(result.stderr.match(/ at cell /g)).toHaveLength(32);
+    expect(result.stderr.length).toBeLessThan(8_000);
+    expect(await runVisualReview(workspace)).toEqual(result);
+  });
+
+  it("keeps complete dense-overlap feedback bounded without stopping at pair 33", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const calls = `for (let index = 0; index < 20000; index += 1) {
+      session.createBlock({ id: "dense-" + index, shape: "full", paletteRole: "ground", centerMetersXYZ: [400, 0.5, 0] });
+    }`;
+    await writeFile(sourcePath, source.replace("session.finalize(", `${calls}\nsession.finalize(`));
+    const result = await runVisualReview(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('"isComplete":true');
+    expect(result.stderr).toContain('"conflictingBlockCount":19999');
+    expect(result.stderr).toContain('"lastWitnessBlockIds":["dense-19999","dense-0"]');
+    expect(result.stderr.length).toBeLessThan(8_000);
+  });
+
+  it("uses the old first-occupant witness for three coincident Blocks", async () => {
     const workspace = await createVisualReviewWorkspace();
     const sourcePath = path.join(workspace, "scene.ts");
     const source = await readFile(sourcePath, "utf8");
@@ -1497,7 +1536,6 @@ export default defineBabylonNativeScene({ kind: "babylon-native-scene-module", i
       .map(([, id, otherId, cell]) => [id, otherId, cell])).toEqual([
       ["coincident-b", "coincident-a", "19,-2,-1"],
       ["coincident-c", "coincident-a", "19,-2,-1"],
-      ["coincident-c", "coincident-b", "19,-2,-1"],
     ]);
   });
 
@@ -1540,6 +1578,7 @@ export default defineBabylonNativeScene({ kind: "babylon-native-scene-module", i
     expect(result.stderr).toContain("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP");
     expect(result.stderr.match(/ at cell /g)).toHaveLength(Math.min(pairCount, 32));
     expect(result.stderr.includes("additional overlapping Block pairs omitted (limit 32)")).toBe(mode === "caught-overflow");
+    expect(result.stderr).toContain(`"isComplete":${mode === "caught-overflow"}`);
     for (const file of ["builder-top-down-comparison.png", "builder-entry-comparison.png"]) {
       await expect(readFile(path.join(workspace, "attempts/advisory", file))).rejects.toMatchObject({ code: "ENOENT" });
     }

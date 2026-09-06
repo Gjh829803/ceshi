@@ -277,10 +277,16 @@ Collider geometry admission, Ground and Runtime checks remain Host-owned.
 
 Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
 functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and
-one representative occupied cell for each of at most 32 distinct pairs, in deterministic discovery
-order. Repeated cells for the same pair appear once; a truncation notice means more pairs remain.
-Read all reported pairs together and repair their shared geometric cause within one existing cycle,
-rather than repairing only the first pair. Repair that geometry inside this task using the same shared repair counter;
+one representative occupied cell for each of the first 32 distinct witness pairs, in deterministic
+discovery order. As in the old checker, each cell retains its first occupant as the witness.
+The detail limit never stops source traversal. Read the appended `overlap scan summary` too:
+`isComplete`, total conflicting Blocks, and each fixed-palette-pair family's count, microcell
+extent and first/last witness IDs expose later scenery, water and landmark conflicts. Repeated
+cells for a pair appear once in the details; a truncation notice means details were omitted, not
+that only those first Blocks need repair. `isComplete: false` means source execution itself failed
+before finishing. Repair all reported families' actual geometric causes in one existing cycle,
+preserving complete forms instead of deleting scenery or hiding overlaps. These role-pair summaries
+are diagnostic labels, never inferred Physics or Collider membership. Use the same shared repair counter;
 do not ignore a renderer failure or return stale PNGs. This is disposable authoring feedback, not
 full Native admission, a Package receipt or a Runtime collision owner.
 

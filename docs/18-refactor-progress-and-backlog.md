@@ -3332,7 +3332,19 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   因此没有错误地改动该值。用户最新安排是本批修复后先跑一个新 Case，通过及必要
   合入检查完成后合 main，再从最新 main 新建 worktree 继续 CF；不等待全部 CF。
 
-- 最新真实 Case（2026-09-07，`13b52d17`，`paper-moon-054-cf-g4-0907` /
+- 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
+  `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
+  用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。
+  三份源码完整保留在 `generation-failure/outputs`，不是“完全没有源码”；顶层
+  `WORLD_RECONSTRUCTION_NO_OUTPUT` 来自交付缺失，尚未进入 Native Check/Ground。
+  旧分支同样拒绝这些重叠，不得放宽。继续补 `CF-19/OVERLAP-SCAN`：原 renderer
+  到第 33 对重叠就提前终止源码执行，旧检查会完整遍历；改为完整首占用者扫描、
+  前 32 对明细加有界类别汇总，不新增生产 gate/超时/修复轮数。新回归已 RED→GREEN
+  覆盖后置冲突与 20k 重合输入；原失败源码只读扫描完整 85,450 Blocks，发现 48 个
+  真正冲突 Blocks。renderer/冻结工具 focused 45/45、typecheck 与直接 Package 回放
+  1/1 通过；场景本身未被手动修成通过，下一次生产验证仍待实际结果。
+
+- 上一真实 Case（2026-09-07，`13b52d17`，`paper-moon-054-cf-g4-0907` /
   `run-20260906204436-65522`）已结束，ordinary production failed，未发布/未合 main。
   Planner 自检及 Host 复验通过；Builder 退出 0，Host 自检与 Native Check 通过。
   Ground 仅有一处失败：`middle-to-remote-source` 第 009 段从 `[14,8,-60]` 到

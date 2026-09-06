@@ -419,10 +419,24 @@ function captureSource(
 
   const blocks: CapturedBlock[] = [];
   const blockIds = new Set<string>();
-  const blockIndexesByMicroCellKey = new Map<string, number[]>();
-  const overlapPairKeys = new Set<string>();
+  // Match the old checker: retain the first occupant as the cell's witness.
+  // Keeping every coincident occupant makes a complete scan quadratic.
+  const blockIndexByMicroCellKey = new Map<string, number>();
   const overlapDiagnostics: string[] = [];
   let hasOmittedOverlapPairs = false;
+  let isCompleteOverlapScan = false;
+  let conflictingBlockCount = 0;
+  type OverlapFamily = {
+    paletteRoles: readonly string[];
+    witnessPairCount: number;
+    firstWitnessBlockIds: readonly string[];
+    lastWitnessBlockIds: readonly string[];
+    minimumMicroCellXYZ: number[];
+    maximumMicroCellXYZ: number[];
+  };
+  // Six closed visual roles bound this map to 21 unordered families. These
+  // labels summarize diagnostics only; they never infer Collider membership.
+  const overlapFamilies = new Map<string, OverlapFamily>();
   const diagnosticBlockId = (id: string): string => {
     const label = id.length <= 80 ? id : `${id.slice(0, 80)}...[${hash(id)}]`;
     return JSON.stringify(label).slice(1, -1).replace(
@@ -434,7 +448,12 @@ function captureSource(
     "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
     [...overlapDiagnostics, ...(hasOmittedPairs
       ? [`additional overlapping Block pairs omitted (limit ${MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT})`]
-      : [])].join("; "),
+      : []), `overlap scan summary: ${JSON.stringify({
+        isComplete: isCompleteOverlapScan,
+        scannedBlockCount: blocks.length,
+        conflictingBlockCount,
+        families: [...overlapFamilies.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([, family]) => family),
+      })}`].join("; "),
   );
   let finalized = false;
   let inputParsers: ReturnType<typeof createBabylonNativeBlockInputParsersV1>;
@@ -462,25 +481,43 @@ function captureSource(
     // Disposable feedback only. Use the Profile's exact occupied cells, not a
     // second bounds/intersection approximation or a Runtime collision inference.
     const keys = babylonNativeBlockOccupiedMicroCellKeysV1(placement);
+    const conflictCellsByOccupant = new Map<number, string[]>();
     for (const key of keys) {
-      for (const occupantIndex of blockIndexesByMicroCellKey.get(key) ?? []) {
-        // Block IDs are unique; their insertion indexes bound deduplication keys
-        // independently of malformed ID length. Store only 32 pairs, not cells.
-        const pairKey = `${blocks.length},${occupantIndex}`;
-        if (overlapPairKeys.has(pairKey)) continue;
-        if (overlapDiagnostics.length === MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT) {
-          hasOmittedOverlapPairs = true;
-          return rejectOverlaps(true);
-        }
-        overlapPairKeys.add(pairKey);
-        const occupant = blocks[occupantIndex]!.id;
-        overlapDiagnostics.push(`block '${diagnosticBlockId(id)}' overlaps '${diagnosticBlockId(occupant)}' at cell ${key}`);
+      const occupantIndex = blockIndexByMicroCellKey.get(key);
+      if (occupantIndex !== undefined) {
+        const cells = conflictCellsByOccupant.get(occupantIndex) ?? [];
+        cells.push(key);
+        conflictCellsByOccupant.set(occupantIndex, cells);
+      }
+    }
+    if (conflictCellsByOccupant.size > 0) conflictingBlockCount += 1;
+    for (const [occupantIndex, cells] of conflictCellsByOccupant) {
+      const occupant = blocks[occupantIndex]!;
+      if (overlapDiagnostics.length < MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT) {
+        overlapDiagnostics.push(`block '${diagnosticBlockId(id)}' overlaps '${diagnosticBlockId(occupant.id)}' at cell ${cells[0]!}`);
+      } else hasOmittedOverlapPairs = true;
+      const paletteRoles = [paletteRole, occupant.paletteRole].sort(stableCompare);
+      const familyKey = paletteRoles.join(":");
+      const witness = [diagnosticBlockId(id), diagnosticBlockId(occupant.id)];
+      let family = overlapFamilies.get(familyKey);
+      if (family === undefined) {
+        const coordinates = cells[0]!.split(",").map(Number);
+        family = { paletteRoles, witnessPairCount: 0,
+          firstWitnessBlockIds: witness, lastWitnessBlockIds: witness,
+          minimumMicroCellXYZ: [...coordinates], maximumMicroCellXYZ: [...coordinates] };
+        overlapFamilies.set(familyKey, family);
+      }
+      family.witnessPairCount += 1;
+      family.lastWitnessBlockIds = witness;
+      for (const key of cells) {
+        key.split(",").map(Number).forEach((coordinate, axis) => {
+          family.minimumMicroCellXYZ[axis] = Math.min(family.minimumMicroCellXYZ[axis]!, coordinate);
+          family.maximumMicroCellXYZ[axis] = Math.max(family.maximumMicroCellXYZ[axis]!, coordinate);
+        });
       }
     }
     for (const key of keys) {
-      const occupants = blockIndexesByMicroCellKey.get(key);
-      if (occupants === undefined) blockIndexesByMicroCellKey.set(key, [blocks.length]);
-      else occupants.push(blocks.length);
+      if (!blockIndexByMicroCellKey.has(key)) blockIndexByMicroCellKey.set(key, blocks.length);
     }
     blockIds.add(id);
     blocks.push(Object.freeze({
@@ -626,6 +663,7 @@ function captureSource(
     buildResult = buildScript.runInContext(context, {
       timeout: BUILD_TIMEOUT_MILLISECONDS,
     });
+    isCompleteOverlapScan = true;
   } finally {
     // A later malformed call or a source catch cannot hide known overlaps.
     if (overlapDiagnostics.length > 0) rejectOverlaps(hasOmittedOverlapPairs);
