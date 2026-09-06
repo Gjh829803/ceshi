@@ -363,6 +363,62 @@ async function main(): Promise<void> {
         ?.entityState.positionMetersXYZ,
     );
 
+    const cameraSnapshot = async (id: string) => page!.evaluate(async (requestId) => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1, id: requestId,
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "snapshot.get",
+      });
+    }, id) as Promise<{ snapshot: { view: { camera: {
+      viewYawOffsetRadians: number; viewPitchOffsetRadians: number; viewDistanceOffsetMeters: number;
+    } } } }>;
+    const cameraBefore = (await cameraSnapshot("request.browser.camera.before")).snapshot.view.camera;
+    const canvasBounds = await frame.locator("canvas").boundingBox();
+    assert(canvasBounds !== null);
+    const pointerX = canvasBounds.x + canvasBounds.width / 2;
+    const pointerY = canvasBounds.y + canvasBounds.height / 2;
+    await page.mouse.move(pointerX, pointerY);
+    await page.mouse.down();
+    await page.mouse.move(pointerX + 40, pointerY + 20);
+    await page.mouse.up();
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(100);
+    // Existing Director damping consumes committed time, not event callbacks.
+    // Settle through the public fixed-input path before comparing old deltas.
+    await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const receipt = await probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.camera.settle",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }) as { status: string };
+      if (receipt.status !== "succeeded") throw new Error("Camera settle failed");
+    });
+    const cameraAfter = (await cameraSnapshot("request.browser.camera.after")).snapshot.view.camera;
+    assert(Math.abs(cameraAfter.viewYawOffsetRadians - cameraBefore.viewYawOffsetRadians + 0.24) < 0.001,
+      "physical drag must apply the old yaw sensitivity through Runtime");
+    assert(Math.abs(cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians - 0.08) < 0.001,
+      "physical drag must apply the old pitch sensitivity through Runtime");
+    assert(Math.abs(cameraAfter.viewDistanceOffsetMeters - cameraBefore.viewDistanceOffsetMeters - 0.8) < 0.001,
+      "physical wheel must apply the old zoom sensitivity through Runtime");
+
+    await page.mouse.move(pointerX + 60, pointerY + 30);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(pointerX + 80, pointerY + 40);
+    await page.mouse.up({ button: "right" });
+    await page.mouse.down();
+    await frame.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await page.mouse.move(pointerX + 100, pointerY + 50);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    const cameraAfterIgnoredInput = (await cameraSnapshot("request.browser.camera.ignored")).snapshot.view.camera;
+    for (const key of ["viewYawOffsetRadians", "viewPitchOffsetRadians", "viewDistanceOffsetMeters"] as const) {
+      assert(Math.abs(cameraAfterIgnoredInput[key] - cameraAfter[key]) < 0.001,
+        "released/right-button/blurred pointer must not move the camera");
+    }
+
     const receipt = await page.evaluate(async () =>
       window.__WORLDKIT_HOSTED_RUNTIME__!.submit({
         kind: "worldkit-runtime-session-request",
@@ -419,6 +475,12 @@ async function main(): Promise<void> {
         unrelatedPublicAssetsBlocked: true,
         repositoryRootFileSystemBlocked: true,
         subjectAssetContentHashRequired: true,
+        physicalPointerCamera: {
+          yawDeltaRadians: cameraAfter.viewYawOffsetRadians - cameraBefore.viewYawOffsetRadians,
+          pitchDeltaRadians: cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians,
+          zoomDeltaMeters: cameraAfter.viewDistanceOffsetMeters - cameraBefore.viewDistanceOffsetMeters,
+          releasedRightButtonAndBlurIgnored: true,
+        },
         runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,
       },

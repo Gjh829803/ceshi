@@ -29,6 +29,7 @@ import {
   type RuntimeSessionRequestV1,
   type RenderReadyReceiptV1,
   type WorldRuntimeSnapshotV4,
+  type CameraViewInputV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   RuntimeHost,
@@ -121,6 +122,7 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   initialSnapshot(): WorldRuntimeSnapshotV4;
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
   renderFrame(interpolationAlphaRatio?: number): RenderReadyReceiptV1;
+  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4>;
   resize(): void;
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
@@ -353,6 +355,17 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
   resize(): void {
     this.activeHandle().runtime.resize();
+  }
+
+  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4> {
+    const deltas = Object.freeze({ ...input });
+    const operation = this.#tail.then(() => {
+      if (!this.#isActive) throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
+      this.activeHandle().runtime.adjustCameraView(deltas);
+      return this.initialSnapshot();
+    });
+    this.#tail = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   executeFormalCapture(

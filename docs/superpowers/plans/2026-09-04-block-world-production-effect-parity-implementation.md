@@ -1103,6 +1103,38 @@ failure. This Browser run is not a pixel/feel review; alpha 0/0.5/1 and committe
 Snapshot invariance are real Babylon/Havok NullEngine evidence. No new model
 Case, full CI or independent final review occurred.
 
+### CF-05/P1 Native Hosted pointer control parity (2026-09-07)
+
+Main-agent-only/sequential; depends on R7. Current Native Hosted captures pointer
+down/up but never handles pointermove or wheel. Pinned old adapter uses left-drag
+yaw `-dx * 0.006`, pitch `dy * 0.005`, wheel zoom `deltaY * 0.008`, active pointer
+identity, focus/capture and blur cancellation. Restore that exact physical input
+mapping. The existing isolated-entry queue serializes local camera adjustments
+with fixed input/reset; existing Runtime.adjustCameraView remains the sole Camera
+state/Hash/Reset/journal owner. Do not introduce a second Camera, public protocol
+dialect, extra Tick or alternate sensitivity. Browser events stay inside the
+trusted Host frame, never in generated Native Modules.
+
+Evidence: event deltas/capture/release/blur/cleanup, actual Native entry immediate
+Camera publication and reset, then existing Hosted Browser extended with actual
+drag/wheel and unchanged simulation-independent input meaning. Keyboard action
+mode selection and arrow acceleration remain separate required parity items;
+P1 alone is not full CF-05/12 acceptance.
+
+P1 evidence: the real Hosted Browser drag assertion failed before wiring. After
+the fix, the actual entry test confirms adjustment queues behind fixed input,
+copies deltas at submission, advances no extra Tick, leaves the current committed
+pose unchanged until the next fixed update, retains old damping/sensitivity,
+resets offsets through Runtime and rejects use after disposal. It passed 1/1.
+The Browser now measures 40px/20px left-drag + wheel 100 after ordinary fixed-input
+damping: yaw -0.23999999996562807rad, pitch 0.07999999980520278rad (Profile Y
+sensitivity 0.8), zoom 0.799999945395173m. Released/right-button/blurred pointer
+movement is ignored; physical keyboard, session protocol, disposal and existing
+origin isolation checks still pass. Typecheck and original 3C ledger passed.
+Only the existing verifier was extended; no new production gate or protocol
+request was added. Exact-SHA full CI/independent review and final generated Case
+remain unrun. Keyboard mode selection and arrow camera input are still open.
+
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 
 Main-agent-only, sequential; depends on the existing CF-02 watchdog, not on a new

@@ -565,15 +565,42 @@ async function startHostedFrame(): Promise<void> {
     pressedCodes.add(event.code);
   });
   window.addEventListener("keyup", (event) => pressedCodes.delete(event.code));
-  window.addEventListener("blur", () => pressedCodes.clear());
+  let activeCameraPointerId: number | undefined;
+  let lastCameraPointerPosition: readonly [number, number] = [0, 0];
+  window.addEventListener("blur", () => {
+    pressedCodes.clear();
+    activeCameraPointerId = undefined;
+  });
   canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    activeCameraPointerId = event.pointerId;
+    lastCameraPointerPosition = [event.clientX, event.clientY];
     canvas.focus();
     canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
   });
+  canvas.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== activeCameraPointerId) return;
+    const deltaX = event.clientX - lastCameraPointerPosition[0];
+    const deltaY = event.clientY - lastCameraPointerPosition[1];
+    lastCameraPointerPosition = [event.clientX, event.clientY];
+    void entry.adjustCameraView({
+      yawDeltaRadians: -deltaX * 0.006,
+      pitchDeltaRadians: deltaY * 0.005,
+    }).catch(showFailure);
+    event.preventDefault();
+  });
+  canvas.addEventListener("wheel", (event) => {
+    void entry.adjustCameraView({ zoomDeltaMeters: event.deltaY * 0.008 }).catch(showFailure);
+    event.preventDefault();
+  }, { passive: false });
   const releasePointer = (event: PointerEvent): void => {
+    if (event.pointerId !== activeCameraPointerId) return;
+    activeCameraPointerId = undefined;
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
     }
+    event.preventDefault();
   };
   canvas.addEventListener("pointerup", releasePointer);
   canvas.addEventListener("pointercancel", releasePointer);

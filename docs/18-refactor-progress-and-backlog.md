@@ -3263,6 +3263,14 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   页面启动/键盘移动/协议/清理验证通过。未跑新模型 Case、全仓 CI 或独立审查；
   多入口像素/手感、主体完整能力及整个 CF-04/12 仍不能据此结项。
 
+- CF-05/P1 Native Hosted 鼠标控制（2026-09-07，`049d4431` 后）：真实 Browser 已
+  RED 复现缺失拖拽/滚轮；现接回旧 -dx×0.006、dy×0.005、wheel×0.008，复用原
+  isolated queue 和 Runtime Camera owner，无新协议请求、状态 owner 或生产门禁。
+  实际入口证明提交值冻结、fixed-input 串行、零额外 Tick、原阻尼、Reset 与销毁边界。
+  最终原 Browser 验证通过：40/20px 拖拽和 wheel=100 得到约 -0.24rad/+0.08rad/+0.8m，
+  松开/右键/失焦无额外转动；typecheck 和原 3C 通过。键盘多运动模式/箭头相机接入
+  仍须继续，不能把 P1 当整个 CF-05/12 完成；最后真实生成 Case 未启动。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

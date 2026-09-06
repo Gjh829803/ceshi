@@ -491,6 +491,43 @@ describe("Babylon Native isolated Runtime entry", () => {
     } finally { await entry.dispose(); }
   });
 
+  it("serializes local camera deltas after fixed input and resets through the same Runtime owner", async () => {
+    const input = await entryInput();
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    try {
+      const fixed = entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.fixed", {
+        type: "fixed-input.run", input: { actions: [], ticks: 1 },
+      }));
+      const deltas = { yawDeltaRadians: 0.12, pitchDeltaRadians: 0.1, zoomDeltaMeters: 0.4 };
+      const adjustment = entry.adjustCameraView(deltas);
+      deltas.yawDeltaRadians = 2;
+      const adjusted = await adjustment;
+      expect((await fixed).status).toBe("succeeded");
+      expect(adjusted.world.simulationTick).toBe(1);
+      expect(adjusted.view.camera).toMatchObject({
+        mode: "tracking", viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0, viewDistanceOffsetMeters: 0,
+      });
+      const snapshot = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.snapshot", { type: "snapshot.get" }));
+      if (snapshot.status !== "succeeded" || snapshot.requestType !== "snapshot.get") throw new Error("snapshot failed");
+      expect(snapshot.snapshot.view).toEqual(adjusted.view);
+      const settled = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.settle", {
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }));
+      if (settled.status !== "succeeded" || settled.requestType !== "fixed-input.run") throw new Error("fixed input failed");
+      if (settled.snapshot.view.camera.mode !== "tracking") throw new Error("tracking missing");
+      expect(settled.snapshot.view.camera.viewYawOffsetRadians).toBeCloseTo(0.12 * (1 - Math.exp(-16 * 0.5)), 6);
+      expect(settled.snapshot.view.camera.viewPitchOffsetRadians).toBeCloseTo(0.08 * (1 - Math.exp(-14 * 0.5)), 6);
+      expect(settled.snapshot.view.camera.viewDistanceOffsetMeters).toBeGreaterThan(0.39);
+      const reset = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.reset", { type: "session.reset" }));
+      if (reset.status !== "succeeded" || reset.requestType !== "session.reset") throw new Error("reset failed");
+      expect(reset.snapshot.view.camera).toMatchObject({
+        viewYawOffsetRadians: 0, viewPitchOffsetRadians: 0, viewDistanceOffsetMeters: 0,
+      });
+    } finally { await entry.dispose(); }
+    await expect(entry.adjustCameraView({ yawDeltaRadians: 0.1 })).rejects.toThrow("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
+  });
+
   it("routes fixed input, snapshot and close through Runtime Session Protocol V1", async () => {
     const input = await entryInput();
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
