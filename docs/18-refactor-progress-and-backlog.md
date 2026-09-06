@@ -3307,11 +3307,17 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   cf-g2-package-group2.json、cf-g2-package-group3.json 和 cf-g2-package-spawn-obstruction.json。
   G2 达到定向实现检查点，不关闭 CF-04/05/12，不启动最终生成 Case。
 
-- CF-04/G3 待核查：上述邻阶夹具同时暴露 source Spawn 与平滑后实际地面高度的
-  关系。旧 Compiler 直接保留 source stand position，而当前 Native Package/Runtime
-  都执行 post-smoothing support-height 准入。必须用同一布局复现旧分支实际初始落点
-  与首 Tick 行为，再确认/修复这一关系；不能用改测试夹具冒充其已对齐，也不能简单
-  增大容差或追加启动 Tick。范围和所需证据已记录在主实施计划 G3。
+- CF-04/G3 实现检查点（2026-09-07，`ef7ab8c3` 后）：已实际运行旧 Git 对象中的
+  checker/Compiler/Runtime，确认邻阶平滑布局保留原始 Spawn、Tick 0，不预跑 Tick。
+  当前 Native 原先在启动前拒绝同一布局；现由 Package/Runtime 共享 Profile 既有
+  源顶面 footprint/clearance 检查，实际接地仍完全归现有 Havok/Character。删除 Native
+  继承的额外 0.05m 占地余量，Heightfield 不变。真实 Runtime 首 Tick/30 Tick 数值
+  与旧分支到小数点后六位一致，Reset 回原位；洞口、真实头部阻挡、合法网格悬空点
+  仍拒绝。四文件 71/71、真实 Package 正例/两项反例 3/3、typecheck、原 3C 通过。
+  live/frozen 自检脚本及嵌入类型图精确一致；便携工具/tuple/shape/drift 四项通过，
+  精确发布 Spawn 另行 1/1 通过，Host-only export/epoch 与零债务 boundaries 通过。
+  收据为 output/playwright/cf-g3-*.json。未运行最终新图 Case，不把本项定向证据
+  称为完整 CF 闭环。
 
 - CF-05/R1 浏览器异常恢复（2026-09-07，未提交树）：恢复旧分支精确 prepare 失败
   条件与一次 neutral Tick，不扩大到脚本或正式 Capture。Runtime 只提供原事务回滚

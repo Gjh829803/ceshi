@@ -9,6 +9,8 @@ gate or extra source-repair tasks, and a fresh local Case only after alignment.
 ## Evidence and conclusions
 
 All rows below are **static-read**, unless a narrower automated result is stated.
+This opening table records the initial MEM4 audit; subsequent implementation
+checkpoints below supersede its open findings individually, not by blanket parity.
 An equal default does not prove equal final resolved state or pixels. The older
 2026-09-04 main comparison is historical evidence, not current status.
 
@@ -23,7 +25,7 @@ An equal default does not prove equal final resolved state or pixels. The older
 | Advisory rasters | Old renderer: top 768 square, entry 960×540, 40px top padding, 7px spawn token | Current renderer uses the same values; comparison outputs 1544×768 and 1928×540. Cluster bounds are unscaled in both advisory renderers; 0.985 is actual display scaling, not a claim of software/Runtime pixel identity. |
 | Formal raster | Old `scripts/cli/worldkit.ts:1548`: 1280×720, scale factor 1 | Current `native-world-case-preparation.ts:450-452`: 1280×720, DPR 1. |
 | Formal task timeout | Old `scripts/agents/run-lwdp-codex-task.mjs:254`: 1800 seconds default | Current production budget owner freezes 1800 seconds. Cloud execution/retry is not exercised by a local Case. |
-| Block geometry | Old four shapes, occupancy 0.5m per axis; center lattice 0.25m per axis | Current same four dimensions plus 0.25m-high `step`; occupancy `[0.5,0.25,0.5]`, center lattice `[0.25,0.125,0.25]`. Actual contract difference, not numeric parity. |
+| Block geometry | Old four shapes, occupancy 0.5m per axis; center lattice 0.25m per axis | Initial MEM4 had an extra `step` and finer Y grid. G2 at `ef7ab8c3` removes that dialect and aligns all three axes plus live/frozen consumers. |
 | Pre-allocation clustering | Old compiler clusters first in 32m center-owned chunks, X→Z→Y | MEM4 now clusters before Native Mesh allocation; 685 focused tests and real unchanged 158100-Block Host diagnostic passed. Not full Case evidence. |
 | Opening capture timing | Old CLI waits for ready and another animation frame before capture | Current Formal provider resets, waits for render readiness, commits one neutral fixed Tick, waits again and verifies unchanged Tick. Exact captured state/timing parity is not established. |
 | Camera occlusion | Old Block Runtime constructs `ThirdPersonSubjectOcclusionFadeV1` at lines 1087-1091 and passes `subject-occlusion-fade` at 1172-1174; Director skips Spring Arm for that strategy | Initial audit confirmed a behavior gap. OCC-B2 below now connects Native Block fading and skips retraction only for that admitted source; complete multi-entry parity is still open. |

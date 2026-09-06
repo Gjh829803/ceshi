@@ -309,7 +309,7 @@ describe("traversal graph builder profile registry", () => {
         BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
       resolvedVersion: "1",
       contentHash: sha256CanonicalJson(resolved.profile),
-      profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+      profile: { ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE, clearanceMarginMeters: 0 },
     });
     expect(resolved.resourceRef).not.toBe(heightfield.resourceRef);
     expect(resolved.profile).not.toBe(heightfield.profile);

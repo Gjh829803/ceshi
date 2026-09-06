@@ -1296,6 +1296,37 @@ correction proof of Spawn parity. Required evidence covers the old-admitted
 smoothed join, unsupported holes, genuine body/head obstruction, exact source
 and published placement, first frame/Tick, reset and the real Package consumer.
 
+G3 implementation checkpoint (2026-09-07, after `ef7ab8c3`): independently executed
+the pinned old checker, Compiler and actual Babylon/Havok Runtime from Git objects,
+using the installed matching dependencies. A full floor with adjacent raised half
+Blocks retains Spawn `[0,0,0]`, Tick 0. Its first Tick is
+`[0.0005324383398838228,0.002129753359535247,0]`; at Tick 30 it is
+`[0.012651358340479573,0.05060543336191836,0]`, still supported. Current Native
+reproduced `SPAWN_SUPPORT_MISSING` before this repair.
+
+Profile now exports its existing source footprint/clearance evaluator through the
+Host-only boundary. Package and Runtime use the same evaluator and actual checked
+epoch, not a reconstructed metadata model. A closed required `spawnGeometry`
+discriminator preserves generic Collider admission while Native Block admits the
+old source position; post-smoothing exact-height/overlap tests no longer veto it.
+No Spawn rewrite, tolerance increase, startup Tick or per-Tick ground sampler is
+introduced. Actual Havok/Character remains the sole movement/support owner.
+Native's inherited extra 0.05m clearance margin is removed; Heightfield remains
+unchanged. Old authoring catalog uses exactly the Subject Capsule radius/height.
+
+Focused source/Ground/Profile/surface/actual Runtime regression passed 71/71,
+including old numeric Tick trace to six decimals, Reset, holes, head obstruction
+and a legal-lattice suspended Spawn. The prior off-height fixture used illegal
+Y=0.25m and hit lattice validation first; using Y=0.5m exercises missing support
+without changing production checks. Real Package positive and footprint/head
+negatives passed 3/3; the strengthened exact published Spawn assertion passed
+again (1/1). Typecheck, original 3C ledger and zero-debt workspace boundaries
+passed. Host-only exports/epoch transport passed 11/11 across the final focused
+runs. Rebuilt live/frozen checker bytes and the current embedded type graph match;
+four affected portable/tuple/shape/drift tests passed (103 unrelated tests not rerun).
+JSON evidence is in `output/playwright/cf-g3-{source-spawn,package-spawn,package-exact-spawn,builder-tools}.json`.
+This checkpoint does not prove final generated production or complete CF acceptance.
+
 ### CF-05/R1 prepared-input browser recovery parity (2026-09-07)
 
 Main-agent-only/sequential; depends on K1 and current Runtime prepared transactions.

@@ -845,6 +845,28 @@ describe("packageNativeBlockAttemptV1", () => {
     });
   }, 60_000);
 
+  it("publishes the legacy source Spawn below the smoothed top without changing frozen inputs", async () => {
+    const sceneSource = SCENE_SOURCE.replace(
+      '    session.finalize({ staticColliders: [',
+      '    session.createBlockGrid({idPrefix: "spawn-adjacent-half", shape: "half", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, 0.25, 11], repeatCountXYZ: [1, 1, 8] });\n    session.finalize({ staticColliders: [',
+    );
+    const fixture = await completedAttempt({ sceneSource });
+    const originalCase = await readFile(fixture.casePath, "utf8");
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.verifiedWorldPackage.nativeSceneContribution.spawnMarker.positionMetersXYZ).toEqual([0, 0, 18]);
+    expect(await readFile(fixture.casePath, "utf8")).toBe(originalCase);
+    const report = JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath, "ground-analysis-report.json",
+    ), "utf8"));
+    expect(report).toMatchObject({ admissionOutcome: "passed" });
+    expect(report.failureFacts).toEqual([]);
+  }, 120_000);
+
   it("fails closed before Package publication when the Spawn Capsule footprint is not fully supported", async () => {
     const fixture = await completedAttempt({
       sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,

@@ -140,15 +140,15 @@ const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfil
   maximumTraversalSurfaceTrianglePairTestCount: 4_000_000,
 };
 
-// Native Block currently uses the same measured graph-building limits as the
-// Heightfield lane, but it owns a separate Profile value and resource identity.
+// Native Block shares graph-building limits, but its source-top footprint uses
+// exactly the authored Subject Capsule, as in the legacy Block checker.
 // Keep the values explicit so tuning one Scene Source cannot silently change
 // the admission policy of the other.
 const BUILT_IN_NATIVE_BLOCK_GROUND_GRAPH_BUILDER_PROFILE:
   TraversalGraphBuilderProfileV2 = {
     kind: "traversal-graph-builder-profile",
     schemaVersion: 2,
-    clearanceMarginMeters: 0.05,
+    clearanceMarginMeters: 0,
     voxelCellSizeMeters: 0.15,
     voxelCellHeightMeters: 0.1,
     tileSizeCells: 64,

@@ -263,6 +263,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "createBabylonNativeBlockGroundBoundaryContributionV1",
       "materializeBabylonNativeBlockWalkableTopologyV1",
       "analyzeBabylonNativeBlockGroundV1",
+      "evaluateBabylonNativeBlockSourceStandabilityV1",
       "assessBabylonNativeBlockOptimizationV1",
       "BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1",
       "BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1",

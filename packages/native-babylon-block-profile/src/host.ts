@@ -83,9 +83,11 @@ export type {
 } from "./walkable-topology-materializer.js";
 export {
   analyzeBabylonNativeBlockGroundV1,
+  evaluateBabylonNativeBlockSourceStandabilityV1,
 } from "./ground-analysis.js";
 export type {
   AnalyzeBabylonNativeBlockGroundInputV1,
+  BabylonNativeBlockSourceStandabilityV1,
   BabylonNativeBlockGroundAnalysisBudgetV1,
   BabylonNativeBlockGroundAnalysisMetricsV1,
   BabylonNativeBlockGroundAnalysisReportV1,

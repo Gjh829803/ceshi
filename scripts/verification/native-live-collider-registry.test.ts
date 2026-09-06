@@ -79,13 +79,38 @@ const productionWorldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(JSON.parse(
 ));
 
 function moduleFixture(
-  profile: "single-block" | "half-meter-ramp" | "one-meter-ramp" = "single-block",
+  profile: "single-block" | "half-meter-ramp" | "one-meter-ramp" | "smoothed-spawn" = "single-block",
+  spawnFixture: "supported" | "hole" | "head-obstruction" | "off-source-height" = "supported",
 ): BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
       const session = createBabylonNativeBlockProfileSessionV1(context);
+      if (profile === "smoothed-spawn") {
+        for (let x = -1; x <= 1; x++) for (let z = -2; z <= 2; z++) {
+          if (spawnFixture === "hole" && x === 0 && z === 0) continue;
+          session.createBlock({ id: `spawn-floor-${x + 1}-${z + 2}`, shape: "full", paletteRole: "ground",
+            colliderGroupId: "spawn-ground", centerMetersXYZ: [x, -0.5, z] });
+        }
+        session.createBlockGrid({ idPrefix: "spawn-left", shape: "half", paletteRole: "ground",
+          colliderGroupId: "spawn-ground", minimumCenterMetersXYZ: [-1, 0.25, -2], repeatCountXYZ: [1, 1, 5] });
+        if (spawnFixture === "head-obstruction") {
+          session.createBlock({ id: "head-obstruction", shape: "small", paletteRole: "structure", centerMetersXYZ: [0.25, 1.25, 0.25] });
+        }
+        session.finalize({ staticColliders: [{ id: "ground",
+          colliderGeometrySource: { kind: "block-group", colliderGroupId: "spawn-ground" },
+          traversalBinding: { kind: "static-surface", surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" },
+          exposedEdgePolicy: "none", frictionRatio: 0.75, restitutionRatio: 0,
+        }, ...(spawnFixture === "head-obstruction" ? [{ id: "head-obstruction",
+          colliderGeometrySource: { kind: "block" as const, blockId: "head-obstruction" },
+          traversalBinding: { kind: "not-traversable" as const }, exposedEdgePolicy: "none" as const,
+        }] : [])] });
+        context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId,
+          positionMetersXYZ: [0, spawnFixture === "off-source-height" ? 0.5 : 0, 0], facingRadians: 0 });
+        return;
+      }
       if (profile === "half-meter-ramp" || profile === "one-meter-ramp") {
         for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
           const riseCount = profile === "one-meter-ramp"
@@ -464,6 +489,36 @@ function activeLocomotion(
 }
 
 describe("SDK-owned Native live collider registry", () => {
+  it.each([
+    ["hole", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING"],
+    ["head-obstruction", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED"],
+    ["off-source-height", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING"],
+  ] as const)("source Spawn still rejects %s without creating a replacement position", async (fixture, code) => {
+    await expect(createRuntime({ module: moduleFixture("smoothed-spawn", fixture) })).rejects.toThrow(code);
+  });
+
+  it("admits the legacy source Spawn below its smoothed top without moving it or inserting a Tick", async () => {
+    const { runtime, controlledEntityId } = await createRuntime({ module: moduleFixture("smoothed-spawn") });
+    try {
+      const initial = runtime.snapshot();
+      expect(initial.tick).toBe(0);
+      expect(initial.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ).toEqual([0, 0, 0]);
+      const first = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(first.tick).toBe(1);
+      // Independently executed pinned 9e35ab53 Compiler + Babylon/Havok trace.
+      expect(first.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[0]).toBeCloseTo(0.0005324383398838228, 6);
+      expect(first.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[1]).toBeCloseTo(0.002129753359535247, 6);
+      const settled = await runtime.runFixedInput({ actions: [], ticks: 29 });
+      expect(settled.tick).toBe(30);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[0]).toBeCloseTo(0.012651358340479573, 6);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[1]).toBeCloseTo(0.05060543336191836, 6);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.locomotion).toMatchObject({ status: "active", supportMode: "supported" });
+      runtime.reset();
+      expect(runtime.snapshot().tick).toBe(0);
+      expect(runtime.snapshot().subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ).toEqual([0, 0, 0]);
+    } finally { await runtime.dispose(); }
+  });
+
   it.each(["half-meter-ramp", "one-meter-ramp"] as const)("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp: %s", async (profile) => {
     const {
       runtime,

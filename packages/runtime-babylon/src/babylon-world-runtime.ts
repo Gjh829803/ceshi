@@ -187,6 +187,7 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
   materializeBabylonNativeBlockVisualBatchesV1,
   peekBabylonNativeBlockLiveHandleRegistryV1,
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 
 function residencyEvidence(
@@ -1229,7 +1230,17 @@ export class BabylonWorldRuntime {
             "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTROLLED_SUBJECT_MISSING: Native Runtime Bootstrap has no controlled Subject descriptor.",
           );
         }
+        const checkedBlockEpochs = isNil(blockMetadata)
+          ? [] : takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
+        const checkedBlockEpoch = checkedBlockEpochs[0];
+        if (!isNil(blockMetadata) && (checkedBlockEpochs.length !== 1 ||
+          checkedBlockEpoch?.profileInventoryHash !== blockMetadata.profileInventoryHash)) {
+          throw new Error("WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH: Source ground evidence does not match the verified Block Profile.");
+        }
         const surfaceAdmission = admitBabylonNativeSurfacesV1({
+          spawnGeometry: checkedBlockEpoch === undefined
+            ? { kind: "collider-surface" }
+            : { kind: "native-block-source", groundModel: checkedBlockEpoch.logicalGroundModel },
           contribution: admittedNativeContribution,
           registryLock: preparedNativeScene.verifiedWorldPackage.registryLock,
           controlledSubject,

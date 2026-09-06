@@ -283,6 +283,7 @@ export function analyzeProductionNativeBlockGroundV1(
   });
   const runtimeSurfaceAdmission = caseIntent.groundFailurePolicy === "block-admission"
     ? admitBabylonNativeSurfacesV1({
+        spawnGeometry: { kind: "native-block-source", groundModel: input.checkedEpochEvidence.logicalGroundModel },
         contribution: input.contribution,
         registryLock: input.registryLock,
         controlledSubject: controlledSubjectV1(input.worldRuntimeBootstrap),

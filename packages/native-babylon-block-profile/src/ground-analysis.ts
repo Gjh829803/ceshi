@@ -196,7 +196,7 @@ const REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const CELL = /^-?(?:0|[1-9][0-9]*),-?(?:0|[1-9][0-9]*),-?(?:0|[1-9][0-9]*)$/;
 const EPSILON = 1e-8;
 
-interface CandidateEvaluation {
+export interface BabylonNativeBlockSourceStandabilityV1 {
   readonly positionMetersXYZ: BabylonNativeBlockGroundStandPositionV1;
   readonly requiredFootprintCellCount: number;
   readonly supportedFootprintCellCount: number;
@@ -651,7 +651,7 @@ function evaluateCandidate(
   solidOccupancyByHorizontalCell: SolidOccupancyByHorizontalCell,
   capsuleRadiusMeters: number,
   capsuleHeightMeters: number,
-): CandidateEvaluation {
+): BabylonNativeBlockSourceStandabilityV1 {
   positionKey(position);
   const topY = Math.round(position[1] / GRID[1]);
   const footprint = intersectingFootprintCells(position, capsuleRadiusMeters);
@@ -708,6 +708,25 @@ function evaluateCandidate(
       ...clearanceBlockerSourceBlockIds,
     ])].sort(stableCompare)),
   });
+}
+
+/** One-shot authoring admission; never a Runtime grounding or movement sampler. */
+export function evaluateBabylonNativeBlockSourceStandabilityV1(input: Readonly<{
+  groundModel: BabylonNativeBlockLogicalGroundModelV1;
+  positionMetersXYZ: BabylonNativeBlockGroundStandPositionV1;
+  capsuleRadiusMeters: number;
+  capsuleHeightMeters: number;
+}>): BabylonNativeBlockSourceStandabilityV1 {
+  requireStandPosition(input.positionMetersXYZ, "positionMetersXYZ");
+  finite(input.capsuleRadiusMeters, "capsuleRadiusMeters");
+  finite(input.capsuleHeightMeters, "capsuleHeightMeters");
+  if (input.capsuleRadiusMeters < 0 || input.capsuleHeightMeters <= 0) {
+    return fail(INPUT_CODE, "Capsule dimensions are invalid");
+  }
+  return evaluateCandidate(input.positionMetersXYZ,
+    new Map(input.groundModel.exposedSupportTopCells.map(cell => [cell.topCellKey, cell])),
+    indexSolidOccupancyByHorizontalCell(input.groundModel.solidOccupancyCells),
+    input.capsuleRadiusMeters, input.capsuleHeightMeters);
 }
 
 function squaredDistanceToSegmentXZ(
@@ -804,7 +823,7 @@ function stateFailureFact(input: Readonly<{
 }
 
 function failureFactsForPosition(
-  evaluation: CandidateEvaluation,
+  evaluation: BabylonNativeBlockSourceStandabilityV1,
   target: Readonly<{
     id: string;
     acceptanceTargetRef: string;

@@ -285,6 +285,18 @@ const SPAWN = Object.freeze({
 });
 
 describe("Babylon Native Block Subject-relative ground analysis", () => {
+  it("uses the legacy Capsule radius without an added clearance footprint", () => {
+    // Radius .35 reaches the four adjacent cells but not the diagonal corners
+    // (.353553m away). The old catalog publishes exactly collider.radiusMeters.
+    const report = analyze({
+      capabilityOverrides: { capsuleRadiusMeters: 0.35 },
+      supportTopCellKeys: ["0,1,0", "-1,1,0", "1,1,0", "0,1,-1", "0,1,1"],
+      caseIntent: caseIntent({ spawn: SPAWN }),
+    });
+    expect(report.admissionOutcome).toBe("passed");
+    expect(report.failureFacts).toEqual([]);
+  });
+
   it("publishes deterministic standability, connectivity, band and report metrics", () => {
     const target = Object.freeze({
       id: "remote-target",
@@ -449,7 +461,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
   });
 
-  it("includes the trusted traversal clearance margin in footprint coverage", () => {
+  it("admits a fitting source footprint without the Heightfield clearance margin", () => {
     const result = analyze({
       supportTopCellKeys: rectangle(0, 3, 0, 0),
       capabilityOverrides: { capsuleRadiusMeters: 0.24 },
@@ -459,9 +471,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }) }),
     });
 
-    expect(result.analysisOutcome).toBe("failed");
-    expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
-    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.failureFacts.map(({ metricId }) => metricId)).not.toContain(
       "ground-support-coverage-basis-points",
     );
   });
