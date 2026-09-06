@@ -172,13 +172,16 @@ quota blocks just because the weekly snapshot says 100%.
 At 03:05 local, `account-decisions.json` expands U12 to 8 after inspected
 orchard/river-valley samples (023, 069, 190), and U33 to production-good at 4
 after distinct satisfactory samples 027 and 090. Mixed samples remain recorded.
-Current limits are U05=8, U12=8, U37=4, U33=4. A/B/C now report platform
+At 03:20, inspected U37 ruins/snow-valley samples 192 and 196 also passed
+the quality check and reached 7/7 and 6/6 route targets. Current limits are
+U05=8, U12=8, U37=8, U33=4. A/B/C now report platform
 `quota_low`; preserve their in-flight tasks but do not bypass admission filtering.
 Capacity reprobe wave-27 completed weak samples on U35/U22/U04/U09/U31;
 these accounts are quality-quarantined. Their already-running second references
 in wave-29 remain intact for comparison; do not dispatch a third sample.
 `capacity-paired-dispatch.json` records the six second-reference assignments.
-U26 remains awaiting actual outcome inspection. All quality judgments are based
+U26 samples 024 and 211 were inspected as mixed and weak; it is now also
+quality-quarantined. All quality judgments are based
 on reference/opening images, recorded motion samples and route/source evidence;
 none of these Host decisions modifies Agent input or blocks artifact playback.
 
