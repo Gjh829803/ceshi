@@ -263,3 +263,41 @@ diagnostics at the same 1 GiB limit. Post-GC live heap: **425,161,992 bytes**, d
 from 474,001,776 after B5. Post-disposal: 40,663,224 bytes and zero Meshes/Geometries.
 Snapshot traversal is unchanged at 31,996,000 entries; no timing speedup is claimed.
 This still does not prove that the 158,100-Block world fits production capacity.
+
+## MEM4 representation decision — pending user confirmation
+
+Read-only boundary inspection at `042ef1db50c8fc86fe10c74a250059ec209a5859`
+confirms a frozen-contract conflict, not merely an implementation allocation bug:
+
+- Pinned old `9e35ab53` compiler clusters the Block data before generating Canonical
+  nodes (`packages/block-world-compiler/src/compile.ts:520-521`, `:394`).
+- Current drawing API design, sections 4 and 6, explicitly returns `Mesh` /
+  `readonly Mesh[]` immediately and requires Finalize to inspect each live Profile
+  Mesh. Source: `2026-09-02-agent-friendly-babylon-native-block-drawing-api-design.md`.
+- `2026-09-04-block-world-production-outcome-parity-design.md` section 1 keeps the
+  current Native architecture while aligning non-architectural production behavior.
+- Current `session.ts` allocates each Mesh before Finalize; `layout.ts` validates
+  geometry/transform against it; `profile-settlement.ts` joins records by Block ID
+  to actual Mesh settlement targets. `live-handle-registry.ts` begins with the
+  `authoring-unbatched` realization before Host batching. These consumers cannot
+  be fixed by only deleting allocation or changing the API's return annotation.
+
+Moving to intent-first, pre-allocation clustering would be a public current-only
+contract change. It may preserve the Native Source and all sole Runtime owners,
+but must update the frozen design and the complete producer/consumer closure, not
+introduce a second authoring path or silently substitute fake Mesh handles. No such
+implementation is authorized by this note. Ask the user to confirm this direction
+before replacing the explicit immediate-Mesh contract. Remaining within that
+contract and continuing allocation optimization is still possible; current focused
+measurements do not establish full-world capacity for either unimplemented option.
+
+If approved, main-agent-only tasks are sequential:
+
+| Task | Dependency / owner | Contract and integration evidence |
+|---|---|---|
+| CF-20/MEM4-A | User decision; main architecture owner | Freeze one Native intent/visual materialization contract; enumerate all Schema/API, Skill/type context, layout/settlement/hash, package/replay and Capture consumers; no new gate, source-count cap or alternate lane |
+| CF-20/MEM4-B | MEM4-A; Profile and Host owners | Implement one current-only path preserving exact Block IDs, shape/metric layout, explicit collider intent, old clustering and display scale, rollback and one authoritative settlement; adversarial contract tests and consumer closure |
+| CF-20/MEM4-C | MEM4-B; real Host replay and final integration | Same unchanged paid source where the new source contract permits it, correctly versioned new provenance, full Native/Ground/Package/Capture and rendered inspection; fresh production Case before main integration |
+
+No new Case, test worktree, source mutation, frozen-contract rewrite, full CI or
+main merge was performed for this inspection. The original failed run remains intact.
