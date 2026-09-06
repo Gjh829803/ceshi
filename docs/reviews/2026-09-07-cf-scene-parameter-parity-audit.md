@@ -234,3 +234,27 @@ count in both fields; production inventory validation is unchanged. The
 deterministic Browser verifier now requires opening Tick 0, sampled support Tick
 1 and distinct hashes. Actual Browser verification is still pending at this
 checkpoint; this is not final T1, CF-04/12 or generated-Case acceptance.
+
+### CF-04/T1 real Hosted validation
+
+On candidate `a1802205`, `pnpm verify:native-no-script-capture` passed real
+Check/Ground/Package, cold Browser Capture and Evaluation with the new required
+timing assertions. Retained evidence:
+`/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-LyRJkc`.
+The opening receipt is Tick 0, fade elapsed time is zero; support is sampled at
+Tick 1 with an independently hashed Snapshot. Its reset Hash exactly matches
+the opening receipt, while its actual contact is `collider-foreground-ground`
+at `[0,0,18]`, `foreground-top`, medium `ground`. Browser/Vite cleanup completed.
+All seven PNG content hashes match the prior unoccluded C2 fixture exactly; the
+main agent inspected the opening PNG again. This validates the production
+producer/parser/receipt/evaluation path, not a mocked port alone.
+
+Focused evidence: contract/provider/evaluation files passed 114 tests; the
+subsequent no-script evaluation test additionally checks that replacement of a
+valid sampled Snapshot without a matching Capture receipt is rejected. Capture,
+Hosted protocol and final publication files passed 58 tests. Typecheck passed
+after the fixture's explicit count avoided an invalid union-property access.
+No full CI or independent review was run. The standalone occluding-wall pixel
+probe plus this unoccluded Hosted fixture do not yet establish a complete real
+occluding-world or multi-entry pixel comparison; those remain required with the
+other CF-04/12 acceptance work. No generated Case or main merge occurred.

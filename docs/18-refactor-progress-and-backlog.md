@@ -3240,6 +3240,14 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   三文件 58 项通过。另补齐捕获夹具遗漏的 settledVisualTargetCount，生产检查不变。
   真实 Browser 的 Tick 0 开场和 Tick 1 支撑采样仍待复验，不据此结项或跑最终模型 Case。
 
+- CF-04/T1 真实 Hosted 复验（2026-09-07，`a1802205`）：已通过现有确定性 Browser
+  验证命令，收据确认 opening Tick 0、fade elapsed 0、support sampled Tick 1，两个
+  Hash 分别绑定真实状态，原 reset identity 仍相等；Check/Ground/Package/Capture/
+  Evaluation 和清理完成。无遮挡夹具七张 PNG 与前版内容 Hash 完全一致，开场图已查看。
+  focused 合同/provider/evaluation 三文件 114 项及捕获/协议/发布三文件 58 项通过，
+  typecheck 通过。具体证据目录与不足见当日参数审计 T1 real Hosted validation；
+  真实遮挡世界、多入口完整像素/手感、CF-04/12 和最后生成 Case 仍开放，未合 main。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史
