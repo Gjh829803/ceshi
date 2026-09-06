@@ -10,7 +10,7 @@ import sharp from 'sharp';
 import { ThreeCompiler, hashTree, type Candidate } from '../three-creator/compiler.js';
 import { canonicalHash, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
 import { EpisodePlannerTools, EPISODE_TOOLS } from './mcp.js';
-import { saveEpisodeSource } from './source.js';
+import { loadEpisodeSource, saveEpisodeSource } from './source.js';
 import { createHash } from 'node:crypto';
 
 const sha = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
@@ -46,6 +46,14 @@ world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:
 afterAll(async()=>{await rm(root,{recursive:true,force:true});});
 
 describe('Three Episode planner MCP boundary',()=>{
+ it('keeps the original image portable and rejects its changed bytes',async()=>{
+  const referencePath=path.join(candidate.root,'user-original.png');await writeFile(referencePath,await readFile(source.opening.path));
+  const manifest=path.join(candidate.root,'with-reference.json');
+  await saveEpisodeSource(manifest,{...source,referenceImage:{path:referencePath,sha256:sha(await readFile(referencePath))}});
+  const header=JSON.parse(await readFile(manifest,'utf8'));expect(path.isAbsolute(header.referenceImage.path)).toBe(false);
+  expect((await loadEpisodeSource(manifest)).referenceImage?.path).toBe(referencePath);
+  await writeFile(referencePath,'tampered original');await expect(loadEpisodeSource(manifest)).rejects.toThrow('SOURCE_FILE_CHANGED');
+ });
  it('offers exactly three tools, accepts free coordinates without observation gates and paginates declared source',async()=>{
   expect(EPISODE_TOOLS.map(tool=>tool.name)).toEqual(['episode_observe','episode_probe','episode_submit_plan']);
   const outputRoot=output(),service=await EpisodePlannerTools.create({sourceManifest,outputRoot});

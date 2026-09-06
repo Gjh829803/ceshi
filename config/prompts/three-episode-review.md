@@ -47,3 +47,12 @@ Return the requested JSON schema with concrete, concise observations. A needs-re
 must name the material consequence and an actionable correction; do not accumulate cosmetic
 nitpicks into a failure. Keep the aggregate verdict consistent with the per-image verdicts.
 Do not edit or generate images or video.
+
+When the Host supplies user-original-reference and a variant with styleMode=source-reference,
+compare that variant's appearance to the actual original: subject and landmark identities,
+clothing, materials, palette, lighting and photographic/illustrative treatment must remain
+recognizably faithful. Merely retaining whitebox colors or relabeling a transformed concept
+is insufficient. The whitebox remains the only spatial authority. Never demand the original
+image's camera/layout when it differs from the actual whitebox. The original slot is intentional
+and must not be rejected for failing to reinvent identities. This exception does not exempt
+it from spatial/readability checks or approve the other nine styles.

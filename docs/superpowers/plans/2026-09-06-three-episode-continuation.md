@@ -164,3 +164,50 @@ as a clean aggregate pass. Local preview additionally gained HTTP byte ranges:
 206 payload/headers and browser seek to 14.7 s were verified; all six videos load.
 The detached server receipt is `r6/preview-server-process.json` (port 53747).
 No cloud rollout, new image generation or Seedance submission occurred here.
+
+## Restore the original-reference style — 2026-09-06
+
+User requests that one of ten first-frame styles match the original image. Missing
+cause: the Director asked all ten to reinvent semantic identities and the r6 source
+capsule omitted its optional referenceImage. Main-agent-only EP4→EP5 correction:
+verify original bytes → portable reference closure + exact one-slot validator →
+cloud Director repair of unaccepted style-02 → one image + independent reference/
+spatial review → candidate-page update. Source/capture physics and the other nine
+variant objects are unchanged. Files owned here: source.ts, visual-contracts.mjs,
+visuals/workflow/report, Director/reviewer prompts and focused tests. No Seedance.
+
+Recovered original SHA256 is
+36e161e2a76971e1bacc300c0d228a584425703b0202e69cfec5d7250d819027,
+verified against original Creator case-input.json: photographic blue wrapped
+traveler, saddled reclining camel, golden sand and blue daylight. New source
+capsule: `.codex-tmp/three-episode-test/source-reference-r9/source.json` (same
+world/runtime, new reference closure; not yet a new cloud worker rollout).
+Original-style job evidence lives in
+`.codex-tmp/three-episode-results/source-style-20260906`. The generic default slot
+is 00, current one-slot recovery is 02; seven user-accepted image IDs/bytes remain.
+Generation continues to use one whitebox image; original appearance reaches the
+Director and independent reviewer visually, and generation through the complete
+bound style description. A changed plan does not rewrite historical approvals.
+
+Original-style delivery completed: cloud Director gen_717099aba4a91c29, single
+T2I gen_5a9071a81b5deebd, independent reviewer gen_ccf8a456f9fd6822 all succeeded.
+New style-02 first frame SHA256:
+375dc873eb024c1a28e3612443fb6a872907258be06109add4ff836919b26b38.
+Reviewer passed recognizable photographic appearance and practical spatial
+correspondence; residual angular camel/baggage surfaces were explicitly recorded
+as non-blocking. Nine other plan objects and candidate images are unchanged.
+Browser verified `/anchors.html#original-style`: ten cards, one original slot,
+1280px image loaded. Comparison and style-plan pages updated. Current display uses
+`report/anchor-selection.json`; historical `anchor-admissions.json`, prior plan,
+cloud opinions and seven scoped user approvals remain intact. The new Director
+plan is current `report/style-plan.json`; before-original-style files retain the
+old plan/pages. Original image and source-style review are available on the page.
+
+Verification: missing-slot failing reproducer before implementation; 38 Node tests
+and 31 Episode Vitest tests passed, including corrupted-reference rejection,
+portable source hash validation, one reserved slot, and single-whitebox generation.
+Typecheck, census (368 registered files), workspace boundaries and diff checks
+passed. Real cloud run submitted exactly one image; no secondary style views,
+events, video requests or Seedance submissions were started. Implementation and
+reference-capable source capsule are local; the three bounded cloud recovery jobs
+used the existing pinned r8 launcher, not a global worker rollout.

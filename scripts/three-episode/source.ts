@@ -46,6 +46,8 @@ export async function loadEpisodeSource(file: string): Promise<EpisodeSourceMani
   for (const [relative, hash] of Object.entries(source.sourceFiles)) await verifyFile({ path: closedPath(source.sourceRoot, relative), sha256: hash });
   if (canonicalHash(await hashTree(source.playableRoot)) !== canonicalHash(source.playableFiles)) throw new Error('EPISODE_PLAYABLE_CHANGED');
   await verifyFile(source.opening);
+  if (source.referenceImage) await verifyFile(source.referenceImage);
+  if (source.worldPlan) await verifyFile(source.worldPlan);
   for (const target of source.targets) await verifyFile(target.whiteboxTriview);
   return source;
 }
@@ -55,7 +57,7 @@ async function writeJson(file: string, value: unknown) { await mkdir(path.dirnam
  * Author source and compiled scene entry remain byte-identical. Only SDK/bridge
  * runtime files are replaced, with both original and derived identities retained.
  */
-export async function prepareEpisodeSource(options: { payloadRoot: string; outputRoot: string; worldId: string; sourceUrl?: string }): Promise<EpisodeSourceManifest> {
+export async function prepareEpisodeSource(options: { payloadRoot: string; outputRoot: string; worldId: string; sourceUrl?: string; referenceImage?: EpisodeFile }): Promise<EpisodeSourceManifest> {
   const payload = await realpath(options.payloadRoot), output = path.resolve(options.outputRoot);
   const manifestBytes = await readFile(path.join(payload, 'delivery.json'));
   const delivery = JSON.parse(manifestBytes.toString());
@@ -98,11 +100,21 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   };
   const openingEntry = captures.images.find((entry: any) => entry.view === 'opening');
   if (!openingEntry) throw new Error('EPISODE_OPENING_MISSING');
+  let referenceImage: EpisodeFile | undefined;
+  if (options.referenceImage) {
+    await verifyFile(options.referenceImage);
+    const extension = path.extname(options.referenceImage.path).toLowerCase();
+    if (!['.png','.jpg','.jpeg','.webp'].includes(extension)) throw new Error('EPISODE_REFERENCE_IMAGE_FORMAT_INVALID');
+    const filename = path.join(output, 'references', `user-original-${options.referenceImage.sha256}${extension}`);
+    await mkdir(path.dirname(filename), { recursive: true }); await copyFile(options.referenceImage.path, filename);
+    referenceImage = { path: filename, sha256: options.referenceImage.sha256, byteLength: (await lstat(filename)).size };
+  }
   const source: EpisodeSourceManifest = {
     kind: 'three-episode-source', schemaVersion: 1, worldId: options.worldId,
     sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash,
     sourceWorldBuildHash: delivery.worldBuildHash, sourceRuntimeHash: delivery.runtimeHash,
     sourceDeliveryManifestSha256: sha(manifestBytes), sourceRoot, playableRoot, sourceFiles,
+    ...(referenceImage ? { referenceImage } : {}),
     playableFiles, opening: await imageFile(openingEntry),
     targets: await Promise.all(captures.images.filter((entry: any) => entry.view === 'entity-triview').map(async (entry: any) => {
       const entityId = entry.orientationTargetId ?? entry.entityIds?.[0];
@@ -120,6 +132,6 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const value = (flag: string) => process.argv[process.argv.indexOf(flag) + 1]!;
-  const source = await prepareEpisodeSource({ payloadRoot: value('--payload'), outputRoot: value('--output'), worldId: value('--world-id'), ...(process.argv.includes('--source-url') ? { sourceUrl: value('--source-url') } : {}) });
+  const source = await prepareEpisodeSource({ payloadRoot: value('--payload'), outputRoot: value('--output'), worldId: value('--world-id'), ...(process.argv.includes('--reference-image') ? { referenceImage: { path: path.resolve(value('--reference-image')), sha256: value('--reference-image-sha256') } } : {}), ...(process.argv.includes('--source-url') ? { sourceUrl: value('--source-url') } : {}) });
   process.stdout.write(`${JSON.stringify({ sourceManifest: path.join(path.resolve(value('--output')), 'source.json'), worldBuildHash: source.worldBuildHash, sourceWorldBuildHash: source.sourceWorldBuildHash })}\n`);
 }

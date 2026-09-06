@@ -155,3 +155,28 @@ For local review, `node scripts/three-episode/preview-server.mjs REPORT_DIRECTOR
 53747` serves only that directory on loopback and supports native video seeking
 with HTTP byte ranges. Keep its lifetime independent of a short shell session
 when leaving the review page open for the user.
+
+## One original-reference style plus nine reinterpretations
+
+When a user original exists, package its exact bytes with `prepareEpisodeSource`
+(`referenceImage: {path, sha256}`), or pass `--reference-image FILE
+--reference-image-sha256 HASH` to the source CLI. It is a portable, hash-verified
+source artifact independent of the scene/runtime identity. Never substitute the
+whitebox, a generated concept, or an inferred style for a missing original.
+
+The Style Director and independent reviews receive the original image. Exactly
+one variant must use `styleMode: "source-reference"` and the exact
+`referenceImageSha256`; its reserved ID defaults to `style-00`. A recovery may set
+`referenceStyleVariantId` to another slot (this case uses `style-02`) to preserve
+previously accepted IDs. Its subject, landmarks, materials, palette, illumination
+and photographic/illustrative treatment follow the original. Nine other variants
+remain diverse reinterpretations; do not count the original as an eleventh style.
+
+ImageGen still receives only the current whitebox composition image. The Director
+writes the observed original appearance into that slot's complete prompt and target
+descriptions. Reviews compare the actual original, whitebox and output independently;
+copying the original camera, retaining low-poly whitebox shading, or relabeling an
+unrelated concept does not satisfy original-style fidelity. Subsequent views use
+the admitted anchor's appearance dictionary as before. Original reference identity
+participates in planning/review/cache identities; missing or corrupted references
+cannot be admitted. Historical image approvals keep their existing scoped receipts.

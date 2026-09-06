@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import sharp from 'sharp';
 import { runThreeEpisodeVisuals } from './visuals.mjs';
-import { assertThreeEpisodeVisualInputs, normalizeThreeEpisodeEvents, THREE_EPISODE_STYLE_IDS } from './visual-contracts.mjs';
+import { assertThreeEpisodeVisualInputs, assertThreeEpisodeStylePlan, normalizeThreeEpisodeEvents, THREE_EPISODE_STYLE_IDS } from './visual-contracts.mjs';
 
 const temporary = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -27,6 +27,7 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
   const cloud = {
     async runCodex(args) {
       calls.codex++; calls.tasks.push(args.taskId);
+      if(args.assets.some(a=>a.logicalImageId==='user-original-reference'||a.path===source.referenceImage?.path)) calls.referenceTasks=(calls.referenceTasks??0)+1;
       assert.equal(args.model, 'gpt-6-astra'); assert.equal(args.reasoningEffort, 'xhigh');
       for (const asset of args.assets) assert.match(asset.id, /^[a-z0-9][a-z0-9-]{2,119}$/);
       const context = JSON.parse(await readFile(args.assets.find(asset => asset.id === 'context').path, 'utf8'));
@@ -38,7 +39,7 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
       }
       let result = { ...structuredClone(schema), inputHash: context.inputHash };
       if (schema.kind === 'worldkit-three-episode-style-plan') {
-        result.variants = THREE_EPISODE_STYLE_IDS.map((id, index) => ({ id, name: `name ${index}`, styleFamily: `family ${index}`, worldIdentity: `world ${index}`, subjectIdentity: `subject ${index}`, diversityRationale: `rationale ${index}`, concept: `concept ${index}`, visualPrompt: `visual ${index}`, geminiEventPrompt: `events ${index}`, negativeConstraints: 'preserve geometry', targetInterpretations: source.targets.map(target => ({ visualTargetId: target.id, finalIdentity: `final ${index} ${target.id}`, appearance: 'fixture appearance' })) }));
+        result.variants = THREE_EPISODE_STYLE_IDS.map((id, index) => ({ id, ...(context.sourceStylePolicy?.referenceStyleVariantId === id ? {styleMode:'source-reference',referenceImageSha256:context.sourceStylePolicy.referenceImageSha256} : {}), name: `name ${index}`, styleFamily: `family ${index}`, worldIdentity: `world ${index}`, subjectIdentity: `subject ${index}`, diversityRationale: `rationale ${index}`, concept: `concept ${index}`, visualPrompt: `visual ${index}`, geminiEventPrompt: `events ${index}`, negativeConstraints: 'preserve geometry', targetInterpretations: source.targets.map(target => ({ visualTargetId: target.id, finalIdentity: `final ${index} ${target.id}`, appearance: 'fixture appearance' })) }));
       } else if (schema.kind === 'worldkit-three-episode-appearance-lock') {
         result = {...result, subjectAppearance:'bound subject appearance',environmentAppearance:'bound environment materials',lighting:'bright diffuse light',palette:'anchor palette',negativeConstraints:'preserve whitebox geometry',targetAppearances:schema.targetAppearances.map(item=>({...item,appearance:'bound '+item.targetId,basis:'anchor-visible'}))};
       } else if (schema.kind === 'worldkit-three-episode-visual-review') {
@@ -259,3 +260,26 @@ test('a revised rubric re-evaluates exhausted existing candidates once without r
  Object.assign(updated.styles['style-00'],{currentAnchor:null,currentReview:null,revisionReview:{verdict:'needs-repair'},pendingFeedback:'Still invalid under this policy'});updated.styles['style-00'].attempts[3].status='needs-repair';await writeFile(result.anchorHistoryPath,JSON.stringify(updated));
  await assert.rejects(runThreeEpisodeVisuals(setup.options),/OPENING_REPAIR_BUDGET_EXHAUSTED/);assert.equal(setup.calls.images,before);
 });
+
+ test('requires one hash-bound original-reference style when a user image exists', async()=>{
+  const f=await fixture(); await runThreeEpisodeVisuals(f.options);
+  const plan=JSON.parse(await readFile(path.join(f.options.outputRoot,'style-plan.json'),'utf8'));
+  assert.throws(()=>assertThreeEpisodeStylePlan(plan,{worldId:plan.worldId,episodeId:plan.episodeId,inputHash:plan.inputHash,targetIds:f.source.targets.map(t=>t.id),referenceImageSha256:'d'.repeat(64),referenceStyleVariantId:'style-02'}),/original.reference style/);
+ });
+
+ test('carries the actual original into planning/review, reserves its slot and keeps image generation single-whitebox', async()=>{
+  const f=await fixture(); f.source.referenceImage=await ref(path.join(f.root,'triview.png'));
+  await runThreeEpisodeVisuals({...f.options,referenceStyleVariantId:'style-02'});
+  const plan=JSON.parse(await readFile(path.join(f.options.outputRoot,'style-plan.json'),'utf8'));
+  assert.equal(plan.variants.filter(v=>v.styleMode==='source-reference').length,1);
+  assert.equal(plan.variants[2].referenceImageSha256,f.source.referenceImage.sha256);
+  assert.ok(f.calls.referenceTasks>2,'source reference must reach director and independent reviews');
+  assert.equal(f.calls.images,130);assert.equal(f.calls.videos,0);
+  const bad=structuredClone(plan);bad.variants[2].referenceImageSha256='e'.repeat(64);
+  assert.throws(()=>assertThreeEpisodeStylePlan(bad,{worldId:plan.worldId,episodeId:plan.episodeId,inputHash:plan.inputHash,targetIds:f.source.targets.map(t=>t.id),referenceImageSha256:f.source.referenceImage.sha256,referenceStyleVariantId:'style-02'}),/original-reference style/);
+ });
+ test('rejects a corrupted user original before any provider work', async()=>{
+  const f=await fixture();f.source.referenceImage={path:path.join(f.root,'triview.png'),sha256:'f'.repeat(64)};
+  await assert.rejects(runThreeEpisodeVisuals(f.options),/STALE_INPUT/);
+  assert.equal(f.calls.codex+f.calls.images+f.calls.events,0);
+ });

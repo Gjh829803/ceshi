@@ -41,6 +41,7 @@ export function assertThreeEpisodeVisualInputs(source, capture) {
     assert(text(target.name) && object(target.whiteboxTriview) && text(target.whiteboxTriview.path), `target ${target.id} needs its complete whitebox tri-view`);
     normalizeVisualHash(target.whiteboxTriview.sha256);
   }
+  if (source.referenceImage) { assert(text(source.referenceImage.path), 'user reference image path missing'); normalizeVisualHash(source.referenceImage.sha256); }
   assert(normalizeVisualHash(capture?.worldBuildHash) === normalizeVisualHash(source.worldBuildHash), 'capture belongs to another world');
   assert(normalizeVisualHash(capture?.runtimeHash) === normalizeVisualHash(source.runtimeHash), 'capture belongs to another runtime');
   ordered(capture?.segments, THREE_EPISODE_SEGMENT_IDS, 'id', 'capture segments');
@@ -52,13 +53,21 @@ export function assertThreeEpisodeVisualInputs(source, capture) {
     assert(segment.status === 'completed', `${segment.id} has not completed recording`);
   }
 }
-export function assertThreeEpisodeStylePlan(plan, {worldId, episodeId, inputHash, targetIds}) {
+export function assertThreeEpisodeStylePlan(plan, {worldId, episodeId, inputHash, targetIds, referenceImageSha256, referenceStyleVariantId = 'style-00'}) {
   assert(plan?.kind === 'worldkit-three-episode-style-plan' && plan.schemaVersion === 1 && plan.worldId === worldId && plan.episodeId === episodeId && plan.inputHash === inputHash, 'style plan identity mismatch');
   ordered(plan.variants, THREE_EPISODE_STYLE_IDS, 'id', 'ten styles');
   for (const style of plan.variants) {
     for (const field of ['name', 'styleFamily', 'worldIdentity', 'subjectIdentity', 'diversityRationale', 'concept', 'visualPrompt', 'geminiEventPrompt', 'negativeConstraints']) assert(text(style[field]), `${style.id}.${field} missing`);
     ordered(style.targetInterpretations, targetIds, 'visualTargetId', `${style.id} targets`);
     for (const target of style.targetInterpretations) assert(text(target.finalIdentity) && text(target.appearance), `${style.id} target identity/appearance missing`);
+  }
+  const originals = plan.variants.filter(style => style.styleMode === 'source-reference');
+  if (referenceImageSha256) {
+    assert(originals.length === 1 && originals[0].id === referenceStyleVariantId && originals[0].referenceImageSha256 === normalizeVisualHash(referenceImageSha256), 'exactly one hash-bound original-reference style is required in its reserved slot');
+  } else assert(originals.length === 0, 'original-reference style requires an actual user image');
+  for (const style of plan.variants) {
+    assert(['source-reference','reinterpretation'].includes(style.styleMode ?? 'reinterpretation'), 'invalid style mode');
+    if (style.styleMode !== 'source-reference') assert(style.referenceImageSha256 == null, 'reinterpretation cannot claim original-reference binding');
   }
   for (const field of ['concept', 'styleFamily', 'worldIdentity', 'subjectIdentity']) assert(new Set(plan.variants.map(style => style[field].trim().toLowerCase())).size === 10, `duplicate ${field}`);
   return plan;

@@ -113,6 +113,7 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     if(options.until==='capture'){await update('whitebox-completed',{status:'paused-before-visuals'});return state;}
     await update('style-planning');
     const visuals=await runThreeEpisodeVisuals({source,capture:captureInput,episodeId,outputRoot:path.join(output,'visuals'),cloud,stopBeforeSeedance:true,
+      ...(conf?.referenceStyleVariantId?{referenceStyleVariantId:conf.referenceStyleVariantId}:{}),
       ...(conf?.stylePlanCandidate?{stylePlanCandidate:conf.stylePlanCandidate}:{}),
       onProgress:async(visualState:any)=>{await update(visualState.stage==='planning'?'style-planning':visualState.stage,{visualState});}});
     if(visuals.status!=='pre-seedance-ready'||visuals.preparedRequestCount!==60||visuals.providerVideoSubmissionCount!==0)throw new Error('EPISODE_PRE_SEEDANCE_CLOSURE_INVALID');

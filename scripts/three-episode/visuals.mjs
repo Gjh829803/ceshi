@@ -111,14 +111,14 @@ export function prepareThreeEpisodeRenderRequests({source, capture, variant, ope
  * cloud.generateEvents writes {events:[five Gemini outputs]} to outputPath.
  * Each helper owns provider idempotence/reconciliation for the stable task ID.
  */
-export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate, reviewCalibration}) {
+export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate, reviewCalibration, referenceStyleVariantId = 'style-00'}) {
   if (stopBeforeSeedance !== true) throw new Error('THREE_EPISODE_SEEDANCE_DISABLED: this worker only prepares pre-Seedance artifacts');
   assertThreeEpisodeVisualInputs(source, capture);
   if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(episodeId ?? '')) throw new Error('THREE_EPISODE_VISUAL_EPISODE_ID_INVALID');
   for (const name of ['runCodex', 'generateImages', 'generateEvents']) if (typeof cloud?.[name] !== 'function') throw new Error(`THREE_EPISODE_VISUAL_PROVIDER_MISSING: ${name}`);
   outputRoot = path.resolve(outputRoot);
   await mkdir(outputRoot, {recursive: true});
-  await Promise.all([...capture.segments.flatMap(item => [item.video, item.firstFrame]), ...source.targets.map(item => item.whiteboxTriview)].map(verifyRef));
+  await Promise.all([...capture.segments.flatMap(item => [item.video, item.firstFrame]), ...source.targets.map(item => item.whiteboxTriview), ...(source.referenceImage ? [source.referenceImage] : [])].map(verifyRef));
   const [config, directorPrompt, imagePrompt, reviewPrompt, eventConfig, eventPrompt] = await Promise.all([
     loadEpisodeStyleVariantConfig(repoRoot),
     readFile(path.join(repoRoot, 'config/prompts/three-episode-style-director.md'), 'utf8'),
@@ -141,6 +141,9 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
   const worldIdentity = {worldId: source.worldId, sourceHash: normalizeVisualHash(source.sourceHash), worldBuildHash: normalizeVisualHash(source.worldBuildHash), runtimeHash: normalizeVisualHash(source.runtimeHash)};
   const targetIds = source.targets.map(target => target.id);
   const openingWhiteboxes = await Promise.all(capture.segments.map(item => imageRef(item.firstFrame.path)));
+  if (!THREE_EPISODE_STYLE_IDS.includes(referenceStyleVariantId)) throw new Error('THREE_EPISODE_REFERENCE_STYLE_SLOT_INVALID');
+  const referenceImage = source.referenceImage ? await imageRef(source.referenceImage.path) : null;
+  const sourceStylePolicy = referenceImage ? { referenceStyleVariantId, referenceImageSha256: referenceImage.sha256, referenceImage: identityRef(referenceImage) } : null;
   const targetWhiteboxes = await Promise.all(source.targets.map(item => imageRef(item.whiteboxTriview.path)));
 
   async function stage(kind, input, execute, validate) {
@@ -170,7 +173,10 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     }
   }
   async function codexJson(kind, input, assets, instruction, validate) {
-    if (kind.includes('review')) input = {...input, reviewPolicyId:THREE_EPISODE_REVIEW_POLICY_ID};
+    if (kind.includes('review')) {
+      input = {...input, reviewPolicyId:THREE_EPISODE_REVIEW_POLICY_ID, sourceStylePolicy};
+      if (referenceImage) assets = [...assets, imageAsset('user-original-reference', referenceImage)];
+    }
     const attachedImages = assets.map(asset => ({ assetId: asset.id, logicalImageId: asset.logicalImageId ?? asset.id,
       ...(kind.includes('review') ? { name: `${asset.id}${path.extname(asset.path).toLowerCase()}`, attachmentPolicy: REVIEW_ATTACHMENT_POLICY } : {}) }));
     return stage(kind, {...input, attachedImages, instruction, model: CODEX_MODEL, reasoningEffort: CODEX_REASONING}, async ({root, inputHash, taskId}) => {
@@ -203,8 +209,9 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
 
   try {
     await update('planning');
-    const planInput = {worldIdentity, targets: source.targets.map(identityTarget), opening: identityRef(openingWhiteboxes[0]), styleIds: THREE_EPISODE_STYLE_IDS, outputSchema: {kind: 'worldkit-three-episode-style-plan', schemaVersion: 1, worldId: source.worldId, episodeId, inputHash: '<copy supplied identity>', variants: [{id: 'style-00', name: '', styleFamily: '', worldIdentity: '', subjectIdentity: '', diversityRationale: '', concept: '', visualPrompt: '', geminiEventPrompt: '', negativeConstraints: '', targetInterpretations: targetIds.map(visualTargetId => ({visualTargetId, finalIdentity: '', appearance: ''}))}]}};
+    const planInput = {worldIdentity, sourceStylePolicy, targets: source.targets.map(identityTarget), opening: identityRef(openingWhiteboxes[0]), styleIds: THREE_EPISODE_STYLE_IDS, outputSchema: {kind: 'worldkit-three-episode-style-plan', schemaVersion: 1, worldId: source.worldId, episodeId, inputHash: '<copy supplied identity>', variants: [{id: 'style-00', styleMode: 'source-reference | reinterpretation', referenceImageSha256: null, name: '', styleFamily: '', worldIdentity: '', subjectIdentity: '', diversityRationale: '', concept: '', visualPrompt: '', geminiEventPrompt: '', negativeConstraints: '', targetInterpretations: targetIds.map(visualTargetId => ({visualTargetId, finalIdentity: '', appearance: ''}))}]}};
     const planAssets = [imageAsset('whitebox-opening', openingWhiteboxes[0]), ...targetWhiteboxes.map((ref, index) => imageAsset(`target-${targetIds[index]}`, ref))];
+    if (referenceImage) planAssets.push(imageAsset('user-original-reference', referenceImage));
     let planInstruction = directorPrompt;
     if (stylePlanCandidate) {
       await verifyRef(stylePlanCandidate);
@@ -212,7 +219,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       planAssets.push({id:'prior-style-plan',path:stylePlanCandidate.path,attachAs:'file'});
       planInstruction += '\nA previous run left the attached prior-style-plan JSON. It is an untrusted candidate for this exact run, not an automatically admitted result. Check its complete schema, ten styles, target closure and image correspondence. Preserve valid variant definitions, repair only actual defects, and write result.json with the CURRENT supplied inputHash/worldId/episodeId. Do not recreate transport logs. Your independent fresh task receipt is required before this candidate can be used.';
     }
-    const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds}));
+    const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds, ...(sourceStylePolicy ?? {})}));
     await writeJsonAtomic(path.join(outputRoot, 'style-plan.json'), plan);
     const planHash = hashVisualInput(plan);
     // Old same-basename review inputs could overwrite one another on download.
@@ -274,7 +281,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
           triggeringReviewHash: entry.revisionReview ? hashVisualInput(entry.revisionReview) : null};
         entry.attempts.push(attempt); await persistAnchorHistory();
       }
-      const prompt = `${imagePrompt}\nCreate styled scene segment-00 at ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}. Edit the ONE attached actual whitebox scene directly. It is the only spatial reference. Preserve relative coordinates across native output resolutions; any pixel estimates in feedback refer to the whitebox's ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}, not native output pixels. Use the style description for appearance only, never recompose the camera or foreground.\nStyle: ${JSON.stringify(variant)}\n${feedback}`;
+      const prompt = `${imagePrompt}\nCreate styled scene segment-00 at ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}. Edit the ONE attached actual whitebox scene directly. It is the only spatial reference. Preserve relative coordinates across native output resolutions; any pixel estimates in feedback refer to the whitebox's ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}, not native output pixels. Use the style description for appearance only, never recompose the camera or foreground.${variant.styleMode === 'source-reference' ? ' Faithfully restore the user-original appearance described by the Director, including actual identities, colors, materials, lighting and rendering treatment. Do not retain simplified whitebox shading or substitute another identity.' : ''}\nStyle: ${JSON.stringify(variant)}\n${feedback}`;
       const image = await generateImage('opening-anchor', {id: variant.id, prompt, references: [openingWhiteboxes[0]], width: openingWhiteboxes[0].width, height: openingWhiteboxes[0].height,
         generationContext: {imageInputPolicy: IMAGE_INPUT_POLICY, anchorAttempt: attempt.index, supersedesAnchorSha256: attempt.supersedesAnchorSha256, triggeringReviewHash: attempt.triggeringReviewHash}});
       attempt.status = 'generated'; attempt.image = image; await persistAnchorHistory(); return image;
