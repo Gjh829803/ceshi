@@ -869,10 +869,15 @@ const CREATED_OBJECT_SURFACE_BY_KIND_V1 = new Map(
     [surface.kind, surface] as const
   ),
 );
+const EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1 = new Map<
+  CreatedObjectSurfaceV1["kind"], EffectiveCreatedObjectSurfaceV1
+>();
 
 function effectiveCreatedObjectSurface(
   kind: CreatedObjectSurfaceV1["kind"],
 ): EffectiveCreatedObjectSurfaceV1 {
+  const cached = EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1.get(kind);
+  if (typeof cached !== "undefined") return cached;
   const surfaces: CreatedObjectSurfaceV1[] = [];
   let currentKind: CreatedObjectSurfaceV1["kind"] | undefined = kind;
   while (typeof currentKind !== "undefined") {
@@ -886,7 +891,7 @@ function effectiveCreatedObjectSurface(
   const flatten = (
     select: (surface: CreatedObjectSurfaceV1) => readonly string[],
   ): readonly string[] => Object.freeze(surfaces.flatMap(select));
-  return Object.freeze({
+  const effective = Object.freeze({
     observableKeys: flatten(({ observableKeys }) => observableKeys),
     callbackSetterKeys: flatten(({ callbackSetterKeys }) => callbackSetterKeys),
     directCallbackKeys: flatten(({ directCallbackKeys }) => directCallbackKeys),
@@ -895,6 +900,8 @@ function effectiveCreatedObjectSurface(
     ),
     forbiddenMethodKeys: flatten(({ forbiddenMethodKeys }) => forbiddenMethodKeys),
   });
+  EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1.set(kind, effective);
+  return effective;
 }
 
 function inheritedPropertyDescriptor(
@@ -972,6 +979,22 @@ function instrumentObservable(
   );
 }
 
+function readObservableProviderValue(
+  owner: Record<string, unknown>,
+  originalOwnDescriptor: PropertyDescriptor | undefined,
+  descriptor: PropertyDescriptor | undefined,
+  hasProviderAssignedValue: boolean,
+  providerAssignedValue: unknown,
+): unknown {
+  if (hasProviderAssignedValue) return providerAssignedValue;
+  if (typeof originalOwnDescriptor !== "undefined") {
+    return "value" in originalOwnDescriptor
+      ? originalOwnDescriptor.value
+      : originalOwnDescriptor.get?.call(owner);
+  }
+  return descriptor?.get?.call(owner);
+}
+
 function installObservableSurfaceAccessor(
   owner: Record<string, unknown>,
   key: string,
@@ -989,20 +1012,12 @@ function installObservableSurfaceAccessor(
     allowProviderAssignment && key === "onMeshReadyObservable";
   let hasProviderAssignedValue = false;
   let providerAssignedValue: unknown;
-  const readProviderValue = (): unknown => {
-    if (hasProviderAssignedValue) return providerAssignedValue;
-    if (typeof originalOwnDescriptor !== "undefined") {
-      return "value" in originalOwnDescriptor
-        ? originalOwnDescriptor.value
-        : originalOwnDescriptor.get?.call(owner);
-    }
-    return descriptor?.get?.call(owner);
-  };
   const accessor: PropertyDescriptor = {
     configurable: true,
     enumerable: originalOwnDescriptor?.enumerable ?? descriptor?.enumerable ?? false,
     get(): unknown {
-      const observable = readProviderValue();
+      const observable = readObservableProviderValue(owner, originalOwnDescriptor,
+        descriptor, hasProviderAssignedValue, providerAssignedValue);
       if (typeof baseline === "undefined") {
         baseline = captureObservableBaseline(observable);
         baselinesByKey.set(key, baseline);
@@ -1024,7 +1039,8 @@ function installObservableSurfaceAccessor(
           hasProviderAssignedValue = true;
           providerAssignedValue = value;
         }
-        const observable = readProviderValue();
+        const observable = readObservableProviderValue(owner, originalOwnDescriptor,
+          descriptor, hasProviderAssignedValue, providerAssignedValue);
         baseline = captureObservableBaseline(observable);
         baselinesByKey.set(key, baseline);
         instrumentObservable(

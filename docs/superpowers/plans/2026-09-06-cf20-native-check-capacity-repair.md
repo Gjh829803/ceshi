@@ -233,3 +233,33 @@ its unchanged 1 GiB limit: post-GC live heap **474,001,776 bytes**, compared wit
 The original full Case still has no Native Check success; aggregate CI, rendered
 acceptance and main merge remain open. This measurement does not justify raising
 the production heap or reducing the generated world.
+
+## MEM3-B6 immutable audit surface and reader allocation
+
+Main-agent-only; existing authority-audit owner. Cache the immutable inherited
+surface arrays by the closed runtime-kind union, and move the per-accessor
+provider-value reader to a single module function with explicit current state.
+Inputs and outputs of the reader stay identical, including own descriptor versus
+inherited getter precedence and one-time Mesh provider assignment. Keep baselines,
+mutation predicates and restored descriptors instance-local. The cache may contain
+only frozen string arrays, never Candidate objects or closures capturing a Scene.
+Required evidence: RED per-Mesh surface-allocation count across two probes, current
+authority/Candidate/Runtime/Session files, typecheck and unchanged allocation probe.
+
+Read-only investigation of Scene allocation rollback found no indexed Mesh
+membership API in installed Babylon 9.23.0 (`addMesh` appends; `removeMesh` uses
+`indexOf`; new-Mesh notifications are deferred). Replacing the snapshot by only
+the prior array length would not preserve cleanup if construction mutates the
+prior collection. Keep that contract and track its quadratic traversal as open;
+do not silently substitute a weaker tail-slice cleanup.
+
+Implemented. The isolated production-loader regression observed four identical
+Mesh surface arrays for four Meshes across two probes before the change; afterward
+it observes one. Four complete authority/Candidate/Runtime/Session files passed
+**341/341** (including lazy accessors, provider assignment, mutation rejection,
+repeated insertion, original descriptor restoration and closed-probe GC tests);
+typecheck passed. The unchanged audited 8,000-Block diagnostic completed with no
+diagnostics at the same 1 GiB limit. Post-GC live heap: **425,161,992 bytes**, down
+from 474,001,776 after B5. Post-disposal: 40,663,224 bytes and zero Meshes/Geometries.
+Snapshot traversal is unchanged at 31,996,000 entries; no timing speedup is claimed.
+This still does not prove that the 158,100-Block world fits production capacity.

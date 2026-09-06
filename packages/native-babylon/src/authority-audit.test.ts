@@ -132,6 +132,38 @@ function registerSpawn(
 }
 
 describe("installed Babylon runtime-kind authority audit", () => {
+  it("CF-20 reuses immutable inherited audit surfaces across Meshes and probes", async () => {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+      import { Scene } from '@babylonjs/core/scene.js';
+      import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
+      import { beginBabylonNativeSceneAuthorityProbeV1 } from ${JSON.stringify(new URL("./authority-audit.ts", import.meta.url).href)};
+      const originalFreeze = Object.freeze;
+      let meshSurfaces = 0;
+      Object.freeze = function(value) {
+        if (Array.isArray(value) && value.includes('onBeforeRenderObservable') &&
+            value.includes('onCollideObservable') && value.includes('onDisposeObservable')) meshSurfaces++;
+        return originalFreeze(value);
+      };
+      try {
+        for (let round=0;round<2;round++) {
+          const engine = new NullEngine(); const scene = new Scene(engine);
+          const probe = beginBabylonNativeSceneAuthorityProbeV1({engine, scene});
+          try {
+            MeshBuilder.CreateBox('surface-a', {}, scene);
+            MeshBuilder.CreateBox('surface-b', {}, scene);
+            assert.deepEqual(probe.audit(), []);
+          } finally {probe.restore();scene.dispose();engine.dispose();}
+        }
+        assert.equal(meshSurfaces, 1, 'flatten frozen inherited keys once, not per Mesh or probe');
+      } finally {Object.freeze = originalFreeze;}
+    `;
+    await promisify(execFile)(process.execPath,
+      ["--import", "tsx", "--input-type=module", "--eval", script],
+      { timeout: 30_000 });
+  }, 35_000);
+
   it("CF-20 avoids per-method function-name decoration in the production TS loader", async () => {
     const script = `
       import assert from 'node:assert/strict';
