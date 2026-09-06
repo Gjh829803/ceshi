@@ -176,7 +176,8 @@ At 03:20, inspected U37 ruins/snow-valley samples 192 and 196 also passed
 the quality check and reached 7/7 and 6/6 route targets. Current limits are
 U05=8, U12=8, U37=8. At 03:49, U33 also expanded from 4 to 8 using its
 previously inspected distinct satisfactory samples 027/090 and healthy actual
-provider activity; pending 217–220 remain ungraded and are the next QA priority.
+provider activity. Later inspection graded 217 satisfactory and 219/220 mixed
+(limited later-route coverage and simplified canyon forms); 218 remains pending.
 See `u33-capacity-expansion.json`. A/B report platform `quota_low`, and C's
 19:00 UTC health snapshot reports `auth_failed`; preserve their in-flight tasks
 but do not bypass admission filtering.
@@ -207,6 +208,14 @@ Seven controller tests passed, including an end-to-end cycle with one free slot
 and a full-capacity cycle that must not prepare another task. Existing live job
 IDs/payload hashes and detached supervisors were preserved during the parent-only
 restart; evidence is in `single-slot-refill-adjustment.json`.
+
+At 04:23, a bounded U03 calibration used the next two unused master references
+260/261 in wave-47, without input changes. Its only prior sample 013 was mixed
+because of weak color separation, with usable motion and 6/7 route targets.
+U03 remains probation, not bulk-production eligible. Inspect both new actual
+outputs before any promotion; preserve the original mixed judgment. The fixed
+jobs are recorded in `u03-paired-calibration-dispatch.json` and already running:
+`gen_f1824def1d4c6541` / `gen_2c0275a8e0bf81ab`. Do not dispatch them again.
 
 Retry budgets distinguish provider rejections from world authoring. A case has at
 most 4 confirmed provider attempts and at most 2 attempts with evidence of model
