@@ -1,0 +1,9 @@
+{
+  "status": "ready",
+  "sourceCommit": "a774b0ccd67d84d93b3b9ec06abe7709ca18d22c",
+  "runtimeLockHash": "7486b980ac3656ad705e9d9f9902f50e204c828b7db4519a87a10ee38d39d6b0",
+  "cloudRoot": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc",
+  "modelCalls": 0,
+  "doctor": "passed",
+  "oldRuntimeUnchanged": true
+}

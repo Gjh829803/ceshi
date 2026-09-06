@@ -1,5 +1,13 @@
 ## Humanoid motion repair and guidance — 2026-09-06
 
+All ten manual motion repairs are now published in place at the original URLs,
+as explicitly requested after the user rejected a separate repair gallery. Keep
+the original provider archives unchanged and the actual manual build identity in
+gallery metadata. New humanoid jobs must use the ready runtime lock in
+`docs/evaluations/gpt6-three/humanoid-motion-repair-20260906/runtime-lock.json`
+(7486b980…); it includes the G-bot starter, short motion guidance and the SDK
+walk/run intent correction. See that directory's README and verification records.
+
 The user now authorizes correcting the humanoid prompt and SDK guidance/examples,
 manually repairing delivered cases 07, 01 and 04, and checking this ten-case batch
 for equivalent skeletal-motion mistakes. Preserve scenes/gameplay/cameras and
