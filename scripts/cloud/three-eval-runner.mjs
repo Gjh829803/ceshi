@@ -53,7 +53,7 @@ const manifest = {...sourceManifest, cases: sourceManifest.cases.flatMap(item =>
 const maxConcurrency = Number(options["--max-concurrency"] ?? previousPlan?.maxConcurrency ?? (suite === "sdk-only" ? 5 : 4));
 if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 64) throw new Error("--max-concurrency must be an integer in [1, 64]");
 const accountConcurrency = Number(options["--account-concurrency"] ?? previousPlan?.accountConcurrency ?? (suite === "sdk-only" ? 5 : 4));
-if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 5) throw new Error("--account-concurrency must be an integer in [1, 5]");
+if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 8) throw new Error("--account-concurrency must be an integer in [1, 8]");
 const caseLimit = Number(options["--case-limit"] ?? 5);
 if (!Number.isSafeInteger(caseLimit) || caseLimit < 1 || caseLimit > sourceManifest.cases.length) throw new Error("--case-limit must fit the frozen manifest");
 const requestedCaseId = options["--case-id"] ?? (options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");

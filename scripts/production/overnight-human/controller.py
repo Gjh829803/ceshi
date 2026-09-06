@@ -79,7 +79,7 @@ def main():
     if decision.get('availability','').startswith('blocked-'):continue
     if state not in ['verified-good','promising','production-good']:continue
     if a['label'] not in ['A','B','C','G'] and not decision.get('qualityEvidence'):continue
-    cap=2 if state=='promising' else 4;free=max(0,cap-busy[a['identitySha256']]);accounts.extend([a]*free)
+    cap=8 if state=='verified-good' else 2 if state=='promising' else 4;free=max(0,cap-busy[a['identitySha256']]);accounts.extend([a]*free)
    # Keep initial exploration broad, then fill freed slots using approved accounts.
    # Previously verified accounts may keep working while probation results are assessed.
    slots=min(config['maxConcurrency']-len(active),len(accounts),64)
@@ -99,7 +99,7 @@ def main():
    cases=[]
    for case,a in zip(selected,assign):cases.append({**case,'codexAccountIds':[a['codexAccountId']]})
    manifest={**master,'id':run,'cases':cases};path=support/'selected-cases.json';write(path,manifest);path.chmod(0o600);root=REPO/'.codex-tmp/three-creator-eval/runs'/run
-   args=['node','scripts/cloud/three-eval-runner.mjs','--mode','prepare','--run-id',run,'--manifest',str(path),'--runtime-lock',config['runtimeLockPath'],'--case-limit',str(len(cases)),'--max-concurrency','64','--account-concurrency','4','--account-policy-file',config['accountPolicyPath'],'--account-inventory-file',config['inventoryPath'],'--experiment-revision','overnight-human-300-v1']
+   args=['node','scripts/cloud/three-eval-runner.mjs','--mode','prepare','--run-id',run,'--manifest',str(path),'--runtime-lock',config['runtimeLockPath'],'--case-limit',str(len(cases)),'--max-concurrency','64','--account-concurrency','8','--account-policy-file',config['accountPolicyPath'],'--account-inventory-file',config['inventoryPath'],'--experiment-revision','overnight-human-300-v1']
    subprocess.run(args,cwd=REPO,capture_output=True,check=True,timeout=120)
    config['waves'].append({'runId':run,'runRoot':str(root),'caseIds':[c['id'] for c in cases],'stage':'quality-weighted-production','createdAt':now()});config['phase']='production';write(OUT/'campaign.json',config);start_supervisor(root)
    print(json.dumps({'at':now(),'launchedWave':run,'count':len(cases),'accounts':collections.Counter(a['label'] for a in assign)}),flush=True)

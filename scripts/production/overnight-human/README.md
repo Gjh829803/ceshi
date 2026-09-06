@@ -33,7 +33,11 @@ not modify the installed Creator capsule. D/E/F remain denied.
   flock. First probe wave: 37 cases, A/B/C/G twice and 29 other eligible accounts
   once. Subsequent waves use account decisions. Each wave has one existing durable
   `three-eval-supervisor.mjs`, fixed manifests/payloads, exact job/request identities.
-  Total cap 64; 4 live tasks per proven account, 2 per promising account. New jobs
+  Total cap 64; 8 live tasks per historically verified account, 4 per newly proven
+  account, 2 per promising account. The historic-account cap increased from 4 to 8
+  at 00:18 local after all 26 existing live requests showed actual CLI activity
+  and later preview/test success. Only new requests use the higher provider cap;
+  existing payloads, job identities, Creator prompt and runtime remain frozen. New jobs
   stop at 06:20; retrieval/publication continue. Pending job IDs reserve slots.
 - `publisher.py`: owns the single campaign site, stages each wave through the
   production viewer and incrementally uploads changed files with manifest last.
