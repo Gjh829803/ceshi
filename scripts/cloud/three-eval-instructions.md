@@ -23,10 +23,18 @@ R and tool reset must restore the complete initial world, camera and gameplay
 state. Use the SDK's declared extension and control capabilities when required;
 do not claim an unsupported movement or geometry behavior merely by naming it.
 
-Use real world_preview images and world_inspect diagnostics, then repair this same
+Compare real world_preview images with the reference: subject size and placement,
+camera perspective, landmark silhouettes and spatial depth. Correct major visual
+or structural mismatches before the final recording; compilation and a technical
+passed flag alone do not establish task completion.
+Use short real keyboard episodes and world_inspect to check movement, held running,
+jumping, first-input camera continuity, wall occlusion/recovery and reset. Verify
+distinct connected areas beyond the opening, supporting five minutes of meaningful
+exploration. Repeated laps, targets already reached at spawn and oversized target
+tolerances do not prove exploration. Repair observed failures and retest the same
 world. After the final world-source change, request an opening preview and inspect
 the returned image. An episode-only edit does not invalidate that world image.
-Use short real keyboard episodes to debug, then record a full 180–300-second
+Then record a full 180–300-second
 episode with at least 180 seconds of active play and complete object three-views
 before world_submit. Paused, loading and reset time cannot count as active play.
 Long operations return
@@ -34,9 +42,9 @@ operation IDs: poll the same operation through operations_get; do not launch dup
 
 External acceptance goals cannot be weakened by deleting waypoints, replacing
 stairs with nonphysical decorations, or detaching the required moving subject's
-parts. Preserve those goals while fixing the world. Report unsupported behavior
-and failed goals truthfully. A technical delivery is ready for independent visual
-and gameplay review; it does not establish semantic acceptance or zero defects.
+parts. Preserve those goals while fixing the world. Before submitting, compare
+the evidence with the reference and user goals yourself; report unsupported,
+unverified or failed goals explicitly.
 
 Run world_playtest and world_submit in the same MCP service session. Do not write
 delivery files, traces, receipts or tool reports manually. Submit using world_submit,

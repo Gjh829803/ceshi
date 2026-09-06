@@ -1,5 +1,12 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
+The user now requests xhigh again, a small prompt-only increase in self-check
+requirements, and the same two cloud cases. Use the original immutable xhigh
+runtime 968433bf… and unchanged SDK/Creator tools. Only the normal instruction's
+self-check paragraphs change. Keep each case pinned to its latest xhigh account;
+no case-specific hints, generated-world edits, or assistant review gate. The ultra
+worker patch remains a separate undeployed worktree and is not part of this run.
+
 The user now explicitly authorizes two concurrent cloud cases with GPT-6 Astra
 think mode ultra. This slice is limited to Host effort selection, exact launcher
 and receipt validation, plus pinning each case to its most recent xhigh account
