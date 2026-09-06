@@ -132,6 +132,55 @@ function registerSpawn(
 }
 
 describe("installed Babylon runtime-kind authority audit", () => {
+  it("CF-20 does not reinstall guards for repeated Geometry insertion", () => {
+    const candidate = createCandidate();
+    const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+    try {
+      const mesh = MeshBuilder.CreateBox("shared-geometry", {}, candidate.scene);
+      const geometry = mesh.geometry!;
+      const guardedDispose = geometry.dispose;
+      const guardedCallback = Object.getOwnPropertyDescriptor(geometry, "onGeometryUpdated");
+      for (let index = 0; index < 64; index += 1) {
+        expect(candidate.scene.pushGeometry(geometry)).toBe(false);
+      }
+      expect(geometry.dispose).toBe(guardedDispose);
+      expect(Object.getOwnPropertyDescriptor(geometry, "onGeometryUpdated"))
+        .toEqual(guardedCallback);
+      expect(probe.audit()).toEqual([]);
+      expect(() => { geometry.onGeometryUpdated = () => undefined; })
+        .toThrow("WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN");
+    } finally { probe.restore(); }
+  });
+
+  it("CF-20 keeps repeated Geometry insertion disposal stack bounded", () => {
+    const candidate = createCandidate();
+    const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+    try {
+      const mesh = MeshBuilder.CreateBox("shared-disposal", {}, candidate.scene);
+      const geometry = mesh.geometry!;
+      for (let index = 0; index < 32768; index += 1) candidate.scene.pushGeometry(geometry);
+      expect(() => mesh.dispose()).not.toThrow();
+      expect(geometry.isDisposed()).toBe(true);
+      expect(probe.audit()).toEqual([]);
+    } finally { probe.restore(); }
+  });
+
+  it("CF-20 retains the original callback baseline across remove and reinsert", () => {
+    const candidate = createCandidate();
+    const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+    try {
+      const geometry = MeshBuilder.CreateBox("original-baseline", {}, candidate.scene).geometry!;
+      candidate.scene.removeGeometry(geometry);
+      Object.defineProperty(geometry, "onGeometryUpdated", {
+        configurable: true, writable: true, value: () => undefined,
+      });
+      expect(candidate.scene.pushGeometry(geometry)).toBe(true);
+      expect(probe.audit().map(({ code }) => code)).toContain(
+        "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+      );
+    } finally { probe.restore(); }
+  });
+
   it("CF-20 releases created-object audit records after restore and disposal", async () => {
     const script = `
       import assert from 'node:assert/strict';

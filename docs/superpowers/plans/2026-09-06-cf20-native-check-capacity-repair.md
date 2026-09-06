@@ -148,3 +148,41 @@ zero. All 31,996,000 prior-Mesh snapshot visits remain. Geometry's installed
 reference-release implementation also searches its member array; this change is
 not evidence of linear-time disposal or overall speedup. The larger 158,100-Block
 capacity problem, finalization measurements and full production replay remain open.
+
+## MEM3-B4 repeated insertion audit ownership
+
+Main-agent-only, sequential; existing Native authority-audit owner. Babylon 9.23.0
+`Geometry.applyToMesh` invokes `Scene.pushGeometry` even for a registered Geometry;
+`pushGeometry` then returns false without a new registration. The audit wrapper
+currently re-instruments before that call, stacking disposal wrappers, callback
+guards and retained records on the same object for every attachment. B3's geometry
+reuse exposes this repeatedly; it also exists for explicit repeated insertion.
+
+Input: same Candidate object and same runtime-kind surface. Output: one installed
+guard set and original audit baseline per object/kind for the active probe. Do not
+skip a different kind, remove prior records, reset mutation diagnostics or alter
+Scene insertion results. Track completed installation weakly so a closed probe
+cannot retain scene objects. Required evidence: RED repeated-insertion identity
+and disposal-stack tests, remove/reinsert callback mutation rejection, existing
+authority/Candidate/Runtime tests, GC ownership regression, and the same isolated
+8,000-Block diagnostic. Not a new gate or final full-production acceptance.
+
+Implemented with probe-local WeakSets keyed by runtime kind, marking only completed
+instrumentation. Original records remain active across remove/reinsert, and a
+different runtime kind still has its own instrumentation path. No Scene insertion
+return value or argument is changed. Weak ownership preserves the existing restored
+probe GC contract.
+
+RED evidence: repeated insertion changed the guarded function/descriptor identity;
+32,768 repeats then Mesh disposal threw `RangeError: Maximum call stack size
+exceeded`. (The smaller 8,192-repeat sample did not overflow.) Both regressions
+now pass, as does callback mutation rejection after remove/reinsert. Four complete
+authority-audit/Candidate admission/Runtime replay/Session files passed **339/339**,
+including the disposed-Mesh GC reproducer; typecheck passed.
+
+The unchanged audited 8,000-Block diagnostic again completed under its fixed 1 GiB
+limit with no audit diagnostics and no retained sampled Scene snapshots. Live
+post-GC heap: **556,598,744 bytes**, down from 577,032,528 after B3. Post-disposal:
+40,618,080 bytes with zero Meshes/Geometries. This repairs a real large shared-
+Geometry cleanup failure, but per-Mesh cost and the 31,996,000 snapshot visits
+remain. No full 158,100-Block Host replay or scene-effect acceptance is claimed.

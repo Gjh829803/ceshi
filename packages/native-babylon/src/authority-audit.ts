@@ -1119,6 +1119,9 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
   const snapshot = captureBabylonNativeSceneAuthoritySnapshotV1(candidate);
   const restorers: Array<() => void> = [];
   const createdObjects: CreatedObjectAuditRecordV1[] = [];
+  const instrumentedObjectsByKind = new Map<
+    CreatedObjectSurfaceV1["kind"], WeakSet<object>
+  >();
   const standardMaterialTransitions: StandardMaterialTransitionV1[] = [];
   const guardedPhysicsMethodsByKey = new Map<string, unknown>();
   let providerMutationDepth = 0;
@@ -1247,6 +1250,12 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
   ): void => {
     const object = publicObject(input);
     const kind = createdObjectKind(insertionKey, object);
+    let instrumentedObjects = instrumentedObjectsByKind.get(kind);
+    if (instrumentedObjects?.has(object)) return;
+    if (typeof instrumentedObjects === "undefined") {
+      instrumentedObjects = new WeakSet();
+      instrumentedObjectsByKind.set(kind, instrumentedObjects);
+    }
     const surface = effectiveCreatedObjectSurface(kind);
     const transition: StandardMaterialTransitionV1 | undefined =
       kind === "standard-material" && !isExisting
@@ -1373,6 +1382,9 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       installOwnMethodGuard(object, key, recordViolation, restorers);
     }
     createdObjects.push(record);
+    // Babylon re-submits shared Geometry on every attachment. Preserve the
+    // original record and guards instead of nesting another disposal wrapper.
+    instrumentedObjects.add(object);
   };
 
   for (const transformNode of candidate.scene.transformNodes) {
