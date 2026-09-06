@@ -89,6 +89,10 @@ try {
   assert.deepEqual(capture.cleanupOutcomes, { hostedBrowserSession: "completed", viteServer: "completed" });
   const receipt = parseFormalWorldCaptureReceiptV1(await json(path.join(captureRoot, "formal-world-capture-receipt.json")));
   const spawnSupport = parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json")));
+  // Retain actual output before assertions so a failing new geometry probe is
+  // inspectable after the owned temporary Package is cleaned up.
+  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
+  console.log(`native-no-script-capture: captured evidence ${evidenceRoot}`);
   // CF-04/T1: actual production captures the reset state, not the later support
   // sampling Tick. Keep both independently hashed states in the real output.
   assert.equal(receipt.readySnapshot.world.simulationTick, 0);
@@ -129,7 +133,6 @@ try {
     },
   });
   // Retain both consumer stages and actual pixels before regression assertions.
-  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
   await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
   await cp(evaluation.evidenceSetPath, path.join(evidenceRoot, "evidence-set.json"));
   console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
