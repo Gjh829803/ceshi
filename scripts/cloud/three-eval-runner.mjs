@@ -82,8 +82,8 @@ async function saveSummary() {
 if (mode === "stats") { const summary = await saveSummary(); console.log(JSON.stringify({summary: path.join(outputRoot, "summary.json"), delivered: summary.deliveredCount, failed: summary.failedCount, pending: summary.pendingCount})); process.exit(0); }
 const lockPath = path.resolve(options["--runtime-lock"] ?? previousPlan?.runtimeLockPath ?? path.join(repo, ".codex-tmp/three-creator-eval/runtime-lock.json"));
 const lock = await readRuntimeLock(lockPath, {requireReady: mode !== "prepare"});
-if(previousPlan&&previousPlan.runtimeHash!==lock.runtimeHash)throw Error("CREATOR_FROZEN_RUNTIME_CHANGED");
 if (lock.reasoningEffort !== reasoningEffort) throw new Error("CREATOR_REASONING_EFFORT_LOCK_MISMATCH");
+if(previousPlan&&previousPlan.runtimeHash!==lock.runtimeHash)throw Error("CREATOR_FROZEN_RUNTIME_CHANGED");
 if (typeof lock.launcherPath !== "string" || !/^\/fsx\/pipeline\/worldkit-three-creator-experiments\/.+\/three-eval-launcher\.mjs$/.test(lock.launcherPath)) throw new Error("runtime-lock.launcherPath must identify the isolated cloud launcher.");
 const s3Root = (options["--output-s3-root"] ?? previousPlan?.outputS3Root ?? `s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/${suite === "sdk-only" ? "sdk-eval" : "paired-eval"}`).replace(/\/$/, "");
 if (!s3Root.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/")) throw new Error("Evaluation S3 prefix must stay within the project's Three artifact root.");

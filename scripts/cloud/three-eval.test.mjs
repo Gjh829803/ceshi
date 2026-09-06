@@ -84,9 +84,11 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   const mismatched=spawnSync(process.execPath,ultraArgs.map(x=>x===ultraLock?lock:x),{encoding:'utf8'});assert.notEqual(mismatched.status,0);assert.match(mismatched.stderr,/REASONING_EFFORT_LOCK_MISMATCH/);
 
   const tenManifest=path.join(dir,'ten-manifest.json'),tenOut=path.join(dir,'ten-run');
+  const ninetyLock=path.join(dir,'ninety-lock.json');await writeFile(ninetyLock,JSON.stringify({...JSON.parse(await readFile(lock,'utf8')),maximumTaskSeconds:5400}));
+  const drift=spawnSync(process.execPath,sdkArgs.map(value=>value===lock?ninetyLock:value),{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/FROZEN_RUNTIME_CHANGED/);assert.deepEqual(JSON.parse(await readFile(path.join(sdkOut,task,'payload.json'),'utf8')),oldPayload);
   await writeFile(tenManifest,JSON.stringify({cases:[...cases,...cases.map(c=>({...c,id:c.id+'-extra'}))]}));
-  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',lock,'--manifest',tenManifest,'--run-id','test-ten-sdk','--output-root',tenOut,'--case-limit','10','--max-concurrency','10']);
-  const tenPlan=JSON.parse(await readFile(path.join(tenOut,'evaluation-plan.json'),'utf8'));assert.equal(tenPlan.selectedTaskIds.length,10);assert.equal(tenPlan.maxConcurrency,10);
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ninetyLock,'--manifest',tenManifest,'--run-id','test-ten-sdk','--output-root',tenOut,'--case-limit','10','--max-concurrency','10']);
+  const tenPlan=JSON.parse(await readFile(path.join(tenOut,'evaluation-plan.json'),'utf8'));assert.equal(tenPlan.selectedTaskIds.length,10);assert.equal(tenPlan.maxConcurrency,10);assert.equal(tenPlan.safetyPolicy.maximumModelSeconds,5400);const tenPayload=JSON.parse(await readFile(path.join(tenOut,tenPlan.selectedTaskIds[0],'payload.json'),'utf8'));assert.equal(tenPayload.defaults.timeout_seconds,5520);
 
   // Exercise the real coordinator in an isolated checkout. Only its provider
   // transport is replaced; no production credential files or cloud API exist.
