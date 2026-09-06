@@ -211,3 +211,42 @@ passed. Real cloud run submitted exactly one image; no secondary style views,
 events, video requests or Seedance submissions were started. Implementation and
 reference-capable source capsule are local; the three bounded cloud recovery jobs
 used the existing pinned r8 launcher, not a global worker rollout.
+
+## Authorized completion run — r9
+
+The user asks to finish the remaining generation pipeline. The existing boundary
+remains pre-Seedance. Use cloud GPU recordings with player-capture-2.1, the verified
+r6 Agent route, the restored original-reference style at 02 and nine unchanged
+style definitions. Main-agent-only dependency chain: validated continuation inputs
+→ immutable r9 worker capsule → cloud six-clip capture → ten-anchor admission →
+seventy later images (five views plus two target tri-views per style) → diversity
+→ ten Gemini event calls → sixty prepared requests, zero Seedance submissions.
+
+`continue.ts` checks the original route's actual MCP receipt and prior source
+manifest hash; scene/source/runtime and file inventories must match. It only seeds
+a fresh workflow's existing Agent plan, without inventing Host routes. Cloud
+capture reruns the enhanced input policy. `anchor-continuation.mjs` imports exact
+candidate image bytes and durable spent attempts. A user opening approval carries
+across the new plan header only when the complete variant definition, world,
+whitebox and selected image are unchanged; its original receipt remains nested.
+It cannot approve a later frame or changed variant. The two pending candidates
+03/04 get at most two explicitly recorded extra repairs under the revised rubric;
+other budgets are not reset. The original-reference 02 remains independently
+reviewed, not user-approved. An opening hash mismatch stops reuse.
+
+Pre-dispatch verification: 39 Node tests, 31 Episode Vitest tests and typecheck
+passed. Exact input bundle is `.codex-tmp/three-episode-cloud-setup/recovery-r9`;
+release creation/uploads use the trusted ray namespace head and never package
+runtime credential files. A new immutable FSx release and S3 prefix isolate this
+run from r8 and the local developer videos. Do not relabel a local video as cloud
+capture or overwrite seven original user decisions.
+
+R9 running: Host `three-episode-gvs2-host-20260906-r9-9r75r`; GPU Job
+`three-episode-capture-7bebe1c4f99ffab9f3568c91` completed all six enhanced clips.
+First frame 00 exactly matches f04985f5… and preserves the original user-approved
+opening scope. Archive SHA256:
+77325830a2132090401de10ee697fa51700926255d768b2da8dbb5214ea6dd3f.
+S3 prefix: `s3://leap-world-us-east-2/world-model/platform/worldkit-three-episode/gvs2-pre-seedance-20260906-r9/host-r9`.
+Preview: `http://127.0.0.1:53747/continuation/`. Local scoped monitors and evidence
+are under `.codex-tmp/three-episode-results/r9`; the current provider stage is
+style-plan gen_489e98038bfbd702. Source/route/model receipts remain immutable.

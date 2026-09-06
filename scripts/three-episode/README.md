@@ -180,3 +180,20 @@ unrelated concept does not satisfy original-style fidelity. Subsequent views use
 the admitted anchor's appearance dictionary as before. Original reference identity
 participates in planning/review/cache identities; missing or corrupted references
 cannot be admitted. Historical image approvals keep their existing scoped receipts.
+
+## Resume selected anchors after a policy update
+
+The optional runtime `anchorContinuation: {path,sha256}` names a frozen
+`three-episode-anchor-continuation` manifest. It closes the exact source/runtime,
+whitebox opening, current and historical style plans, ten images, spent attempts
+and an explicit bounded additional budget (0–2 per slot). The new Director must
+preserve all imported variant definitions. Every image is verified before reuse.
+Original user decisions carry only across unchanged variant definitions and exact
+opening bytes, with the original approval receipt retained; later frames still
+need independent review. A changed world or opening fails closed.
+
+`continue.ts` can seed an existing cloud Agent plan into a fresh run from its
+actual `episode_submit_plan` receipt and original source manifest. It validates
+source/runtime/scene closure and does not run a Host route planner. Normal cloud
+capture, style reviews and pre-Seedance preparation then continue through
+`workflow.ts`. Keep the immutable run inputs, logs and provider request journals.

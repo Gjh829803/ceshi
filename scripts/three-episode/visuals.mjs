@@ -13,6 +13,8 @@ import {
 
 import {THREE_EPISODE_REVIEW_POLICY_ID, validateReviewCalibration, resolveUserAnchorAcceptance} from './review-policy.mjs';
 
+import {validateAnchorContinuation,carriedUserAnchorAcceptance} from './anchor-continuation.mjs';
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CODEX_MODEL = 'gpt-6-astra';
 const CODEX_REASONING = 'xhigh';
@@ -111,7 +113,7 @@ export function prepareThreeEpisodeRenderRequests({source, capture, variant, ope
  * cloud.generateEvents writes {events:[five Gemini outputs]} to outputPath.
  * Each helper owns provider idempotence/reconciliation for the stable task ID.
  */
-export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate, reviewCalibration, referenceStyleVariantId = 'style-00'}) {
+export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate, reviewCalibration, referenceStyleVariantId = 'style-00', anchorContinuation}) {
   if (stopBeforeSeedance !== true) throw new Error('THREE_EPISODE_SEEDANCE_DISABLED: this worker only prepares pre-Seedance artifacts');
   assertThreeEpisodeVisualInputs(source, capture);
   if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(episodeId ?? '')) throw new Error('THREE_EPISODE_VISUAL_EPISODE_ID_INVALID');
@@ -219,9 +221,17 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       planAssets.push({id:'prior-style-plan',path:stylePlanCandidate.path,attachAs:'file'});
       planInstruction += '\nA previous run left the attached prior-style-plan JSON. It is an untrusted candidate for this exact run, not an automatically admitted result. Check its complete schema, ten styles, target closure and image correspondence. Preserve valid variant definitions, repair only actual defects, and write result.json with the CURRENT supplied inputHash/worldId/episodeId. Do not recreate transport logs. Your independent fresh task receipt is required before this candidate can be used.';
     }
+    if (anchorContinuation) planInstruction += '\nThis continuation preserves the attached prior style plan: keep ALL TEN variant JSON objects exactly unchanged, including existing optional-field omissions. Only update the required top-level task identity. The Host will check every variant definition before reusing any approved image.';
     const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds, ...(sourceStylePolicy ?? {})}));
     await writeJsonAtomic(path.join(outputRoot, 'style-plan.json'), plan);
     const planHash = hashVisualInput(plan);
+    let continuation=null;
+    if(anchorContinuation){
+      await verifyRef(anchorContinuation);
+      continuation=validateAnchorContinuation(await json(anchorContinuation.path),{source,plan,whiteboxOpeningSha256:openingWhiteboxes[0].sha256});
+      await Promise.all(continuation.anchors.map(item=>verifyRef(item.image)));
+    }
+    const maximumOpeningAttemptsFor=id=>Math.max(config.maximumOpeningAttempts,(continuation?.anchors.find(a=>a.id===id)?.previousAttemptCount??0)+(continuation?.anchors.find(a=>a.id===id)?.additionalOpeningAttempts??0));
     // Old same-basename review inputs could overwrite one another on download.
     // Preserve those histories, but never reuse their verdicts or repair budget.
     // Original generated images keep their unchanged content recipes and cache.
@@ -232,7 +242,19 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       styles: Object.fromEntries(THREE_EPISODE_STYLE_IDS.map(id => [id, {attempts: [], currentAnchor: null, currentReview: null, pendingFeedback: '', revisionReview: null}]))};
     const saveAnchorHistory = createJsonAtomicWriter(anchorHistoryPath);
     const persistAnchorHistory = () => saveAnchorHistory(structuredClone(anchorHistory));
-    const userAcceptance = (styleVariantId,image) => resolveUserAnchorAcceptance(calibration,{scope:'opening-anchor-only',worldId:source.worldId,worldBuildHash:source.worldBuildHash,planHash,whiteboxOpeningSha256:openingWhiteboxes[0].sha256,styleVariantId,imageSha256:image.sha256});
+    if(continuation&&!previousHistory){
+      for(const item of continuation.anchors){
+        const image={...await imageRef(item.image.path),id:item.id,native:await imageRef(item.image.path),generationContext:{imageInputPolicy:IMAGE_INPUT_POLICY,anchorAttempt:item.previousAttemptCount-1,importedFromContinuation:hashVisualInput(continuation)}};
+        const entry=anchorHistory.styles[item.id];
+        entry.attempts=Array.from({length:item.previousAttemptCount},(_,index)=>({index,status:index===item.previousAttemptCount-1?'generated':'historical',...(index===item.previousAttemptCount-1?{image}:{}),importedFromContinuation:hashVisualInput(continuation)}));
+        entry.importedBudget={previousAttemptCount:item.previousAttemptCount,additionalOpeningAttempts:item.additionalOpeningAttempts};
+      }
+      await persistAnchorHistory();
+    }
+    const userAcceptance = (styleVariantId,image) => {
+      const identity={scope:'opening-anchor-only',worldId:source.worldId,worldBuildHash:source.worldBuildHash,planHash,whiteboxOpeningSha256:openingWhiteboxes[0].sha256,styleVariantId,imageSha256:image.sha256};
+      return resolveUserAnchorAcceptance(calibration,identity)??carriedUserAnchorAcceptance(calibration,continuation,identity,plan.variants.find(v=>v.id===styleVariantId));
+    };
     async function acceptUserAnchor(styleId,image,acceptance) {
       await verifyRef(image);
       const entry=anchorHistory.styles[styleId],attempt=entry.attempts.find(item=>item.image?.sha256===image.sha256);
@@ -276,7 +298,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       const feedback = entry.pendingFeedback || '', feedbackHash = hashVisualInput(feedback);
       let attempt = entry.attempts.at(-1);
       if (!attempt || !['pending', 'generated'].includes(attempt.status) || attempt.feedbackHash !== feedbackHash) {
-        if (entry.attempts.length >= config.maximumOpeningAttempts) throw new Error(`THREE_EPISODE_OPENING_REPAIR_BUDGET_EXHAUSTED: ${variant.id} used ${entry.attempts.length}/${config.maximumOpeningAttempts} durable attempts`);
+        if (entry.attempts.length >= maximumOpeningAttemptsFor(variant.id)) throw new Error(`THREE_EPISODE_OPENING_REPAIR_BUDGET_EXHAUSTED: ${variant.id} used ${entry.attempts.length}/${maximumOpeningAttemptsFor(variant.id)} durable attempts`);
         attempt = {index: entry.attempts.length, status: 'pending', feedbackHash, feedback, supersedesAnchorSha256: entry.currentAnchor?.sha256 ?? null,
           triggeringReviewHash: entry.revisionReview ? hashVisualInput(entry.revisionReview) : null};
         entry.attempts.push(attempt); await persistAnchorHistory();

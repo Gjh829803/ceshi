@@ -283,3 +283,16 @@ test('a revised rubric re-evaluates exhausted existing candidates once without r
   await assert.rejects(runThreeEpisodeVisuals(f.options),/STALE_INPUT/);
   assert.equal(f.calls.codex+f.calls.images+f.calls.events,0);
  });
+
+test('continues existing anchors without regeneration, preserving spent budgets and only unchanged scoped approvals',async()=>{
+ const {setup,baseline,calibration}=await calibratedFixture();const {hashVisualInput}=await import('./visual-contracts.mjs');
+ const continuation={kind:'three-episode-anchor-continuation',schemaVersion:1,worldBuildHash:setup.source.worldBuildHash,runtimeHash:setup.source.runtimeHash,whiteboxOpeningSha256:setup.capture.segments[0].firstFrame.sha256,plan:baseline.plan,historicalPlan:baseline.plan,anchors:baseline.anchors.map((image,index)=>({id:THREE_EPISODE_STYLE_IDS[index],image,previousAttemptCount:4,additionalOpeningAttempts:index===3?2:0}))};
+ const file=path.join(setup.root,'continuation.json');await writeFile(file,JSON.stringify(continuation));const before=setup.calls.images;
+ const result=await runThreeEpisodeVisuals({...setup.options,episodeId:'fixture-continued',outputRoot:path.join(setup.root,'continued'),anchorContinuation:await ref(file),reviewCalibration:calibration});
+ assert.equal(setup.calls.images-before,120,'only later images, not ten imported openings');
+ const carried=result.anchorAdmissions[0].userAcceptance;assert.equal(carried.kind,'three-episode-carried-user-anchor-acceptance');assert.equal(carried.sourceAcceptance.planHash,hashVisualInput(baseline.plan));assert.equal(carried.planHash,hashVisualInput(result.plan));
+ const history=JSON.parse(await readFile(result.anchorHistoryPath,'utf8'));assert.equal(history.styles['style-03'].attempts.length,4);assert.equal(history.styles['style-03'].importedBudget.additionalOpeningAttempts,2);
+ const {validateAnchorContinuation,carriedUserAnchorAcceptance}=await import('./anchor-continuation.mjs');
+ const changed=structuredClone(result.plan);changed.variants[0].concept='changed accepted variant';assert.throws(()=>validateAnchorContinuation(continuation,{source:setup.source,plan:changed,whiteboxOpeningSha256:setup.capture.segments[0].firstFrame.sha256}),/variant.*changed/);
+ assert.equal(carriedUserAnchorAcceptance(calibration,continuation,{...carried,scope:'later-frame'},result.plan.variants[0]),null);
+});
