@@ -16,6 +16,7 @@ import {
   deriveRuntimeSessionReceiptIdV1,
   hashRuntimeSessionRequestV1,
   parseFixedInputV1,
+  parseCameraSubjectOcclusionStateV1,
   parseRuntimeSessionEventV1,
   parseRuntimeSessionReceiptV1,
   parseRuntimeSessionRequestV1,
@@ -30,6 +31,51 @@ import {
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
+
+function occlusionFixture() {
+  return {
+    isEnabled: true,
+    isSelectionInitialized: true,
+    selectionElapsedSeconds: 1 / 60,
+    selectedInstanceCount: 1,
+    fadedInstanceCount: 1,
+    instances: [{ batchId: "batch-a", instanceIndex: 3,
+      opacityRatio: Math.fround(0.8), targetOpacityRatio: 0.3 }],
+  };
+}
+
+describe("Camera Subject occlusion protocol", () => {
+  it("freezes exact temporal/instance state and binds it into canonical evidence", () => {
+    const input = occlusionFixture();
+    const parsed = parseCameraSubjectOcclusionStateV1(input);
+    expect(parsed).toEqual(input);
+    expect(Object.isFrozen(parsed.instances[0])).toBe(true);
+    input.instances[0]!.opacityRatio = 0.7;
+    expect(parsed.instances[0]!.opacityRatio).toBe(Math.fround(0.8));
+    expect(sha256CanonicalJson(parsed)).not.toBe(sha256CanonicalJson(input));
+    expect(sha256CanonicalJson(parsed)).not.toBe(sha256CanonicalJson({ ...parsed, selectionElapsedSeconds: 0 }));
+  });
+
+  it("rejects inconsistent counts, duplicate rows, unknown fields and unsafe inputs", () => {
+    const base = occlusionFixture();
+    for (const invalid of [
+      { ...base, selectedInstanceCount: 0 },
+      { ...base, fadedInstanceCount: 0 },
+      { ...base, selectionElapsedSeconds: NaN },
+      { ...base, isEnabled: false },
+      { ...base, isSelectionInitialized: false },
+      { ...base, extra: true },
+      { ...base, instances: [base.instances[0], base.instances[0]] },
+      { ...base, instances: [{ ...base.instances[0], targetOpacityRatio: 0.4 }] },
+      { ...base, instances: [{ ...base.instances[0], instanceIndex: -1 }] },
+      { ...base, instances: [{ ...base.instances[0], opacityRatio: Infinity }] },
+    ]) expect(() => parseCameraSubjectOcclusionStateV1(invalid)).toThrow();
+    let accessed = false;
+    const accessor = { ...base, get instances() { accessed = true; return base.instances; } };
+    expect(() => parseCameraSubjectOcclusionStateV1(accessor)).toThrow();
+    expect(accessed).toBe(false);
+  });
+});
 
 function snapshotFixture(): WorldRuntimeSnapshotV4 {
   return {
@@ -401,6 +447,7 @@ describe("Runtime Session V1 public DTOs", () => {
           positionMetersXYZ: [0, 4, 5],
           activeCameraProfileRef: cameraRigProfileRef,
           authoredOpeningProfileRef: cameraRigProfileRef,
+          subjectOcclusion: occlusionFixture(),
           activeCameraRigRef: "worldkit://camera-rig/orbit-follow@1",
           activeCameraModifierRefs: [],
           safeFallbackActive: true,
@@ -438,6 +485,12 @@ describe("Runtime Session V1 public DTOs", () => {
     expect(parseWorldRuntimeSnapshotV4(trackingSnapshot)).toEqual(
       trackingSnapshot,
     );
+    expect(() => parseWorldRuntimeSnapshotV4({
+      ...trackingSnapshot,
+      view: { ...trackingSnapshot.view, camera: {
+        ...trackingSnapshot.view.camera, subjectOcclusion: { ...occlusionFixture(), fadedInstanceCount: 0 },
+      } },
+    })).toThrow();
     expect(() => parseWorldRuntimeSnapshotV4({
       ...trackingSnapshot,
       view: { ...trackingSnapshot.view, camera: {

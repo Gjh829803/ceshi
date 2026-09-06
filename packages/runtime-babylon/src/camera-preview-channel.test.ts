@@ -3,7 +3,8 @@ import { createRequire } from "node:module";
 
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin.js";
@@ -33,6 +34,7 @@ import {
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 import { CameraComponentV1 } from "./camera-component";
+import { NativeBlockSubjectOcclusionFadeV1 } from "./native-block-subject-occlusion";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import {
   compileRuntimeTestScenePlanV1,
@@ -79,7 +81,7 @@ function cameraGeometryQuery(
   };
 }
 
-function createCameraRenderFixture() {
+function createCameraRenderFixture(withSubjectOcclusion = false) {
   const executionPlan = compileRuntimeTestScenePlanV1(createFlatTerrainCapabilitySpec(), {
     subjectResourceRegistry: builtInSubjectResourceRegistry,
   });
@@ -88,7 +90,17 @@ function createCameraRenderFixture() {
   const scene = new Scene(engine);
   const camera = new FreeCamera("camera.render-history", Vector3.Zero(), scene);
   const query = vi.fn<CameraGeometryQueryPortV2["query"]>(() => undefined);
-  const component = new CameraComponentV1(initialCamera(executionPlan), camera, scene, cameraGeometryQuery(query));
+  const occluder = withSubjectOcclusion ? MeshBuilder.CreateBox("wall", {}, scene) : undefined;
+  if (occluder !== undefined) {
+    occluder.material = new StandardMaterial("wall.material", scene);
+    occluder.thinInstanceSetBuffer("matrix", new Float32Array(Matrix.Identity().asArray()), 16, true);
+  }
+  const fade = occluder === undefined ? undefined : new NativeBlockSubjectOcclusionFadeV1([{
+    id: "wall-batch", mesh: occluder,
+    transforms: [{ positionMetersXYZ: [3, 2, -4], scaleXYZ: [4, 4, 0.5] }],
+  }]);
+  const component = new CameraComponentV1(initialCamera(executionPlan), camera, scene, cameraGeometryQuery(query),
+    fade === undefined ? undefined : { fade, colliderBySubjectEntityId: new Map([[subject.entityId, subject.collider]]) });
   const arm = new SpringArmComponentV1();
   const sample: ViewTargetSampleV1 = {
     controlledEntityId: subject.entityId, entityId: subject.entityId,
@@ -101,13 +113,13 @@ function createCameraRenderFixture() {
     mode: "camera-rig-profile", cameraRigProfileRef: ORBIT_REF,
   });
   return {
-    component, camera, query, sample, subject,
+    component, camera, query, sample, subject, fade, occluder,
     update(tick: number, overrides: Partial<ViewTargetSampleV1> = {}, deltaSeconds = 1 / 60) {
       const next = { ...sample, ...overrides };
       component.update(subject.capabilityAssembly.cameraContext, next, deltaSeconds,
         committedCameraContextFromViewTargetV2(next, tick, "idle", 0), arm);
     },
-    dispose() { component.dispose(); arm.dispose(); engine.dispose(); },
+    dispose() { component.dispose(); arm.dispose(); fade?.dispose(); engine.dispose(); },
   };
 }
 
@@ -427,6 +439,62 @@ function expectTargetAndFovRemainTransitioning(
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
+  it("Native fade retains framing without querying retraction and render does not advance fade", () => {
+    const f = createCameraRenderFixture(true);
+    try {
+      f.query.mockImplementation(() => { throw new Error("unexpected collision retraction"); });
+      f.update(0);
+      const initial = f.component.snapshot();
+      expect(initial.subjectOcclusion?.selectedInstanceCount).toBe(1);
+      expect(initial.subjectOcclusion?.instances[0]?.opacityRatio).toBe(Math.fround(1 - (1 / 60) / 0.15));
+      expect(initial.isCollisionRetracted).toBeUndefined();
+      f.update(0);
+      expect(f.component.snapshot()).toEqual(initial);
+      f.update(1, { targetPositionMetersXYZ: [3.1, 1, -7] });
+      const before = f.component.captureTransactionState();
+      for (const alpha of [0, 0.5, 1]) {
+        f.component.render(alpha, () => expect(f.fade!.snapshot()).toEqual(before.subjectOcclusion));
+        expect(f.component.captureTransactionState()).toEqual(before);
+      }
+      expect(f.query).not.toHaveBeenCalled();
+    } finally { f.dispose(); }
+  });
+
+  it("Native fade restores the Camera transaction after capture or material update failure", () => {
+    const f = createCameraRenderFixture(true);
+    try {
+      f.update(0);
+      const before = f.component.captureTransactionState();
+      expect(() => f.component.withSubjectOcclusionSuspended(() => {
+        expect(f.fade!.snapshot().isEnabled).toBe(false);
+        expect(f.fade!.snapshot().fadedInstanceCount).toBe(0);
+        throw new Error("capture failed");
+      })).toThrow("capture failed");
+      expect(f.component.captureTransactionState()).toEqual(before);
+      vi.spyOn(f.occluder!, "thinInstanceBufferUpdated").mockImplementationOnce(() => {
+        throw new Error("buffer failed");
+      });
+      expect(() => f.update(1)).toThrow("buffer failed");
+      expect(f.component.captureTransactionState()).toEqual(before);
+      f.update(1);
+      expect(f.fade!.snapshot()).not.toEqual(before.subjectOcclusion);
+      f.component.restoreTransactionState(before);
+      expect(f.component.captureTransactionState()).toEqual(before);
+      f.component.reset();
+      expect(f.fade!.snapshot()).toMatchObject({ isSelectionInitialized: false, instances: [] });
+    } finally { f.dispose(); }
+  });
+
+  it("Native fade retains old controlled-Subject fallback for a non-Subject view target", () => {
+    const f = createCameraRenderFixture(true);
+    try {
+      f.update(0, { entityId: "view-target-not-a-subject" });
+      expect(f.fade!.snapshot().selectedInstanceCount).toBe(1);
+      const before = f.fade!.snapshot();
+      expect(() => f.update(1, { entityId: "unowned-view-target", controlledEntityId: "unowned-control" })).not.toThrow();
+      expect(f.fade!.snapshot()).toEqual(before);
+    } finally { f.dispose(); }
+  });
   it.each([false, true])("projects all four authored opening values onto the selected Profile before modifiers and Preview (Socket available: %s)", (hasTargetSocket) => {
     const plan = compileRuntimeTestScenePlanV1(createFlatTerrainCapabilitySpec(), {
       subjectResourceRegistry: builtInSubjectResourceRegistry,

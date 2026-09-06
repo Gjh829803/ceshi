@@ -7,6 +7,7 @@ import type {
   CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
 import type {
+  CameraSubjectOcclusionStateV1,
   CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
@@ -16,6 +17,7 @@ import type {
   ViewTargetSampleV1,
   WorldRuntimeInitialCameraV1,
 } from "@whitebox-world/runtime-contracts";
+import type { NativeBlockSubjectOcclusionFadeV1 } from "./native-block-subject-occlusion.js";
 import { SceneComponentV1 } from "@whitebox-world/runtime-framework";
 
 import {
@@ -43,11 +45,21 @@ export interface CommittedCameraRenderPoseHistoryV1 {
 }
 
 export interface CameraComponentTransactionStateV1 {
+  readonly subjectOcclusion?: CameraSubjectOcclusionStateV1;
   readonly director: CameraDirectorTransactionStateV1;
   readonly activeSpringArm: SpringArmComponentV1 | undefined;
   readonly activeSpringArmState: SpringArmTransactionStateV1 | undefined;
   readonly renderPoseHistory: CommittedCameraRenderPoseHistoryV1;
   readonly renderPoseHistoryNeedsReset: boolean;
+}
+
+export interface CameraSubjectOcclusionBindingV1 {
+  readonly fade: NativeBlockSubjectOcclusionFadeV1;
+  readonly colliderBySubjectEntityId: ReadonlyMap<string, Readonly<{
+    centerOffsetFromSubjectOriginMetersXYZ: RuntimeVec3V1;
+    heightMeters: number;
+    radiusMeters: number;
+  }>>;
 }
 
 function copyRenderPose(
@@ -183,9 +195,11 @@ export class CameraComponentV1 extends SceneComponentV1 {
     private readonly camera: FreeCamera,
     scene: Scene,
     cameraGeometryQuery: CameraGeometryQueryPortV2,
+    private readonly subjectOcclusion?: CameraSubjectOcclusionBindingV1,
   ) {
     super("camera");
-    this.director = new CameraDirectorV1(initialCamera, camera, scene, cameraGeometryQuery);
+    this.director = new CameraDirectorV1(initialCamera, camera, scene, cameraGeometryQuery,
+      subjectOcclusion !== undefined);
     this.renderPoseBuffer = new CommittedCameraRenderPoseBufferV1(this.captureRenderPose(0));
   }
 
@@ -209,6 +223,7 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   captureTransactionState(): CameraComponentTransactionStateV1 {
     return Object.freeze({
+      ...(this.subjectOcclusion === undefined ? {} : { subjectOcclusion: this.subjectOcclusion.fade.snapshot() }),
       director: this.director.captureTransactionState(),
       activeSpringArm: this.activeSpringArm,
       activeSpringArmState: this.activeSpringArm?.captureTransactionState(),
@@ -218,6 +233,9 @@ export class CameraComponentV1 extends SceneComponentV1 {
   }
 
   restoreTransactionState(state: CameraComponentTransactionStateV1): void {
+    if ((this.subjectOcclusion === undefined) !== (state.subjectOcclusion === undefined)) {
+      throw new Error("WORLDKIT_CAMERA_OCCLUSION_TRANSACTION_MISMATCH");
+    }
     if (this.activeSpringArm !== state.activeSpringArm) {
       this.activeSpringArm?.reset();
       this.activeSpringArm = state.activeSpringArm;
@@ -229,6 +247,7 @@ export class CameraComponentV1 extends SceneComponentV1 {
     this.director.restoreTransactionState(state.director);
     this.renderPoseBuffer.restore(state.renderPoseHistory);
     this.renderPoseHistoryNeedsReset = state.renderPoseHistoryNeedsReset;
+    if (state.subjectOcclusion !== undefined) this.subjectOcclusion!.fade.restore(state.subjectOcclusion);
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {
@@ -264,6 +283,8 @@ export class CameraComponentV1 extends SceneComponentV1 {
     committedCameraContext: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
   ): void {
+    const before = this.subjectOcclusion === undefined ? undefined : this.captureTransactionState();
+    try {
     if (this.activeSpringArm !== springArm) {
       this.activeSpringArm?.reset();
       this.activeSpringArm = springArm;
@@ -278,12 +299,28 @@ export class CameraComponentV1 extends SceneComponentV1 {
       springArm,
     );
     if (update === "unchanged") return;
+    if (this.subjectOcclusion !== undefined) {
+      const collider = this.subjectOcclusion.colliderBySubjectEntityId.get(sample.entityId) ??
+        this.subjectOcclusion.colliderBySubjectEntityId.get(sample.controlledEntityId);
+      if (collider !== undefined) this.subjectOcclusion.fade.update({
+        cameraPosition: this.camera.position,
+        subjectOriginPositionMetersXYZ: sample.targetPositionMetersXYZ,
+        colliderCenterOffsetMetersXYZ: collider.centerOffsetFromSubjectOriginMetersXYZ,
+        colliderHeightMeters: collider.heightMeters,
+        colliderRadiusMeters: collider.radiusMeters,
+        deltaSeconds,
+      });
+    }
     const pose = this.captureRenderPose(committedCameraContext.committedTick);
     if (this.renderPoseHistoryNeedsReset || update === "reset") {
       this.renderPoseBuffer.reset(pose);
       this.renderPoseHistoryNeedsReset = false;
     } else {
       this.renderPoseBuffer.commit(pose);
+    }
+    } catch (error) {
+      if (before !== undefined) this.restoreTransactionState(before);
+      throw error;
     }
   }
 
@@ -311,7 +348,13 @@ export class CameraComponentV1 extends SceneComponentV1 {
   }
 
   snapshot(): CameraDirectorSnapshotV1 {
-    return this.director.snapshot();
+    return Object.freeze({ ...this.director.snapshot(),
+      ...(this.subjectOcclusion === undefined ? {} : { subjectOcclusion: this.subjectOcclusion.fade.snapshot() }),
+    });
+  }
+
+  withSubjectOcclusionSuspended<T>(capture: () => T): T {
+    return this.subjectOcclusion === undefined ? capture() : this.subjectOcclusion.fade.withSuspended(capture);
   }
 
   previewState(): CameraPreviewStateV1 {
@@ -320,6 +363,7 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   reset(): void {
     this.director.reset();
+    this.subjectOcclusion?.fade.reset();
     this.activeSpringArm?.reset();
     this.renderPoseHistoryNeedsReset = true;
   }

@@ -3197,6 +3197,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   当前防穿模冻结设计与旧策略冲突，不能默默归为允许偏差，也不能仅取消碰撞而遗漏
   fade/Reset/Capture 消费者。新 Case 尚未启动；完整参数对齐、CF-04/12 保持开放。
 
+- CF-04/12-OCC-B1（2026-09-07，`7601ad77` 后未提交工作树）：按旧行为推进的目标
+  已在 Camera 设计明确为 Native Block 构图优先/遮挡淡出，其他 Source 保留硬碰撞。
+  展示模块已落代码，使用显式 Host 批次而非 Mesh 名称/全局注册表；旧选择、update、
+  Shader 和参数共 21 个定义去注释/类型重命名后 AST 对照一致。新增 6 项真实 Babylon
+  Mesh/Material 用例通过，含九射线覆盖、15Hz/Float32 淡出、完整状态恢复、截图异常、
+  构造/销毁失败和双实例隔离；连同 census 共 18/18，typecheck、480 文件 census 通过。
+  此模块尚未接入生产 Host/Camera 或公开 Snapshot；没有取消当前生产收臂。事务/Hash、
+  真批次与 Capture/Browser/Feel Review 仍待集成，不能据此勾完 CF-04/12 或跑最终 Case。
+
+- CF-04/12-OCC-B2/C1（2026-09-07，`7601ad77` 后未提交工作树）：上条 B1 的
+  未接线状态已更新。实际 Native Block 显示批次、CameraComponent 事务、Director 和
+  公开 Snapshot/单一 parser 已接通；保留旧受控 Subject 回退，Native Block 使用淡出
+  而非收臂，其他场景源不变。146 项 focused 回归及新增身份 Shader 准备用例通过，
+  typecheck 通过。实际 WebGL2 首张身份 mask 复现异步编译漏批次，已在既有 render-ready
+  预编译修复，不新增 render/Tick/gate；首张及后续身份 mask 正确，开场淡出显示主体，
+  暂停后状态和像素完整恢复。详细命令范围、指标和本地截图见当日参数审计 OCC-B2/C1。
+  完整多入口 Camera/主体效果、Feel Review、全部旧参数与最后真实 Case 仍未关闭，
+  CF-04/12 保持 open；本批尚未提交/推送，不复用 MEM4 的旧全量证据声称通过。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

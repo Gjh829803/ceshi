@@ -100,6 +100,7 @@ import { admitBabylonNativeSurfacesV1 } from
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
 import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
 import { CameraComponentV1 } from "./camera-component";
+import { NativeBlockSubjectOcclusionFadeV1, nativeBlockOcclusionBatchesFromLiveHandlesV1 } from "./native-block-subject-occlusion.js";
 import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
@@ -153,6 +154,7 @@ import { GoldenHumanoidPresentationContextProjectionV1 } from
   "./golden-humanoid-presentation-context";
 import {
   captureBabylonArtifactViewV1,
+  prepareBabylonArtifactIdentityCaptureV1,
   type BabylonArtifactCaptureRequestV1,
   type BabylonArtifactCaptureResultV1,
 } from "./artifact-capture";
@@ -1108,6 +1110,7 @@ export class BabylonWorldRuntime {
         options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ;
       let effectiveCamera = options.worldRuntimeBootstrap.initialCamera;
       let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
+      let nativeSubjectOcclusion: NativeBlockSubjectOcclusionFadeV1 | undefined;
       if (!isNil(nativeScene) && !isNil(preparedNativeScene)) {
         options.onInitializationStage?.("native-scene");
         const nativeResult = await admitBabylonNativeSceneCandidateV1({
@@ -1379,6 +1382,11 @@ export class BabylonWorldRuntime {
               liveHandles: visualRegistry,
             });
           ownedDisposers.push(() => visualBatches.dispose());
+          nativeSubjectOcclusion = new NativeBlockSubjectOcclusionFadeV1(
+            nativeBlockOcclusionBatchesFromLiveHandlesV1(visualBatches.batches),
+          );
+          const occlusion = nativeSubjectOcclusion;
+          ownedDisposers.push(() => occlusion.dispose());
         }
       }
 
@@ -1397,6 +1405,10 @@ export class BabylonWorldRuntime {
         camera,
         scene,
         cameraGeometryQuery,
+        nativeSubjectOcclusion === undefined ? undefined : {
+          fade: nativeSubjectOcclusion,
+          colliderBySubjectEntityId: new Map(effectiveRuntimeSubjects.map((subject) => [subject.entityId, subject.collider])),
+        },
       ));
       options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
@@ -3395,6 +3407,9 @@ export class BabylonWorldRuntime {
           ...publishedCameraProjection.positionMetersXYZ,
         ]),
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
+        ...(cameraDirectorSnapshot.subjectOcclusion === undefined ? {} : {
+          subjectOcclusion: cameraDirectorSnapshot.subjectOcclusion,
+        }),
         ...(cameraDirectorSnapshot.authoredOpeningProfileRef === undefined ? {} : {
           authoredOpeningProfileRef: cameraDirectorSnapshot.authoredOpeningProfileRef,
         }),
@@ -3813,17 +3828,21 @@ export class BabylonWorldRuntime {
   ): BabylonArtifactCaptureResultV1 {
     this.assertUsable();
     this.assertCommittedCameraViewEpoch();
-    return captureBabylonArtifactViewV1({
+    const capture = () => captureBabylonArtifactViewV1({
       scene: this.scene,
       engine: this.engine,
       camera: this.camera,
       request,
     });
+    return request.kind === "opening-frame"
+      ? capture()
+      : this.cameraComponent.withSubjectOcclusionSuspended(capture);
   }
 
   async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {
     this.assertUsable();
     await this.scene.whenReadyAsync();
+    await prepareBabylonArtifactIdentityCaptureV1(this.scene);
     return this.renderFrame();
   }
 

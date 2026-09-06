@@ -9,6 +9,40 @@
 **本轮边界：** 只冻结产品方案、接口边界、实施任务图与验收标准，不修改 Runtime 代码
 **事实基线：** GitHub `main` `2fd8c1c2694a861e213ad2c72e9cb3aefec087ce`；Babylon.js `9.23.0`；Havok `1.3.14`
 
+## CF-04/12 Native Block 旧生产行为修订（2026-09-07）
+
+用户最新要求完成 CF-04/12 并严格遵循旧 `codex/block-world-main-integration@9e35ab53`
+的生产行为。实际旧 Block 路由启用遮挡实例淡出，并跳过第三人称 Spring Arm；
+不能把本文面向硬碰撞 Golden 的“镜头绝不穿墙”同时宣称为旧 Block 行为。
+本节明确修订 Native Block 的目标策略；下述接线已实现，但完整 CF-04/12 验收尚未完成。
+
+- 已验证 Native Block Package 的第三人称使用旧构图/遮挡淡出策略。镜头可穿越场景
+  遮挡几何，不再为这个场景源承诺相机硬碰撞；人物碰撞、支撑、行动和移动权威不变。
+- Canonical 及非 Block Native Source 保留本文 Hard Decollider 策略。策略由 Host
+  从已锁定的场景源/Profile 身份派生，不从 Mesh 名称、URL、环境变量或可变 Preview
+  布尔开关推断，不增加旧/新迁移模式。两类场景仍只有一个 Camera Director。
+- Profile → authored opening → Context Modifiers → Preview 顺序不变。Native Module
+  不创建相机；不通过给 Query Provider 伪造“无碰撞”返回值实现旧策略。
+- 旧九射线只选择展示遮挡实例，绝不用于人物接地或物理查询。选择周期 `1/15s`、
+  水平/垂直 margin `0.45/0.55m`、coverage `0.3`、opacity `0.3/0.5`、淡入/恢复
+  `0.15/0.25s` 与旧代码一致。唯一 Host 显示批次提供完整实例 bounds 和实际材料。
+- 淡出状态必须随当前相机事务完成 Snapshot/Hash/Reset/Replay/Rollback；旧类只有
+  不完整 inspection snapshot，不能原封不动复制为新的隐藏 Runtime 状态。Render
+  不得推进另一份计时器。提交时序与旧呈现结果的关系须用逐步轨迹和 Browser 证明。
+- Opening 使用同一实际相机/淡出；top-down 和 entity-triview 暂停淡出，异常也必须
+  恢复完整原状态。Identity mask 保留现有不透明语义量测定义，不把淡出孔洞误当成
+  实体几何缺失。需要更新量测解释时在同一合同内显式处理。
+- 上述策略、状态合同、显示批次、材质/Shader、Capture、Reset、清理必须一起验证；
+  不能仅删除 Spring Arm 调用就称完成。不得弱化 `verify:3c-migration` 的结构断言。
+
+当前 `native-block-subject-occlusion.ts` 已接入 Host 真批次、唯一 CameraComponent
+事务、Director 和公开 Snapshot；保留旧 controlled-Subject 采样回退，不在目标缺失时
+新增失败门禁。实际 WebGL2 探针覆盖淡出、首张不透明身份 mask 和截图状态/像素恢复。
+身份 Shader 在既有 render-ready 中预编译，不添加 render、Tick 或模型修复轮次。
+这些 focused 证据不是整条多入口/真实生产验收。本文其余硬碰撞验收继续适用于硬碰撞策略，不把那些
+验收套在旧式 Native Block 上制造额外生产 gate。两轮人工 Feel Review、正式 Browser
+与整条生产链证据仍独立开放。完整任务见 CF 参数审计的 OCC-A/B/C 表。
+
 ---
 
 ## 0. 结论先行

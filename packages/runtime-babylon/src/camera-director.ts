@@ -42,6 +42,7 @@ import { SpringArmComponentV1 } from "./spring-arm-component";
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
   authoredOpeningProfileRef?: string;
+  subjectOcclusion?: import("@whitebox-world/runtime-contracts").CameraSubjectOcclusionStateV1;
   activeCameraRigRef: string;
   activeCameraModifierRefs: readonly string[];
   fallbackActive: boolean;
@@ -528,6 +529,7 @@ export class CameraDirectorV1 {
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
     private readonly cameraGeometryQuery: CameraGeometryQueryPortV2,
+    private readonly usesSubjectOcclusionFade = false,
   ) {
     this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
@@ -1196,7 +1198,7 @@ export class CameraDirectorV1 {
     let startedOverlapping: boolean | undefined;
     let penetrationDepthMeters: number | undefined;
     let clearHoldRemainingSeconds: number | undefined;
-    if (!firstPerson) {
+    if (!firstPerson && !this.usesSubjectOcclusionFade) {
       let collision: ReturnType<SpringArmComponentV1["solve"]>;
       try {
         collision = springArm.solve({
@@ -1321,6 +1323,7 @@ export class CameraDirectorV1 {
   ): boolean {
     if (!this.initialized || this.latestUpdateFailed || this.latestCommittedTick === undefined ||
       this.activeTargetEntityId === undefined || this.activeParameters === undefined) return false;
+    if (this.usesSubjectOcclusionFade) return true;
     const committedTick = this.latestCommittedTick;
     const radiusMeters = this.activeParameters.collisionRadiusMeters;
     const excludedEntityIds = Object.freeze([this.activeTargetEntityId]);

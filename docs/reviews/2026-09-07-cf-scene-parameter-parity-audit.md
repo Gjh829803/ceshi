@@ -26,7 +26,7 @@ An equal default does not prove equal final resolved state or pixels. The older
 | Block geometry | Old four shapes, occupancy 0.5m per axis; center lattice 0.25m per axis | Current same four dimensions plus 0.25m-high `step`; occupancy `[0.5,0.25,0.5]`, center lattice `[0.25,0.125,0.25]`. Actual contract difference, not numeric parity. |
 | Pre-allocation clustering | Old compiler clusters first in 32m center-owned chunks, X→Z→Y | MEM4 now clusters before Native Mesh allocation; 685 focused tests and real unchanged 158100-Block Host diagnostic passed. Not full Case evidence. |
 | Opening capture timing | Old CLI waits for ready and another animation frame before capture | Current Formal provider resets, waits for render readiness, commits one neutral fixed Tick, waits again and verifies unchanged Tick. Exact captured state/timing parity is not established. |
-| Camera occlusion | Old Block Runtime constructs `ThirdPersonSubjectOcclusionFadeV1` at lines 1087-1091 and passes `subject-occlusion-fade` at 1172-1174; Director skips Spring Arm for that strategy | Current Native uses the sole Hard Decollider/Spring Arm path and has no old fade integration. **Confirmed behavior gap**, not a missing test alone. |
+| Camera occlusion | Old Block Runtime constructs `ThirdPersonSubjectOcclusionFadeV1` at lines 1087-1091 and passes `subject-occlusion-fade` at 1172-1174; Director skips Spring Arm for that strategy | Initial audit confirmed a behavior gap. OCC-B2 below now connects Native Block fading and skips retraction only for that admitted source; complete multi-entry parity is still open. |
 
 ## CF-04/12-OCC: frozen-design conflict and next implementation boundary
 
@@ -59,7 +59,77 @@ Snapshot/Reset/Replay/Rollback and fixed/render timing must be considered togeth
 | CF-04/12-OCC-B | OCC-A; existing Camera Director and Native visual materializer | Admitted world/Subject/camera state → old-equivalent resolved opening and occlusion presentation | Obstruction reproducer; all opacity/timing values, per-instance selection, partial construction/disposal, Context/Preview ordering, Reset/rollback/two sessions | sequential |
 | CF-04/12-OCC-C | OCC-B; existing Formal/interactive/artifact capture | Same admitted world and resolved camera → captures with declared matching view policy | Non-symmetric wall/Subject, opening vs top/triview isolation, actual browser pixels, 0/0.5/1 interpolation, no Gameplay Snapshot mutation | sequential |
 
+### OCC-B1 implementation checkpoint
+
+The 2026-09-07 Native Block amendment in the Camera design records the chosen
+old-style Native Block behavior explicitly; Canonical/non-Block hard-collision
+behavior is not silently removed. This is a target-contract change, not activated
+Runtime behavior. `native-block-subject-occlusion.ts` now takes explicit Host batch
+IDs, Meshes and instance transforms instead of a global metadata/name registry.
+The pinned selection/update/shader code and timing constants are retained.
+Its extended immutable snapshot includes selection timing and selected/current
+instance opacities, with reset, restore and exception-safe capture suspension.
+Acquisition failure and throwing cleanup release every acquired material/buffer.
+
+Evidence: initial missing-module RED; six new Babylon NullEngine/material tests
+passed, plus 12 existing census tests (18/18, exit 0); typecheck and test:census
+passed (480 classified files). Two initial fixture mistakes were corrected: the
+"away" ray originally hit the second instance, and a material assertion originally
+ran after Engine disposal. Neither correction changed the migrated algorithm.
+TypeScript printer comparison against pinned old source, ignoring comments and
+the Native type rename, confirms 21 functions/methods/constants unchanged,
+including both GLSL/WGSL shader functions and complete `update`/`setEnabled` bodies.
+This is source/automated-contract evidence, not actual Browser shader or pixels.
+
+At the B1 checkpoint no production Host/Camera route invoked this module. Runtime Snapshot/Hash,
+fixed-tick transaction integration, real batch membership, Capture mask policy,
+Browser views and Feel Review remain required before OCC-B/C or CF-04/12 closes.
+The module is an implementation dependency, not a new public Scene API, source,
+physics owner, production gate or independent model task.
+
 The remaining shape/walkable and Capture timing differences also need explicit
 resolution. This audit does not close CF-04/12, all CF development, exact-SHA full
 CI, independent review or fresh local production acceptance. No new Case was
 submitted and no historical failed artifact was edited.
+
+### OCC-B2 / C1 integration checkpoint
+
+On the uncommitted tree following `7601ad77`, admitted Native Block display batches
+now supply actual merged instance matrices to the fade module. Structure and
+background-mass palettes participate; ground/route/water/hazard do not. This is
+an explicit current-palette mapping, not proof of every old preset/landmark case.
+The single CameraComponent checkpoints fade state with Director, Spring Arm and
+render history. Public tracking Snapshot uses the single closed
+`CameraSubjectOcclusionStateV1` parser. Native Block skips retraction and its
+render safety query, while the default Canonical path is unchanged. Old target
+Subject, then controlled Subject lookup is preserved; absent Subjects do not add
+a failure gate. Profile changes do not unconditionally reset fade timing.
+
+The old timing/shader values are retained; B1's AST comparison predates the
+mechanical snapshot/private-field rename to `isSelectionInitialized`.
+New tests cover actual batch matrices, canonical state validation/hash inputs,
+duplicate ticks, alpha 0/0.5/1, failed material update rollback and retry, capture
+exception restoration, and actual Native Package Reset replay. Six focused files
+passed 146 tests; the subsequently added identity-preparation test also passed.
+The unchanged view-target context suite passed six tests separately. Typecheck
+passed after the identity-preparation change. These are input-scoped results, not
+full CI or independent review.
+
+The browser fixture `scripts/verification/native-block-occlusion-browser/` uses
+the actual Babylon WebGL2 shader and shared artifact renderer. Its initial RED
+showed 10044 red Subject pixels incorrectly visible in the first identity mask:
+the newly installed plain identity material's Thin Instance shader had not
+finished compilation. A later animation frame concealed that defect. The fix
+precompiles the exact shared identity material variants in existing
+`renderFrameWhenReady`, releases temporary materials even on failure, and does
+not render or advance Tick. The final probe has no extra warm-up animation frame
+and asserts the first mask, not merely a later successful one.
+
+Final local browser metrics: opaque opening red pixels 0; faded opening 7030;
+first and faded identity masks 0; suspended capture 0; one selected instance;
+complete state restoration and byte-identical restored display pixels. Screenshot:
+`output/playwright/.playwright-cli/page-2026-09-06T17-55-29-655Z.png` (local,
+ignored diagnostic evidence). Browser fixture production build passed with the
+expected bundle-size advisory and non-empty-output-directory notice; neither is
+a runtime diagnostic. This proves WebGL2 on this machine, not WebGPU, the complete
+Preview/Formal/artifact camera flow, two Feel Reviews, or full CF-04/12 completion.

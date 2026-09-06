@@ -138,6 +138,46 @@ interface BabylonArtifactMeasuredRequestV1 {
   ) => unknown;
 }
 
+function createIdentityMaterial(
+  scene: Scene,
+  originalMaterial: Material | null,
+  color: string,
+  imageProcessing: ImageProcessingConfiguration,
+): StandardMaterial {
+  const material = new StandardMaterial("worldkit.artifact.identity", scene);
+  material.disableLighting = true;
+  material.fogEnabled = false;
+  material.imageProcessingConfiguration = imageProcessing;
+  material.diffuseColor = Color3.Black();
+  material.specularColor = Color3.Black();
+  material.emissiveColor = Color3.FromHexString(color);
+  if (originalMaterial !== null) {
+    material.backFaceCulling = originalMaterial.backFaceCulling;
+    material.sideOrientation = originalMaterial.sideOrientation;
+  }
+  return material;
+}
+
+/**
+ * Prepare the exact identity shader variants before issuing synchronous capture.
+ * Scene readiness covers display materials only: a newly introduced identity
+ * material can otherwise skip Thin Instances on its first parallel compile.
+ * This waits for shaders without rendering or advancing any simulation state.
+ */
+export async function prepareBabylonArtifactIdentityCaptureV1(scene: Scene): Promise<void> {
+  const imageProcessing = new ImageProcessingConfiguration();
+  imageProcessing.isEnabled = false;
+  for (const mesh of scene.meshes) {
+    if (!mesh.isVisible || mesh.isDisposed()) continue;
+    const material = createIdentityMaterial(scene, mesh.material, "#000000", imageProcessing);
+    try {
+      await material.forceCompilationAsync(mesh, { useInstances: mesh.hasThinInstances || mesh.hasInstances });
+    } finally {
+      material.dispose();
+    }
+  }
+}
+
 export interface BabylonArtifactCameraPoseV1 {
   readonly targetPositionMetersXYZ: readonly [number, number, number];
   readonly targetHeightMeters: number;
@@ -743,18 +783,9 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         if (!mesh.isVisible) continue;
         const originalMaterial = mesh.material;
         if (!originalMaterialByMesh.has(mesh)) originalMaterialByMesh.set(mesh, originalMaterial);
-        const material = new StandardMaterial("worldkit.artifact.identity", scene);
+        const material = createIdentityMaterial(scene, originalMaterial,
+          colorsByMesh.get(mesh) ?? "#000000", imageProcessing);
         temporaryMaterials.add(material);
-        material.disableLighting = true;
-        material.fogEnabled = false;
-        material.imageProcessingConfiguration = imageProcessing;
-        material.diffuseColor = Color3.Black();
-        material.specularColor = Color3.Black();
-        material.emissiveColor = Color3.FromHexString(colorsByMesh.get(mesh) ?? "#000000");
-        if (originalMaterial !== null) {
-          material.backFaceCulling = originalMaterial.backFaceCulling;
-          material.sideOrientation = originalMaterial.sideOrientation;
-        }
         mesh.material = material;
       }
       // The display framebuffer has MSAA: averaging adjacent identities can

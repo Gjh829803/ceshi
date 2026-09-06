@@ -12,7 +12,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { captureBabylonArtifactViewV1 } from "./artifact-capture.js";
+import { captureBabylonArtifactViewV1, prepareBabylonArtifactIdentityCaptureV1 } from "./artifact-capture.js";
 
 class FakeCanvasElement {
   width = 8;
@@ -34,6 +34,30 @@ describe("Babylon artifact capture", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("prepares identity shader variants without rendering or replacing display materials", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const mesh = MeshBuilder.CreateBox("identity-ready", {}, scene);
+    mesh.material = new StandardMaterial("display", scene);
+    mesh.thinInstanceSetBuffer("matrix", new Float32Array(Matrix.Identity().asArray()), 16, true);
+    const before = [...scene.materials];
+    const display = mesh.material;
+    const render = vi.spyOn(scene, "render");
+    const compile = vi.spyOn(StandardMaterial.prototype, "forceCompilationAsync").mockResolvedValue(undefined);
+    try {
+      await prepareBabylonArtifactIdentityCaptureV1(scene);
+      expect(compile).toHaveBeenCalledWith(mesh, { useInstances: true });
+      expect(render).not.toHaveBeenCalled();
+      expect(mesh.material).toBe(display);
+      expect(scene.materials).toEqual(before);
+      compile.mockRejectedValueOnce(new Error("shader failed"));
+      await expect(prepareBabylonArtifactIdentityCaptureV1(scene)).rejects.toThrow("shader failed");
+      expect(mesh.material).toBe(display);
+      expect(scene.materials).toEqual(before);
+      expect(render).not.toHaveBeenCalled();
+    } finally { engine.dispose(); }
   });
 
   it.each((["success", "canvas", "render", "copy", "cleanup", "copy-and-cleanup"] as const).flatMap(failure =>

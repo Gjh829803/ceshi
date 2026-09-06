@@ -482,6 +482,10 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       // Possession is staged here; pose evidence begins at its committed Tick.
       expect(initial.camera.desiredTargetPositionMetersXYZ).toBeUndefined();
       const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(snapshot.camera.subjectOcclusion).toMatchObject({
+        isEnabled: true, isSelectionInitialized: true,
+      });
+      expect(snapshot.camera.isCollisionRetracted).toBeUndefined();
       expect(snapshot.camera.resolvedParameters).toMatchObject({ distanceMeters: 5.5,
         targetHeightMeters: 1.1, pitchRadians: 0.12, baseFovDegrees: 54 });
       // This primitive runtime fixture has no preferred Camera Socket; verify
@@ -495,6 +499,9 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       expect(JSON.stringify(verified.bootstrap)).toBe(before);
       expect(verified.bootstrap.initialCamera).not.toEqual(openingCamera);
       runtime.reset();
+      expect(runtime.snapshot().camera.subjectOcclusion).toMatchObject({
+        isSelectionInitialized: false, selectedInstanceCount: 0, fadedInstanceCount: 0, instances: [],
+      });
       await bindRuntimeTestPossession(runtime, controlledEntityId);
       expect(runtime.snapshot().camera.desiredTargetPositionMetersXYZ).toBeUndefined();
       const replay = await runtime.runFixedInput({ actions: [], ticks: 1 });

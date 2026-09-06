@@ -274,6 +274,23 @@ export interface SubjectPresetTuningReceiptV1 {
   snapshot: WorldRuntimeSnapshotV4;
 }
 
+export interface CameraSubjectOcclusionInstanceStateV1 {
+  readonly batchId: string;
+  readonly instanceIndex: number;
+  readonly opacityRatio: number;
+  readonly targetOpacityRatio: number;
+}
+
+/** Camera-owned presentation state; never Character collision or support truth. */
+export interface CameraSubjectOcclusionStateV1 {
+  readonly isEnabled: boolean;
+  readonly isSelectionInitialized: boolean;
+  readonly selectionElapsedSeconds: number;
+  readonly selectedInstanceCount: number;
+  readonly fadedInstanceCount: number;
+  readonly instances: readonly CameraSubjectOcclusionInstanceStateV1[];
+}
+
 export type WorldRuntimeCameraStateV4 =
   | Readonly<{
       mode: "unbound";
@@ -285,6 +302,7 @@ export type WorldRuntimeCameraStateV4 =
       positionMetersXYZ: RuntimeVec3V1;
       activeCameraProfileRef: string;
       authoredOpeningProfileRef?: string;
+      subjectOcclusion?: CameraSubjectOcclusionStateV1;
       activeCameraRigRef: string;
       activeCameraModifierRefs: readonly string[];
       safeFallbackActive: boolean;
