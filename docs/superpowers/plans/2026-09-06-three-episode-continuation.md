@@ -282,3 +282,46 @@ New regression failed before this narrow recovery support and passed after it;
 R10 archive SHA256 6fcc93baeeedadd2ad6155cb83ba9ab51e35dd34b41db88db21591e36da6d7af;
 Host prefix `s3://leap-world-us-east-2/world-model/platform/worldkit-three-episode/gvs2-pre-seedance-20260906-r10/host-r10`.
 Final readiness is still pending, and Seedance submissions remain zero.
+
+R10 resumed successfully after the complete checkpoint was restored. No new GPU
+capture, style planning or unrelated image jobs were issued. The sole image retry
+`gen_7c820c25b45d2178` succeeded; its original-style group is being reviewed by
+`gen_2de0cfa928522d22`. R10 pod is `three-episode-gvs2-host-20260906-r10-w89r8`.
+Monitors, new recovery logs and final package workspace are now under
+`.codex-tmp/three-episode-results/r10`; the user-facing URL remains `/continuation/`.
+Do not mistake the earlier r9 failed-run snapshot or image checkpoint for final
+readiness. The next required stages remain global review, Gemini events and sixty
+prepared requests. Both executions have zero Seedance submissions.
+
+## Completed pre-Seedance delivery
+
+R10 Host reached Kubernetes Complete and published its closed 1,503-file manifest
+at 2026-09-06 02:51:57 UTC. Manifest SHA256:
+c56a9dbbaaf3b94eba91f4ef31d146c7aae7069970cc574318589567e5b63243.
+The final source-reference group and global diversity review passed. Ten real
+Gemini calls produced fifty normalized visual events, and all sixty render
+requests were prepared with providerSubmitted=false. Seedance submissions: zero.
+Final pre-Seedance manifest SHA256:
+1fe2d32dcae595b1a310aa8093b62b9390ac9b45796b4cce5121a584780ca8ed.
+
+Local final verification checked all 92 media references (six videos, six whitebox
+openings, sixty styled openings, twenty complete target sheets), request input
+hashes, media-to-segment/variant bindings, one original-reference slot, fifty
+events and all sixty unsubmitted requests. Evidence:
+`.codex-tmp/three-episode-results/r10/final-verification.json`,
+`cloud-closure-receipt.json`, `package-verification.json` and `final-metadata/`.
+Browser verified the final 6/6, 10/10, 60/60, zero-Seedance dashboard and download
+link. The current 02 anchor and comparison pages show the corrected photographic
+opening, while seven original user approval records remain intact.
+
+Portable package: `r10/three-episode-complete-pre-seedance.zip`, 190,162,729 bytes,
+160 files, ZIP integrity checked. SHA256:
+1f4d41c32681d61f57cdf0647a98074aa2ad507102a5df60dce80371eedf852f.
+It contains the standalone source world, verified media, raw cloud metadata,
+portable media paths for all sixty requests, event browser and a loopback preview
+server. The portable request file changes only resource paths and removes native
+source paths into nativeSha256 provenance; original cloud records remain in
+metadata. Final URLs: `/continuation/`, `/continuation/events.html`, and
+`/continuation/three-episode-complete-pre-seedance.zip` on port 53747. This closes
+the user's authorized workflow through the agreed stop; no video-provider
+submission capability or global Creator rollout is claimed.
