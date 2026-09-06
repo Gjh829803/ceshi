@@ -30,6 +30,8 @@ export type {
 export { BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 } from "./check.js";
 export type { BabylonNativeBlockProfileDiagnosticCodeV1 } from "./check.js";
 export { createBabylonNativeBlockInputParsersV1 } from "./session-input.js";
+export { createBabylonNativeBlockVisualClustersV1 } from "./visual-clusters.js";
+export type { BabylonNativeBlockVisualClusterSourceV1 } from "./visual-clusters.js";
 export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
   BabylonNativeBlockCheckedLayoutV1,

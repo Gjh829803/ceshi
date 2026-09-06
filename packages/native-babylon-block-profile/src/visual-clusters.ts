@@ -2,30 +2,33 @@ import { groupBy } from "lodash-es";
 import {
   effectiveBabylonNativeBlockSizeMetersXYZV1,
   type BabylonNativeBlockShapeKindV1,
-} from "@whitebox-world/native-babylon-block-profile/shapes";
+} from "./shapes.js";
+
+import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
 
 type Vec3 = readonly [number, number, number];
 
-interface VisualBlock {
+export interface BabylonNativeBlockVisualClusterSourceV1 {
   readonly id: string;
   readonly shape: BabylonNativeBlockShapeKindV1;
-  readonly paletteRole: string;
+  readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly visualGroupId?: string;
   readonly centerMetersXYZ: Vec3;
   readonly rotationQuarterTurnsY: 0 | 1 | 2 | 3;
 }
 
 /**
- * Advisory projection only. Pinned 9e35ab53 clusters.ts expands X, then Z,
+ * Pinned 9e35ab53 clusters.ts expands X, then Z,
  * then Y, starting at the lowest Y/Z/X cell within each center-owned 32m chunk.
  * Native palette/visual identity partitions replace the old visual preset key;
  * this does not infer a physics preset, runtime Entity, Collider or budget cost.
  */
-export function clusterNativeBlockVisualReviewV1<T extends VisualBlock>(
+export function createBabylonNativeBlockVisualClustersV1<T extends BabylonNativeBlockVisualClusterSourceV1>(
   blocks: readonly T[],
 ): readonly Readonly<{
   source: T;
   sourceBlockIds: readonly string[];
+  chunkIndexXZ: readonly [number, number];
   minimumMetersXYZ: Vec3;
   maximumMetersXYZ: Vec3;
 }>[] {
@@ -44,6 +47,7 @@ export function clusterNativeBlockVisualReviewV1<T extends VisualBlock>(
   ]));
   const output: Array<{
     source: T; sourceBlockIds: readonly string[];
+    chunkIndexXZ: readonly [number, number];
     minimumMetersXYZ: Vec3; maximumMetersXYZ: Vec3;
   }> = [];
   for (const key of Object.keys(groups).sort()) {
@@ -89,6 +93,8 @@ export function clusterNativeBlockVisualReviewV1<T extends VisualBlock>(
       const last = at(countX - 1, countY - 1, countZ - 1);
       output.push(Object.freeze({
         source,
+        chunkIndexXZ: Object.freeze([Math.floor(source.centerMetersXYZ[0] / 32),
+          Math.floor(source.centerMetersXYZ[2] / 32)] as [number, number]),
         sourceBlockIds: Object.freeze(sourceBlockIds.sort()),
         minimumMetersXYZ: Object.freeze(source.centerMetersXYZ.map((value, axis) =>
           value - size[axis]! / 2) as [number, number, number]),

@@ -1,3 +1,4 @@
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
@@ -47,8 +48,8 @@ function stableCompare(left: string, right: string): number {
 /**
  * Isolate exactly the requested logical Blocks for one formal Capture view.
  * Independent Meshes hide directly; batched Blocks keep their batch resident
- * and mask only the non-target Thin Instances, so a batch never loses or gains
- * Capture identity. Every mutation is reversed by `restore()` exactly once.
+ * and mask non-target clusters or temporarily fragment partially selected ones.
+ * The shared logical-member transforms preserve exact Capture identity. Every mutation is reversed by `restore()` exactly once.
  */
 export function applyBabylonNativeBlockCaptureIsolationV1(
   input: ApplyBabylonNativeBlockCaptureIsolationInputV1,
@@ -136,57 +137,62 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
       applyTint(handle.mesh);
     }
     for (const batch of registry.visualBatches) {
-      const maskedIndexes = batch.blockIds
-        .map((blockId, instanceIndex) =>
-          targets.has(blockId) ? -1 : instanceIndex)
-        .filter((instanceIndex) => instanceIndex !== -1);
-      if (maskedIndexes.length === batch.blockIds.length) {
+      const selectedByInstance = batch.instances.map(({ sourceBlockIds }) =>
+        sourceBlockIds.filter((blockId) => targets.has(blockId)));
+      if (selectedByInstance.every((ids) => ids.length === 0)) {
         hide(batch.mesh);
         hiddenBatchIds.push(batch.batchId);
         continue;
       }
-      if (maskedIndexes.length > 0) {
+      if (selectedByInstance.some((ids, index) => ids.length !== batch.instances[index]!.sourceBlockIds.length)) {
         const current = batch.mesh.thinInstanceGetWorldMatrices();
-        if (current.length !== batch.blockIds.length) {
-          return fail(
-            CODE,
-            `Batch '${batch.batchId}' Thin Instance count does not match its Block rows.`,
-          );
+        if (current.length !== batch.instances.length) {
+          return fail(CODE, `Batch '${batch.batchId}' instance count does not match its cluster rows.`);
         }
-        const priorMatrices = new Float32Array(
-          batch.blockIds.length * THIN_INSTANCE_MATRIX_STRIDE,
-        );
-        current.forEach((matrix, instanceIndex) =>
-          matrix.copyToArray(
-            priorMatrices,
-            instanceIndex * THIN_INSTANCE_MATRIX_STRIDE,
-          ));
-        const maskedMatrices = new Float32Array(priorMatrices);
-        for (const instanceIndex of maskedIndexes) {
-          for (const offset of LINEAR_MATRIX_OFFSETS) {
-            maskedMatrices[
-              instanceIndex * THIN_INSTANCE_MATRIX_STRIDE + offset
-            ] = 0;
+        const priorMatrices = new Float32Array(current.length * THIN_INSTANCE_MATRIX_STRIDE);
+        current.forEach((matrix, index) => matrix.copyToArray(priorMatrices, index * THIN_INSTANCE_MATRIX_STRIDE));
+        // Instance colors have one row per instance, not per cube vertex.
+        const colors = batch.mesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)
+          ?.getFloatData(current.length, true);
+        const priorColors = isNil(colors) ? undefined : new Float32Array(colors);
+        const nextMatrices: number[] = [];
+        const nextColors: number[] = [];
+        const append = (values: readonly number[] | Float32Array, index: number): void => {
+          nextMatrices.push(...values);
+          if (!isNil(priorColors)) nextColors.push(...priorColors.slice(index * 4, index * 4 + 4));
+        };
+        selectedByInstance.forEach((selected, index) => {
+          const instance = batch.instances[index]!;
+          if (selected.length === instance.sourceBlockIds.length) {
+            append(current[index]!.asArray(), index);
+          } else if (selected.length === 0) {
+            const matrix = Array.from(current[index]!.asArray());
+            for (const offset of LINEAR_MATRIX_OFFSETS) matrix[offset] = 0;
+            append(matrix, index);
+            maskedThinInstanceCount++;
+          } else {
+            // Capture-only fragmentation. Each portion uses the materializer's
+            // exact whole-cluster transform, not independently re-shrunk Blocks.
+            for (const blockId of selected) {
+              const handle = handleByBlockId.get(blockId)!;
+              if (handle.kind !== "thin-instance" || handle.batchId !== batch.batchId ||
+                  handle.instanceIndex !== index) {
+                return fail(CODE, "partial cluster target has no matching logical member");
+              }
+              append(handle.sourceWorldMatrix.asArray(), index);
+            }
+            maskedThinInstanceCount++;
           }
-        }
+        });
         const mesh = batch.mesh;
         restoreSteps.push(() => {
-          mesh.thinInstanceSetBuffer(
-            "matrix",
-            new Float32Array(priorMatrices),
-            THIN_INSTANCE_MATRIX_STRIDE,
-            true,
-          );
+          mesh.thinInstanceSetBuffer("matrix", new Float32Array(priorMatrices), THIN_INSTANCE_MATRIX_STRIDE, true);
+          if (!isNil(priorColors)) mesh.thinInstanceSetBuffer(VertexBuffer.ColorKind, new Float32Array(priorColors), 4, true);
           mesh.thinInstanceRefreshBoundingInfo(true);
         });
-        mesh.thinInstanceSetBuffer(
-          "matrix",
-          maskedMatrices,
-          THIN_INSTANCE_MATRIX_STRIDE,
-          true,
-        );
+        mesh.thinInstanceSetBuffer("matrix", new Float32Array(nextMatrices), THIN_INSTANCE_MATRIX_STRIDE, true);
+        if (!isNil(priorColors)) mesh.thinInstanceSetBuffer(VertexBuffer.ColorKind, new Float32Array(nextColors), 4, true);
         mesh.thinInstanceRefreshBoundingInfo(true);
-        maskedThinInstanceCount += maskedIndexes.length;
       }
       applyTint(batch.mesh);
     }

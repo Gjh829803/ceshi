@@ -3132,6 +3132,21 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   这些不替代新真实 Case，不标 CF-19
   全完成，Collider 几何准入/地面/容量和实际山谷还原仍是独立未完成证据。
 
+- CF-20/CLUSTER（2026-09-06，`13f31012` 上的未提交工作树）：比较图已有旧式合并体块，
+  修复前 Runtime 却按 Block 分别生成实例；相同 0.985 比例不代表几何等价。真实 Babylon
+  初始 RED：两个相邻 1m Block 的旧合并显示左边界应为 -0.485m，修复前为
+  -0.492500007m，后续还要求一个显示体块并保留全部逻辑 ID。CLUSTER1 将已有纯合并
+  算法迁入 Profile，比较图改用该唯一所有者，删除脚本层实现；非对称/边界/身份/台阶
+  4/4、固定比较图像素回归通过。CLUSTER2 已接入 Runtime 共享合并体、完整逻辑 ID 和
+  Capture 临时局部选择/恢复，上述 RED 已转 GREEN；实现 Hash 绑定合并成员与矩阵。
+  直接受影响回归先通过 138/138，新增异常恢复/旋转场景后 Capture 6/6、显示及包边界
+  20/20 通过，typecheck 通过。真实 Browser/Havok 2,000 Block 合成工作负载完成 90 tick，
+  Runtime ready 3.22s，已查看 opening 图（`output/playwright/native-block-budget-1788700639877/`）。
+  这些不证明新旧完整像素等价或真实 Case 成功。冻结工具逐字节同步，最终直接受影响
+  11 文件 254/254 通过（278.02s，包含完整 Builder Skill 漂移检查）；diff 检查通过。
+  物理分块仍为 4m、显示分块 32m；CLUSTER3 的 8k 容量与旧源预算闭包仍未完成。
+  此批仅达到分支提交条件；未做 root full CI/独立 exact-SHA 审查，不跑新 Case、不合 main。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

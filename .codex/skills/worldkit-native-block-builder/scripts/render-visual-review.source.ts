@@ -25,7 +25,7 @@ import {
   type NativeBlockSubjectVisualReviewProxyV1,
 } from "../../../../scripts/reconstruction/native-block-subject-visual-review-proxy.js";
 import { resolveNativeSubjectAuthoringClosureV1 } from "../../../../scripts/reconstruction/native-subject-host-context.js";
-import { clusterNativeBlockVisualReviewV1 } from "../../../../scripts/reconstruction/native-block-visual-review-clusters.js";
+import { createBabylonNativeBlockVisualClustersV1 } from "@whitebox-world/native-babylon-block-profile";
 
 const WIDTH_TOP = 768;
 const WIDTH_ENTRY = 960;
@@ -994,7 +994,7 @@ function cuboids(
   blocks: readonly CapturedBlock[],
   colorsByVisualGroupId: ReadonlyMap<string, Rgb>,
 ): readonly Cuboid[] {
-  return clusterNativeBlockVisualReviewV1(blocks).map((cluster) => {
+  return createBabylonNativeBlockVisualClustersV1(blocks).map((cluster) => {
     const block = cluster.source;
     return Object.freeze({
       id: block.id,

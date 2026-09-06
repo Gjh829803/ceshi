@@ -31,41 +31,41 @@ import {
 import packageJson from "../../package.json";
 import { createNativeSubjectHostContextV1 } from "../reconstruction/native-subject-host-context.js";
 import { runBuilderSelfCheckV1 } from "../reconstruction/production-run-ports.js";
-import { clusterNativeBlockVisualReviewV1 } from "../reconstruction/native-block-visual-review-clusters.js";
+import { createBabylonNativeBlockVisualClustersV1 } from "@whitebox-world/native-babylon-block-profile";
 
 describe("CF-20 legacy advisory volume projection", () => {
   const block = (id: string, centerMetersXYZ: readonly [number, number, number]) => ({
     id, centerMetersXYZ, shape: "full" as const,
-    rotationQuarterTurnsY: 0 as const, paletteRole: "structure",
+    rotationQuarterTurnsY: 0 as const, paletteRole: "structure" as const,
   });
   it("keeps the old X then Z then Y greedy volumes and source coverage", () => {
     const rows = [block("a", [0, 0, 0]), block("b", [1, 0, 0]),
       block("c", [0, 0, 1]), block("d", [0, 1, 0]), block("e", [1, 1, 0])];
-    const clusters = clusterNativeBlockVisualReviewV1(rows);
+    const clusters = createBabylonNativeBlockVisualClustersV1(rows);
     expect(clusters.map(({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }) =>
       ({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }))).toEqual([
       { sourceBlockIds: ["a", "b", "d", "e"], minimumMetersXYZ: [-0.5, -0.5, -0.5], maximumMetersXYZ: [1.5, 1.5, 0.5] },
       { sourceBlockIds: ["c"], minimumMetersXYZ: [-0.5, -0.5, 0.5], maximumMetersXYZ: [0.5, 0.5, 1.5] },
     ]);
-    expect(clusterNativeBlockVisualReviewV1([...rows].reverse())).toEqual(clusters);
+    expect(createBabylonNativeBlockVisualClustersV1([...rows].reverse())).toEqual(clusters);
   });
   it("partitions at old center-owned 32m boundaries including negative coordinates", () => {
     const rows = [-1, 0, 31, 32].map((x) => block(`x-${x}`, [x, 0, 0]));
-    expect(clusterNativeBlockVisualReviewV1(rows)).toHaveLength(4);
-    expect(clusterNativeBlockVisualReviewV1([block("a", [30, 0, 0]), block("b", [31, 0, 0])]))
+    expect(createBabylonNativeBlockVisualClustersV1(rows)).toHaveLength(4);
+    expect(createBabylonNativeBlockVisualClustersV1([block("a", [30, 0, 0]), block("b", [31, 0, 0])]))
       .toHaveLength(1);
   });
   it("never merges distinct visual roles, identities or effective shapes", () => {
-    const rows = [block("a", [0, 0, 0]), { ...block("b", [1, 0, 0]), paletteRole: "ground" },
+    const rows = [block("a", [0, 0, 0]), { ...block("b", [1, 0, 0]), paletteRole: "ground" as const },
       { ...block("c", [2, 0, 0]), visualGroupId: "target-a" },
       { ...block("d", [3, 0, 0]), visualGroupId: "target-b" },
       { ...block("e", [4.25, 0, 0]), shape: "quarter" as const },
       { ...block("f", [5, 0, 0.25]), shape: "quarter" as const, rotationQuarterTurnsY: 1 as const }];
-    expect(clusterNativeBlockVisualReviewV1(rows)).toHaveLength(rows.length);
+    expect(createBabylonNativeBlockVisualClustersV1(rows)).toHaveLength(rows.length);
   });
   it("extends the same volume rule to Native quarter-meter treads without aliasing centers", () => {
     const rows = [0.125, 0.375].map((y, index) => ({ ...block(`step-${index}`, [0, y, 0]), shape: "step" as const }));
-    expect(clusterNativeBlockVisualReviewV1(rows)).toMatchObject([{
+    expect(createBabylonNativeBlockVisualClustersV1(rows)).toMatchObject([{
       sourceBlockIds: ["step-0", "step-1"], minimumMetersXYZ: [-0.5, 0, -0.5], maximumMetersXYZ: [0.5, 0.5, 0.5],
     }]);
   });

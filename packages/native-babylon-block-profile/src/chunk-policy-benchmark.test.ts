@@ -13,6 +13,7 @@ import {
   BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+  hashBabylonNativeBlockChunkPolicyV1,
 } from "./chunk-policy.js";
 import {
   BABYLON_NATIVE_BLOCK_CHUNK_POLICY_PENDING_CASE_SLOTS_V1,
@@ -144,16 +145,16 @@ describe("NBR-65F Chunk policy benchmark", () => {
       });
       expect(Object.fromEntries(benchmark.policyRows.map((row) => [row.policyId,
         [row.totals.visualDrawUnitCount, row.maximumResidencyGroupBlockCount]])))
-        .toEqual({ "chunk-xz-2m": [64, 2], "chunk-xz-4m": [32, 4], "chunk-xz-8m": [16, 8],
-          "chunk-xz-16m": [8, 16], "chunk-xz-32m": [4, 32] });
-      expect(benchmark.selection.selectedPolicyId).toBe("chunk-xz-32m");
+        .toEqual({ "chunk-xz-2m": [4, 2], "chunk-xz-4m": [4, 4], "chunk-xz-8m": [4, 8],
+          "chunk-xz-16m": [4, 16], "chunk-xz-32m": [4, 32] });
+      expect(benchmark.selection.selectedPolicyId).toBe("chunk-xz-2m");
       expect(BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1.id).toBe("chunk-xz-4m");
       // Deterministic layout counts only: this visual-only fixture does not
       // claim Ground, Havok, frame timing or complete-world production evidence.
       expect(benchmark.policyRows.every((row) => row.totals.colliderProxyCount === 0)).toBe(true);
     } finally { scene.dispose(); engine.dispose(); }
   });
-  it("re-derives the frozen policy from every positive Corpus Case", async () => {
+  it("reports the current Corpus recommendation without changing the frozen physics policy", async () => {
     const measuredCases = await measureCorpusEpochs();
     const benchmark = measureBabylonNativeBlockChunkPolicyBenchmarkV1({
       candidatePolicies: BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
@@ -173,10 +174,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
       "chunk-xz-2m": {
         baselineVisualDrawUnitCount: 48,
         baselineColliderProxyCount: 10,
-        visualDrawUnitCount: 30,
-        visualGeometryBufferSetCount: 30,
-        thinInstanceBatchCount: 15,
-        independentVisualMeshCount: 15,
+        visualDrawUnitCount: 25,
+        visualGeometryBufferSetCount: 25,
+        thinInstanceBatchCount: 17,
+        independentVisualMeshCount: 8,
         residencyGroupCount: 23,
         colliderProxyCount: 10,
         colliderTriangleCount: 1440,
@@ -227,8 +228,10 @@ describe("NBR-65F Chunk policy benchmark", () => {
       },
     });
     expect(benchmark.selection).toEqual({
-      selectedPolicyId: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1.id,
-      selectedPolicyHash: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
+      selectedPolicyId: "chunk-xz-2m",
+      selectedPolicyHash: hashBabylonNativeBlockChunkPolicyV1(
+        BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1.find(({ id }) => id === "chunk-xz-2m")!,
+      ),
       selectionRule:
         "minimum-total-visual-draw-units-then-minimum-peak-residency-block-count-then-finest-chunk-edge-then-lexicographic-policy-id",
       isRealCaseEvidenceComplete: false,

@@ -1,5 +1,6 @@
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { Matrix } from "@babylonjs/core/Maths/math.vector.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -191,6 +192,13 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
   if (batchById.size !== input.liveHandleRegistry.visualBatches.length) {
     fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
   }
+  for (const batch of batchById.values()) {
+    if (batch.instances.some(({ sourceBlockIds }) => sourceBlockIds.length === 0)) {
+      fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_COVERAGE_INVALID");
+    }
+    exactStringSet(batch.blockIds, batch.instances.flatMap(({ sourceBlockIds }) => sourceBlockIds),
+      "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_COVERAGE_INVALID");
+  }
   const handleByBlockId =
     new Map<string, BabylonNativeBlockLiveVisualHandleV1>();
   const batchedBlockIds = new Set<string>();
@@ -209,9 +217,11 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
       if (
         batch === undefined ||
         batch.mesh !== live.batchMesh ||
-        batch.blockIds[live.instanceIndex] !== live.blockId ||
+        !(live.sourceWorldMatrix instanceof Matrix) ||
+        !live.sourceWorldMatrix.asArray().every(Number.isFinite) ||
+        !batch.instances[live.instanceIndex]?.sourceBlockIds.includes(live.blockId) ||
         !live.batchMesh.hasThinInstances ||
-        live.batchMesh.thinInstanceCount !== batch.blockIds.length
+        live.batchMesh.thinInstanceCount !== batch.instances.length
       ) fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
       batchedBlockIds.add(live.blockId);
     }

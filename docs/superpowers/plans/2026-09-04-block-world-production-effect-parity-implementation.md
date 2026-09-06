@@ -2603,3 +2603,72 @@ feedback replay of the unchanged private source again rejects the exact decimal 
 PNG output. This is not a final full-CI checkpoint or independent review.
 The original failed 054 Run remains failed and immutable;
 no fresh real Case has been launched and the main merge condition remains unmet.
+
+### CF-20/CLUSTER: close feedback-to-Runtime volume representation
+
+Current baseline is 13f31012; pinned comparison remains 9e35ab53. Main-agent-only,
+sequential; no subagents or paid Case at this implementation checkpoint.
+
+| ID | Dependencies / exclusive owner | Contract and integration | Required evidence |
+| --- | --- | --- | --- |
+| CF-20/CLUSTER1 | Existing advisory cluster algorithm; Profile pure geometry owner | Move the existing X/Z/Y greedy, center-owned 32m visual partition into the Profile; advisory imports that single owner. Delete the script-local implementation and alias. Preserve source membership, effective shape, palette and visual identity, and every output bound. This does not assert a physics-preset mapping. | Existing asymmetric/negative-boundary/identity/quarter-tread fixtures, package exports, unchanged decoded pixels and frozen portable tool drift. |
+| CF-20/CLUSTER2 | CLUSTER1; Host visual materializer and live-handle/Capture consumers | Actual Runtime display must realize the cluster cuboid and apply fixed 0.985 shrink to that whole cuboid, not independently to each member Block. Keep all logical Block IDs and exact semantic selection/tint/hide behavior, one registry and deterministic realization hash. Migrate all live-handle consumers together; do not silently merge separately addressable identities or let selecting one member tint unrelated geometry. Collider/ground/topology remain their existing metric owners. | Failing two-adjacent-Block volume reproducer, actual Babylon world vertices/instance counts, asymmetric and chunk-crossing layouts, semantic isolation and restoration, partial-failure disposal, real rendered comparisons before claiming equivalence. |
+| CF-20/CLUSTER3 | CLUSTER2 plus actual resource measurements and B2 semantic grouping proof | Reconcile the fixed 8k production limit against old source/cluster accounting. Preserve the distinction between actual Native workload, old accounting and static-Contribution limits. Do not manufacture cluster counts from source count or merely raise a number; no extra ordinary gate. | Complete-world workloads above the present 8k floor/terrain limit, all actual downstream budget consumers, and later full production/reference-image evidence. |
+
+Static evidence: old block-world-compiler/src/clusters.ts keys by preset/effective
+shape/visual identity and keeps interactive/stateful Blocks independent. Current
+pre-fix visual-batch-materializer.ts created one matrix per Block even though advisory
+already projects merged cuboids. Matching the 0.985 scalar therefore does not prove
+the same visible union or source capacity. This is a remaining representation gap,
+not a successful CF-20 completion or an exemption from the full goal.
+
+CLUSTER1 is implemented in the uncommitted tree: the script-local implementation
+and alias are deleted; the advisory consumer imports Profile visual-clusters.ts.
+Four existing geometry cases, the fixed decoded-pixel comparison, and typecheck
+pass. CLUSTER2's real Babylon reproducer went RED then GREEN: for two adjacent
+1m Blocks, the displayed minimum X is now -0.485m rather than
+-0.4925000071525574m, with one display volume and both logical IDs retained.
+Runtime now consumes the shared cluster plan, with independently owned unit-cube
+Geometry per batch and one matrix per cluster. The realization hash binds normal
+cluster matrices and complete source membership. Capture uses explicit per-member
+display transforms only for temporary partial-cluster selection, restores normal
+matrix/color buffers on exit or partial setup failure, and verifies the complete
+logical-ID-to-instance membership without scene-name inference. Collider and
+ground owners are unchanged; physical residency remains 4m while visual partition
+is 32m. The diagnostic physical-chunk benchmark now recommends 2m under its
+unchanged tie-breaker, but this is not applied as a Runtime policy change.
+
+Direct regression passed 138/138 before additional adversarial fixtures;
+subsequent Capture tests passed 6/6 and materializer/package-boundary tests 20/20.
+Typecheck passed. The existing real Browser/Havok 2,000-Block workload completed
+90 fixed ticks (60 retained timing samples), Runtime ready in 3220.6ms, and an
+inspected opening PNG at `output/playwright/native-block-budget-1788700639877/`.
+Its source diff hash is
+`sha256:b8b51183e424af410b28082d28603390883ec6ce8e66239e0ad329845d3b3069`.
+This is synthetic Runtime/render evidence, not an old/new pixel comparison or a
+successful reference-image production Case; retained authoring Meshes still
+contribute to memory. Regenerated live/frozen tools are byte-identical. Final
+directly affected regression passed 254/254 in 11 files (278.02s), including the
+complete existing Native Block Builder Skill drift gate, materializer, Capture,
+identity, measurement, chunk benchmark, optimization and package-boundary tests.
+Diff checks passed. No root full CI or independent exact-SHA review is claimed.
+
+CLUSTER3 remains open; the source budget B1 helper is still not authorized to
+produce a speculative production veto. This implementation checkpoint is ready
+for its focused branch commit, not a main merge. Full CF effect, capacity and
+final real-Case evidence remain required.
+
+CLUSTER3 consumer audit (same implementation checkpoint): the 8,000 source cap
+is published in `native-block-production-budget.ts` to both Planner context and
+the generation Request. Request parsing requires a positive `maximumBlockCount`;
+Profile Session reserve and grid expansion enforce it. The advisory executor
+repeats that budget and additionally has a fixed 100,000 capture ceiling. Ground
+analysis derives occupancy/support budgets from the requested maximum, not the
+checked source inventory. These are distinct consumers; changing one production
+number would not close the chain. Pinned old `clusters.ts`, Block checks and
+Builder self-check have no corresponding fixed source-count gate; old compile
+derives resource limits from source/solid-cluster counts. Continue by removing or
+replacing the mismatched count contract consistently, using actual checked
+inventory for derived work bounds, not an arbitrarily enlarged numeric cap.
+Preserve existing Native trust/Collider ownership and output/process limits;
+do not claim old resource equivalence from visual cluster counts alone.

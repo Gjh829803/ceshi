@@ -190,7 +190,7 @@ describe("NBR-65 current topology optimization contract", () => {
         schemaVersion: 1,
         chunkPolicyHash: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
         thinInstanceGroups: [{
-          residencyGroupId: "grid-chunk-xp0-zp0",
+          visualChunkIndexXZ: [0, 0],
           blockIds: ["wall-a", "wall-b"],
         }],
         independentVisualBlockIds: [],

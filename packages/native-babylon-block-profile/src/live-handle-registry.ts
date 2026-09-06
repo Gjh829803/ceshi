@@ -1,3 +1,4 @@
+import type { Matrix } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
@@ -15,7 +16,7 @@ export interface BabylonNativeBlockWalkableOverlayHandleV1 {
 
 /**
  * One closed row per logical Block. A Block is realized either as its own Mesh
- * or as one instance inside a Chunk-local Thin Instance batch; both branches
+ * or as a member of one visual-cluster Thin Instance; both branches
  * keep the logical Block ID, runtime Entity ID and semantic Capture class, so
  * Capture selection, tinting, hiding and diagnostics never lose identity.
  */
@@ -35,16 +36,20 @@ export type BabylonNativeBlockLiveVisualHandleV1 =
       batchId: string;
       batchMesh: Mesh;
       instanceIndex: number;
+      /** Exact displayed portion of the cluster owned by this logical Block. */
+      sourceWorldMatrix: Matrix;
     }>;
 
 export interface BabylonNativeBlockLiveVisualBatchV1 {
   readonly batchId: string;
-  readonly residencyGroupId: string;
+  readonly visualChunkIndexXZ: readonly [number, number];
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly semanticCaptureClassId: string;
-  /** Ordered by Thin Instance index. */
+  /** Complete logical inventory, independent of instance count. */
   readonly blockIds: readonly string[];
+  /** Ordered by normal Thin Instance index; each row is a merged cuboid. */
+  readonly instances: readonly Readonly<{ sourceBlockIds: readonly string[] }>[];
   readonly mesh: Mesh;
 }
 

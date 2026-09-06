@@ -1,4 +1,5 @@
-import { Matrix } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
@@ -22,11 +23,10 @@ import {
   type BabylonNativeBlockLiveVisualHandleV1,
 } from "./live-handle-registry.js";
 import {
-  createBabylonNativeBlockResidencyGroupsV1,
   createBabylonNativeBlockThinInstanceGroupsV1,
 } from "./optimization.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
-import type { BabylonNativeBlockShapeKindV1 } from "./shapes.js";
+import { BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1, type BabylonNativeBlockShapeKindV1 } from "./shapes.js";
 import {
   registerBabylonNativeBlockWalkableInstanceDisplayV1,
   registerBabylonNativeBlockWalkableVertexDisplayV1,
@@ -93,27 +93,12 @@ interface RestorableVisualStateV1 {
   readonly alwaysSelectAsActiveMesh: boolean;
 }
 
-function extentOf(
-  placement: BabylonNativeBlockVisualBatchPlacementV1,
-): Readonly<{
-  id: string;
-  minimumMetersXYZ: readonly number[];
-  maximumMetersXYZ: readonly number[];
-}> {
-  return Object.freeze({
-    id: placement.blockId,
-    minimumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-      placement.centerMetersXYZ[axis]! - placement.sizeMetersXYZ[axis]! / 2)),
-    maximumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-      placement.centerMetersXYZ[axis]! + placement.sizeMetersXYZ[axis]! / 2)),
-  });
-}
-
 /**
- * Materialize Chunk-local Thin Instance batches over the already-admitted
+ * Materialize 32m center-owned visual-cluster batches over the already-admitted
  * Native Block visuals. Batching is a Host realization detail: it never changes
  * the authored Block inventory, the frozen settlement fingerprints or the
- * published Package. Batched Blocks stay always resident and far-visible; only
+ * authored Package. The realization hash binds cluster membership and matrices.
+ * Logical Block portions remain exactly addressable for Capture. Visuals stay far-visible; only
  * physics residency is bounded, and it never touches these Meshes.
  */
 export function materializeBabylonNativeBlockVisualBatchesV1(
@@ -170,20 +155,8 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     meshByBlockId.set(placement.blockId, handle.mesh);
   }
 
-  const residency = createBabylonNativeBlockResidencyGroupsV1(
-    placements.map(extentOf),
-    chunkPolicy,
-  );
   const partition = createBabylonNativeBlockThinInstanceGroupsV1(
-    placements.map((placement) => Object.freeze({
-      id: placement.blockId,
-      shape: placement.shape,
-      paletteRole: placement.paletteRole,
-      ...(isNil(placement.visualGroupId)
-        ? {}
-        : { visualGroupId: placement.visualGroupId }),
-    })),
-    residency.residencyGroupIdByBlockId,
+    placements.map((placement) => Object.freeze({ ...placement, id: placement.blockId })),
   );
 
   const restorable: RestorableVisualStateV1[] = [];
@@ -203,50 +176,44 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
   try {
     for (const group of partition.groups) {
       const sourceMesh = meshByBlockId.get(group.blockIds[0]!)!;
-      const geometry = sourceMesh.geometry;
-      if (isNil(geometry)) {
-        return fail(
-          CODE,
-          `Batch '${group.id}' has no shared source geometry.`,
-        );
-      }
-      const batchMesh = new Mesh(
+      // One independently owned unit cube per batch: Babylon stores instance
+      // buffers on Geometry, so cross-batch Geometry sharing aliases matrices.
+      const batchMesh = MeshBuilder.CreateBox(
         `worldkit-block-visual-batch-${input.realizationId}-${group.id}`,
-        input.scene,
+        { size: 1 }, input.scene,
       );
       batchMeshes.push(batchMesh);
-      // Sharing the checked Block geometry keeps one buffer set per batch
-      // instead of allocating a second copy of the same fixed shape.
-      geometry.applyToMesh(batchMesh);
-      const matrices = new Float32Array(group.blockIds.length * 16);
-      group.blockIds.forEach((blockId, instanceIndex) => {
-        const memberMesh = meshByBlockId.get(blockId)!;
-        memberMesh.computeWorldMatrix(true).copyToArray(
-          matrices,
-          instanceIndex * 16,
-        );
+      const matrices = new Float32Array(group.clusters.length * 16);
+      const sourceWorldMatrixByBlockId = new Map<string, Matrix>();
+      const instanceIndexByBlockId = new Map<string, number>();
+      const clusterPlacements = group.clusters.map((cluster, instanceIndex) => {
+        const center = Vector3.FromArray(cluster.minimumMetersXYZ)
+          .add(Vector3.FromArray(cluster.maximumMetersXYZ)).scale(0.5);
+        const size = Vector3.FromArray(cluster.maximumMetersXYZ)
+          .subtract(Vector3.FromArray(cluster.minimumMetersXYZ));
+        Matrix.Compose(size.scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1),
+          Quaternion.Identity(), center).copyToArray(matrices, instanceIndex * 16);
+        for (const blockId of cluster.sourceBlockIds) {
+          const placement = placementByBlockId.get(blockId)!;
+          const memberCenter = Vector3.FromArray(placement.centerMetersXYZ).subtract(center)
+            .scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1).add(center);
+          sourceWorldMatrixByBlockId.set(blockId, Matrix.Compose(
+            Vector3.FromArray(placement.sizeMetersXYZ).scale(BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1),
+            Quaternion.Identity(), memberCenter,
+          ));
+          instanceIndexByBlockId.set(blockId, instanceIndex);
+        }
+        return Object.freeze({ blockId: cluster.sourceBlockIds[0]!,
+          paletteRole: group.paletteRole, centerMetersXYZ: Object.freeze(center.asArray() as [number, number, number]) });
       });
       batchMesh.thinInstanceSetBuffer("matrix", matrices, 16, true);
-      if (batchMesh.thinInstanceCount !== group.blockIds.length) {
-        return fail(
-          CODE,
-          `Batch '${group.id}' did not accept one Thin Instance per Block.`,
-        );
+      if (batchMesh.thinInstanceCount !== group.clusters.length) {
+        return fail(CODE, `Batch '${group.id}' did not accept one Thin Instance per visual cluster.`);
       }
       batchMesh.material = sourceMesh.material;
       if (group.paletteRole === "ground" || group.paletteRole === "route") {
         walkableDisplayRegistrations.push(
-          registerBabylonNativeBlockWalkableInstanceDisplayV1(
-            batchMesh,
-            group.blockIds.map((blockId) => {
-              const placement = placementByBlockId.get(blockId)!;
-              return Object.freeze({
-                blockId,
-                paletteRole: placement.paletteRole,
-                centerMetersXYZ: placement.centerMetersXYZ,
-              });
-            }),
-          ),
+          registerBabylonNativeBlockWalkableInstanceDisplayV1(batchMesh, clusterPlacements),
         );
       }
       batchMesh.isPickable = false;
@@ -258,14 +225,15 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
       batchMesh.thinInstanceRefreshBoundingInfo(true);
       batches.push(Object.freeze({
         batchId: group.id,
-        residencyGroupId: group.residencyGroupId,
+        visualChunkIndexXZ: group.visualChunkIndexXZ,
         shape: group.shape,
         paletteRole: group.paletteRole,
         semanticCaptureClassId: group.semanticCaptureClassId,
         blockIds: Object.freeze([...group.blockIds]),
+        instances: Object.freeze(group.clusters.map(({ sourceBlockIds }) => Object.freeze({ sourceBlockIds }))),
         mesh: batchMesh,
       }));
-      group.blockIds.forEach((blockId, instanceIndex) => {
+      group.blockIds.forEach((blockId) => {
         const memberHandle = handleByBlockId.get(blockId)!;
         const memberMesh = meshByBlockId.get(blockId)!;
         retain(memberMesh);
@@ -277,7 +245,8 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
           semanticCaptureClassId: memberHandle.semanticCaptureClassId,
           batchId: group.id,
           batchMesh,
-          instanceIndex,
+          instanceIndex: instanceIndexByBlockId.get(blockId)!,
+          sourceWorldMatrix: sourceWorldMatrixByBlockId.get(blockId)!,
         }));
       });
     }
@@ -304,11 +273,13 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
       chunkPolicyHash,
       batches: batches.map((batch) => ({
         batchId: batch.batchId,
-        residencyGroupId: batch.residencyGroupId,
+        visualChunkIndexXZ: batch.visualChunkIndexXZ,
         shape: batch.shape,
         paletteRole: batch.paletteRole,
         semanticCaptureClassId: batch.semanticCaptureClassId,
         blockIds: [...batch.blockIds],
+        instances: batch.instances.map(({ sourceBlockIds }) => ({ sourceBlockIds: [...sourceBlockIds] })),
+        matrices: batch.mesh.thinInstanceGetWorldMatrices().map((matrix) => Array.from(matrix.asArray())),
       })),
       independentBlockIds: [...partition.independentBlockIds],
     };
@@ -346,7 +317,7 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         authoringVisualMeshCount: placements.length,
         thinInstanceBatchCount: batches.length,
         thinInstanceCount: batches.reduce(
-          (sum, batch) => sum + batch.blockIds.length,
+          (sum, batch) => sum + batch.instances.length,
           0,
         ),
         independentVisualMeshCount: partition.independentBlockIds.length,
@@ -445,16 +416,7 @@ export function babylonNativeBlockLiveVisualHandleWorldMatrixV1(
   if (handle.kind === "independent-mesh") {
     return handle.mesh.computeWorldMatrix(true).clone();
   }
-  const buffer = handle.batchMesh.thinInstanceGetWorldMatrices()[
-    handle.instanceIndex
-  ];
-  if (isNil(buffer)) {
-    return fail(
-      CODE,
-      `Thin Instance ${handle.instanceIndex} of '${handle.blockId}' is absent.`,
-    );
-  }
-  return buffer.clone();
+  return handle.sourceWorldMatrix.clone();
 }
 
 export function babylonNativeBlockLiveVisualRenderedMeshesV1(

@@ -4,7 +4,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBabylonNativeBlockVisualsV1 } from
   "./babylon-visual-adapter.js";
@@ -55,6 +55,7 @@ const BLOCKS = Object.freeze([
 const cleanups: Array<() => void> = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   while (cleanups.length > 0) cleanups.pop()!();
 });
 
@@ -168,6 +169,46 @@ function instanceTranslations(mesh: Mesh): readonly number[] {
 }
 
 describe("NBR-65F formal Capture target isolation", () => {
+
+  it("fragments disjoint members of one cluster and restores its exact buffers", () => {
+    const fixture = createFixture();
+    const priorMatrices = fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()]);
+    const priorColors = Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!);
+    const isolation = applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-2", "route-0"],
+    });
+    expect(fixture.batchMesh.thinInstanceCount).toBe(2);
+    expect(instanceTranslations(fixture.batchMesh)).toEqual([0.015, 1.985]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985]);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(2, true)!))
+      .toEqual([...priorColors, ...priorColors]);
+    isolation.restore();
+    expect(fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()])).toEqual(priorMatrices);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!))
+      .toEqual(priorColors);
+  });
+
+  it("restores the normal cluster after a partially applied capture buffer throws", () => {
+    const fixture = createFixture();
+    const priorMatrices = fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()]);
+    const priorColors = Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!);
+    const setBuffer = fixture.batchMesh.thinInstanceSetBuffer;
+    let didThrow = false;
+    vi.spyOn(fixture.batchMesh, "thinInstanceSetBuffer").mockImplementation(function (kind, buffer, stride, isStatic) {
+      setBuffer.call(fixture.batchMesh, kind, buffer, stride, isStatic);
+      if (kind === "matrix" && !didThrow) {
+        didThrow = true;
+        throw new Error("partial capture buffer failure");
+      }
+    });
+    expect(() => applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-0", "route-2"],
+    })).toThrow("partial capture buffer failure");
+    expect(fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()])).toEqual(priorMatrices);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!))
+      .toEqual(priorColors);
+    expect(fixture.independentMesh.isVisible).toBe(true);
+  });
   it("isolates one batched Block without losing its batch identity", () => {
     const fixture = createFixture();
     const scaleBefore = instanceScales(fixture.batchMesh);
@@ -179,18 +220,17 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(isolation.targetBlockIds).toEqual(["route-1"]);
     expect(isolation.hiddenIndependentBlockIds).toEqual(["wall-single"]);
     expect(isolation.hiddenBatchIds).toEqual([]);
-    expect(isolation.maskedThinInstanceCount).toBe(2);
+    expect(isolation.maskedThinInstanceCount).toBe(1);
     expect(fixture.independentMesh.isVisible).toBe(false);
     expect(fixture.batchMesh.isVisible).toBe(true);
-    expect(fixture.batchMesh.thinInstanceCount).toBe(3);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0, scaleBefore[1], 0]);
-    // The masked instances keep their translation, so the batch never loses a
-    // row and the surviving instance index still names one logical Block.
-    expect(instanceTranslations(fixture.batchMesh)).toEqual([0, 1, 2]);
+    expect(fixture.batchMesh.thinInstanceCount).toBe(1);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985]);
+    // Partial selection uses the materializer-owned displayed Block portion.
+    expect(instanceTranslations(fixture.batchMesh)).toEqual([1]);
 
     isolation.restore();
     expect(instanceScales(fixture.batchMesh)).toEqual(scaleBefore);
-    expect(instanceTranslations(fixture.batchMesh)).toEqual([0, 1, 2]);
+    expect(instanceTranslations(fixture.batchMesh)).toEqual([1]);
     expect(fixture.independentMesh.isVisible).toBe(true);
     expect(fixture.batchMesh.isVisible).toBe(true);
   });
@@ -206,7 +246,7 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(isolation.maskedThinInstanceCount).toBe(0);
     expect(fixture.batchMesh.isVisible).toBe(false);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([2.955]);
 
     isolation.restore();
     expect(fixture.batchMesh.isVisible).toBe(true);
@@ -268,6 +308,6 @@ describe("NBR-65F formal Capture target isolation", () => {
       targetBlockIds: ["route-0", "route-0"],
     })).toThrow(/WORLDKIT_NATIVE_BLOCK_CAPTURE_ISOLATION_INVALID/);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([2.955]);
   });
 });

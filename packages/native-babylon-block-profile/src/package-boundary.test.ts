@@ -210,6 +210,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockInputParsersV1",
       "createBabylonNativeBlockProfileSessionV1",
+      "createBabylonNativeBlockVisualClustersV1",
       "hashBabylonNativeBlockCheckedLayoutInventoryV1",
       "hashNativeBlockAuthoringManifestV1",
       "hashNativeBlockVisualResourceListV1",
