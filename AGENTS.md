@@ -1,5 +1,12 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
+The latest user request is an account-only comparison: repeat the same two
+xhigh self-check cases with the accounts that actually produced the original
+good worlds (canyon A, ring B). This supersedes the latest-account pinning below.
+Keep the self-check prompt, case inputs and immutable runtime byte-identical;
+record requested and actual accounts, job identities and separately attributed
+quality observations. Do not silently fall back to another account.
+
 The user now requests xhigh again, a small prompt-only increase in self-check
 requirements, and the same two cloud cases. Use the original immutable xhigh
 runtime 968433bf… and unchanged SDK/Creator tools. Only the normal instruction's

@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-06T12:10:57.154221+00:00",
+  "scope": "Two-case GPT-6 world reconstruction account observations",
+  "interpretation": "Account labels identify historical executions. Quality feedback, technical delivery and capacity errors are recorded separately. No account-level causal ranking established. Actual private IDs remain in ignored .codex-tmp/account-performance/account-id-map.json.",
+  "accounts": [
+    {
+      "label": "A",
+      "identityHash": "5bb04e93264f",
+      "userLikedJobIds": [
+        "gen_fe1079992dc9b5e3",
+        "gen_46237a5932d27537"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "historically-user-liked; compare under fixed conditions",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "B",
+      "identityHash": "f7abcf1b8d89",
+      "userLikedJobIds": [
+        "gen_ffb6845e2a241543"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "historically-user-liked; compare under fixed conditions",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "C",
+      "identityHash": "95f8c23f5cc5",
+      "userLikedJobIds": [
+        "gen_3fc4085613628887"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "historically-user-liked; compare under fixed conditions",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "D",
+      "identityHash": "1da59801262c",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_0d48cf74ac446f94",
+        "gen_ae7b0e6bb2ebb118"
+      ],
+      "selectionGuidance": "no-user-liked-evidence-in-this-ledger",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "E",
+      "identityHash": "acfc3b8cd65a",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_449377c4e0bcc976"
+      ],
+      "selectionGuidance": "no-user-liked-evidence-in-this-ledger",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "F",
+      "identityHash": "8c723340d43d",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_3fad93aae48e58b7"
+      ],
+      "selectionGuidance": "no-user-liked-evidence-in-this-ledger",
+      "causalQualityRanking": null
+    }
+  ],
+  "runs": [
+    {
+      "jobId": "gen_fe1079992dc9b5e3",
+      "case": "original-canyon",
+      "accountLabel": "A",
+      "actualAccountIdentityHash": "5bb04e93264f",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_ffb6845e2a241543",
+      "case": "original-ring",
+      "accountLabel": "B",
+      "actualAccountIdentityHash": "f7abcf1b8d89",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_3fc4085613628887",
+      "case": "accepted-replay-canyon",
+      "accountLabel": "C",
+      "actualAccountIdentityHash": "95f8c23f5cc5",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_46237a5932d27537",
+      "case": "accepted-replay-ring",
+      "accountLabel": "A",
+      "actualAccountIdentityHash": "5bb04e93264f",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_0d48cf74ac446f94",
+      "case": "rejected-opening-canyon",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_449377c4e0bcc976",
+      "case": "rejected-opening-ring",
+      "accountLabel": "E",
+      "actualAccountIdentityHash": "acfc3b8cd65a",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_3fad93aae48e58b7",
+      "case": "restored-ring",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_ae7b0e6bb2ebb118",
+      "case": "restored-canyon",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      }
+    },
+    {
+      "jobId": "gen_f0ace71487c78049",
+      "case": "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+      "requestedAccountLabel": "D",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountMatchesRequested": true,
+      "accountEvidence": "provider items metadata",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "worldBuildHash": "4575628136b7ac180df154ed4682d659affca62252cecd3c03af440d1c045c99",
+      "status": "delivered",
+      "elapsedSeconds": 1267.559,
+      "quality": {
+        "source": "assistant opening-image and playtest observations",
+        "verdict": "below-original",
+        "userVerdict": null,
+        "note": "See ../xhigh-selfcheck-20260906/README.md. Technical delivery does not establish fidelity or five-minute exploration."
+      }
+    },
+    {
+      "jobId": "gen_e682b8abea057f96",
+      "case": "gpt6-holdout-screenshot-20260823-193953--three-sdk",
+      "requestedAccountLabel": "F",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "accountMatchesRequested": true,
+      "accountEvidence": "provider items metadata",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "worldBuildHash": "273c4db33d080d7687166062254b6184f805e487a7f571ee982b15c7bb5986bc",
+      "status": "delivered",
+      "elapsedSeconds": 1574.436,
+      "quality": {
+        "source": "assistant opening-image and playtest observations",
+        "verdict": "below-original",
+        "userVerdict": null,
+        "note": "See ../xhigh-selfcheck-20260906/README.md. Technical delivery does not establish fidelity or five-minute exploration."
+      }
+    },
+    {
+      "jobId": "gen_d266668fa189b50b",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "status": "failed",
+      "failureCategory": "model-capacity",
+      "quality": {
+        "source": null,
+        "verdict": "not-assessed-incomplete",
+        "note": "Availability failure is not a completed-world quality score."
+      }
+    },
+    {
+      "jobId": "gen_088cd064cb508d0b",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "status": "failed",
+      "failureCategory": "model-capacity",
+      "quality": {
+        "source": null,
+        "verdict": "not-assessed-incomplete",
+        "note": "Availability failure is not a completed-world quality score."
+      }
+    },
+    {
+      "runId": "known-good-xhigh-good-accounts-two-20260906",
+      "jobId": "gen_82e9410acbe9efd1",
+      "case": "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+      "requestedAccountLabel": "A",
+      "requestedAccountIdentityHash": "5bb04e93264f",
+      "selectionSourceJobId": "gen_fe1079992dc9b5e3",
+      "accountLabel": null,
+      "actualAccountIdentityHash": null,
+      "accountMatchesRequested": null,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "status": "submitted",
+      "quality": {
+        "source": null,
+        "verdict": "pending",
+        "userVerdict": null
+      },
+      "providerStatus": "running",
+      "submittedAt": "2026-09-06T12:06:31.166Z",
+      "serverAcceptedAccountSelection": true,
+      "accountEvidence": "awaiting provider items metadata",
+      "worldBuildHash": null,
+      "startedAt": null,
+      "finishedAt": null
+    },
+    {
+      "runId": "known-good-xhigh-good-accounts-two-20260906",
+      "jobId": "gen_a66b7b1be813063a",
+      "case": "gpt6-holdout-screenshot-20260823-193953--three-sdk",
+      "requestedAccountLabel": "B",
+      "requestedAccountIdentityHash": "f7abcf1b8d89",
+      "selectionSourceJobId": "gen_ffb6845e2a241543",
+      "accountLabel": null,
+      "actualAccountIdentityHash": null,
+      "accountMatchesRequested": null,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "status": "submitted",
+      "quality": {
+        "source": null,
+        "verdict": "pending",
+        "userVerdict": null
+      },
+      "providerStatus": "running",
+      "submittedAt": "2026-09-06T12:06:30.605Z",
+      "serverAcceptedAccountSelection": true,
+      "accountEvidence": "awaiting provider items metadata",
+      "worldBuildHash": null,
+      "startedAt": null,
+      "finishedAt": null
+    }
+  ]
+}
