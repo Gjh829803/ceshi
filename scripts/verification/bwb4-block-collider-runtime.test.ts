@@ -51,16 +51,16 @@ const RESOURCE_BUDGET = Object.freeze({
 });
 
 // Walkable static-surface Colliders publish the continuous top surface, not
-// the pre-NBR-65 solid box volume. Shared 0.25 m edges are auto-smoothed, so
-// ground-negative-one / quarter-meter-rise share a 0.125 m seam.
+// the pre-NBR-65 solid box volume. Shared 0.5 m edges are auto-smoothed, so
+// ground-negative-one / half-meter-rise share a 0.25 m seam.
 const EXPECTED_COLLIDER_BOUNDS_METERS = Object.freeze({
   "collider-elevated-tread": Object.freeze({
-    minimum: Object.freeze([-0.5, 0.25, -3.5] as const),
-    maximum: Object.freeze([0.5, 0.25, -2.5] as const),
+    minimum: Object.freeze([-0.5, 0.5, -3.5] as const),
+    maximum: Object.freeze([0.5, 0.5, -2.5] as const),
   }),
   "collider-ground-negative-one": Object.freeze({
     minimum: Object.freeze([-0.5, 0, -1.5] as const),
-    maximum: Object.freeze([0.5, 0.125, -0.5] as const),
+    maximum: Object.freeze([0.5, 0.25, -0.5] as const),
   }),
   "collider-ground-positive-one": Object.freeze({
     minimum: Object.freeze([-0.5, 0, 0.5] as const),
@@ -71,12 +71,12 @@ const EXPECTED_COLLIDER_BOUNDS_METERS = Object.freeze({
     maximum: Object.freeze([0.5, 0, 0.5] as const),
   }),
   "collider-half-meter-blocker": Object.freeze({
-    minimum: Object.freeze([-0.5, 0.75, -4.5] as const),
-    maximum: Object.freeze([0.5, 0.75, -3.5] as const),
+    minimum: Object.freeze([-0.5, 0, -4.5] as const),
+    maximum: Object.freeze([0.5, 1, -3.5] as const),
   }),
-  "collider-quarter-meter-rise": Object.freeze({
-    minimum: Object.freeze([-0.5, 0.125, -2.5] as const),
-    maximum: Object.freeze([0.5, 0.25, -1.5] as const),
+  "collider-half-meter-rise": Object.freeze({
+    minimum: Object.freeze([-0.5, 0.25, -2.5] as const),
+    maximum: Object.freeze([0.5, 0.5, -1.5] as const),
   }),
 } as const);
 
@@ -283,15 +283,23 @@ function nativeColliderChunkPartMeshes(
     .sort((left, right) => left.name < right.name ? -1 : 1);
 }
 
-function assertExactBoxContribution(
+function assertExactFixtureContribution(
   collider: PassedCandidateAdmission["contribution"]["staticColliders"][number],
   bounds: Readonly<{
     minimum: readonly [number, number, number];
     maximum: readonly [number, number, number];
   }>,
 ): void {
-  expect(collider.vertexCount).toBeGreaterThanOrEqual(8);
-  expect(collider.triangleCount).toBeGreaterThanOrEqual(8);
+  const isSolid = collider.id === "collider-half-meter-blocker";
+  if (isSolid) {
+    // The occupied-cell solid union can retain collinear boundary vertices.
+    expect(collider.vertexCount).toBeGreaterThanOrEqual(8);
+    expect(collider.triangleCount).toBeGreaterThanOrEqual(12);
+  } else {
+    // Each fully exposed source top is one rectangle, not four microtiles.
+    expect(collider.vertexCount).toBe(4);
+    expect(collider.triangleCount).toBe(2);
+  }
   assertColliderAxisAlignedBounds(collider.worldPositionsMetersXYZ, bounds);
 }
 
@@ -525,8 +533,9 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
     expect(first.admission.contribution.profileSettlement).toMatchObject({
       kind: "host-snapshot",
       profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
-      // 6 Block meshes plus 6 walkable-overlay settlement targets.
-      targetCount: 10,
+      // Four visual clusters plus five walkable overlays; the solid blocker
+      // is not another walkable top.
+      targetCount: 9,
     });
     const expectedColliderIds = Object.keys(
       EXPECTED_COLLIDER_BOUNDS_METERS,
@@ -540,7 +549,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       if (isNil(bounds)) {
         throw new Error(`Unexpected BWB-4 Collider '${collider.id}'.`);
       }
-      assertExactBoxContribution(collider, bounds);
+      assertExactFixtureContribution(collider, bounds);
     }
     for (const candidate of [first, second]) {
       expect(candidate.candidateColliderMeshes).toHaveLength(6);
@@ -598,7 +607,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
     expect(candidateEngine?.isDisposed).toBe(true);
   });
 
-  it("passes 0.25m, blocks 0.5m, resets exactly, and loses support at the ledge", async () => {
+  it("passes a smoothed 0.5m rise, blocks an explicit 0.5m wall, resets exactly, and loses support at the ledge", async () => {
     const { runtime, verified } = await createRuntime();
     const internals = runtime as unknown as {
       scene: Scene;
@@ -689,7 +698,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
           throw new Error(`Runtime collider '${colliderId}' lost indexed geometry.`);
         }
         assertColliderAxisAlignedBounds([...positions], bounds);
-        expect(indices.length).toBeGreaterThanOrEqual(24);
+        expect(indices.length).toBe(colliderId === "collider-half-meter-blocker" ? 36 : 6);
       }
       expect(spawnCollisionMesh?.metadata).toMatchObject({
         worldkitEntityId: "collider-ground-zero",
@@ -716,7 +725,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         throw new Error("Elevated tread must have exactly one Havok ray hit.");
       }
       expect(elevatedSupport.hasHit).toBe(true);
-      expect(elevatedSupport.hitPointWorld.y).toBeCloseTo(0.25, 5);
+      expect(elevatedSupport.hitPointWorld.y).toBeCloseTo(0.5, 5);
       expect(elevatedSupport.hitNormalWorld.y).toBeGreaterThan(0.99);
       expect(elevatedSupport.body?.transformNode.metadata).toEqual({
         worldkitEntityId: elevatedContribution.id,
@@ -744,17 +753,17 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         .subjectStatesByEntityId[controlledEntityId]!;
       expect(crossedRiser.positionMetersXYZ[2]).toBeLessThan(-1.5);
       expect(crossedRiser.positionMetersXYZ[2]).toBeGreaterThan(-2.5);
-      expect(crossedRiser.positionMetersXYZ[1]).toBeGreaterThan(0.24);
+      expect(crossedRiser.positionMetersXYZ[1]).toBeGreaterThan(0.4);
       expect(crossedRiser.positionMetersXYZ[1]).toBeLessThanOrEqual(
-        controlledDescriptor.collider.maxStepHeightMeters + 0.01,
+        0.5 + 0.06,
       );
       expect(crossedRiser.movementMedium).toBe("ground");
       const elevatedTread = firstTraversal.elevatedTread
         .subjectStatesByEntityId[controlledEntityId]!;
       expect(elevatedTread.positionMetersXYZ[2]).toBeLessThan(-2.5);
       expect(elevatedTread.positionMetersXYZ[2]).toBeGreaterThan(-3.5);
-      expect(elevatedTread.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
-      expect(elevatedTread.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(elevatedTread.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.5);
+      expect(elevatedTread.positionMetersXYZ[1]).toBeLessThanOrEqual(0.56);
       expect(elevatedTread.movementMedium).toBe("ground");
       const blockedSubject = firstTraversal.blocked
         .subjectStatesByEntityId[controlledEntityId]!;
@@ -762,8 +771,8 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         .toBeGreaterThanOrEqual(blockerCenterLimitMetersZ - 0.02);
       expect(blockedSubject.positionMetersXYZ[2])
         .toBeLessThanOrEqual(blockerCenterLimitMetersZ + 0.08);
-      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
-      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.5);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.56);
       expect(blockedSubject.movementMedium).toBe("ground");
       const committedHash = sha256CanonicalJson(firstTraversal.blocked);
 

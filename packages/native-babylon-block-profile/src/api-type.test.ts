@@ -24,7 +24,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<0 | 1 | 2 | 3>();
     expectTypeOf<BabylonNativeBlockCreateInputV1>().toEqualTypeOf<Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole:
         | "ground"
         | "route"
@@ -61,7 +61,7 @@ describe("Babylon Native block profile public types", () => {
   it("names the dense repetition argument as a grid create input", () => {
     expectTypeOf<BabylonNativeBlockGridCreateInputV1>().toEqualTypeOf<Readonly<{
       idPrefix: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole:
         | "ground"
         | "route"

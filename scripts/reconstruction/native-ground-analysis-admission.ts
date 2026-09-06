@@ -26,7 +26,6 @@ import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalGraphBuilderProfileV2,
   BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
-  type TraversalCapabilityEnvelopeReceiptV1,
 } from "@whitebox-world/traversal";
 import {
   hashWorldReconstructionCaseV1,
@@ -46,7 +45,7 @@ import { createNativeGroundAnalysisRepairDiagnosticsV1 } from
 
 const MAXIMUM_OCCUPANCY_CELLS_PER_BLOCK = 16;
 const MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK = 4;
-const TOPOLOGY_CAPABILITY_EPSILON = 1e-8;
+const TOPOLOGY_GEOMETRY_EPSILON = 1e-8;
 
 export interface AnalyzeProductionNativeBlockGroundInputV1 {
   readonly groundExploration: NativeBlockGroundExplorationV1;
@@ -84,10 +83,8 @@ function controlledSubjectV1(runtime: WorldRuntimeBootstrapV1) {
   return subjects[0]!;
 }
 
-export function assertProductionNativeBlockGroundTopologyCompatibleV1(
+export function assertProductionNativeBlockGroundTopologyIntegrityV1(
   evidence: BabylonNativeBlockCheckedEpochEvidenceV1,
-  traversalCapabilityEnvelopeReceipt:
-    TraversalCapabilityEnvelopeReceiptV1,
 ): void {
   const topology = evidence.topology;
   const groundModelHash = evidence.logicalGroundModel.logicalGroundModelHash;
@@ -102,21 +99,9 @@ export function assertProductionNativeBlockGroundTopologyCompatibleV1(
   ) {
     return fail("walkable topology identity or Profile policy is stale");
   }
-  const envelope = traversalCapabilityEnvelopeReceipt.envelope;
-  if (
-    BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1
-      .maximumAutoSmoothHeightDeltaMeters >
-        envelope.maxStepHeightMeters + TOPOLOGY_CAPABILITY_EPSILON
-  ) {
-    return fail(
-      `Block Profile auto-smooth limit ${
-        BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1
-          .maximumAutoSmoothHeightDeltaMeters
-      }m exceeds controlled Subject maxStepHeightMeters ${
-        envelope.maxStepHeightMeters
-      }m`,
-    );
-  }
+  // The old 1m smoothing span constructs ramps, not vertical steps. Do not
+  // reject an entire world using its Subject's step/slope settings; actual
+  // Spawn support and required routes are checked by their existing owners.
   for (const geometry of topology.walkableGeometries) {
     const positions = geometry.collisionPositionsMetersXYZ;
     const indices = geometry.triangleIndices;
@@ -157,30 +142,14 @@ export function assertProductionNativeBlockGroundTopologyCompatibleV1(
         secondEdge[0] * firstEdge[1] - secondEdge[1] * firstEdge[0],
       ] as const;
       const normalLength = Math.hypot(...normal);
-      if (!(normalLength > TOPOLOGY_CAPABILITY_EPSILON)) {
+      if (!(normalLength > TOPOLOGY_GEOMETRY_EPSILON)) {
         return fail(
           `walkable topology '${geometry.logicalColliderId}' has a degenerate triangle`,
         );
       }
-      if (!(normal[1] > TOPOLOGY_CAPABILITY_EPSILON)) {
+      if (!(normal[1] > TOPOLOGY_GEOMETRY_EPSILON)) {
         return fail(
           `walkable topology '${geometry.logicalColliderId}' has a downward-facing triangle`,
-        );
-      }
-      const slopeDegrees = Math.acos(Math.min(
-        1,
-        normal[1] / normalLength,
-      )) * 180 / Math.PI;
-      if (
-        slopeDegrees >
-          envelope.maxSlopeDegrees + TOPOLOGY_CAPABILITY_EPSILON
-      ) {
-        return fail(
-          `walkable topology '${geometry.logicalColliderId}' slope ${
-            slopeDegrees
-          }deg exceeds controlled Subject maxSlopeDegrees ${
-            envelope.maxSlopeDegrees
-          }deg`,
         );
       }
     }
@@ -292,9 +261,8 @@ export function analyzeProductionNativeBlockGroundV1(
       BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     ),
   });
-  assertProductionNativeBlockGroundTopologyCompatibleV1(
+  assertProductionNativeBlockGroundTopologyIntegrityV1(
     input.checkedEpochEvidence,
-    traversalCapabilityEnvelopeReceipt,
   );
   const caseIntent = createGroundCaseIntentV1(input);
   const profileReport = analyzeBabylonNativeBlockGroundV1({

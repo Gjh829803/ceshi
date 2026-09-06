@@ -38,16 +38,16 @@ The current public call sequence separates identity/shape creation from placemen
 ```ts
 const block = session.createBlock({
   id: "central-step",
-  shape: "step",
+  shape: "half",
   paletteRole: "route",
   visualGroupId: "central-ascent-group",
 });
-block.position.set(0, 0.125, 14);
+block.position.set(0, 0.25, 14);
 ```
 
 That split leaves four Profile invariants to generated code and catches violations only at Finalize:
 
-- shape-specific center residue on the `[0.5, 0.25, 0.5]m` occupancy grid;
+- shape-specific center residue on the `[0.5, 0.5, 0.5]m` occupancy grid;
 - exact `0 | 1 | 2 | 3` Y quarter-turn selection;
 - stable repeated IDs and iteration order; and
 - pre-allocation input, duplicate-ID, and occupied-cell closure.
@@ -245,10 +245,10 @@ blocks.createBlockGrid({
 for (let stepIndex = 0; stepIndex < 6; stepIndex += 1) {
   blocks.createBlock({
     id: `central-step-${stepIndex}`,
-    shape: "step",
+    shape: "half",
     paletteRole: "route",
     visualGroupId: "central-ascent-group",
-    centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, 15 - stepIndex],
+    centerMetersXYZ: [0, 0.25 + stepIndex * 0.5, 15 - stepIndex],
   });
 }
 ```

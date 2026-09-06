@@ -38,6 +38,7 @@ import type {
 } from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
+  isRecoverablePreparedFixedInputFailure,
   FIXED_TIME_STEP_SECONDS,
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
@@ -98,6 +99,7 @@ const MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME = 5;
 export type ArrowInputClearReasonV1 =
   | "startup"
   | "blur"
+  | "fixed-input-recovery"
   | "simulation-reset"
   | "possession-unbound"
   | "possession-rebind";
@@ -1343,8 +1345,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const ticks = this.consumeFixedTicks(timestampMilliseconds);
     if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
+      let inputRuntime: BabylonWorldRuntime | undefined;
       try {
-        const runtimeProjection = this.activeRuntime().snapshot();
+        inputRuntime = this.activeRuntime();
+        const runtimeProjection = inputRuntime.snapshot();
         const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
           ? runtimeProjection.possessionTarget.controlledEntityId
           : undefined;
@@ -1381,14 +1385,34 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         );
       } catch (error) {
         if (this.disposed) return;
-        this.paused = true;
-        this.frameLoopDiagnostic = {
-          severity: "error",
-          code: "WORLDKIT_RUNTIME_FRAME_FAILED",
-          instancePath: "",
-          message: "The runtime was paused after a simulation frame failed.",
-        };
-        console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
+        const failure = inputRuntime?.consumeFixedInputFailureDiagnostic();
+        let recovered = false;
+        if (isRecoverablePreparedFixedInputFailure(error, failure)) {
+          this.clearPhysicalInputState("fixed-input-recovery");
+          try {
+            await this.coordinator.runFixedInput({ actions: [], ticks: 1 });
+            recovered = true;
+            this.frameLoopDiagnostic = {
+              severity: "warning", code: "WORLDKIT_RUNTIME_FRAME_RECOVERED", instancePath: "",
+              message: "A rejected input frame was rolled back and the runtime recovered safely.",
+            };
+            console.warn("WORLDKIT_RUNTIME_FRAME_RECOVERED", error);
+          } catch (recoveryError) {
+            inputRuntime?.consumeFixedInputFailureDiagnostic();
+            console.error("WORLDKIT_RUNTIME_FRAME_RECOVERY_FAILED", recoveryError);
+          }
+        }
+        if (!recovered) {
+          this.paused = true;
+          this.coordinator.setPaused(true);
+          this.frameLoopDiagnostic = {
+            severity: "error",
+            code: "WORLDKIT_RUNTIME_FRAME_FAILED",
+            instancePath: "",
+            message: "The runtime was paused after a simulation frame failed.",
+          };
+          console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
+        }
       } finally {
         this.animationPending = false;
       }

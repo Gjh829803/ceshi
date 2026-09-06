@@ -217,10 +217,14 @@ export const NARROW_SPAWN_GROUND_SCENE_SOURCE = SCENE_SOURCE.replace(
   `shape: "small", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [0.25, -0.25, 11.25], repeatCountXYZ: [1, 1, 14]`,
 );
 
-export const SPAWN_ADJACENT_STEP_SCENE_SOURCE = SCENE_SOURCE.replace(
+export const SPAWN_CAPSULE_OBSTRUCTION_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-  `    session.createBlockGrid({idPrefix: "spawn-step-left", shape: "step", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, 0.125, 11], repeatCountXYZ: [1, 1, 8] });
+  `    session.createBlock({id: "spawn-head-obstruction", shape: "small", paletteRole: "structure", visualGroupId: "central-ascent-group", centerMetersXYZ: [0.25, 1.25, 18.25] });
     session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+).replace(
+  `    session.finalize({ staticColliders: [`,
+  `    session.finalize({ staticColliders: [
+      { id: "collider-spawn-head-obstruction", colliderGeometrySource: { kind: "block", blockId: "spawn-head-obstruction" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },`,
 );
 
 export const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(

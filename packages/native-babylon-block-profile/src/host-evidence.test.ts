@@ -39,7 +39,6 @@ function evidence(id: string): BabylonNativeBlockCheckedEpochEvidenceV1 {
             half: 0,
             quarter: 0,
             small: 0,
-            step: 0,
           },
           blockCountByPaletteRole: {
             ground: 0,

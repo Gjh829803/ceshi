@@ -27,7 +27,7 @@ const NOT_TRAVERSABLE = Object.freeze({ kind: "not-traversable" as const });
 const POLICY: BabylonNativeBlockWalkableTopologyPolicyV1 = Object.freeze({
   kind: "babylon-native-block-walkable-topology-policy",
   schemaVersion: 1,
-  maximumAutoSmoothHeightDeltaMeters: 0.3,
+  maximumAutoSmoothHeightDeltaMeters: 1,
   visualOverlayOffsetMeters: 0.004,
   maximumLogicalColliderCount: 32,
   maximumColliderVertexCount: 10_000,
@@ -177,12 +177,12 @@ function verticesAtX(
 describe("Babylon Native Block walkable topology", () => {
   it("CF-04/G1 smooths a one-meter rise across full source-Block tops, not half-meter microcell ramps", () => {
     // Two actual 1x1x1 Blocks, lower top at 1m and higher top at 2m.
-    // Current occupancy is 0.5/0.25/0.5; each top contains four microcells.
+    // Uniform 0.5m occupancy; each top contains four microcells.
     const lower: string[] = [];
     const higher: string[] = [];
     for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) {
-      for (let y = 0; y < 4; y++) lower.push(`${x},${y},${z}`);
-      for (let y = 4; y < 8; y++) higher.push(`${x + 2},${y},${z}`);
+      for (let y = 0; y < 2; y++) lower.push(`${x},${y},${z}`);
+      for (let y = 2; y < 4; y++) higher.push(`${x + 2},${y},${z}`);
     }
     const result = topology(model([
       { colliderId: "lower", cells: lower, traversal: "surface" },
@@ -201,7 +201,7 @@ describe("Babylon Native Block walkable topology", () => {
   });
 
   it("CF-20/MEM4 preserves exact exposed faces, winding, holes and Collider partitions", () => {
-    const grid = [0.5, 0.25, 0.5];
+    const grid = [0.5, 0.5, 0.5];
     for (let variant = 0; variant < 16; variant++) {
       const cells: string[] = [];
       for (let x = -2; x <= 2; x++) for (let y = -1; y <= 1; y++) for (let z = -2; z <= 2; z++) {
@@ -256,7 +256,7 @@ describe("Babylon Native Block walkable topology", () => {
     const result = buildBabylonNativeBlockWalkableTopologyV1({ groundModel,
       policy: { ...POLICY, maximumColliderVertexCount: 8, maximumColliderTriangleCount: 12 } });
     expect(result.solidGeometries[0]).toMatchObject({ vertexCount: 8, triangleCount: 12, sourceCellCount: 512,
-      minimumMetersXYZ: [0, 0, 0], maximumMetersXYZ: [4, 2, 4] });
+      minimumMetersXYZ: [0, 0, 0], maximumMetersXYZ: [4, 4, 4] });
   });
   it("partitions mixed-group and ungrouped top quads without changing collision geometry", () => {
     const groundModel = model([{
@@ -270,13 +270,14 @@ describe("Babylon Native Block walkable topology", () => {
     }]);
     const result = topology(groundModel);
     const geometry = result.walkableGeometries[0]!;
-    expect(sha256CanonicalJson({
-      collisionPositionsMetersXYZ: geometry.collisionPositionsMetersXYZ,
-      overlayPositionsMetersXYZ: geometry.overlayPositionsMetersXYZ,
-      triangleIndices: geometry.triangleIndices,
-      vertexCount: geometry.vertexCount, triangleCount: geometry.triangleCount,
-      colliderVertexCount: result.colliderVertexCount, colliderTriangleCount: result.colliderTriangleCount,
-    })).toBe("sha256:fa8ac634670cd34b7a0d2e8c229f02dcb551c255c09a6668c8f8df8a8cc4deaf");
+    const ungrouped = topology(model([{
+      colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,1,0", "2,0,0", "3,0,0"],
+      sourceBlockIds: ["block-a", "block-b", "block-none", "block-a-two"],
+    }])).walkableGeometries[0]!;
+    expect(geometry.collisionPositionsMetersXYZ).toEqual(ungrouped.collisionPositionsMetersXYZ);
+    expect(geometry.overlayPositionsMetersXYZ).toEqual(ungrouped.overlayPositionsMetersXYZ);
+    expect(geometry.triangleIndices).toEqual(ungrouped.triangleIndices);
     expect(geometry.overlayPartitions).toEqual([
       { sourceBlockIds: ["block-none"], visualGroupIds: [], triangleIndices: geometry.triangleIndices.slice(12, 18) },
       { sourceBlockIds: ["block-a", "block-a-two"], visualGroupIds: ["group-a"],
@@ -340,8 +341,8 @@ describe("Babylon Native Block walkable topology", () => {
       0,
     )).toEqual(verticesAtX(west!.collisionPositionsMetersXYZ, 0));
     expect(verticesAtX(east!.collisionPositionsMetersXYZ, 0)).toEqual([
-      [0, 0.375, 0],
-      [0, 0.375, 0.5],
+      [0, 0.75, 0],
+      [0, 0.75, 0.5],
     ]);
   });
 

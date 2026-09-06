@@ -28,6 +28,9 @@ import {
   createBabylonNativeIsolatedRuntimeEntryV1,
   type CreateBabylonNativeIsolatedRuntimeEntryInputV1,
 } from "./babylon-native-isolated-runtime-entry";
+import { GroundAwarePhysicsCharacterController } from "./babylon-character-body-port";
+import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { finishHostedInteractiveInputV1 } from "./browser-fixed-input-recovery";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -727,6 +730,113 @@ describe("Babylon Native isolated Runtime entry", () => {
       diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" },
     });
   }, 30_000);
+
+  it("retains a rolled-back invalid-input Session without retrying a protocol request", async () => {
+    const input = await entryInput("runtime.hosted.input-rollback");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.warmup", {
+      type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 5 },
+    }));
+    const before = entry.initialSnapshot();
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => { throw new Error("3C_INPUT_INVALID: injected invalid contact"); });
+    const observedFailure = vi.spyOn(BabylonWorldRuntime.prototype, "consumeFixedInputFailureDiagnostic");
+    try {
+      const request = protocolRequest(input.request.runtimeSessionId, "request.input-rollback", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 3 },
+      });
+      const rejected = await entry.submit(request);
+      expect(observedFailure.mock.results[0]?.value).toEqual({ stage: "prepare", errorCode: "3C_INPUT_INVALID" });
+      expect(rejected).toMatchObject({
+        status: "rejected", diagnostic: { code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED" },
+      });
+      expect(JSON.stringify(rejected)).not.toContain("injected invalid contact");
+      expect(entry.initialSnapshot()).toEqual(before);
+      expect(await entry.submit(request)).toEqual(rejected);
+      expect(entry.initialSnapshot()).toEqual(before);
+      const recovered = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.neutral", {
+        type: "fixed-input.run", input: { actions: [], ticks: 1 },
+      }));
+      expect(recovered).toMatchObject({ status: "succeeded", snapshot: {
+        worldSessionId: before.worldSessionId, world: { simulationTick: 6 },
+      } });
+    } finally {
+      failure.mockRestore();
+      observedFailure.mockRestore();
+      await entry.dispose();
+    }
+  });
+
+  it.each(["invalid-contact", "internal-error"] as const)("keeps failed native integration fatal (%s)", async (kind) => {
+    const input = await entryInput("runtime.hosted.fatal-input");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "integrate")
+      .mockImplementationOnce(() => { throw new Error(kind === "invalid-contact"
+        ? "3C_INPUT_INVALID: cannot undo an external integration" : "private integration failure"); });
+    try {
+      const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.fatal", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 1 },
+      }));
+      expect(receipt).toMatchObject({ status: "rejected", diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" } });
+      expect(JSON.stringify(receipt)).not.toContain("private");
+      await expect(finishHostedInteractiveInputV1({
+        receipt,
+        clearPhysicalInput() { throw new Error("must not try recovery"); },
+        async submitNeutralInput() { throw new Error("must not dispatch a neutral Tick"); },
+      })).rejects.toThrow("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      expect(await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.after-fatal", {
+        type: "snapshot.get",
+      }))).toMatchObject({ status: "rejected", diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" } });
+    } finally {
+      failure.mockRestore();
+      await entry.dispose();
+    }
+  });
+
+  it.each([false, true])("browser input makes one neutral recovery attempt (retryFails=%s)", async (retryFails) => {
+    const input = await entryInput("runtime.hosted.browser-recovery");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const checkSupport = GroundAwarePhysicsCharacterController.prototype.checkSupport;
+    let isRecovery = false;
+    let recoveryFailureInjected = false;
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => { throw new Error("3C_INPUT_INVALID: rejected browser input"); })
+      .mockImplementation(function (this: GroundAwarePhysicsCharacterController, ...args) {
+        if (isRecovery && retryFails && !recoveryFailureInjected) {
+          recoveryFailureInjected = true;
+          throw new Error("3C_INPUT_INVALID: rejected neutral input");
+        }
+        return checkSupport.apply(this, args);
+      });
+    const pressedCodes = new Set(["KeyW", "ArrowLeft"]);
+    let arrowVelocity = 0.025;
+    const submittedInputs: unknown[] = [];
+    try {
+      const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.browser", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 3 },
+      }));
+      const completion = finishHostedInteractiveInputV1({
+        receipt,
+        clearPhysicalInput() { pressedCodes.clear(); arrowVelocity = 0; },
+        async submitNeutralInput(neutral) {
+          expect(pressedCodes.size).toBe(0);
+          expect(arrowVelocity).toBe(0);
+          submittedInputs.push(neutral);
+          isRecovery = true;
+          return entry.submit(protocolRequest(input.request.runtimeSessionId, "request.browser.neutral", {
+            type: "fixed-input.run", input: neutral,
+          }));
+        },
+      });
+      if (retryFails) await expect(completion).rejects.toThrow("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      else await expect(completion).resolves.toBe(true);
+      expect(submittedInputs).toEqual([{ actions: [], ticks: 1 }]);
+      expect(entry.initialSnapshot().world.simulationTick).toBe(retryFails ? 0 : 1);
+    } finally {
+      failure.mockRestore();
+      await entry.dispose();
+    }
+  });
 
   it("binds a post-swap reset cleanup failure to the committed new World", async () => {
     const input = await entryInput("runtime.hosted.reset-cleanup-failure");

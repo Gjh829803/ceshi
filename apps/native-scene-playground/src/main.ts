@@ -6,6 +6,7 @@ import {
   FIXED_TIME_STEP_SECONDS, CAMERA_KEY_ACTION_MAP, CAMERA_YAW_RADIANS_PER_TICK,
   CAMERA_PITCH_RADIANS_PER_TICK, advanceKeyboardCameraRadiansPerTick,
   isPhysicalGameplayKeyV1,
+  finishHostedInteractiveInputV1,
 } from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
@@ -569,8 +570,20 @@ async function startHostedFrame(): Promise<void> {
       input,
     });
     const [receipt] = await Promise.all([fixed, ...cameraAdjustments]);
-    if (receipt.status !== "succeeded") {
-      throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+    const recovered = await finishHostedInteractiveInputV1({
+      receipt,
+      clearPhysicalInput,
+      submitNeutralInput: (neutral) => entry.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: `request.browser-local-input.${++localRequestSequence}`,
+        runtimeSessionId,
+        type: "fixed-input.run",
+        input: neutral,
+      }),
+    });
+    if (recovered) {
+      console.warn("WORLDKIT_RUNTIME_FRAME_RECOVERED");
     }
   };
   const renderLoop = async (timestamp: number): Promise<void> => {

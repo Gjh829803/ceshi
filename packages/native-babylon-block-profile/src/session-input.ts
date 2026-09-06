@@ -23,7 +23,7 @@ import {
 } from "./shapes.js";
 
 const SHAPES = new Set<BabylonNativeBlockShapeKindV1>([
-  "full", "half", "quarter", "small", "step",
+  "full", "half", "quarter", "small",
 ]);
 const PALETTE_ROLES = new Set<BabylonNativeBlockPaletteRoleV1>(
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,

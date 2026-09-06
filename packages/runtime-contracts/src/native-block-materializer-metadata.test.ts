@@ -285,6 +285,12 @@ describe("BabylonNativeBlockMaterializerMetadataV1", () => {
   });
 
   it.each([
+    ["removed quarter-meter step shape", () => ({
+      ...metadataValue(),
+      blocks: metadataValue().blocks.map((block, index) => index === 0
+        ? { ...block, shape: "step" }
+        : block),
+    })],
     ["unsorted blocks", () => ({
       ...metadataValue(),
       blocks: [...metadataValue().blocks].reverse(),

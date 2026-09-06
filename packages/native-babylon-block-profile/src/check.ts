@@ -295,7 +295,6 @@ function countInputs(
     half: 0,
     quarter: 0,
     small: 0,
-    step: 0,
   };
   const blockCountByPaletteRole = Object.fromEntries(
     BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1.map((role) => [role, 0]),

@@ -79,18 +79,18 @@ const productionWorldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(JSON.parse(
 ));
 
 function moduleFixture(
-  profile: "single-block" | "quarter-meter-ramp" | "one-meter-ramp" = "single-block",
+  profile: "single-block" | "half-meter-ramp" | "one-meter-ramp" = "single-block",
 ): BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
       const session = createBabylonNativeBlockProfileSessionV1(context);
-      if (profile === "quarter-meter-ramp" || profile === "one-meter-ramp") {
+      if (profile === "half-meter-ramp" || profile === "one-meter-ramp") {
         for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
           const riseCount = profile === "one-meter-ramp"
             ? (xMeters < 2 ? 0 : xMeters < 6 ? 1 : 2)
-            : xMeters < 2 ? 0 : Math.min(8, xMeters - 1);
+            : xMeters < 2 ? 0 : Math.min(4, xMeters - 1);
           for (let zMeters = -2; zMeters <= 2; zMeters += 1) {
             session.createBlock({
               id: `ramp-base-x${xMeters + 3}-z${zMeters + 2}`,
@@ -102,11 +102,11 @@ function moduleFixture(
             for (let riseIndex = 0; riseIndex < riseCount; riseIndex += 1) {
               session.createBlock({
                 id: `ramp-rise-x${xMeters + 3}-z${zMeters + 2}-y${riseIndex}`,
-                shape: profile === "one-meter-ramp" ? "full" : "step",
+                shape: profile === "one-meter-ramp" ? "full" : "half",
                 paletteRole: "ground",
                 centerMetersXYZ: [
                   xMeters,
-                  profile === "one-meter-ramp" ? 0.5 + riseIndex : 0.125 + riseIndex * 0.25,
+                  profile === "one-meter-ramp" ? 0.5 + riseIndex : 0.25 + riseIndex * 0.5,
                   zMeters,
                 ],
                 colliderGroupId: "ramp-ground-group",
@@ -464,7 +464,7 @@ function activeLocomotion(
 }
 
 describe("SDK-owned Native live collider registry", () => {
-  it.each(["quarter-meter-ramp", "one-meter-ramp"] as const)("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp: %s", async (profile) => {
+  it.each(["half-meter-ramp", "one-meter-ramp"] as const)("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp: %s", async (profile) => {
     const {
       runtime,
       expectedWalkSpeedMetersPerSecond,
@@ -494,7 +494,7 @@ describe("SDK-owned Native live collider registry", () => {
           // to x=6.5. Measure its interior, beyond the capsule's mixed
           // flat/ramp manifold. The old contact projection also slows at
           // changing normals; the invariant here is no sustained slope drag.
-          if (profile === "quarter-meter-ramp" || (
+          if (profile === "half-meter-ramp" || (
             subject.positionMetersXYZ[0] >= 5.25 &&
             subject.positionMetersXYZ[0] <= 5.75
           )) {

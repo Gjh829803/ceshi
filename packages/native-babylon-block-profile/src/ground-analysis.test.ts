@@ -199,7 +199,7 @@ function logicalModel(input: Readonly<{
 
 function position(topCellKey: string): readonly [number, number, number] {
   const [x, y, z] = topCellKey.split(",").map(Number);
-  return Object.freeze([(x! + 0.5) * 0.5, y! * 0.25, (z! + 0.5) * 0.5]);
+  return Object.freeze([(x! + 0.5) * 0.5, y! * 0.5, (z! + 0.5) * 0.5]);
 }
 
 function caseIntent(input: Partial<BabylonNativeBlockGroundCaseIntentV1> &
@@ -371,13 +371,13 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     ]);
     const spawn = Object.freeze({
       ...SPAWN,
-      standPositionMetersXYZ: Object.freeze([0, 0.25, 0.5]) as
+      standPositionMetersXYZ: Object.freeze([0, 0.5, 0.5]) as
         readonly [number, number, number],
     });
     const target = Object.freeze({
       id: "upper-target",
       acceptanceTargetRef: "worldkit://acceptance-target/upper@1",
-      standPositionMetersXYZ: Object.freeze([0, 0.5, -0.5]) as
+      standPositionMetersXYZ: Object.freeze([0, 1, -0.5]) as
         readonly [number, number, number],
     });
     const result = analyze({
@@ -395,11 +395,11 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.reachableRequiredTargetCount).toBe(1);
     expect(result.standableNodes).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        positionMetersXYZ: [0, 0.25, 0.5],
+        positionMetersXYZ: [0, 0.5, 0.5],
         isReachableFromSpawn: true,
       }),
       expect.objectContaining({
-        positionMetersXYZ: [0, 0.5, -0.5],
+        positionMetersXYZ: [0, 1, -0.5],
         isReachableFromSpawn: true,
       }),
     ]));
@@ -422,16 +422,16 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       caseIntent: caseIntent({
         spawn: Object.freeze({
           ...SPAWN,
-          standPositionMetersXYZ: [-0.25, 0.25, -0.25] as const,
+          standPositionMetersXYZ: [-0.25, 0.5, -0.25] as const,
         }),
         requireSingleReachableComponent: false,
       }),
     });
 
     expect(result.standableNodes.map(({ positionMetersXYZ }) =>
-      positionMetersXYZ)).not.toContainEqual([-0.25, 0.25, 0]);
+      positionMetersXYZ)).not.toContainEqual([-0.25, 0.5, 0]);
     expect(result.standableNodes.map(({ positionMetersXYZ }) =>
-      positionMetersXYZ)).not.toContainEqual([0, 0.25, 0]);
+      positionMetersXYZ)).not.toContainEqual([0, 0.5, 0]);
   });
 
   it("rejects a narrow surface using full Capsule-footprint union coverage", () => {
@@ -469,7 +469,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
   it("reports exact low-overhead clearance without changing the Capsule", () => {
     const result = analyze({
       supportTopCellKeys: rectangle(-1, 1, -1, 1),
-      blockerCellKeys: ["0,4,0"],
+      blockerCellKeys: ["0,3,0"],
       capabilityOverrides: { capsuleHeightMeters: 1.2 },
       caseIntent: caseIntent({ spawn: SPAWN }),
     });
@@ -479,9 +479,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(clearance?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 1_200,
-      actualMillimeters: 750,
+      actualMillimeters: 1_000,
       maximumAllowedDriftMillimeters: 0,
-      exceededByMillimeters: 450,
+      exceededByMillimeters: 200,
       correctionDirection: "increase",
     });
   });
@@ -499,8 +499,8 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(clearance?.details).toMatchObject({
       kind: "millimeters-threshold",
       expectedMillimeters: 3_000,
-      actualMillimeters: 500,
-      exceededByMillimeters: 2_500,
+      actualMillimeters: 1_000,
+      exceededByMillimeters: 2_000,
     });
   });
 
@@ -534,9 +534,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(step?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 0,
-      actualMillimeters: 1_500,
+      actualMillimeters: 3_000,
       maximumAllowedDriftMillimeters: 1_000,
-      exceededByMillimeters: 500,
+      exceededByMillimeters: 2_000,
       correctionDirection: "decrease",
     });
   });
@@ -566,7 +566,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.failureFacts).toEqual([]);
   });
 
-  it("keeps a one-meter route rise reachable through four admitted quarter-meter joins", () => {
+  it("keeps a two-meter route rise reachable through four admitted half-meter joins", () => {
     const lowLanding = rectangle(-4, -3, -1, 0, 0);
     const firstTread = rectangle(-2, -1, -1, 0, 1);
     const secondTread = rectangle(0, 1, -1, 0, 2);
@@ -658,9 +658,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       metricId === "ground-step-down-millimeters");
     expect(step?.details).toMatchObject({
       kind: "millimeters-threshold",
-      actualMillimeters: 1_500,
+      actualMillimeters: 3_000,
       maximumAllowedDriftMillimeters: 1_000,
-      exceededByMillimeters: 500,
+      exceededByMillimeters: 2_000,
       correctionDirection: "decrease",
     });
   });
@@ -699,10 +699,10 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       },
     });
     expect(failure?.message).toContain(
-      "segment segment-000 from [0.25,0.25,0.25] to [1.75,0.25,0.25]",
+      "segment segment-000 from [0.25,0.5,0.25] to [1.75,0.5,0.25]",
     );
     expect(failure?.repairInstruction).toContain(
-      "between [0.25,0.25,0.25] and [1.75,0.25,0.25]",
+      "between [0.25,0.5,0.25] and [1.75,0.5,0.25]",
     );
     expect(failure?.repairInstruction).toContain(
       "both endpoint supports exist, but no connected path stays inside the band",
@@ -809,7 +809,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
         ...rectangle(-1, 1, -1, 1),
         ...(condition === "blocked" ? rectangle(10, 12, 10, 12) : []),
       ],
-      ...(condition === "blocked" ? { blockerCellKeys: ["11,3,11"] } : {}),
+      ...(condition === "blocked" ? { blockerCellKeys: ["11,2,11"] } : {}),
       caseIntent: caseIntent({
         spawn: SPAWN, requireSingleReachableComponent: false,
         requiredTargets: [{ id: "remote-target",

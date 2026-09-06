@@ -146,7 +146,7 @@ export interface WorldReconstructionExpectedV1 {
     readonly acceptanceTargetRef: string;
     readonly contributionId: string;
     readonly colliderId: string;
-    readonly role: "ground" | "blocker" | "step";
+    readonly role: "ground" | "blocker";
     readonly requiresOverlay: boolean;
   }>[];
   readonly groundConnectivity: Readonly<{
@@ -300,7 +300,7 @@ export type WorldReconstructionObservedDimensionV1 =
       contributions: readonly Readonly<{
         contributionId: string;
         colliderId: string;
-        role: "ground" | "blocker" | "step";
+        role: "ground" | "blocker";
         hasOverlay: boolean;
       }>[];
     }>
@@ -1629,14 +1629,14 @@ function assertTraversalChecksMatchColliderRolesV1(
       check.acceptanceTargetRef,
     );
     const matches = check.expectation === "pass"
-      ? roles?.has("ground") === true || roles?.has("step") === true
+      ? roles?.has("ground") === true
       : roles?.has("blocker") === true;
     if (!matches) {
       fail(
         contract,
         `expected/criticalTraversalChecks/${check.id}/acceptanceTargetRef`,
         check.expectation === "pass"
-          ? "pass traversal target must bind at least one ground or step collider"
+          ? "pass traversal target must bind at least one ground collider"
           : "block traversal target must bind at least one blocker collider",
       );
     }
@@ -1731,7 +1731,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
       const itemPath = `${path}/contributions/${index}`;
       const row = object(entry, contract, itemPath);
       exactFields(row, ["contributionId", "colliderId", "role", "hasOverlay"], contract, itemPath);
-      return Object.freeze({ contributionId: text(row.contributionId, contract, `${itemPath}/contributionId`), colliderId: text(row.colliderId, contract, `${itemPath}/colliderId`), role: enumValue(row.role, ["ground", "blocker", "step"] as const, contract, `${itemPath}/role`), hasOverlay: boolean(row.hasOverlay, contract, `${itemPath}/hasOverlay`) });
+      return Object.freeze({ contributionId: text(row.contributionId, contract, `${itemPath}/contributionId`), colliderId: text(row.colliderId, contract, `${itemPath}/colliderId`), role: enumValue(row.role, ["ground", "blocker"] as const, contract, `${itemPath}/role`), hasOverlay: boolean(row.hasOverlay, contract, `${itemPath}/hasOverlay`) });
     });
     if (contributions.some((row, index) => index > 0 && contributions[index - 1]!.contributionId >= row.contributionId)) fail(contract, `${path}/contributions`, "must be unique and strictly sorted by contributionId");
     return Object.freeze({ kind: "collider-observed", contributions: Object.freeze(contributions) });
@@ -1846,7 +1846,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     const path = `expected/colliders/${index}`;
     const row = object(entry, contract, path);
     exactFields(row, ["acceptanceTargetRef", "contributionId", "colliderId", "role", "requiresOverlay"], contract, path);
-    return Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`), contributionId: text(row.contributionId, contract, `${path}/contributionId`), colliderId: text(row.colliderId, contract, `${path}/colliderId`), role: enumValue(row.role, ["ground", "blocker", "step"] as const, contract, `${path}/role`), requiresOverlay: boolean(row.requiresOverlay, contract, `${path}/requiresOverlay`) });
+    return Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`), contributionId: text(row.contributionId, contract, `${path}/contributionId`), colliderId: text(row.colliderId, contract, `${path}/colliderId`), role: enumValue(row.role, ["ground", "blocker"] as const, contract, `${path}/role`), requiresOverlay: boolean(row.requiresOverlay, contract, `${path}/requiresOverlay`) });
   });
   if (colliders.length === 0 || colliders.some((row, index) => index > 0 && colliders[index - 1]!.contributionId >= row.contributionId)) fail(contract, "expected/colliders", "must be non-empty, unique, and sorted by contributionId");
   if (new Set(colliders.map(({ colliderId }) => colliderId)).size !== colliders.length) {
@@ -1856,8 +1856,8 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   if (!colliders.some(({ acceptanceTargetRef, colliderId, role }) =>
     colliderId === supportColliderId &&
     acceptanceTargetRef === spawnAcceptanceTargetRef &&
-    (role === "ground" || role === "step")
-  )) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground or step collider bound to the same acceptance target");
+    role === "ground"
+  )) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground collider bound to the same acceptance target");
   const spawnSupport = Object.freeze({
     acceptanceTargetRef: spawnAcceptanceTargetRef,
     spawnMarkerId: text(

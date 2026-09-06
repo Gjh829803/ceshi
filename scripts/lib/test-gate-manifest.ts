@@ -164,6 +164,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/committed-render-pose.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/control-capture.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/control-profile-runtime.test.ts", lane: "contract" },
+  { path: "packages/runtime-babylon/src/fixed-input-recovery.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/formal-world-capture-measurement.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/formal-world-capture-provider.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/gameplay-world-adapter.test.ts", lane: "contract" },

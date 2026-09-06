@@ -18,7 +18,7 @@ import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
 import type { BabylonNativeBlockCreateInputV1, BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
 
-type Shape = "full" | "half" | "quarter" | "small" | "step";
+type Shape = "full" | "half" | "quarter" | "small";
 type PaletteRole =
   | "ground"
   | "route"
@@ -232,7 +232,6 @@ describe("Babylon Native block profile structural check", () => {
             half: 0,
             quarter: 0,
             small: 0,
-            step: 0,
           },
           blockCountByPaletteRole: {
             ground: 1,
@@ -242,7 +241,7 @@ describe("Babylon Native block profile structural check", () => {
             "water-like-visual": 0,
             "background-mass": 0,
           },
-          occupiedMicroCellCount: 16,
+          occupiedMicroCellCount: 8,
           exposedTopSurfaceCellCount: 4,
           boundarySegmentCount: 8,
           structuralStepTransitionCount: 0,
@@ -354,13 +353,13 @@ describe("Babylon Native block profile structural check", () => {
         );
         const low = session.createBlock({
           id: "low-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
-          centerMetersXYZ: [0, 0.125, 0],
+          centerMetersXYZ: [0, 0.25, 0],
         });
         const high = session.createBlock({
           id: "high-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
           centerMetersXYZ: [1, upperY, 0],
         });
@@ -371,8 +370,8 @@ describe("Babylon Native block profile structural check", () => {
       }
     };
 
-    const oneStep = build(0.375);
-    const twoSteps = build(0.625);
+    const oneStep = build(0.75);
+    const twoSteps = build(1.25);
 
     expect(oneStep.outcome).toBe("passed");
     expect(oneStep.metrics.structuralRouteComponentCount).toBe(1);
@@ -428,7 +427,7 @@ describe("Babylon Native block profile structural check", () => {
     });
   });
 
-  it("keeps the documented stacked quarter-meter stair recipe in one structural route component", async () => {
+  it("keeps the documented stacked half-meter stair recipe in one structural route component", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
     const engine = new NullEngine();
     const scene = new Scene(engine);
@@ -444,27 +443,27 @@ describe("Babylon Native block profile structural check", () => {
       });
       session.createBlock({
         id: "route-step-lower",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [1, 0.125, 0],
+        centerMetersXYZ: [1, 0.25, 0],
       });
       session.createBlock({
         id: "route-step-middle",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [1, 0.375, 0],
+        centerMetersXYZ: [1, 0.75, 0],
       });
       session.createBlock({
         id: "route-step-upper",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [1, 0.625, 0],
+        centerMetersXYZ: [1, 1.25, 0],
       });
       session.createBlock({
         id: "route-upper-landing",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [2, 0.625, 0],
+        centerMetersXYZ: [2, 1.25, 0],
       });
 
       const result = session.finalize().checkResult;

@@ -9,6 +9,25 @@
 
 ## Implementation revision record
 
+- **2026-09-07 — CF-04/G2 Host consumer correction:** the production Host must
+  not compare the Profile's 1m auto-smoothing span to the Character's discrete
+  step height, or reject the whole scene because any generated triangle exceeds
+  the Character slope setting. Pinned `9e35ab53` builds ramps and admits source
+  joins within its 1m band; neither global veto exists there. Remove these two
+  checks, retaining topology identity/index/winding integrity and the existing
+  actual Spawn, clearance and required-route owners. Update the capability
+  verifier's evidence row accordingly; this does not claim its aggregate run passed.
+
+- **2026-09-07 — CF-04/G2 four-shape closure:** pinned `9e35ab53` owns the
+  current `full/half/quarter/small` shape set, uniform 0.5m XYZ occupancy and
+  0.25m XYZ center lattice. Delete the additional quarter-height `step` shape,
+  including its parser/type/metadata and Builder/frozen examples. Collider roles
+  are `ground` from explicit admitted static-surface intent and `blocker` from
+  not-traversable intent; shape does not create a third acceptance role. Update
+  the active representative Case, not historical run receipts. This supersedes
+  the anisotropic/step contracts in the August 31 settlement design. G1 smoothing
+  and current Capsule resources remain unchanged; no new gate or repair budget.
+
 - **2026-09-07 — CF-04/G1 pinned production geometry correction (in progress):**
   the user's explicit parity requirement supersedes the September 3 decision to
   replace one-meter smoothing with quarter-meter authored stairs. Smoothing is

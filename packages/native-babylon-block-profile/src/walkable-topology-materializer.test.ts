@@ -37,7 +37,7 @@ const STATIC_SURFACE = Object.freeze({
 const POLICY = Object.freeze({
   kind: "babylon-native-block-walkable-topology-policy" as const,
   schemaVersion: 1 as const,
-  maximumAutoSmoothHeightDeltaMeters: 0.3,
+  maximumAutoSmoothHeightDeltaMeters: 1,
   visualOverlayOffsetMeters: 0.004,
   maximumLogicalColliderCount: 8,
   maximumColliderVertexCount: 1_000,

@@ -113,6 +113,7 @@ export interface RuntimeSessionSubjectSupportV1 {
 export type RuntimeSessionDiagnosticCodeV1 =
   | "RUNTIME_SESSION_REQUEST_ID_CONFLICT"
   | "RUNTIME_SESSION_REQUEST_REJECTED"
+  | "RUNTIME_SESSION_FIXED_INPUT_REJECTED"
   | "RUNTIME_SESSION_NOT_ACTIVE"
   | "RUNTIME_SESSION_RECOVERY_DIVERGED"
   | "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE"
@@ -166,8 +167,16 @@ export type RuntimeSessionReceiptV1 =
       diagnostic: Readonly<{
         readonly code: Exclude<
           RuntimeSessionDiagnosticCodeV1,
-          "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE"
+          "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" | "RUNTIME_SESSION_FIXED_INPUT_REJECTED"
         >;
+        readonly message: string;
+      }>;
+    }>)
+  | (RuntimeSessionReceiptBaseV1 & Readonly<{
+      requestType: "fixed-input.run";
+      status: "rejected";
+      diagnostic: Readonly<{
+        readonly code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED";
         readonly message: string;
       }>;
     }>)
@@ -221,6 +230,7 @@ const RUNTIME_SESSION_DIAGNOSTIC_CODES =
   new Set<RuntimeSessionDiagnosticCodeV1>([
     "RUNTIME_SESSION_REQUEST_ID_CONFLICT",
     "RUNTIME_SESSION_REQUEST_REJECTED",
+    "RUNTIME_SESSION_FIXED_INPUT_REJECTED",
     "RUNTIME_SESSION_NOT_ACTIVE",
     "RUNTIME_SESSION_RECOVERY_DIVERGED",
     "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
@@ -1040,6 +1050,9 @@ function parseRuntimeSessionReceiptBodyV1(
       diagnostic.code ===
         "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" &&
       record.requestType !== "session.reset"
+    ) return invalid(schemaName);
+    if (diagnostic.code === "RUNTIME_SESSION_FIXED_INPUT_REJECTED" &&
+      record.requestType !== "fixed-input.run"
     ) return invalid(schemaName);
     return canonicalClone(record, schemaName) as unknown as Omit<
       RuntimeSessionReceiptV1,

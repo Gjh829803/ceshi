@@ -1069,9 +1069,7 @@ function evaluateCollider(
       hasRoleMismatch = true;
       const instruction = expected.role === "blocker"
         ? `Set static collider ${expected.colliderId} traversalBinding.kind to "not-traversable" so the Host derives role blocker. Changing logicalSubshapeId, name, tag, material, paletteRole, or shape does not change the Host-derived blocker role.`
-        : expected.role === "step"
-          ? `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and author its source block with shape.kind "step" so the Host derives role step.`
-          : `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and use a non-step source block shape so the Host derives role ground.`;
+        : `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" so the Host derives role ground. The source Block shape does not define a separate collider role.`;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
         acceptanceTargetRef: expected.acceptanceTargetRef,

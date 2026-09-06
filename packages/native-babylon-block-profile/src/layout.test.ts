@@ -14,7 +14,7 @@ interface LayoutModule {
   ): Readonly<{
     blocks: readonly Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole: string;
       visualGroupId?: string;
       centerMetersXYZ: readonly [number, number, number];
@@ -46,7 +46,7 @@ function record(
   scene: Scene,
   input: Readonly<{
     id: string;
-    shape?: "full" | "half" | "quarter" | "small" | "step";
+    shape?: "full" | "half" | "quarter" | "small";
     paletteRole?: "ground" | "route" | "structure";
     visualGroupId?: string;
     declaredCenterMetersXYZ?: readonly [number, number, number];
@@ -120,7 +120,7 @@ describe("Babylon Native block profile layout", () => {
         minimumMetersXYZ: [1, 0, -0.5],
         maximumMetersXYZ: [2, 0.5, 0],
         occupiedMicroCellKeys: [
-          "2,0,-1", "3,0,-1", "2,1,-1", "3,1,-1",
+          "2,0,-1", "3,0,-1",
         ],
       }]);
     });
@@ -206,9 +206,7 @@ describe("Babylon Native block profile layout", () => {
         relatedBlockId: "overlap-block",
         microCellKeys: [
           "-1,0,-1", "-1,0,0", "-1,1,-1", "-1,1,0",
-          "-1,2,-1", "-1,2,0", "-1,3,-1", "-1,3,0",
           "0,0,-1", "0,0,0", "0,1,-1", "0,1,0",
-          "0,2,-1", "0,2,0", "0,3,-1", "0,3,0",
         ],
       });
     });
@@ -262,15 +260,15 @@ describe("Babylon Native block profile layout", () => {
     withScene((scene) => {
       const lowStep = record(scene, {
         id: "low-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        declaredCenterMetersXYZ: [0, 0.125, 0],
+        declaredCenterMetersXYZ: [0, 0.25, 0],
       });
       const highStep = record(scene, {
         id: "high-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        declaredCenterMetersXYZ: [1, 0.375, 0],
+        declaredCenterMetersXYZ: [1, 0.75, 0],
       });
       const oneMeterHigh = record(scene, {
         id: "one-meter-high",
@@ -304,19 +302,19 @@ describe("Babylon Native block profile layout", () => {
     });
   });
 
-  it("supports quarter-meter step stacking without overlap", async () => {
+  it("supports half-meter step stacking without overlap", async () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
       const base = record(scene, {
         id: "base-step",
-        shape: "step",
-        declaredCenterMetersXYZ: [0, 0.125, 0],
+        shape: "half",
+        declaredCenterMetersXYZ: [0, 0.25, 0],
       });
       const top = record(scene, {
         id: "top-step",
-        shape: "step",
-        declaredCenterMetersXYZ: [0, 0.375, 0],
+        shape: "half",
+        declaredCenterMetersXYZ: [0, 0.75, 0],
       });
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [top, base]);
@@ -324,7 +322,7 @@ describe("Babylon Native block profile layout", () => {
       expect(layout.issues).toEqual([]);
       expect(layout.unsupportedBlockIds).toEqual([]);
       expect(layout.blocks.map(({ centerMetersXYZ }) => centerMetersXYZ))
-        .toEqual([[0, 0.125, 0], [0, 0.375, 0]]);
+        .toEqual([[0, 0.25, 0], [0, 0.75, 0]]);
     });
   });
 });

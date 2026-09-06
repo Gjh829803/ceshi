@@ -150,7 +150,6 @@ describe("Babylon Native block profile session", () => {
     ["half", [0, 0.25, 0], [1, 0.5, 1]],
     ["quarter", [0.25, 0.25, 0], [0.5, 0.5, 1]],
     ["small", [0.25, 0.25, 0.25], [0.5, 0.5, 0.5]],
-    ["step", [0, 0.125, 0], [1, 0.25, 1]],
   ] as const)("materializes exact %s metric intent with the fixed display scale", async (shape, center, size) => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
     withScene(scene => {
@@ -573,6 +572,21 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
+  it("rejects the removed quarter-height step shape before creating geometry", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      expect(() => session.createBlock({
+        id: "removed-step",
+        // @ts-expect-error Deliberately exercise untrusted removed input.
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [0, 0.125, 0],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID/);
+      expect(scene.meshes).toHaveLength(0);
+    });
+  });
+
   it("rejects the removed display-gap override before any side effect", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
@@ -590,9 +604,9 @@ describe("Babylon Native block profile session", () => {
       );
       session.createBlock({
         id: "route-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [0, 0.125, 0],
+        centerMetersXYZ: [0, 0.25, 0],
       });
 
       expect(() => session.finalize(Object.freeze({
@@ -644,7 +658,7 @@ describe("Babylon Native block profile session", () => {
       expect(hostPublishableFailure(() => {
         session.createBlock({
           id: "central-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
           centerMetersXYZ: [0, 0.1, 0],
         });
@@ -707,11 +721,11 @@ describe("Babylon Native block profile session", () => {
     withScene(scene => {
       const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
       const intent = session.createBlock({ id: "ground-block", shape: "quarter",
-        paletteRole: "ground", centerMetersXYZ: [0.25, 0.5, 0] });
+        paletteRole: "ground", centerMetersXYZ: [0.25, 0.25, 0] });
       expect(Reflect.set(intent.centerMetersXYZ, "0", 3)).toBe(false);
       expect(Reflect.set(intent, "rotationQuarterTurnsY", 1)).toBe(false);
       expect(session.finalize({ staticColliders: [] }).checkedLayout.layout.blocks[0])
-        .toMatchObject({ centerMetersXYZ: [0.25, 0.5, 0], rotationQuarterTurnsY: 0 });
+        .toMatchObject({ centerMetersXYZ: [0.25, 0.25, 0], rotationQuarterTurnsY: 0 });
     });
   });
 

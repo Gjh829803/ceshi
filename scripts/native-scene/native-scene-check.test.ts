@@ -169,12 +169,12 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
       "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
     ],
     [
-      "off-grid step center",
+      "off-grid half center",
       `
         const session = createBabylonNativeBlockProfileSessionV1(context);
         session.createBlock({
           id: "central-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
           visualGroupId: "central-ascent-group",
           centerMetersXYZ: [0, 0.1, 0],

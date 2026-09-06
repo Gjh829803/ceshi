@@ -47,6 +47,7 @@ import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 import {
   BabylonWorldRuntime,
+  isRecoverablePreparedFixedInputFailure,
   type BabylonWorldRuntimeInitializationStageV1,
 } from "./babylon-world-runtime";
 import {
@@ -509,10 +510,20 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     }
 
     let receipt: RuntimeSessionReceiptV1;
+    const inputRuntime = request.type === "fixed-input.run" ? this.activeHandle().runtime : undefined;
     try {
       receipt = await this.invoke(request);
-    } catch {
+    } catch (error) {
       const failureWorldSessionId = this.host.currentWorldSessionId;
+      const failure = inputRuntime?.consumeFixedInputFailureDiagnostic();
+      if (isRecoverablePreparedFixedInputFailure(error, failure)) {
+        receipt = rejectedReceipt(request, failureWorldSessionId, {
+          code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED",
+          message: "The invalid fixed input was rolled back; the Session remains active.",
+        });
+        this.#receiptsByRequestId.set(request.id, Object.freeze({ requestHash, receipt }));
+        return receipt;
+      }
       this.#isActive = false;
       await this.host.dispose().catch(() => undefined);
       receipt = rejectedReceipt(request, failureWorldSessionId, {

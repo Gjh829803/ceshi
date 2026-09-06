@@ -1223,15 +1223,139 @@ Main-agent-only/sequential, depends on G1. Restore pinned-old four shape kinds
 (`full`, `half`, `quarter`, `small`), 0.5m XYZ occupancy and 0.25m XYZ center
 lattice. Remove the current-only 0.25m-high `step` shape and its 0.125m Y center
 recipe, with no compatibility alias. Owners: profile shapes/parser/corpus,
-Runtime materializer metadata and schema/generated validator, portable checker,
+Runtime materializer metadata, Case/evidence role parsers, portable checker,
 renderer, live/frozen Builder Skill and direct fixtures/consumers. Keep metric
 ground construction and existing Host authority; do not alter Capsule resources.
+
+Collider role closure removes the shape-derived `step` role: explicit
+static-surface means ground, not-traversable means blocker. Update the active
+representative Case and frozen Builder bundles together; historical run artifacts
+remain evidence for their old inputs, not current acceptance. Numeric range
+`step` fields in unrelated schemas are not this removed shape and stay unchanged.
 
 Required evidence: actual shape bounds/occupancy and invalid-placement checks;
 current-only metadata/checker rejection; compatible source examples/corpus;
 affected reconstruction/Package consumers; live/frozen Skill drift check; real
 Havok one-meter path rerun after lattice change; typecheck. Then re-evaluate all
 remaining CF acceptance rows before freezing and running the final fresh Case.
+
+G2 implementation checkpoint (2026-09-07, working tree after `4c2e0537`):
+the four shapes and uniform grid now propagate through Session input, materializer
+metadata, checked counts, Corpus, Case/evidence roles and Builder source examples.
+Live and representative frozen Skill/checker/renderer copies were regenerated.
+The old quarter-height recipe failed the updated example test before correction;
+the same example and actual occupancy checks then passed. Preserve the old 1m
+source-top smoothing, not a recipe forcing four quarter-meter treads or an added
+flat-landing margin. No Capsule, Runtime solver, production budget or repair count
+changed in G2.
+
+Affected fixtures now use truthful half-meter tops and explicit not-traversable
+solid walls. The former smoothed "blocker" is no longer represented as ground.
+Actual BWB-4 and BWB-5 Havok tests retain fixed inputs, supported traversal,
+wall stop, ledge departure and exact Reset/replay. Ground diagnostics retain
+footprint/clearance/optional-target failures on the restored metric grid. The
+active representative Case uses ground, while old run receipts remain historical.
+Typecheck passed. The full Builder command initially passed 101/106; its five
+stale instruction/occupancy assertions were corrected and passed focused reruns.
+An additional portable-tool regression rejects removed `step` in both frozen
+TypeScript checking and rendering, then admits the valid `half` replacement.
+The rebuilt live/frozen byte check passed. Package/Native Check ended with 42/56
+passing. Most failures exposed an overlooked Host-wide veto comparing smoothing
+span to Character step height; the same helper also vetoed every steep triangle.
+Pinned old `check.ts` permits its 1m source join independent of those raw limits.
+Both vetoes are removed; the helper now owns topology integrity only and has no
+Subject envelope parameter. Actual Spawn/clearance/required-route admission is
+unchanged. The composed-Subject real Package positive and integrity/closed-finalize
+negatives pass (3/3). The other eleven cases finished as two 4/4 groups, then
+2/3 plus the corrected obstruction fixture 1/1. All fourteen original failures
+now have passing focused evidence; the original unaffected 42/56 evidence is
+retained, not presented as a new single aggregate 56/56 run. JSON reports are
+under `output/playwright/cf-g2-package-group{1,2,3}.json` and
+`cf-g2-package-spawn-obstruction.json` (group3 records its one original failure).
+The obstruction fixture now has a flat supported floor and an explicit head
+blocker: under restored smoothing the former adjacent-step fixture instead
+changes center support height. No Runtime support/capsule threshold was weakened.
+G2 reaches a focused implementation checkpoint, not parent CF acceptance.
+
+### CF-04/G3 source Spawn versus smoothed Runtime surface follow-up
+
+Main-agent-only/sequential after G2. The changed adjacent-step fixture exposes a
+separate behavior to audit, not an issue that is resolved by rewriting a test:
+the old Block Compiler copies `spawnStandPositionMetersXYZ` to its Spawn anchor,
+and the old checker validates source-top intent; current Native Package and
+Runtime both call `admitBabylonNativeSurfacesV1`, which requires support at/below
+the source feet and nearly exact post-smoothing height. A neighboring half Block
+can lift the full source-top rectangle under those feet after smoothing.
+
+Before final Case, reproduce that same source layout through the pinned old
+checker/Compiler/Runtime and current Native consumers. Determine the old actual
+initial placement and settlement timing, then align within the existing Spawn,
+surface-admission and Character owners. Do not merely widen a tolerance, add a
+neutral startup Tick, weaken capsule/hole checks, or call the obstruction-fixture
+correction proof of Spawn parity. Required evidence covers the old-admitted
+smoothed join, unsupported holes, genuine body/head obstruction, exact source
+and published placement, first frame/Tick, reset and the real Package consumer.
+
+### CF-05/R1 prepared-input browser recovery parity (2026-09-07)
+
+Main-agent-only/sequential; depends on K1 and current Runtime prepared transactions.
+Pinned old adapter lines 1635-1715 recovers only a WorldSession prepare rejection
+paired with `3C_INPUT_INVALID`, clearing physical input and issuing one neutral
+Tick. A failed neutral Tick pauses; explicit scripted input does not retry.
+Current Viewer paused every error and Native entry disposed every rejected
+operation, losing that old recovery path.
+
+Owner/input/output contract: existing Babylon Runtime records only the sanitized
+failure code and prepare/rollback stage after its existing restore completes.
+This is one-shot observational evidence, not a new movement/support authority.
+The shared predicate requires successful rollback plus the exact WorldSession
+prepare failure boundary. Failed rollback, failed external native integration,
+commit/abort errors, estimates and generic errors remain fatal. Current Host
+transaction/Hash/Reset/replay ownership and input parameters remain unchanged.
+
+Native's existing request/receipt protocol adds one closed diagnostic code,
+`RUNTIME_SESSION_FIXED_INPUT_REJECTED`: the rejected request retains its immutable
+receipt and never retries automatically or closes a successfully restored Session.
+Only the physical browser caller clears keys/arrow velocity and submits a fresh
+neutral request once. Viewer uses the same predicate and its existing coordinator;
+formal Capture and scripted protocol input do not insert a recovery Tick. No new
+request type, model task, production gate or Builder repair round is added.
+
+Evidence checkpoint: Viewer recovery RED -> GREEN, 33/33; actual Native entry and
+predicate 27/27 including failed integration, failed neutral input and idempotent
+rejection. Native frame/protocol group 47/47 preceded the added fatal negatives.
+The initial integrate-failure injection correctly proved fatal rollback, so the
+recoverable positive injects one invalid support sample before external integration.
+The nonzero-history positive now commits five Ticks before rejection, retains the
+exact Snapshot and idempotent rejected receipt, then commits only Tick six for
+the explicit neutral request. The protocol parser also rejects recovery codes
+attached to any non-fixed-input receipt (13/13, RED -> GREEN).
+
+Real Hosted Browser evidence passed with a one-shot exception in the installed
+Babylon `checkSupport` boundary. The verifier resolves the already-loaded module
+URL from resource timing and restores the real method before throwing. Recovery
+warning was observed, held W/arrow state cleared, and simulation continued from
+Tick 141 to 161; settled yaw delta was 1.4047231433611529e-8 radians. The old
+Director damping is settled through ordinary fixed input, not bypassed. Pointer,
+wheel, Reset, protocol and origin-isolation assertions still pass. The first probe
+used a second module URL and timed out; selecting the loaded module corrected
+that injection. A later premature damping assertion was corrected without changing
+Runtime parameters. These failures are not claimed as passing Browser evidence.
+
+The neutral browser adapter policy lives in runtime-babylon's browser helper,
+used by Native main through its public export and by real entry tests within the
+same package. No package test imports an app's private source. The existing
+occlusion probe is explicitly test-support and consumes public capture/testing
+exports. Workspace boundaries pass with zero debt; test census is 481 files,
+438 contract and 43 resource-heavy. Original 3C passes at 11 entries/34 live
+references/10 invariants; its thresholds and exclusions were not weakened.
+Typecheck passed. The frozen Native checker embeds the exact current TypeScript
+graph, and the live/frozen bytes match. A loaded concurrent portable-tool check
+timed out at 20s; its isolated rerun passed in 7.75s, with no timeout increase.
+The corrected five-Tick positive was also mutation-checked: disabling only the
+new recoverable branch makes the real entry return INTERNAL_FAILURE and fail;
+restoring it passes (1/1). No final generated Case, repository-wide CI or
+independent final review is claimed.
 
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 

@@ -458,6 +458,68 @@ async function main(): Promise<void> {
     await page.keyboard.up("w");
     await page.keyboard.up("ArrowLeft");
 
+    // Fault injection stays in the verifier, never in a generated Module or a
+    // production debug port. Restore the real method before throwing once.
+    await frame.locator("canvas").focus();
+    await page.keyboard.down("w");
+    await page.keyboard.down("ArrowLeft");
+    const recoveredWarning = page.waitForEvent("console", {
+      predicate: (message) => message.text() === "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+      timeout: 30_000,
+    }).catch((error: unknown) => error);
+    const injectionModule = await frame.evaluate(async () => {
+      const moduleUrl = performance.getEntriesByType("resource")
+        .map(({ name }) => name)
+        .find((name) => new URL(name).pathname.includes("characterController"));
+      if (moduleUrl === undefined) throw new Error("Loaded Babylon Character module missing from Browser resource evidence");
+      const { PhysicsCharacterController } = await import(moduleUrl);
+      const prototype = PhysicsCharacterController.prototype;
+      const checkSupport = prototype.checkSupport;
+      prototype.checkSupport = function () {
+        prototype.checkSupport = checkSupport;
+        throw new Error("3C_INPUT_INVALID: browser verifier one-shot support rejection");
+      };
+      return moduleUrl;
+    });
+    const recoveryResult = await recoveredWarning;
+    if (recoveryResult instanceof Error) {
+      throw new Error(`Browser recovery failed: ${JSON.stringify({
+        injectionModule, errors, body: await frame.locator("body").textContent(),
+      })}`, { cause: recoveryResult });
+    }
+    // Clearing physical input does not bypass the old Director damping. Settle
+    // its already-committed target through ordinary deterministic input first.
+    await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const receipt = await probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.recovery.damping",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }) as { status: string };
+      if (receipt.status !== "succeeded") throw new Error("Recovery damping failed");
+    });
+    await page.waitForTimeout(500);
+    const afterRecovery = await cameraSnapshot("request.browser.recovery.settled");
+    await page.waitForTimeout(250);
+    const afterRecoveryWait = await cameraSnapshot("request.browser.recovery.continued");
+    assert(afterRecoveryWait.snapshot.world.simulationTick > afterRecovery.snapshot.world.simulationTick,
+      "a recovered physical-input frame must keep scheduling simulation");
+    assert(Math.abs(afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians -
+      afterRecovery.snapshot.view.camera.viewYawOffsetRadians) < 0.0001,
+      `recovery must clear the held arrow and its velocity: ${JSON.stringify({
+        before: afterRecovery.snapshot.view.camera.viewYawOffsetRadians,
+        after: afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians,
+        ticks: [afterRecovery.snapshot.world.simulationTick, afterRecoveryWait.snapshot.world.simulationTick],
+      })}`);
+    const recoveredPosition = afterRecovery.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    const recoveredPositionAfter = afterRecoveryWait.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    assert(Math.hypot(recoveredPositionAfter[0]! - recoveredPosition[0]!,
+      recoveredPositionAfter[2]! - recoveredPosition[2]!) < 0.01,
+    "recovery must clear held movement input");
+    await page.keyboard.up("w");
+    await page.keyboard.up("ArrowLeft");
+
     const receipt = await page.evaluate(async () =>
       window.__WORLDKIT_HOSTED_RUNTIME__!.submit({
         kind: "worldkit-runtime-session-request",
@@ -514,6 +576,14 @@ async function main(): Promise<void> {
         unrelatedPublicAssetsBlocked: true,
         repositoryRootFileSystemBlocked: true,
         subjectAssetContentHashRequired: true,
+        preparedInputRecovery: {
+          recoveredWarningObserved: true,
+          clearsHeldMovementAndArrowVelocity: true,
+          settledSimulationTick: afterRecovery.snapshot.world.simulationTick,
+          continuedSimulationTick: afterRecoveryWait.snapshot.world.simulationTick,
+          settledYawDeltaRadians: afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians -
+            afterRecovery.snapshot.view.camera.viewYawOffsetRadians,
+        },
         physicalPointerCamera: {
           yawDeltaRadians: cameraAfter.viewYawOffsetRadians - cameraBefore.viewYawOffsetRadians,
           pitchDeltaRadians: cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians,

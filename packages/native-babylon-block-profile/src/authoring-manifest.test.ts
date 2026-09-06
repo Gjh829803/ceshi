@@ -163,7 +163,7 @@ function reconstructionCaseValue() {
           "worldkit://acceptance-target/upper-t-junction@1",
         contributionId: "upper-step-contribution",
         colliderId: "upper-step",
-        role: "step",
+        role: "ground",
         requiresOverlay: true,
       }],
       groundConnectivity: { mode: "case-defined" as const,
@@ -248,7 +248,7 @@ function checkedLayoutValue() {
       diagnostics: [],
       metrics: {
         blockCount: 2,
-        blockCountByShape: { full: 2, half: 0, quarter: 0, small: 0, step: 0 },
+        blockCountByShape: { full: 2, half: 0, quarter: 0, small: 0 },
         blockCountByPaletteRole: {
           ground: 0,
           route: 1,

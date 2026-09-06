@@ -1,6 +1,11 @@
 # Babylon Block Settlement 与真实台阶闭环设计
 
 - 状态：Accepted implementation design
+- 当前修订（2026-09-07）：CF-04/G1/G2 已取代本文 §9/§10 中 anisotropic grid、
+  quarter-height `step` 和逐 Block solid-box 步行面的决定。当前四形状/统一网格及
+  1m source-top smoothing 以 [Native Walkable Surface 修订](./2026-09-02-native-block-walkable-surface-closure-design.md#implementation-revision-record)
+  为准；下文保留历史设计上下文，不可用来恢复已删除方言。真实 Fixture 现在验证
+  0.5m 平滑上升、显式不可行走的 0.5m 高差阻挡及同样的 Reset/ledge/cleanup。
 - 日期：2026-08-31
 - 上位设计：[Babylon Native Block Whitebox 创作 Profile](./2026-08-28-babylon-native-block-whitebox-profile-design.md)
 - Native 权威：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)

@@ -1,3 +1,4 @@
+// Test-only WebGL probe; it is not a production scene entry point.
 import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
@@ -5,8 +6,8 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import { NativeBlockSubjectOcclusionFadeV1 } from "../../../packages/runtime-babylon/src/native-block-subject-occlusion";
-import { captureBabylonArtifactViewV1, prepareBabylonArtifactIdentityCaptureV1 } from "../../../packages/runtime-babylon/src/artifact-capture";
+import { NativeBlockSubjectOcclusionFadeV1 } from "@whitebox-world/runtime-babylon/testing";
+import { captureBabylonArtifactViewV1, prepareBabylonArtifactIdentityCaptureV1 } from "@whitebox-world/runtime-babylon";
 
 const result = document.querySelector<HTMLPreElement>("#result")!;
 

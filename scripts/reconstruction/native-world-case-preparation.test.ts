@@ -366,7 +366,7 @@ describe("trusted Native world Case preparation", () => {
           acceptanceTargetRef: string;
           contributionId: string;
           colliderId: string;
-          role: "ground" | "blocker" | "step";
+          role: "ground" | "blocker";
           requiresOverlay: boolean;
         }[];
         semanticSilhouetteTargets: readonly {

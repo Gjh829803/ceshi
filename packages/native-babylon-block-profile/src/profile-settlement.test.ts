@@ -19,7 +19,7 @@ import {
 import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 
-type Shape = "full" | "half" | "quarter" | "small" | "step";
+type Shape = "full" | "half" | "quarter" | "small";
 type PaletteRole = "ground" | "route" | "structure";
 interface FinalizeSelection {
   readonly id: string;
@@ -204,8 +204,8 @@ async function buildProfileInventoryHash(
         { id: "feature-block", shape,
           paletteRole: variant.paletteRole ?? "route",
           visualGroupId: variant.visualGroupId ?? "feature-group",
-          center: shape === "step"
-            ? [variant.xMeters ?? 1, 0.125, 0] as const
+          center: shape === "half"
+            ? [variant.xMeters ?? 1, 0.25, 0] as const
             : [variant.xMeters ?? 1.25, 0.25,
               shape === "quarter" ? 0 : 0.25] as const },
       ];
@@ -587,7 +587,7 @@ describe("Babylon Native block Profile settlement", () => {
       .toBe(baseline);
     for (const variant of [
       { shape: "quarter" as const },
-      { shape: "step" as const },
+      { shape: "half" as const },
       { paletteRole: "structure" as const },
       { visualGroupId: "changed-group" },
       { colliderGroupId: "changed-collider-group" },

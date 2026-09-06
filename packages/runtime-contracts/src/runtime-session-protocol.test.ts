@@ -542,6 +542,21 @@ describe("Runtime Session V1 public DTOs", () => {
       ...rejectedBody,
     } as const satisfies RuntimeSessionReceiptV1;
     expect(parseRuntimeSessionReceiptV1(rejected)).toEqual(rejected);
+    const recoverableBody = {
+      ...rejectedBody,
+      requestType: "fixed-input.run",
+      diagnostic: {
+        code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED",
+        message: "The invalid input was rolled back.",
+      },
+    } as const;
+    const recoverable = { ...recoverableBody, id: deriveRuntimeSessionReceiptIdV1(recoverableBody) };
+    expect(parseRuntimeSessionReceiptV1(recoverable)).toEqual(recoverable);
+    const wrongOperationBody = { ...recoverableBody, requestType: "snapshot.get" } as const;
+    expect(() => parseRuntimeSessionReceiptV1({
+      ...wrongOperationBody,
+      id: `runtime-session-receipt:${sha256CanonicalJson(wrongOperationBody).slice("sha256:".length)}`,
+    })).toThrow("closed RuntimeSessionReceiptV1 schema");
     const invalidSnapshotCleanupFailureBody = {
       ...rejectedBody,
       diagnostic: {

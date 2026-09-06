@@ -9,10 +9,10 @@ import sharp from "sharp";
 
 import * as nativePackageInput from "../native-scene/native-package-input.js";
 import { createProductionWorldReconstructionRunPortsV1, type ProductionWorldReconstructionRunPortOwnersV1 } from "./production-run-ports.js";
-import { assertProductionNativeBlockGroundTopologyCompatibleV1 } from "./native-ground-analysis-admission.js";
+import { assertProductionNativeBlockGroundTopologyIntegrityV1 } from "./native-ground-analysis-admission.js";
 import { assertNativeBlockProductionSourceImportsV1, NativeBlockPackageErrorV1, packageNativeBlockAttemptV1 } from "./native-package.js";
 
-import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, HOST_CLOSURE_ROOT, SCENE_SOURCE, REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE, REGENERATED_GRID_SCENE_SOURCE, MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE, REMOVED_DISPLAY_GAP_SCENE_SOURCE, MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE, MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE, MISSING_GRID_CHILD_SCENE_SOURCE, NARROW_SPAWN_GROUND_SCENE_SOURCE, SPAWN_ADJACENT_STEP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_AUTHORING } from "./native-package.test-support.js";
+import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, HOST_CLOSURE_ROOT, SCENE_SOURCE, REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE, REGENERATED_GRID_SCENE_SOURCE, MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE, REMOVED_DISPLAY_GAP_SCENE_SOURCE, MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE, MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE, MISSING_GRID_CHILD_SCENE_SOURCE, NARROW_SPAWN_GROUND_SCENE_SOURCE, SPAWN_CAPSULE_OBSTRUCTION_SCENE_SOURCE, EXTRA_VISUAL_GROUP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_AUTHORING } from "./native-package.test-support.js";
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -141,7 +141,7 @@ describe("packageNativeBlockAttemptV1", () => {
       .toBe("function");
   });
 
-  it("fails closed when the Profile topology exceeds the controlled Subject envelope", () => {
+  it("accepts legacy one-meter smoothing and steep terrain while rejecting corrupt topology", () => {
     const evidence = (options: Readonly<{
       riseMeters?: number;
       reverseWinding?: boolean;
@@ -180,31 +180,20 @@ describe("packageNativeBlockAttemptV1", () => {
         },
       } as never;
     };
-    const envelope = (maxStepHeightMeters: number, maxSlopeDegrees: number) => ({
-      envelope: { maxStepHeightMeters, maxSlopeDegrees },
-    }) as never;
-
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence(),
-      envelope(0.3, 42),
     )).not.toThrow();
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
-      evidence(),
-      envelope(0.2, 42),
-    )).toThrow(
-      "WORLDKIT_NATIVE_BLOCK_GROUND_ADMISSION_INPUT_INVALID: Block Profile auto-smooth limit 0.3m exceeds controlled Subject maxStepHeightMeters 0.2m",
-    );
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
-      evidence({ riseMeters: 0.5 }),
-      envelope(0.3, 20),
-    )).toThrow(/slope .* exceeds controlled Subject maxSlopeDegrees 20deg/);
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
+      evidence({ riseMeters: 1 }),
+    )).not.toThrow();
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
+      evidence({ riseMeters: 2 }),
+    )).not.toThrow();
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence({ reverseWinding: true }),
-      envelope(0.3, 42),
     )).toThrow(/downward-facing triangle/);
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence({ topologyPolicyHash: `sha256:${"0".repeat(64)}` }),
-      envelope(0.3, 42),
     )).toThrow(/topology identity or Profile policy is stale/);
   });
 
@@ -726,7 +715,7 @@ describe("packageNativeBlockAttemptV1", () => {
   it("rejects the removed display-gap override before producing advisory artifacts", async () => {
     await expect(completedAttempt({
       sceneSource: REMOVED_DISPLAY_GAP_SCENE_SOURCE,
-    })).rejects.toThrow(/session.finalize requires only staticColliders/);
+    })).rejects.toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
   }, 60_000);
 
   it("joins captured Spawn exactly to the checked Native contribution", async () => {
@@ -914,7 +903,9 @@ describe("packageNativeBlockAttemptV1", () => {
 
   it("reuses Runtime surface admission before Package publication when final topology obstructs the Spawn Capsule", async () => {
     const fixture = await completedAttempt({
-      sceneSource: SPAWN_ADJACENT_STEP_SCENE_SOURCE,
+      // Legacy smoothing changes the adjacent-step center height; use a flat
+      // supported floor and an explicit head obstruction for this rejection.
+      sceneSource: SPAWN_CAPSULE_OBSTRUCTION_SCENE_SOURCE,
     });
 
     const rejected = await packageNativeBlockAttemptV1({

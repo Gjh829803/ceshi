@@ -665,7 +665,7 @@ export function createEvidenceSetFixtureInputV1(
       blockId: "step-shaped-ground-block",
       runtimeEntityId: "native-block:step-shaped-ground-block",
       semanticCaptureClassId: "worldkit.native-block.group.ground-group",
-      shape: "step" as const,
+      shape: "full" as const,
       paletteRole: "ground" as const,
       visualGroupId: "ground-group",
       centerMetersXYZ: [2, -0.5, 2] as const,

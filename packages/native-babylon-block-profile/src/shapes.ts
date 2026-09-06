@@ -3,12 +3,12 @@ export const BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1 = 1 as const;
 export const BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 = 0.985 as const;
 export const BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1 = Object.freeze([
   0.5,
-  0.25,
+  0.5,
   0.5,
 ] as const);
 export const BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1 = Object.freeze([
   0.25,
-  0.125,
+  0.25,
   0.25,
 ] as const);
 
@@ -16,8 +16,7 @@ export type BabylonNativeBlockShapeKindV1 =
   | "full"
   | "half"
   | "quarter"
-  | "small"
-  | "step";
+  | "small";
 
 export type BabylonNativeBlockPositionMetersXYZV1 = readonly [
   xMeters: number,
@@ -36,7 +35,6 @@ export const BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 = Object.freeze({
   half: Object.freeze([1, 0.5, 1]) as readonly [1, 0.5, 1],
   quarter: Object.freeze([0.5, 0.5, 1]) as readonly [0.5, 0.5, 1],
   small: Object.freeze([0.5, 0.5, 0.5]) as readonly [0.5, 0.5, 0.5],
-  step: Object.freeze([1, 0.25, 1]) as readonly [1, 0.25, 1],
 } satisfies Readonly<
   Record<BabylonNativeBlockShapeKindV1, readonly [number, number, number]>
 >);

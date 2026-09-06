@@ -63,10 +63,10 @@ describe("CF-20 legacy advisory volume projection", () => {
       { ...block("f", [5, 0, 0.25]), shape: "quarter" as const, rotationQuarterTurnsY: 1 as const }];
     expect(createBabylonNativeBlockVisualClustersV1(rows)).toHaveLength(rows.length);
   });
-  it("extends the same volume rule to Native quarter-meter treads without aliasing centers", () => {
-    const rows = [0.125, 0.375].map((y, index) => ({ ...block(`step-${index}`, [0, y, 0]), shape: "step" as const }));
+  it("extends the same volume rule to legacy half-meter treads without aliasing centers", () => {
+    const rows = [0.25, 0.75].map((y, index) => ({ ...block(`step-${index}`, [0, y, 0]), shape: "half" as const }));
     expect(createBabylonNativeBlockVisualClustersV1(rows)).toMatchObject([{
-      sourceBlockIds: ["step-0", "step-1"], minimumMetersXYZ: [-0.5, 0, -0.5], maximumMetersXYZ: [0.5, 0.5, 0.5],
+      sourceBlockIds: ["step-0", "step-1"], minimumMetersXYZ: [-0.5, 0, -0.5], maximumMetersXYZ: [0.5, 1, 0.5],
     }]);
   });
 });
@@ -702,8 +702,9 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(outputContract).toContain(
       "A Builder that omits either named planning image has not completed reconstruction preflight.",
     );
-    expect(skill).toContain("final smoothed collision triangles");
-    expect(skill).toContain("place stair and slope transitions outside that landing");
+    expect(skill).toContain("trusted smoothed support surface");
+    expect(skill).toContain("does not require equality between the raw top Y and the final triangle Y");
+    expect(skill).toContain("old one-meter shared-corner smoothing threshold");
     expect(skill).toContain("structural admission evidence, not a Route/Nav product claim");
     expect(skill).not.toContain(
       "then the central ascent, the T-shaped upper platform, the gate/building silhouette",
@@ -798,7 +799,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       "Every `case.json.expected.colliders[].colliderId` and `contributionId` is unique",
     );
     expect(outputContract).toContain(
-      "A pass check's `acceptanceTargetRef` binds at least one required `ground` or `step` Collider",
+      "A pass check's `acceptanceTargetRef` binds at least one required `ground` Collider",
     );
     expect(outputContract).toContain(
       "a block check's ref binds at least one required `blocker` Collider",
@@ -810,17 +811,16 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       "For an intended exposed edge of checked static ground where falling would violate the Case, use `protect-ground-subject`",
     );
     expect(outputContract).toContain(
-      "center lattice is `[0.25, 0.125, 0.25]` meters",
+      "center lattice is `[0.25, 0.25, 0.25]` meters",
     );
     expect(outputContract).toContain(
-      "occupancy grid is `[0.5, 0.25, 0.5]` meters",
+      "occupancy grid is `[0.5, 0.5, 0.5]` meters",
     );
     for (const shapeContract of [
       "`full`: `[1, 1, 1]`",
       "`half`: `[1, 0.5, 1]`",
       "`quarter`: `[0.5, 0.5, 1]`",
       "`small`: `[0.5, 0.5, 0.5]`",
-      "`step`: `[1, 0.25, 1]`",
     ]) {
       expect(outputContract).toContain(shapeContract);
     }
@@ -834,7 +834,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       "Never move, widen, delete, replace, duplicate, or invent a band",
     );
     expect(outputContract).toContain(
-      "Give each frozen point a flat landing with full Capsule-footprint support",
+      "Preserve source-top stand positions with full Capsule-footprint support",
     );
     expect(outputContract).not.toContain(
       "The representative Case needs a readable central ascent, T-shaped upper platform",
@@ -903,7 +903,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
         readFile(path.join(liveRoot, relativePath), "utf8"),
         readFile(path.join(frozenRoot, relativePath), "utf8"),
       ]);
-      expect(frozen, relativePath).toBe(live);
+      expect(frozen === live, `${relativePath} must be byte-identical`).toBe(true);
     }
   });
 
@@ -945,10 +945,10 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(outputContract).toContain("minimumCenterMetersXYZ: [-1, -0.5, 0]");
     expect(outputContract).toContain("repeatCountXYZ: [3, 1, 1]");
     expect(outputContract).toContain(
-      "centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, -1 - stepIndex]",
+      "centerMetersXYZ: [0, 0.25 + stepIndex * 0.5, -1 - stepIndex]",
     );
     expect(outputContract).toContain(
-      "stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j`",
+      "stack `n` `half` blocks at the same XZ center with Y centers `0.25 + 0.5 * j`",
     );
     expect(outputContract).toContain(
       "Put successive tread columns exactly one meter apart along X or Z",
@@ -974,24 +974,24 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
       const centerMetersXYZ = [
         0,
-        0.125 + stepIndex * 0.25,
+        0.25 + stepIndex * 0.5,
         -1 - stepIndex,
       ] as const;
       stairColumns.push(centerMetersXYZ);
       expect(babylonNativeBlockCenterAlignsToGridV1({
-        shape: "step",
+        shape: "half",
         centerMetersXYZ,
         rotationQuarterTurnsY: 0,
       })).toBe(true);
     }
     for (let columnIndex = 1; columnIndex < stairColumns.length; columnIndex += 1) {
       const previous = new Set(babylonNativeBlockOccupiedMicroCellKeysV1({
-        shape: "step",
+        shape: "half",
         centerMetersXYZ: stairColumns[columnIndex - 1]!,
         rotationQuarterTurnsY: 0,
       }));
       const current = babylonNativeBlockOccupiedMicroCellKeysV1({
-        shape: "step",
+        shape: "half",
         centerMetersXYZ: stairColumns[columnIndex]!,
         rotationQuarterTurnsY: 0,
       });
@@ -999,14 +999,14 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }
     const stackedKeys = new Set<string>();
     for (let treadIndex = 0; treadIndex < 4; treadIndex += 1) {
-      const centerMetersXYZ = [0, 0.125 + 0.25 * treadIndex, 0] as const;
+      const centerMetersXYZ = [0, 0.25 + 0.5 * treadIndex, 0] as const;
       expect(babylonNativeBlockCenterAlignsToGridV1({
-        shape: "step",
+        shape: "half",
         centerMetersXYZ,
         rotationQuarterTurnsY: 0,
       })).toBe(true);
       const keys = babylonNativeBlockOccupiedMicroCellKeysV1({
-        shape: "step",
+        shape: "half",
         centerMetersXYZ,
         rotationQuarterTurnsY: 0,
       });
@@ -1014,7 +1014,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       for (const key of keys) stackedKeys.add(key);
     }
     expect(babylonNativeBlockCenterAlignsToGridV1({
-      shape: "step",
+      shape: "half",
       centerMetersXYZ: [0, 0.1, 0],
       rotationQuarterTurnsY: 0,
     })).toBe(false);
@@ -1029,8 +1029,8 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       rotationQuarterTurnsY: 0,
     }));
     expect(babylonNativeBlockOccupiedMicroCellKeysV1({
-      shape: "step",
-      centerMetersXYZ: [0, 0.125, -1],
+      shape: "half",
+      centerMetersXYZ: [0, 0.25, -1],
       rotationQuarterTurnsY: 0,
     }).some((key) => entryGroundKeys.has(key))).toBe(false);
   });
@@ -1067,6 +1067,31 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       expect.objectContaining({ path: "scene.ts" }),
     ]);
     expect(first.stdout).toBe(second.stdout);
+  });
+
+  it("rejects the removed step shape in both portable tools and accepts the legacy half shape", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const sourcePath = path.join(workspace, "scene.ts");
+    const source = await readFile(sourcePath, "utf8");
+    const removedCall = 'session.createBlock({ id: "shape-probe", shape: "step", paletteRole: "ground", centerMetersXYZ: [10, 0.125, 0] });';
+    await writeFile(sourcePath, source.replace("session.finalize(", `${removedCall}\nsession.finalize(`));
+    const rejected = await runSelfCheck(workspace);
+    expect(rejected.exitCode).toBe(2);
+    expect(rejected.report.diagnosticCodes).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+    expect(rejected.report.typecheckDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ typescriptCode: 2322, sourcePath: "scene.ts" }),
+    ]));
+    const rejectedReview = await runVisualReview(workspace);
+    expect(rejectedReview.exitCode).toBe(2);
+    expect(rejectedReview.stderr).toContain("WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID");
+    for (const file of ["builder-top-down-comparison.png", "builder-entry-comparison.png"]) {
+      await expect(readFile(path.join(workspace, "attempts/advisory", file)))
+        .rejects.toMatchObject({ code: "ENOENT" });
+    }
+    const admittedCall = removedCall.replace('shape: "step"', 'shape: "half"').replace("0.125", "0.25");
+    await writeFile(sourcePath, source.replace("session.finalize(", `${admittedCall}\nsession.finalize(`));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, typecheckDiagnostics: [] });
+    expect((await runVisualReview(workspace)).exitCode).toBe(0);
   });
 
   it("accepts actual ungrouped Blocks when the Case declares no semantic targets", async () => {
@@ -1391,7 +1416,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const pairs = [...result.stderr.matchAll(/block '([^']+)' overlaps '([^']+)' at cell ([^;\n]+)/g)];
     expect(pairs.map(([, id, otherId, cell]) => [id, otherId, cell])).toEqual(
       Array.from({ length: Math.min(pairCount, 32) }, (_, index) => [
-        `overlap-${index}`, `base-${index}`, `${19 + index * 4},-4,-1`,
+        `overlap-${index}`, `base-${index}`, `${19 + index * 4},-2,-1`,
       ]),
     );
     expect(result.stderr.includes("additional overlapping Block pairs omitted (limit 32)")).toBe(pairCount > 32);
@@ -1414,9 +1439,9 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(result.exitCode).toBe(2);
     expect([...result.stderr.matchAll(/block '([^']+)' overlaps '([^']+)' at cell ([^;\n]+)/g)]
       .map(([, id, otherId, cell]) => [id, otherId, cell])).toEqual([
-      ["coincident-b", "coincident-a", "19,-4,-1"],
-      ["coincident-c", "coincident-a", "19,-4,-1"],
-      ["coincident-c", "coincident-b", "19,-4,-1"],
+      ["coincident-b", "coincident-a", "19,-2,-1"],
+      ["coincident-c", "coincident-a", "19,-2,-1"],
+      ["coincident-c", "coincident-b", "19,-2,-1"],
     ]);
   });
 

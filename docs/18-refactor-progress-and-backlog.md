@@ -3289,6 +3289,43 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   G2 四形状/统一网格、Builder 指引及消费者尚未完成；全 CF 验收、最终新生成 Case、
   第二张图和合入 main 均未完成，不能用此定向证据替代。
 
+- CF-04/G2 四形状/网格收尾（2026-09-07，`4c2e0537` 后未提交树）：已将
+  `full/half/quarter/small`、0.5m XYZ occupancy 和 0.25m XYZ center lattice 连到
+  Session、metadata、Case/Evidence、当前标准 Case、Corpus 与 live/frozen Builder。
+  删除额外的 quarter-height `step` 方言及强制四分之一米台阶/额外平坦落点指引；
+  保留 G1 的旧 1m source-top smoothing、现有 Capsule 参数和生产/修复预算。
+  BWB-4 真实 Havok 4/4、BWB-5 6/6 通过；受影响 Ground/Materializer/benchmark
+  夹具已修复其旧网格坐标并通过定向回归。Builder 完整检查先有 101/106 通过，
+  五个旧文案/occupancy 断言修正后定向通过；额外的双工具回归验证 `step` 在
+  frozen TypeScript checker 与 renderer 都被拒绝，而合法 `half` 两者均通过。
+  G2 类型检查已通过。Package/Native Check 整组结果为 42/56；多数失败发现 Host
+  遗留的“平滑跨度不得超过人物步高”及全场景坡度否决。已移除这两个旧分支不存在
+  的限制，保留拓扑完整性与实际 Spawn/净空/必需路线检查；真实 composed Subject
+  Package 和两个定向用例 3/3 通过，随后两组 Package 4/4、4/4 通过；最后一组
+  2/3，阻挡夹具改为平地上的真实头部障碍后 1/1 通过。原 14 个失败都有定向绿色
+  证据，但没有重新声称一次整组 56/56。JSON 收据在 output/playwright/cf-g2-package-group1.json、
+  cf-g2-package-group2.json、cf-g2-package-group3.json 和 cf-g2-package-spawn-obstruction.json。
+  G2 达到定向实现检查点，不关闭 CF-04/05/12，不启动最终生成 Case。
+
+- CF-04/G3 待核查：上述邻阶夹具同时暴露 source Spawn 与平滑后实际地面高度的
+  关系。旧 Compiler 直接保留 source stand position，而当前 Native Package/Runtime
+  都执行 post-smoothing support-height 准入。必须用同一布局复现旧分支实际初始落点
+  与首 Tick 行为，再确认/修复这一关系；不能用改测试夹具冒充其已对齐，也不能简单
+  增大容差或追加启动 Tick。范围和所需证据已记录在主实施计划 G3。
+
+- CF-05/R1 浏览器异常恢复（2026-09-07，未提交树）：恢复旧分支精确 prepare 失败
+  条件与一次 neutral Tick，不扩大到脚本或正式 Capture。Runtime 只提供原事务回滚
+  后的一次性错误码/阶段证据，Native 对可恢复请求返回独立拒绝诊断并保留幂等收据；
+  浏览器清空实体按键和箭头速度后只补一次，失败停止。外部 integration/rollback
+  失败仍关闭 Session。Viewer 33/33、实际 Native 与条件边界 27/27 通过；补充验证
+  5 Tick 历史回滚、重复拒绝幂等且补救只到 Tick 6，最新定向入口 5/5。协议拒绝码
+  绑定 fixed-input.run，parser 13/13。真实 Browser 注入一次 checkSupport 失败，
+  收到恢复警告、按键/箭头速度清空后仍从 Tick 141 推进到 161；旧阻尼收敛后 yaw
+  差为 1.4047231433611529e-8。原鼠标/滚轮、Reset 和跨源隔离断言仍通过。
+  类型检查、零债务 workspace boundaries、481 文件 census、原 3C（11/34/10）通过；
+  冻结工具类型图与当前源码精确一致，便携工具单独复验通过，没有放宽超时。
+  这关闭本切片的定向实现/Browser 证据，不代表完整 CF 或最终 Case 已完成。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

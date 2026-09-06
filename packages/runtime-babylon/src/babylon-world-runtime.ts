@@ -284,6 +284,36 @@ function cameraContextWithLockedLocalSocketsV1(
   });
 }
 
+/** Observational failure evidence only; committed state belongs to the transaction. */
+export interface BabylonFixedInputFailureDiagnosticV1 {
+  readonly stage: "prepare" | "rollback";
+  readonly errorCode: string;
+}
+
+function fixedInputFailureCode(error: unknown): string {
+  if (!(error instanceof Error)) return "WORLDKIT_RUNTIME_INTERNAL_FAILURE";
+  const code = /^([A-Z0-9][A-Z0-9_]+):\s*.+$/s.exec(error.message)?.[1];
+  if (code !== undefined) return code;
+  if (error instanceof AggregateError) {
+    for (const cause of error.errors) {
+      const nested = fixedInputFailureCode(cause);
+      if (nested !== "WORLDKIT_RUNTIME_INTERNAL_FAILURE") return nested;
+    }
+  }
+  return "WORLDKIT_RUNTIME_INTERNAL_FAILURE";
+}
+
+export function isRecoverablePreparedFixedInputFailure(
+  error: unknown,
+  diagnostic: BabylonFixedInputFailureDiagnosticV1 | undefined,
+): boolean {
+  return diagnostic?.stage === "prepare" &&
+    diagnostic.errorCode === "3C_INPUT_INVALID" &&
+    error instanceof Error && error.name === "WorldSessionOperationErrorV1" &&
+    error.message.startsWith("ADAPTER_FIXED_INPUT_FAILED:") &&
+    error.message.includes("The Runtime Adapter could not prepare the fixed simulation Tick.");
+}
+
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
   | "scene"
@@ -953,6 +983,7 @@ export class BabylonWorldRuntime {
   private fixedInputReplayHistory: readonly FixedInputReplayHistoryEntryV1[] = [];
   private fixedInputReplayBaseline: FixedInputReplayBaselineCheckpointV1 | undefined;
   private isReplayingFixedInputHistory = false;
+  private latestFixedInputFailureDiagnostic: BabylonFixedInputFailureDiagnosticV1 | undefined;
   private preparedFixedInput: Readonly<{
     beforeRuntimeProjection: BabylonRuntimeProjectionV1;
     beforeWorldProjection: ReturnType<
@@ -1770,6 +1801,12 @@ export class BabylonWorldRuntime {
       this.commitFixedTick({ cameraMode: "controlled-entity" });
     }
     return this.snapshot();
+  }
+
+  consumeFixedInputFailureDiagnostic(): BabylonFixedInputFailureDiagnosticV1 | undefined {
+    const diagnostic = this.latestFixedInputFailureDiagnostic;
+    this.latestFixedInputFailureDiagnostic = undefined;
+    return diagnostic;
   }
 
   [BABYLON_TRAVERSAL_RUNTIME_INTERNAL](): BabylonTraversalRuntimeInternalV1 {
@@ -2630,6 +2667,7 @@ export class BabylonWorldRuntime {
       BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]
     >>>
   >> {
+    this.latestFixedInputFailureDiagnostic = undefined;
     this.assertUsable();
     if ([...this.characterEntitiesByEntityId.values()].some(
       (character) => !isCharacterMovementControllerV1(character.movement),
@@ -2730,11 +2768,17 @@ export class BabylonWorldRuntime {
       try {
         await this.restorePreparedFixedInput();
       } catch (rollbackError) {
+        this.latestFixedInputFailureDiagnostic = Object.freeze({
+          stage: "rollback", errorCode: fixedInputFailureCode(rollbackError),
+        });
         throw new AggregateError(
           [error, rollbackError],
           "Transactional Runtime Tick prepare failed and its checkpoint could not be restored.",
         );
       }
+      this.latestFixedInputFailureDiagnostic = Object.freeze({
+        stage: "prepare", errorCode: fixedInputFailureCode(error),
+      });
       throw error;
     }
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";

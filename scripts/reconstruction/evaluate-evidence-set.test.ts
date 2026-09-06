@@ -269,7 +269,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     );
   });
 
-  it("derives step evidence from the selected trusted Block shape", () => {
+  it("derives ground evidence solely from the explicit static-surface binding", () => {
     expect(projectColliderEvidenceRoleV1({
       kind: "static-surface",
       surfaceEntityId: "step-surface",
@@ -277,7 +277,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:step-surface:step-top",
-    }, ["step"])).toBe("step");
+    })).toBe("ground");
     expect(projectColliderEvidenceRoleV1({
       kind: "static-surface",
       surfaceEntityId: "group-surface",
@@ -285,7 +285,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:group-surface:group-top",
-    }, ["step", "full"])).toBe("ground");
+    })).toBe("ground");
   });
 
   it("canonicalizes adjacent opening distance pairs independently of depth order", () => {

@@ -16,8 +16,7 @@ export type BabylonNativeBlockMaterializerShapeV1 =
   | "full"
   | "half"
   | "quarter"
-  | "small"
-  | "step";
+  | "small";
 
 export type BabylonNativeBlockMaterializerPaletteRoleV1 =
   | "ground"
@@ -191,7 +190,7 @@ const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const SEMANTIC_CLASS = /^[a-z][a-z0-9.-]{2,127}$/;
 const IDENTITY_COLOR = /^#[0-9A-F]{6}$/;
 const SHAPES = new Set<BabylonNativeBlockMaterializerShapeV1>([
-  "full", "half", "quarter", "small", "step",
+  "full", "half", "quarter", "small",
 ]);
 const PALETTE_ROLES = new Set<BabylonNativeBlockMaterializerPaletteRoleV1>([
   "ground", "route", "structure", "hazard", "water-like-visual",

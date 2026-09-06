@@ -287,6 +287,19 @@ describe("world reconstruction contracts", () => {
     }
   });
 
+  it("rejects the removed shape-derived step Collider role in Case and Evidence", () => {
+    const sourceCase = caseValue();
+    sourceCase.expected.colliders[0]!.role = "step";
+    expect(() => parseWorldReconstructionCaseV1(sourceCase))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+    const sourceEvidence = evidenceValue();
+    const colliderEvidence = sourceEvidence.observedDimensions.find(({ dimensionId }) => dimensionId === "collider")!;
+    const observed = colliderEvidence.observed as { contributions: Array<{ role: string }> };
+    observed.contributions[0]!.role = "step";
+    expect(() => parseWorldReconstructionEvidenceSetV1(sourceEvidence))
+      .toThrowError("WORLD_RECONSTRUCTION_EVIDENCE_SET_INVALID");
+  });
+
   it.each([
     "Cloud-temple.case",
     "cloud_temples.case",
