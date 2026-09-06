@@ -138,19 +138,27 @@ from entering it. Generic wording such as “preserve the layout” is insuffici
 
 ## Generation and review
 
-1. Generate the styled opening first. Do not start tri-view generation before inspecting and accepting it.
-2. Inspect it side by side with the actual whitebox opening. Reject it if it
+1. Generate the styled opening first. Inspect and select its final generated PNG
+   before starting tri-view generation.
+2. Inspect it side by side with the actual whitebox opening. If it
    copied the user's composition, materially moved a whitebox mass, changed the
    protected envelope's left/right boundary or width profile, broke its visible
    continuity, added any obstruction inside it, or visualized an undeclared
-   technical helper. Revise only the opening prompt and regenerate once.
-3. Use the accepted styled opening as the shared appearance anchor for all
+   technical helper, revise only the opening prompt and regenerate once.
+   Then save the final generated PNG and freeze it as the appearance anchor.
+   Report any remaining visual differences in the final response; selecting
+   this anchor does not assert perfect visual alignment.
+3. Use that exact styled opening as the shared appearance anchor for all
    tri-views. Generate every declared tri-view, parallelizing those independent
    calls when the tool permits.
 4. Inspect the outputs for the required panel count, target identity, consistent
    appearance, exact left=Front / center=Right / right=Back order, and absence
    of text or viewport residue. Regenerate a failed image at most once.
-5. Leave every accepted PNG at its exact Host-declared output path and finish.
+5. Save each final generated PNG at its exact Host-declared output path, including
+   images with remaining visual differences after their allowance. Report those
+   differences by target in the final response. Visual self-review guides repair;
+   it is not an additional production delivery gate. Do not withhold a valid
+   required PNG, fabricate a visual pass, or add another generation round.
 
 Do not create a second Codex task, delegate work, call an external provider, or
 write undeclared files. The Host validates file integrity and manifest closure
@@ -159,8 +167,8 @@ after delivery; do not claim those checks yourself.
 For a Host-declared tri-views-only task, the already accepted styled opening and
 prompt bundle are frozen inputs. Do not regenerate the opening or edit that bundle;
 perform steps 3–5 using the attached styled-opening-frame as the exact appearance
-anchor. Regenerate only failed tri-view images, at most once each. If a required
-image still fails its visual check after that allowance, report the failure and do
-not deliver it as accepted. Never replace a passing image as part of another
+anchor. Regenerate only failed tri-view images, at most once each. Save every final
+generated PNG after that allowance and report remaining visual differences without
+claiming a visual pass. Never replace a passing image as part of another
 image's repair. The Host runs its file/hash/role checks after this one task returns;
 it does not conduct an intermediate approval or a second semantic review.

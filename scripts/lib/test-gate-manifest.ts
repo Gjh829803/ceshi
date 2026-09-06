@@ -28,6 +28,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/native-scene-playground/src/native-package-vite-seam.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/page-failure.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/world-package-loader.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-renderer-lifecycle.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-write-capability.test.ts", lane: "contract" },
   { path: "apps/playground/src/authoring-export.test.ts", lane: "contract" },

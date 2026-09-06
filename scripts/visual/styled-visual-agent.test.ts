@@ -496,10 +496,10 @@ describe("single-task styled visual production", () => {
       const root = argument(args, "--repo-root");
       expect(root).not.toBe(input.repoRoot);
       const instruction = await readFile(argument(args, "--instruction-file"), "utf8");
-      expect(instruction).toContain("Only after accepting it, use that exact styled-opening-frame PNG");
+      expect(instruction).toContain("save and freeze that exact styled-opening-frame PNG as the appearance anchor");
       expect(instruction).toContain("at most one regeneration per failing image");
       const skill = await readFile(path.join(root, ".codex/skills/worldkit-visual-reconstructor/SKILL.md"), "utf8");
-      expect(skill).toContain("Do not start tri-view generation before inspecting and accepting it");
+      expect(skill).toContain("before starting tri-view generation");
       expect(skill).not.toContain('"provider":');
       for (let i = 0; i < args.length; i++) if (args[i] === "--asset") {
         const [, source] = args[++i]!.split("::");

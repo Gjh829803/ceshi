@@ -3374,6 +3374,29 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   改为旧分支已有的有序 1–8 modes，定向测试通过。最终全量检查/合入仍待收口；用户
   禁用子智能体，本轮没有独立子智能体审查证据。
 
+- CF-16/VISUAL-DELIVERY-PARITY（2026-09-07，main-agent-only）：真实视觉任务
+  `visual-1788736127520-dedbbd` 已终局失败（CLI exit 2，task-rejected）。开场/人物图
+  留在隔离 workspace，目标 2/3/4 在各自单次重生成后因比例/基线差异被任务扣留，
+  Host 因必需输出缺失拒绝，未运行视觉 finalization。白盒已发布结果未被覆盖。
+  重新沿 pinned old 实际入口核对：`run-styled-opening-frame-agent.sh` 调用
+  `run-gemini-visual-pipeline.py`，`_generate_one` 得到有效 PNG 即保存返回，
+  `_generate_images` 汇总文件，没有语义相似度/基线不通过就扣留文件的 gate。
+  因此此前仅从旧 Visual Skill 推断实际生产自检/失败规则并不充分；当前 dispatcher
+  明写的“失败则不交付”确为新增生产否决。按用户优先规则删除该否决，保留既定的
+  Codex 单任务、开场先行/确切锚点、检查与现有最多单次重生成；预算后交付真实 PNG，
+  残余差异在任务最终回复如实报告，不伪称语义通过。Host 文件/身份/Hash 校验不变。
+  实际失败任务为 Skill RED；现有入口/closure 77 项通过，过期文案断言修正后该项
+  1/1 与 Studio 直接调用契约 1/1 通过。修订后模型行为仍待新的真实视觉尝试验证；
+  不复制旧任务未交付图片冒充成功，也不恢复旧 Provider。
+
+- 候选 `844554ab` 已整合 `origin/main@0d766279`，仅测试数据格式冲突，相关回归
+  53/53。本批完整检查已通过 generated self-check、typecheck、Studio、独立 Node
+  69/69；Site 因本地缺 vinext 首次未启动，按 lock 安装后使用现有 Node 22.21 完成
+  build 与页面测试 1/1（SDK 检查环境 Node 23.11）。root 的 workspace boundaries、
+  clean-break、3C 已通过；census 发现新 loader 回归未登记，补入 contract lane 后
+  census 通过（482 files = 439 contract + 43 resource-heavy）。Vitest 两 lane 和
+  Playground build 尚未执行完成，须从这里继续，不重复已通过的独立/Studio 整套。
+
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
   用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。

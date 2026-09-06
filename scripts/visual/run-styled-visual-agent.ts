@@ -178,7 +178,7 @@ This is one ${options.scope === "all" ? "complete opening-and-tri-views" : "tri-
 Read ${relativeScene}/scene-brief.md, ${relativeScene}/visual-identity-palette.json and ${relativeScene}/${captureFile}.
 The actual-whitebox-opening fixes spatial composition and the visible movement envelope; user-first-frame fixes appearance only.
 ${options.scope === "all"
-    ? "Generate and visually inspect the opening first. Only after accepting it, use that exact styled-opening-frame PNG as the appearance anchor for every tri-view. Never generate the opening and tri-views concurrently."
+    ? "Generate and visually inspect the opening first. After its existing repair allowance, save and freeze that exact styled-opening-frame PNG as the appearance anchor for every tri-view. Never generate the opening and tri-views concurrently."
     : "The attached styled-opening-frame is already accepted. Keep it and the prompt bundle byte-for-byte unchanged; use this exact image as the appearance anchor for every tri-view."}
 Inspect each image inside this same task. Allow at most one regeneration per failing image, preserving every other accepted image.
 Every target sheet retains left=Front / center=Right / right=Back, its shared physical scale and baseline; do not infer directions from the opening camera.
@@ -188,7 +188,7 @@ Write only these declared output files:
 ${outputs.map(file => `- ${relativeScene}/${file}`).join("\n")}
 Use built-in image generation; no subagents, second tasks or external image providers. Do not modify frozen inputs, Runtime, geometry or Camera.
 The prompt artifact uses schemaVersion 2, no provider field, roles [actual-whitebox-opening,user-first-frame] for opening and [target-whitebox-triview,styled-opening-frame,user-first-frame] for tri-views.
-Host file/hash/role finalization runs after this task returns; do not claim it yourself. If an image still fails after its allowed regeneration, report the failure rather than deliver it as accepted.
+After the existing allowance, save every final generated PNG at its declared path, even if visual differences remain. Report residual differences by target in the final response without claiming perfect alignment. Visual self-review is repair feedback, not a production delivery veto; do not withhold a valid required image or add a generation round. Missing, unreadable or corrupt outputs are still failures. Host file/hash/role finalization runs after this task returns; do not claim it yourself.
 `;
     const instructionPath = path.join(taskRoot, "instruction.txt");
     if (!prior) await writeFile(instructionPath, instruction);
