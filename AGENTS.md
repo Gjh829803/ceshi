@@ -1,3 +1,18 @@
+## Known-good historical Creator baseline — 2026-09-06
+
+The user requested restoring the exact version that generated the canyon courier
+and hollow-ring worlds, then adding later improvements one at a time. This branch
+is based on `03b8cb656c2e4ccf0770f50d8c09872c39259a48`. Keep SDK, Creator tools,
+prompt and launcher at this baseline until a specific next change is requested.
+The pinned cloud runtime and restoration evidence are documented in
+`docs/evaluations/gpt6-three/known-good-baseline/README.md`.
+
+The historical Agent playtest mechanism belongs to this baseline. The production
+evaluation viewer remains separate: do not reintroduce assistant/human review as a
+playability gate. Later camera, UI, capture, budget, continuation and prompt changes
+remain preserved on `codex/gpt6-world-agent-refactor`, not silently mixed in here.
+The two-case baseline replay is prepared without new cloud submissions.
+
 # Agent Whitebox World authoring rules
 
 ## GPT-6 Creator reconstruction branch — 2026-09-05

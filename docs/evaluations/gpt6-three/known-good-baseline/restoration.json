@@ -1,0 +1,17 @@
+{
+  "status": "restored-and-pinned",
+  "sourceCommit": "03b8cb656c2e4ccf0770f50d8c09872c39259a48",
+  "branch": "codex/creator-known-good-baseline",
+  "cloudClosure": {
+    "status": "passed",
+    "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+    "sourceCommit": "03b8cb656c2e4ccf0770f50d8c09872c39259a48",
+    "sdkRuntimeHash": "0a52dc8c4c877fc48ea20f730b07c869ee5af411fbafb50d341bcf7bd8d50290"
+  },
+  "selectedTaskIds": [
+    "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+    "gpt6-holdout-screenshot-20260823-193953--three-sdk"
+  ],
+  "newCloudSubmissions": 0,
+  "historicalPromptAndDefaultsMatch": true
+}
