@@ -15,6 +15,47 @@ class EndCycle(BaseException):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_refills_one_free_slot_without_exceeding_account_or_global_capacity(self):
+        for active_count, expected_submissions in [(7, 1), (8, 0)]:
+            with self.subTest(active_count=active_count), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                master = {'cases': [{'id': 'next', 'prompt': 'unchanged scene request'}]}
+                controller.write(root / 'master.json', master)
+                controller.write(root / 'policy.json', {'denied': []})
+                controller.write(root / 'account-inventory-private.json', [{
+                    'label': 'A', 'identitySha256': 'account-a', 'codexAccountId': 'fixture-account',
+                    'eligible': True, 'healthStatus': 'active', 'quotaLeftPercent': 50}])
+                controller.write(root / 'account-decisions.json', {'accounts': {
+                    'A': {'identitySha256': 'account-a', 'status': 'verified-good'}}})
+                controller.write(root / 'campaign.json', {
+                    'id': 'fixture', 'masterManifest': str(root / 'master.json'),
+                    'createdAt': '2020-01-01T00:00:00+00:00',
+                    'deadline': '2099-01-02T00:00:00Z', 'latestNewGenerationAt': '2099-01-01T23:00:00Z',
+                    'maxConcurrency': 8, 'accountPolicyPath': str(root / 'policy.json'),
+                    'inventoryPath': str(root / 'account-inventory-private.json'),
+                    'runtimeLockPath': str(root / 'frozen-lock.json'), 'waves': []})
+                rows = [{'caseId': f'active-{i}', 'taskId': f'active-{i}--three-sdk',
+                         'root': str(root / f'active-{i}'), 'phase': 'submitted',
+                         'jobId': f'gen_{i}', 'requestedAccountSha256': 'account-a',
+                         'cliActivityObserved': True} for i in range(active_count)]
+                with patch.object(controller, 'OUT', root), patch.object(controller, 'REPO', root), \
+                        patch.object(controller, 'rows_of', return_value=rows), \
+                        patch.object(controller, 'refresh_health'), \
+                        patch.object(controller, 'start_supervisor') as start, \
+                        patch.object(controller.subprocess, 'run') as prepare, \
+                        patch.object(controller.time, 'sleep', side_effect=EndCycle):
+                    with self.assertRaises(EndCycle):
+                        controller.main()
+                self.assertEqual(prepare.call_count, expected_submissions)
+                self.assertEqual(start.call_count, expected_submissions)
+                if expected_submissions:
+                    args = prepare.call_args.args[0]
+                    self.assertEqual(args[args.index('--case-limit') + 1], '1')
+                    self.assertEqual(args[args.index('--account-concurrency') + 1], '20')
+                    manifest = json.loads(Path(args[args.index('--manifest') + 1]).read_text())
+                    self.assertEqual(manifest['cases'], [{**master['cases'][0], 'codexAccountIds': ['fixture-account']}])
+                    self.assertEqual(len(json.loads((root / 'campaign.json').read_text())['waves']), 1)
+
     def test_pre_model_rejections_do_not_spend_two_world_generation_attempts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

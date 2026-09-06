@@ -139,7 +139,7 @@ def main():
    # Only a deliberate retry after a confirmed terminal attempt; same reference/runtime.
    retry=[c for c in master['cases'] if c['id'] in byCase and c['id'] not in available and can_retry_attempts(byCase[c['id']])]
    pending+=retry
-   if slots<4 or not pending:time.sleep(30);continue
+   if slots<1 or not pending:time.sleep(30);continue
    # Prefer proven accounts; balance occupancy before using their remaining capacity.
    accounts.sort(key=lambda a:(0 if decisions[a['label']]['status']=='verified-good' else 1 if decisions[a['label']]['status']=='production-good' else 2,-float(a.get('quotaLeftPercent') or 0),a['label']))
    pools={a['label']:[x for x in accounts if x['label']==a['label']] for a in accounts};allocated=[]

@@ -200,6 +200,14 @@ from 4 to at most 8; use the current per-account decisions above and in
 `account-decisions.json`, preserving mixed samples. Promising accounts still
 have a maximum of two unreviewed attempts.
 
+At 04:05 local, Host admission stopped waiting for at least four free slots.
+Any positive free capacity now refills on the next controller cycle, retaining
+all per-account/global limits, quality routing and availability breakers.
+Seven controller tests passed, including an end-to-end cycle with one free slot
+and a full-capacity cycle that must not prepare another task. Existing live job
+IDs/payload hashes and detached supervisors were preserved during the parent-only
+restart; evidence is in `single-slot-refill-adjustment.json`.
+
 Retry budgets distinguish provider rejections from world authoring. A case has at
 most 4 confirmed provider attempts and at most 2 attempts with evidence of model
 work. Missing/ambiguous evidence counts conservatively as model work. Explicit
