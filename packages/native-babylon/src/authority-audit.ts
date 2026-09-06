@@ -769,6 +769,19 @@ export function auditBabylonNativeSceneAuthoritySnapshotV1(
   }
 }
 
+function createAuthorityMethodGuard(
+  originalMethod: (...args: never[]) => unknown,
+  recordViolation: () => never,
+  allowCall: ((args: readonly unknown[]) => boolean) | undefined,
+): (this: unknown, ...args: readonly unknown[]) => unknown {
+  // Return an anonymous expression directly: tsx's keepNames decorates a named
+  // expression per allocation, adding a property dictionary to every hot guard.
+  return function(this: unknown, ...args: readonly unknown[]): unknown {
+    if (allowCall?.(args)) return Reflect.apply(originalMethod, this, args);
+    return recordViolation();
+  };
+}
+
 function installOwnMethodGuard(
   owner: Record<string, unknown>,
   key: string,
@@ -782,15 +795,11 @@ function installOwnMethodGuard(
   Object.defineProperty(owner, key, {
     configurable: true,
     enumerable: originalOwnDescriptor?.enumerable ?? false,
-    value: function guardedAuthorityMethod(
-      this: unknown,
-      ...args: readonly unknown[]
-    ): unknown {
-      if (allowCall?.(args)) {
-        return Reflect.apply(originalMethod, this, args);
-      }
-      return recordViolation();
-    },
+    value: createAuthorityMethodGuard(
+      originalMethod as (...args: never[]) => unknown,
+      recordViolation,
+      allowCall,
+    ),
     writable: true,
   });
   restorers.push(() => {

@@ -186,3 +186,50 @@ post-GC heap: **556,598,744 bytes**, down from 577,032,528 after B3. Post-dispos
 40,618,080 bytes with zero Meshes/Geometries. This repairs a real large shared-
 Geometry cleanup failure, but per-Mesh cost and the 31,996,000 snapshot visits
 remain. No full 158,100-Block Host replay or scene-effect acceptance is claimed.
+
+## MEM3-B5 production-loader guard allocation
+
+Main-agent-only; existing authority-audit method guard factory. Two real V8 heap
+snapshots of the same first 1,000 captured Blocks (private diagnostics at
+`/tmp/cf20-mem3-heap.9LNvuw/`) show live post-GC heaps of 54,077,696 bytes without
+audit and 104,619,200 with audit. These are equivalent inputs in separate processes,
+not a claim of deterministic total heap size. Snapshot self-size deltas include
+26,153,600 bytes of property arrays, 7,355,880 bytes of anonymous closures,
+6,620,040 bytes of closure contexts, and 2,861,120 bytes of named method guards.
+Tracing property-array ownership attributes 11,444,480 bytes to 44,705 guarded
+method functions alone, versus 6,208,000 bytes on the 1,000 Mesh objects.
+
+Installed `tsx` sets esbuild `keepNames: true`. An isolated transform verifies
+that named function expressions receive `Object.defineProperty(fn, 'name', ...)`
+on every factory invocation; an anonymous function returned directly from a
+factory does not. Keep the same bound permission predicate, dynamic receiver,
+original provider call, mutation latch, constructibility and restoration behavior;
+only remove hot-path name decoration. Do not change global loader settings or
+the classification of Babylon runtime constructors. Required evidence: RED
+production-loader decoration test, complete authority/Candidate/Runtime/Session
+tests, typecheck and the same 8,000-Block allocation diagnostic.
+
+The old pinned compiler calls `createBlockWorldRuntimeClustersV2` before compiling
+Canonical world nodes (`packages/block-world-compiler/src/compile.ts`, lines 520-521
+and 394). Native currently allocates raw Meshes before later batching. This remains
+a known representation/capacity difference; a small memory improvement alone does
+not demonstrate that the old full-world capacity has been restored.
+
+Implemented by extracting the existing method guard expression into one private
+factory that returns it anonymously. The factory captures only the permission
+predicate, original method and violation latch; descriptor restoration still
+belongs to the original installation scope. No global tsx configuration or public
+Runtime constructor naming changed.
+
+The isolated regression patches `Object.defineProperty` **before** dynamically
+importing the audited module, because tsx captures that function in its naming
+helper at module initialization. An initial instrumentation placed after import
+missed the writes and was not valid RED evidence. The corrected reproducer saw
+all six sampled guards decorated before the fix, and zero afterward. Four complete
+authority/Candidate/Runtime/Session files passed **340/340**; typecheck passed.
+The unchanged audited 8,000-Block diagnostic completed with no diagnostics under
+its unchanged 1 GiB limit: post-GC live heap **474,001,776 bytes**, compared with
+556,598,744 before B5. Disposal left 40,664,832 bytes and zero Meshes/Geometries.
+The original full Case still has no Native Check success; aggregate CI, rendered
+acceptance and main merge remain open. This measurement does not justify raising
+the production heap or reducing the generated world.

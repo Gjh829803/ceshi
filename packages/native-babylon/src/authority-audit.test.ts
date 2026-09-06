@@ -132,6 +132,42 @@ function registerSpawn(
 }
 
 describe("installed Babylon runtime-kind authority audit", () => {
+  it("CF-20 avoids per-method function-name decoration in the production TS loader", async () => {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+      import { Scene } from '@babylonjs/core/scene.js';
+      import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
+      const engine = new NullEngine(); const scene = new Scene(engine);
+      const originalDefine = Object.defineProperty;
+      const decoratedFunctions = new WeakSet();
+      Object.defineProperty = function(owner, key, descriptor) {
+        if (typeof owner === 'function' && key === 'name') decoratedFunctions.add(owner);
+        return originalDefine(owner, key, descriptor);
+      };
+      let probe;
+      try {
+        // Install before importing: tsx captures Object.defineProperty in its __name helper.
+        const { beginBabylonNativeSceneAuthorityProbeV1 } = await import(${JSON.stringify(new URL("./authority-audit.ts", import.meta.url).href)});
+        probe = beginBabylonNativeSceneAuthorityProbeV1({engine, scene});
+        const mesh = MeshBuilder.CreateBox('name-allocation', {}, scene);
+        const ready = mesh.onMeshReadyObservable;
+        const guards = [mesh.registerBeforeRender, ready.add, ready.remove, ready.clear,
+          ready.notifyObservers, ready.observers.push];
+        assert.equal(guards.filter(guard => decoratedFunctions.has(guard)).length, 0,
+          'hot guard factories must not allocate function-name property dictionaries per method');
+        assert.deepEqual(probe.audit(), []);
+        assert.throws(() => ready.add(() => {}), /WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN/);
+      } finally {
+        Object.defineProperty = originalDefine;
+        probe?.restore(); scene.dispose(); engine.dispose();
+      }
+    `;
+    await promisify(execFile)(process.execPath,
+      ["--import", "tsx", "--input-type=module", "--eval", script],
+      { timeout: 30_000 });
+  }, 35_000);
+
   it("CF-20 does not reinstall guards for repeated Geometry insertion", () => {
     const candidate = createCandidate();
     const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
