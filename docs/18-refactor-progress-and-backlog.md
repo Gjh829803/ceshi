@@ -3339,7 +3339,12 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   对应最小修复 `CF-02/STARTUP-SNAPSHOT`：23MB Package 在 Vite 配置阶段重复完整
   校验三遍约 48s，超过旧分支同样的 30s 预算。改为读取同一已验证的启动快照，
   HTTP 请求仍保留原目录漂移检查，不修改超时。transport/Vite 19/19 与 typecheck
-  通过；需冻结提交后实测启动，再通过原 Run 的 Host-only 恢复继续，不重跑模型。
+  通过；`23c995cf` 上两个服务已在 17.7s 就绪，未放宽 30s 启动预算。原 Run 的
+  Host-only 恢复 1 已进入浏览器，但停在 package/revision 0 后触发 45s stall。
+  实测原 Package 收据在 15.2s、17 个文件在 31.1s 下载完成，存在未上报的真实进度。
+  继续补 `CF-02/PACKAGE-PROGRESS`：仅把完成的传输接入既有 reporter，不用计时心跳
+  伪造进度，不改 45s/180s 预算，不减完整校验。37 项 focused、最终 typecheck 和
+  loader 补充 3 项通过，下一步恢复 Host；两次失败记录及原 Package 都保留，不重跑模型。
 
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder

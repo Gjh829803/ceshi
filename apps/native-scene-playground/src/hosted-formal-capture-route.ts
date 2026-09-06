@@ -262,6 +262,7 @@ async function initializeFormalCaptureFrameV1(input: Readonly<{
   );
   const verified = await loadVerifiedNativeWorldPackageV1(
     new URL("/__worldkit/native-package/", location.origin),
+    () => reporter.progress("package"),
   );
   reporter.progress("module");
   const moduleImport = await import("virtual:worldkit-native-scene");

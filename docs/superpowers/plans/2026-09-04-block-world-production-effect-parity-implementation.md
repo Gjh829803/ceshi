@@ -1379,6 +1379,21 @@ on the requested new worktree without labeling the overall goal complete.
 
 ### CF-19/GROUND-FEEDBACK minimum flow blocker (2026-09-07)
 
+`CF-02/PACKAGE-PROGRESS`: startup snapshot fix `23c995cf` passes real
+default-budget startup (two Vite servers ready in 17,671/17,689ms; 33,547ms
+including parent Package admission, original Root unchanged). Host-only recovery
+1 advances to Browser loading, then stalls: retained trace stays at package,
+revision 0, until 47,664ms (45s stall/180s hard budgets unchanged). A direct
+same-Package HTTP probe receives the receipt at 15,210ms and all 17 root files at
+31,135ms; progress existed but was not published. Wire completed receipt/file
+body transfers to the existing startup reporter's package revision. No timer
+heartbeats, admission claims, changed budgets, retries or reduced verification.
+Observer failures cannot veto Package loading; malformed bytes still fail the
+unchanged final verifier. Held-body RED proves missing intermediate progress;
+loader/route/watchdog focused suites pass 37/37. Final typecheck and the three
+loader regressions pass. Retained-Run Host-only recovery remains required; the
+original failed output epoch is retained.
+
 `CF-02/STARTUP-SNAPSHOT` follow-up (main-agent-only/sequential): `1e1f572f`
 Case `paper-moon-054-cf-scan-0907`, Run `run-20260906221617-80057`, passed
 Builder delivery, Host self-check, Native Check and Ground (28,320 standable
