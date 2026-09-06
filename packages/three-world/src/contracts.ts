@@ -54,6 +54,9 @@ export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMoveme
 );
 export interface CameraFollowOptions {
  readonly targetEntityId?:string;
+ /** With no orbit override, continue the authored pose and framing. */
+ readonly framingMode?:'preserve-opening'|'target';
+ readonly followHalfLifeSeconds?:number;
  readonly distanceMeters?:number;
  readonly targetHeightMeters?:number;
  readonly pitchRadians?:number;
@@ -227,6 +230,7 @@ export interface WorldDescription {
 }
 export interface CameraState {
  readonly mode:'authored'|'follow-pending'|'follow';
+ readonly framingMode?:'preserve-opening'|'target';
  readonly positionWorldMetersXYZ:Vec3;
  readonly desiredPositionWorldMetersXYZ:Vec3;
  readonly desiredYawRadians:number;

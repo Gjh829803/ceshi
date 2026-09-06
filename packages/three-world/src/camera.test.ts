@@ -14,6 +14,229 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('reacquires setup-time pose and projection edits when pending follow activates', () => {
+    const { camera, rig } = fixture(); rig.setFollow({ targetEntityId: 'hero' });
+    camera.position.set(-9, 18, 34); camera.lookAt(8, 25, -80);
+    camera.fov = 38; camera.setViewOffset(1800, 1000, 100, 120, 1200, 800); camera.updateProjectionMatrix();
+    const opening = camera.clone(); rig.updateDesired({ activate: true }, 1 / 60);
+    for (let i = 0; i < 120; i++) { rig.updateDesired({}, 1 / 60); rig.update(1 / 60); }
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(camera.projectionMatrix.equals(opening.projectionMatrix)).toBe(true);
+    expect(camera.view).toEqual(opening.view);
+  });
+
+  it('smooths ordinary target translation without inheriting subject rotation or changing orientation', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(4, 6, 14); camera.lookAt(-6, 8, -5);
+    const opening = camera.clone(); let target: Vec3 = [0, 0, 0];
+    const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', activateOnInput: false });
+    target = [2, 1, -3]; rig.update(.08);
+    expect(camera.position.distanceTo(opening.position.clone().add(new THREE.Vector3(1, .5, -1.5)))).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    rig.update(.08);
+    expect(camera.position.distanceTo(opening.position.clone().add(new THREE.Vector3(1.5, .75, -2.25)))).toBeLessThan(1e-8);
+  });
+
+  it('allows zero follow damping and preserves translated subject screen composition', () => {
+    const camera = new THREE.PerspectiveCamera(44, 1.8, .1, 500); camera.position.set(3, 5, 12); camera.lookAt(-4, 8, -30);
+    const opening = camera.clone(); let target: Vec3 = [0, 0, 0];
+    const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', followHalfLifeSeconds: 0, activateOnInput: false });
+    const before = new THREE.Vector3(0, 1, 0).project(camera);
+    target = [2, 1, -3]; rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position.clone().add(new THREE.Vector3(...target)))).toBeLessThan(1e-8);
+    const after = new THREE.Vector3(2, 2, -3).project(camera);
+    expect(after.x).toBeCloseTo(before.x, 9); expect(after.y).toBeCloseTo(before.y, 9);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+  });
+
+  it('uses the intended off-center view for movement and keeps user orbit after input ends', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(3, 4, 8); camera.lookAt(-7, 9, -30); camera.rotateZ(.2);
+    const opening = camera.clone(); let target: Vec3 = [0, 0, 0];
+    const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', followHalfLifeSeconds: 0, activateOnInput: false });
+    const openingDirection = camera.getWorldDirection(new THREE.Vector3());
+    expect(rig.desiredYawRadians).toBeCloseTo(Math.atan2(-openingDirection.x, -openingDirection.z), 9);
+    expect(Math.abs(rig.desiredYawRadians - Math.atan2(3, 8))).toBeGreaterThan(.05);
+    rig.updateDesired({ yawDeltaRadians: .6 }, 1 / 60);
+    const expectedRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .6).multiply(opening.quaternion);
+    const expectedDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(expectedRotation);
+    expect(rig.desiredYawRadians).toBeCloseTo(Math.atan2(-expectedDirection.x, -expectedDirection.z), 9);
+    expect(camera.quaternion.equals(opening.quaternion)).toBe(true);
+    rig.update(1 / 60); const orbited = camera.clone();
+    expect(camera.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-7);
+    for (let i = 0; i < 120; i++) { rig.updateDesired({}, 1 / 60); rig.update(1 / 60); }
+    expect(camera.position.distanceTo(orbited.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(orbited.quaternion)).toBeLessThan(1e-7);
+    target = [1, 0, 2]; rig.update(1 / 60);
+    expect(camera.position.distanceTo(orbited.position.clone().add(new THREE.Vector3(...target)))).toBeLessThan(1e-8);
+  });
+
+  it('preserves distant and polar authored arms on empty input and allows deliberate zoom', () => {
+    for (const point of [[17, 28, 210], [0, 31.3, 0], [0, -28.7, 0]] as const) {
+      const camera = new THREE.PerspectiveCamera(); camera.position.set(point[0], point[1], point[2]); camera.lookAt(-3, 1, -5);
+      const opening = camera.clone();
+      const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]);
+      rig.setFollow({ targetEntityId: 'hero', activateOnInput: false });
+      for (let i = 0; i < 120; i++) { rig.updateDesired({}, 1 / 60); rig.update(1 / 60); }
+      expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+      expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+      const distanceBefore = rig.snapshot().desiredArmDistanceMeters!;
+      rig.updateDesired({ distanceDeltaMeters: -5 }, 1 / 60);
+      expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(distanceBefore - 5, 8);
+      for (let i = 0; i < 240; i++) rig.update(1 / 60);
+      expect(rig.snapshot().actualArmDistanceMeters).toBeCloseTo(distanceBefore - 5, 5);
+      expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    }
+  });
+
+  it('does not jump to legacy pitch limits when the first orbit input reaches an authored pole', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 31.3, 0); camera.lookAt(-3, 1, -5);
+    const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]); rig.setFollow({ targetEntityId: 'hero', activateOnInput: false });
+    const opening = camera.clone(); rig.updateDesired({ pitchDeltaRadians: .01 }, 1 / 60); rig.update(1 / 60);
+    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(Math.PI / 2, 9);
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    rig.updateDesired({ pitchDeltaRadians: -.02 }, 1 / 60); rig.update(1 / 60);
+    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(Math.PI / 2 - .02, 9);
+  });
+
+  it('preserves a zero-length authored arm without forcing an offset or invalid orientation', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 1.3, 0); camera.lookAt(-5, 3, -10);
+    const opening = camera.clone(); const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]);
+    rig.setFollow({ targetEntityId: 'hero' }); rig.updateDesired({ activate: true }, 1 / 60); rig.update(1 / 60);
+    expect(camera.position.equals(opening.position)).toBe(true);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBe(0);
+  });
+
+  it('retains explicit legacy target intent and allows a distinct preservation pivot', () => {
+    for (const options of [{ distanceMeters: 7 }, { pitchRadians: .4 }, { targetHeightMeters: 4 }, { framingMode: 'target' as const }]) {
+      const { rig } = fixture(); rig.setFollow({ targetEntityId: 'hero', ...options, activateOnInput: false, transitionSeconds: 0 }); rig.update(1 / 60);
+      expect(rig.snapshot().desiredArmDistanceMeters).toBe(options.distanceMeters ?? 4);
+      expect(rig.snapshot().desiredPitchRadians).toBe(options.pitchRadians ?? .25);
+    }
+    const { camera, rig } = fixture(); const opening = camera.clone();
+    rig.setFollow({ targetEntityId: 'hero', framingMode: 'preserve-opening', targetHeightMeters: 5, activateOnInput: false }); rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(opening.position.distanceTo(new THREE.Vector3(0, 5, 0)), 8);
+  });
+
+  it('keeps angular framing during real-wall retraction without changing the baseline probe policy', async () => {
+    const physics = await ThreePhysics.create(), camera = new THREE.PerspectiveCamera(44, 1.8, .1, 500);
+    camera.position.set(2, 3, 10); camera.lookAt(-5, 7, -20); const opening = camera.clone();
+    camera.updateMatrixWorld(true);
+    const target: Vec3 = [0, 1.3, 0], before = new THREE.Vector3(...target).project(camera);
+    const rig = new ThreeCameraRig(camera, physics.castCameraArm.bind(physics), () => [0, 0, 0]);
+    rig.setFollow({ targetEntityId: 'hero', activateOnInput: false }); rig.update(1 / 60);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(10, 10, .2)); wall.position.set(0, 3, 6);
+    try {
+      physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' }); physics.step(1 / 60, {}); rig.update(1 / 60);
+      const state = rig.snapshot(), after = new THREE.Vector3(...target).project(camera);
+      expect(state.obstructionEntityId).toBe('wall'); expect(state.actualArmDistanceMeters).toBeLessThan(7);
+      expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+      expect(after.x).toBeCloseTo(before.x, 8); expect(after.y).toBeCloseTo(before.y, 8);
+      expect(physics.castCameraArm(target, state.positionWorldMetersXYZ, .2).distanceMeters).toBeCloseTo(state.actualArmDistanceMeters!, 5);
+    } finally { physics.dispose(); wall.geometry.dispose(); }
+  });
+
+  it('discards damping when a legal target teleport crosses a wall or a corner', async () => {
+    for (const corner of [false, true]) {
+      const physics = await ThreePhysics.create(), camera = new THREE.PerspectiveCamera();
+      const walls = [new THREE.Mesh(new THREE.BoxGeometry(.2, 4, 20))]; walls[0]!.position.y = 2;
+      if (corner) { const cross = new THREE.Mesh(new THREE.BoxGeometry(20, 4, .2)); cross.position.y = 2; walls.push(cross); }
+      let target: Vec3 = [-.8, 0, corner ? -.8 : 0];
+      camera.position.set(-.8, 1.3, corner ? -6.8 : 6); camera.lookAt(target[0], 1.3, target[2]);
+      const rig = new ThreeCameraRig(camera, physics.castCameraArm.bind(physics), () => target);
+      try {
+        walls.forEach((wall, i) => physics.addRigid('wall' + i, wall, { kind: 'fixed', shape: 'box' })); physics.step(1 / 60, {});
+        rig.setFollow({ targetEntityId: 'hero', activateOnInput: false }); rig.update(1 / 60);
+        target = [.8, 0, corner ? .8 : 0]; rig.update(1 / 60);
+        expect(camera.position.x).toBeCloseTo(.8, 7);
+        const pivot: Vec3 = [target[0], 1.3, target[2]], state = rig.snapshot();
+        expect(physics.castCameraArm(pivot, state.positionWorldMetersXYZ, .2).distanceMeters).toBeCloseTo(distance(pivot, state.positionWorldMetersXYZ), 5);
+        expect(state.positionWorldMetersXYZ.every(Number.isFinite)).toBe(true);
+      } finally { physics.dispose(); walls.forEach(wall => wall.geometry.dispose()); }
+    }
+  });
+
+  it('resets pending preserve-follow under a rotated scaled parent and reacquires another target', () => {
+    const camera = new THREE.OrthographicCamera(-4, 4, 3, -3, .1, 100); camera.position.set(0, 3, 8); camera.lookAt(-3, 5, -20);
+    camera.updateMatrix(); camera.matrixAutoUpdate = false;
+    const parent = new THREE.Group(); parent.position.set(2, 0, -3); parent.rotation.set(.1, .4, -.2); parent.scale.setScalar(2); parent.add(camera); parent.updateMatrixWorld(true);
+    let target: Vec3 = [0, 0, 0]; const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', followHalfLifeSeconds: 0 }); rig.sealInitialState();
+    const openingPosition = camera.getWorldPosition(new THREE.Vector3()), openingRotation = camera.getWorldQuaternion(new THREE.Quaternion());
+    const initial = rig.snapshot(); rig.updateDesired({ activate: true }, 1 / 60); target = [2, 1, -3]; rig.update(1 / 60);
+    expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(openingPosition.clone().add(new THREE.Vector3(...target)))).toBeLessThan(1e-8);
+    expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(openingRotation)).toBeLessThan(1e-7);
+    target = [0, 0, 0]; rig.reset(); expect(rig.snapshot()).toEqual(initial); expect(camera.matrixAutoUpdate).toBe(false);
+    rig.updateDesired({ activate: true }, 1 / 60); target = [2, 1, -3]; rig.update(1 / 60);
+    const rebound = camera.clone(), reboundPosition = camera.getWorldPosition(new THREE.Vector3());
+    rig.setFollow({ targetEntityId: 'other', followHalfLifeSeconds: 0, activateOnInput: false }); rig.update(1 / 60);
+    expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(reboundPosition)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(rebound.quaternion)).toBeLessThan(1e-7);
+  });
+
+  it('rejects conflicting preservation options and invalid pending poses before authority changes', () => {
+    const { camera, rig } = fixture(); rig.setFollow({ targetEntityId: 'hero' }); const before = rig.snapshot();
+    for (const options of [{ framingMode: 'preserve-opening' as const, distanceMeters: 5 }, { framingMode: 'preserve-opening' as const, pitchRadians: .2 }, { followHalfLifeSeconds: -.1 }, { followHalfLifeSeconds: Infinity }]) {
+      expect(() => rig.setFollow({ targetEntityId: 'hero', ...options })).toThrow('WORLD_CAMERA_OPTION_INVALID');
+      expect(rig.snapshot()).toEqual(before);
+    }
+    const position = camera.position.clone(); camera.position.x = NaN;
+    expect(() => rig.updateDesired({ activate: true }, 1 / 60)).toThrow('WORLD_CAMERA_POSE_INVALID');
+    expect(rig.mode).toBe('follow-pending'); camera.position.copy(position); camera.updateMatrixWorld(true);
+    expect(rig.snapshot()).toEqual(before);
+  });
+
+  it('has equivalent follow damping across elapsed-time steps without advancing on zero time', () => {
+    const run = (hz: number) => {
+      const camera = new THREE.PerspectiveCamera(); camera.position.set(3, 4, 8); camera.lookAt(-3, 7, -10);
+      let target: Vec3 = [0, 0, 0]; const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+      rig.setFollow({ targetEntityId: 'hero', activateOnInput: false }); const opening = camera.position.clone();
+      target = [3, 2, -7]; rig.update(0); expect(camera.position.distanceTo(opening)).toBeLessThan(1e-8);
+      for (let i = 0; i < hz; i++) rig.update(1 / hz);
+      return rig.snapshot().positionWorldMetersXYZ;
+    };
+    for (const hz of [30, 120]) expect(distance(run(hz), run(60))).toBeLessThan(1e-8);
+  });
+
+  it('keeps target damping isolated between rigs and restores its initial memory', () => {
+    const first = fixture(), second = fixture(); let target: Vec3 = [0, 0, 0];
+    const rig = new ThreeCameraRig(first.camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', activateOnInput: false }); rig.sealInitialState();
+    second.rig.setFollow({ targetEntityId: 'other', activateOnInput: false }); const independent = second.rig.snapshot();
+    target = [4, 2, -3]; rig.update(.08); const firstRun = rig.snapshot();
+    expect(second.rig.snapshot()).toEqual(independent);
+    target = [0, 0, 0]; rig.reset(); target = [4, 2, -3]; rig.update(.08);
+    expect(rig.snapshot()).toEqual(firstRun);
+  });
+
+  it('rotates throughout a legacy authored transition instead of snapping on its final tick', () => {
+    const camera = new THREE.PerspectiveCamera(52, 1.8, .1, 650); camera.position.set(0, 3.35, 18); camera.lookAt(-1, 27, -85);
+    const opening = camera.quaternion.clone(), previous = opening.clone();
+    const rig = new ThreeCameraRig(camera, unobstructed, () => [0, .22, 0]);
+    rig.setFollow({ targetEntityId: 'hero', distanceMeters: 16, targetHeightMeters: 5, pitchRadians: -.05, transitionSeconds: 1.6 });
+    rig.updateDesired({ activate: true }, 1 / 60); let maximumAngle = 0, midpointAngle = 0;
+    for (let tick = 1; tick <= 100; tick++) { rig.update(1 / 60); maximumAngle = Math.max(maximumAngle, previous.angleTo(camera.quaternion)); if (tick === 48) midpointAngle = opening.angleTo(camera.quaternion); previous.copy(camera.quaternion); }
+    expect(midpointAngle).toBeGreaterThan(.01); expect(maximumAngle).toBeLessThan(.02);
+  });
+
+  it('inherits an off-center authored opening without a push-in when follow activates', () => {
+    const camera = new THREE.PerspectiveCamera(39, 1.8, .1, 2000);
+    camera.position.set(17, 28, 210); camera.lookAt(-60, 74, -120);
+    const opening = camera.clone();
+    const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]);
+    rig.setFollow({ targetEntityId: 'hero' });
+    rig.updateDesired({ activate: true }, 1 / 60);
+    for (let i = 0; i < 120; i++) rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(camera.projectionMatrix.equals(opening.projectionMatrix)).toBe(true);
+  });
+
   it('preserves the exact authored opening until first input and transitions on that same camera', () => {
     const { camera, rig } = fixture(); const opening = camera.clone();
     rig.setFollow({ targetEntityId: 'hero', distanceMeters: 4, pitchRadians: .25, transitionSeconds: .4 });
@@ -30,7 +253,7 @@ describe('ThreeCameraRig', () => {
 
   it('updates the desired movement basis before changing the rendered pose', () => {
     const { camera, rig } = fixture(); const before = camera.quaternion.clone();
-    rig.setFollow({ targetEntityId: 'hero', rotationSpeedRadiansPerSecond: 2 });
+    rig.setFollow({ targetEntityId: 'hero', framingMode: 'target', rotationSpeedRadiansPerSecond: 2 });
     const yaw = rig.desiredYawRadians;
     rig.updateDesired({ cameraYawRatio: 1, cameraPitchRatio: -.5, yawDeltaRadians: .1 }, .25);
     expect(rig.desiredYawRadians).toBeCloseTo(yaw + .6, 10);

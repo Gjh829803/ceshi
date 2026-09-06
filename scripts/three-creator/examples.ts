@@ -32,7 +32,7 @@ const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshSta
 body.position.y=0.7; player.add(body);
 world.addCharacter({id:'player',object:player,body:{heightMeters:1.4,radiusMeters:0.35}});
 world.setControlledEntity('player');
-world.setCameraFollow({distanceMeters:8,activateOnInput:true});
+world.setCameraFollow(); // follow from the authored camera without reframing
 world.setCaptureTargets(['player']);
 await world.start(); // prepares baseline and installs the real same-scene observer
 // WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.

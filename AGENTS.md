@@ -1,5 +1,14 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
+The latest user request authorizes restoring opening-preserving smooth camera
+follow from 2a7a2f9b on the current xhigh self-check branch, then running canyon
+with original account A and ring with original account B. Migrate only camera.ts,
+its tests/public contracts and its short README/example guidance. Keep the
+510-word self-check instruction byte-identical. Reuse the audited immutable
+c45b168a camera runtime after verifying installed source identity. Preserve the
+in-flight no-camera account comparison and its automatic publication/ledger.
+Authority: docs/superpowers/plans/2026-09-06-opening-good-accounts.md.
+
 The latest user request is an account-only comparison: repeat the same two
 xhigh self-check cases with the accounts that actually produced the original
 good worlds (canyon A, ring B). This supersedes the latest-account pinning below.

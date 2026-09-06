@@ -14,7 +14,7 @@ world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
 const hero = await world.assets.load('humanoid.g-bot');
 world.addCharacter({id:'hero', asset:hero});
 world.setControlledEntity('hero');
-world.setCameraFollow({distanceMeters:5});
+world.setCameraFollow(); // continue the camera composition already authored above
 world.setCaptureTargets(['hero','tower']); // register tower first
 await world.start();
 ```
@@ -31,8 +31,14 @@ Terrain/obstacle default to fixed collision; decoration has no collision. Use
 kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
 Register small visual stones as decoration when they should not impede walking.
 
-The camera remains at the authored first-frame pose until movement or camera
-input activates follow. WASD moves, arrows/drag rotate camera, Shift runs,
+With no orbit overrides, `setCameraFollow()` preserves the current camera pose,
+FOV and framing, then smoothly follows the controlled entity's translation.
+It does not automatically move closer or center the subject. Orbit/zoom input
+persists; `followHalfLifeSeconds` controls translation smoothing (default .08).
+Explicit distance/pitch/target-height values retain the legacy target framing;
+use them only for an intentional camera transition. `framingMode:'preserve-opening'`
+can select inherited framing explicitly (without distance/pitch overrides).
+The camera stays at the authored first-frame pose until input. WASD moves, arrows/drag rotate camera, Shift runs,
 Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
 collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
 `useAuthoredCamera()` explicitly returns camera control for a cutscene;
