@@ -97,6 +97,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
     expect(Object.keys(manifest.exports as object)).toEqual([
       ".",
+      "./shapes",
       "./host",
       "./testing",
     ]);
@@ -224,6 +225,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     const host = await import("./host.js") as Record<string, unknown>;
     expect(Object.keys(host)).toEqual([
       "takeBabylonNativeBlockCheckedEpochEvidenceV1",
+      "createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1",
       "createBabylonNativeBlockMaterializerMetadataV1",
       "babylonNativeBlockLiveVisualHandleMeshV1",
       "peekBabylonNativeBlockLiveHandleRegistryV1",

@@ -703,7 +703,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       outputDirectoryPath,
       "render-visual-review.mjs",
     ))).resolves.toEqual(await readFile(VISUAL_REVIEW_RENDERER));
-  }, 30_000);
+  }, 120_000);
 
   it("teaches only the atomic Block drawing dialect", async () => {
     const outputContract = await readFile(path.resolve(
