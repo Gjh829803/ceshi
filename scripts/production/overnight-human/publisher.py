@@ -32,7 +32,7 @@ def main():
  for c in master['cases']:
   ref=f'references/{c["id"]}.png';cp(Path(c['referenceImage']['path']),SITE/ref)
   task=c['id']+'--three-sdk';manifestRows[task]={'id':task,'baseCaseId':c['id'],'profile':'three-sdk','title':c['title'],'reference':ref,'referenceImageSha256':c['referenceImage']['contentSha256'],'prompt':c['effectiveUserPrompt'],'status':'queued','tags':['human','open'],'note':'已选入今晚 300 例生产队列；等待账号分配。'}
- for n in ['index.html','styles.css','app.mjs']:cp(VIEWER/'apps/creator-evaluation-site'/n,SITE/n)
+ for n in ['index.html','styles.css','app.mjs','reviews.mjs']:cp(VIEWER/'apps/creator-evaluation-site'/n,SITE/n)
  spec=importlib.util.spec_from_file_location('publisher_base',REPO/'scripts/cloud/publish-creator-evaluation-site.py');pub=importlib.util.module_from_spec(spec);spec.loader.exec_module(pub)
  sent=read(OUT/'published-files.json',{});cache={};lastFingerprint={};cycle=0
  while True:
