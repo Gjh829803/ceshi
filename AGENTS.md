@@ -11,7 +11,10 @@ The historical Agent playtest mechanism belongs to this baseline. The production
 evaluation viewer remains separate: do not reintroduce assistant/human review as a
 playability gate. Later camera, UI, capture, budget, continuation and prompt changes
 remain preserved on `codex/gpt6-world-agent-refactor`, not silently mixed in here.
-The two-case baseline replay is prepared without new cloud submissions.
+The user subsequently authorized submitting and testing that exact two-case replay.
+Run `known-good-baseline-two-20260906` selects only the canyon and hollow-ring cases;
+keep `--case-limit 2` explicit when using this historical runner for run/resume.
+Do not add optimizations or send case-specific repair hints during the comparison.
 
 # Agent Whitebox World authoring rules
 
