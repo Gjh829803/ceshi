@@ -313,3 +313,22 @@ and archive validators still apply. Case 267's 19,965,855-byte archive verified
 after three whole-stream reads had been rejected as truncated. Follow the same
 preview, checkpoint installation, publication and public verification sequence
 after a successful transfer. Do not start duplicate recovery processes.
+
+Case 277 was subsequently recovered the same way, including public browser
+verification of the original compiled bytes. The seven intermediate cases are
+034/096/218/221/228/267/277; individual recovery records and the aggregate public
+verification are under OUT. Do not repeat recovery for these completed records.
+
+`OUT/write-drain-audit.py` writes a timestamped, read-only outcome audit and a
+latest pointer. It partitions the 300 distinct cases into final deliveries,
+recovered finals, intermediate playables, active/retrieval cases and terminal
+cases without an artifact. Historical failed attempts are counted separately;
+an earlier failed attempt does not override a later successful artifact. The
+audit reuses the observed CLI availability classification and distinguishes
+authoring timeouts, account-slot timeouts and Host queue cutoffs. The 83 observed
+provider startup failures include 76 requests routed to G; that early Host
+admission failure must remain visible in the final explanation. Do not call all
+startup failures model-quality failures, or infer every driver's detailed cause
+from its exit code alone. The audit's review totals describe deliberately chosen
+account-screening samples, not a random quality estimate for the whole campaign.
+It does not publish or change any job, world, account decision or quality review.
