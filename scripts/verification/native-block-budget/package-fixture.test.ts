@@ -31,7 +31,9 @@ describe("CF-20 budget measurement Package", () => {
     for (const row of comparison.policyRows) {
       expect(row.caseMeasurements).toHaveLength(1);
       expect(row.caseMeasurements[0]!.profileInventoryHash).toBe(fixture.measurement.profileInventoryHash);
-      expect(row.totals.baselineVisualDrawUnitCount).toBe(2_000);
+      // 2,000 logical Blocks form four floor clusters across 32m boundaries
+      // and two shape layers for each of four landmarks: 4 + 2 * 4 = 12.
+      expect(row.totals.baselineVisualDrawUnitCount).toBe(12);
       expect(row.totals.colliderProxyCount).toBe(fixture.measurement.colliderCount);
       expect(row.totals.colliderTriangleCount).toBe(fixture.measurement.colliderTriangleCount);
     }

@@ -96,8 +96,10 @@ describe("Planner execution identity", () => {
     const bytes = await readFile(path.join(native.prepared.workspaceContextRoot, ref));
     const context = JSON.parse(bytes.toString("utf8"));
     expect(context.budgets).toEqual(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1);
-    expect(context.blockSizeMetersXYZByShape.full).toEqual([1, 1, 1]);
-    expect(context.blockSizeMetersXYZByShape.step).toEqual([1, 0.25, 1]);
+    expect(context.blockSizeMetersXYZByShape).toEqual({
+      full: [1, 1, 1], half: [1, 0.5, 1],
+      quarter: [0.5, 0.5, 1], small: [0.5, 0.5, 0.5],
+    });
     const request = JSON.parse(await readFile(native.prepared.requestPath, "utf8"));
     expect(request.contextFiles).toContainEqual({ inputRef: ref, contentHash: sha256Bytes(bytes) });
     const canonical = await fixture("canonical");

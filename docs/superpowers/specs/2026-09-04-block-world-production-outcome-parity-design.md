@@ -134,11 +134,18 @@ If a downstream optional visual step fails, an already admitted playable whitebo
 launchable. The requested top-level scope fails until its own required artifacts close; it does not mutate
 the upstream whitebox outcome.
 
-The historical base Visual Reconstructor had same-task self-review followed by Host file/hash/role
-closure; it did not have a separate semantic Reviewer. Those same-task and Host checks remain blocking for
-a requested base-style scope. Any new independent base semantic review is a strict diagnostic only and
-cannot introduce a new ordinary-production veto. This differs from the per-variant Reviewer in the Episode
-visual-sample scope below, which was present in the old workflow and remains part of that requested scope.
+CF-16 execution-path correction (2026-09-07, user-authorized no-new-gate parity): the pinned old
+`scripts/visual/run-styled-opening-frame-agent.sh` actually invokes `run-gemini-visual-pipeline.py`.
+Its `_generate_one` saves valid image bytes and `_generate_images` collects the declared files; it does
+not withhold PNGs on a semantic-similarity or baseline review verdict. The earlier statement that the
+old base Skill's same-task semantic verdict was a blocking production gate was not supported by that
+actual entry point. Keep the current single Codex task, opening-first inspection/frozen appearance anchor
+and existing bounded repair allowance, but deliver every final generated valid PNG after that allowance.
+Report residual visual differences without claiming semantic success. Executing the requested stage and
+Host file/hash/role closure remain required; missing/corrupt/stale outputs still fail. Neither same-task
+quality feedback nor a new independent base semantic review may create a delivery veto. This differs
+from the per-variant Reviewer in the Episode visual-sample scope below, which was present in the old
+workflow and remains part of that requested scope.
 
 CF16's current prompt bundle retains `kind: worldkit-visual-generation-prompts`
 and only schemaVersion 2, with exact top-level keys kind/schemaVersion/sceneId/

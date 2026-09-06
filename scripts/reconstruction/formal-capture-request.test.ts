@@ -367,6 +367,7 @@ async function fixture(withoutScriptedTraversal = false, completeTargets = false
   };
   const nativeBlockMaterializerMetadata = {
     ...baseMetadata,
+    settledVisualTargetCount: 3,
     groundExploration: withoutScriptedTraversal ? {
       mode: "source-authored" as const,
       requiredTargets: [

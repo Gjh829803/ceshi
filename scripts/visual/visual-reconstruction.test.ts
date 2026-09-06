@@ -79,6 +79,7 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
       role: "primary-subject",
       semanticClassId: "subject.traveler",
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [0, -1],
       views: ["front", "right", "back"],
       imageUri: "traveler/whitebox-triview.png",
     }],

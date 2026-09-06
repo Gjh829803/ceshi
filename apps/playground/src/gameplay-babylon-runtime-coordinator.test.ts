@@ -578,7 +578,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(cameraImmediatelyAfterMount.mode).toBe("tracking");
     if (cameraImmediatelyAfterMount.mode === "tracking") {
       expect(cameraImmediatelyAfterMount.requestedArmLengthMeters)
-        .toBeCloseTo(5, 6);
+        .toBeCloseTo(4.8, 6);
     }
 
     const mountedFirstFixedTick = await coordinator.runFixedInput({
@@ -701,7 +701,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     });
     if (dismountedFirstFixedTick.view.camera.mode === "tracking") {
       expect(dismountedFirstFixedTick.view.camera.requestedArmLengthMeters)
-        .toBeCloseTo(5, 6);
+        .toBeCloseTo(4.8, 6);
     }
 
     const riderBeforeIndependentMove = dismountedFirstFixedTick.world
@@ -766,7 +766,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       activeCameraModifierRefs: [],
     });
     if (reset.view.camera.mode === "tracking") {
-      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(5, 6);
+      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(4.8, 6);
     }
 
     await coordinator.dispose();

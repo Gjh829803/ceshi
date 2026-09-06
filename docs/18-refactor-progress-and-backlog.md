@@ -3389,6 +3389,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   1/1 与 Studio 直接调用契约 1/1 通过。修订后模型行为仍待新的真实视觉尝试验证；
   不复制旧任务未交付图片冒充成功，也不恢复旧 Provider。
 
+  修订后的 `d22cbbfd` 真实任务 `visual-1788737225126-ztzdhl` 已完成（exit 0），
+  一个提示词文件、开场及四目标三视图全部经 Host promotion/finalization 交付；
+  两份 report 均 passed，所有已发布 PNG 与 manifest Hash 逐项匹配。三视图 manifest
+  hash 为 `sha256:d232bbe278321f023799566940e17ab2e84a305d735b5de895bae823a80c560f`。
+  任务记录了开场人物偏低、建筑规整化和各目标轮廓/比例偏差，未扣留 PNG、未增加轮数。
+  这证明修订后实际交付行为 GREEN，不证明完整 CF 效果对齐；原失败任务与 reference
+  备份仍在 `.codex-tmp/visual-reconstructor-dEdbbd`。当前是原 Case 的 Host 恢复加
+  新视觉尝试走完，不是另一次 fresh `agent:world` 从头到尾的退出 0 证据。
+
 - 候选 `844554ab` 已整合 `origin/main@0d766279`，仅测试数据格式冲突，相关回归
   53/53。本批完整检查已通过 generated self-check、typecheck、Studio、独立 Node
   69/69；Site 因本地缺 vinext 首次未启动，按 lock 安装后使用现有 Node 22.21 完成
@@ -3396,6 +3405,20 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   clean-break、3C 已通过；census 发现新 loader 回归未登记，补入 contract lane 后
   census 通过（482 files = 439 contract + 43 resource-heavy）。Vitest 两 lane 和
   Playground build 尚未执行完成，须从这里继续，不重复已通过的独立/Studio 整套。
+
+  后续 `d22cbbfd` contract 全组终局：439 files 中 431 passed / 8 failed，
+  6,028 tests 中 5,992 passed / 33 failed / 3 skipped，耗时 1,261.73s。
+  失败已按实际原因收口：Capture 夹具追加目标但漏改 settlement count、骑乘测试仍期待
+  5m 而旧/新 authored opening 均为 4.8m（mounted modifier 7m 不变）、Planner 断言仍
+  用已移除 step、地形测试临时 Brief 缺 movement 行前缀、视觉测试缺 frontDirection。
+  五文件修复后 60/60；预算测试按真实 12 个 authoring clusters 计绘制基线而非
+  2,000 个逻辑 Blocks；当前 R0 示例迁移 colliderSource 并同步 Lock/Graph Hash。
+  Hosted Runner 的 pure Host barrel 把未使用的 Ground→Authoring validator 初始化
+  带入包（实际仅 141 字符）；打包明确该 re-export barrel 无副作用后，原 import-graph
+  禁入检查与完整 staged runner 分发测试均通过，未删规则、未引入 Runtime fallback。
+  三文件余下 4 项已分别 GREEN，合计八个失败文件定向回归覆盖 64 项，typecheck 通过。
+  其余 431 个文件的通过证据保留，不能描述为在新 SHA 上重新跑过一次完整绿色 aggregate。
+  重型组和 Playground build 仍待继续；尚未合 main。
 
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
