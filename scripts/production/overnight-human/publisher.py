@@ -9,6 +9,11 @@ def read(p,default=None):
 def write(p,d):
  p.parent.mkdir(parents=True,exist_ok=True);t=p.with_name(p.name+'.tmp');t.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n');os.replace(t,p)
 def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def has_playable(row):return bool(row.get('playable') or row.get('checkpoint',{}).get('playable'))
+def choose_case(previous,current):
+ if current.get('playable'):return current
+ if previous.get('playable'):return previous
+ return current if has_playable(current) or not has_playable(previous) else previous
 def cp(a,b):
  if b.exists() and a.stat().st_size==b.stat().st_size and a.stat().st_mtime_ns<=b.stat().st_mtime_ns:return
  b.parent.mkdir(parents=True,exist_ok=True)
@@ -34,7 +39,7 @@ def main():
   try:
    cycle+=1;config=read(OUT/'campaign.json');progressRows={};rows=dict(manifestRows)
    for wave in config['waves']:
-    root=Path(wave['runRoot']);gallery=OUT/'waves'/wave['runId']/'gallery';fingerprint=hashlib.sha256(b''.join(p.read_bytes() for p in sorted(root.glob('*--three-sdk/state.json')))).hexdigest()
+    root=Path(wave['runRoot']);gallery=OUT/'waves'/wave['runId']/'gallery';fingerprintFiles=sorted(list(root.glob('*--three-sdk/state.json'))+list(root.glob('*--three-sdk/checkpoint-latest.json')));fingerprint=hashlib.sha256(b''.join(p.read_bytes() for p in fingerprintFiles)).hexdigest()
     if lastFingerprint.get(wave['runId'])!=fingerprint or not (gallery/'results.json').exists():
      proc=subprocess.run(['python3',str(SCRIPTS/'sync-three-evaluation-site.py'),'--run-root',str(root),'--inputs-root',str(OUT/'inputs'),'--gallery-root',str(gallery),'--stage-only'],cwd=VIEWER,capture_output=True,text=True,timeout=240)
      if proc.returncode:raise RuntimeError(proc.stderr[-700:])
@@ -44,7 +49,7 @@ def main():
     subprocess.run(nodeargs,cwd=VIEWER,capture_output=True,check=True,timeout=60)
     for c in read(gallery/'results.json',{}).get('cases',[]):
      task=c['id']
-     if not rows.get(task,{}).get('playable') or c.get('playable'):rows[task]=c
+     rows[task]=choose_case(rows.get(task,{}),c)
     for c in read(gallery/'progress.json',{}).get('cases',[]):
      earlier=progressRows.get(c['taskId'],{});attempts={}
      for attempt in earlier.get('attempts',[])+c.get('attempts',[]):attempts[(attempt.get('runId'),attempt.get('jobId') or attempt.get('taskId'))]=attempt
@@ -80,7 +85,7 @@ def main():
       for p in files:
        b=p.read_bytes();i=tarfile.TarInfo(p.relative_to(SITE).as_posix());i.size=len(b);i.mode=0o644;tar.addfile(i,io.BytesIO(b))
      buffer.seek(0);subprocess.run(['kubectl','-n','ray','exec','-i',heads[0],'-c','ray-head','--','python','-c',pub.INSTALL,remote,'full'],stdin=buffer,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,check=True,timeout=480)
-    sent=newSent;write(OUT/'published-files.json',sent);write(OUT/'publication-status.json',{'updatedAt':timestamp,'url':'http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/'+RUN+'/','changedFiles':len(files),'playable':sum(bool(c.get('playable')) for c in rows.values()),'selected':300});print(json.dumps({'publishedAt':timestamp,'files':len(files),'playable':sum(bool(c.get('playable')) for c in rows.values())}),flush=True)
+    sent=newSent;write(OUT/'published-files.json',sent);write(OUT/'publication-status.json',{'updatedAt':timestamp,'url':'http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/'+RUN+'/','changedFiles':len(files),'playable':sum(has_playable(c) for c in rows.values()),'selected':300});print(json.dumps({'publishedAt':timestamp,'files':len(files),'playable':sum(has_playable(c) for c in rows.values())}),flush=True)
    if (OUT/'complete.json').exists() or ((OUT/'deadline-summary.json').exists() and now()>config['deadline']):write(OUT/'publication-complete.json',{'at':now()});return
   except Exception as e:write(OUT/'publisher-warning.json',{'at':now(),'error':str(e)[-800:]});print(type(e).__name__,str(e)[-300:],flush=True)
   time.sleep(45)

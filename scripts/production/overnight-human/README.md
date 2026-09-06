@@ -217,6 +217,49 @@ outputs before any promotion; preserve the original mixed judgment. The fixed
 jobs are recorded in `u03-paired-calibration-dispatch.json` and already running:
 `gen_f1824def1d4c6541` / `gen_2c0275a8e0bf81ab`. Do not dispatch them again.
 
+At 05:09, both U03 samples 260/261 were actually inspected as satisfactory,
+with color, clothed motion and connected-region evidence (limitations retained).
+U03 became production-good at 8; its first eight production jobs 280–287 have
+actual CLI activity. The original gray 013 remains mixed. U33 subsequently fell
+below the provider quota threshold (18% in the 20:00 UTC snapshot); retain its
+quality decision but stop new admission while unavailable.
+
+## Recovering a timed-out existing build without another model run
+
+Cases 218/221 timed out after successful same-build playtests; case 228 has the
+same recovery path. Host copied only their explicit closed candidate source,
+compiled playable and original evidence, verified source/runtime/build hashes,
+then reopened the unchanged files in an isolated browser with external requests
+blocked. The recovery produces a Host-labelled checkpoint, never an Agent final
+receipt. Original failure states and original recordings remain intact.
+
+The existing viewer checkpoint mechanism shows “中间可玩版本 · 尚未正式交付”.
+Controller `runnableCheckpoints` counts these separately; `availableArtifacts`
+is the unique union of normal delivery, recovered final archives and runnable
+checkpoints. Intermediate checkpoints do not satisfy final campaign completion;
+only 300 normal or recovered final archives may create `complete.json`.
+A later final delivery supersedes a checkpoint without double
+counting; a later failure cannot hide a saved playable. A checkpoint pointer
+holds fresh generation retries. Checkpoint counts require matching job/case/lock,
+verified actual account identity and the Host archive verification record.
+
+The bounded recovery tools and evidence are under OUT:
+`select-timeout-snapshots.py <case-number>`, `recover-timeout-files.py`,
+`preview-recovered-candidates.mjs`, `install-recovered-checkpoints.py`, then
+`verify-checkpoints-public.mjs <case-number>`. Run dependent steps only after the
+previous step succeeds. Existing snapshots/checkpoints are retained and
+revalidated, not rebuilt. Select only a confirmed terminal timeout with a clean
+180+ second same-build playtest and opening capture. All new recovered builds
+must pass the existing checkpoint archive verifier and fresh browser startup.
+Remote source files and Agent prompt are never modified.
+
+Public HTTP pages receive the existing host-compat UUID shim. Verification
+checks that exact shim's SHA and excludes only its known tag when comparing
+HTML; compiled world bytes remain identical. `checkpoint-public-verification.json`
+records real public browser readiness, intermediate notice and links. Nine
+controller tests and two publisher tests cover identity, retry holds and
+cross-attempt precedence. Original frozen runtime lock remains unchanged.
+
 Retry budgets distinguish provider rejections from world authoring. A case has at
 most 4 confirmed provider attempts and at most 2 attempts with evidence of model
 work. Missing/ambiguous evidence counts conservatively as model work. Explicit

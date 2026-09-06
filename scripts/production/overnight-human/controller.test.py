@@ -15,6 +15,37 @@ class EndCycle(BaseException):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_only_verified_same_attempt_checkpoints_are_counted_and_retry_is_held(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();world='1'*64;archive='2'*64
+            state={'jobId':'gen_fixture','taskId':'fixture--three-sdk','caseId':'fixture','profile':'three-sdk','runtimeHash':'3'*64,'accountRouting':{'verified':True}}
+            pointer={'kind':'three-creator-checkpoint','status':'runnable','jobId':state['jobId'],'taskId':state['taskId'],'caseId':state['caseId'],'profile':state['profile'],'creatorRuntimeLockHash':state['runtimeHash'],'worldBuildHash':world,'archiveSha256':archive,'sourceHash':'4'*64,'verifiedDirectory':f'checkpoint-verified/{world}-{archive[:16]}'}
+            directory=root/pointer['verifiedDirectory'];directory.mkdir(parents=True)
+            controller.write(directory/'checkpoint-receipt.json',pointer)
+            controller.write(directory/'checkpoint-verification.json',{'kind':'three-creator-checkpoint-verification','status':'verified','worldBuildHash':world,'archiveSha256':archive})
+            controller.write(root/'checkpoint-latest.json',pointer)
+            self.assertEqual(controller.runnable_checkpoint(root,state)['worldBuildHash'],world)
+            self.assertIsNone(controller.runnable_checkpoint(root,{**state,'jobId':'gen_other'}))
+            self.assertIsNone(controller.runnable_checkpoint(root,{**state,'accountRouting':{'verified':False}}))
+            self.assertFalse(controller.can_retry_attempts([{'root':str(root),'phase':'failed','providerStatus':'completed'}]))
+            controller.write(directory/'checkpoint-verification.json',{'kind':'three-creator-checkpoint-verification','status':'verified','worldBuildHash':world,'archiveSha256':'5'*64})
+            self.assertIsNone(controller.runnable_checkpoint(root,state))
+
+    def test_checkpoint_and_final_delivery_are_not_double_counted(self):
+        for final in [False,True]:
+            with self.subTest(final=final),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary)
+                controller.write(root/'master.json',{'cases':[{'id':'fixture'}]})
+                controller.write(root/'campaign.json',{'id':'fixture','masterManifest':str(root/'master.json'),'createdAt':'2020-01-01T00:00:00+00:00','deadline':'2020-01-02T00:00:00Z','latestNewGenerationAt':'2020-01-01T23:00:00Z','waves':[]})
+                row={'root':str(root),'caseId':'fixture','taskId':'fixture--three-sdk','jobId':'gen_checkpoint','phase':'failed','executionComplete':True,'checkpointArtifact':True,'cliActivityObserved':False}
+                rows=[row]+([{**row,'jobId':'gen_final','phase':'delivered','checkpointArtifact':False}] if final else [])
+                with patch.object(controller,'OUT',root),patch.object(controller,'rows_of',return_value=rows),patch.object(controller,'refresh_health'),patch.object(controller,'start_supervisor'):
+                    controller.main()
+                status=json.loads((root/'status.json').read_text())
+                self.assertEqual(status['availableArtifacts'],1)
+                self.assertEqual(status['runnableCheckpoints'],0 if final else 1)
+                self.assertEqual(status['delivered'],1 if final else 0)
+
     def test_refills_one_free_slot_without_exceeding_account_or_global_capacity(self):
         for active_count, expected_submissions in [(7, 1), (8, 0)]:
             with self.subTest(active_count=active_count), tempfile.TemporaryDirectory() as temporary:

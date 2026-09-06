@@ -1,6 +1,6 @@
 """Durable campaign queue. Quality decisions are separate, evidence-backed Host inputs."""
 from pathlib import Path
-import json,os,sys,time,datetime,hashlib,subprocess,fcntl,collections
+import json,os,sys,time,datetime,hashlib,subprocess,fcntl,collections,re
 from account_availability import update_availability
 REPO=Path(__file__).resolve().parents[3];OUT=REPO/'.codex-tmp/overnight-human-300-20260906';TERMINAL={'delivered','failed','stopped','cancelled'}
 def read(p,default=None):
@@ -44,13 +44,30 @@ def used_model_output(row):
 
 def can_retry_attempts(attempts):
  if len(attempts)>=4 or sum(used_model_output(r) for r in attempts)>=2:return False
- if any(Path(r['root'],'creator-result.json').exists() for r in attempts):return False
+ if any(Path(r['root'],name).exists() for r in attempts for name in ['creator-result.json','checkpoint-latest.json']):return False
  for r in attempts:
   if r['phase']!='failed':return False
   normal=r.get('providerStatus') in ['failed','completed','succeeded','submit_failed']
   stopped_before_model=r.get('providerStatus') in ['stopped','cancelled'] and r.get('executionComplete') and (r.get('failure') or {}).get('message')=='THREE_EXECUTION_GUARD: queue-deadline' and not used_model_output(r)
   if not normal and not stopped_before_model:return False
  return True
+
+def runnable_checkpoint(root,state):
+ checkpoint=read(root/'checkpoint-latest.json',{})
+ if checkpoint.get('kind')!='three-creator-checkpoint' or checkpoint.get('status')!='runnable':return None
+ expected={'jobId':state.get('jobId'),'taskId':state.get('taskId'),'caseId':state.get('caseId'),'profile':state.get('profile'),'creatorRuntimeLockHash':state.get('runtimeHash')}
+ if any(not v or checkpoint.get(k)!=v for k,v in expected.items()):return None
+ account=state.get('accountRouting',{})
+ if not account.get('verified') or account.get('denied'):return None
+ directory=checkpoint.get('verifiedDirectory','')
+ if not re.fullmatch(r'checkpoint-verified/[a-f0-9]{64}-[a-f0-9]{16}',directory):return None
+ target=root/directory
+ if target.resolve()!=target:return None
+ report=read(target/'checkpoint-verification.json',{});receipt=read(target/'checkpoint-receipt.json',{})
+ if report.get('kind')!='three-creator-checkpoint-verification' or report.get('status')!='verified':return None
+ if any(checkpoint.get(k)!=report.get(k) for k in ['worldBuildHash','archiveSha256']):return None
+ if any(checkpoint.get(k)!=receipt.get(k) for k in ['sourceHash','worldBuildHash','archiveSha256','creatorRuntimeLockHash','taskId']):return None
+ return checkpoint
 
 def start_supervisor(root):
  owner=read(root/'supervisor-owner.json',{});pid=owner.get('pid')
@@ -74,7 +91,8 @@ def rows_of(config):
   for task in plan.get('selectedTaskIds',[]):
    state=read(root/task/'state.json',{});payload=read(root/task/'payload.json',{});ids=payload.get('options',{}).get('codex_account_ids',[])
    recovery=read(root/task/'host-recovered-delivery.json',{});recovered=recovery.get('kind')=='three-creator-recovered-delivery' and recovery.get('status')=='artifact-verified' and recovery.get('jobId')==state.get('jobId') and all(recovery.get(k)==state.get(k) and state.get(k) for k in ['sourceHash','worldBuildHash'])
-   rows.append({'availabilityFacts':live.get(task,{}).get('failureFacts',[]),'executionComplete':state.get('rayCleanupConfirmed') is True and state.get('providerStatus') in ['succeeded','completed','failed','cancelled','stopped'],'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
+   checkpoint=runnable_checkpoint(root/task,state) or {}
+   rows.append({'availabilityFacts':live.get(task,{}).get('failureFacts',[]),'executionComplete':state.get('rayCleanupConfirmed') is True and state.get('providerStatus') in ['succeeded','completed','failed','cancelled','stopped'],'recoveredArtifact':bool(recovered),'checkpointArtifact':bool(checkpoint),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash') or checkpoint.get('worldBuildHash'),'sourceHash':state.get('sourceHash') or checkpoint.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
  return rows
 
 def main():
@@ -93,7 +111,7 @@ def main():
    write(OUT/'automatic-availability.json',auto)
    for row in rows:byCase.setdefault(row['caseId'],[]).append(row)
    completed={cid for cid,attempts in byCase.items() if any(r['phase']=='delivered' for r in attempts)}
-   recovered={r['caseId'] for r in rows if r.get('recoveredArtifact')};available=completed|recovered
+   recovered={r['caseId'] for r in rows if r.get('recoveredArtifact')};checkpoints={r['caseId'] for r in rows if r.get('checkpointArtifact')};available=completed|recovered|checkpoints
    active=[r for r in rows if r['phase'] not in TERMINAL and not r.get('executionComplete')];pendingRecovery=[r for r in rows if r['phase'] not in TERMINAL];busy=collections.Counter(r['requestedAccountSha256'] for r in active)
    reviews=read(OUT/'quality-reviews.json',{'cases':{}})['cases'];reviewqueue=[]
    for row in rows:
@@ -107,8 +125,9 @@ def main():
    elapsed=time.time()-datetime.datetime.fromisoformat(config['createdAt']).timestamp();remainingSeconds=datetime.datetime.fromisoformat(config['deadline'].replace('Z','+00:00')).timestamp()-time.time()
    status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'recoveredArtifacts':len(recovered-completed),'availableArtifacts':len(available),'active':len(active),'pendingDeliveries':sum(r['phase']=='delivery-pending' for r in rows),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
    status['automaticAccountBlocks']={v['label']:v['kind'] for v in auto['blockedAccounts'].values()}
+   status['runnableCheckpoints']=len(checkpoints-(completed|recovered))
    write(OUT/'status.json',status)
-   if len(available)==300:write(OUT/'complete.json',status);return
+   if len(completed|recovered)==300:write(OUT/'complete.json',status);return
    if (OUT/'halt.json').exists():time.sleep(30);continue
    if status['localFreeGiB']<8:
     write(OUT/'storage-attention.json',{'at':now(),'freeGiB':status['localFreeGiB'],'reason':'Pause new admission; preserve existing jobs and recover space without deleting unique evidence.'});time.sleep(30);continue
