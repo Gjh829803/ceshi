@@ -207,6 +207,21 @@ function traversalPorts(
 }
 
 describe("formal world capture provider", () => {
+  it("prepares the old reset opening without a neutral gameplay Tick", async () => {
+    const { ports } = traversalPorts("runtime.opening");
+    const snapshot = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resetForOpening(
+      "runtime.opening", ports,
+    );
+    expect(snapshot.world.simulationTick).toBe(0);
+    expect(ports.runFixedInput).not.toHaveBeenCalled();
+    expect(ports.awaitRenderReady).toHaveBeenCalledOnce();
+    const sampled = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.sampleSupportAfterOpening(
+      "runtime.opening", ports, snapshot,
+    );
+    expect(sampled.world.simulationTick).toBe(1);
+    expect(ports.runFixedInput).toHaveBeenCalledExactlyOnceWith({ actions: [], axes: {}, ticks: 1 });
+    expect(snapshot.world.simulationTick).toBe(0);
+  });
   it("colors explicit top-overlay partitions without losing mixed-group or ungrouped surfaces", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

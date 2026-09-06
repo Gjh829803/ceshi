@@ -89,6 +89,7 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
   } as typeof baseInput.nativeSceneContribution;
   const nativeBlockMaterializerMetadata = {
     ...baseMetadata,
+    settledVisualTargetCount: 3,
     contributionHash:
       hashBabylonNativeSceneContributionV1(nativeSceneContribution),
     blocks: [...baseMetadata.blocks, {

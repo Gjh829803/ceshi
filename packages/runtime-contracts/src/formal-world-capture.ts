@@ -443,6 +443,9 @@ export interface FormalSpawnSupportObservationV1
   extends FormalMeasuredObservationIdentityV1 {
   readonly kind: "formal-spawn-support-observation";
   readonly schemaVersion: 1;
+  /** Actual committed support sample, one neutral Tick after the captured reset state. */
+  readonly sampledSnapshot: WorldRuntimeSnapshotV4;
+  readonly sampledSnapshotHash: Sha256HashV1;
   readonly spawnMarkerId: string;
   readonly subjectEntityId: string;
   readonly supportContact: Readonly<{
@@ -872,7 +875,7 @@ const NORMALIZED_CENTER_FIELDS = ["xBasisPoints", "yBasisPoints"] as const;
 const SPAWN_SUPPORT_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "spawnMarkerId", "subjectEntityId",
   "supportContact", "capsuleFootPointMetersXYZ", "supportGapMillimeters",
-  "movementMedium", "observedTopologyRelations",
+  "movementMedium", "observedTopologyRelations", "sampledSnapshot", "sampledSnapshotHash",
 ] as const;
 const SUPPORT_CONTACT_FIELDS = [
   "colliderId", "sourceBlockId", "surfaceEntityId", "logicalSubshapeId",
@@ -3261,16 +3264,24 @@ export function parseFormalSpawnSupportObservationV1(
     source.schemaVersion !== 1
   ) fail(contract, "", "unexpected kind or schemaVersion");
   const identity = parseObservationIdentity(source, contract, "physics");
+  const sampledSnapshotHash = hash(source.sampledSnapshotHash, contract, "sampledSnapshotHash");
+  const sampledSnapshot = parseObservationSnapshot(
+    source.sampledSnapshot, identity.runtimeSessionId, sampledSnapshotHash, contract, "sampledSnapshot",
+  );
+  if (sampledSnapshot.worldSessionId !== identity.resetReadySnapshot.worldSessionId ||
+      sampledSnapshot.world.simulationTick !== identity.resetReadySnapshot.world.simulationTick + 1) {
+    fail(contract, "sampledSnapshot", "must identify the same world's one neutral Tick after opening Reset");
+  }
   const subjectEntityId = text(
     source.subjectEntityId,
     contract,
     "subjectEntityId",
   );
-  const subjectState = identity.resetReadySnapshot.world.subjectStatesByEntityId[
+  const subjectState = sampledSnapshot.world.subjectStatesByEntityId[
     subjectEntityId
   ];
-  if (isNil(subjectState)) {
-    fail(contract, "subjectEntityId", "must name the reset-ready controlled Subject");
+  if (isNil(subjectState) || isNil(identity.resetReadySnapshot.world.subjectStatesByEntityId[subjectEntityId])) {
+    fail(contract, "subjectEntityId", "must name the captured and sampled controlled Subject");
   }
   const movementMedium = enumValue(
     source.movementMedium,
@@ -3286,7 +3297,7 @@ export function parseFormalSpawnSupportObservationV1(
     locomotionState.locomotion.status !== "active" ||
     locomotionState.locomotion.movementMedium !== movementMedium
   ) {
-    fail(contract, "movementMedium", "must match committed reset-ready Subject state");
+    fail(contract, "movementMedium", "must match committed sampled Subject state");
   }
   const contact = object(source.supportContact, contract, "supportContact");
   exactFields(contact, SUPPORT_CONTACT_FIELDS, contract, "supportContact");
@@ -3294,6 +3305,8 @@ export function parseFormalSpawnSupportObservationV1(
     kind: "formal-spawn-support-observation",
     schemaVersion: 1,
     ...identity,
+    sampledSnapshot,
+    sampledSnapshotHash,
     spawnMarkerId: text(source.spawnMarkerId, contract, "spawnMarkerId"),
     subjectEntityId,
     supportContact: Object.freeze({

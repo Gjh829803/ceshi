@@ -3233,6 +3233,13 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   观察使用，需要一起对齐捕获状态与真实支撑证据，不能简单删除、伪造或放宽检查。
   CF-04/12 与最终两张图生产验收保持开放。
 
+- CF-04/T1 实现检查点（2026-09-07，`186cbc48` 后）：图片与身份 mask/三视图现在先在
+  Reset/render-ready 状态捕获，之后才执行原有支撑采样 Tick；支撑观察新增 required
+  sampledSnapshot/Hash，原 reset identity 仍绑定 Capture receipt，不伪造采样时刻。
+  两项 focused RED→GREEN；合同/provider/evaluation 测试通过，捕获/Hosted 协议/最终发布
+  三文件 58 项通过。另补齐捕获夹具遗漏的 settledVisualTargetCount，生产检查不变。
+  真实 Browser 的 Tick 0 开场和 Tick 1 支撑采样仍待复验，不据此结项或跑最终模型 Case。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

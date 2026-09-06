@@ -1106,8 +1106,16 @@ export function createEvidenceSetFixtureInputV1(
       toNodeId: "upper",
     }],
   });
+  const sampledSnapshot = parseWorldRuntimeSnapshotV4({
+    ...snapshot,
+    world: { ...snapshot.world, simulationTick: snapshot.world.simulationTick + 1,
+      gameplayInspection: { ...snapshot.world.gameplayInspection,
+        simulationTick: snapshot.world.simulationTick + 1 } },
+  });
   const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
     ...observationIdentity("formal-spawn-support-observation", "physics"),
+    sampledSnapshot,
+    sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot),
     spawnMarkerId: "player-spawn",
     subjectEntityId: "player",
     supportContact: {

@@ -474,13 +474,26 @@ function assertSnapshot(
   ) fail("BABYLON_FORMAL_CAPTURE_RUNTIME_SNAPSHOT_INVALID");
 }
 
-async function resetAndSettle(
+async function resetForOpening(
   runtimeSessionId: string,
   ports: FormalWorldCaptureProviderPortsV1,
 ): Promise<WorldRuntimeSnapshotV4> {
   const reset = await ports.resetWithInitialControlBinding();
   assertSnapshot(reset, runtimeSessionId);
   await ports.awaitRenderReady();
+  const ready = ports.snapshot();
+  assertSnapshot(ready, runtimeSessionId, reset.worldSessionId);
+  if (ready.world.simulationTick !== reset.world.simulationTick) {
+    fail("BABYLON_FORMAL_CAPTURE_READY_SNAPSHOT_STALE");
+  }
+  return ready;
+}
+
+async function sampleSupportAfterOpening(
+  runtimeSessionId: string,
+  ports: FormalWorldCaptureProviderPortsV1,
+  reset: WorldRuntimeSnapshotV4,
+): Promise<WorldRuntimeSnapshotV4> {
   const settled = await ports.runFixedInput({ actions: [], axes: {}, ticks: 1 });
   assertSnapshot(settled, runtimeSessionId, reset.worldSessionId);
   if (settled.world.simulationTick !== reset.world.simulationTick + 1) {
@@ -493,6 +506,13 @@ async function resetAndSettle(
     fail("BABYLON_FORMAL_CAPTURE_READY_SNAPSHOT_STALE");
   }
   return ready;
+}
+
+async function resetAndSettle(
+  runtimeSessionId: string,
+  ports: FormalWorldCaptureProviderPortsV1,
+): Promise<WorldRuntimeSnapshotV4> {
+  return sampleSupportAfterOpening(runtimeSessionId, ports, await resetForOpening(runtimeSessionId, ports));
 }
 
 function openingArtifactRequest(
@@ -1057,6 +1077,8 @@ async function captureTraversal(
 
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
+  resetForOpening,
+  sampleSupportAfterOpening,
   assertTriviewTargets,
   captureWhiteboxTriviewPngs,
   resolveIdentityMaskColors,
@@ -1136,7 +1158,7 @@ export async function executeFormalWorldCaptureProviderV1(
   const metadata = assertRequestPackageIdentity(request, input.verifiedWorldPackage);
   assertTriviewTargets(request.visualCaptureGroups, metadata,
     input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId);
-  const initialReadySnapshot = await resetAndSettle(
+  const initialReadySnapshot = await resetForOpening(
     input.runtimeSessionId,
     input.ports,
   );
@@ -1247,12 +1269,22 @@ export async function executeFormalWorldCaptureProviderV1(
     sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore
   ) fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
 
+  const whiteboxTriviewPngs = await captureWhiteboxTriviewPngs(request, input.ports);
+  if (sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore) {
+    fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
+  }
+  // All image consumers use the old reset/render opening. Only now advance the
+  // existing neutral Tick for actual Physics support evidence, and retain its
+  // separate sampled Snapshot rather than attributing it to the opening state.
+  const sampledSnapshot = await sampleSupportAfterOpening(
+    input.runtimeSessionId, input.ports, initialReadySnapshot,
+  );
   const support = input.ports.readCommittedSupportEvidence(subjectEntityId) ?? fail(
     "BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_MISSING",
   );
   const supportContact = selectFormalCommittedSupportContactV1({
     evidence: support,
-    committedTick: initialReadySnapshot.world.simulationTick,
+    committedTick: sampledSnapshot.world.simulationTick,
   });
   const supportCollider = colliderRows.find(
     ({ colliderId }) => colliderId === supportContact.colliderId,
@@ -1326,6 +1358,8 @@ export async function executeFormalWorldCaptureProviderV1(
       "physics",
       "spawn-support",
     ),
+    sampledSnapshot,
+    sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot),
     spawnMarkerId: input.verifiedWorldPackage.nativeSceneContribution.spawnMarker.id,
     subjectEntityId,
     supportContact: {
@@ -1337,7 +1371,7 @@ export async function executeFormalWorldCaptureProviderV1(
     },
     capsuleFootPointMetersXYZ: foot,
     supportGapMillimeters,
-    movementMedium: movementMedium(initialReadySnapshot, subjectEntityId),
+    movementMedium: movementMedium(sampledSnapshot, subjectEntityId),
     observedTopologyRelations: measuredSupportRelations(
       request,
       subjectEntityId,
@@ -1361,10 +1395,6 @@ export async function executeFormalWorldCaptureProviderV1(
       colliderRows,
     ),
   });
-  const whiteboxTriviewPngs = await captureWhiteboxTriviewPngs(request, input.ports);
-  if (sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore) {
-    fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
-  }
   const scriptedTraversal = await captureTraversal(
     request,
     initialReadySnapshot,

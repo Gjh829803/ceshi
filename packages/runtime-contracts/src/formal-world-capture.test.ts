@@ -1466,9 +1466,24 @@ describe("formal measured observation documents", () => {
     }
   });
 
+  function supportSampleFixture() {
+    const resetSnapshot = snapshotFixture();
+    const sampledSnapshot = {
+      ...resetSnapshot,
+      world: { ...resetSnapshot.world, simulationTick: resetSnapshot.world.simulationTick + 1,
+        gameplayInspection: { ...resetSnapshot.world.gameplayInspection,
+          simulationTick: resetSnapshot.world.simulationTick + 1 } },
+    };
+    return { sampledSnapshot, sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot) };
+  }
+
   it("parses measured support and rejects a stale reset Snapshot join", () => {
+    const resetSnapshot = snapshotFixture();
+    const { sampledSnapshot, sampledSnapshotHash } = supportSampleFixture();
     const value = {
       ...observationIdentity("formal-spawn-support-observation", "physics"),
+      sampledSnapshot,
+      sampledSnapshotHash,
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {
@@ -1485,11 +1500,28 @@ describe("formal measured observation documents", () => {
     };
     const parsed = parseFormalSpawnSupportObservationV1(value);
     expect(parsed.supportContact.colliderId).toBe("spawn-ground");
+    expect(parsed.resetReadySnapshot.world.simulationTick).toBe(4);
+    expect(parsed.sampledSnapshot.world.simulationTick).toBe(5);
     expect(hashFormalSpawnSupportObservationV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(() => parseFormalSpawnSupportObservationV1({
       ...value,
       resetReadySnapshotHash: H("9"),
     })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    for (const badSample of [resetSnapshot,
+      { ...sampledSnapshot, worldSessionId: "another-world" },
+      { ...sampledSnapshot, runtimeSessionId: "another-runtime" },
+      { ...sampledSnapshot, world: { ...sampledSnapshot.world, simulationTick: 6,
+        gameplayInspection: { ...sampledSnapshot.world.gameplayInspection, simulationTick: 6 } } },
+    ]) {
+      expect(() => parseFormalSpawnSupportObservationV1({ ...value,
+        sampledSnapshot: badSample, sampledSnapshotHash: sha256CanonicalJson(badSample),
+      })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    }
+    expect(() => parseFormalSpawnSupportObservationV1({ ...value, sampledSnapshotHash: H("9") }))
+      .toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    const { sampledSnapshot: _sample, sampledSnapshotHash: _hash, ...removedShape } = value;
+    expect(() => parseFormalSpawnSupportObservationV1(removedShape))
+      .toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
   });
 
   it("rejects legacy flat locomotion support state even when the medium agrees", () => {
@@ -1500,6 +1532,7 @@ describe("formal measured observation documents", () => {
         "physics",
         resetReadySnapshot,
       ),
+      ...supportSampleFixture(),
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {
@@ -1519,6 +1552,7 @@ describe("formal measured observation documents", () => {
   it("rejects support evidence that disagrees with nested committed movement medium", () => {
     expect(() => parseFormalSpawnSupportObservationV1({
       ...observationIdentity("formal-spawn-support-observation", "physics"),
+      ...supportSampleFixture(),
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {

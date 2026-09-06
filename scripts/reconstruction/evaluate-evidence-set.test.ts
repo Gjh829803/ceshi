@@ -1,12 +1,14 @@
-import { canonicalJsonBytes } from "@whitebox-world/protocol";
+import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
   hashFormalSemanticViewObservationSetV1,
+  hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
+  parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
 } from "@whitebox-world/runtime-contracts";
 import { evaluateWorldReconstructionV1 } from "@whitebox-world/validation";
@@ -140,6 +142,9 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     expect(traversal.checks).toEqual([]);
     expect(traversal).toEqual(fixture.scriptedTraversalObservation);
     expect(traversal.resetReadySnapshotHash).toBe(fixture.captureReceipt.readySnapshotHash);
+    expect(fixture.spawnSupportObservation.resetReadySnapshotHash).toBe(fixture.captureReceipt.readySnapshotHash);
+    expect(fixture.spawnSupportObservation.sampledSnapshot.world.simulationTick)
+      .toBe(fixture.captureReceipt.readySnapshot.world.simulationTick + 1);
     for (const port of Object.values(ports)) expect(port).not.toHaveBeenCalled();
     // The fixture receipt is bound to the same exact empty observation bytes.
     const evidence = buildWorldReconstructionEvidenceSetV1({ ...fixture, scriptedTraversalObservation: traversal });
@@ -147,6 +152,16 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       profile: fixture.evaluationProfile, evidence });
     expect(result.dimensions.find(({ dimensionId }) => dimensionId === "critical-traversal")?.status).toBe("incomplete");
     expect(result.outcome).toBe("incomplete");
+    // A rehashed valid support sample cannot silently replace the one whose
+    // bytes were accepted in the Capture receipt.
+    const sample = fixture.spawnSupportObservation.sampledSnapshot;
+    const changedSample = { ...sample, world: { ...sample.world, worldStateHash: H("8") } };
+    const changedSupport = parseFormalSpawnSupportObservationV1({ ...fixture.spawnSupportObservation,
+      sampledSnapshot: changedSample, sampledSnapshotHash: sha256CanonicalJson(changedSample) });
+    expect(hashFormalSpawnSupportObservationV1(changedSupport))
+      .not.toBe(fixture.captureReceipt.spawnSupportObservationContentHash);
+    expect(() => buildWorldReconstructionEvidenceSetV1({ ...fixture, spawnSupportObservation: changedSupport }))
+      .toThrow("spawn observation content hash does not match Capture Receipt");
     expect(() => parseFormalScriptedTraversalObservationV1({
       ...createEvidenceSetFixtureInputV1().scriptedTraversalObservation, checks: [],
     })).toThrow();

@@ -211,3 +211,26 @@ that test expectation was corrected. First identity mask, full capture-state
 restoration and restored pixels continue to pass. Browser fixture build and
 typecheck passed. This demonstrates actual pixel sensitivity to the known extra
 Tick, not an end-to-end old/current image comparison or a completed T1 repair.
+
+### CF-04/T1 implementation checkpoint
+
+The provider now captures the reset/render-ready state before its existing
+neutral support Tick. Opening, identity, side/top, collider overlay and tri-views
+all precede that Tick; explicit traversal keeps its independently reset sequence.
+The current-only support observation requires `sampledSnapshot` and its Hash,
+while its original reset identity still joins the image Capture receipt. The
+single parser validates the same session/world and following Tick and reads the
+movement medium from the sampled state. Evaluation and final publication already
+use that parser and its complete content Hash, so their existing stale-receipt
+rejection is preserved, not relaxed. No second Physics query or Camera owner is
+introduced; no additional Tick, model task, retry or ordinary gate is added.
+
+The two new regressions first failed on the missing sampled contract and missing
+reset-only preparation, then passed. Contract/provider/evaluation tests passed;
+the wider capture run exposed seven pre-existing fixture construction failures:
+`formal-capture.test.ts` changed settlement targetCount to 3 without updating
+`settledVisualTargetCount`. The fixture now carries the same explicit synthetic
+count in both fields; production inventory validation is unchanged. The
+deterministic Browser verifier now requires opening Tick 0, sampled support Tick
+1 and distinct hashes. Actual Browser verification is still pending at this
+checkpoint; this is not final T1, CF-04/12 or generated-Case acceptance.

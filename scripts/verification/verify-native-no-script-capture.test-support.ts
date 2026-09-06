@@ -83,6 +83,16 @@ try {
   });
   assert.deepEqual(capture.cleanupOutcomes, { hostedBrowserSession: "completed", viteServer: "completed" });
   const receipt = parseFormalWorldCaptureReceiptV1(await json(path.join(captureRoot, "formal-world-capture-receipt.json")));
+  const spawnSupport = parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json")));
+  // CF-04/T1: actual production captures the reset state, not the later support
+  // sampling Tick. Keep both independently hashed states in the real output.
+  assert.equal(receipt.readySnapshot.world.simulationTick, 0);
+  assert.equal(spawnSupport.resetReadySnapshotHash, receipt.readySnapshotHash);
+  assert.equal(spawnSupport.sampledSnapshot.world.simulationTick, 1);
+  assert.notEqual(spawnSupport.sampledSnapshotHash, receipt.readySnapshotHash);
+  const openingCamera = receipt.readySnapshot.view.camera;
+  assert.equal(openingCamera.mode, "tracking");
+  if (openingCamera.mode === "tracking") assert.equal(openingCamera.subjectOcclusion?.selectionElapsedSeconds, 0);
   const traversal = parseFormalScriptedTraversalObservationV1(await json(path.join(captureRoot, "scripted-traversal.json")));
   assert.deepEqual(traversal.checks, []);
   assert.equal(traversal.resetReadySnapshotHash, receipt.readySnapshotHash);
@@ -100,7 +110,7 @@ try {
       identityMaskPngs,
       openingObservation: parseFormalOpeningObservationV1(await json(path.join(captureRoot, "opening-observation.json"))),
       semanticViewObservationSet: parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json"))),
-      spawnSupportObservation: parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json"))),
+      spawnSupportObservation: spawnSupport,
       colliderOverlayObservation: parseFormalColliderOverlayObservationV1(await json(path.join(captureRoot, "collider-overlay-observation.json"))),
     },
   });

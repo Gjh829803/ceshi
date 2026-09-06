@@ -585,6 +585,21 @@ coverage remains CF-11/21 and is not implied by removing the template.
 
 ### CF-11 ordinary Capture has no invented traversal script
 
+CF-04/T1 opening timing amendment (2026-09-07): the paused old-branch opening is
+the reset/render-ready state, not a state advanced by a synthetic neutral Tick.
+The Formal provider captures all opening/identity/orthographic/tri-view images
+from that same state before the existing neutral support-sampling Tick. Camera
+and Physics retain their current single owners; rendering never advances them.
+`FormalSpawnSupportObservationV1` keeps `resetReadySnapshot` and its Hash joined
+to the Capture receipt, and now requires `sampledSnapshot` and its Hash for the
+actual support measurement. The sample belongs to the same Runtime/world and
+the immediately following neutral Tick; its committed movement medium is used
+for support observations. No old-shape fallback or relabeling of a Tick is
+allowed. The existing support sample is reordered, not duplicated; no new model
+task, ordinary gate, retry, support algorithm or extra simulation Tick is added.
+All consumers parse and hash the current observation shape together. Explicit
+scripted traversal retains its existing independently reset sampling sequence.
+
 Ordinary baseline preparation does not invent a straight 12m route, 300 Tick
 input sequence, remote checkpoint or topology relation. Ground's actual authored
 anchors and bands remain mandatory and independent of Capture scripts. Explicit
