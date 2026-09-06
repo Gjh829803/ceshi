@@ -1442,6 +1442,24 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("does not invent horizontal amplification from a partially applied slope recovery velocity", () => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = {
+      ...supportedSupport(normal),
+      averageSurfaceVelocityMetersPerSecondXYZ: [-0.026343052327037597, 0.052686104654075194, 0],
+    };
+    driver.contacts = [groundContact(normal)];
+    driver.onIntegrate = () => {
+      driver.position = [0.004444444444444473, 1.0035872124336862, 0];
+      driver.velocity = [0.26666666666666666, 0.13333333333333333, 0];
+    };
+    const { resolution } = beginAndResolve(port, 1, [0.0044444444444444444, 0.0022222222222222222, 0]);
+    expect(resolution.appliedTranslationMetersXYZ[0]).toBeCloseTo(0.0044444444444444444, 12);
+    expect(resolution.support.mode).toBe("supported");
+    port.dispose();
+  });
+
   it("allows takeoff when the frozen support translation is not applied", () => {
     const { driver, port } = createPort();
     driver.support = {
@@ -1638,6 +1656,25 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     driver.support = supportedSupport();
     const next = createMovementTickTokenV1();
     expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe("supported");
+    port.abortTick(next);
+    port.dispose();
+  });
+
+  it.each([
+    ["uphill tangent", [0.04, 0.02, 0] as Vec3, "supported"],
+    ["uphill takeoff", [0.04, 0.09, 0] as Vec3, "unsupported"],
+  ] as const)("distinguishes %s from support-plane separation across Ticks", (_name, delta, mode) => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = supportedSupport(normal);
+    driver.contacts = [groundContact(normal)];
+
+    const { token, resolution } = beginAndResolve(port, 1, delta);
+    expect(resolution.support.mode).toBe(mode);
+    port.commitTick(token);
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe(mode);
+    expect(driver.checkSupportCalls).toBe(2);
     port.abortTick(next);
     port.dispose();
   });

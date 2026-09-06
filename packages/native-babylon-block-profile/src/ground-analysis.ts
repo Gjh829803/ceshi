@@ -11,8 +11,9 @@ import type {
   BabylonNativeBlockLogicalSolidOccupancyCellV1,
   BabylonNativeBlockLogicalSupportTopCellV1,
 } from "./logical-ground-model.js";
-import type {
-  BabylonNativeBlockWalkableTopologyV1,
+import {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+  type BabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology.js";
 import {
   babylonNativeBlockChunkAxisIndexV1,
@@ -541,30 +542,11 @@ function exactTopologyFailureFacts(
       instruction: `Add or extend explicit static-surface Blocks beneath ${target.id}; keep the frozen target position and trusted Subject envelope unchanged.`,
     })]);
   }
-  const deltaMeters = sample.supportHeightMeters - position[1];
-  if (Math.abs(deltaMeters) <= EPSILON) return Object.freeze([]);
-  const expectedMillimeters = position[1] * 1_000;
-  const actualMillimeters = sample.supportHeightMeters * 1_000;
-  return Object.freeze([failureFact({
-    acceptanceTargetRef: target.acceptanceTargetRef,
-    targetId: target.id,
-    metricId: "ground-support-height-millimeters",
-    details: {
-      kind: "millimeters-threshold",
-      expectedMillimeters,
-      actualMillimeters,
-      maximumAllowedDriftMillimeters: EPSILON * 1_000,
-      exceededByMillimeters:
-        Math.abs(actualMillimeters - expectedMillimeters) - EPSILON * 1_000,
-      correctionDirection: deltaMeters > 0 ? "decrease" : "increase",
-    },
-    evidenceRef,
-    affectedSourceBlockIds: localSourceBlockIds.length > 0
-      ? localSourceBlockIds
-      : sample.affectedSourceBlockIds,
-    message: `Ground target ${target.id} expects ${expectedMillimeters}mm support height, but the final walkable topology is ${actualMillimeters}mm at that exact XZ position.`,
-    instruction: `${deltaMeters > 0 ? "Lower" : "Raise"} the explicit static-surface Blocks beneath ${target.id} until the final smoothed topology matches ${expectedMillimeters}mm; do not move the frozen target or relax Runtime support tolerance.`,
-  })]);
+  // Pinned production validates the authored source-top stand position above.
+  // Smoothing intentionally changes its realized Y; exact equality would be a
+  // new production gate. Missing geometry stays an integrity failure, while
+  // actual support/settlement remains owned by the Runtime's checkSupport().
+  return Object.freeze([]);
 }
 
 function sourceSurfaces(
@@ -1364,16 +1346,11 @@ export function analyzeBabylonNativeBlockGroundV1(
     if (isNil(leftNode) || isNil(rightNode)) continue;
     const delta = rightNode.positionMetersXYZ[1] -
       leftNode.positionMetersXYZ[1];
-    const horizontalDistanceMeters = Math.hypot(
-      rightNode.positionMetersXYZ[0] - leftNode.positionMetersXYZ[0],
-      rightNode.positionMetersXYZ[2] - leftNode.positionMetersXYZ[2],
-    );
-    const maximumAllowedHeightDeltaMeters = Math.min(
-      envelope.maxStepHeightMeters,
-      horizontalDistanceMeters * Math.tan(
-        envelope.maxSlopeDegrees * Math.PI / 180,
-      ),
-    );
+    // Old check.ts:1024-1037 connects source tops whose seam the topology
+    // removes. A discrete Character step/slope veto on that raw delta adds a
+    // second, stricter production rule; it is not actual Runtime traversal.
+    const maximumAllowedHeightDeltaMeters =
+      BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1.maximumAutoSmoothHeightDeltaMeters;
     if (Math.abs(delta) <= maximumAllowedHeightDeltaMeters + EPSILON) {
       connect(leftNode, rightNode);
       continue;
@@ -1561,7 +1538,7 @@ export function analyzeBabylonNativeBlockGroundV1(
           nodesById.get(frontier.fromNodeId)!.support.sourceBlockId,
           nodesById.get(frontier.toNodeId)!.support.sourceBlockId,
         ].sort(stableCompare)),
-        message: `The closest disconnected frontier toward ${target.id} changes height by ${actualMillimeters}mm; the trusted combined step/slope limit is ${allowedMillimeters}mm.`,
+        message: `The closest disconnected frontier toward ${target.id} changes height by ${actualMillimeters}mm; the source-top auto-smoothing limit is ${allowedMillimeters}mm.`,
         instruction: `Add intermediate explicit step Blocks or lower the frontier toward ${target.id} until every smoothed height change is at most ${allowedMillimeters}mm; do not change the Physics Body profile.`,
       }));
     }

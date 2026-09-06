@@ -690,7 +690,12 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     surfaceInfo: CharacterSurfaceInfo,
     gravity: Vector3,
   ): void {
-    const leavesSupport = this.exactTranslationLeavesSupportForCurrentIntegrate;
+    // Positive world-Y is also ordinary uphill tangent motion. Detachment
+    // requires separation from the admitted support plane, not merely ascent.
+    const leavesSupport = this.exactTranslationLeavesSupportForCurrentIntegrate &&
+      (surfaceInfo.supportedState !== CharacterSupportedState.SUPPORTED ||
+        Vector3.Dot(this.getVelocity(), surfaceInfo.averageSurfaceNormal) >
+          BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1);
     const effectiveSurfaceInfo = leavesSupport
       ? {
           supportedState: CharacterSupportedState.UNSUPPORTED,
@@ -1087,9 +1092,13 @@ function canonicalContact(
 function proposalLeavesSupportUpward(
   proposal: MovementProposalV1,
   up: MovementVec3V1,
+  support: BodySampleV1["support"],
 ): boolean {
   return dot(proposal.translationDeltaMetersXYZ, up) >
-    BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
+    BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 &&
+    (support.mode === "unsupported" ||
+      dot(proposal.translationDeltaMetersXYZ, support.normalXYZ) >
+        BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1);
 }
 
 function assertContactConeCoherent(
@@ -1185,9 +1194,16 @@ function removeBoundedSupportTranslation(
     0,
     dot(unexplained, supportDelta) / maximumContributionSquared,
   ));
-  return freezeVec3(applied.map((component, axis) =>
-    component - supportDelta[axis]! * acceptedRatio
-  ));
+  return freezeVec3(applied.map((component, axis) => {
+    const contribution = supportDelta[axis]! * acceptedRatio;
+    const direction = Math.sign(contribution);
+    // The manifold may block part of the frozen surface/recovery velocity.
+    // Never subtract an unapplied axis and thereby manufacture amplification
+    // on that axis. Each accepted component remains bounded by both the
+    // frozen contribution and the observed displacement beyond the proposal.
+    const observedContribution = Math.max(0, unexplained[axis]! * direction);
+    return component - direction * Math.min(Math.abs(contribution), observedContribution);
+  }));
 }
 
 /**
@@ -2216,6 +2232,7 @@ class BabylonCharacterBodyPortV1
               value === 0 ? 0 : -value
             ),
           ),
+          transaction.sample.support,
         )
         ? Object.freeze({ mode: "unsupported" as const })
         : transaction.sample.support;
@@ -2276,6 +2293,7 @@ class BabylonCharacterBodyPortV1
             value === 0 ? 0 : -value
           ),
         ),
+        transaction.sample.support,
       );
       return resolution;
     } catch (error) {

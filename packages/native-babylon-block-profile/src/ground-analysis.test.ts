@@ -508,12 +508,12 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     const target = Object.freeze({
       id: "high-target",
       acceptanceTargetRef: "worldkit://acceptance-target/high@1",
-      standPositionMetersXYZ: position("1,3,0"),
+      standPositionMetersXYZ: position("1,7,0"),
     });
     const result = analyze({
       supportTopCellKeys: [
         ...rectangle(-1, 0, -1, 1, 1),
-        ...rectangle(1, 2, -1, 1, 3),
+        ...rectangle(1, 2, -1, 1, 7),
       ],
       caseIntent: caseIntent({
         spawn: SPAWN,
@@ -534,14 +534,14 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(step?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 0,
-      actualMillimeters: 500,
-      maximumAllowedDriftMillimeters: 300,
-      exceededByMillimeters: 200,
+      actualMillimeters: 1_500,
+      maximumAllowedDriftMillimeters: 1_000,
+      exceededByMillimeters: 500,
       correctionDirection: "decrease",
     });
   });
 
-  it("applies the trusted maximum slope to smoothed adjacent support", () => {
+  it("CF-04/G1 does not apply raw-height step/slope vetoes to an old automatically smoothed join", () => {
     const target = Object.freeze({
       id: "slope-target",
       acceptanceTargetRef: "worldkit://acceptance-target/slope@1",
@@ -559,14 +559,11 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     });
 
-    expect(result.analysisOutcome).toBe("failed");
-    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
-    expect(result.failureFacts.find(({ metricId }) =>
-      metricId === "ground-step-up-millimeters")?.details).toMatchObject({
-      actualMillimeters: 250,
-      maximumAllowedDriftMillimeters: 9,
-      exceededByMillimeters: 241,
-    });
+    // This graph is old structural connectivity, not a claim that the current
+    // Character can traverse every slope. Actual motion remains Runtime-owned.
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(1);
+    expect(result.failureFacts).toEqual([]);
   });
 
   it("keeps a one-meter route rise reachable through four admitted quarter-meter joins", () => {
@@ -602,7 +599,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.failureFacts).toEqual([]);
   });
 
-  it("rejects an exact Spawn height that differs from the final smoothed topology", () => {
+  it("CF-04/G1 preserves old source-top Spawn/waypoint intent without adding a post-smoothing exact-height gate", () => {
     const target = Object.freeze({
       id: "smoothed-target",
       acceptanceTargetRef: "worldkit://acceptance-target/smoothed@1",
@@ -631,30 +628,15 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     });
 
-    expect(result.admissionOutcome).toBe("failed");
-    const mismatches = result.failureFacts.filter(({ metricId }) =>
-      metricId === "ground-support-height-millimeters");
-    expect(mismatches).toHaveLength(2);
-    const mismatch = mismatches.find(({ targetId }) =>
-      targetId === "spawn-check");
-    expect(mismatch).toMatchObject({
-      targetId: "spawn-check",
-      details: {
-        kind: "millimeters-threshold",
-        expectedMillimeters: 250,
-        actualMillimeters: 312.5,
-        correctionDirection: "decrease",
-      },
-    });
-    expect(mismatch?.affectedSourceBlockIds.length).toBeGreaterThan(0);
-    expect(mismatch?.affectedSourceBlockIds.length).toBeLessThan(12);
-    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.failureFacts).toEqual([]);
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(1);
   });
 
   it("preserves directed step-down evidence from a higher Spawn", () => {
     const highSpawn = Object.freeze({
       ...SPAWN,
-      standPositionMetersXYZ: position("0,3,0"),
+      standPositionMetersXYZ: position("0,7,0"),
     });
     const target = Object.freeze({
       id: "low-target",
@@ -663,7 +645,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
     const result = analyze({
       supportTopCellKeys: [
-        ...rectangle(-1, 0, -1, 1, 3),
+        ...rectangle(-1, 0, -1, 1, 7),
         ...rectangle(1, 2, -1, 1, 1),
       ],
       caseIntent: caseIntent({
@@ -676,9 +658,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       metricId === "ground-step-down-millimeters");
     expect(step?.details).toMatchObject({
       kind: "millimeters-threshold",
-      actualMillimeters: 500,
-      maximumAllowedDriftMillimeters: 300,
-      exceededByMillimeters: 200,
+      actualMillimeters: 1_500,
+      maximumAllowedDriftMillimeters: 1_000,
+      exceededByMillimeters: 500,
       correctionDirection: "decrease",
     });
   });

@@ -3280,6 +3280,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Runtime 迁移完成。实际驾驶/滑翔 Native 端到端模式证据仍待补；不关闭 CF-04/05/12，
   没有新增生产 gate、全仓 CI、独立审查或新生成 Case。
 
+- CF-04/G1 坡面检查点（2026-09-07，`d6995a05` 后）：恢复老分支完整源方块顶面、
+  1m 共享角平滑及源顶面 Ground 连通逻辑；删除新增的原始高差 step/slope 重复否决
+  和平滑后精确 Y 等值要求。真实 Havok 复现并修正持续坡面降速、上坡切线误判离地，
+  以及部分支撑修正速度造成的位移校验误报。沿用现有 Character/BodyPort 权威，
+  不新增 grounding cache、不调步高或求解器容差。9 个直接相关文件 249/249、
+  typecheck 和 3C 检查通过，含 1m 坡面上/下坡、反向、走/跑跳跃、落地、Reset。
+  G2 四形状/统一网格、Builder 指引及消费者尚未完成；全 CF 验收、最终新生成 Case、
+  第二张图和合入 main 均未完成，不能用此定向证据替代。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

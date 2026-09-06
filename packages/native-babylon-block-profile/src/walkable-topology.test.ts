@@ -11,6 +11,7 @@ import type {
 } from "./logical-ground-model.js";
 import {
   buildBabylonNativeBlockWalkableTopologyV1,
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   type BabylonNativeBlockWalkableTopologyPolicyV1,
 } from "./walkable-topology.js";
 
@@ -174,6 +175,31 @@ function verticesAtX(
 }
 
 describe("Babylon Native Block walkable topology", () => {
+  it("CF-04/G1 smooths a one-meter rise across full source-Block tops, not half-meter microcell ramps", () => {
+    // Two actual 1x1x1 Blocks, lower top at 1m and higher top at 2m.
+    // Current occupancy is 0.5/0.25/0.5; each top contains four microcells.
+    const lower: string[] = [];
+    const higher: string[] = [];
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) {
+      for (let y = 0; y < 4; y++) lower.push(`${x},${y},${z}`);
+      for (let y = 4; y < 8; y++) higher.push(`${x + 2},${y},${z}`);
+    }
+    const result = topology(model([
+      { colliderId: "lower", cells: lower, traversal: "surface" },
+      { colliderId: "higher", cells: higher, traversal: "surface" },
+    ]), BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1);
+    const low = result.walkableGeometries.find(row => row.logicalColliderId === "lower")!;
+    const high = result.walkableGeometries.find(row => row.logicalColliderId === "higher")!;
+    // Old 9e35ab53 averages the shared 1m/2m corners to 1.5m; each
+    // intact Block remains one 1m-wide quad, giving a 0.5/1 slope.
+    expect(verticesAtX(low.collisionPositionsMetersXYZ, 1)).toEqual([[1, 1.5, 0], [1, 1.5, 1]]);
+    expect(verticesAtX(high.collisionPositionsMetersXYZ, 1)).toEqual([[1, 1.5, 0], [1, 1.5, 1]]);
+    expect(verticesAtX(low.collisionPositionsMetersXYZ, 0)).toEqual([[0, 1, 0], [0, 1, 1]]);
+    expect(verticesAtX(high.collisionPositionsMetersXYZ, 2)).toEqual([[2, 2, 0], [2, 2, 1]]);
+    expect(low).toMatchObject({ vertexCount: 4, triangleCount: 2, sourceCellCount: 4 });
+    expect(high).toMatchObject({ vertexCount: 4, triangleCount: 2, sourceCellCount: 4 });
+  });
+
   it("CF-20/MEM4 preserves exact exposed faces, winding, holes and Collider partitions", () => {
     const grid = [0.5, 0.25, 0.5];
     for (let variant = 0; variant < 16; variant++) {

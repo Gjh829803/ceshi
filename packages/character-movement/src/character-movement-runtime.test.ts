@@ -443,6 +443,29 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     });
   });
 
+  it.each([
+    [-0.4472135954999579, 1.2, false],
+    [0.4472135954999579, -1.2, false],
+    [-0.4472135954999579, 5.5, true],
+  ] as const)("CF-04/G1 lifts planar velocity on committed support: normalX=%s Y=%s jump=%s", (normalX, expectedY, jump) => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const before = runtime.snapshot();
+    const token = runtime.beginTick(command(1, {
+      movementInputXZ: [1, 0], jumpPressed: jump, jumpHeld: jump,
+    }));
+    const proposal = runtime.proposeMovement(token, sample(token, 1, {
+      linearVelocityMetersPerSecondXYZ: [2.4, 0, 0],
+      support: { mode: "supported", pointMetersXYZ: [0, 0, 0],
+        normalXYZ: [normalX, 0.8944271909999159, 0], isDynamic: false },
+    }));
+    expect(proposal.proposedLinearVelocityMetersPerSecondXYZ[0]).toBe(2.4);
+    expect(proposal.proposedLinearVelocityMetersPerSecondXYZ[1]).toBeCloseTo(expectedY, 12);
+    expect(proposal.translationDeltaMetersXYZ[1]).toBeCloseTo(expectedY / 60, 12);
+    expect(runtime.snapshot()).toEqual(before);
+    runtime.reset();
+    expect(runtime.snapshot()).toEqual(before);
+  });
+
   it("stages jump without mutation, then commits takeoff from BodyResolution", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
     const before = runtime.snapshot();

@@ -687,6 +687,17 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     let verticalVelocity = 0;
     if (takeoffProposed) {
       verticalVelocity = this.#options.jumpSpeedMetersPerSecond;
+    } else if (sample.support.mode === "supported") {
+      // Old free-ground movement lifts planar velocity onto the admitted
+      // support tangent without shrinking XZ speed. The existing Body sample
+      // is the sole support source; no retained surface or height lookup.
+      const normal = sample.support.normalXYZ;
+      if (Math.abs(normal[1]) > 0.000001) {
+        verticalVelocity = checkedFinite(
+          -(normal[0] * horizontal[0] + normal[2] * horizontal[1]) / normal[1],
+          "supported surface velocity Y",
+        );
+      }
     } else if (sample.support.mode === "unsupported") {
       const locomotion = this.#currentSnapshot.locomotion;
       const isAscendingJump = locomotion.status === "active" &&

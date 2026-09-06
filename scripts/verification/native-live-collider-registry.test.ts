@@ -79,18 +79,18 @@ const productionWorldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(JSON.parse(
 ));
 
 function moduleFixture(
-  profile: "single-block" | "quarter-meter-ramp" = "single-block",
+  profile: "single-block" | "quarter-meter-ramp" | "one-meter-ramp" = "single-block",
 ): BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
       const session = createBabylonNativeBlockProfileSessionV1(context);
-      if (profile === "quarter-meter-ramp") {
+      if (profile === "quarter-meter-ramp" || profile === "one-meter-ramp") {
         for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
-          const riseCount = xMeters < 2
-            ? 0
-            : Math.min(8, xMeters - 1);
+          const riseCount = profile === "one-meter-ramp"
+            ? (xMeters < 2 ? 0 : xMeters < 6 ? 1 : 2)
+            : xMeters < 2 ? 0 : Math.min(8, xMeters - 1);
           for (let zMeters = -2; zMeters <= 2; zMeters += 1) {
             session.createBlock({
               id: `ramp-base-x${xMeters + 3}-z${zMeters + 2}`,
@@ -102,11 +102,11 @@ function moduleFixture(
             for (let riseIndex = 0; riseIndex < riseCount; riseIndex += 1) {
               session.createBlock({
                 id: `ramp-rise-x${xMeters + 3}-z${zMeters + 2}-y${riseIndex}`,
-                shape: "step",
+                shape: profile === "one-meter-ramp" ? "full" : "step",
                 paletteRole: "ground",
                 centerMetersXYZ: [
                   xMeters,
-                  0.125 + riseIndex * 0.25,
+                  profile === "one-meter-ramp" ? 0.5 + riseIndex : 0.125 + riseIndex * 0.25,
                   zMeters,
                 ],
                 colliderGroupId: "ramp-ground-group",
@@ -271,6 +271,7 @@ function packageFixture(
       contributionHash: hashBabylonNativeSceneContributionV1(contribution),
       profileInventoryHash: evidence.profileInventoryHash,
       settledVisualHash: contribution.profileSettlement.settledVisualHash,
+      settledVisualTargetCount: contribution.profileSettlement.targetCount,
       blocks: evidence.checkedLayout.layout.blocks.map((block) => ({
         blockId: block.id,
         runtimeEntityId: `native-block:${block.id}`,
@@ -463,19 +464,20 @@ function activeLocomotion(
 }
 
 describe("SDK-owned Native live collider registry", () => {
-  it("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp", async () => {
+  it.each(["quarter-meter-ramp", "one-meter-ramp"] as const)("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp: %s", async (profile) => {
     const {
       runtime,
       expectedWalkSpeedMetersPerSecond,
       expectedCameraDistanceMeters,
       controlledEntityId,
     } = await createRuntime({
-      module: moduleFixture("quarter-meter-ramp"),
+      module: moduleFixture(profile),
     });
     try {
       let snapshot = runtime.snapshot();
       const rampSamples = [];
       const rampCameraSamples = [];
+      const steadySlopeSamples = [];
       for (let tick = 0; tick < 480; tick += 1) {
         snapshot = await runtime.runFixedInput({
           actions: ["move-right"],
@@ -488,20 +490,35 @@ describe("SDK-owned Native live collider registry", () => {
         ) {
           rampSamples.push(subject);
           rampCameraSamples.push(snapshot.camera);
+          // The 1m source tops form a 26.565-degree incline from x=4.5
+          // to x=6.5. Measure its interior, beyond the capsule's mixed
+          // flat/ramp manifold. The old contact projection also slows at
+          // changing normals; the invariant here is no sustained slope drag.
+          if (profile === "quarter-meter-ramp" || (
+            subject.positionMetersXYZ[0] >= 5.25 &&
+            subject.positionMetersXYZ[0] <= 5.75
+          )) {
+            steadySlopeSamples.push(subject);
+          }
         }
         if (subject.positionMetersXYZ[0] >= 10) break;
       }
       expect(rampSamples.length).toBeGreaterThan(30);
       expect(rampSamples.every(({ movementMedium }) =>
         movementMedium === "ground")).toBe(true);
-      expect(Math.min(...rampSamples.map(({ speedMetersPerSecond }) =>
+      expect(steadySlopeSamples.length).toBeGreaterThan(10);
+      expect(Math.min(...steadySlopeSamples.map(({ speedMetersPerSecond }) =>
         speedMetersPerSecond))).toBeGreaterThanOrEqual(
           expectedWalkSpeedMetersPerSecond * 0.9,
         );
-      expect(Math.max(...rampCameraSamples.map((camera) =>
-        (camera.requestedArmLengthMeters ?? expectedCameraDistanceMeters) -
-        (camera.effectiveArmLengthMeters ?? 0),
-      ))).toBeLessThanOrEqual(0.02);
+      for (const camera of rampCameraSamples) {
+        // Native follows the old subject-fade lane, not the Canonical hard
+        // collision arm. Verify its actual pose instead of treating an absent
+        // hard-collision-only effectiveArmLengthMeters as a zero-length arm.
+        expect(camera.subjectOcclusion?.isEnabled).toBe(true);
+        expect(camera.actualPositionMetersXYZ).toEqual(camera.desiredPositionMetersXYZ);
+        expect(camera.requestedArmLengthMeters).toBeCloseTo(expectedCameraDistanceMeters, 8);
+      }
       expect(rampCameraSamples.every(({ decollisionPhase }) =>
         decollisionPhase !== "emergency-inside" &&
         decollisionPhase !== "constrained")).toBe(true);

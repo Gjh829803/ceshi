@@ -83,7 +83,7 @@ export const BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1 =
   Object.freeze({
     kind: "babylon-native-block-walkable-topology-policy" as const,
     schemaVersion: 1 as const,
-    maximumAutoSmoothHeightDeltaMeters: 0.3,
+    maximumAutoSmoothHeightDeltaMeters: 1,
     visualOverlayOffsetMeters: 0.004,
     maximumLogicalColliderCount: 4_096,
     maximumColliderVertexCount: 1_048_576,
@@ -116,7 +116,72 @@ interface SupportCell {
   readonly x: number;
   readonly y: number;
   readonly z: number;
-  readonly traversalSurfaceProfileRef: string;
+}
+
+interface SupportTile {
+  readonly cells: readonly SupportCell[];
+  readonly minimumX: number;
+  readonly maximumX: number;
+  readonly minimumZ: number;
+  readonly maximumZ: number;
+  readonly topY: number;
+}
+
+// Pinned Block Runtime retains complete source tops, splitting only partial
+// exposure. Averaging each microcell independently steepens an intact 1m ramp.
+function sourceSupportTiles(
+  cells: readonly SupportCell[],
+  solids: readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[],
+): readonly SupportTile[] {
+  const sourceKey = (source: { colliderId: string; sourceBlockId: string }) =>
+    `${source.colliderId}\u0000${source.sourceBlockId}`;
+  const boundsBySource = new Map<string, {
+    minimumX: number; maximumX: number;
+    minimumZ: number; maximumZ: number; topY: number;
+  }>();
+  for (const solid of solids) {
+    const [x, y, z] = cellCoordinates(solid.cellKey);
+    const key = sourceKey(solid);
+    const prior = boundsBySource.get(key);
+    if (prior === undefined) {
+      boundsBySource.set(key, {
+        minimumX: x, maximumX: x + 1,
+        minimumZ: z, maximumZ: z + 1, topY: y + 1,
+      });
+    } else {
+      prior.minimumX = Math.min(prior.minimumX, x);
+      prior.maximumX = Math.max(prior.maximumX, x + 1);
+      prior.minimumZ = Math.min(prior.minimumZ, z);
+      prior.maximumZ = Math.max(prior.maximumZ, z + 1);
+      prior.topY = Math.max(prior.topY, y + 1);
+    }
+  }
+  const cellsBySource = new Map<string, SupportCell[]>();
+  for (const cell of cells) {
+    const key = sourceKey(cell.source);
+    const rows = cellsBySource.get(key) ?? [];
+    rows.push(cell);
+    cellsBySource.set(key, rows);
+  }
+  return [...cellsBySource.entries()].flatMap(([key, rows]): SupportTile[] => {
+    const bounds = boundsBySource.get(key);
+    if (bounds !== undefined && rows.length ===
+        (bounds.maximumX - bounds.minimumX) * (bounds.maximumZ - bounds.minimumZ) &&
+        rows.every(cell => cell.y === bounds.topY)) {
+      return [{ ...bounds, cells: rows }];
+    }
+    return rows.map(cell => ({
+      cells: [cell], minimumX: cell.x, maximumX: cell.x + 1,
+      minimumZ: cell.z, maximumZ: cell.z + 1, topY: cell.y,
+    }));
+  });
+}
+
+function supportTileCorners(tile: SupportTile): readonly (readonly [number, number])[] {
+  return [
+    [tile.minimumX, tile.minimumZ], [tile.maximumX, tile.minimumZ],
+    [tile.maximumX, tile.maximumZ], [tile.minimumX, tile.maximumZ],
+  ];
 }
 
 function stableCompare(left: string, right: string): number {
@@ -475,8 +540,6 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
         x,
         y,
         z,
-        traversalSurfaceProfileRef:
-          source.traversalBinding.traversalSurfaceProfileRef,
       });
     })
     .sort((left, right) =>
@@ -490,57 +553,55 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
       return fail(INPUT_CODE, "support topology contains duplicate cells");
     }
     supportKeys.add(uniqueKey);
-    for (const [cornerX, cornerZ] of [
-      [cell.x, cell.z],
-      [cell.x + 1, cell.z],
-      [cell.x + 1, cell.z + 1],
-      [cell.x, cell.z + 1],
-    ] as const) {
-      const key =
-        `${cell.traversalSurfaceProfileRef}:${cornerX},${cornerZ}`;
+  }
+  const supportTiles = sourceSupportTiles(supportCells, input.groundModel.solidOccupancyCells);
+  for (const tile of supportTiles) {
+    for (const [cornerX, cornerZ] of supportTileCorners(tile)) {
+      const key = `${cornerX},${cornerZ}`;
       const heights = cornerHeightsByKey.get(key) ?? [];
-      heights.push(cell.y * GRID[1]);
+      heights.push(tile.topY * GRID[1]);
       cornerHeightsByKey.set(key, heights);
     }
   }
   const walkableByColliderId = new Map<string, GeometryAccumulator>();
   const smoothedHeight = (
-    cell: SupportCell,
+    tile: SupportTile,
     cornerX: number,
     cornerZ: number,
   ): number => {
     const heights = cornerHeightsByKey.get(
-      `${cell.traversalSurfaceProfileRef}:${cornerX},${cornerZ}`,
-    ) ?? [cell.y * GRID[1]];
+      `${cornerX},${cornerZ}`,
+    ) ?? [tile.topY * GRID[1]];
     const minimum = Math.min(...heights);
     const maximum = Math.max(...heights);
     if (
       maximum - minimum >
         policy.maximumAutoSmoothHeightDeltaMeters + EPSILON
-    ) return cell.y * GRID[1];
+    ) return tile.topY * GRID[1];
     return canonicalNumber(
       heights.reduce((sum, value) => sum + value, 0) / heights.length,
     );
   };
-  for (const cell of supportCells) {
+  for (const tile of supportTiles) {
+    const cell = tile.cells[0]!;
     const group = groupByColliderId.get(cell.source.colliderId)!;
     let accumulator = walkableByColliderId.get(group.colliderId);
     if (isNil(accumulator)) {
       accumulator = createAccumulator(group, "continuous-walkable-surface");
       walkableByColliderId.set(group.colliderId, accumulator);
     }
-    accumulator.sourceCellKeys.add(cell.source.topCellKey);
-    const x0 = cell.x * GRID[0];
-    const x1 = (cell.x + 1) * GRID[0];
-    const z0 = cell.z * GRID[2];
-    const z1 = (cell.z + 1) * GRID[2];
+    for (const sourceCell of tile.cells) accumulator.sourceCellKeys.add(sourceCell.source.topCellKey);
+    const x0 = tile.minimumX * GRID[0];
+    const x1 = tile.maximumX * GRID[0];
+    const z0 = tile.minimumZ * GRID[2];
+    const z1 = tile.maximumZ * GRID[2];
     addUpwardTopQuad(accumulator, [
-      [x0, smoothedHeight(cell, cell.x, cell.z), z0],
-      [x1, smoothedHeight(cell, cell.x + 1, cell.z), z0],
-      [x1, smoothedHeight(cell, cell.x + 1, cell.z + 1), z1],
-      [x0, smoothedHeight(cell, cell.x, cell.z + 1), z1],
+      [x0, smoothedHeight(tile, tile.minimumX, tile.minimumZ), z0],
+      [x1, smoothedHeight(tile, tile.maximumX, tile.minimumZ), z0],
+      [x1, smoothedHeight(tile, tile.maximumX, tile.maximumZ), z1],
+      [x0, smoothedHeight(tile, tile.minimumX, tile.maximumZ), z1],
     ]);
-    // The logical source cell owns both triangles, including an ungrouped top.
+    // Every tile stays with its original source Block and visual identity.
     const visualGroupId = cell.source.visualGroupId ?? "";
     let partition = accumulator.overlayPartitionsByVisualGroupId.get(visualGroupId);
     if (isNil(partition)) {

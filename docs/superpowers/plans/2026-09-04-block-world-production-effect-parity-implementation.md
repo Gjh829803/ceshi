@@ -1174,6 +1174,65 @@ as completed. Native entry 16/16, typecheck and the existing 3C gate pass (11
 entries, 34 live references, 10 single-authority invariants). Actual specialized
 Native context evidence remains required before closing K1.
 
+### CF-04/G1 source-top geometry parity (2026-09-07)
+
+Main-agent-only/sequential. Dependency: K1 checkpoint; exclusive owner is the
+existing Native Block logical-ground/topology pipeline, with the existing
+Character Movement and BodyPort owners for the directly exposed slope defect.
+Input: checked explicit
+Collider selections and their source-Block occupancy. Output: old-equivalent
+fully exposed source-top rectangles (partial exposure remains microtiles),
+global shared-corner smoothing with the pinned 1m span and original deterministic
+diagonal, retained logical Collider and visual partitions. No new Runtime support,
+Physics Body, locomotion or second ground sampler owner is introduced.
+
+Required evidence: two adjacent full Blocks with 1m top difference have shared
+1.5m corners and 1m-wide ramps, not 0.5m-wide steep strips; clipped tops and holes;
+negative coordinates, source order, group/Chunk seams, diagonal and partition
+identity; direct Ground/Boundary/materializer consumers; then actual Native Havok
+uphill/downhill. The current quarter-height step/grid and Builder recipe form the
+dependent G2 clean break; final Case waits for both and their consumer closure.
+
+G1 focused checkpoint (2026-09-07, parent `d6995a05`):
+- Full source-top rectangles, global 1m corner smoothing and old source-top
+  Ground checks are restored. Current quarter-height lattice/step remains G2.
+- Actual Havok exposed sustained speed loss on a 26.565-degree incline:
+  resetting supported velocity Y to zero repeatedly projects away X speed.
+  Character Movement now lifts its planar proposal using the admitted Body
+  sample normal, as pinned-old free-ground does on stable support. Jump keeps
+  precedence; there is no old Block height-sampler or cached support normal.
+- BodyPort distinguishes upward tangent movement from support-plane departure.
+  Its existing departure state retains commit/abort/reset ownership. Frozen
+  support/recovery velocity is discounted only where actually applied: partially
+  blocked recovery must not manufacture horizontal amplification in the checker.
+  Step height, solver tolerances, repair rounds and production gates are unchanged.
+- The one-meter fixture checks steady incline speed, not an invented minimum at
+  every flat/ramp manifold transition; old code also projects changing normals.
+  Full path still checks grounded traversal and actual Native fade-lane Camera
+  pose. The previous Camera test incorrectly treated absent Canonical-only arm
+  telemetry as zero; it now checks actual versus desired pose directly.
+- Nine affected test files passed **249/249**, including real Babylon 9.23.0/Havok
+  traversal, both ramp fixtures, reversal, walk/run jumping, landing and Reset;
+  `pnpm typecheck` and `pnpm verify:3c-migration` passed (11 entries, 34 live
+  references, 10 single-authority invariants). No final generated Case, full CI,
+  independent review or complete old/new transient trace equivalence is claimed.
+
+### CF-04/G2 old shape/grid and Builder consumer closure
+
+Main-agent-only/sequential, depends on G1. Restore pinned-old four shape kinds
+(`full`, `half`, `quarter`, `small`), 0.5m XYZ occupancy and 0.25m XYZ center
+lattice. Remove the current-only 0.25m-high `step` shape and its 0.125m Y center
+recipe, with no compatibility alias. Owners: profile shapes/parser/corpus,
+Runtime materializer metadata and schema/generated validator, portable checker,
+renderer, live/frozen Builder Skill and direct fixtures/consumers. Keep metric
+ground construction and existing Host authority; do not alter Capsule resources.
+
+Required evidence: actual shape bounds/occupancy and invalid-placement checks;
+current-only metadata/checker rejection; compatible source examples/corpus;
+affected reconstruction/Package consumers; live/frozen Skill drift check; real
+Havok one-meter path rerun after lattice change; typecheck. Then re-evaluate all
+remaining CF acceptance rows before freezing and running the final fresh Case.
+
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 
 Main-agent-only, sequential; depends on the existing CF-02 watchdog, not on a new
