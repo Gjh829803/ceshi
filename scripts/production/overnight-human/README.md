@@ -286,3 +286,30 @@ with WebSockets disabled. Read retries always target the same job/files; a
 transport-exit warning is not discarded unless the complete returned archive
 length and SHA verify. `timeout-transfer-attempts.json` records the actual result.
 Public verification now preserves timestamped reports as well as the aggregate.
+
+## Admission closed; artifact drain after 06:20
+
+The last submission was at 06:18:10 local. The 06:20 cutoff has passed;
+`admission-cutoff-verification.json` confirms no later submission or unresolved
+plan. Do not open another generation attempt or expand account admission. Keep
+the existing supervisors and publisher running to retrieve known jobs. Samples
+280/287 were actually inspected as satisfactory; 68 distinct outcomes have now
+been reviewed, with unreviewed results still playable.
+
+Case 267 was recovered as another intermediate checkpoint. Its original build
+`165a6e95c42473badd3d8c4cf788e25b509509a4b44525c1861e6bbdfe28edcc`
+passed fresh local and public browser startup checks. Its generated source and
+compiled world bytes were preserved, and its original timeout remains visible.
+
+For repeated whole-archive truncation, use the existing OUT helper with
+`WORLDKIT_RECOVERY_CHUNKED=1 python3 OUT/recover-timeout-files.py <case-number>`
+(replace OUT with the actual control directory). This stages a Host-only copy of
+the original archive under the exact job's `host-recovery` directory, outside the
+Agent workspace, then reads 512 KiB chunks. Verify offset, length and SHA for
+every chunk, followed by the complete archive SHA before extraction. This does
+not alter the source, invoke the model, or create another generation job.
+`chunked-transfer-<jobId>.json` records verified transfers; the original identity
+and archive validators still apply. Case 267's 19,965,855-byte archive verified
+after three whole-stream reads had been rejected as truncated. Follow the same
+preview, checkpoint installation, publication and public verification sequence
+after a successful transfer. Do not start duplicate recovery processes.
