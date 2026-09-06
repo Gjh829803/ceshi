@@ -174,8 +174,12 @@ orchard/river-valley samples (023, 069, 190), and U33 to production-good at 4
 after distinct satisfactory samples 027 and 090. Mixed samples remain recorded.
 At 03:20, inspected U37 ruins/snow-valley samples 192 and 196 also passed
 the quality check and reached 7/7 and 6/6 route targets. Current limits are
-U05=8, U12=8, U37=8, U33=4. A/B/C now report platform
-`quota_low`; preserve their in-flight tasks but do not bypass admission filtering.
+U05=8, U12=8, U37=8. At 03:49, U33 also expanded from 4 to 8 using its
+previously inspected distinct satisfactory samples 027/090 and healthy actual
+provider activity; pending 217–220 remain ungraded and are the next QA priority.
+See `u33-capacity-expansion.json`. A/B report platform `quota_low`, and C's
+19:00 UTC health snapshot reports `auth_failed`; preserve their in-flight tasks
+but do not bypass admission filtering.
 Capacity reprobe wave-27 completed weak samples on U35/U22/U04/U09/U31;
 these accounts are quality-quarantined. Their already-running second references
 in wave-29 remain intact for comparison; do not dispatch a third sample.
@@ -184,6 +188,11 @@ U26 samples 024 and 211 were inspected as mixed and weak; it is now also
 quality-quarantined. All quality judgments are based
 on reference/opening images, recorded motion samples and route/source evidence;
 none of these Host decisions modifies Agent input or blocks artifact playback.
+Exact target hits are supporting evidence, not a substitute for that inspection:
+compare nearest distances, tolerance, route geometry and actual frames. Some
+targets in inspected 223/224 missed a 2–3 metre tolerance although the real route
+visibly entered the surrounding area; retain genuinely unvisited regions as
+unverified rather than labelling every missed target impassable.
 
 Production accounts require two distinct visually inspected, hash-matching good
 samples. `productionConcurrency` may explicitly raise a selected proven account
