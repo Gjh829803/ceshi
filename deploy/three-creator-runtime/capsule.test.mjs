@@ -13,10 +13,8 @@ const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
 test('minimal importer projection preserves exact package resolutions and integrity records', () => {
   const projected = projectLock(lock, rootManifest);
   const importers = projected.slice(projected.indexOf('\nimporters:\n'), projected.indexOf('\npackages:\n'));
-  assert.deepEqual([...importers.matchAll(/^  (\S+):(?: \{\})?$/gm)].map(match => match[1]), ['.', 'packages/three-world', 'packages/camera-collision']);
-  assert(!importers.includes('@babylonjs'));
-  assert(!importers.replaceAll('@whitebox-world/camera-collision', '').includes('@whitebox-world'));
-  assert(importers.includes('version: link:../camera-collision'));
+  assert.deepEqual([...importers.matchAll(/^  (\S+):$/gm)].map(match => match[1]), ['.', 'packages/three-world']);
+  assert(!importers.includes('@babylonjs')); assert(!importers.includes('@whitebox-world'));
   assert(importers.includes("'@worldkit/three'")); assert(importers.includes("'@modelcontextprotocol/sdk'"));
   assert(importers.includes('      typescript:\n'), 'Runtime authoring schema requires the pinned TypeScript compiler API');
   assert.equal(projected.slice(projected.indexOf('\npackages:\n')), lock.slice(lock.indexOf('\npackages:\n')));
@@ -28,7 +26,6 @@ test('projection rejects changed dependency versions and unknown lock formats', 
   assert.throws(() => projectLock(lock, { ...rootManifest, devDependencies: { ...rootManifest.devDependencies, typescript: '99.0.0' } }), /Root\/lock mismatch/);
   assert.throws(() => projectLock(lock.replace("lockfileVersion: '9.0'", "lockfileVersion: '10.0'"), rootManifest), /lock layout/);
   assert.throws(() => projectLock(lock.replace('  packages/three-world:', '  packages/not-three:'), rootManifest), /workspace importer/);
-  assert.throws(() => projectLock(lock.replace('  packages/camera-collision: {}', '  packages/camera-collision:\n    dependencies: {}'), rootManifest), /shared camera collision dependencies/);
 });
 
 function withCapsule(run) {

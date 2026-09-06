@@ -1,16 +1,5 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
-The user subsequently authorized migrating the selected camera interpolation and
-collision recovery fixes, input focus/release, source save/checkpoint/continuation,
-cloud reliability, prioritized representative tri-views, asset search and bounded
-image transport together, then comparing the same canyon/ring cloud cases.
-Implementation authority: `docs/superpowers/plans/2026-09-06-selected-migration.md`.
-Keep the historical normal-task instruction byte-identical, authored opening and
-follow configuration semantics, recorded self-test contract and examples unchanged.
-Do not migrate UI presentation, framing inheritance, static batching, budget advice
-or mandatory planning instructions. The below historical freeze is superseded only
-for these explicitly selected changes. Do not give generated cases repair hints.
-
 The user requested restoring the exact version that generated the canyon courier
 and hollow-ring worlds, then adding later improvements one at a time. This branch
 is based on `03b8cb656c2e4ccf0770f50d8c09872c39259a48`. Keep SDK, Creator tools,

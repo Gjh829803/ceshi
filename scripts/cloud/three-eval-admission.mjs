@@ -18,10 +18,3 @@ export async function withAdmissionDirectoryLock(root,key,work,{waitMilliseconds
   try{return await work(path.join(root,`${key}.json`));}
   finally{await rmdir(directory);}
 }
-
-export function admissionIsClosed(record) {
-  if(['cancelled','stopped'].includes(record.providerStatus))return record.rayCleanupConfirmed===true;
-  if(['succeeded','completed','failed','submit_failed'].includes(record.providerStatus))return true;
-  return ['delivered','failed','cancelled','stopped'].includes(record.phase)&&
-    ((!record.jobId&&record.hasSubmissionIntent===false)||record.submissionRejected===true);
-}
