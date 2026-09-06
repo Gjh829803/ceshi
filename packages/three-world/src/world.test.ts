@@ -17,6 +17,20 @@ async function fixture(navigation = false) {
 const point = (world: Awaited<ReturnType<typeof fixture>>, id = 'Player-A') => world.snapshot().entities.find(e => e.id === id)!.positionMetersXYZ;
 
 describe('ThreeWorld', () => {
+  it.each([[3,6],[3.2,6],[1.5,2.5]])('keeps walk/run animation aligned with held intent at speeds %s/%s', async (walkSpeed,runSpeed) => {
+    const world = await fixture();
+    try {
+      const object=actor();object.position.x=5;let selected='';
+      const asset={object,clips:[],mixer:new THREE.AnimationMixer(object),actionIds:['idle','walk','run','jump','fall'],isActionComplete:false,timeSeconds:0,
+        play:(actionId:string)=>{selected=actionId;},update:()=>{},dispose:()=>{}};
+      world.addCharacter({id:'Animated',object,asset,character:{walkSpeedMetersPerSecond:walkSpeed,runSpeedMetersPerSecond:runSpeed}});
+      world.setControlledEntity('Animated');world.step({},60);
+      world.step({moveZRatio:-1},30);expect(selected).toBe('walk');
+      world.step({moveZRatio:-1,run:true},30);expect(selected).toBe('run');
+      world.step({moveZRatio:-1},30);expect(selected).toBe('walk');
+      world.step({},30);expect(selected).toBe('idle');
+    } finally {world.dispose();}
+  });
   it('uses held arrow keys to orbit the camera without driving the character', async () => {
     const world = await fixture();
     try {

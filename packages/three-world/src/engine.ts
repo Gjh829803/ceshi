@@ -218,7 +218,8 @@ export class WorldEngine {
       for (const [id, entity] of this.entities) if (entity.asset) {
         const state = this.physics.state(id); const speed = state ? Math.hypot(state.velocityMetersPerSecondXYZ[0], state.velocityMetersPerSecondXYZ[2]) : 0;
         if(state?.isGrounded)this.jumped.delete(id);
-        const requested = customActions.get(id)??(!state?.isGrounded ? (this.jumped.has(id)?'jump':'fall') : speed > 3 ? 'run' : speed > 0.1 ? 'walk' : 'idle');
+        const runningIntent = id === this.controlled ? Boolean(input.run) : Boolean(this.goals.get(id)?.run);
+        const requested = customActions.get(id)??(!state?.isGrounded ? (this.jumped.has(id)?'jump':'fall') : speed > 0.1 ? (runningIntent ? 'run' : 'walk') : 'idle');
         if(entity.asset.isActionComplete)this.manualActions.delete(id);
         if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) entity.asset.play(requested);
         entity.asset.update(dt);
