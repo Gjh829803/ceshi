@@ -149,3 +149,9 @@ account or change Agent context. Existing payloads remain immutable. The snapsho
 and driver logs are in OUT. U14 passed its first scene but then hit its actual
 usage window; several following driver failures were health filtering, not model
 quality failures. Its `blocked-usage-limit` decision prevents new submissions.
+
+Promising accounts now have at most two attempts awaiting a quality decision,
+even if those attempts are already terminal. Completing a trial does not silently
+authorize more trials before its outcome is reviewed. Completed provider execution
+with confirmed cleanup releases Host execution capacity during artifact download;
+`pendingDeliveries` remains separate and retrieval continues through final drain.

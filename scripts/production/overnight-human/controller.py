@@ -13,6 +13,11 @@ def alive(pid):
  try:os.kill(int(pid),0);return True
  except (OSError,ValueError,TypeError):return False
 
+def free_account_slots(quality,active_count,unreviewed_count):
+ cap={'verified-good':8,'production-good':4,'promising':2}.get(quality,0)
+ free=max(0,cap-active_count)
+ return min(free,max(0,2-unreviewed_count)) if quality=='promising' else free
+
 def start_supervisor(root):
  owner=read(root/'supervisor-owner.json',{});pid=owner.get('pid')
  if alive(pid) or (root/'supervisor-complete.json').exists():return
@@ -35,7 +40,7 @@ def rows_of(config):
   for task in plan.get('selectedTaskIds',[]):
    state=read(root/task/'state.json',{});payload=read(root/task/'payload.json',{});ids=payload.get('options',{}).get('codex_account_ids',[])
    recovery=read(root/task/'host-recovered-delivery.json',{});recovered=recovery.get('kind')=='three-creator-recovered-delivery' and recovery.get('status')=='artifact-verified' and recovery.get('jobId')==state.get('jobId') and all(recovery.get(k)==state.get(k) and state.get(k) for k in ['sourceHash','worldBuildHash'])
-   rows.append({'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
+   rows.append({'executionComplete':state.get('rayCleanupConfirmed') is True and state.get('providerStatus') in ['succeeded','completed','failed','cancelled','stopped'],'recoveredArtifact':bool(recovered),'taskId':task,'caseId':task.removesuffix('--three-sdk'),'wave':wave['runId'],'root':str(root/task),'phase':state.get('phase','not-started'),'jobId':state.get('jobId'),'providerStatus':state.get('providerStatus'),'requestedAccountSha256':hashlib.sha256(ids[0].encode()).hexdigest() if len(ids)==1 else None,'actualAccount':state.get('accountRouting',{}),'worldBuildHash':state.get('worldBuildHash'),'sourceHash':state.get('sourceHash'),'failure':state.get('failure'),'submittedAt':state.get('submittedAt'),'cliActivityObserved':live.get(task,{}).get('cliActivityObserved',False)})
  return rows
 
 def main():
@@ -51,7 +56,7 @@ def main():
    for row in rows:byCase.setdefault(row['caseId'],[]).append(row)
    completed={cid for cid,attempts in byCase.items() if any(r['phase']=='delivered' for r in attempts)}
    recovered={r['caseId'] for r in rows if r.get('recoveredArtifact')};available=completed|recovered
-   active=[r for r in rows if r['phase'] not in TERMINAL];busy=collections.Counter(r['requestedAccountSha256'] for r in active)
+   active=[r for r in rows if r['phase'] not in TERMINAL and not r.get('executionComplete')];pendingRecovery=[r for r in rows if r['phase'] not in TERMINAL];busy=collections.Counter(r['requestedAccountSha256'] for r in active)
    reviews=read(OUT/'quality-reviews.json',{'cases':{}})['cases'];reviewqueue=[]
    for row in rows:
     root=Path(row['root']);verified=root/'host-verified/payload';caps=verified/'captures/captures.json';report=read(caps,{})
@@ -62,14 +67,14 @@ def main():
      reviewqueue.append({**row,'referencePath':str(ref),'openingPath':str(existing) if existing else None,'verifiedRoot':str(verified),'note':'Inspect original vs opening and movement evidence; technical pass alone is not quality.'})
    write(OUT/'review-queue.json',{'updatedAt':now(),'cases':reviewqueue})
    elapsed=time.time()-datetime.datetime.fromisoformat(config['createdAt']).timestamp();remainingSeconds=datetime.datetime.fromisoformat(config['deadline'].replace('Z','+00:00')).timestamp()-time.time()
-   status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'recoveredArtifacts':len(recovered-completed),'availableArtifacts':len(available),'active':len(active),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
+   status={'id':config['id'],'updatedAt':now(),'deadline':config['deadline'],'target':300,'selected':300,'submitted':len({r['caseId'] for r in rows if r['jobId']}),'delivered':len(completed),'recoveredArtifacts':len(recovered-completed),'availableArtifacts':len(available),'active':len(active),'pendingDeliveries':sum(r['phase']=='delivery-pending' for r in rows),'cliObserved':sum(r['cliActivityObserved'] for r in active),'failedAttempts':sum(r['phase']=='failed' for r in rows),'qualityReviewed':len(reviews),'qualityReviewPending':len(reviewqueue),'notDispatched':300-len(byCase),'accountDecisions':{k:v['status'] for k,v in decisions.items()},'cases':rows,'hoursRemaining':round(remainingSeconds/3600,2),'localFreeGiB':round(__import__('shutil').disk_usage(OUT).free/1024**3,2)}
    write(OUT/'status.json',status)
    if len(available)==300:write(OUT/'complete.json',status);return
    if (OUT/'halt.json').exists():time.sleep(30);continue
    if status['localFreeGiB']<8:
     write(OUT/'storage-attention.json',{'at':now(),'freeGiB':status['localFreeGiB'],'reason':'Pause new admission; preserve existing jobs and recover space without deleting unique evidence.'});time.sleep(30);continue
    if now()>config['latestNewGenerationAt']:
-    if not active:
+    if not pendingRecovery:
      write(OUT/'deadline-summary.json',status)
      if remainingSeconds<=0:return
     time.sleep(30);continue
@@ -81,7 +86,9 @@ def main():
     if decision.get('availability','').startswith('blocked-'):continue
     if state not in ['verified-good','promising','production-good']:continue
     if a['label'] not in ['A','B','C','G'] and not decision.get('qualityEvidence'):continue
-    cap=8 if state=='verified-good' else 2 if state=='promising' else 4;free=max(0,cap-busy[a['identitySha256']]);accounts.extend([a]*free)
+    unreviewed=sum(r['requestedAccountSha256']==a['identitySha256'] and r['taskId'] not in reviews for r in rows)
+    free=free_account_slots(state,busy[a['identitySha256']],unreviewed)
+    accounts.extend([a]*free)
    # Keep initial exploration broad, then fill freed slots using approved accounts.
    # Previously verified accounts may keep working while probation results are assessed.
    slots=min(config['maxConcurrency']-len(active),len(accounts),64)
