@@ -3216,6 +3216,13 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   完整多入口 Camera/主体效果、Feel Review、全部旧参数与最后真实 Case 仍未关闭，
   CF-04/12 保持 open；本批尚未提交/推送，不复用 MEM4 的旧全量证据声称通过。
 
+- CF-04/12-OCC-C2 冷启动排查（2026-09-07）：上批已作本地验证提交 `9b8f36a9`，
+  尚未推送。真实 Native Check/Ground/Package 通过；Hosted 冷启动失败已定位为
+  MEM4 新导入的 `boxBuilder.js` 在虚拟 Native 模块加载后才触发 Vite 预打包/reload，
+  导致既有 iframe 导航保护终止。修复仅补 Runtime 提前预打包清单，12 项 seam 回归
+  RED→GREEN；不弱化导航保护、不改超时/相机参数/修复轮次。修复后的冷 Browser
+  验证尚待运行，完整 CF-04/12 与最终模型 Case 仍开放。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

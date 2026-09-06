@@ -133,3 +133,23 @@ ignored diagnostic evidence). Browser fixture production build passed with the
 expected bundle-size advisory and non-empty-output-directory notice; neither is
 a runtime diagnostic. This proves WebGL2 on this machine, not WebGPU, the complete
 Preview/Formal/artifact camera flow, two Feel Reviews, or full CF-04/12 completion.
+
+### OCC-C2 cold Hosted startup repair
+
+OCC-B2/C1 was committed locally as `9b8f36a9`; it was not pushed or declared CF
+complete. The first real Hosted capture invocation on a dirty tree correctly
+stopped before Browser creation at the existing SDK source-identity boundary.
+After committing, real Check/Ground/Package passed but cold Hosted startup failed.
+A read-only browser observer and server logs on the unchanged candidate established
+the cause: Vite discovered `@babylonjs/core/Meshes/Builders/boxBuilder.js` only
+through the admitted Native virtual module, optimized it late, then reloaded the
+iframe. The existing bridge consequently reported `FRAME_NAVIGATED`.
+
+The dependency comes from MEM4's `babylon-visual-adapter.ts` intent-first geometry
+materialization. Add it to the existing Runtime prebundle list; do not relax the
+frame-navigation protection, increase startup timeouts, change Camera parameters,
+or add model retries. The Vite seam regression first failed on the missing row,
+then all 12 seam tests passed. Real cold Browser rerun remains required after the
+repair commit. The diagnostic fixture is retained locally at
+`/private/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-native-package-vkx0fp`;
+it is synthetic test input, not a successful generated Case or modified old failure.

@@ -30,6 +30,10 @@ const NATIVE_SCENE_MODULE_PATH = "native/scene.mjs";
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
 const HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS = Object.freeze([
   "@babylonjs/core/Maths/math.viewport.js",
+  // Native source is reached through the admitted virtual module. Include its
+  // intent-first geometry dependency before navigation, so Vite cannot discover
+  // it late and reload an already-bound isolated Runtime frame.
+  "@babylonjs/core/Meshes/Builders/boxBuilder.js",
   "@babylonjs/core/scene.js",
 ] as const);
 
