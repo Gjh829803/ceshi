@@ -2369,6 +2369,33 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Package/Capture/resume 接线尚未完成。无付费任务、新真实 Browser/模型 Case、最终
   本地 Case、全仓 CI 或独立审查；全部 CF 完成并对齐旧链后才运行最终本地生产 Case。
 
+- CF-12/M-C2B-D 主体设计到 Host 定义转换（2026-09-06，输入 `12fb6227`，
+  main-agent-only）：新增 `native-composed-subject-definition.ts`，接受完整 primitive/asset
+  部件与 static/rigged 绑定的 typed design，生成 C2A 可消费的 PackageSubjectDefinition。
+  复用当前 Authoring visual-part 类型与 validator；不恢复旧 Block World Scene DSL，
+  不复制 normalizer/Runtime compiler，不依靠名字选择模型，也不让设计者指定任意
+  Physics/Capability/Camera profiles。保留旧 `1e-9` 量化、support-center、白膜外观、
+  Collider include/exclude、静态派生/骨骼 Collider、Rig/Animation、全部固定 profiles
+  和 `block-world-composed` 语义标签。此函数不是原始 JSON ingress parser，尚未启用
+  新生产输出文件或更改 Native Skill/Request/Attempt/checker；没有新增普通生产 gate。
+  对照方式：从固定 `9e35ab53c634acaef8c53a33082fff77653f7bbb` 的
+  `packages/block-world-compiler/src/compile.ts` 提取并执行原始量化和
+  `compilePackageSubjectDefinitions`，给旧函数同一组等价输入，比较完整 canonical
+  Definition。primitive 和 rigged 均完全一致；Hash 分别为
+  `sha256:a84f80b27bd08ff0fb6c5e5225f155b9fa02ae2fe5e8e3c7f9f9d26b4a918ba0`、
+  `sha256:934d6eb2626feb4dec4d0fa122f56fa36eec8cd519baf1c3fa59fd27466d697b`，
+  已固定到回归断言。首次对照脚本因 VM 跨 realm 原型被 canonical JSON 拒绝；改为
+  仅对旧函数 JSON 输出做 JSON 序列化后比较，未改生产 canonical JSON owner。
+  验证：初次 RED 为模块缺失；新增测试误传 Proxy bytes 而非 bytes hash，修正夹具后
+  定向 4/4。补齐四种 primitive、asset 位移/旋转/缩放、refs、accessor/非法数值、
+  输入/输出隔离及两种设计到实际 Native Request 准备，最终
+  `pnpm exec vitest run scripts/reconstruction/generation-request.test.ts --maxWorkers 1`
+  **55/55**、`pnpm typecheck` 通过（exit 0）。没有修改已有 Host port、Runtime、
+  Skill 或 portable checker，因此不重跑这些未失效证据；没有全仓 CI、独立审查、
+  Browser/模型或最终本地 Case。**C2B 实际生产激活仍未完成**：必须在同一 Builder
+  任务内生成主体提案，由同一 Host 编译/重放，并一起迁移前置固定 Bootstrap 身份与
+  后置编译闭包的 Request/Attempt/Package/Capture/resume 消费者；不得后改冻结请求。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

@@ -615,6 +615,35 @@ C2 execution split (main-agent-only, sequential; input baseline `beae162b`):
 | CF-12/M-C2A | `scripts/reconstruction/native-subject-host-closure.ts`: given an explicit registered ref or package Subject definition and Host-owned IDs/Camera/gravity, reuse existing Subject schema validation, normalization, resource locking, C1 compilation and core Gameplay/WRT constructors. Return one exact compiled Host closure and its Subject resource cost; no file writes, model call, semantic selection or synthetic Canonical world. | Registered, primitive-composed and rigged inputs; unchanged actual descriptor/profiles; input immutability; invalid/reserved resources and accessor rejection; actual Native generation Request/proxy preparation and changed-definition identities. This constructor does not certify requested movement support or whole-Package budgets. |
 | CF-12/M-C2B | Same Native Host owner: activate the source of explicit Subject intent and bind requested modes/primary identity to the selected compiled result; replace the fixed Cloud Ridge closure in production, including full Subject resource budgeting and immutable Request/Attempt/proxy/Package/Capture/resume propagation. | Depends on C2A; old selection/self-check timing and Native ownership must remain explicit. Do not silently select by preset name, substitute G Bot, delete unsupported requested modes, or add an early ordinary-production veto. All current producer/consumer and frozen input changes must close together. |
 
+C2B design-to-definition prerequisite (`CF-12/M-C2B-D`, main-agent-only,
+sequential, input `12fb6227`): restore the pinned old compiler's composed Subject
+translation at the Native Host owner. Builder design data supplies the complete
+primitive/registered-asset silhouette and static/rigged binding, not arbitrary
+Gameplay, Physics, Camera, sockets, capabilities or profile overrides. Reuse the
+current Authoring visual-part types and validator; do not restore the old Block
+World scene language or copy Subject normalization/Runtime compilation. Preserve
+the old 1e-9 number quantization, support-center coordinates, included/excluded
+collider parts, whitebox appearance, rig/animation/collider refs and exact Host
+profile defaults from `9e35ab53:packages/block-world-compiler/src/compile.ts:31-179`.
+Output is a PackageSubjectDefinition consumed by C2A, not a second Runtime owner.
+Required evidence: source-derived complete-definition parity, all four primitive
+shapes, asset transforms, rigged binding, malformed data/accessors, input isolation
+and actual compiled closure/proxy. This prerequisite does not activate another
+production file or alter frozen Requests. C2B's same-task proposal publication,
+checker/proxy timing and immutable output-closure identity transition must be
+activated together; never rewrite the pre-dispatch Request to fit later output.
+
+C2B-D evidence checkpoint: the typed converter is implemented. Executing the
+actual pinned old translation against the same primitive and rigged designs
+produces identical complete canonical definitions; their captured hashes are
+regression assertions. Four primitive shapes, exact binding/asset transforms,
+malformed data/accessors and input/output isolation are covered. Both designed
+closures also pass actual `prepareNativeBlockGenerationTaskV1` preparation.
+Generation Request tests pass 55/55 and typecheck passes; no production ingress,
+Skill/portable checker, Runtime or existing Host port changed. This is a
+prerequisite, not C2B activation or proof of visual/movement parity. The exact
+source comparison and exclusions are in docs/18.
+
 C2A implementation checkpoint: the explicit Host constructor and shared Subject
 projection exist. Actual Native Request/proxy preparation accepts registered
 asset, registered primitive, package primitive and package rigged closures.

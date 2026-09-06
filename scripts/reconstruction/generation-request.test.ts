@@ -46,6 +46,10 @@ import {
   compileNativeSubjectHostClosureV1,
   type NativeSubjectHostClosureInputV1,
 } from "./native-subject-host-closure.js";
+import {
+  compileNativeComposedSubjectDefinitionV1,
+  type NativeComposedSubjectDesignV1,
+} from "./native-composed-subject-definition.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
 const API_HASH = hash("a");
@@ -416,6 +420,138 @@ function subjectHostInput(subject: NativeSubjectHostClosureInputV1["subject"]): 
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  function composedDesign(rigged = false): NativeComposedSubjectDesignV1 {
+    const definition = (rigged ? createValidRiggedPackageSubjectWorldV4() : createValidPackageSubjectWorldV4())
+      .resources.subjectDefinitions[0]!;
+    return {
+      id: definition.id,
+      category: definition.category,
+      bodyTopology: definition.bodyTopology,
+      semanticClassId: definition.semanticClassId,
+      displayName: definition.aiMetadata.displayName,
+      description: definition.aiMetadata.description,
+      visualParts: definition.visualParts.map((part) => {
+        if (part.kind === "primitive") return part;
+        const { appearance: _appearance, ...design } = part;
+        return design;
+      }),
+      visualBinding: definition.visualBinding.mode === "static" ? { mode: "static" } : {
+        ...definition.visualBinding,
+        colliderProfileRef: definition.colliderPolicy.kind === "profile" ? definition.colliderPolicy.colliderProfileRef : "invalid",
+      },
+    };
+  }
+
+  it.each([false, true])("compiles the complete old composed Subject defaults and real Host proxy (rigged=%s)", (rigged) => {
+    const design = composedDesign(rigged);
+    const before = stringifyCanonicalJson(design);
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    const expected = (rigged ? createValidRiggedPackageSubjectWorldV4() : createValidPackageSubjectWorldV4())
+      .resources.subjectDefinitions[0]!;
+    // The pinned old Block compiler overrides these Authoring fixture fields.
+    expected.authoringAvailability = "advanced";
+    expected.allowedOverridePaths = [];
+    expected.sockets = [];
+    expected.mountSlots = [];
+    expected.relationshipCapabilityRefs = [];
+    expected.aiMetadata.semanticTags = [design.category, design.bodyTopology, "block-world-composed"];
+    for (const part of expected.visualParts) {
+      part.localTransform.rotationEulerRadiansXYZ ??= [0, 0, 0];
+    }
+    expect(result.value).toEqual(expected);
+    // Captured by executing compilePackageSubjectDefinitions from pinned
+    // 9e35ab53 against these same two designs, not generated from this helper.
+    expect(sha256CanonicalJson(result.value)).toBe(rigged
+      ? "sha256:934d6eb2626feb4dec4d0fa122f56fa36eec8cd519baf1c3fa59fd27466d697b"
+      : "sha256:a84f80b27bd08ff0fb6c5e5225f155b9fa02ae2fe5e8e3c7f9f9d26b4a918ba0");
+    const closure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: result.value }));
+    const expectedClosure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: expected }));
+    expect(closure).toEqual(expectedClosure);
+    if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
+    const proxy = deriveNativeBlockSubjectVisualReviewProxyV1({
+      worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
+      worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
+    });
+    expect(proxy.subjectDefinitionRef).toBe(`package://subject-definition/${design.id}@1`);
+    expect(proxy.cuboids.length).toBeGreaterThan(0);
+    expect(stringifyCanonicalJson(design)).toBe(before);
+    expect(compileNativeComposedSubjectDefinitionV1(design)).toEqual(result);
+  });
+
+  it("quantizes all composed primitive dimensions and transforms as the pinned old compiler", () => {
+    const design = composedDesign();
+    const shapes = [
+      { kind: "box", sizeMetersXYZ: [0.80000000004, 0.7, 1.4] },
+      { kind: "sphere", radiusMeters: 0.10000000006 },
+      { kind: "cylinder", radiusMeters: 0.10000000006, heightMeters: 0.70000000006 },
+      { kind: "capsule", radiusMeters: 0.10000000006, heightMeters: 0.70000000006 },
+    ] as const;
+    design.visualParts = shapes.map((shape, index) => ({
+      id: `part-${index}`, kind: "primitive", shape,
+      localTransform: { positionMetersXYZ: [-0.00000000004, 0.35, 0], rotationEulerRadiansXYZ: [0, 0.12000000004, 0] },
+      colliderContribution: index === 3 ? "exclude" : "include", semanticTags: ["body"],
+    }));
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.value.visualParts.map((part) => part.kind === "primitive" && part.shape)).toEqual([
+      { kind: "box", sizeMetersXYZ: [0.8, 0.7, 1.4] },
+      { kind: "sphere", radiusMeters: 0.1 },
+      { kind: "cylinder", radiusMeters: 0.1, heightMeters: 0.7 },
+      { kind: "capsule", radiusMeters: 0.1, heightMeters: 0.7 },
+    ]);
+    expect(result.value.visualParts.every((part) =>
+      !Object.is(part.localTransform.positionMetersXYZ[0], -0) && part.localTransform.rotationEulerRadiansXYZ?.[1] === 0.12)).toBe(true);
+    expect(result.value.visualParts[3]).toMatchObject({ colliderContribution: "exclude" });
+    expect(design.visualParts[0]!.localTransform.positionMetersXYZ[0]).toBe(-0.00000000004);
+  });
+
+  it("rejects malformed composed design through the existing Subject schema and never executes accessors", () => {
+    const invalid = composedDesign();
+    invalid.visualParts[0]!.localTransform.positionMetersXYZ = [0, Number.NaN, 0];
+    expect(compileNativeComposedSubjectDefinitionV1(invalid).ok).toBe(false);
+    const accessor = composedDesign();
+    let executed = false;
+    Object.defineProperty(accessor, "visualParts", { enumerable: true, get() { executed = true; throw new Error("accessor"); } });
+    expect(compileNativeComposedSubjectDefinitionV1(accessor).ok).toBe(false);
+    expect(executed).toBe(false);
+  });
+
+  it("preserves composed asset transforms, exact rigged refs and independent output data", () => {
+    const design = composedDesign(true);
+    const asset = design.visualParts[0]!;
+    if (asset.kind !== "asset") throw new Error("Missing asset fixture.");
+    asset.localTransform.positionMetersXYZ = [0.1234567894, 0.00000000004, -0.00000000004];
+    asset.localTransform.rotationEulerRadiansXYZ = [0, 0.2345678914, 0];
+    asset.localTransform.scaleXYZ = [1.00000000004, 1.1234567894, 1];
+    const original = structuredClone(design);
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.value.visualParts[0]).toEqual({
+      ...asset,
+      appearance: { mode: "whitebox-neutral" },
+      localTransform: {
+        positionMetersXYZ: [0.123456789, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0.234567891, 0],
+        scaleXYZ: [1, 1.123456789, 1],
+      },
+    });
+    if (design.visualBinding.mode !== "rigged") throw new Error("Missing rigged fixture.");
+    expect(result.value.visualBinding).toEqual({
+      mode: "rigged", rigProfileRef: design.visualBinding.rigProfileRef, animationSetRef: design.visualBinding.animationSetRef,
+    });
+    expect(result.value.colliderPolicy).toEqual({ kind: "profile", colliderProfileRef: design.visualBinding.colliderProfileRef });
+    expect(result.value.actionOrPoseSetRef).toBe(design.visualBinding.animationSetRef);
+    result.value.visualParts[0]!.localTransform.positionMetersXYZ = [9, 9, 9];
+    (result.value.profiles.allowedControlFeelProfileRefs as string[]).push("changed-output");
+    expect(design).toEqual(original);
+    const replay = compileNativeComposedSubjectDefinitionV1(design);
+    expect(replay.value?.profiles.allowedControlFeelProfileRefs).not.toContain("changed-output");
+    expect(replay.value?.visualParts[0]!.localTransform.positionMetersXYZ).toEqual([0.123456789, 0, 0]);
+  });
+
   it.each([
     ["worldkit://subject-definition/missing@1", "AUTHORING_REFERENCE_NOT_FOUND"],
     ["worldkit://subject-definition/vehicle.four-wheel.arcade@1", "SUBJECT_CAPABILITY_UNSATISFIED"],
@@ -486,15 +622,20 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     })).toThrow(/Subject definition Registry closure failed/);
   });
 
-  it.each(["registered", "registered-primitive", "primitive", "rigged"] as const)(
+  it.each(["registered", "registered-primitive", "primitive", "rigged", "designed-primitive", "designed-rigged"] as const)(
     "prepares a compiled %s Host Subject closure without the Cloud Ridge world",
     async (kind) => {
       const value = await fixture();
       try {
         const base = input(value);
-        const sourceWorld = kind === "rigged"
+        const sourceWorld = kind === "rigged" || kind === "designed-rigged"
           ? createValidRiggedPackageSubjectWorldV4()
           : createValidPackageSubjectWorldV4();
+        if (kind === "designed-primitive" || kind === "designed-rigged") {
+          const composed = compileNativeComposedSubjectDefinitionV1(composedDesign(kind === "designed-rigged"));
+          if (!composed.ok || composed.value === undefined) throw new Error(JSON.stringify(composed.diagnostics));
+          sourceWorld.resources.subjectDefinitions = [composed.value];
+        }
         const definition = sourceWorld.resources.subjectDefinitions[0]!;
         const selectedSubject = kind === "registered" || kind === "registered-primitive"
           ? { source: "registry" as const, subjectDefinitionRef: kind === "registered"
