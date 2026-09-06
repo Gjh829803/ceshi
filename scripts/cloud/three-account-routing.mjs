@@ -3,7 +3,8 @@ import {createHash} from 'node:crypto';
 const identity=id=>createHash('sha256').update(id).digest('hex');
 export function validateCreatorAccountPolicy(policy) {
   if(policy?.schemaVersion!==1||policy.scope!=='worldkit-creator'||!Array.isArray(policy.preferred)||!Array.isArray(policy.denied)||policy.allowUnratedFallback!==false)throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
-  const all=[...policy.preferred,...policy.denied];
+  if(policy.probation!==undefined&&!Array.isArray(policy.probation))throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
+  const all=[...policy.preferred,...policy.denied,...(policy.probation??[])];
   if(!policy.preferred.length||all.some(row=>typeof row.label!=='string'||!/^[a-f0-9]{64}$/.test(row.identitySha256??''))||new Set(all.map(row=>row.identitySha256)).size!==all.length)throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
   return policy;
 }
@@ -21,7 +22,8 @@ export function selectCreatorAccount({policy,inventory,requestedIds,slot=0}) {
   const preferred=policy.preferred.flatMap(account=>eligible.filter(row=>identity(row.codexAccountId)===account.identitySha256));
   if(requestedIds!==undefined) {
     assertCreatorAccountSelection(requestedIds,policy);
-    if(requestedIds.some(id=>!preferred.some(row=>row.codexAccountId===id)))throw Error('CREATOR_ACCOUNT_NOT_PREFERRED_OR_UNAVAILABLE');
+    const probation=(policy.probation??[]).flatMap(account=>eligible.filter(row=>identity(row.codexAccountId)===account.identitySha256));
+    if(requestedIds.some(id=>![...preferred,...probation].some(row=>row.codexAccountId===id)))throw Error('CREATOR_ACCOUNT_NOT_PREFERRED_OR_UNAVAILABLE');
     return requestedIds;
   }
   if(!preferred.length)throw Error('CREATOR_PREFERRED_ACCOUNTS_UNAVAILABLE');
@@ -31,5 +33,5 @@ export function actualCreatorAccountEvidence(ids,actualId,policy) {
   assertCreatorAccountSelection(ids,policy);
   if(typeof actualId!=='string'||!actualId)return {verified:false,reason:'provider-account-metadata-unavailable'};
   const hash=identity(actualId),denied=policy.denied.some(row=>row.identitySha256===hash);
-  return {verified:!denied&&ids.includes(actualId),identitySha256:hash,label:policy.preferred.find(row=>row.identitySha256===hash)?.label??null,denied};
+  return {verified:!denied&&ids.includes(actualId),identitySha256:hash,label:[...policy.preferred,...(policy.probation??[])].find(row=>row.identitySha256===hash)?.label??null,denied};
 }

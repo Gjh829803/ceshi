@@ -1,6 +1,6 @@
 /** Release model capacity before slow artifact retrieval; retain all completion promises. */
 export async function runWithExecutionSlots(plans,maximum,execute,shouldStop=()=>false) {
-  if(!Number.isSafeInteger(maximum)||maximum<1||maximum>10)throw Error('CREATOR_EXECUTION_CAPACITY_INVALID');
+  if(!Number.isSafeInteger(maximum)||maximum<1||maximum>64)throw Error('CREATOR_EXECUTION_CAPACITY_INVALID');
   const active=new Set(),completions=[];
   for(const plan of plans) {
     while(active.size>=maximum)await Promise.race(active);

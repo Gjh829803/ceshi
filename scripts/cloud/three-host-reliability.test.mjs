@@ -14,6 +14,20 @@ import {runWithExecutionSlots} from './three-execution-slots.mjs';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const policy={schemaVersion:1,scope:'worldkit-creator',preferred:['A','B'].map(label=>({label,identitySha256:hash(label)})),denied:[{label:'D',identitySha256:hash('D')}],allowUnratedFallback:false};
 const inventory=['A','B','D','unrated'].map(codexAccountId=>({codexAccountId,eligible:true,healthStatus:'active'}));
+test('probation accounts require explicit selection and never become automatic fallback',()=>{
+ const trial={...policy,probation:[{label:'U01',identitySha256:hash('unrated')}]};
+ assert.deepEqual(selectCreatorAccount({policy:trial,inventory,requestedIds:['unrated']}),['unrated']);
+ assert.deepEqual(selectCreatorAccount({policy:trial,inventory}),['A']);
+ assert.throws(()=>selectCreatorAccount({policy:trial,inventory:inventory.map(r=>({...r,eligible:r.codexAccountId==='unrated'}))}),/PREFERRED_ACCOUNTS_UNAVAILABLE/);
+ assert.throws(()=>selectCreatorAccount({policy:trial,inventory:inventory.map(r=>({...r,eligible:false})),requestedIds:['unrated']}),/NOT_PREFERRED/);
+ assert.equal(actualCreatorAccountEvidence(['unrated'],'unrated',trial).label,'U01');
+});
+test('expanded execution slots admit up to 64 while enforcing the configured bound',async()=>{
+ let active=0,peak=0;
+ await runWithExecutionSlots(Array.from({length:90}),37,async()=>{active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;});
+ assert.equal(peak,37);
+ await assert.rejects(()=>runWithExecutionSlots([],65,async()=>{}),/CAPACITY_INVALID/);
+});
 test('new cases distribute across approved healthy accounts and never fall back to denied or unrated accounts',()=>{
  assert.deepEqual(Array.from({length:10},(_,slot)=>selectCreatorAccount({policy,inventory,slot})[0]),['A','B','A','B','A','B','A','B','A','B']);
  assert.throws(()=>selectCreatorAccount({policy,inventory,requestedIds:['D']}),/DENIED/);

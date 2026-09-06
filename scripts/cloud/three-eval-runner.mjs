@@ -51,7 +51,7 @@ if (previousPlan?.experimentRevision && previousPlan.experimentRevision !== expe
 const profiles = suite === "sdk-only" ? ["three-sdk"] : ["three-raw", "three-sdk"];
 const manifest = {...sourceManifest, cases: sourceManifest.cases.flatMap(item => profiles.map(profile => ({...item, baseCaseId: item.id, profile, id: `${item.id}--${profile}`})))};
 const maxConcurrency = Number(options["--max-concurrency"] ?? previousPlan?.maxConcurrency ?? (suite === "sdk-only" ? 5 : 4));
-if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 10) throw new Error("--max-concurrency must be an integer in [1, 10]");
+if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 64) throw new Error("--max-concurrency must be an integer in [1, 64]");
 const accountConcurrency = Number(options["--account-concurrency"] ?? previousPlan?.accountConcurrency ?? (suite === "sdk-only" ? 5 : 4));
 if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 5) throw new Error("--account-concurrency must be an integer in [1, 5]");
 const caseLimit = Number(options["--case-limit"] ?? 5);

@@ -1,3 +1,17 @@
+## Overnight production — 2026-09-06
+
+The user authorizes 300 human-led open-world cloud cases by 2026-09-07 08:00
+Asia/Shanghai, with account exploration then quality-weighted production.
+Use `scripts/production/overnight-human/README.md` and the existing campaign at
+`.codex-tmp/overnight-human-300-20260906`. First 37 requests are already submitted;
+never create a duplicate campaign or discard their job IDs. The controller and
+publisher run detached; task heartbeat `300` owns actual result assessment and
+account-quality decisions. Explicit probation accounts may be selected, D/E/F
+remain denied. Keep the optimized cloud runtime 7486b980 and Agent prompt frozen.
+No manual generated-world repairs in this new production campaign. Postponed
+visual assessment must not block playing verified deliveries. Record quota and
+capacity errors separately from visual quality. See the README before operating.
+
 ## Humanoid motion repair and guidance — 2026-09-06
 
 All ten manual motion repairs are now published in place at the original URLs,
