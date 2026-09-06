@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { WorldEngine, type WorldOptions as EngineOptions } from './engine.js';
+import { normalizeCaptureSelection, observeCaptureSelection, type SelectedCaptureTarget } from './capture-selection.js';
 import { WorldAssets } from './assets-library.js';
 import { OperationLedger, StateRegistry, actionArguments, cloneJson, failure, objectSchema, requireId, runtimeError, scalarSchema, scalarValue, synchronous } from './control-support.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
@@ -52,8 +53,8 @@ export class ThreeWorld implements API.World {
  private readonly activities=new Map<string,Activity>();private readonly tweens:Tween[]=[];private readonly queued:Queued[]=[];
  private readonly requests=new Map<string,{body:string;promise:Promise<API.CommandReceipt>}>();
  private readonly ownedResources=new Set<THREE.BufferGeometry|THREE.Material>();
- private baseline: {entries:Map<string,Registration>;prototypes:Map<string,Prototype>;geometries:Map<string,Geometry>;parameters:Map<string,Parameter>;actions:Map<string,API.ActionDefinition<API.ObjectSchema>>;movements:Map<string,API.MovementDefinition<API.JsonValue>>;autonomies:Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>;geometryById:Map<string,THREE.BufferGeometry>}|undefined;
- private captureIds:string[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;
+ private baseline: {entries:Map<string,Registration>;prototypes:Map<string,Prototype>;geometries:Map<string,Geometry>;parameters:Map<string,Parameter>;actions:Map<string,API.ActionDefinition<API.ObjectSchema>>;movements:Map<string,API.MovementDefinition<API.JsonValue>>;autonomies:Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>;geometryById:Map<string,THREE.BufferGeometry>;captureTargets:readonly SelectedCaptureTarget[]}|undefined;
+ private captureTargets:readonly SelectedCaptureTarget[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;
  private activeWriter:string|undefined;private observer:API.WorldObservation|undefined;
  private constructor(private readonly engine:WorldEngine,assets:WorldAssets){
   this.scene=engine.scene;this.camera=engine.camera;this.renderer=engine.renderer;this.assets=assets;
@@ -111,10 +112,11 @@ export class ThreeWorld implements API.World {
   const {asset:_asset,...metadata}=options;this.engine.addCharacter({...metadata,object,character,...(asset?{asset:this.assets.internal(asset)}:{})});
   this.entries.set(options.id,{id:options.id,object,options,role:'actor',body,...(asset?{asset}:{}),generation:++this.nextGeneration,geometryVersion:0,movementId,movementState:movementId==='ground'?null:cloneJson(this.movements.get(movementId)!.initialState),physicsKind:'character'});this.touch();return object;
  }
- setControlledEntity(id:string):void{this.entity(id);this.engine.setControlledEntity(id);this.cancelActor(id);this.touch();}
+ setControlledEntity(id:string):void{this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
  setCameraFollow(options:API.CameraFollowOptions={}):void{this.engine.setCameraFollow(options);}
  useAuthoredCamera():THREE.Camera{return this.engine.cameraRig.useAuthoredCamera();}
- setCaptureTargets(ids:readonly string[]):void{for(const id of ids)this.entity(id);this.captureIds=[...new Set(ids)];}
+ setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
+ private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.updating.add(callback);return()=>{this.updating.delete(callback);};}
  onReset(callback:()=>void):()=>void{this.resets.add(callback);return()=>{this.resets.delete(callback);};}
  onDispose(callback:()=>void):()=>void{this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}
@@ -382,11 +384,11 @@ export class ThreeWorld implements API.World {
     switch(command.type){
      case 'entity.spawn':{const options=prepared.spawned.get(command.entityId)!;if('role' in options)this.addEntity(options);else this.addCharacter(options);break;}
      case 'entity.despawn':{const root=this.entity(command.entityId);const removed=[...this.entries.values()].filter(entry=>this.within(entry.object,root.object));
-      if(this.captureIds.includes(command.entityId))this.captureIds=this.captureIds.filter(id=>id!==command.entityId);
+      const remainingCaptureTargets=this.captureTargets.filter(selection=>!removed.some(entry=>entry.id===selection.entityId||selection.representative&&this.within(selection.representative.object,entry.object)));
       // A deleted follow target explicitly releases the same camera instead of keeping a stale callback.
       if(removed.some(entry=>entry.id===this.engine.cameraRig.targetEntityId))this.engine.cameraRig.useAuthoredCamera();
       for(const task of [...this.activities.values()])if([...task.followTargets.values()].some(targetId=>removed.some(entry=>entry.id===targetId))){this.cancelActivity(task.operationId);this.operations.update(task.operationId,{status:'failed',phase:'target-removed',error:failure('FOLLOW_TARGET_REMOVED','The followed entity was removed.','content')});}
-      for(const entry of removed)this.cancelActor(entry.id);this.engineCommand({type:command.type,entityId:command.entityId});for(const entry of removed){this.entries.delete(entry.id);this.autonomies.delete(entry.id);}break;}
+      for(const entry of removed)this.cancelActor(entry.id);this.engineCommand({type:command.type,entityId:command.entityId});this.captureTargets=remainingCaptureTargets;for(const entry of removed){this.entries.delete(entry.id);this.autonomies.delete(entry.id);}break;}
      case 'entity.attach':this.engineCommand({type:command.type,childEntityId:command.childEntityId,parentEntityId:command.parentEntityId,positionMetersXYZ:command.positionLocalMetersXYZ});break;
      case 'entity.play-action':this.engine.playAction(command.entityId,command.actionId,command.playback);break;
      case 'entity.stop-action':this.engine.stopAction(command.entityId);break;
@@ -456,8 +458,9 @@ export class ThreeWorld implements API.World {
    let receipt:API.CommandReceipt|undefined;const operationId=this.operations.create('initial');this.commit({prepared,operationId,commandId:'initial-parameters',resolve:value=>{receipt=value;}},true);if(receipt?.status==='rejected')throw receipt.error;if(receipt?.status==='accepted'){const result=this.operations.get(receipt.operationId);if(result.status!=='succeeded')throw result.error??failure('INITIAL_PREPARATION_FAILED');}
   }
   if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');
+  this.captureObservation();
   this.state.seal();
-  this.baseline={entries:new Map([...this.entries].map(([id,entry])=>[id,this.copyEntry(entry)])),prototypes:new Map(this.prototypes),geometries:new Map(this.geometries),parameters:new Map(this.parameters),actions:new Map(this.actions),movements:new Map(this.movements),autonomies:new Map([...this.autonomies].map(([id,value])=>[id,cloneJson(value)])),geometryById:new Map([...this.entries].filter(([,entry])=>(entry.object as THREE.Mesh).isMesh).map(([id,entry])=>[id,(entry.object as THREE.Mesh).geometry]))};
+  this.baseline={entries:new Map([...this.entries].map(([id,entry])=>[id,this.copyEntry(entry)])),prototypes:new Map(this.prototypes),geometries:new Map(this.geometries),parameters:new Map(this.parameters),actions:new Map(this.actions),movements:new Map(this.movements),autonomies:new Map([...this.autonomies].map(([id,value])=>[id,cloneJson(value)])),geometryById:new Map([...this.entries].filter(([,entry])=>(entry.object as THREE.Mesh).isMesh).map(([id,entry])=>[id,(entry.object as THREE.Mesh).geometry])),captureTargets:this.captureTargets};
  }
  async start():Promise<void>{
   this.alive();if(this.engine.isRunning)return;if(this.starting)return this.starting;
@@ -470,6 +473,7 @@ export class ThreeWorld implements API.World {
   for(const queued of this.queued.splice(0))queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('STALE_TASK')});
   const wasRunning=this.engine.isRunning;this.engine.stop();if(!this.baseline)await this.initialise();
   const baseline=this.baseline!;
+  this.captureTargets=baseline.captureTargets;
   for(const [id,geometry] of baseline.geometryById){const original=baseline.entries.get(id)!;(original.object as THREE.Mesh).geometry=geometry;}
   this.entries.clear();for(const [id,entry] of baseline.entries)this.entries.set(id,{...this.copyEntry(entry),generation:++this.nextGeneration});
   this.prototypes.clear();for(const [id,value] of baseline.prototypes)this.prototypes.set(id,value);
@@ -480,7 +484,7 @@ export class ThreeWorld implements API.World {
   this.autonomies.clear();for(const [id,value] of baseline.autonomies)this.autonomies.set(id,cloneJson(value));
   this.state.reset();this.engine.reset();this.errors.length=0;this.touch();
   for(const parameter of this.parameters.values())if('effect' in parameter.definition){this.activeWriter=parameter.definition.id;try{const effect=parameter.definition.effect;this.authorCallback(parameter.definition.id,()=>effect(parameter.value));}finally{this.activeWriter=undefined;}}
-  for(const callback of this.resets)this.guarded(()=>synchronous(callback));this.engine.render();if(wasRunning)await this.start();
+  for(const callback of this.resets)this.guarded(()=>synchronous(callback));this.captureObservation();this.engine.render();if(wasRunning)await this.start();
  }
  async runTask<T>(task:(scope:API.TaskScope)=>Promise<T>):Promise<T>{
   this.alive();const epoch=this.epoch;const abort=new AbortController();this.scopes.add(abort);
@@ -543,7 +547,8 @@ export class ThreeWorld implements API.World {
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
   const observer:API.WorldObservation={ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,
-   get player(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return Object.fromEntries([...world.entries].filter(([id])=>!world.captureIds.length||world.captureIds.includes(id)||id===world.engine.controlledEntityId).map(([id,entry])=>[id,entry.object]));},
+   get player(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
+   get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
    startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:()=>world.describe(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
   const target=window as unknown as Record<string,unknown>;target.__WORLDKIT_EVAL__=observer;target.__WORLDKIT_CREATOR__=observer;this.observer=observer;

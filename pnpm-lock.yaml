@@ -419,9 +419,14 @@ importers:
 
   packages/camera:
     dependencies:
+      '@whitebox-world/camera-collision':
+        specifier: workspace:*
+        version: link:../camera-collision
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
+
+  packages/camera-collision: {}
 
   packages/character-movement:
     dependencies:
@@ -766,6 +771,9 @@ importers:
       '@recast-navigation/generators':
         specifier: 0.43.1
         version: 0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)
+      '@whitebox-world/camera-collision':
+        specifier: workspace:*
+        version: link:../camera-collision
       three:
         specifier: 0.185.1
         version: 0.185.1

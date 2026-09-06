@@ -44,13 +44,21 @@ afterEach(() => {
 });
 
 describe("@whitebox-world/camera package boundary", () => {
-  it("depends only on gameplay-contracts as its authoritative state source", () => {
+  it("depends only on its authoritative gameplay state and the shared pure collision solver", () => {
     const manifest = JSON.parse(
       readFileSync(join(PACKAGE_DIRECTORY, "package.json"), "utf8"),
     ) as { dependencies?: Readonly<Record<string, string>> };
     expect(Object.keys(manifest.dependencies ?? {})).toEqual([
       "@whitebox-world/gameplay-contracts",
+      "@whitebox-world/camera-collision",
     ]);
+  });
+  it("keeps the shared collision core free of runtime and provider dependencies", () => {
+    const root = join(PACKAGE_DIRECTORY, '../camera-collision');
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
+    const source = productionSourceFiles(join(root, 'src')).map(file => readFileSync(file, 'utf8')).join('\n');
+    for (const dependency of FORBIDDEN_DEPENDENCIES) expect(source).not.toMatch(forbiddenImportPattern(dependency));
   });
   it("has no renderer, physics, Registry, Gameplay, or Runtime dependency", () => {
     const manifest = JSON.parse(

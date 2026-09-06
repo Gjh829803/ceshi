@@ -11,6 +11,9 @@ import type { WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, type AuthoringTopic } from './authoring-schema.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, SDK_EXAMPLE } from './examples.js';
+import {boundedPreviewFile} from './preview-images.js';
+import {CreatorCheckpoints} from './checkpoints.js';
+import {selectTriviewTargets} from './capture-plan.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -93,6 +96,7 @@ export class ThreeCreatorTools {
   private session?: Session;
   private playtestEvidence?: Evidence;
   private captureEvidence?: Evidence;
+  private checkpoints?: CreatorCheckpoints;
   constructor(workspace: string, readonly profile: CreatorProfile) {
     this.compiler = new ThreeCompiler(workspace, profile); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
   }
@@ -127,7 +131,15 @@ export class ThreeCreatorTools {
       return { profile: this.profile, topic, files, sdkExample: 'SDK v2 capability example: actual character, effects, controlled movement intent, named geometry and NPC operations. Validate in the current runtime before claiming behavior.' };
     }
     return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? SDK_EXAMPLE : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
-  async assets(query = '', assetId?: string) { const assets = await readCatalog(); const words = query.toLowerCase().split(/\s+/).filter(Boolean); return { schemaVersion: 1, assets: assets.filter(asset => (!assetId || asset.id === assetId) && words.every(word => JSON.stringify(publicAsset(asset)).toLowerCase().includes(word))).map(publicAsset) }; }
+  async assets(query = '', assetId?: string) {
+    const assets=await readCatalog(), words=query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const ranked=assets.filter(asset=>!assetId||asset.id===assetId).map(asset=>{
+      // Match positive identity/use metadata, never a limitation such as "not a fox".
+      const text=JSON.stringify([asset.id,asset.displayName,asset.recommendedFor]).toLowerCase();
+      return {asset,score:words.filter(word=>text.includes(word)).length};
+    }).filter(({score})=>assetId||words.length===0||score>0).sort((a,b)=>b.score-a.score);
+    return {schemaVersion:1,assets:ranked.map(({asset})=>publicAsset(asset))};
+  }
   start(type: string, run: (id: string) => Promise<unknown>) {
     const now = new Date().toISOString(), id = randomUUID(); const operation: Operation = { id, type, status: 'queued', createdAt: now, updatedAt: now }; this.operations.set(id, operation);
     this.queue = this.queue.then(async () => {
@@ -228,15 +240,27 @@ export class ThreeCreatorTools {
     if (!['opening', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'stop');
     if (view === 'opening') await this.bridge(session, 'reset');
-    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
+    const root=path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`);
+    const captured=await this.capture(session,root,view,entityIds,frontYawRadians);
+    const report={...captured,kind:'three-creator-browser-preview',schemaVersion:1,view,
+      pageErrors:[...session.errors],runtimeErrors:(await this.bridge(session,'read')).errors??[],blockedNetworkRequests:[...session.networkErrors]};
+    await json(path.join(root,'preview.json'),report);
+    let checkpointWarning:string|undefined;
+    if(report.pageErrors.length===0&&report.runtimeErrors.length===0&&report.blockedNetworkRequests.length===0) {
+      try { this.checkpoints??=new CreatorCheckpoints(this.workspace,this.profile); await this.checkpoints.save(candidate,report); }
+      catch { checkpointWarning='THREE_CHECKPOINT_NOT_SAVED'; }
+    }
+    return {...report,image:await boundedPreviewFile(captured.image),...(checkpointWarning?{checkpointWarning}:{})};
   }
-  async triviews() {
+  async triviews(includeAdditionalTargets=false) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'reset');
-    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`), observation = await this.bridge(session, 'inspect'); const images = [];
+    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`);
+    const plan=selectTriviewTargets(await this.bridge(session,'captureTargets'),includeAdditionalTargets); const images = [];
     images.push(await this.capture(session, root, 'opening'));
-    for (const id of ['player', ...Object.keys(observation.targets).filter(id => id !== 'player' && observation.targets[id].uuid !== observation.player.uuid)]) images.push(await this.capture(session, root, 'entity-triview', [id]));
-    const report = { kind: 'three-creator-captures', schemaVersion: 1, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
-    await json(path.join(root, 'captures.json'), report); this.captureEvidence = { root, files: await hashTree(root), report }; return { ...report, image: images[0]!.image };
+    for (const target of plan.selectedTargets) images.push(await this.capture(session,root,'entity-triview',[target.id]));
+    const report = { kind: 'three-creator-captures', schemaVersion: 1, selectionPolicy:plan.selectionPolicy, conditioningEntityIds:plan.conditioningEntityIds, omittedEntityIds:plan.omittedEntityIds, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
+    const displayImage=await boundedPreviewFile(images[0]!.image);
+    await json(path.join(root, 'captures.json'), report); this.captureEvidence = { root, files: await hashTree(root), report }; return { ...report, image: displayImage };
   }
   private async episode(): Promise<{ episode: Episode; hash: string; bytes: Buffer }> {
     const file = path.join(this.workspace, 'episode.json'); if ((await lstat(file)).isSymbolicLink() || !isWithin(await realpath(this.workspace), await realpath(file))) throw new Error('THREE_EPISODE_PATH_INVALID');

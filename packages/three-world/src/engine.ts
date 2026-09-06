@@ -3,7 +3,7 @@ import { DEFAULT_CHARACTER_OPTIONS, ThreePhysics } from './physics.js';
 import { ThreeNavigation } from './navigation.js';
 import { ThreeCameraRig, type CameraRigInput } from './camera.js';
 import { ownViewport } from './viewport.js';
-import { WorldKeyboard } from './input.js';
+import { WorldInputRouter, WorldKeyboard } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
@@ -55,7 +55,7 @@ export class WorldEngine {
   private pointerInput: CameraRigInput = {};
   private readonly jumped = new Set<string>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
-  private pointerAbort: AbortController | undefined;
+  private inputRouter: WorldInputRouter | undefined;
   private controlled: string | undefined;
   private tick = 0;
   private revision = 0;
@@ -137,14 +137,22 @@ export class WorldEngine {
     this.cameraRig.setFollow({...options,targetEntityId});
   }
   private installPointer(canvas: HTMLCanvasElement): void {
-    this.pointerAbort=new AbortController();const signal=this.pointerAbort.signal;
-    let pointer:number|undefined;let x=0;let y=0;
-    canvas.addEventListener('pointerdown',e=>{if(!this.running)return;pointer=e.pointerId;x=e.clientX;y=e.clientY;canvas.setPointerCapture(pointer);canvas.focus();},{signal});
-    canvas.addEventListener('pointermove',e=>{if(pointer!==e.pointerId)return;this.pointerInput={...this.pointerInput,activate:true,yawDeltaRadians:(this.pointerInput.yawDeltaRadians??0)-(e.clientX-x)*.004,pitchDeltaRadians:(this.pointerInput.pitchDeltaRadians??0)+(e.clientY-y)*.004};x=e.clientX;y=e.clientY;},{signal});
-    const release=(e:PointerEvent)=>{if(pointer===e.pointerId){pointer=undefined;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}};
-    canvas.addEventListener('pointerup',release,{signal});canvas.addEventListener('pointercancel',release,{signal});
-    canvas.addEventListener('wheel',e=>{if(!this.running||this.cameraRig.mode==='authored')return;e.preventDefault();this.pointerInput={...this.pointerInput,activate:true,distanceDeltaMeters:(this.pointerInput.distanceDeltaMeters??0)+e.deltaY*.005};},{signal,passive:false});
+    this.inputRouter = new WorldInputRouter(this.keyboard, {
+      isRunning: () => this.running,
+      canZoom: () => this.cameraRig.mode !== 'authored',
+      onPointer: input => {
+        this.pointerInput = {
+          ...this.pointerInput, activate: true,
+          yawDeltaRadians: (this.pointerInput.yawDeltaRadians ?? 0) + (input.yawDeltaRadians ?? 0),
+          pitchDeltaRadians: (this.pointerInput.pitchDeltaRadians ?? 0) + (input.pitchDeltaRadians ?? 0),
+          distanceDeltaMeters: (this.pointerInput.distanceDeltaMeters ?? 0) + (input.distanceDeltaMeters ?? 0),
+        };
+      },
+      onRelease: () => { this.pointerInput = {}; this.previousJump = false; this.previousInteract = false; },
+    });
+    this.inputRouter.bind(canvas);
   }
+
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
   onAfterUpdate(callback:()=>void):()=>void {this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
   setDriveProvider(provider:NonNullable<WorldEngine['driveProvider']>):void {this.driveProvider=provider;}
@@ -421,7 +429,7 @@ export class WorldEngine {
     };
     this.frameId = requestAnimationFrame(frame);
   }
-  stop(): void { this.running = false; this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
+  stop(): void { this.running = false; this.inputRouter?.clear(); this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(): void { if (this.disposed) return; this.scene.updateMatrixWorld(true); this.renderer?.render(this.scene, this.camera); }
   resize(width: number, height: number): void { if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) throw new Error('WORLD_VIEWPORT_INVALID'); this.renderer?.setSize(width, height, false); if (this.camera instanceof THREE.PerspectiveCamera) { this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); } }
   snapshot(): WorldSnapshot {
@@ -470,7 +478,7 @@ export class WorldEngine {
   }
   private recordError(code: string, error: unknown, entityId?: string): void { if (this.failures.length < 128) this.failures.push({ code, message: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown failure', simulationTick: this.tick, ...(entityId ? { entityId } : {}) }); }
   dispose(): void {
-    if (this.disposed) return; this.stop(); this.disposed = true; this.keyboard.detach(); this.pointerAbort?.abort();this.releaseViewport?.();
+    if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter?.dispose(); this.keyboard.detach();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }

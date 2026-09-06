@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+#!/bin/sh
+':' //; exec "$(dirname "$0")/../toolkit/runtime/bin/node" "$0" "$@"
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
@@ -9,16 +10,26 @@ import { fileURLToPath } from "node:url";
 import { readRuntimeLock, parseCloudLayout, executionEnvironment, prepareSessionDirectories, fileSha256, writeJson, THREE_TOOLS } from "./three-eval-runtime.mjs";
 import { eventStatistics, isPassingDelivery, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 
+import {restoreThreeContinuation, continuationPrompt} from "./three-eval-restore.mjs";
+import {startThreeProgressPublisher} from "./three-eval-progress-publisher.mjs";
+
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const startedAt = new Date().toISOString();
 const originalArgs = process.argv.slice(2);
+if (originalArgs.length === 1 && originalArgs[0] === '--worldkit-runtime-probe') {
+  const lock = await readRuntimeLock(path.join(directory, 'runtime-lock.json'), {requireReady:false,requireCurrentLauncher:true});
+  if (await realpath(process.execPath) !== await realpath(lock.nodeBinary)) throw new Error('THREE_LAUNCHER_NODE_MISMATCH');
+  process.stdout.write(JSON.stringify({kind:'three-creator-launcher-probe',nodeVersion:process.version,nodeBinary:process.execPath,modelCalls:0})+'\n');
+  process.exit(0);
+}
 const layout = await parseCloudLayout(originalArgs);
 const eventsFile = path.join(layout.outputs, "creator-events.jsonl");
 const stderrFile = path.join(layout.outputs, "creator-stderr.log");
 const reportFile = path.join(layout.outputs, "creator-launcher-report.json");
 const report = {kind: "three-creator-launcher-report", schemaVersion: 1, caseId: layout.caseId, taskId: layout.taskId, profile: layout.profile, engine: "three@0.185.1", startedAt, workspace: layout.workspace, declaredOutputsRoot: layout.outputs, status: "starting", model: "gpt-6-astra", reasoningEffort: "xhigh"};
+let progressPublisher;
 try {
-  const lock = await readRuntimeLock(path.join(directory, "runtime-lock.json"), {checkInstalled: true});
+  const lock = await readRuntimeLock(path.join(directory, "runtime-lock.json"), {checkInstalled: true, requireCurrentLauncher: true});
   Object.assign(report, {runtimeHash: lock.runtimeHash, codexBinary: lock.codexBinary, codexBinarySha256: lock.codexBinarySha256, toolkitRoot: lock.toolkitRoot, browserRoot: lock.browserRoot});
   const bridge = path.join(directory, "three-eval-mcp-bridge.mjs");
   const mcpArgs = [bridge, "--runtime-lock", lock.runtimeLockPath, "--workspace", layout.workspace, "--profile", layout.profile];
@@ -26,7 +37,10 @@ try {
   const toolPolicies = enabledTools.map(name => `${name}={approval_mode="approve"}`).join(",");
   const mcpConfiguration = `mcp_servers={worldkit_three_creator={command=${JSON.stringify(lock.nodeBinary)},args=${JSON.stringify(mcpArgs)},cwd=${JSON.stringify(layout.workspace)},enabled=true,required=true,env_vars=[],default_tools_approval_mode="prompt",tools={${toolPolicies}},enabled_tools=${JSON.stringify(enabledTools)},startup_timeout_sec=60,tool_timeout_sec=90}}`;
   const overrides = ["approval_policy=\"never\"", "features.apps=false", "features.hooks=false", "features.plugins=false", "features.remote_plugin=false", "features.skill_mcp_dependency_install=false", "skills.bundled.enabled=false", "skills.include_instructions=false", "tools.view_image=true", "allow_login_shell=false", "features.shell_snapshot=false", "shell_environment_policy.inherit=\"core\"", mcpConfiguration];
-  const args = [...originalArgs.slice(0, -1), "--ignore-user-config", "--ignore-rules", "--json", ...overrides.flatMap(value => ["-c", value]), originalArgs.at(-1)];
+  const restored = await restoreThreeContinuation({layout,lock});
+  if (restored) report.continuation = restored.continuation;
+  const taskPrompt = await continuationPrompt(originalArgs.at(-1), restored, process.stdin);
+  const args = [...originalArgs.slice(0, -1), "--ignore-user-config", "--ignore-rules", "--json", ...overrides.flatMap(value => ["-c", value]), taskPrompt.argument];
   const env = executionEnvironment(lock, layout.workspace, {includeAuthentication: true, profile: layout.profile});
   await prepareSessionDirectories(env, lock);
   Object.assign(report, {status: "running", appliedConfiguration: overrides, modelEnvironmentKeys: Object.keys(env).sort(), mcpAuthenticationEnvironmentPassed: false});
@@ -34,8 +48,11 @@ try {
   const events = createWriteStream(eventsFile, {flags: "wx"});
   const errors = createWriteStream(stderrFile, {flags: "wx"});
   const transportHash = createHash("sha256");
-  const child = spawn(lock.codexBinary, args, {cwd: layout.workspace, env, stdio: ["inherit", "pipe", "pipe"], detached: true});
+  // This host-owned writer runs independently of valid source or MCP startup.
+  progressPublisher = startThreeProgressPublisher({layout,lock,env:executionEnvironment(lock,layout.workspace,{profile:layout.profile})});
+  const child = spawn(lock.codexBinary, args, {cwd: layout.workspace, env, stdio: [taskPrompt.stdin === undefined ? "inherit" : "pipe", "pipe", "pipe"], detached: true});
   const stop = signal => { try { process.kill(-child.pid, signal); } catch {} };
+  if (taskPrompt.stdin !== undefined) { child.stdin.on("error", () => stop("SIGTERM")); child.stdin.end(taskPrompt.stdin); }
   const signalHandlers = new Map(["SIGTERM", "SIGINT"].map(signal => [signal, () => { report.interruptedBy = signal; stop(signal); }]));
   for (const [signal, handler] of signalHandlers) process.on(signal, handler);
   let timedOut = false;
@@ -59,7 +76,8 @@ try {
   Object.assign(report, {childExitCode: exit.code, childExitSignal: exit.signal, timedOut, eventsSha256: await fileSha256(eventsFile), stderrSha256: await fileSha256(stderrFile)});
   report.eventsTransportSha256 = transportHash.digest("hex");
   if (report.eventsSha256 !== report.eventsTransportSha256) throw new Error("CREATOR_EVENT_STREAM_TAMPERED");
-  if (timedOut || exit.code !== 0) throw new Error(timedOut ? "CREATOR_TASK_TIMEOUT" : `CREATOR_CODEX_EXIT_${exit.code ?? exit.signal}`);
+  const executionFailure = timedOut || exit.code !== 0 ? (timedOut ? "CREATOR_TASK_TIMEOUT" : `CREATOR_CODEX_EXIT_${exit.code ?? exit.signal}`) : null;
+  try {
   const sourceResult = path.join(layout.workspace, "creator-result.json");
   const result = JSON.parse(await readFile(sourceResult, "utf8"));
   if (!isPassingDelivery(result, layout.profile)) throw new Error("CREATOR_DELIVERY_CONTRACT_FAILED");
@@ -76,12 +94,14 @@ try {
   const toolEvidence = await eventStatistics(eventsFile);
   report.toolEvidence = toolEvidence;
   const receipt = validateDeliveryEvidence({result, launcherReport: report, events: toolEvidence, eventsSha256: report.eventsSha256, artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[layout.profile].runtimeHash, expectedCaseId: layout.caseId, expectedTaskId: layout.taskId, expectedProfile: layout.profile, expectedWorkspace: layout.workspace});
-  Object.assign(report, {status: "delivered", submitReceipt: receipt, qualification: "Three technical delivery with matching MCP transport receipt; independent visual/runtime review remains required"});
+  Object.assign(report, {status: "delivered", ...(executionFailure ? {deliveryRecoveredAfterExecutionFailure:executionFailure} : {}), submitReceipt: receipt, qualification: "Three production delivery with matching MCP transport receipt; ready for direct publication"});
+  } catch (error) { if (executionFailure) throw new Error(executionFailure, {cause:error}); throw error; }
 } catch (error) {
   Object.assign(report, {status: "failed", error: error instanceof Error ? error.message : String(error)});
   process.stderr.write(`CREATOR_LAUNCHER_FAILED: ${report.error}\n`);
   process.exitCode = 1;
 } finally {
+  await progressPublisher?.stop();
   report.finishedAt = new Date().toISOString();
   await writeJson(reportFile, report);
 }

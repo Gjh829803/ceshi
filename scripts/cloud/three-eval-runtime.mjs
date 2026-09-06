@@ -7,6 +7,8 @@ export const CODEX_BINARY_SHA256 = "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29
 export const THREE_PROFILES = ["three-raw", "three-sdk"];
 export const THREE_ENGINE = "three@0.185.1";
 export const THREE_TOOL_VERSION = "0.2.0-experimental";
+const LEGACY_LAUNCHER_FILES = ["three-eval-launcher.mjs", "three-eval-runtime.mjs", "three-eval-mcp-bridge.mjs", "three-eval-statistics.mjs"];
+export const THREE_LAUNCHER_FILES = [...LEGACY_LAUNCHER_FILES, "three-eval-restore.mjs", "three-eval-progress-publisher.mjs", "three-checkpoint-unpack.py", "three-progress-unpack.py"];
 export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_execute_command", "world_get_operation", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
 export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "hostCacheRoot", "note", "changeReason", "previousRuntimeLockHash"]);
 export const BROWSER_ENV_KEYS = new Set(["PLAYWRIGHT_BROWSERS_PATH", "WORLDKIT_CHROMIUM_EXECUTABLE", "LD_LIBRARY_PATH", "FONTCONFIG_PATH", "FONTCONFIG_FILE", "LANG"]);
@@ -51,7 +53,7 @@ export async function verifyInstalledClosure(root, entries, manifestName) {
   }
   await walk(root);
 }
-export async function readRuntimeLock(file, {requireReady = true, checkInstalled = false} = {}) {
+export async function readRuntimeLock(file, {requireReady = true, checkInstalled = false, requireCurrentLauncher = false} = {}) {
   const bytes = await readFile(file);
   const lock = JSON.parse(bytes);
   for (const key of Object.keys(lock)) if (!RUNTIME_LOCK_KEYS.has(key)) throw new Error(`THREE_RUNTIME_UNKNOWN_FIELD: ${key}`);
@@ -69,7 +71,8 @@ export async function readRuntimeLock(file, {requireReady = true, checkInstalled
   if (!Number.isSafeInteger(maximumTaskSeconds) || maximumTaskSeconds < 300 || maximumTaskSeconds > 7200) throw new Error("CREATOR_TASK_DEADLINE_INVALID");
   for (const key of ["toolkitArchiveSha256", "toolkitSourceHash", "toolkitContentSha256", "browserArchiveSha256", "browserContentSha256"]) if (!/^[a-f0-9]{64}$/.test(lock[key] ?? "")) throw new Error(`THREE_RUNTIME_HASH_INVALID: ${key}`);
   if (!/^\/fsx\/pipeline\/worldkit-three-creator-experiments\/.+\/three-eval-launcher\.mjs$/.test(lock.launcherPath ?? "")) throw new Error("THREE_RUNTIME_LAUNCHER_PATH_INVALID");
-  const expectedLauncherFiles = ["three-eval-launcher.mjs", "three-eval-runtime.mjs", "three-eval-mcp-bridge.mjs", "three-eval-statistics.mjs"];
+  const historical = !requireCurrentLauncher && Object.keys(lock.launcherFilesSha256 ?? {}).sort().join() === [...LEGACY_LAUNCHER_FILES].sort().join();
+  const expectedLauncherFiles = historical ? LEGACY_LAUNCHER_FILES : THREE_LAUNCHER_FILES;
   if (Object.keys(lock.launcherFilesSha256 ?? {}).sort().join() !== [...expectedLauncherFiles].sort().join() || expectedLauncherFiles.some(name => !/^[a-f0-9]{64}$/.test(lock.launcherFilesSha256[name]))) throw new Error("THREE_LAUNCHER_CLOSURE_INVALID");
   if (Object.keys(lock.prebuiltRuntimes ?? {}).sort().join() !== [...THREE_PROFILES].sort().join()) throw new Error("THREE_PREBUILT_PROFILES_INVALID");
   for (const profile of THREE_PROFILES) {
@@ -79,6 +82,7 @@ export async function readRuntimeLock(file, {requireReady = true, checkInstalled
   }
   if (lock.status === "ready" && [lock.toolkitArchiveSha256,lock.toolkitSourceHash,lock.toolkitContentSha256,lock.browserArchiveSha256,lock.browserContentSha256,...THREE_PROFILES.flatMap(profile=>[lock.prebuiltRuntimes[profile].manifestSha256,lock.prebuiltRuntimes[profile].runtimeHash])].some(value=>value === "0".repeat(64))) throw new Error("THREE_READY_RUNTIME_HAS_UNBUILT_PLACEHOLDERS");
   if (checkInstalled) {
+    if (((await lstat(lock.launcherPath)).mode & 0o111) !== 0o111) throw new Error("THREE_LAUNCHER_NOT_EXECUTABLE");
     for (const name of expectedLauncherFiles) if (await fileSha256(path.join(path.dirname(file), name)) !== lock.launcherFilesSha256[name]) throw new Error(`THREE_LAUNCHER_HASH_MISMATCH: ${name}`);
     if (await fileSha256(lock.codexBinary) !== CODEX_BINARY_SHA256) throw new Error("CREATOR_CODEX_BINARY_HASH_MISMATCH");
     for (const relative of ["node_modules/tsx/dist/loader.mjs", "scripts/three-creator/mcp.ts"]) {

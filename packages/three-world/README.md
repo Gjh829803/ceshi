@@ -34,7 +34,8 @@ Register small visual stones as decoration when they should not impede walking.
 The camera remains at the authored first-frame pose until movement or camera
 input activates follow. WASD moves, arrows/drag rotate camera, Shift runs,
 Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
-collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
+collisionRadiusMeters, recoveryHalfLifeSeconds and maximumRecoveryMetersPerSecond
+(default 3 m/s) when tuning is necessary.
 `useAuthoredCamera()` explicitly returns camera control for a cutscene;
 `setCameraFollow()` takes it back from the current pose.
 
@@ -178,7 +179,11 @@ character, complete custom fox, real stairs, ramp, NPC controls and reset.
 
 SDK `await start()` installs WorldObservation-v2 on the actual scene/camera and
 renderer, plus the gallery lifecycle alias. `setCaptureTargets` selects complete
-registered objects. Snapshots retain all entities, actual motion/animation,
+registered objects in priority order. The complete controlled subject is first;
+default capture delivers at most five sheets. Repeated objects can select one
+complete representative: `{entityId, representative:{kind:"object", object}}` or
+`{entityId, representative:{kind:"instance", object:instancedMesh, instanceIndex}}`.
+Registration alone does not select an object for capture. Snapshots retain all entities, actual motion/animation,
 worldRevision, tick, camera and structured errors; describe is the controller view.
 
 Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views

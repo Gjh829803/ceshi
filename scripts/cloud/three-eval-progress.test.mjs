@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import test from 'node:test';
 import {buildThreeRunProgress} from './three-eval-progress.mjs';
+import {discoverThreeAttemptRuns} from './three-eval-recovery-index.mjs';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const taskId='new-reference--three-sdk',caseId='new-reference',runtimeHash=hash('runtime'),caseHash=hash('case');
@@ -25,6 +26,121 @@ async function fixture(runId='run-main',jobId='gen_0000000000000001',root) {
   return {container,runRoot,caseRoot,plan,state,live,launcher,async saveState(){await json(path.join(caseRoot,'state.json'),state);}};
 }
 const snapshot=(...attempts)=>({kind:'three-creator-safe-live-status',schemaVersion:1,observedAt,attempts});
+
+async function linkedFixture(parent) {
+ parent.state.phase='failed';parent.state.failure={message:'CREATOR_TASK_TIMEOUT'};await parent.saveState();
+ const child=await fixture('run-child','gen_0000000000000002',path.join(parent.runRoot,'continuations'));
+ child.state.phase='not-started';delete child.state.jobId;delete child.state.submittedAt;delete child.state.providerStatus;
+ child.state.continuation={kind:'artifact-continuation',parentRunId:parent.plan.runId,parentJobId:parent.state.jobId,parentRequestId:parent.state.requestId,attemptNumber:2,maximumModelAttempts:2,sourceKind:'progress',sourceHash:hash('latest progress'),fallbackSourceHash:hash('working source'),privatePath:'/PRIVATE_CONTINUATION'};
+ child.state.progress={status:'unverified',sourceHash:hash('latest progress'),createdAt:observedAt,playable:'/PRIVATE_WIP',secret:'PRIVATE_TOKEN'};
+ await child.saveState();
+ const index={kind:'three-creator-recovery-runs',schemaVersion:1,runs:[{runId:child.plan.runId,relativeDirectory:'continuations/run-child'}]};
+ await json(path.join(parent.runRoot,'recovery-runs.json'),index);
+ return {child,index};
+}
+
+test('discovers a queued continuation without a job, retaining failure history and runnable fallback',async()=>{
+ const f=await fixture();try{
+  f.state.checkpoint={status:'runnable',worldBuildHash:hash('working build'),sourceHash:hash('working source'),createdAt:observedAt};
+  const {child}=await linkedFixture(f);
+  let row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'queued');assert.equal(row.jobId,null);assert.equal(row.submittedAt,null);assert.equal(row.runId,child.plan.runId);
+  assert.equal(row.attempts.length,2);assert.equal(row.attempts[0].failure.code,'EXECUTION_TIMEOUT');assert.equal(row.attempts[1].continuation.parentJobId,f.state.jobId);
+  assert.equal(row.checkpoint.originRunId,f.plan.runId);assert.equal(row.progress.status,'unverified');assert.equal(row.playable,undefined);
+  assert(row.events.some(event=>event.type==='artifact-continuation'&&event.label==='从已有工程继续'));
+  assert(row.events.some(event=>event.type==='source-saved'&&event.label.includes('尚未验证')));
+  assert(!JSON.stringify(row).includes('PRIVATE_'));
+  child.state.jobId='gen_0000000000000002';child.state.phase='submitted';child.state.providerStatus='running';child.state.submittedAt=observedAt;await child.saveState();
+  row=(await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(child.live),now})).cases[0];
+  assert.equal(row.phase,'running');assert.equal(row.jobId,child.state.jobId);assert.equal(row.stage,'preview');assert.equal(row.attempts[0].phase,'failed');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('unverified source alone never creates a runnable checkpoint or playback identity',async()=>{
+ const f=await fixture();try{
+  await linkedFixture(f);
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.progress.status,'unverified');assert.equal(row.checkpoint,undefined);assert.equal(row.playable,undefined);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('discovers nested continuation ancestry and retains original evidence order',async()=>{
+ const f=await fixture();try{
+  const {child}=await linkedFixture(f);
+  child.state.continuation.maximumModelAttempts=3;child.state.phase='failed';child.state.jobId='gen_0000000000000002';child.state.submittedAt=observedAt;await child.saveState();
+  const next=await fixture('run-grandchild','gen_0000000000000003',path.join(child.runRoot,'continuations'));
+  next.state.phase='not-started';delete next.state.jobId;delete next.state.submittedAt;delete next.state.providerStatus;
+  next.state.continuation={...child.state.continuation,parentRunId:child.plan.runId,parentJobId:child.state.jobId,parentRequestId:child.state.requestId,attemptNumber:3};await next.saveState();
+  await json(path.join(child.runRoot,'recovery-runs.json'),{kind:'three-creator-recovery-runs',schemaVersion:1,runs:[{runId:next.plan.runId,relativeDirectory:'continuations/run-grandchild'}]});
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.runId,next.plan.runId);assert.equal(row.phase,'queued');
+  assert.deepEqual(row.attempts.map(attempt=>attempt.runId),[f.plan.runId,child.plan.runId,next.plan.runId]);
+  assert.equal(row.attempts[0].phase,'failed');assert.equal(row.attempts[1].phase,'failed');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('linked discovery rejects wrong parent, identities, bounds and unsafe index paths',async()=>{
+ for(const mutation of ['parent','active','attempt','runtime','case','request','escape','duplicate','symlink']){
+  const f=await fixture();try{
+   const {child,index}=await linkedFixture(f);
+   if(mutation==='parent')child.state.continuation.parentJobId='gen_ffffffffffffffff';
+   if(mutation==='active'){f.state.phase='running';await f.saveState();}
+   if(mutation==='attempt')child.state.continuation.attemptNumber=3;
+   if(mutation==='runtime')child.plan.runtimeHash=hash('wrong runtime');
+   if(mutation==='case')child.plan.cases[0].caseHash=hash('wrong case');
+   if(mutation==='request')child.plan.cases[0].requestId=f.state.requestId;
+   if(mutation==='escape')index.runs[0].relativeDirectory='../run-child';
+   if(mutation==='duplicate')index.runs.push(index.runs[0]);
+   await json(path.join(child.runRoot,'evaluation-plan.json'),child.plan);await child.saveState();await json(path.join(f.runRoot,'recovery-runs.json'),index);
+   if(mutation==='symlink'){await rm(path.join(f.runRoot,'recovery-runs.json'));await json(path.join(f.container,'linked-index.json'),index);await symlink(path.join(f.container,'linked-index.json'),path.join(f.runRoot,'recovery-runs.json'));}
+   await assert.rejects(discoverThreeAttemptRuns({runRoot:f.runRoot}),/THREE_RECOVERY_INDEX_/ ,mutation);
+  }finally{await rm(f.container,{recursive:true,force:true});}
+ }
+});
+
+test('rejects two sibling continuations consuming the same next model attempt',async()=>{
+ const f=await fixture();try{
+  const {child,index}=await linkedFixture(f);
+  const sibling=await fixture('run-second-child','gen_0000000000000003',path.join(f.runRoot,'continuations'));
+  sibling.state.continuation=child.state.continuation;await sibling.saveState();
+  index.runs.push({runId:sibling.plan.runId,relativeDirectory:'continuations/run-second-child'});await json(path.join(f.runRoot,'recovery-runs.json'),index);
+  await assert.rejects(discoverThreeAttemptRuns({runRoot:f.runRoot}),/PARENT_MISMATCH/);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('a verified runnable checkpoint does not relabel a failed generation as delivered',async()=>{
+ const f=await fixture();try{
+  f.state.phase='failed';f.state.providerStatus='completed';f.state.failure={message:'CREATOR_TASK_TIMEOUT'};
+  f.state.checkpoint={status:'runnable',worldBuildHash:hash('checkpoint'),sourceHash:hash('source'),createdAt:observedAt,privatePath:'/PRIVATE_CHECKPOINT'};
+  await f.saveState();
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'failed');assert.equal(row.stage,'failed');assert.equal(row.checkpoint.status,'runnable');
+  assert(row.events.some(event=>event.type==='checkpoint-saved'&&event.stage==='preview'));assert(!JSON.stringify(row).includes('PRIVATE_CHECKPOINT'));
+  assert.equal(row.attempts.length,1);assert.equal(row.toolSummary.counts.world_preview,undefined);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('shows accepted service submissions as waiting until actual CLI activity is observed',async()=>{
+ const f=await fixture();try{
+  for(const status of ['submitted','submitting']){
+   f.state.providerStatus=status;await f.saveState();
+   const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
+   assert.equal(row.phase,'queued');assert.equal(row.stage,'queued');assert.equal(row.providerStatus,status);
+   assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);assert.equal(row.queueSeconds,600);
+  }
+  const started=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now});
+  assert.equal(started.cases[0].phase,'running');assert.equal(started.cases[0].stage,'preview');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('labels cancellation cleanup explicitly without inventing a completed or running agent',async()=>{
+ const f=await fixture();try{
+  f.state.phase='stop-pending';f.state.providerStatus='cancelled';await f.saveState();
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
+  assert.equal(row.stage,'stopping');assert.equal(row.stageLabel,'等待取消完成');
+  assert.equal(row.startedAt,null);assert.equal(row.completedAt,null);assert.equal(row.cliActivityObserved,false);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
 
 test('real CLI activity and current MCP stage override queued API items/counters',async()=>{
  const f=await fixture();try{
@@ -183,5 +299,53 @@ test('separates call execution from checks and never calls short or under-durati
    if(expected.adequacy)assert.equal(event.playtestAdequacy,expected.adequacy);
    assert.equal(row.toolSummary.latestOperation.executionStatus,'succeeded');assert.equal(row.toolSummary.latestOperation.resultStatus,expected.resultStatus);assert.equal(row.attempts[0].toolSummary.latestOperation.resultStatus,expected.resultStatus);assert(!JSON.stringify(row).includes('PRIVATE_'));
   }
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+
+test('quota termination and SDK budgets stay distinct production failures', async()=>{
+ const f=await fixture();
+ try {
+  f.state.phase='failed';f.state.failure={message:'CREATOR_CODEX_EXIT_1'};await f.saveState();
+  f.live.launcher.status='failed';f.live.launcher.finishedAt=observedAt;
+  f.live.failureFacts=[{layer:'sdk-physics',code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED'},{layer:'sdk-physics',code:'PHYSICS_COLLIDER_BUDGET_EXCEEDED'},{layer:'model-service',code:'MODEL_USAGE_LIMIT'}];
+  const output=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now});
+  const row=output.cases[0];assert.equal(row.phase,'failed');assert.equal(row.failure.category,'account-usage');assert.equal(row.failure.code,'MODEL_USAGE_LIMIT');
+  assert.equal(row.failureFacts.length,3);assert(row.failureFacts.some(x=>x.code==='PHYSICS_TRIANGLE_BUDGET_EXCEEDED'));
+ } finally {await rm(f.container,{recursive:true,force:true});}
+});
+
+
+test('native ImageGen planning appears without exposing the prompt, image bytes or saved path',async()=>{
+ const f=await fixture();try{
+  f.state.startedAt=startedAt;await f.saveState();
+  await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),JSON.stringify({type:'item.completed',item:{type:'image_generation',id:'image-one',status:'completed',result:'PRIVATE_IMAGE_BYTES',revised_prompt:'PRIVATE_PROMPT',savedPath:'/private/PRIVATE_PATH.png'}})+'\n');
+  const output=await buildThreeRunProgress({runRoot:f.runRoot,now});const row=output.cases[0];
+  assert.equal(row.stage,'planning');assert.equal(row.toolSummary.counts.imagegen,1);assert(row.events.some(x=>x.tool==='imagegen'));
+  assert(!JSON.stringify(output).includes('PRIVATE_'));
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+
+test('live observation follows a replacement ready head and rejects unavailable or ambiguous readers',async()=>{
+ const {selectThreeLiveHead}=await import('./three-eval-live.mjs');
+ const ready=name=>({metadata:{name},spec:{containers:[{name:'ray-head'}]},status:{phase:'Running',conditions:[{type:'Ready',status:'True'}]}});
+ const old=ready('old-head');old.metadata.deletionTimestamp='2026-09-06T00:00:00Z';
+ const next=ready('replacement-head');
+ assert.equal(selectThreeLiveHead({items:[old,next]}),'replacement-head');
+ for(const items of [[],[old],[next,ready('another-head')],[{...next,status:{phase:'Pending'}}],[{...next,spec:{containers:[{name:'ray-worker'}]}}]]) assert.throws(()=>selectThreeLiveHead({items}),/THREE_LIVE_HEAD_UNAVAILABLE/);
+});
+
+
+test('explicit user stop takes precedence over launcher exit errors and stale failed item evidence',async()=>{
+ const f=await fixture();try{
+  Object.assign(f.state,{phase:'cancelled',providerStatus:'cancelled',rayCleanupConfirmed:true,stop:{requestedAt:observedAt}});await f.saveState();
+  await json(path.join(f.caseRoot,'creator-launcher-report.json'),{...f.launcher,status:'failed',error:'CREATOR_CODEX_EXIT_SIGTERM'});
+  await json(path.join(f.caseRoot,'items.json'),{items:[{item_id:taskId,status:'failed',error:'terminated'}]});
+  let row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'cancelled');assert.equal(row.stage,'cancelled');assert.equal(row.failure,undefined);assert.equal(row.completedAt,observedAt);
+  f.state.phase='stop-pending';await f.saveState();row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'stop-pending');assert.equal(row.stage,'stopping');assert.equal(row.failure,undefined);
  }finally{await rm(f.container,{recursive:true,force:true});}
 });

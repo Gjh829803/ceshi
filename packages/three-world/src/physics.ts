@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
-import type { CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
+import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
 import { extractCollisionGeometry, finiteVector, geometryError, geometrySignature, isWorldVisible, worldPose, type GeometrySnapshot, type WorldPose } from './geometry.js';
 
 export const DEFAULT_CHARACTER_OPTIONS: Required<CharacterOptions> = Object.freeze({
@@ -288,7 +288,7 @@ export class ThreePhysics implements PhysicsPort {
     }
     return result;
   }
-  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): { distanceMeters: number; colliderEntityId?: string } {
+  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): CameraArmHit {
     this.live(); validateVec(targetMetersXYZ, 'camera target'); validateVec(desiredEyeMetersXYZ, 'camera eye'); validateNumber(radiusMeters, 0, 'camera radius', false);
     const target = new THREE.Vector3(...targetMetersXYZ), direction = new THREE.Vector3(...desiredEyeMetersXYZ).sub(target), length = direction.length();
     const shape = new RAPIER.Ball(radiusMeters), rotation = { x: 0, y: 0, z: 0, w: 1 };
@@ -297,15 +297,33 @@ export class ThreePhysics implements PhysicsPort {
       const source = this.colliderSources.get(collider.handle);
       return Boolean(entry && entry.kind !== 'character' && entry.body.isEnabled() && !collider.isSensor() && source && isWorldVisible(entry.object) && isWorldVisible(source));
     };
-    const overlapping = this.world.intersectionWithShape(target, rotation, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, includeSolid);
-    if (overlapping) return { distanceMeters: 0, colliderEntityId: this.colliderOwners.get(overlapping.handle)! };
-    for (const id of this.queryDirty) for (const collider of this.entries.get(id)?.colliders ?? []) if (includeSolid(collider) && collider.contactShape(shape, target, rotation, 0)) return { distanceMeters: 0, colliderEntityId: id };
+    let overlap: CameraArmHit | undefined;
+    const considerOverlap = (collider: Collider): boolean => {
+      if (!includeSolid(collider)) return true;
+      const contact = collider.contactShape(shape, target, rotation, 0);
+      if (contact && contact.distance <= 0 && -contact.distance >= (overlap?.penetrationDepthMeters ?? -1)) {
+        overlap = { distanceMeters: 0, colliderEntityId: this.colliderOwners.get(collider.handle)!,
+          normalWorldXYZ: vec(contact.normal1), hitPositionWorldMetersXYZ: vec(contact.point1),
+          startedOverlapping: true, penetrationDepthMeters: -contact.distance };
+      }
+      return true;
+    };
+    this.world.intersectionsWithShape(target, rotation, shape, considerOverlap, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, includeSolid);
+    for (const id of this.queryDirty) for (const collider of this.entries.get(id)?.colliders ?? []) considerOverlap(collider);
+    if (overlap) return overlap;
     if (length === 0) return { distanceMeters: 0 };
     const hit = this.world.castShape(target, rotation, direction.divideScalar(length), shape, 0, length, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, includeSolid);
-    let result: { distanceMeters: number; colliderEntityId?: string } = hit ? { distanceMeters: Math.max(0, Math.min(length, hit.time_of_impact)), colliderEntityId: this.colliderOwners.get(hit.collider.handle)! } : { distanceMeters: length };
+    // Rapier 0.20 World.castShape returns world-space data, while the direct
+    // Collider.castShape fallback returns collider-local normal1/witness1.
+    const describe = (collider: Collider, hit: RAPIER.ShapeCastHit, local = false): CameraArmHit => ({
+      distanceMeters: Math.max(0, Math.min(length, hit.time_of_impact)), colliderEntityId: this.colliderOwners.get(collider.handle)!,
+      normalWorldXYZ: local ? vec(new THREE.Vector3().copy(hit.normal1).applyQuaternion(collider.rotation())) : vec(hit.normal1),
+      hitPositionWorldMetersXYZ: local ? vec(new THREE.Vector3().copy(hit.witness1).applyQuaternion(collider.rotation()).add(collider.translation())) : vec(hit.witness1), startedOverlapping: false, penetrationDepthMeters: 0,
+    });
+    let result: CameraArmHit = hit ? describe(hit.collider, hit) : { distanceMeters: length };
     for (const id of this.queryDirty) for (const collider of this.entries.get(id)?.colliders ?? []) if (includeSolid(collider)) {
       const direct = collider.castShape({ x: 0, y: 0, z: 0 }, shape, target, rotation, direction, 0, result.distanceMeters, true);
-      if (direct && (!result.colliderEntityId || direct.time_of_impact < result.distanceMeters)) result = { distanceMeters: Math.max(0, direct.time_of_impact), colliderEntityId: id };
+      if (direct && (!result.colliderEntityId || direct.time_of_impact < result.distanceMeters)) result = describe(collider, direct, true);
     }
     return result;
   }

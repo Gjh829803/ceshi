@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@whitebox-world/gameplay-contracts": "workspace:*"
+    "@whitebox-world/gameplay-contracts": "workspace:*",
+    "@whitebox-world/camera-collision": "workspace:*"
   }
 }

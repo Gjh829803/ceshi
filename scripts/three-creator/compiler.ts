@@ -91,9 +91,14 @@ export class ThreeCompiler {
     await assertNoSymlinks(this.outputRoot);
     const sdkFiles = this.profile === 'three-sdk' ? await hashTree(path.join(REPOSITORY_ROOT, 'packages/three-world/src')) : {};
     for (const key of Object.keys(sdkFiles)) if (key.endsWith('.test.ts')) delete sdkFiles[key];
+    const sharedCameraFiles: Record<string, string> = this.profile === 'three-sdk' ? {
+      ...await hashTree(path.join(REPOSITORY_ROOT, 'packages/camera-collision/src')),
+      'package.json': sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/camera-collision/package.json'))),
+    } : {};
+    for (const key of Object.keys(sharedCameraFiles)) if (key.endsWith('.test.ts')) delete sharedCameraFiles[key];
     const bridge = await readFile(path.join(REPOSITORY_ROOT, 'apps/three-creator-playground/bridge.ts'));
     const versions = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'package.json'), 'utf8'));
-    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))) }));
+    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), capture:sha256(await readFile(path.join(REPOSITORY_ROOT,'apps/three-creator-playground/capture.ts'))), compiler: sha256(await readFile(fileURLToPath(import.meta.url))) }));
     const root = path.join(this.outputRoot, 'runtime', cacheIdentity);
     const sealed = this.runtimes.get(cacheIdentity);
     if (sealed) { await verifyFiles(root, sealed.files); return { root, hash: sealed.hash, hit: true, cacheIdentity }; }
