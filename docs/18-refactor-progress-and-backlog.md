@@ -3162,6 +3162,19 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   不撤销那些历史测量。尚不证明任意容量可运行、旧总资源计数完全对齐或真实 Case 通过；
   CF 父项仍开放，最终图片 Case/合 main 条件未满足。
 
+- CF-20/MEM3 真实容量失败（2026-09-06）：冻结 `f72a4931` 的新 054
+  `paper-moon-054-cf-f72a493-0906` / `run-20260906140808-99613` 已结束，退出码
+  `134`。Planner/Host 交接、Builder 交付和 Host 重放自检通过；Native Check 耗尽
+  约 4 GiB Node 堆，没有生成检查结果，Ground/Capture/发布未启动。已实际查看的比较图
+  仍有宫殿高差和山谷纵深偏差，不能称为效果对齐。实现修复与完整复跑仍待完成，不合 main。
+  原始源码/失败证据保留，后续按
+  [MEM3 容量修复计划](superpowers/plans/2026-09-06-cf20-native-check-capacity-repair.md)
+  定位并修复现有 owner，不重新引入源码 Block 数量 gate。
+  后续 MEM3-B1/B2 已修审计收尾主动实例化未使用 Observable、恢复后仍保留已销毁对象
+  两项问题；两项 RED 后，owner/准入/重放三文件 290/290 与 typecheck 通过。
+  相同 8,000 Block 诊断现可在固定 1 GiB 堆下完成审计/销毁，但活跃分配仍约 625 MB。
+  本次真实源码共 158,100 Block，完整容量问题仍开放，不能据此称生产已修复。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

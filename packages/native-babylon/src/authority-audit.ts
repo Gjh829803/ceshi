@@ -840,6 +840,7 @@ interface CreatedObjectAuditRecordV1 {
   readonly object: Record<string, unknown>;
   readonly surface: EffectiveCreatedObjectSurfaceV1;
   readonly observableBaselinesByKey: Map<string, ObservableBaselineV1>;
+  readonly observableGettersByKey: Map<string, () => unknown>;
   readonly allowedObserversByKey: Map<string, readonly unknown[]>;
   readonly directValuesByKey: Map<string, () => unknown>;
   readonly retainedCollectionsByKey: Map<string, readonly unknown[]>;
@@ -971,7 +972,7 @@ function installObservableSurfaceAccessor(
   allowNotification: (args: readonly unknown[]) => boolean,
   allowMutation: () => boolean,
   allowProviderAssignment: boolean,
-): void {
+): () => unknown {
   const originalOwnDescriptor = Object.getOwnPropertyDescriptor(owner, key);
   const descriptor = inheritedPropertyDescriptor(owner, key);
   let baseline: ObservableBaselineV1 | undefined;
@@ -988,7 +989,7 @@ function installObservableSurfaceAccessor(
     }
     return descriptor?.get?.call(owner);
   };
-  Object.defineProperty(owner, key, {
+  const accessor: PropertyDescriptor = {
     configurable: true,
     enumerable: originalOwnDescriptor?.enumerable ?? descriptor?.enumerable ?? false,
     get(): unknown {
@@ -1027,7 +1028,8 @@ function installObservableSurfaceAccessor(
       }
       recordViolation();
     },
-  });
+  };
+  Object.defineProperty(owner, key, accessor);
   restorers.push(() => {
     if (typeof originalOwnDescriptor === "undefined") {
       Reflect.deleteProperty(owner, key);
@@ -1043,6 +1045,7 @@ function installObservableSurfaceAccessor(
       Object.defineProperty(owner, key, originalOwnDescriptor);
     }
   });
+  return accessor.get!;
 }
 
 function installCreatedDirectValueGuard(
@@ -1262,6 +1265,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       object,
       surface,
       observableBaselinesByKey: new Map(),
+      observableGettersByKey: new Map(),
       allowedObserversByKey: new Map(),
       directValuesByKey: new Map(),
       retainedCollectionsByKey: new Map(),
@@ -1299,7 +1303,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       });
     }
     for (const key of surface.observableKeys) {
-      installObservableSurfaceAccessor(
+      const getter = installObservableSurfaceAccessor(
         object,
         key,
         recordViolation,
@@ -1314,6 +1318,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
         },
         !isExisting,
       );
+      record.observableGettersByKey.set(key, getter);
     }
     for (const key of surface.directCallbackKeys) {
       record.directValuesByKey.set(
@@ -1462,6 +1467,15 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       let createdObjectInvalid = false;
       for (const record of createdObjects) {
         for (const key of record.surface.observableKeys) {
+          // A never-read guard has observed no callbacks to audit. Reading it
+          // here would allocate Babylon's lazy Observable and instrument all
+          // its methods purely for the audit. Keep the live guard installed;
+          // deletion/replacement still follows the rejecting path below.
+          if (
+            !record.observableBaselinesByKey.has(key) &&
+            Object.getOwnPropertyDescriptor(record.object, key)?.get ===
+              record.observableGettersByKey.get(key)
+          ) continue;
           const observable = record.object[key];
           const baseline = record.observableBaselinesByKey.get(key);
           if (
@@ -1518,6 +1532,11 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       if (restored) return;
       restored = true;
       for (const restore of restorers.reverse()) restore();
+      // The lease is closed. Keeping these closures/records would retain every
+      // generated object even after its Scene and the object were disposed.
+      restorers.length = 0;
+      createdObjects.length = 0;
+      standardMaterialTransitions.length = 0;
     },
   });
 }

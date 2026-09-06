@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { ActionManager } from "@babylonjs/core/Actions/actionManager.js";
@@ -42,6 +44,7 @@ import {
   BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1,
   BABYLON_NATIVE_FORBIDDEN_SCENE_INPUT_CAMERA_METHOD_KEYS_V1,
   BABYLON_NATIVE_FORBIDDEN_SCENE_PHYSICS_METHOD_KEYS_V1,
+  beginBabylonNativeSceneAuthorityProbeV1,
 } from "./authority-audit.js";
 import {
   BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
@@ -129,6 +132,87 @@ function registerSpawn(
 }
 
 describe("installed Babylon runtime-kind authority audit", () => {
+  it("CF-20 releases created-object audit records after restore and disposal", async () => {
+    const script = `
+      import assert from 'node:assert/strict';
+      import { setImmediate } from 'node:timers/promises';
+      import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+      import { Scene } from '@babylonjs/core/scene.js';
+      import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
+      import { beginBabylonNativeSceneAuthorityProbeV1 } from ${JSON.stringify(new URL("./authority-audit.ts", import.meta.url).href)};
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      const probe = beginBabylonNativeSceneAuthorityProbeV1({engine, scene});
+      const references = Array.from({length:16}, (_, index) =>
+        new WeakRef(MeshBuilder.CreateBox('retention-' + index, {size:1}, scene)));
+      assert.deepEqual(probe.audit(), []);
+      probe.restore();
+      scene.dispose(); engine.dispose();
+      for (let round=0;round<4;round++) {await setImmediate();globalThis.gc();}
+      assert.equal(references.filter(reference => reference.deref() !== undefined).length,
+        0, 'restored live probe must not retain disposed generated Meshes');
+      probe.restore();
+    `;
+    await promisify(execFile)(process.execPath,
+      ["--expose-gc", "--import", "tsx", "--input-type=module", "--eval", script],
+      { timeout: 30_000 });
+  }, 35_000);
+
+  it("CF-20 keeps unused Mesh Observables lazy across repeated authority audits", () => {
+    const candidate = createCandidate();
+    const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+    try {
+      const mesh = MeshBuilder.CreateBox("lazy-audit", { size: 1 }, candidate.scene);
+      // Installed Mesh.onBeforeRenderObservable creates this backing value on read.
+      const data = (mesh as unknown as {
+        _internalMeshDataInfo: { _onBeforeRenderObservable?: unknown };
+      })._internalMeshDataInfo;
+      const before = data._onBeforeRenderObservable;
+      expect(before).toBeUndefined();
+      expect(probe.audit()).toEqual([]);
+      expect(probe.audit()).toEqual([]);
+      expect(data._onBeforeRenderObservable).toBe(before);
+      // Deferring an unused getter must not remove its live mutation guard.
+      expect(() => mesh.onBeforeRenderObservable.add(() => undefined)).toThrow(
+        "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+      );
+      expect(probe.audit().map(({ code }) => code)).toContain(
+        "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+      );
+    } finally { probe.restore(); }
+  });
+
+  it.each(["delete", "replace"] as const)(
+    "CF-20 rejects %s of an unused observable guard without skipping authority",
+    (mode) => {
+      const candidate = createCandidate();
+      const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+      try {
+        const mesh = MeshBuilder.CreateBox("lazy-replace", { size: 1 }, candidate.scene);
+        if (mode === "delete") Reflect.deleteProperty(mesh, "onBeforeRenderObservable");
+        else Object.defineProperty(mesh, "onBeforeRenderObservable", {
+          configurable: true, get: () => ({ observers: [] }),
+        });
+        expect(probe.audit().map(({ code }) => code)).toContain(
+          "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+        );
+      } finally { probe.restore(); }
+    },
+  );
+
+  it("CF-20 preserves admission of an initialized observable with identical identity", () => {
+    const candidate = createCandidate();
+    const probe = beginBabylonNativeSceneAuthorityProbeV1(candidate);
+    try {
+      const mesh = MeshBuilder.CreateBox("lazy-identity", { size: 1 }, candidate.scene);
+      const observable = mesh.onBeforeRenderObservable;
+      Object.defineProperty(mesh, "onBeforeRenderObservable", {
+        configurable: true, value: observable,
+      });
+      expect(probe.audit()).toEqual([]);
+    } finally { probe.restore(); }
+  });
+
   it("uses the AbstractMesh callback surface for an InstancedMesh added by Babylon", async () => {
     const candidate = createCandidate();
     const result = await admit(candidate, (context) => {
