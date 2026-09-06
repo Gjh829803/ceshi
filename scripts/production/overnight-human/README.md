@@ -187,8 +187,8 @@ none of these Host decisions modifies Agent input or blocks artifact playback.
 
 Production accounts require two distinct visually inspected, hash-matching good
 samples. `productionConcurrency` may explicitly raise a selected proven account
-from 4 to at most 8; U05 now has a usable ice-world and campus sample and uses 8,
-while U12 and U37 use 4 with their mixed samples retained. Promising accounts still
+from 4 to at most 8; use the current per-account decisions above and in
+`account-decisions.json`, preserving mixed samples. Promising accounts still
 have a maximum of two unreviewed attempts.
 
 Retry budgets distinguish provider rejections from world authoring. A case has at
