@@ -212,13 +212,14 @@ export function createCloudClient(overrides = {}) {
     const routingPrefix = `${logicalTaskId.slice(0, 84)}-${digest(logicalTaskId).slice(0, 8)}-pool-`;
     const baseTaskId = pool ? `${routingPrefix}${digest(JSON.stringify(pool)).slice(0, 12)}` : logicalTaskId;
     const taskId = id(`${baseTaskId}${retryAttempt ? `-retry-${retryAttempt}` : ''}`);
-    const accountIds = pool ? [pool[parseInt(digest(logicalTaskId).slice(0, 8), 16) % pool.length]] : undefined;
+    const accountIds = pool ? [pool[(parseInt(digest(logicalTaskId).slice(0, 8), 16) + retryAttempt) % pool.length]] : undefined;
     if (pool || retryAttempt) {
       const entries = await readdir(path.join(outputRoot, '.cloud')).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
       let hasFailedPredecessor = false;
       for (const entry of entries.filter(name => name !== taskId && (name === logicalTaskId || name.startsWith(routingPrefix) || name.startsWith(`${logicalTaskId}-retry-`)))) {
         const previous = await optionalJson(path.join(outputRoot, '.cloud', entry, 'state.json'));
-        if (previous && (!previous.isTerminal || !['failed', 'completed', 'submit_failed'].includes(previous.status))) throw new Error('EPISODE_IMAGE_ROUTING_REQUIRES_TERMINAL_FAILED_ATTEMPT');
+        const explicitlyRecoverableCancellation = retryAttempt > 0 && ['cancelled','stopped'].includes(previous?.status) && conf.imageRetryCancelledJobs?.includes(previous.jobId);
+        if (previous && (!previous.isTerminal || (!['failed', 'completed', 'submit_failed'].includes(previous.status) && !explicitlyRecoverableCancellation))) throw new Error('EPISODE_IMAGE_ROUTING_REQUIRES_TERMINAL_FAILED_ATTEMPT');
         if (previous) hasFailedPredecessor = true;
       }
       if (retryAttempt && !hasFailedPredecessor) throw new Error('EPISODE_IMAGE_RETRY_REQUIRES_TERMINAL_FAILED_PREDECESSOR');

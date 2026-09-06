@@ -250,3 +250,35 @@ S3 prefix: `s3://leap-world-us-east-2/world-model/platform/worldkit-three-episod
 Preview: `http://127.0.0.1:53747/continuation/`. Local scoped monitors and evidence
 are under `.codex-tmp/three-episode-results/r9`; the current provider stage is
 style-plan gen_489e98038bfbd702. Source/route/model receipts remain immutable.
+
+R9 image progress: ten anchors passed the revised opening review with zero
+regeneration. All seventy later images completed; one style-02 segment-05 image
+was repaired for reverting to low-poly shading. All ten full style groups then
+passed their individual reviews. Global diversity review gen_8a3130bd31262f3d
+passed spatial registration and distinguishability, but requested photographic
+camel shading in the style-02 opening. The worker is applying that bounded
+original-style revision; the other nine groups remain cached. Revised opening
+SHA256 d0fc5cc85b55b31c8893bca2082cae5ca0bca174b6aade06791d7bc054602e19
+passed the next opening review. Final readiness is not yet established: new
+appearance-bound views, global review, events and request preparation remain.
+The earlier `r9/image-verification.json` is explicitly a pre-revision checkpoint.
+
+R9 recovery: `gen_b8c00a3bbbfc57b9` (only style-02 target-traveler, 1536×640)
+remained running without any generated file for more than its 1200-second image
+budget. Ray job status queries gave no task result and the state API timed out.
+The main agent deliberately cancelled this one stalled job and confirmed LWDP
+`cancelled` before retry. R9 published a closed 1,386-file checkpoint at 02:26:42
+UTC. No other completed work was discarded.
+
+R10 resumes that exact checkpoint with the same Episode ID and output paths.
+`continue.ts --checkpoint-s3` revalidates the recorded source/route receipt and
+hydrates only into fresh output. `imageRetryAttempts` allows one retry for the
+exact style-image-f25be11214c68755fcc4438f task; `imageRetryCancelledJobs` names only
+that confirmed cancelled job. Ordinary cancelled/user-stopped jobs remain blocked
+from retries, and live/unknown outcomes still cannot be duplicated. The retry
+rotates to the other existing account in the same pool. Model stays GPT-6/xhigh.
+New regression failed before this narrow recovery support and passed after it;
+40 Node tests, 31 Episode Vitest tests, typecheck and census passed.
+R10 archive SHA256 6fcc93baeeedadd2ad6155cb83ba9ab51e35dd34b41db88db21591e36da6d7af;
+Host prefix `s3://leap-world-us-east-2/world-model/platform/worldkit-three-episode/gvs2-pre-seedance-20260906-r10/host-r10`.
+Final readiness is still pending, and Seedance submissions remain zero.

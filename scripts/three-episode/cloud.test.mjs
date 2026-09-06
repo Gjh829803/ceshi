@@ -21,7 +21,7 @@ async function fixture(t, behavior = {}) {
     if (url.endsWith('/config')) return { config: { ...payload, options: { ...payload.defaults, ...payload.options } } };
     if (url.includes('/items')) return { items: (payload.tasks ?? payload.items).map(row => ({ item_id: row.id, status: behavior.failed ? 'failed' : 'succeeded', error: behavior.failed ? 'test terminal' : '' })) };
     throw new Error(`Unexpected URL ${url}`);
-  }, poll: async () => { if (behavior.pollError) throw behavior.pollError; return { status: behavior.failed ? 'failed' : 'succeeded' }; }, transfer: async (source, destination) => {
+  }, poll: async () => { if (behavior.pollError) throw behavior.pollError; return { status: behavior.pollStatus ?? (behavior.failed ? 'failed' : 'succeeded') }; }, transfer: async (source, destination) => {
     if (!source.startsWith('s3://')) return;
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(destination, source.includes('episode-launcher-report') ? JSON.stringify({ status: 'delivered', model: 'gpt-6-astra', reasoningEffort: 'xhigh' }) : '{"ok":true}');
@@ -201,3 +201,11 @@ test('cloud reviewer pool recovery retains failed evidence and cannot duplicate 
  const pending=await fixture(t,{pollError:new Error('pending')});await assert.rejects(pending.client.runCodex(pending.args),/REMOTE_PENDING/);
  pending.runtime.codexAccountIds=['existing-account-a'];await assert.rejects(pending.client.runCodex(pending.args),/REQUIRES_TERMINAL_FAILED/);assert.equal(pending.calls.filter(c=>c.method==='POST').length,1);
 });
+
+ test('only an explicit exact-job recovery can retry a terminal cancelled image',async t=>{
+  const behavior={pollStatus:'cancelled',runtime:{imageAccountIds:['account-a','account-b']}};const f=await fixture(t,behavior);
+  const args={batchId:'cancelled-image',outputRoot:f.root,items:[{id:'one-image',prompt:'same prompt',images:[],outputPath:path.join(f.root,'image.png')}]};
+  await assert.rejects(f.client.generateImages(args),/TERMINAL_FAILED/);const first=f.payload().request_id,account=f.payload().options.codex_account_ids[0];
+  f.runtime.imageRetryAttempts={'cancelled-image':1};await assert.rejects(f.client.generateImages(args),/REQUIRES_TERMINAL_FAILED/);assert.equal(f.calls.filter(c=>c.method==='POST').length,1);
+  f.runtime.imageRetryCancelledJobs=['gen_abc123'];behavior.pollStatus='succeeded';await f.client.generateImages(args);assert.notEqual(f.payload().request_id,first);assert.notEqual(f.payload().options.codex_account_ids[0],account);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
+ });
