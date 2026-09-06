@@ -26,6 +26,7 @@ export interface StartHostedRuntimeFrameInputV1 {
   readonly sessionNonce: string;
   readonly protocolBudget: NativeEffectiveExecutionBudgetV1["protocol"];
   readonly createRecorder?: Parameters<typeof attachHostedRecordingServer>[1];
+  readonly onBeforeReset?: () => void;
 }
 
 export interface HostedRuntimeFrameV1 {
@@ -118,6 +119,7 @@ export function startHostedRuntimeFrameV1(
     nextInboundSequence += 1;
     tail = tail.then(async () => {
       if (disposed || isNil(port)) return;
+      if (request.type === "session.reset") input.onBeforeReset?.();
       const receipt = await input.entry.submit(request);
       const outgoing = parseNativeIsolationTransportEnvelopeV1({
         kind: "native-isolation-transport-envelope",

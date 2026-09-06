@@ -1,30 +1,14 @@
-import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
+import { FIXED_TIME_STEP_SECONDS, semanticActionsForPhysicalCodesV1 } from "@whitebox-world/runtime-babylon";
 import type {
   FixedInputV1,
-  SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 
 const MAXIMUM_FIXED_TICKS_PER_FRAME = 5;
 
-function semanticActionsForCodes(
-  pressedCodes: ReadonlySet<string>,
-): readonly SemanticInputActionV1[] {
-  const actions: SemanticInputActionV1[] = [];
-  if (pressedCodes.has("KeyW")) actions.push("move-forward");
-  if (pressedCodes.has("KeyS")) actions.push("move-backward");
-  if (pressedCodes.has("KeyA")) actions.push("move-left");
-  if (pressedCodes.has("KeyD")) actions.push("move-right");
-  if (
-    pressedCodes.has("ShiftLeft") ||
-    pressedCodes.has("ShiftRight")
-  ) actions.push("run");
-  if (pressedCodes.has("Space")) actions.push("jump");
-  return Object.freeze(actions);
-}
-
 export function consumeHostedInteractiveInputV1(input: Readonly<{
   accumulatedSeconds: number;
   pressedCodes: ReadonlySet<string>;
+  motionKernelRef?: string;
 }>): Readonly<{
   remainingSeconds: number;
   input?: FixedInputV1;
@@ -46,7 +30,7 @@ export function consumeHostedInteractiveInputV1(input: Readonly<{
     remainingSeconds:
       Math.max(0, accumulatedSeconds - ticks * FIXED_TIME_STEP_SECONDS),
     input: Object.freeze({
-      actions: semanticActionsForCodes(input.pressedCodes),
+      actions: semanticActionsForPhysicalCodesV1(input.pressedCodes, input.motionKernelRef),
       ticks,
     }),
   });
@@ -56,6 +40,7 @@ export function consumeHostedInteractiveInputV1(input: Readonly<{
 export async function renderHostedInteractiveFrameV1(input: Readonly<{
   accumulatedSeconds: number;
   pressedCodes: ReadonlySet<string>;
+  motionKernelRef?: string;
   runFixedInput(input: FixedInputV1): Promise<void>;
   renderFrame(interpolationAlphaRatio: number): void;
   isDisposed(): boolean;

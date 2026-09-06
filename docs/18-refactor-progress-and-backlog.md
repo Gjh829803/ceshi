@@ -3271,6 +3271,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   松开/右键/失焦无额外转动；typecheck 和原 3C 通过。键盘多运动模式/箭头相机接入
   仍须继续，不能把 P1 当整个 CF-05/12 完成；最后真实生成 Case 未启动。
 
+- CF-05/K1 键盘对齐检查点（2026-09-07，`0626082a` 后）：Native 接回旧模式相关的
+  Shift/Space、动作键及方向键/IJKL 相机输入；与 Viewer 共享纯键位映射和旧加减速公式。
+  删除当前 Viewer 独有的 Space/Shift 短按缓存，恢复老分支采样时只读取按住键的行为。
+  对应 RED→GREEN 后三文件 72/72、实际 Native 入口 16/16、typecheck 和现有 3C
+  检查通过；原 Browser 证实鼠标/箭头/IJKL 和按住 W/ArrowLeft 时 Reset 清空。
+  输入边界使用当前 motionKernelRef，旧字段引用计数从 21 收窄到 16，不宣称专用运动
+  Runtime 迁移完成。实际驾驶/滑翔 Native 端到端模式证据仍待补；不关闭 CF-04/05/12，
+  没有新增生产 gate、全仓 CI、独立审查或新生成 Case。
+
 - CF 试跑交付（2026-09-06）：按用户要求将本轮实现和生成工具集中交付到
   `codex/cf-production-effect-closure`，附
   `docs/superpowers/skills/cf-trial-run.md` 的本地命令、环境和回传说明。新生成的历史

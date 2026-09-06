@@ -1135,6 +1135,45 @@ Only the existing verifier was extended; no new production gate or protocol
 request was added. Exact-SHA full CI/independent review and final generated Case
 remain unrun. Keyboard mode selection and arrow camera input are still open.
 
+### CF-05/K1 Native Hosted keyboard parity (2026-09-07)
+
+Main-agent-only/sequential, after P1/R7. Existing Viewer contains the old physical
+key mapping and arrow acceleration; Native duplicates only WASD/Shift/Space and
+misses mode-specific actions and arrow input. Extract the old pure key mapping
+and arrow recurrence into one Runtime Babylon browser-adapter utility, with
+both Viewer and Native callers. The current Viewer-only Space/Shift latch is
+not present in pinned old 9e35ab53 and is deleted: both sample currently held
+keys, without retaining a press released before the sample. Device pressed-key
+sets remain local to each browser adapter. This is physical state outside Gameplay,
+not a second locomotion or Camera authority. No new dependency cycle or app-to-app
+import through the isolated origin allowlist.
+
+Input: pressed/released codes, actual possessed Runtime Subject/motion kernel,
+committed reset/rebind lifecycle and display Tick count. Output: the old semantic
+action order and per-Tick arrow yaw/pitch deltas before the same fixed-input batch.
+Use actual Runtime projection for the Native Host input context; do not infer
+capability from a Subject name or return a second Gameplay snapshot. Reset/blur/
+unbound/rebind clear pressed keys and arrow velocity. Existing Runtime owners
+still apply camera deltas and execute fixed input through the isolated queue.
+
+Evidence: existing Viewer keyboard/arrow regressions, released-key timing and
+ground/driving/gliding maps, dual Shift/repeat/release, 12-Tick acceleration and
+9-Tick release, reset/rebind clearing, real Hosted keyboard/arrow behavior,
+typecheck, original 3C and affected source consumers. No final model Case until
+all CF development/alignment is done; K1 alone is not CF-04/05/12 completion.
+
+Implementation checkpoint: Native mode mapping had three RED cases before shared
+normalization; the current-only Viewer short-tap latch then failed the pinned-old
+released-key test and was removed. The three directly affected files pass 72 tests.
+Real Hosted Browser validates arrows and I/J/K/L plus Reset while W/ArrowLeft are
+held (keys and arrow velocity clear). Input context uses canonical motionKernelRef
+only to normalize physical keys; the actual possessed specialized Subject is read
+from the existing Runtime projection, never inferred from its name. The 3C census
+contracts to 16, with the specialized seam still explicitly live, not renamed away
+as completed. Native entry 16/16, typecheck and the existing 3C gate pass (11
+entries, 34 live references, 10 single-authority invariants). Actual specialized
+Native context evidence remains required before closing K1.
+
 ### CF-05/S1 Capture startup flight evidence (2026-09-06)
 
 Main-agent-only, sequential; depends on the existing CF-02 watchdog, not on a new

@@ -36,6 +36,19 @@ describe("Hosted Runtime frame document", () => {
 });
 
 describe("Hosted Runtime interactive input", () => {
+  it.each([
+    ["free-ground", ["jump", "run", "handbrake", "aim"]],
+    ["wheeled-arcade", ["boost", "brake", "handbrake", "aim"]],
+    ["unpowered-glide", ["boost", "handbrake", "primary-action", "aim"]],
+  ] as const)("maps physical keys for the actual %s kernel", (kernel, actions) => {
+    const consumed = consumeHostedInteractiveInputV1({
+      accumulatedSeconds: 1 / 60,
+      pressedCodes: new Set(["ShiftLeft", "Space", "AltLeft", "KeyF"]),
+      motionKernelRef: `worldkit://motion-kernel/${kernel}@1`,
+    });
+    expect(consumed.input?.actions).toEqual(actions);
+  });
+
   it.each([30, 60, 120])("keeps one second at 60 fixed Ticks with a %i Hz display", (displayHz) => {
     let remainingSeconds = 0;
     let ticks = 0;

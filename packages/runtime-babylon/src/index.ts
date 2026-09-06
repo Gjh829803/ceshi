@@ -1,4 +1,5 @@
 export * from "./babylon-world-runtime";
+export * from "./browser-keyboard-input";
 export {
   admitBabylonNativeSurfacesV1,
   BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1,

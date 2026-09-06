@@ -397,6 +397,10 @@ describe("Babylon Native isolated Runtime entry", () => {
 
     expect(snapshot.runtimeSessionId).toBe(input.request.runtimeSessionId);
     expect(snapshot.runtime.phase).toBe("ready");
+    expect(entry.physicalInputContext()).toEqual({
+      worldSessionId: snapshot.worldSessionId,
+      possessionTarget: { mode: "possessed", controlledEntityId: "g-bot-primary" },
+    });
     // Cloud-ridge keeps 3 logical Colliders plus the possessed character. The
     // Runtime realizes those Colliders as a spawn-ring of 4 m Chunk parts, so
     // the committed body count is the resident set rather than one body per

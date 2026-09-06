@@ -43,6 +43,7 @@ import type {
   VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 import {
   BabylonWorldRuntime,
@@ -123,6 +124,11 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
   renderFrame(interpolationAlphaRatio?: number): RenderReadyReceiptV1;
   adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4>;
+  physicalInputContext(): Readonly<{
+    worldSessionId: string;
+    possessionTarget: BabylonRuntimeProjectionV1["possessionTarget"];
+    motionKernelRef?: string;
+  }>;
   resize(): void;
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
@@ -347,6 +353,19 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
   runtimeUsage(): NativeExecutionUsageV1["runtime"] {
     const handle = this.activeHandle();
     return observeRuntimeUsage(handle.runtime.snapshot(), handle.engine);
+  }
+
+  physicalInputContext(): ReturnType<BabylonNativeIsolatedRuntimeEntryV1["physicalInputContext"]> {
+    const projection = this.activeHandle().runtime.snapshot();
+    const target = projection.possessionTarget;
+    const subject = target.mode === "possessed"
+      ? projection.subjectStatesByEntityId[target.controlledEntityId] : undefined;
+    return Object.freeze({
+      worldSessionId: this.host.currentWorldSessionId,
+      possessionTarget: target,
+      ...(subject?.movementOwner === "specialized-motion"
+        ? { motionKernelRef: subject.activeMotionKernelRef } : {}),
+    });
   }
 
   renderFrame(interpolationAlphaRatio = 1): RenderReadyReceiptV1 {

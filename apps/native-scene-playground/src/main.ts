@@ -2,7 +2,11 @@ import type {
   BabylonRuntimeProjectionV1,
   BabylonWorldRuntimeInitializationStageV1,
 } from "@whitebox-world/runtime-babylon";
-import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
+import {
+  FIXED_TIME_STEP_SECONDS, CAMERA_KEY_ACTION_MAP, CAMERA_YAW_RADIANS_PER_TICK,
+  CAMERA_PITCH_RADIANS_PER_TICK, advanceKeyboardCameraRadiansPerTick,
+  isPhysicalGameplayKeyV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
 } from "@whitebox-world/runtime-babylon";
@@ -515,19 +519,48 @@ async function startHostedFrame(): Promise<void> {
     sessionNonce,
     protocolBudget: requestBody.effectiveBudget.protocol,
     createRecorder: () => new CanvasRecorder(canvas),
+    onBeforeReset: () => clearPhysicalInput(true),
   });
   const pressedCodes = new Set<string>();
-  const contextualCodes = new Set([
-    "KeyW", "KeyA", "KeyS", "KeyD",
-    "ShiftLeft", "ShiftRight", "Space",
-  ]);
+  let lastInputContext = entry.physicalInputContext();
+  let keyboardYawRadiansPerTick = 0;
+  let keyboardPitchRadiansPerTick = 0;
   let localRequestSequence = 0;
   let previousTimestamp: number | undefined;
   let accumulatedSeconds = 0;
   let frameRequest = 0;
+  const clearPhysicalInput = (resetClock = false): void => {
+    pressedCodes.clear();
+    keyboardYawRadiansPerTick = 0;
+    keyboardPitchRadiansPerTick = 0;
+    if (resetClock) {
+      previousTimestamp = undefined;
+      accumulatedSeconds = 0;
+    }
+  };
   const runLocalInput = async (input: FixedInputV1): Promise<void> => {
     const requestSequence = ++localRequestSequence;
-    const receipt = await entry.submit({
+    const cameraActions = new Set([...pressedCodes].map(code => CAMERA_KEY_ACTION_MAP[code]));
+    const yawDirection = Number(cameraActions.has("cameraLeft")) - Number(cameraActions.has("cameraRight"));
+    const pitchDirection = Number(cameraActions.has("cameraDown")) - Number(cameraActions.has("cameraUp"));
+    const cameraAdjustments = [];
+    for (let tick = 0; tick < input.ticks; tick++) {
+      keyboardYawRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        keyboardYawRadiansPerTick, yawDirection, CAMERA_YAW_RADIANS_PER_TICK,
+      );
+      keyboardPitchRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        keyboardPitchRadiansPerTick, pitchDirection, CAMERA_PITCH_RADIANS_PER_TICK,
+      );
+      if (keyboardYawRadiansPerTick !== 0 || keyboardPitchRadiansPerTick !== 0) {
+        cameraAdjustments.push(entry.adjustCameraView({
+          yawDeltaRadians: keyboardYawRadiansPerTick,
+          pitchDeltaRadians: keyboardPitchRadiansPerTick,
+        }));
+      }
+    }
+    // Queue every old per-Tick arrow delta, then the fixed batch, synchronously
+    // on the same isolated entry tail; other browser events cannot interleave.
+    const fixed = entry.submit({
       kind: "worldkit-runtime-session-request",
       schemaVersion: 1,
       id: `request.browser-local-input.${requestSequence}`,
@@ -535,12 +568,22 @@ async function startHostedFrame(): Promise<void> {
       type: "fixed-input.run",
       input,
     });
+    const [receipt] = await Promise.all([fixed, ...cameraAdjustments]);
     if (receipt.status !== "succeeded") {
       throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
     }
   };
   const renderLoop = async (timestamp: number): Promise<void> => {
     if (hostedFrame.isDisposed()) return;
+    const context = entry.physicalInputContext();
+    if (context.worldSessionId !== lastInputContext.worldSessionId) clearPhysicalInput(true);
+    else if (context.possessionTarget.mode === "unbound" ||
+      lastInputContext.possessionTarget.mode !== context.possessionTarget.mode ||
+      (lastInputContext.possessionTarget.mode === "possessed" &&
+        lastInputContext.possessionTarget.controlledEntityId !== context.possessionTarget.controlledEntityId)) {
+      clearPhysicalInput();
+    }
+    lastInputContext = context;
     const elapsedSeconds = previousTimestamp === undefined
       ? 0 : Math.max(0, (timestamp - previousTimestamp) / 1_000);
     previousTimestamp = timestamp;
@@ -548,6 +591,7 @@ async function startHostedFrame(): Promise<void> {
     accumulatedSeconds = await renderHostedInteractiveFrameV1({
       accumulatedSeconds,
       pressedCodes,
+      ...(context.motionKernelRef === undefined ? {} : { motionKernelRef: context.motionKernelRef }),
       runFixedInput: runLocalInput,
       renderFrame: (alpha) => { entry.renderFrame(alpha); },
       isDisposed: () => hostedFrame.isDisposed(),
@@ -560,7 +604,7 @@ async function startHostedFrame(): Promise<void> {
     void renderLoop(timestamp).catch(showFailure);
   };
   window.addEventListener("keydown", (event) => {
-    if (!contextualCodes.has(event.code)) return;
+    if (!isPhysicalGameplayKeyV1(event.code) && CAMERA_KEY_ACTION_MAP[event.code] === undefined) return;
     event.preventDefault();
     pressedCodes.add(event.code);
   });
@@ -568,7 +612,7 @@ async function startHostedFrame(): Promise<void> {
   let activeCameraPointerId: number | undefined;
   let lastCameraPointerPosition: readonly [number, number] = [0, 0];
   window.addEventListener("blur", () => {
-    pressedCodes.clear();
+    clearPhysicalInput();
     activeCameraPointerId = undefined;
   });
   canvas.addEventListener("pointerdown", (event) => {
@@ -608,7 +652,7 @@ async function startHostedFrame(): Promise<void> {
   window.addEventListener("resize", () => entry.resize());
   window.addEventListener("beforeunload", () => {
     cancelAnimationFrame(frameRequest);
-    pressedCodes.clear();
+    clearPhysicalInput();
     void hostedFrame.dispose();
   }, { once: true });
   frameRequest = requestAnimationFrame(scheduleRender);

@@ -1222,20 +1222,20 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
   });
 });
 
-describe("PhysicalKeyboardActionTracker split-jump latch", () => {
-  it("preserves the Shift state from a Space press until the next fixed sample", () => {
+describe("PhysicalKeyboardActionTracker legacy sample timing", () => {
+  it("samples only currently held keys without retaining released Space or Shift", () => {
     const tracker = new PhysicalKeyboardActionTracker();
 
     tracker.press("ShiftLeft");
     tracker.press("Space");
     tracker.release("Space");
     tracker.release("ShiftLeft");
-    expect(tracker.actions()).toEqual(["jump", "run"]);
+    expect(tracker.actions()).toEqual([]);
     expect(tracker.actions()).toEqual([]);
 
     tracker.press("Space");
     tracker.release("Space");
-    expect(tracker.actions()).toEqual(["jump"]);
+    expect(tracker.actions()).toEqual([]);
     expect(tracker.actions()).toEqual([]);
 
     tracker.press("KeyW");
@@ -1243,7 +1243,16 @@ describe("PhysicalKeyboardActionTracker split-jump latch", () => {
     tracker.press("Space");
     tracker.release("Space");
     tracker.release("ShiftRight");
-    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
     expect(tracker.actions()).toEqual(["move-forward"]);
+    expect(tracker.actions()).toEqual(["move-forward"]);
+
+    tracker.press("Space");
+    tracker.press("ShiftRight");
+    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
+    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
+    tracker.release("Space");
+    expect(tracker.actions()).toEqual(["move-forward", "run"]);
+    tracker.clear();
+    expect(tracker.actions()).toEqual([]);
   });
 });

@@ -370,7 +370,7 @@ async function main(): Promise<void> {
         runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
         type: "snapshot.get",
       });
-    }, id) as Promise<{ snapshot: { view: { camera: {
+    }, id) as Promise<typeof beforePhysicalInput & { snapshot: { view: { camera: {
       viewYawOffsetRadians: number; viewPitchOffsetRadians: number; viewDistanceOffsetMeters: number;
     } } } }>;
     const cameraBefore = (await cameraSnapshot("request.browser.camera.before")).snapshot.view.camera;
@@ -418,6 +418,45 @@ async function main(): Promise<void> {
       assert(Math.abs(cameraAfterIgnoredInput[key] - cameraAfter[key]) < 0.001,
         "released/right-button/blurred pointer must not move the camera");
     }
+
+    await frame.locator("canvas").focus();
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(250);
+    await page.keyboard.up("ArrowLeft");
+    await page.waitForTimeout(250);
+    const cameraAfterArrow = (await cameraSnapshot("request.browser.camera.arrow")).snapshot.view.camera;
+    assert(cameraAfterArrow.viewYawOffsetRadians > cameraAfterIgnoredInput.viewYawOffsetRadians + 0.01,
+      "Native Hosted must consume the old arrow camera controls");
+    await page.keyboard.down("l");
+    await page.waitForTimeout(250);
+    await page.keyboard.up("l");
+    await page.waitForTimeout(250);
+    const cameraAfterLetter = (await cameraSnapshot("request.browser.camera.letter")).snapshot.view.camera;
+    assert(cameraAfterLetter.viewYawOffsetRadians < cameraAfterArrow.viewYawOffsetRadians - 0.01,
+      "Native Hosted must retain the old I/J/K/L camera bindings");
+
+    await page.keyboard.down("w");
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(100);
+    const resetWhileHeld = await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.keyboard.reset",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "session.reset",
+      });
+    }) as typeof beforePhysicalInput;
+    await page.waitForTimeout(250);
+    const afterResetWhileHeld = await cameraSnapshot("request.browser.keyboard.after-reset");
+    const resetPosition = resetWhileHeld.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    const afterResetPosition = afterResetWhileHeld.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    for (const axis of [0, 2]) assert(Math.abs(resetPosition[axis]! - afterResetPosition[axis]!) < 1e-6,
+      "Reset must clear held movement before the next display input");
+    assert.equal(afterResetWhileHeld.snapshot.view.camera.viewYawOffsetRadians, 0,
+      "Reset must clear arrow velocity and held camera keys");
+    await page.keyboard.up("w");
+    await page.keyboard.up("ArrowLeft");
 
     const receipt = await page.evaluate(async () =>
       window.__WORLDKIT_HOSTED_RUNTIME__!.submit({
@@ -480,6 +519,8 @@ async function main(): Promise<void> {
           pitchDeltaRadians: cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians,
           zoomDeltaMeters: cameraAfter.viewDistanceOffsetMeters - cameraBefore.viewDistanceOffsetMeters,
           releasedRightButtonAndBlurIgnored: true,
+          arrowAndLetterCameraKeysConsumed: true,
+          resetClearsHeldMovementAndArrowVelocity: true,
         },
         runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,
