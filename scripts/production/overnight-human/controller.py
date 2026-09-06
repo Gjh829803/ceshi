@@ -67,7 +67,9 @@ def main():
    if status['localFreeGiB']<8:
     write(OUT/'storage-attention.json',{'at':now(),'freeGiB':status['localFreeGiB'],'reason':'Pause new admission; preserve existing jobs and recover space without deleting unique evidence.'});time.sleep(30);continue
    if now()>config['latestNewGenerationAt']:
-    if not active:write(OUT/'deadline-summary.json',status)
+    if not active:
+     write(OUT/'deadline-summary.json',status)
+     if remainingSeconds<=0:return
     time.sleep(30);continue
    # Actual outcome reviews, never runtime/token-length proxies, unlock probation expansion.
    inventory=read(OUT/'account-inventory-private.json',[]);policy=read(Path(config['accountPolicyPath']));denied={a['identitySha256'] for a in policy['denied']};accounts=[]

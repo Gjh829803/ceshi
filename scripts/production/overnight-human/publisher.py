@@ -78,7 +78,7 @@ def main():
        b=p.read_bytes();i=tarfile.TarInfo(p.relative_to(SITE).as_posix());i.size=len(b);i.mode=0o644;tar.addfile(i,io.BytesIO(b))
      buffer.seek(0);subprocess.run(['kubectl','-n','ray','exec','-i',heads[0],'-c','ray-head','--','python','-c',pub.INSTALL,remote,'full'],stdin=buffer,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,check=True,timeout=480)
     sent=newSent;write(OUT/'published-files.json',sent);write(OUT/'publication-status.json',{'updatedAt':timestamp,'url':'http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/'+RUN+'/','changedFiles':len(files),'playable':sum(bool(c.get('playable')) for c in rows.values()),'selected':300});print(json.dumps({'publishedAt':timestamp,'files':len(files),'playable':sum(bool(c.get('playable')) for c in rows.values())}),flush=True)
-   if (OUT/'complete.json').exists():write(OUT/'publication-complete.json',{'at':now()});return
+   if (OUT/'complete.json').exists() or ((OUT/'deadline-summary.json').exists() and now()>config['deadline']):write(OUT/'publication-complete.json',{'at':now()});return
   except Exception as e:write(OUT/'publisher-warning.json',{'at':now(),'error':str(e)[-800:]});print(type(e).__name__,str(e)[-300:],flush=True)
   time.sleep(45)
 if __name__=='__main__':main()
