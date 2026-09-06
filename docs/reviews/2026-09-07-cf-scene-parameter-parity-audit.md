@@ -199,3 +199,15 @@ measurement bound to its true sampled state through the existing contracts and
 consumers. No production timeouts, hidden repair tasks or ordinary failure gates
 are to be added. Opening/identity pixels, unchanged capture Snapshot, actual
 support provenance and repeat-reset evidence are required before closing T1.
+
+T1's WebGL2 presentation reproducer now extends the existing occlusion browser
+fixture without touching production code. With stationary Subject and wall,
+delta-zero opening has zero visible red Subject pixels; one `1/60s` update has
+1109, versus 7030 after the complete fade. Opacity changes from 1 to
+`0.8888888955116272`, the exact Float32 result of old `moveTowards` with rate
+`(1/60)/0.15`. The initial test expectation incorrectly used a target-relative
+lerp; pinned old and current sources both use the same absolute rate, so only
+that test expectation was corrected. First identity mask, full capture-state
+restoration and restored pixels continue to pass. Browser fixture build and
+typecheck passed. This demonstrates actual pixel sensitivity to the known extra
+Tick, not an end-to-end old/current image comparison or a completed T1 repair.

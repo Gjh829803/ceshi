@@ -60,9 +60,20 @@ async function run() {
     await scene.whenReadyAsync();
     await prepareBabylonArtifactIdentityCaptureV1(scene);
     const opaque = capture();
-    fade.update({ cameraPosition: camera.position, subjectOriginPositionMetersXYZ: [0, 0, 0],
+    const selection = { cameraPosition: camera.position, subjectOriginPositionMetersXYZ: [0, 0, 0] as const,
       colliderCenterOffsetMetersXYZ: [0, 0.9, 0], colliderHeightMeters: 1.8, colliderRadiusMeters: 0.3,
-      deltaSeconds: 0.15 });
+    } as const;
+    // Old paused Reset publishes its opening at delta zero. A neutral gameplay
+    // Tick is not a harmless render wait: even with stationary geometry it
+    // advances the old fade algorithm and changes actual opening pixels.
+    fade.update({ ...selection, deltaSeconds: 0 });
+    const resetOpening = capture();
+    const resetFade = fade.snapshot();
+    fade.update({ ...selection, deltaSeconds: 1 / 60 });
+    const neutralTickOpening = capture();
+    const neutralTickFade = fade.snapshot();
+    fade.reset();
+    fade.update({ ...selection, deltaSeconds: 0.15 });
     const before = fade.snapshot();
     const faded = capture();
     const isolated = fade.withSuspended(capture);
@@ -72,14 +83,24 @@ async function run() {
       firstIdentityRedPixels: redCount(opaque.identityMask!.pixelsRgba),
       identityRedPixels: redCount(faded.identityMask!.pixelsRgba), isolatedRedPixels: redCount(isolated.pixelsRgba),
       selectedInstanceCount: before.selectedInstanceCount,
+      resetOpeningRedPixels: redCount(resetOpening.pixelsRgba),
+      neutralTickOpeningRedPixels: redCount(neutralTickOpening.pixelsRgba),
+      neutralTickChangesOpeningPixels: resetOpening.pixelsRgba.some((value, index) =>
+        value !== neutralTickOpening.pixelsRgba[index]),
+      resetOpacityRatio: resetFade.instances[0]?.opacityRatio,
+      neutralTickOpacityRatio: neutralTickFade.instances[0]?.opacityRatio,
       stateRestored: JSON.stringify(before) === JSON.stringify(fade.snapshot()),
       pixelsRestored: faded.pixelsRgba.every((value, index) => value === restored.pixelsRgba[index]),
     };
     display("Opaque opening", opaque.pixelsRgba);
+    display("After one neutral Tick (timing difference)", neutralTickOpening.pixelsRgba);
     display("Faded opening", faded.pixelsRgba);
     display("Opaque identity mask", faded.identityMask!.pixelsRgba);
     if (metrics.opaqueRedPixels !== 0 || metrics.fadedRedPixels < 500 || metrics.firstIdentityRedPixels !== 0 || metrics.identityRedPixels !== 0 ||
-        metrics.isolatedRedPixels !== 0 || metrics.selectedInstanceCount !== 1 || !metrics.stateRestored || !metrics.pixelsRestored) {
+        metrics.isolatedRedPixels !== 0 || metrics.selectedInstanceCount !== 1 || !metrics.stateRestored || !metrics.pixelsRestored ||
+        metrics.resetOpeningRedPixels !== 0 || metrics.neutralTickOpeningRedPixels <= 0 ||
+        metrics.neutralTickOpeningRedPixels >= metrics.fadedRedPixels || !metrics.neutralTickChangesOpeningPixels ||
+        metrics.resetOpacityRatio !== 1 || metrics.neutralTickOpacityRatio !== Math.fround(1 - (1 / 60) / 0.15)) {
       throw new Error(JSON.stringify(metrics));
     }
     result.textContent = JSON.stringify({ status: "passed", metrics }, null, 2);
