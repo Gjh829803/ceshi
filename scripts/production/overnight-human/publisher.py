@@ -45,7 +45,10 @@ def main():
     for c in read(gallery/'results.json',{}).get('cases',[]):
      task=c['id']
      if not rows.get(task,{}).get('playable') or c.get('playable'):rows[task]=c
-    for c in read(gallery/'progress.json',{}).get('cases',[]):progressRows[c['taskId']]=c
+    for c in read(gallery/'progress.json',{}).get('cases',[]):
+     earlier=progressRows.get(c['taskId'],{});attempts={}
+     for attempt in earlier.get('attempts',[])+c.get('attempts',[]):attempts[(attempt.get('runId'),attempt.get('jobId') or attempt.get('taskId'))]=attempt
+     c['attempts']=list(attempts.values());progressRows[c['taskId']]=c
     for directory in ['cases','references']:
      folder=gallery/directory
      if folder.exists():
