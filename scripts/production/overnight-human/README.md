@@ -169,6 +169,19 @@ block by adding its `jobId` to that account decision’s `availabilityClearedFor
 only after verified reset/health recovery; a new failure blocks again. Never clear
 quota blocks just because the weekly snapshot says 100%.
 
+At 03:05 local, `account-decisions.json` expands U12 to 8 after inspected
+orchard/river-valley samples (023, 069, 190), and U33 to production-good at 4
+after distinct satisfactory samples 027 and 090. Mixed samples remain recorded.
+Current limits are U05=8, U12=8, U37=4, U33=4. A/B/C now report platform
+`quota_low`; preserve their in-flight tasks but do not bypass admission filtering.
+Capacity reprobe wave-27 completed weak samples on U35/U22/U04/U09/U31;
+these accounts are quality-quarantined. Their already-running second references
+in wave-29 remain intact for comparison; do not dispatch a third sample.
+`capacity-paired-dispatch.json` records the six second-reference assignments.
+U26 remains awaiting actual outcome inspection. All quality judgments are based
+on reference/opening images, recorded motion samples and route/source evidence;
+none of these Host decisions modifies Agent input or blocks artifact playback.
+
 Production accounts require two distinct visually inspected, hash-matching good
 samples. `productionConcurrency` may explicitly raise a selected proven account
 from 4 to at most 8; U05 now has a usable ice-world and campus sample and uses 8,
