@@ -15,6 +15,27 @@ class EndCycle(BaseException):
 
 
 class CapacityTests(unittest.TestCase):
+    def test_pre_model_rejections_do_not_spend_two_world_generation_attempts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'creator-events.jsonl').write_text(json.dumps({'type': 'error', 'message': 'Selected model is at capacity.'}) + '\n')
+            row = {'root': str(root), 'phase': 'failed', 'providerStatus': 'completed'}
+            self.assertFalse(controller.used_model_output(row))
+            self.assertTrue(controller.can_retry_attempts([row, row]))
+            self.assertFalse(controller.can_retry_attempts([row] * 4))
+            (root / 'creator-events.jsonl').write_text(json.dumps({'type': 'item.completed', 'item': {'type': 'agent_message', 'text': 'world work'}}) + '\n')
+            self.assertFalse(controller.can_retry_attempts([row, row]))
+            (root / 'creator-result.json').write_text('{}')
+            self.assertFalse(controller.can_retry_attempts([row]))
+
+    def test_only_confirmed_host_queue_cancel_without_model_work_can_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            row = {'root': temporary, 'phase': 'failed', 'providerStatus': 'cancelled', 'executionComplete': True,
+                   'failure': {'message': 'THREE_EXECUTION_GUARD: queue-deadline'}}
+            self.assertTrue(controller.can_retry_attempts([row]))
+            self.assertFalse(controller.can_retry_attempts([{**row, 'executionComplete': False}]))
+            self.assertFalse(controller.can_retry_attempts([{**row, 'failure': {'message': 'User cancelled'}}]))
+
     def test_usage_failure_blocks_before_terminal_and_other_accounts_stay_eligible(self):
         row = {'requestedAccountSha256': 'a', 'jobId': 'gen_one', 'taskId': 'one', 'phase': 'submitted',
                'availabilityFacts': [{'code': 'MODEL_USAGE_LIMIT'}]}
@@ -38,6 +59,9 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(controller.free_account_slots('promising', 0, 2), 0)
         self.assertEqual(controller.free_account_slots('promising', 1, 1), 1)
         self.assertEqual(controller.free_account_slots('production-good', 3, 5), 1)
+        self.assertEqual(controller.free_account_slots('production-good', 7, 5, 8), 1)
+        self.assertEqual(controller.free_account_slots('production-good', 3, 5, 64), 1)
+        self.assertEqual(controller.free_account_slots('promising', 0, 2, 8), 0)
         self.assertEqual(controller.free_account_slots('verified-good', 7, 5), 1)
         self.assertEqual(controller.free_account_slots('quarantine', 0, 0), 0)
 

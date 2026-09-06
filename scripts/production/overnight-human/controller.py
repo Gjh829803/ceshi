@@ -14,10 +14,43 @@ def alive(pid):
  try:os.kill(int(pid),0);return True
  except (OSError,ValueError,TypeError):return False
 
-def free_account_slots(quality,active_count,unreviewed_count):
+def free_account_slots(quality,active_count,unreviewed_count,production_limit=4):
  cap={'verified-good':8,'production-good':4,'promising':2}.get(quality,0)
+ if quality=='production-good' and type(production_limit) is int and 1<=production_limit<=8:cap=production_limit
  free=max(0,cap-active_count)
  return min(free,max(0,2-unreviewed_count)) if quality=='promising' else free
+
+def used_model_output(row):
+ root=Path(row['root']);events=root/'creator-events.jsonl'
+ if row.get('worldBuildHash'):return True
+ if events.exists():
+  if events.stat().st_size>65536:return True
+  rejected=False;has_events=False
+  for line in events.read_text(errors='replace').splitlines():
+   try:event=json.loads(line)
+   except ValueError:continue
+   has_events=True
+   if event.get('type') in ['item.started','item.completed']:return True
+   if event.get('type') in ['error','turn.failed']:
+    message=str(event.get('message') or (event.get('error') or {}).get('message') or '').lower()
+    rejected=rejected or 'hit your usage limit' in message or 'at capacity' in message
+  return False if rejected else has_events or (root/'creator-launcher-report.json').exists()
+ if (root/'creator-launcher-report.json').exists():return True
+ message=(row.get('failure') or {}).get('message','')
+ if 'Codex account slots' in message or message=='THREE_EXECUTION_GUARD: queue-deadline':return False
+ final=read(root/'job-final.json',{})
+ if final.get('timing',{}).get('available') and final['timing'].get('first_item_started_at')=='':return False
+ return True
+
+def can_retry_attempts(attempts):
+ if len(attempts)>=4 or sum(used_model_output(r) for r in attempts)>=2:return False
+ if any(Path(r['root'],'creator-result.json').exists() for r in attempts):return False
+ for r in attempts:
+  if r['phase']!='failed':return False
+  normal=r.get('providerStatus') in ['failed','completed','succeeded','submit_failed']
+  stopped_before_model=r.get('providerStatus') in ['stopped','cancelled'] and r.get('executionComplete') and (r.get('failure') or {}).get('message')=='THREE_EXECUTION_GUARD: queue-deadline' and not used_model_output(r)
+  if not normal and not stopped_before_model:return False
+ return True
 
 def start_supervisor(root):
  owner=read(root/'supervisor-owner.json',{});pid=owner.get('pid')
@@ -93,15 +126,18 @@ def main():
     if a['identitySha256'] in auto['blockedAccounts']:continue
     if state not in ['verified-good','promising','production-good']:continue
     if a['label'] not in ['A','B','C','G'] and not decision.get('qualityEvidence'):continue
+    if state=='production-good':
+     qualified={e['taskId'] for e in decision.get('qualityEvidence',[]) if e.get('verdict') in ['strong','satisfactory'] and reviews.get(e['taskId'],{}).get('accountIdentitySha256')==a['identitySha256'] and reviews.get(e['taskId'],{}).get('worldBuildHash')==e.get('worldBuildHash') and reviews.get(e['taskId'],{}).get('visualInspected') is True}
+     if len(qualified)<2:continue
     unreviewed=sum(r['requestedAccountSha256']==a['identitySha256'] and r['taskId'] not in reviews for r in rows)
-    free=free_account_slots(state,busy[a['identitySha256']],unreviewed)
+    free=free_account_slots(state,busy[a['identitySha256']],unreviewed,decision.get('productionConcurrency',4))
     accounts.extend([a]*free)
    # Keep initial exploration broad, then fill freed slots using approved accounts.
    # Previously verified accounts may keep working while probation results are assessed.
    slots=min(config['maxConcurrency']-len(active),len(accounts),64)
    pending=[c for c in master['cases'] if c['id'] not in byCase]
    # Only a deliberate retry after a confirmed terminal attempt; same reference/runtime.
-   retry=[c for c in master['cases'] if c['id'] in byCase and c['id'] not in completed and len(byCase[c['id']])<2 and all(r['phase']=='failed' and r.get('providerStatus') in ['failed','completed','succeeded','submit_failed'] for r in byCase[c['id']]) and not any(Path(r['root'],'creator-result.json').exists() for r in byCase[c['id']])]
+   retry=[c for c in master['cases'] if c['id'] in byCase and c['id'] not in available and can_retry_attempts(byCase[c['id']])]
    pending+=retry
    if slots<4 or not pending:time.sleep(30);continue
    # Prefer proven accounts; balance occupancy before using their remaining capacity.

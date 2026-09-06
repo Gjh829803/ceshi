@@ -168,3 +168,17 @@ remain availability-blocked. A deliberate recovery may acknowledge the current
 block by adding its `jobId` to that account decision’s `availabilityClearedForJobIds`,
 only after verified reset/health recovery; a new failure blocks again. Never clear
 quota blocks just because the weekly snapshot says 100%.
+
+Production accounts require two distinct visually inspected, hash-matching good
+samples. `productionConcurrency` may explicitly raise a selected proven account
+from 4 to at most 8; U05 now has a usable ice-world and campus sample and uses 8,
+while U12 and U37 use 4 with their mixed samples retained. Promising accounts still
+have a maximum of two unreviewed attempts.
+
+Retry budgets distinguish provider rejections from world authoring. A case has at
+most 4 confirmed provider attempts and at most 2 attempts with evidence of model
+work. Missing/ambiguous evidence counts conservatively as model work. Explicit
+pre-model quota/capacity/slot rejections do not consume both world attempts. A Host
+queue-deadline cancellation can retry only after confirmed cleanup and no model
+work; user cancellations never qualify. A final receipt always holds regeneration
+for artifact recovery.
