@@ -185,11 +185,24 @@ export async function prepareSessionDirectories(env, lock) {
   await prepareBrowserRegistry(lock.browserRoot, env.PLAYWRIGHT_BROWSERS_PATH);
 }
 
-export async function resolveCreatorSubmission({existingJobId, hasDurableIntent, mode, findExisting, createIntentAndSubmit}) {
+export async function resolveCreatorSubmission({existingJobId, hasDurableIntent, mode, findExisting, createIntentAndSubmit, replayIntentAndSubmit, wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds))}) {
   if (!["run", "resume"].includes(mode)) throw new Error("CREATOR_SUBMISSION_MODE_INVALID");
   if (existingJobId) return existingJobId;
   if (!hasDurableIntent && mode === "resume") return null;
-  const jobId = hasDurableIntent ? await findExisting() : await createIntentAndSubmit();
+  let jobId;
+  if (!hasDurableIntent) jobId=await createIntentAndSubmit();
+  else {
+    for(let attempt=0;attempt<3;attempt++) {
+      try {jobId=await findExisting();break;}
+      catch(error) {
+        // Only repeated explicit absence can replay the identical persisted
+        // idempotency key/payload. Transport uncertainty never creates a job.
+        if(error.status!==404||!replayIntentAndSubmit)throw error;
+        if(attempt===2)jobId=await replayIntentAndSubmit();
+        else await wait(1000*(attempt+1));
+      }
+    }
+  }
   if (typeof jobId !== "string" || !/^gen_[a-f0-9]+$/.test(jobId)) throw new Error("CREATOR_JOB_ID_UNRESOLVED");
   return jobId;
 }

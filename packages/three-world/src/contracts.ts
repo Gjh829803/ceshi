@@ -66,6 +66,10 @@ export interface CameraFollowOptions {
  readonly collisionRadiusMeters?:number;
  readonly recoveryHalfLifeSeconds?:number;
 }
+export type CaptureTargetRepresentative =
+ | {readonly kind:'object';readonly object:THREE.Object3D}
+ | {readonly kind:'instance';readonly object:THREE.InstancedMesh;readonly instanceIndex:number};
+export type CaptureTargetSelection = string | {readonly entityId:string;readonly representative?:CaptureTargetRepresentative};
 type WithoutId<T> = T extends unknown ? Omit<T,'id'> : never;
 export type SpawnTemplate =
  | {readonly kind:'entity';readonly options:WithoutId<EntityOptions>}
@@ -275,7 +279,7 @@ export interface World {
  setCameraFollow(options?:CameraFollowOptions):void;
  /** Releases SDK following without disposing/replacing the camera. */
  useAuthoredCamera():THREE.Camera;
- setCaptureTargets(entityIds:readonly string[]):void;
+ setCaptureTargets(targets:readonly CaptureTargetSelection[]):void;
  registerPrototype(definition:PrototypeDefinition):Promise<void>;
  registerGeometry(definition:GeometryDefinition):Promise<void>;
  replaceGeometry(entityId:string,geometry:THREE.BufferGeometry):Promise<CommandReceipt>;
@@ -310,6 +314,8 @@ export interface WorldObservation {
  readonly renderer:THREE.WebGLRenderer; readonly player:THREE.Object3D;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
+ readonly captureTargetIds?:readonly string[];
+ readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;
  snapshot?():WorldSnapshot; inspect?():unknown; capabilities?():WorldDescription;
  execute?(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;

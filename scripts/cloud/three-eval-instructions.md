@@ -15,6 +15,8 @@ the SDK profile offers the thin SDK and its examples. Both have the same referen
 creative request, catalog assets, budget and browser evidence tools. Search assets
 by exact identity and inspect their limitations; diagnostic samples are not proof
 of faithful subject appearance. Do not install dependencies or change supplied tools.
+For humanoid leads, prefer reusable G-bot or a custom humanoid mesh with working
+walk/run/jump animations, preserving the reference silhouette and appearance.
 
 For the SDK world, WASD moves the character and the arrow keys rotate the camera;
 Shift stays held to run and each new Space press jumps once. Keep the verified

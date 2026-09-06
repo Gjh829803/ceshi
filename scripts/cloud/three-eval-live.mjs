@@ -11,13 +11,19 @@ const python = String.raw`import pathlib,json,os,stat,datetime,sys,math,re
 rows=json.loads(sys.argv[1]); results=[]
 def safe_error(value):
     text=str(value or '')
+    if 'hit your usage limit' in text.lower(): return 'Selected account has reached its usage limit.'
     if 'at capacity' in text.lower(): return 'Selected model is at capacity.'
+    if 'model is not supported when using Codex with a ChatGPT account' in text: return 'Selected model is not supported for this Codex account.'
     import re
     match=re.search(r'\b(?:THREE|CREATOR|LWDP)_[A-Z0-9_]+\b',text)
     return match.group(0) if match else ('Private diagnostics retained.' if text else None)
 def failure_facts(value):
     text=str(value or ''); facts=[]
+    if 'hit your usage limit' in text.lower(): facts.append({'layer':'model-service','code':'MODEL_USAGE_LIMIT'})
+    if 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED' in text: facts.append({'layer':'sdk-physics','code':'PHYSICS_TRIANGLE_BUDGET_EXCEEDED'})
+    if 'PHYSICS_COLLIDER_BUDGET_EXCEEDED' in text: facts.append({'layer':'sdk-physics','code':'PHYSICS_COLLIDER_BUDGET_EXCEEDED'})
     if 'at capacity' in text.lower(): facts.append({'layer':'model-service','code':'MODEL_CAPACITY'})
+    if 'model is not supported when using Codex with a ChatGPT account' in text: facts.append({'layer':'model-service','code':'MODEL_NOT_SUPPORTED_FOR_ACCOUNT'})
     if 'THREE_SOURCE_SYMLINK' in text and ('scratch/' in text or 'codex_home' in text): facts.append({'layer':'host-integration','code':'PLATFORM_SCRATCH_SCANNED_AS_SOURCE'})
     if 'PHYSICS_BOX_DEGENERATE' in text: facts.append({'layer':'author-geometry','code':'PHYSICS_BOX_DEGENERATE'})
     if 'THREE_BROWSER_STARTUP_FAILED' in text and 'PHYSICS_BOX_DEGENERATE' not in text: facts.append({'layer':'browser-startup','code':'THREE_BROWSER_STARTUP_FAILED','cause':'not-identified'})
@@ -26,7 +32,7 @@ def failure_facts(value):
 def result_summary(value):
     if not isinstance(value,dict): return None
     summary={}
-    if value.get('status') in ['passed','failed','ready-for-independent-review']: summary['status']=value['status']
+    if value.get('status') in ['passed','failed','ready','ready-for-independent-review']: summary['status']=value['status']
     for key in ['isCompleteEpisode','capturedInput']:
         if isinstance(value.get(key),bool): summary[key]=value[key]
     for key in ['plannedSeconds','requestedSeconds','actualWallSeconds','inputWallSeconds','activePlaySeconds','completedSteps']:
@@ -56,6 +62,14 @@ for row in rows:
                 data,_=read_public(p); report=json.loads(data)
                 if report.get('taskId')!=row['taskId'] or report.get('workspace')!=str(out.parent): raise ValueError('LIVE_REPORT_IDENTITY_CHANGED')
                 r['launcher']={k:report.get(k) for k in ['status','startedAt','finishedAt','runtimeHash','childExitCode']}; r['launcher']['error']=safe_error(report.get('error'))
+            p=out/'creator-checkpoint.json'
+            if p.exists():
+                data,_=read_public(p); checkpoint=json.loads(data)
+                if checkpoint.get('kind')=='three-creator-checkpoint' and checkpoint.get('status')=='runnable' and checkpoint.get('taskId')==row['taskId'] and checkpoint.get('creatorRuntimeLockHash')==r.get('launcher',{}).get('runtimeHash'):
+                    hashes={k:checkpoint.get(k) for k in ['worldBuildHash','sourceHash','archiveSha256']}
+                    if all(isinstance(v,str) and re.fullmatch(r'[a-f0-9]{64}',v) for v in hashes.values()):
+                        # Receipt presence is not archive verification or a delivery.
+                        r['checkpointReceipt']={'status':'observed-unverified',**hashes,'createdAt':checkpoint.get('createdAt')}
             p=out/'creator-events.jsonl'
             if p.exists():
                 data,s=read_public(p); events=[]
@@ -65,6 +79,12 @@ for row in rows:
                 kinds={}; tools={}; latest_operation=None; latest_tool=None; image_responses=0; facts=[]; operations={}
                 for event in events:
                     kind=event.get('type'); kinds[kind]=kinds.get(kind,0)+1; item=event.get('item',{})
+                    if item.get('type') in ['image_generation','imageGeneration','image_generation_call'] and kind in ['item.started','item.completed']:
+                        status='running' if kind=='item.started' else ('failed' if item.get('failure') or item.get('status') in ['failed','error'] else 'succeeded')
+                        latest_tool={'name':'imagegen','status':'completed' if status=='succeeded' else status,'timestamp':None}
+                        operation_id='imagegen:'+str(item.get('id') or len(operations))
+                        latest_operation={'id':operation_id,'type':'imagegen.generate','status':status,'createdAt':None,'updatedAt':None}
+                        operations[operation_id]=latest_operation
                     if item.get('type')=='mcp_tool_call': latest_tool={'name':item.get('tool'),'status':item.get('status') or ('running' if kind=='item.started' else None),'timestamp':None}
                     if event.get('type')=='item.completed' and item.get('type')=='mcp_tool_call':
                         tool=item.get('tool'); tools[tool]=tools.get(tool,0)+1
@@ -102,7 +122,13 @@ for row in rows:
     results.append(r)
 print(json.dumps({'observedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'jobs':results}))`;
 
-export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namespace='ray', pod='ray-cluster-head-tmssq', container='ray-head'}={}) {
+export function selectThreeLiveHead(inventory, container='ray-head') {
+  const candidates=(inventory.items??[]).filter(item=>!item.metadata?.deletionTimestamp&&item.status?.phase==='Running'&&item.spec?.containers?.some(value=>value.name===container)&&item.status?.conditions?.some(value=>value.type==='Ready'&&value.status==='True'));
+  if(candidates.length!==1||!/^[a-z0-9-]+$/.test(candidates[0].metadata?.name??''))throw new Error('THREE_LIVE_HEAD_UNAVAILABLE');
+  return candidates[0].metadata.name;
+}
+
+export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namespace='ray', pod, container='ray-head'}={}) {
   const cacheRoot=path.join(repo,'.codex-tmp/three-creator-eval/live-cache');
   await mkdir(cacheRoot,{recursive:true});
   const fresh=[], pending=[];
@@ -112,6 +138,10 @@ export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namesp
     pending.push({jobId:job.jobId,taskId:job.taskId,requestId:job.requestId??null,workDir:job.workDir});
   }
   if (pending.length) {
+    if (!pod) {
+      const inventory=await exec('kubectl',['-n',namespace,'get','pods','-l','ray.io/cluster=ray-cluster,ray.io/node-type=head','-o','json'],{encoding:'utf8',timeout:25000,maxBuffer:2*1024*1024});
+      pod=selectThreeLiveHead(JSON.parse(inventory.stdout),container);
+    }
     const {stdout}=await exec('kubectl',['-n',namespace,'exec',pod,'-c',container,'--','python3','-c',python,JSON.stringify(pending)],{encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024});
     const result=JSON.parse(stdout);
     for(const job of result.jobs){const file=path.join(cacheRoot,job.jobId+'.json'),temp=file+`.${process.pid}.part`;await writeFile(temp,JSON.stringify({observedAt:result.observedAt,job}));const {rename}=await import('node:fs/promises');await rename(temp,file);fresh.push({...job,observedAt:result.observedAt});}

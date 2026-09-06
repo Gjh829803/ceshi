@@ -11,6 +11,7 @@ import type { WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, type AuthoringTopic } from './authoring-schema.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, SDK_EXAMPLE } from './examples.js';
+import {selectTriviewTargets} from './capture-plan.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -230,12 +231,13 @@ export class ThreeCreatorTools {
     if (view === 'opening') await this.bridge(session, 'reset');
     return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
   }
-  async triviews() {
+  async triviews(includeAdditionalTargets=false) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'reset');
-    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`), observation = await this.bridge(session, 'inspect'); const images = [];
+    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`);
+    const plan=selectTriviewTargets(await this.bridge(session,'captureTargets'),includeAdditionalTargets); const images = [];
     images.push(await this.capture(session, root, 'opening'));
-    for (const id of ['player', ...Object.keys(observation.targets).filter(id => id !== 'player' && observation.targets[id].uuid !== observation.player.uuid)]) images.push(await this.capture(session, root, 'entity-triview', [id]));
-    const report = { kind: 'three-creator-captures', schemaVersion: 1, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
+    for (const target of plan.selectedTargets) images.push(await this.capture(session,root,'entity-triview',[target.id]));
+    const report = { kind: 'three-creator-captures', schemaVersion: 1, selectionPolicy:plan.selectionPolicy, conditioningEntityIds:plan.conditioningEntityIds, omittedEntityIds:plan.omittedEntityIds, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
     await json(path.join(root, 'captures.json'), report); this.captureEvidence = { root, files: await hashTree(root), report }; return { ...report, image: images[0]!.image };
   }
   private async episode(): Promise<{ episode: Episode; hash: string; bytes: Buffer }> {

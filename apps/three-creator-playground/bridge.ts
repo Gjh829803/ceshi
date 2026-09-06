@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { WorldCommand, WorldDescription, WorldObservation } from '@worldkit/three';
+import {captureObjectViews, captureTargets} from './capture.js';
+export {targetTriviewBasis} from './capture.js';
 
 declare global {
   interface Window {
@@ -8,16 +10,6 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
-/** Semantic local front is -Z; preserve the entire parent/object orientation. */
-export function targetTriviewBasis(object: THREE.Object3D, frontYawRadians = 0) {
-  if (!Number.isFinite(frontYawRadians)) throw new Error('THREE_TARGET_FRONT_YAW_INVALID');
-  object.updateWorldMatrix(true, false);
-  const rotation = object.getWorldQuaternion(new THREE.Quaternion());
-  const front = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), frontYawRadians).applyQuaternion(rotation).normalize();
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rotation).normalize();
-  const right = front.clone().cross(up).normalize();
-  return { front, right, back: front.clone().negate(), up };
-}
 function observation(): WorldObservation {
   const value = window.__WORLDKIT_EVAL__;
   if (!value?.ready || !value.scene?.isScene || !value.camera?.isCamera || !value.renderer?.domElement || typeof value.renderer.render !== 'function' || !value.player?.isObject3D || !value.targets) throw new Error('THREE_OBSERVER_NOT_READY: expose scene, camera, renderer, player, targets and lifecycle methods');
@@ -146,41 +138,11 @@ function createBridge() {
       await started; await flushCurrentCanvas(current);
     },
     endRecording: finishRecording,
+    captureTargets() { return captureTargets(observation()); },
     capture(view: 'opening' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
-      const world = observation(), { scene, renderer } = world;
-      scene.updateMatrixWorld(true);
-      if (view === 'opening') { renderer.render(scene, world.camera); return { view, image: renderer.domElement.toDataURL('image/png'), player: describe(world.player) }; }
-      const targets = entityIds.length ? entityIds.map(id => { const target = id === 'player' ? world.player : world.targets[id]; if (!target) throw new Error(`THREE_TARGET_UNKNOWN: ${id}`); return target; }) : view === 'entity-triview' ? [world.player] : [scene];
-      const firstId = entityIds[0] ?? 'player';
-      const orientationTargetId = firstId === 'player' ? Object.entries(world.targets).find(([, object]) => object === world.player)?.[0] ?? 'player' : firstId;
-      const semanticFrontYawRadians = frontYawRadians ?? world.targetFrontYawRadiansById?.[orientationTargetId] ?? world.targetFrontYawRadiansById?.[firstId] ?? 0;
-      const basis = targetTriviewBasis(targets[0]!, semanticFrontYawRadians);
-      const bounds = new THREE.Box3(); for (const object of targets) bounds.union(new THREE.Box3().setFromObject(object, true));
-      if (bounds.isEmpty() || !Number.isFinite(bounds.min.x + bounds.max.x)) throw new Error('THREE_TARGET_BOUNDS_EMPTY');
-      const center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3()), extent = Math.max(size.x, size.y, size.z, 0.1) * 0.65;
-      const oldSize = renderer.getSize(new THREE.Vector2()), pixelRatio = renderer.getPixelRatio(), viewport = renderer.getViewport(new THREE.Vector4()), scissor = renderer.getScissor(new THREE.Vector4()), scissorTest = renderer.getScissorTest(), background = scene.background, autoClear = renderer.autoClear;
-      const hidden: THREE.Object3D[] = [];
-      if (view === 'entity-triview') {
-        const included = new Set<THREE.Object3D>(); for (const target of targets) { target.traverse(object => included.add(object)); let parent = target.parent; while (parent) { included.add(parent); parent = parent.parent; } }
-        scene.traverse(object => { if ((object as THREE.Mesh).isMesh && object.visible && !included.has(object)) { object.visible = false; hidden.push(object); } });
-        scene.background = new THREE.Color('#e6e9ef');
-      }
-      try {
-        const panels = view === 'entity-triview' ? 3 : 1, panelWidth = view === 'entity-triview' ? 512 : 960, height = view === 'entity-triview' ? 640 : 720;
-        renderer.setPixelRatio(1); renderer.setSize(panelWidth * panels, height, false); renderer.autoClear = false; renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true);
-        for (let index = 0; index < panels; index++) {
-          const halfY = extent * Math.max(1, height / panelWidth), halfX = halfY * panelWidth / height;
-          const camera = new THREE.OrthographicCamera(-halfX, halfX, halfY, -halfY, 0.01, extent * 30 + 100);
-          if (view === 'top-down') { camera.position.copy(center).add(new THREE.Vector3(0, extent * 4 + 5, 0)); camera.up.set(0, 0, -1); }
-          else { const direction = [basis.front, basis.right, basis.back][index]!; camera.position.copy(center).addScaledVector(direction, extent * 4); camera.up.copy(basis.up); }
-          camera.lookAt(center); camera.updateMatrixWorld(true);
-          renderer.setViewport(index * panelWidth, 0, panelWidth, height); renderer.setScissor(index * panelWidth, 0, panelWidth, height); renderer.render(scene, camera);
-        }
-        return { view, entityIds: entityIds.length ? entityIds : ['player'], orientationTargetId, frontYawRadians: semanticFrontYawRadians, frontDirectionWorldXYZ: basis.front.toArray(), rightDirectionWorldXYZ: basis.right.toArray(), upDirectionWorldXYZ: basis.up.toArray(), image: renderer.domElement.toDataURL('image/png'), bounds: { minimumMetersXYZ: bounds.min.toArray(), maximumMetersXYZ: bounds.max.toArray() }, panelOrder: view === 'entity-triview' ? ['front', 'right', 'back'] : ['top-down'] };
-      } finally {
-        for (const object of hidden) object.visible = true;
-        scene.background = background; renderer.autoClear = autoClear; renderer.setPixelRatio(pixelRatio); renderer.setSize(oldSize.x, oldSize.y, false); renderer.setViewport(viewport); renderer.setScissor(scissor); renderer.setScissorTest(scissorTest); renderer.render(scene, world.camera);
-      }
+      const world = observation();
+      if (view === 'opening') { world.scene.updateMatrixWorld(true); world.renderer.render(world.scene, world.camera); return { view, image: world.renderer.domElement.toDataURL('image/png'), player: describe(world.player) }; }
+      return captureObjectViews(world, view, entityIds, frontYawRadians);
     },
   };
 }

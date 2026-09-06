@@ -1,5 +1,21 @@
 ## Known-good historical Creator baseline — 2026-09-06
 
+The user additionally requests one concise humanoid guideline: prefer reusable
+G-bot, or a custom humanoid mesh with working locomotion/run/jump animations while
+preserving reference appearance. This narrow prompt addition is authorized;
+otherwise keep the existing normal instruction unchanged.
+
+Latest user authorization: integrate the accepted smooth opening camera,
+important representative three-views, and Host-only reliability; blacklist D/E/F,
+prefer A/B/C/G, select ten open human-led scenes with a visible forward passage,
+and run ten cloud cases with a 90-minute authoring timeout. Keep the current
+normal Agent instruction unchanged. Source authority is
+docs/superpowers/plans/2026-09-06-camera-triview-reliable-ten.md.
+Only scoped capture contracts/guidance may change Agent-visible SDK/tool content.
+Do not import unrelated visual-style, budget-pressure, UI, camera-collision or
+automatic model-continuation changes. Infrastructure reconciliation and artifact
+retrieval must not start another generation or retain a freed model slot.
+
 The latest user request authorizes restoring opening-preserving smooth camera
 follow from 2a7a2f9b on the current xhigh self-check branch, then running canyon
 with original account A and ring with original account B. Migrate only camera.ts,

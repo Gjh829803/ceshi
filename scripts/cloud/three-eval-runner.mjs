@@ -7,16 +7,19 @@ import { fileSha256, readRuntimeLock, resolveCreatorSubmission, sha256, writeJso
 import { eventStatistics, failureClass, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs";
 import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
-import { withAdmissionDirectoryLock } from "./three-eval-admission.mjs";
+import { withAdmissionDirectoryLock, admissionIsClosed } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
+import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
+import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from "./three-account-routing.mjs";
+import {runWithExecutionSlots} from "./three-execution-slots.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
 const options = {};
 for (let index = 0; index < args.length; index += 2) {
   const key = args[index];
-  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root", "--reasoning-effort"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
+  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root", "--reasoning-effort", "--account-policy-file", "--account-inventory-file"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
   options[key] = args[index + 1];
 }
 const mode = options["--mode"] ?? "prepare";
@@ -37,7 +40,7 @@ if (previousPlan?.manifestPath && path.resolve(previousPlan.manifestPath) !== ma
 const manifestBytes = await readFile(manifestPath), manifestSha256 = sha256(manifestBytes);
 if (previousPlan?.manifestSha256 && previousPlan.manifestSha256 !== manifestSha256) throw new Error("Frozen case manifest bytes changed.");
 const sourceManifest = JSON.parse(manifestBytes);
-if (sourceManifest.cases?.length !== 5 || new Set(sourceManifest.cases.map(item => item.id)).size !== 5) throw new Error("Five unique fixed cases are required.");
+if (!Array.isArray(sourceManifest.cases) || sourceManifest.cases.length < 1 || sourceManifest.cases.length > 100 || new Set(sourceManifest.cases.map(item => item.id)).size !== sourceManifest.cases.length) throw new Error("Between one and 100 unique fixed cases are required.");
 const previousSuite = previousPlan && (previousPlan.suite ?? "paired");
 const suite = options["--suite"] ?? previousSuite ?? "sdk-only";
 if (!["sdk-only", "paired"].includes(suite)) throw new Error("--suite must be sdk-only or paired");
@@ -48,15 +51,15 @@ if (previousPlan?.experimentRevision && previousPlan.experimentRevision !== expe
 const profiles = suite === "sdk-only" ? ["three-sdk"] : ["three-raw", "three-sdk"];
 const manifest = {...sourceManifest, cases: sourceManifest.cases.flatMap(item => profiles.map(profile => ({...item, baseCaseId: item.id, profile, id: `${item.id}--${profile}`})))};
 const maxConcurrency = Number(options["--max-concurrency"] ?? previousPlan?.maxConcurrency ?? (suite === "sdk-only" ? 5 : 4));
-if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 5) throw new Error("--max-concurrency must be an integer in [1, 5]");
+if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 10) throw new Error("--max-concurrency must be an integer in [1, 10]");
 const accountConcurrency = Number(options["--account-concurrency"] ?? previousPlan?.accountConcurrency ?? (suite === "sdk-only" ? 5 : 4));
 if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 5) throw new Error("--account-concurrency must be an integer in [1, 5]");
 const caseLimit = Number(options["--case-limit"] ?? 5);
-if (!Number.isSafeInteger(caseLimit) || caseLimit < 1 || caseLimit > 5) throw new Error("--case-limit must be an integer in [1, 5]");
+if (!Number.isSafeInteger(caseLimit) || caseLimit < 1 || caseLimit > sourceManifest.cases.length) throw new Error("--case-limit must fit the frozen manifest");
 const requestedCaseId = options["--case-id"] ?? (options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");
 const requestedProfile = options["--profile"];
 if (requestedProfile && !profiles.includes(requestedProfile)) throw new Error("--profile must belong to the selected suite; sdk-only admits only three-sdk");
-if (requestedCaseId && !sourceManifest.cases.some(item => item.id === requestedCaseId)) throw new Error("--case-id must identify one of the five frozen cases");
+if (requestedCaseId && !sourceManifest.cases.some(item => item.id === requestedCaseId)) throw new Error("--case-id must identify one of the frozen cases");
 if (requestedCaseId && options["--case-limit"]) throw new Error("Use either --case-id or --case-limit");
 const outputs = [
   {path: "creator-result.json", required: true, content_type: "application/json"},
@@ -70,7 +73,7 @@ const statePath = caseId => path.join(outputRoot, caseId, "state.json");
 async function optionalJson(file) { try { return JSON.parse(await readFile(file, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
 async function saveSummary() {
   const cases = await Promise.all(manifest.cases.map(async item => ({id: item.id, baseCaseId: item.baseCaseId, profile: item.profile, title: item.title, ...(await optionalJson(statePath(item.id)) ?? {phase: "not-started"})})));
-  const summary = {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-evaluation" : "three-creator-paired-evaluation", suite, experimentRevision, engine: "three@0.185.1", runId, updatedAt: new Date().toISOString(), model: "gpt-6-astra", reasoningEffort, caseCount: 5, profileCount: profiles.length, taskCount: manifest.cases.length,
+  const summary = {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-evaluation" : "three-creator-paired-evaluation", suite, experimentRevision, engine: "three@0.185.1", runId, updatedAt: new Date().toISOString(), model: "gpt-6-astra", reasoningEffort, caseCount: sourceManifest.cases.length, profileCount: profiles.length, taskCount: manifest.cases.length,
     deliveredCount: cases.filter(item => item.phase === "delivered").length, failedCount: cases.filter(item => item.phase === "failed").length, pendingCount: cases.filter(item => ["submitted", "running", "remote-pending", "delivery-pending", "submission-unknown", "admission-blocked", "stop-pending"].includes(item.phase)).length,
     qualification: "Pipeline and artifact evidence only; independent visual review and playable-world checks are reported separately.", cases};
   await writeJson(path.join(outputRoot, "summary.json"), summary);
@@ -88,6 +91,12 @@ if (sourceManifest.genericInstructionsSha256 && sourceManifest.genericInstructio
 const evaluationPolicyPath = sourceManifest.evaluationPolicyPath ? path.resolve(repo, sourceManifest.evaluationPolicyPath) : null;
 if (evaluationPolicyPath && !evaluationPolicyPath.startsWith(`${repo}${path.sep}`)) throw new Error("Host evaluation policy must stay in this checkout.");
 const acceptancePolicy = evaluationPolicyPath ? {scope: "host-only", documents: [{path: path.relative(repo, evaluationPolicyPath), sha256: await fileSha256(evaluationPolicyPath)}]} : null;
+const accountPolicyPath=path.resolve(options["--account-policy-file"]??previousPlan?.accountPolicyPath??path.join(repo,"scripts/cloud/creator-account-policy.json"));
+const accountInventoryPath=path.resolve(options["--account-inventory-file"]??previousPlan?.accountInventoryPath??path.join(repo,".codex-tmp/account-performance/account-id-map.json"));
+const accountPolicyBytes=await readFile(accountPolicyPath);
+if(previousPlan?.accountPolicySha256&&previousPlan.accountPolicySha256!==sha256(accountPolicyBytes))throw Error("CREATOR_FROZEN_ACCOUNT_POLICY_CHANGED");
+const accountPolicy=JSON.parse(accountPolicyBytes);
+const accountInventory=JSON.parse(await readFile(accountInventoryPath,"utf8"));
 const plans = [];
 for (const item of manifest.cases) {
   if (!/^[a-z0-9][a-z0-9-]{2,99}$/.test(item.id)) throw new Error("Invalid case id");
@@ -107,7 +116,10 @@ for (const item of manifest.cases) {
   const inputS3Uri = `${outputS3Prefix}/inputs/case-input.json`;
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
   const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
-  const codexAccountIds = item.codexAccountIds;
+  const frozenPayload=previousPlan?await optionalJson(path.join(caseRoot,"payload.json")):null;
+  const codexAccountIds=frozenPayload?.options?.codex_account_ids
+    ?assertCreatorAccountSelection(frozenPayload.options.codex_account_ids,accountPolicy)
+    :selectCreatorAccount({policy:accountPolicy,inventory:accountInventory,requestedIds:item.codexAccountIds,slot:Math.floor(plans.length/profiles.length)});
   if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length !== 1 || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
   const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
   const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
@@ -118,8 +130,8 @@ for (const item of manifest.cases) {
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
 const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
-await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
-if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=5 profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
+await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, accountPolicyPath,accountInventoryPath,accountPolicySha256:sha256(accountPolicyBytes), runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
+if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=${sourceManifest.cases.length} profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
 for (const key of ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete process.env[key];
 process.env.AWS_SHARED_CREDENTIALS_FILE = path.join(repo, ".codex-tmp/runtime-config/aws-credentials");
@@ -133,24 +145,20 @@ const isTerminalStatus = status => ["succeeded", "completed", "failed", "submit_
 async function withAdmissionLock(caseId, work) {
   return withAdmissionDirectoryLock(admissionRoot, caseId, work, {waitMilliseconds: ["__capacity", "__dispatch"].includes(caseId) ? 10000 : 0});
 }
-function admissionIsClosed(record) {
-  if (["cancelled", "stopped"].includes(record.providerStatus) && record.rayCleanupConfirmed !== true) return false;
-  return ["delivered", "failed"].includes(record.phase) && (isTerminalStatus(record.providerStatus) || (!record.jobId && record.hasSubmissionIntent === false) || record.submissionRejected === true);
-}
 async function reserveCase(plan, state) {
   await withAdmissionLock("__capacity", async () => withAdmissionLock(plan.item.id, async file => {
     const existing = await optionalJson(file);
     if (existing && existing.requestId !== plan.requestId && !admissionIsClosed(existing)) throw new Error(`CREATOR_CASE_ALREADY_ACTIVE: ${plan.item.id} belongs to run ${existing.runId}, request ${existing.requestId}, job ${existing.jobId ?? "unresolved"}; resume that request before creating another run`);
     if (existing?.requestId !== plan.requestId) {
       const records = await Promise.all((await readdir(admissionRoot)).filter(name => name.endsWith('.json')).map(name => optionalJson(path.join(admissionRoot, name))));
-      if (records.filter(record => record && !admissionIsClosed(record)).length >= 5) throw new Error("CREATOR_CASE_ADMISSION_BUSY: five Three requests remain in flight; resume them before admitting another");
+      if (records.filter(record => record && !admissionIsClosed(record)).length >= maxConcurrency) throw new Error("CREATOR_CASE_ADMISSION_BUSY: configured maximum of Three requests remain in flight; resume them before admitting another");
     }
     const retryOf = existing && existing.requestId !== plan.requestId ? {runId: existing.runId, requestId: existing.requestId, jobId: existing.jobId ?? null, providerStatus: existing.providerStatus ?? null} : existing?.retryOf;
     state.retryOf = retryOf;
     await writeJson(file, {...existing, runId, requestId: plan.requestId, caseId: plan.item.id, phase: state.phase ?? "reserved", jobId: state.jobId ?? null, providerStatus: state.providerStatus ?? null, hasSubmissionIntent: Boolean(await optionalJson(path.join(plan.caseRoot, "submission-intent.json"))), outputRoot, retryOf, updatedAt: new Date().toISOString()});
   }));
 }
-async function execute(plan) {
+async function execute(plan,releaseExecutionSlot=()=>{}) {
   const previous = await optionalJson(statePath(plan.item.id));
   if (["delivered", "failed"].includes(previous?.phase)) return;
   const state = {...previous, caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, sourceTestSetId: plan.item.sourceTestSetId, sourceCaseId: plan.item.sourceCaseId, caseHash: plan.caseHash, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix};
@@ -172,6 +180,14 @@ async function execute(plan) {
     if (!state.jobId) {
       state.jobId = await resolveCreatorSubmission({existingJobId: state.jobId, hasDurableIntent: Boolean(intent), mode,
         findExisting: async () => submittedJobId(await findGenerationJobByRequestId(plan.requestId)),
+        replayIntentAndSubmit: async () => {
+          const frozen=await optionalJson(intentFile);
+          if(frozen?.requestId!==plan.requestId||frozen.payloadHash!==plan.payloadHash)throw Error("CREATOR_SUBMISSION_INTENT_MISMATCH");
+          const config=await loadLwdpGenerationConfig();
+          const response=await withAdmissionLock("__dispatch",async()=>submitCodexGenerationJob(plan.payload,{config,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(30000)})}));
+          state.submissionRecovery={kind:"same-idempotency-key-replay",at:new Date().toISOString()};
+          return submittedJobId(response);
+        },
         createIntentAndSubmit: async () => {
           await uploadS3File(plan.imagePath, plan.imageS3Uri); await uploadS3File(plan.inputFile, plan.inputS3Uri);
           const config = await loadLwdpGenerationConfig(); // Never serialized or passed to a model/MCP.
@@ -216,16 +232,25 @@ async function execute(plan) {
     if (["stop", "halt-unowned"].includes(finalGuard.action)) { const error = new Error(`THREE_EXECUTION_GUARD: ${finalGuard.reason}`); error.guard = finalGuard; throw error; }
     state.providerStatus = job.status; state.rayCleanupConfirmed = terminalJobHasStopped(job); state.timing = job.timing; state.apiBuildCommit = job.build_commit;
     if (["cancelled", "stopped"].includes(job.status) && !state.rayCleanupConfirmed) { const error = new Error("THREE_EXECUTION_GUARD: ray-cleanup-unconfirmed"); error.guard = {action: "stop-pending", reason: "ray-cleanup-unconfirmed"}; throw error; }
+    state.phase="delivery-pending";await save();releaseExecutionSlot();
     await writeJson(path.join(plan.caseRoot, "job-final.json"), job);
     const items = await fetchGenerationItems(state.jobId); await writeJson(path.join(plan.caseRoot, "items.json"), items);
     const item = (items.items ?? items.data ?? []).find(row => (row.item_id ?? row.id) === plan.item.id);
-    state.itemStatus = item?.status; state.phase = "delivery-pending"; await save();
+    state.itemStatus = item?.status; state.phase = "delivery-pending";
+    state.accountRouting=actualCreatorAccountEvidence(plan.payload.options.codex_account_ids,item?.metadata?.codex_account_id,accountPolicy);
+    await save(); releaseExecutionSlot();
     const downloadStarted = Date.now(); const downloadFailures = [];
     const downloads = [...outputs.map(output => ({remote: `tasks/${plan.item.id}/${output.path}`, name: output.path, required: output.required})), {remote: `tasks/${plan.item.id}/logs/codex_attempt.json`, name: "codex-attempt.json", required: false}, {remote: "reports/codex_delivery_report.json", name: "provider-delivery-report.json", required: false}];
     state.artifacts = {};
     for (const output of downloads) {
       try { const target = path.join(plan.caseRoot, output.name); await downloadS3FileAtomic(`${plan.outputS3Prefix}/${output.remote}`, target); state.artifacts[output.name] = {bytes: (await stat(target)).size, sha256: await fileSha256(target)}; }
       catch (error) { downloadFailures.push({name: output.name, required: output.required, error: error.message}); }
+    }
+    const missingFormal=downloadFailures.filter(output=>output.required).map(output=>output.name);
+    if(missingFormal.length){
+      try{const recovered=await retrieveThreeDeliveryArtifacts({jobId:state.jobId,taskId:plan.item.id,caseRoot:plan.caseRoot,names:missingFormal});Object.assign(state.artifacts,recovered);
+        for(let index=downloadFailures.length-1;index>=0;index--)if(recovered[downloadFailures[index].name])downloadFailures.splice(index,1);
+      }catch(error){state.deliveryRecoveryWarning=error.message;}
     }
     state.deliverySeconds = (Date.now() - downloadStarted) / 1000;
     state.downloadFailures = downloadFailures;
@@ -255,6 +280,7 @@ async function execute(plan) {
     if (job.status !== "succeeded" || item?.status !== "succeeded") throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
+    if(state.accountRouting.identitySha256&&!state.accountRouting.verified)throw Error("CREATOR_ACCOUNT_ROUTING_MISMATCH");
     state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id), expectedReasoningEffort: reasoningEffort});
     state.phase = "delivered"; delete state.failure; await save();
   } catch (error) {
@@ -299,8 +325,7 @@ async function execute(plan) {
     await save(); console.log(`CREATOR_EVAL_${unresolved || pendingDelivery ? "PENDING" : "FAILED"} ${plan.item.id} ${state.failure.category}`);
   }
 }
-let index = 0;
-await Promise.all(Array.from({length: Math.min(maxConcurrency, executionPlans.length)}, async () => { while (index < executionPlans.length && !stopAdmission) { const plan = executionPlans[index++]; await execute(plan); } }));
+await runWithExecutionSlots(executionPlans,maxConcurrency,execute,()=>stopAdmission);
 const summary = await saveSummary();
 console.log(`CREATOR_EVAL_SUMMARY delivered=${summary.deliveredCount} failed=${summary.failedCount} pending=${summary.pendingCount} ${path.join(outputRoot, "summary.json")}`);
 if (summary.cases.filter(item => executionPlans.some(plan => plan.item.id === item.id)).some(item => item.phase !== "delivered")) process.exitCode = 1;

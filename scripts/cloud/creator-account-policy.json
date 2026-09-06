@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "scope": "worldkit-creator",
+  "preferred": [
+    {
+      "label": "A",
+      "identitySha256": "5bb04e93264fc0b864a60f1722be13afc3143ca2f3474acd637b781de0164c79"
+    },
+    {
+      "label": "B",
+      "identitySha256": "f7abcf1b8d8985366b2e705b21893dd3a9294e08d7d50023caaab25c0dc49e35"
+    },
+    {
+      "label": "C",
+      "identitySha256": "95f8c23f5cc55dce8dcc32e7b10839bc7367dfe4aab1040b524a5abf4835144c"
+    },
+    {
+      "label": "G",
+      "identitySha256": "080b526f1d05f6c9b391ca28d45a3559f86038cee850ba6f621f6886debc92c8"
+    }
+  ],
+  "denied": [
+    {
+      "label": "D",
+      "identitySha256": "1da59801262caceaf2c7e5078db0b3724bef29b5c77f3a190811a307b5955097"
+    },
+    {
+      "label": "E",
+      "identitySha256": "acfc3b8cd65a733e6dd98d2928570bff573b0c2a1710e2c198f1b39a23465eb1"
+    },
+    {
+      "label": "F",
+      "identitySha256": "8c723340d43db98bdf69c27038d84f732cc205273d18a173c5ad27113af8638d"
+    }
+  ],
+  "allowUnratedFallback": false
+}

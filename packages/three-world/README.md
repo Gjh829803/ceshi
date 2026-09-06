@@ -184,7 +184,12 @@ character, complete custom fox, real stairs, ramp, NPC controls and reset.
 
 SDK `await start()` installs WorldObservation-v2 on the actual scene/camera and
 renderer, plus the gallery lifecycle alias. `setCaptureTargets` selects complete
-registered objects. Snapshots retain all entities, actual motion/animation,
+registered important objects in priority order; omit incidental grass, stones and clutter.
+The complete controlled subject is first; default capture delivers at most five sheets.
+For repeated objects, choose one complete representative:
+`{entityId, representative:{kind:"object", object}}` or
+`{entityId, representative:{kind:"instance", object:instancedMesh, instanceIndex}}`.
+Registration alone does not select an object for capture. Snapshots retain all entities, actual motion/animation,
 worldRevision, tick, camera and structured errors; describe is the controller view.
 
 Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views
