@@ -9,7 +9,9 @@ Three 场景生成、SDK 修复和后续数据生产收拢到一处。现有生�
 [Three SDK 架构](three-sdk-architecture.md) 说明创作自由、运行时职责、公开接口和
 画面/UI 分层。本文负责生产流程与接入边界；组件 README 负责实际用法。
 旧编号设计、Babylon/Native/Block ADR 和独立 API 草案不再作为本分支的指导。
-对应源码包与历史发布站点尚未清理，不应从它们的存在推断当前生产使用它们。
+旧源码包、演示和架构站点已从本分支移除，当前工作区只保留 Three SDK 与共享
+相机碰撞模块。共享哈希、批次执行和 Vertex 事件函数已独立，原始 GLB 位于
+`assets/three-creator`；既有发布、原工作树和 provider 档案不受此次源码清理影响。
 
 ## 合并来源
 

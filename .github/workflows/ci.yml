@@ -28,14 +28,6 @@ jobs:
           node-version: 24.3.0
           cache: pnpm
 
-      - name: Cache Site npm downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-site-npm-${{ hashFiles('sites/world-sdk-blueprint/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-site-npm-
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -52,25 +44,16 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Install Site dependencies
-        run: npm ci --prefix sites/world-sdk-blueprint --no-audit --no-fund
-
-      - name: Check generated Builder self-check
-        run: pnpm check:agent-self-check
-
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test Studio
-        run: pnpm test:studio
-
-      - name: Test independent Node and Site lanes
+      - name: Test independent Node and Python lanes
         run: pnpm test:independent
 
       - name: Run full Vitest suite
         run: pnpm test
 
-      - name: Build Playground
+      - name: Build Three runtime
         run: pnpm build
 
       - name: Assert checks left the tracked tree clean

@@ -87,14 +87,14 @@ untrusted-code isolation contract by itself.
 
 ## Probe fixture and repeat policy
 
-[Probe instructions](../../../../scripts/cloud/creator-runtime-probe.prompt.md)
+[Probe instructions](https://github.com/seedleap/agent-whitebox-world-sdk/blob/22ddb16d00b25a2014c231237d17c6a65d7e78f3/scripts/cloud/creator-runtime-probe.prompt.md)
 attach a visual nonce, execute a small non-secret
-[Python environment/PNG fixture](../../../../scripts/cloud/creator-runtime-probe.py),
+[Python environment/PNG fixture](https://github.com/seedleap/agent-whitebox-world-sdk/blob/22ddb16d00b25a2014c231237d17c6a65d7e78f3/scripts/cloud/creator-runtime-probe.py),
 require an actual image-viewing tool call, and record exposed tool/skill names.
 The generated PNG is explicitly a software graphics fixture, never a WorldKit
 Runtime screenshot. Input pixels are checked against a separate host oracle.
 
-[Attempt 2 launcher](../../../../scripts/cloud/creator-runtime-probe.mjs) uses
+[Attempt 2 launcher](https://github.com/seedleap/agent-whitebox-world-sdk/blob/22ddb16d00b25a2014c231237d17c6a65d7e78f3/scripts/cloud/creator-runtime-probe.mjs) uses
 the existing project-local client and credentials. It writes a submission intent
 before a single POST and reconciles subsequent invocations by the same request ID.
 It refuses to retry before the previous attempt is confirmed terminal. This

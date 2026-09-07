@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { projectLock, auditCapsule, sha256 } from '../../scripts/cloud/three-capsule.mjs';
+import { projectLock, auditCapsule, sha256, stageContext } from '../../scripts/cloud/three-capsule.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const rootManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json')));
@@ -58,4 +58,26 @@ test('ELF audit rejects wrong architecture and glibc requirements above Jammy', 
   withCapsule(root => { writeFileSync(path.join(root, 'sdk/native.node'), binary(183, 'GLIBC_2.17')); assert.throws(() => auditCapsule(root), /Non-x64/); });
   withCapsule(root => { writeFileSync(path.join(root, 'sdk/native.node'), binary(62, 'GLIBC_2.36')); assert.throws(() => auditCapsule(root), /Newer than Jammy/); });
   withCapsule(root => { writeFileSync(path.join(root, 'sdk/native.node'), binary(62, 'GLIBC_2.28')); const audit = auditCapsule(root); assert.equal(audit.elfCount, 1); assert.equal(audit.maximumRequiredGlibc, '2.28'); });
+});
+
+
+test('staged assets are independent of retired applications and preserve catalog bytes', () => {
+  const temporaryParent = path.join(repositoryRoot, '.codex-tmp');
+  mkdirSync(temporaryParent, { recursive: true });
+  const outputRoot = mkdtempSync(path.join(temporaryParent, 'three-asset-closure-'));
+  try {
+    stageContext(repositoryRoot, outputRoot);
+    const sourceRoot = path.join(outputRoot, 'context/sources');
+    for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
+      const relative = `examples/three-creator/sdk-capabilities/${name}`;
+      assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
+    }
+    const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));
+    for (const asset of catalog.assets) {
+      assert(asset.sourcePath.startsWith('assets/three-creator/'), 'Three assets must not depend on an application directory');
+      const bytes = readFileSync(path.join(sourceRoot, asset.sourcePath));
+      assert.equal(sha256(bytes), `sha256:${asset.sha256}`);
+      assert.equal(bytes.length, asset.byteLength);
+    }
+  } finally { rmSync(outputRoot, { recursive: true, force: true }); }
 });

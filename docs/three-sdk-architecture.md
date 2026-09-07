@@ -31,8 +31,9 @@ SDK 的基本接入顺序是：创建 Three 场景与相机 → `createWorld(...
 | UI 与模型画面展示 | SDK Presentation + 应用 | 展示读取世界状态；模型服务和帧映射由应用/服务接入 |
 | 场景与图片人工反馈 | 现有共享审核服务 | 不随 SDK 版本另建身份；旧图片决定不能批准新图片 |
 
-`packages/three-world` 使用 Three/Rapier。旧 Babylon、Native、Block 包仍在仓库中，
-但其架构不构成本分支的运行时要求。是否删除这些包，需要另行检查真实依赖。
+`packages/three-world` 使用 Three/Rapier，并复用 `packages/camera-collision`。
+这两个包构成当前工作区；旧 Babylon/Havok、Native 和 Block 包已移除。Three 的
+Recast 导航依赖及补丁继续保留。
 
 ## 保持 SDK 简单
 

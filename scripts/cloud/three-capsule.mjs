@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground'];
+const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground', 'examples/three-creator/sdk-capabilities'];
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
 const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -108,7 +108,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json'), 'utf8'));
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
-    assert(/^apps\/playground\/public\/subject-assets\/[a-zA-Z0-9_./-]+\.glb$/.test(asset.sourcePath), `Asset outside raw GLB allowlist: ${asset.id}`);
+    assert(/^assets\/three-creator\/[a-zA-Z0-9_./-]+\.glb$/.test(asset.sourcePath), `Asset outside raw GLB allowlist: ${asset.id}`);
     assert(/^[a-f0-9]{64}$/.test(asset.sha256)); source(asset.sourcePath);
     const record = files.get(asset.sourcePath);
     assert.equal(record.sha256, `sha256:${asset.sha256}`, `Asset SHA mismatch: ${asset.id}`);

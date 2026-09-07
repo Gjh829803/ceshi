@@ -10,8 +10,9 @@ configuration, scheduling and implemented boundaries.
 may still have consumers in several lanes; check imports before removing them.
 
 Earlier `worldkit-cloud-*` / `cloud:scene:*` workflows and Native Creator tooling
-remain as existing code. Their configuration, GPU dispatch and video-provider
-behavior are not the Three Episode contract. This branch does not restart them.
+have been removed from this branch. The shared browser capsule extractor and
+review-site publisher remain in use. Existing external runs and archives retain
+their original identity; the code cleanup does not restart them.
 The previous operational README is available in the
 [pre-cleanup Git snapshot](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/scripts/cloud/README.md).
 

@@ -5,7 +5,7 @@ import { sharedVitestTestConfig } from "./vitest.shared";
 export default defineConfig({
   test: {
     ...sharedVitestTestConfig,
-    // The suite includes real Havok, Playwright/Vite subprocesses, Recast, and
+    // The suite includes real Rapier, Playwright subprocesses, Recast, and
     // temporary Git repositories. Letting Vitest use every host core makes
     // those integration tests compete for process and CPU budgets until their
     // lifecycle assertions time out. Keep the default gate bounded; focused

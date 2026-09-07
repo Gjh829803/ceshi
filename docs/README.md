@@ -28,6 +28,7 @@
 git show 4256b6fdf06c7ba732e13a7c9aeee553544438e9:docs/02-sdk-architecture.md
 ```
 
-旧 packages、应用、脚本、技能与发布站点仍在仓库中，留待后续检查依赖后清理。
-本轮只整理文档，不意味着旧代码已移除或站点已重新发布。
-`17-canonical-json-quickstart.md` 暂留迁移提示，满足仍存在的旧校验器文件路径依赖。
+旧 Babylon/Havok packages、应用、CLI、技能、演示与架构站点已从当前源码移除。
+工作区保留 `three-world`、共享 `camera-collision` 和当前 Creator/Episode/审核入口；
+原始资产移至 `assets/three-creator`，历史评测记录和外部生产产物保留原义。
+源码清理不等于部署，新的生产胶囊仍需独立构建和发布。

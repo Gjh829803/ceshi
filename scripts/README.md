@@ -14,9 +14,12 @@ Current Three production entry points:
 
 Use the commands in the [branch guide](../docs/three-sdk-data-production.md),
 [Creator README](three-creator/README.md) and [Episode README](three-episode/README.md).
-Root package.json still contains earlier workflow aliases because code cleanup is
-separate. An alias being present is not evidence that it belongs to the Three lane.
+Root package.json exposes the retained Three and verification commands. `pnpm build`
+prebuilds the Three runtime; `pnpm test` checks workspace retirement boundaries,
+complete Vitest census and both resource lanes. `pnpm test:independent` covers all
+remaining Node suites and their Python wrappers, including shared production tests.
 
-The earlier `agents/`, `cli/`, `scenes/`, `visual/` and capability-verification
-workflows remain for their existing consumers. New Three scene work follows the
-current Creator contract. Do not add executable or test files directly under `scripts/`.
+Engine-neutral shared code lives in `lib/`: canonical hashing, GPU batch execution,
+Vertex event generation, LWDP access, style contracts, encoding and test utilities.
+The old Agent/CLI/scene/publication workflows were retired. Do not add executable
+or test files directly under `scripts/`.

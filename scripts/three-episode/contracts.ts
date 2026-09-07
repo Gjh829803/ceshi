@@ -1,6 +1,6 @@
 import Ajv from 'ajv';
 import type { Vec3 } from '@worldkit/three';
-import { sha256Canonical } from '../lib/playthrough-dataset.mjs';
+import { sha256Canonical } from '../lib/canonical-json.mjs';
 
 export const EPISODE_VERSION = 'three-episode-agent@1';
 export const SEGMENT_IDS = Array.from({ length: 6 }, (_, i) => `segment-0${i}`);

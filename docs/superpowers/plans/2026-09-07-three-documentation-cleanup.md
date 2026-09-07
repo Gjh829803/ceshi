@@ -49,6 +49,7 @@ superseded design documents, and retain source-bound production evidence.
   are unchanged. The guide-topic test passed. No dependency install was performed.
 - No full CI, build, browser replay, cloud submission or deployment was run.
 
-Old Babylon/Havok dependencies still belong to retained legacy packages. Their
-removal, the old Site implementation, old executable skills/prompts and the route
-census's remaining document path are separate code-cleanup work.
+At the end of this documentation-only phase, old code/dependencies remained.
+The subsequently authorized source cleanup removed the old packages, Site,
+executable skills and route-census compatibility page; this record describes
+the earlier documentation phase only.

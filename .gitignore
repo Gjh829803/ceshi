@@ -19,3 +19,8 @@ scripts/__pycache__/
 artifacts/episodes/
 artifacts/scenes/*/
 apps/playground/public/scene-plans/*/
+
+# Preserve local build caches after retiring the tracked blueprint Site.
+sites/world-sdk-blueprint/.next/
+sites/world-sdk-blueprint/.vinext/
+sites/world-sdk-blueprint/.wrangler/

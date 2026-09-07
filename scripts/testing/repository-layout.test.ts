@@ -2,75 +2,47 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { isEmpty } from "lodash-es";
 import { describe, expect, it } from "vitest";
+
+import { scanThreeWorkspace } from "../lib/three-workspace-boundary";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
-async function pathExists(relativePath: string): Promise<boolean> {
-  try {
-    await stat(path.join(REPOSITORY_ROOT, relativePath));
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw error;
+async function packageManifests(): Promise<string[]> {
+  const entries = await readdir(path.join(REPOSITORY_ROOT, "packages"), { withFileTypes: true });
+  const manifests: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      if ((await stat(path.join(REPOSITORY_ROOT, "packages", entry.name, "package.json"))).isFile()) manifests.push(entry.name);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
+  return manifests.sort();
 }
 
-describe("repository layout", () => {
-  it("keeps executable scripts in named responsibility directories", async () => {
-    const entries = await readdir(path.join(REPOSITORY_ROOT, "scripts"), {
-      withFileTypes: true,
-    });
-    const unexpectedRootFiles = entries
-      .filter((entry) => entry.isFile() && entry.name !== "README.md")
-      .map((entry) => entry.name)
-      .sort();
-
-    expect(isEmpty(unexpectedRootFiles)).toBe(true);
-    for (const directory of [
-      "agents",
-      "assets",
-      "cli",
-      "examples",
-      "fixtures",
-      "lib",
-      "scenes",
-      "testing",
-      "verification",
-      "visual",
-    ]) {
-      expect(await pathExists(`scripts/${directory}`)).toBe(true);
+describe("Three repository layout", () => {
+  it("keeps exactly the runtime packages and current Creator applications", async () => {
+    expect(await packageManifests()).toEqual(["camera-collision", "three-world"]);
+    for (const application of ["apps/creator-evaluation-site", "apps/three-creator-playground"]) {
+      expect((await stat(path.join(REPOSITORY_ROOT, application))).isDirectory()).toBe(true);
     }
   });
 
-  it("keeps examples and durable documentation under their single authorities", async () => {
-    for (const retiredPath of [
-      "artifacts/examples",
-      "decisions",
-      "docs/guides",
-      "docs/plans",
-      "docs/specs",
-      "templates",
-    ]) {
-      expect(await pathExists(retiredPath)).toBe(false);
-    }
+  it("keeps executable scripts under their responsibilities and current documentation authorities", async () => {
+    const entries = await readdir(path.join(REPOSITORY_ROOT, "scripts"), { withFileTypes: true });
+    expect(entries.filter((entry) => entry.isFile() && entry.name !== "README.md").map((entry) => entry.name)).toEqual([]);
     for (const currentPath of [
-      "docs/decisions",
-      "docs/superpowers/plans",
-      "docs/superpowers/skills",
-      "docs/superpowers/specs",
-      "examples/evidence",
-      "examples/templates",
+      "scripts/three-creator", "scripts/three-episode", "scripts/cloud", "scripts/production", "scripts/testing",
+      "docs/three-sdk-architecture.md", "docs/three-sdk-data-production.md", "packages/three-world/README.md",
+      "deploy/creator-evaluation/gateway.mjs",
     ]) {
-      expect(await pathExists(currentPath)).toBe(true);
+      expect(await stat(path.join(REPOSITORY_ROOT, currentPath))).toBeDefined();
     }
   });
 
-  it("keeps only active applications and the independently gated architecture site", async () => {
-    expect(await pathExists("apps/architecture")).toBe(false);
-    expect(await pathExists("apps/playground")).toBe(true);
-    expect(await pathExists("apps/studio/src/server.mjs")).toBe(true);
-    expect(await pathExists("sites/world-sdk-blueprint/app/page.tsx")).toBe(true);
+  it("has no retired workspace packages or dangling legacy dependencies", async () => {
+    expect(await scanThreeWorkspace(REPOSITORY_ROOT)).toEqual([]);
   });
 });

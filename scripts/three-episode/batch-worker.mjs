@@ -3,7 +3,7 @@ import {promisify} from 'node:util';
 import {mkdir,readFile,rm,readdir,writeFile,lstat} from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {runGpuCaptureBatch} from '../cloud/run-worldkit-cloud-gpu-capture-batch-worker.mjs';
+import {runGpuCaptureBatch} from '../lib/gpu-capture-batch.mjs';
 import {createCloudClient} from './cloud.mjs';
 import {materializeThreeEpisodeConfig} from '../cloud/three-episode-host.mjs';
 import {GLOBAL_QUEUE,createBatchStore} from './batch-store.mjs';

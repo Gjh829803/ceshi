@@ -13,8 +13,10 @@ source provenance, implemented boundaries and verification commands.
 Current design is ordinary Three authoring, one SDK runtime owner and an independent
 production pipeline. Keep public API guidance with actual contracts and the SDK
 README; do not recreate duplicate scene languages or separate API drafts.
-Old packages, scripts, skills and the blueprint Site remain pending separate code
-cleanup. Their presence and dated evidence do not override the current Three lane.
+The workspace now contains only `packages/three-world` and its shared
+`packages/camera-collision` dependency. The old Babylon/Havok packages, applications,
+CLI, executable skills and blueprint Site are retired. Retained shared helpers
+and dated evidence do not re-enable those workflows.
 Documentation-only changes require link/claim/diff checks and direct documentation
 consumer checks where applicable, not unrelated runtime or cloud replay.
 

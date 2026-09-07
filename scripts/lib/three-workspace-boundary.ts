@@ -1,0 +1,95 @@
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
+
+import ts from "typescript";
+
+const RETAINED_PACKAGES = new Map([
+  ["packages/camera-collision/package.json", "@whitebox-world/camera-collision"],
+  ["packages/three-world/package.json", "@worldkit/three"],
+]);
+const SOURCE_FILE = /\.(?:c|m)?[jt]sx?$/;
+
+export interface ThreeWorkspaceViolation {
+  readonly code: "THREE_WORKSPACE_PACKAGE" | "THREE_RETIRED_DEPENDENCY";
+  readonly importer: string;
+  readonly specifier: string;
+}
+
+/** Inspect executable syntax and package manifests, never prose or fixture strings. */
+export function checkThreeWorkspaceFiles(
+  files: Readonly<Record<string, string>>,
+): readonly ThreeWorkspaceViolation[] {
+  const violations: ThreeWorkspaceViolation[] = [];
+  const manifests = Object.entries(files).filter(([name]) =>
+    name === "package.json" || /^(?:packages|apps)\/[^/]+\/package\.json$/.test(name));
+  const names = new Set<string>();
+  for (const [name, source] of manifests) {
+    const manifest = JSON.parse(source) as { name?: string };
+    if (name !== "package.json" && manifest.name) names.add(manifest.name);
+    if (name !== "package.json" && RETAINED_PACKAGES.get(name) !== manifest.name) {
+      violations.push({ code: "THREE_WORKSPACE_PACKAGE", importer: name, specifier: manifest.name ?? "missing package name" });
+    }
+  }
+  for (const [name, expected] of RETAINED_PACKAGES) {
+    if (!(name in files)) violations.push({ code: "THREE_WORKSPACE_PACKAGE", importer: name, specifier: expected });
+  }
+  const check = (importer: string, specifier: string) => {
+    const packageName = specifier.split("/").slice(0, 2).join("/");
+    if (specifier.startsWith("@babylonjs/") ||
+      (specifier.startsWith("@whitebox-world/") && !names.has(packageName))) {
+      violations.push({ code: "THREE_RETIRED_DEPENDENCY", importer, specifier });
+    }
+  };
+  for (const [name, source] of manifests) {
+    const manifest = JSON.parse(source) as Record<string, unknown>;
+    for (const scope of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+      const dependencies = manifest[scope];
+      if (dependencies && typeof dependencies === "object" && !Array.isArray(dependencies)) {
+        for (const dependency of Object.keys(dependencies)) check(name, dependency);
+      }
+    }
+  }
+  for (const [name, source] of Object.entries(files)) {
+    if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|scripts|deploy)\//.test(name)) continue;
+    const syntax = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
+      name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const add = (node: ts.Node | undefined) => {
+      if (node && ts.isStringLiteralLike(node)) check(name, node.text);
+    };
+    const visit = (node: ts.Node): void => {
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) add(node.moduleSpecifier);
+      if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add(node.moduleReference.expression);
+      if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) add(node.argument.literal);
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === "require") ||
+        (ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression) &&
+          node.expression.expression.text === "require" && node.expression.name.text === "resolve"))) add(node.arguments[0]);
+      ts.forEachChild(node, visit);
+    };
+    visit(syntax);
+  }
+  return violations.sort((a, b) => a.importer.localeCompare(b.importer) || a.specifier.localeCompare(b.specifier));
+}
+
+export async function scanThreeWorkspace(repositoryRoot: string): Promise<readonly ThreeWorkspaceViolation[]> {
+  const files: Record<string, string> = { "package.json": await readFile(path.join(repositoryRoot, "package.json"), "utf8") };
+  async function visit(directory: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(path.join(repositoryRoot, directory), { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (["node_modules", "dist", "coverage", "artifacts", ".git"].includes(entry.name)) continue;
+      const name = path.posix.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(name);
+      else if (entry.isFile() && (SOURCE_FILE.test(name) || entry.name === "package.json")) {
+        files[name] = await readFile(path.join(repositoryRoot, name), "utf8");
+      }
+    }
+  }
+  for (const directory of ["packages", "apps", "scripts", "deploy"]) await visit(directory);
+  return checkThreeWorkspaceFiles(files);
+}

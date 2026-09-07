@@ -10,7 +10,7 @@
       "encodingProfile": "signed-diverging-blue-gray-orange@1",
       "promptRole": "encoding-style-only",
       "status": "accepted",
-      "sourceExperiment": "artifacts/terrain-experiments/013-grand-canyon-courier",
+      "sourceExperiment": "https://github.com/seedleap/agent-whitebox-world-sdk/tree/22ddb16d00b25a2014c231237d17c6a65d7e78f3/artifacts/terrain-experiments/013-grand-canyon-courier",
       "limitations": [
         "Use only for canyon-family encoding style.",
         "Do not copy its spatial layout, relief amplitude, landmark silhouettes, or basin placement."
@@ -24,7 +24,7 @@
       "encodingProfile": "signed-diverging-blue-gray-orange@1",
       "promptRole": "encoding-style-only",
       "status": "accepted",
-      "sourceExperiment": "artifacts/terrain-experiments/016-green-sahara-caravan",
+      "sourceExperiment": "https://github.com/seedleap/agent-whitebox-world-sdk/tree/22ddb16d00b25a2014c231237d17c6a65d7e78f3/artifacts/terrain-experiments/016-green-sahara-caravan",
       "limitations": [
         "Use only for gently rolling desert or savanna encoding style.",
         "Do not copy oasis, settlement, route, or dune placement into another world."

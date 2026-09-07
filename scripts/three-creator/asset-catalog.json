@@ -7,7 +7,7 @@
       "uri": "./assets/subjects/4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f.glb",
       "sha256": "4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
       "byteLength": 6743072,
-      "sourcePath": "apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      "sourcePath": "assets/three-creator/humanoid/g-bot/v2/g-bot.glb",
       "usage": "reusable",
       "recommendedFor": [
         "humanoid character",
@@ -203,7 +203,7 @@
       "uri": "./assets/subjects/70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b.glb",
       "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
       "byteLength": 27616,
-      "sourcePath": "apps/playground/public/subject-assets/xier120/quadruped-animal/v1/quadruped-animal.glb",
+      "sourcePath": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
       "usage": "diagnostic",
       "recommendedFor": [
         "static asset loading diagnostic"

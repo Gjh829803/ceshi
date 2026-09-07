@@ -4,12 +4,10 @@ import argparse
 import importlib.util
 import json
 import os
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'scripts/episodes'))
-spec = importlib.util.spec_from_file_location('episode_event_director', ROOT / 'scripts/episodes/run-gemini-visual-event-director.py')
+spec = importlib.util.spec_from_file_location('vertex_event_director', ROOT / 'scripts/lib/vertex-event-director.py')
 director = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(director)
 

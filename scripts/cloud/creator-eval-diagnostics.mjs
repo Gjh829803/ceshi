@@ -5,7 +5,7 @@ import { lstat, rename, unlink } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import path from "node:path";
-import { fileSha256, writeJson } from "./creator-eval-runtime.mjs";
+import { fileSha256, writeJson } from "./three-eval-runtime.mjs";
 import { uploadS3File } from "../lib/lwdp-generation-client.mjs";
 
 const exec = promisify(execFile);

@@ -13,8 +13,6 @@ import {
   validateStyleVariantDiversityReview,
   validateStyleVariantVisualReview,
 } from "./episode-style-variants.mjs";
-import { validateStyleVariantDirectorOutput } from
-  "../../.codex/skills/worldkit-style-variant-director/scripts/self-check.mjs";
 
 const HASH = `sha256:${"a".repeat(64)}`;
 const targetIds = ["player-subject", "primary-landmark"];
@@ -126,20 +124,6 @@ test("rejects duplicated style concepts", () => {
   assert.equal(result.ok, false);
   assert.ok(result.diagnostics.some(({ code }) =>
     code === "STYLE_VARIANT_CONCEPTS_DUPLICATED"));
-});
-
-test("Director self-check catches a missing secondary target before delivery", () => {
-  const value = plan();
-  const input = {
-    sceneId: value.sceneId,
-    episodeId: value.episodeId,
-    sourceWhiteboxIdentity: value.sourceWhiteboxIdentity,
-    targets: targetIds.map((visualTargetId) => ({ visualTargetId })),
-  };
-  assert.deepEqual(validateStyleVariantDirectorOutput(input, value), []);
-  value.variants[0].targetInterpretations.pop();
-  assert.ok(validateStyleVariantDirectorOutput(input, value).some(({ code, path }) =>
-    code === "TARGET_COUNT_INVALID" && path === "/variants/0/targetInterpretations"));
 });
 
 test("concurrent atomic writes never share a temporary path or corrupt JSON", async () => {
@@ -267,49 +251,4 @@ test("requires a joint Codex diversity review bound to all ten visual sets", () 
     episodeId: "episode-one",
     inputIdentity,
   }).ok, false);
-});
-
-test("style visual generation exposes no original styled reference or Scene prose", async () => {
-  const runner = await readFile(
-    path.resolve("scripts/agents/run-lwdp-style-variant-visual-agent.sh"),
-    "utf8",
-  );
-  assert.equal(runner.includes("source-reference"), false);
-  assert.equal(runner.includes("reference-0"), false);
-  assert.equal(runner.includes("scene-brief.md"), false);
-  assert.match(runner, /segment-00-approved-anchor/);
-  assert.doesNotMatch(
-    runner,
-    /--output[^\n]*segment-00-styled-opening-frame\.png/,
-  );
-  assert.match(runner, /whitebox-triview-/);
-});
-
-test("formal ten-style workflow admits anchors before cloud visual fan-out", async () => {
-  const [workflow, runner] = await Promise.all([
-    readFile(path.resolve("scripts/episodes/run-style-variant-workflow.mjs"), "utf8"),
-    readFile(path.resolve("scripts/agents/run-lwdp-style-variant-visual-agent.sh"), "utf8"),
-  ]);
-  const anchorStage = workflow.indexOf('stage("style-variant-opening-anchors"');
-  const visualFanOut = workflow.indexOf("const generateVisuals = async");
-  assert.ok(anchorStage >= 0 && visualFanOut > anchorStage);
-  assert.match(workflow, /maximumOpeningAttempts/);
-  assert.match(workflow, /--approval-mode", "codex-review"/);
-  assert.match(runner, /--required-approval-mode codex-review/);
-  assert.match(runner, /--timeout-seconds 7200/);
-});
-
-test("opening Codex review uses a semantic shot-registration threshold", async () => {
-  const [reviewerRunner, reviewerSkill] = await Promise.all([
-    readFile(path.resolve("scripts/agents/run-style-variant-opening-reviewer-agent.sh"), "utf8"),
-    readFile(path.resolve(
-      ".codex/skills/worldkit-style-variant-diversity-reviewer/SKILL.md",
-    ), "utf8"),
-  ]);
-  assert.match(reviewerRunner, /semantic shot-registration threshold/);
-  assert.match(reviewerRunner, /Do not infer collision or gameplay failure/);
-  assert.match(reviewerSkill, /not pixel matching/);
-  assert.match(reviewerSkill, /A single opening image is not proof of collision/);
-  assert.match(reviewerSkill, /Fail spatial registration only for a clear shot-design break/);
-  assert.match(reviewerSkill, /never invent percentages/);
 });

@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-export type IndependentTestLaneV1 = "node" | "site";
+export type IndependentTestLaneV1 = "node";
 
 export interface IndependentTestManifestEntryV1 {
   readonly path: string;
@@ -10,12 +10,10 @@ export interface IndependentTestManifestEntryV1 {
 
 export interface IndependentTestDiscoveryV1 {
   readonly node: readonly string[];
-  readonly site: readonly string[];
 }
 
 export interface IndependentTestGateReportV1 {
   readonly nodeTestFiles: readonly string[];
-  readonly siteTestFiles: readonly string[];
 }
 
 export type IndependentTestSelectionV1 = IndependentTestLaneV1 | "all";
@@ -30,50 +28,29 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
   Object.freeze([
     { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
     { path: "deploy/three-creator-runtime/capsule.test.mjs", lane: "node" },
-    { path: "scripts/agents/local-codex-task.test.mjs", lane: "node" },
-    { path: "scripts/agents/lwdp-cloud-execution-client.test.mjs", lane: "node" },
-    { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
-    { path: "scripts/agents/lwdp-generation-client.test.mjs", lane: "node" },
-    { path: "scripts/agents/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
     { path: "scripts/cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
-    { path: "scripts/cloud/creator-eval.test.mjs", lane: "node" },
-    { path: "scripts/cloud/dispatch-worldkit-gpu-capture-batch.test.mjs", lane: "node" },
-    { path: "scripts/cloud/launch-worldkit-cloud-control-plane.test.mjs", lane: "node" },
-    { path: "scripts/cloud/launch-worldkit-cloud-episode-worker-job.test.mjs", lane: "node" },
-    { path: "scripts/cloud/launch-worldkit-cloud-gpu-capture-batch-job.test.mjs", lane: "node" },
-    { path: "scripts/cloud/launch-worldkit-cloud-worker-job.test.mjs", lane: "node" },
-    { path: "scripts/cloud/launch-worldkit-gpu-batch-dispatcher-cronjob.test.mjs", lane: "node" },
     { path: "scripts/cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
-    { path: "scripts/cloud/run-worldkit-cloud-episode-worker.test.mjs", lane: "node" },
-    { path: "scripts/cloud/run-worldkit-cloud-gpu-capture-batch-worker.test.mjs", lane: "node" },
-    { path: "scripts/cloud/run-worldkit-cloud-scene-batch.test.mjs", lane: "node" },
-    { path: "scripts/cloud/run-worldkit-cloud-scene-worker.test.mjs", lane: "node" },
-    { path: "scripts/cloud/submit-worldkit-cloud-episode.test.mjs", lane: "node" },
-    { path: "scripts/cloud/submit-worldkit-cloud-scene.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-episode-scheduling.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-eval-effort.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval-progress.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval.test.mjs", lane: "node" },
-    { path: "scripts/episodes/gemini-visual-event-director.test.mjs", lane: "node" },
-    { path: "scripts/lib/cloud-global-work-slots.test.mjs", lane: "node" },
-    { path: "scripts/lib/cloud-production-retry-policy.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-host-reliability.test.mjs", lane: "node" },
+    { path: "scripts/lib/canonical-json.test.mjs", lane: "node" },
     { path: "scripts/lib/cloud-production-run.test.mjs", lane: "node" },
-    { path: "scripts/lib/cloud-production-throughput.test.mjs", lane: "node" },
-    { path: "scripts/lib/episode-input-identity.test.mjs", lane: "node" },
-    { path: "scripts/lib/episode-seedance-prompt.test.mjs", lane: "node" },
     { path: "scripts/lib/episode-style-variants.test.mjs", lane: "node" },
-    { path: "scripts/lib/episode-visual-normalization.test.mjs", lane: "node" },
-    { path: "scripts/lib/playthrough-capture-health.test.mjs", lane: "node" },
-    { path: "scripts/lib/playthrough-dataset.test.mjs", lane: "node" },
-    { path: "scripts/lib/playthrough-plan-structure.test.mjs", lane: "node" },
-    { path: "scripts/lib/worldkit-cloud-episode-artifacts.test.mjs", lane: "node" },
+    { path: "scripts/lib/gpu-capture-batch.test.mjs", lane: "node" },
+    { path: "scripts/lib/lwdp-generation-client.test.mjs", lane: "node" },
+    { path: "scripts/lib/vertex-event-director.test.mjs", lane: "node" },
+    { path: "scripts/production/overnight-human/production.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/batch-integration.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/batch-resources.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/batch.test.mjs", lane: "node" },
     { path: "scripts/three-episode/cloud.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/cpu-routing.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/human-review-store.test.mjs", lane: "node" },
     { path: "scripts/three-episode/outbox.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/streaming-overlay.test.mjs", lane: "node" },
     { path: "scripts/three-episode/visuals.test.mjs", lane: "node" },
-    { path: "scripts/visual/image-delivery.test.mjs", lane: "node" },
-    { path: "scripts/visual/seedance25-media-conformance.test.mjs", lane: "node" },
-    {
-      path: "sites/world-sdk-blueprint/tests/rendered-html.test.mjs",
-      lane: "site",
-    },
   ]);
 
 function fail(code: string, detail: string): never {
@@ -116,7 +93,6 @@ export function evaluateIndependentTestGateV1(input: {
   readonly manifest: readonly IndependentTestManifestEntryV1[];
 }): IndependentTestGateReportV1 {
   assertStrictlySorted("node discovery", input.discoveredByLane.node);
-  assertStrictlySorted("site discovery", input.discoveredByLane.site);
   assertStrictlySorted(
     "independent manifest",
     input.manifest.map((entry) => entry.path),
@@ -126,7 +102,7 @@ export function evaluateIndependentTestGateV1(input: {
     input.manifest.map((entry) => [entry.path, entry] as const),
   );
   const discoveredLaneByPath = new Map<string, IndependentTestLaneV1>();
-  for (const lane of ["node", "site"] as const) {
+  for (const lane of ["node"] as const) {
     for (const testPath of input.discoveredByLane[lane]) {
       const previousLane = discoveredLaneByPath.get(testPath);
       if (previousLane !== undefined) fail("DUPLICATE", testPath);
@@ -144,7 +120,6 @@ export function evaluateIndependentTestGateV1(input: {
 
   return Object.freeze({
     nodeTestFiles: frozenPaths(input.discoveredByLane.node),
-    siteTestFiles: frozenPaths(input.discoveredByLane.site),
   });
 }
 
@@ -173,7 +148,7 @@ async function discoverMatchingFiles(input: {
 export async function discoverIndependentTestFilesV1(
   repositoryRoot: string,
 ): Promise<IndependentTestDiscoveryV1> {
-  const [deployment, scripts, site] = await Promise.all([
+  const [deployment, scripts] = await Promise.all([
     discoverMatchingFiles({
       repositoryRoot,
       directory: "deploy",
@@ -184,15 +159,9 @@ export async function discoverIndependentTestFilesV1(
       directory: "scripts",
       matches: (filename) => filename.endsWith(".test.mjs"),
     }),
-    discoverMatchingFiles({
-      repositoryRoot,
-      directory: "sites/world-sdk-blueprint/tests",
-      matches: (filename) => filename.endsWith(".test.mjs"),
-    }),
   ]);
   return Object.freeze({
     node: frozenPaths([...deployment, ...scripts].sort()),
-    site: frozenPaths(site),
   });
 }
 
@@ -203,12 +172,12 @@ export function parseIndependentTestSelectionV1(
   if (
     arguments_.length === 2 &&
     arguments_[0] === "--lane" &&
-    (arguments_[1] === "node" || arguments_[1] === "site")
+    arguments_[1] === "node"
   ) {
     return arguments_[1];
   }
   throw new Error(
-    "INDEPENDENT_TEST_ARGUMENT_INVALID: expected no arguments or '--lane node|site'.",
+    "INDEPENDENT_TEST_ARGUMENT_INVALID: expected no arguments or '--lane node'.",
   );
 }
 
@@ -221,11 +190,6 @@ export function createIndependentTestCommandsV1(
       lane: "node",
       command: process.execPath,
       arguments: ["--test", ...report.nodeTestFiles],
-    },
-    {
-      lane: "site",
-      command: "npm",
-      arguments: ["test", "--prefix", "sites/world-sdk-blueprint"],
     },
   ];
   return Object.freeze(

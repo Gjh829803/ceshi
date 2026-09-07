@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "worldkit_creator": {
-      "command": "node",
-      "args": ["${CODEX_PLUGIN_ROOT}/scripts/server.mjs"]
-    }
-  }
-}

@@ -32,4 +32,5 @@ pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtim
 
 运行配置、素材和云任务状态均为外部输入；安装依赖或构建 SDK 不会启动数据生产。
 
-旧 packages、脚本和架构站点留待后续单独清理；当前文档不再以旧编号路线图作为设计依据。
+工作区仅保留 `three-world` 与共享 `camera-collision`；旧 Babylon/Havok 包、演示、
+CLI、技能和架构站点已移除。当前测试清单覆盖全部剩余测试，`pnpm build` 构建 Three SDK。
