@@ -1,9 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Group, PerspectiveCamera } from 'three';
-import { createWorld, training, type EpisodeStart } from '../../packages/three-world/src/index.js';
-import type { MapDefinition } from '../../packages/three-world/src/training/environment/types.js';
-import type { VehicleSpec } from '../../packages/three-world/src/training/config.js';
+import { createWorld, training, type EpisodeStart, type TrainingMap as MapDefinition, type TrainingVehicleSpec as VehicleSpec } from '@worldkit/three';
 
 // Headless physical integration evidence, not rendered Creator self-check or Episode
 // video acceptance. Starts use the Episode runtime initializer; subsequent motion

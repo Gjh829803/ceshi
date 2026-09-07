@@ -1,9 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {Group,PerspectiveCamera,Vector3} from 'three';
-import {createWorld,type EpisodeFrame,type WorldSnapshot} from '@worldkit/three';
-import type {VehicleSpec} from '../../packages/three-world/src/training/config.js';
-import type {MapDefinition} from '../../packages/three-world/src/training/environment/types.js';
+import {createWorld,type EpisodeFrame,type WorldSnapshot,type TrainingVehicleSpec as VehicleSpec,type TrainingMap as MapDefinition} from '@worldkit/three';
 import {PlayerCaptureController,summarizePlayerBehavior} from './player-controller.js';
 import type {EpisodeSegmentPlan} from './contracts.js';
 import type {RouteDecision} from './route-controller.js';
