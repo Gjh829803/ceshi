@@ -13,6 +13,13 @@ export interface WaterContact {
   submersion:number;
   entrySpeed:number;
   entrySerial:number;
+  /** Read-only diagnostic operands from the same existing contact decision. */
+  feetBelowSurfaceMeters:number;
+  requiredDepthMeters:number;
+  requiredFeetBelowSurfaceMeters:number;
+  depthCheckPassed:boolean;
+  immersionCheckPassed:boolean;
+  wasSwimmingAtSample:boolean;
 }
 
 /** A critically damped surface spring preserves entry velocity, then removes

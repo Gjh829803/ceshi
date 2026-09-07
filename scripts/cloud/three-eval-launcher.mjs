@@ -7,6 +7,7 @@ import { finished } from "node:stream/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readRuntimeLock, parseCloudLayout, executionEnvironment, prepareSessionDirectories, fileSha256, writeJson, THREE_TOOLS } from "./three-eval-runtime.mjs";
+import { freezeTaskAssetPolicy } from "./three-eval-mcp-bridge.mjs";
 import { eventStatistics, isPassingDelivery, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
@@ -21,8 +22,10 @@ try {
   const lock = await readRuntimeLock(path.join(directory, "runtime-lock.json"), {checkInstalled: true});
   if (layout.reasoningEffort !== lock.reasoningEffort) throw new Error("CREATOR_REASONING_EFFORT_LOCK_MISMATCH");
   Object.assign(report, {runtimeHash: lock.runtimeHash, codexBinary: lock.codexBinary, codexBinarySha256: lock.codexBinarySha256, toolkitRoot: lock.toolkitRoot, browserRoot: lock.browserRoot});
+  const assetPolicy = await freezeTaskAssetPolicy({layout, lock});
+  report.assetPolicySha256 = assetPolicy.assetPolicySha256;
   const bridge = path.join(directory, "three-eval-mcp-bridge.mjs");
-  const mcpArgs = [bridge, "--runtime-lock", lock.runtimeLockPath, "--workspace", layout.workspace, "--profile", layout.profile];
+  const mcpArgs = [bridge, "--runtime-lock", lock.runtimeLockPath, "--workspace", layout.workspace, "--profile", layout.profile, "--asset-policy-snapshot", assetPolicy.assetPolicySnapshotPath, "--asset-policy-sha256", assetPolicy.assetPolicySha256];
   const enabledTools = THREE_TOOLS;
   const toolPolicies = enabledTools.map(name => `${name}={approval_mode="approve"}`).join(",");
   const mcpConfiguration = `mcp_servers={worldkit_three_creator={command=${JSON.stringify(lock.nodeBinary)},args=${JSON.stringify(mcpArgs)},cwd=${JSON.stringify(layout.workspace)},enabled=true,required=true,env_vars=[],default_tools_approval_mode="prompt",tools={${toolPolicies}},enabled_tools=${JSON.stringify(enabledTools)},startup_timeout_sec=60,tool_timeout_sec=90}}`;
@@ -63,6 +66,7 @@ try {
   if (timedOut || exit.code !== 0) throw new Error(timedOut ? "CREATOR_TASK_TIMEOUT" : `CREATOR_CODEX_EXIT_${exit.code ?? exit.signal}`);
   const sourceResult = path.join(layout.workspace, "creator-result.json");
   const result = JSON.parse(await readFile(sourceResult, "utf8"));
+  if (result.assetPolicySha256 !== assetPolicy.assetPolicySha256) throw new Error("THREE_ASSET_POLICY_DELIVERY_MISMATCH");
   if (!isPassingDelivery(result, layout.profile)) throw new Error("CREATOR_DELIVERY_CONTRACT_FAILED");
   const artifacts = {};
   for (const name of ["creator-result.json", "creator-delivery.tar.gz"]) {

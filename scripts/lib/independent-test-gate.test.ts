@@ -129,6 +129,7 @@ describe("independent test repository census", () => {
         "scripts/cloud/creator-eval-diagnostics.test.mjs",
         "scripts/cloud/prepare-three-evaluation-site.test.mjs",
         "scripts/cloud/three-episode-scheduling.test.mjs",
+        "scripts/cloud/three-eval-asset-policy.test.mjs",
         "scripts/cloud/three-eval-effort.test.mjs",
         "scripts/cloud/three-eval-progress.test.mjs",
         "scripts/cloud/three-eval.test.mjs",

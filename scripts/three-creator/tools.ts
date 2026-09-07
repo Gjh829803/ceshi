@@ -5,13 +5,15 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import Ajv from 'ajv';
-import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, readCatalog, publicAsset, isWithin, assertNoSymlinks, type Candidate } from './compiler.js';
+import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, publicAsset, isWithin, assertNoSymlinks, type Candidate, type AssetPolicyOptions } from './compiler.js';
 import { EPISODE_SCHEMA, PROJECT_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
 import type { WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, trainingContractSource, type AuthoringTopic } from './authoring-schema.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
-import { RAW_EXAMPLE, SDK_EXAMPLE } from './examples.js';
+import { RAW_EXAMPLE, sdkExample } from './examples.js';
 import { readExampleFiles, type ExampleTopic } from './example-files.js';
+import {characterUsage} from './character-guidance.js';
+import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
@@ -95,11 +97,13 @@ export class ThreeCreatorTools {
   private session?: Session;
   private playtestEvidence?: Evidence;
   private captureEvidence?: Evidence;
-  constructor(workspace: string, readonly profile: CreatorProfile) {
-    this.compiler = new ThreeCompiler(workspace, profile); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
+  constructor(workspace: string, readonly profile: CreatorProfile, policyOptions:AssetPolicyOptions = {}) {
+    this.compiler = new ThreeCompiler(workspace, profile, policyOptions); this.compiler.assetPolicy(); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
   }
   async environment() {
+    const snapshot=this.compiler.assetPolicy();
     return { kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
+      assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared prebuilt Three; the SDK profile adds the fixed SDK runtime.',
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
@@ -112,24 +116,41 @@ export class ThreeCreatorTools {
   }
   async schema(topic: AuthoringTopic = 'getting-started') {
     if (!AUTHORING_TOPICS.includes(topic)) throw new Error('THREE_SCHEMA_TOPIC_UNKNOWN');
+    const policy=this.compiler.assetPolicy().policy;
+    const suggestedExample=topic==='character-actions'?'character-actions':'independent-world';
+    const trainingExampleTopic=this.profile==='three-sdk'&&['training','character-actions','all'].includes(topic)&&await this.exampleAvailable(suggestedExample)?suggestedExample:undefined;
+    const guide=(markdown:string)=>guideTopic(markdown,topic)
+      .replace(/<!-- asset-info:([a-zA-Z0-9._-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,(_match,id:string,body:string)=>policy.allowedAssetIds.includes(id)?body:'')
+      .replaceAll(".assets.load('humanoid.preset-101')",`.assets.load(${JSON.stringify(policy.defaultHumanoidAssetId)})`);
     const sdk: { sdkContracts?: string; sdkGuide?: string; worldCommandSchema?: typeof WORLD_COMMAND_SCHEMA } = this.profile === 'three-sdk' ? {
       sdkContracts: publicContractTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/src/contracts.ts'), 'utf8'), topic),
-      sdkGuide: guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic),
-      ...(topic === 'control' || topic === 'extensions' || topic === 'training' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
+      sdkGuide: guide(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8')),
+      ...(topic === 'control' || topic === 'extensions' || topic === 'training' || topic === 'character-actions' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
     } : {};
     return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
-      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','environment/types.ts','platform/session.ts','runtime.ts'].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),trainingExampleTopic:'independent-world'}:{}),
+      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='character-actions'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','environment/types.ts','platform/session.ts','runtime.ts',...(topic==='character-actions'||topic==='all'?['humanoid/action-schema.ts','simulation.ts']:[])].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),...(trainingExampleTopic?{trainingExampleTopic}:{})}:{}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Paused/reset time is excluded from minimum active-play duration. Fixed XYZ targets measure proximity, never steer or teleport.' };
+  }
+  private exampleRoot(topic:ExampleTopic){return path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='character-actions'?'character-actions':topic==='independent-world'?'training-independent':'sdk-capabilities');}
+  private async exampleAvailable(topic:ExampleTopic){
+    const required=JSON.parse(await readFile(path.join(this.exampleRoot(topic),'project.json'),'utf8')).assetIds as string[];
+    const allowed=this.compiler.assetPolicy().policy.allowedAssetIds;return required.every(id=>allowed.includes(id));
   }
   async examples(topic: ExampleTopic = 'getting-started', selectedFiles?:readonly string[]) {
     if (topic !== 'getting-started') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
-      const root=path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='independent-world'?'training-independent':'sdk-capabilities');
+      const root=this.exampleRoot(topic);
+      if(!await this.exampleAvailable(topic))throw new Error(`THREE_EXAMPLE_ASSETS_UNAVAILABLE: ${topic}`);
       return { profile:this.profile,topic,...await readExampleFiles(root,topic,selectedFiles),sdkExample:'Whitebox training runtime: one SDK clock, original character and reusable vehicle families. Compilation is not behavioral acceptance.' };
     }
-    return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? SDK_EXAMPLE : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: this.profile === 'three-sdk' ? ['humanoid.g-bot'] : [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
-  async assets(query = '', assetId?: string) { const assets = await readCatalog(); const words = query.toLowerCase().split(/\s+/).filter(Boolean); return { schemaVersion: 1, assets: assets.filter(asset => (!assetId || asset.id === assetId) && words.every(word => JSON.stringify(publicAsset(asset)).toLowerCase().includes(word))).map(publicAsset) }; }
+    return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? sdkExample(this.compiler.assetPolicy().policy.defaultHumanoidAssetId) : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: this.profile === 'three-sdk' ? [this.compiler.assetPolicy().policy.defaultHumanoidAssetId] : [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
+  async assets(query = '', assetId?: string) {
+    const allowed=this.compiler.allowedAssets(),ids=allowed.map(asset=>asset.id),words=query.toLowerCase().split(/\s+/).filter(Boolean);
+    const rows=allowed.map(asset=>({asset:publicAsset(asset),usage:characterUsage(asset,this.profile,ids)}));
+    const selected=rows.filter(row=>(!assetId||row.asset.id===assetId)&&words.every(word=>JSON.stringify({asset:row.asset,useWhen:row.usage?.useWhen,skills:row.usage?.skillRequests,bindings:row.usage?.controlBindings,hints:row.usage?.controlHints}).toLowerCase().includes(word)));
+    return {schemaVersion:1,assets:selected.map(row=>row.asset),characterUsage:selected.flatMap(row=>row.usage?[row.usage]:[])};
+  }
   start(type: string, run: (id: string) => Promise<unknown>) {
     const now = new Date().toISOString(), id = randomUUID(); const operation: Operation = { id, type, status: 'queued', createdAt: now, updatedAt: now }; this.operations.set(id, operation);
     this.queue = this.queue.then(async () => {
@@ -200,7 +221,7 @@ export class ThreeCreatorTools {
     return session.page.evaluate(`window.__THREE_CREATOR_HOST__[${JSON.stringify(method)}](...${JSON.stringify(args)})`);
   }
   async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
-  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, profile: this.profile, observation: await this.bridge(session, 'inspect', [query ?? null]), pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
+  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, profile: this.profile, observation, feedback:{water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
   async executeCommand(command: WorldCommand, creatorOperationId: string = randomUUID()) {
     if (!checkCommand(command)) throw new Error(`THREE_WORLD_COMMAND_INVALID: ${JSON.stringify(checkCommand.errors)}`);
     if (this.profile !== 'three-sdk') throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED: raw profile has no SDK command capability');
@@ -343,7 +364,8 @@ export class ThreeCreatorTools {
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const report = { kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
+    const feedback={water:buildWaterFeedback(lastObservation?.snapshot?.training?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const report = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     await json(path.join(root, 'trace.json'), trace); await json(path.join(root, 'playtest.json'), report); await writeFile(path.join(root, 'episode.json'), input.bytes);
     this.playtestEvidence = { root, files: await hashTree(root), report }; return report;
   }
@@ -355,11 +377,13 @@ export class ThreeCreatorTools {
     if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash) await this.triviews();
     const captures = this.captureEvidence!; await verifyFiles(captures.root, captures.files);
     if (captures.report.pageErrors.length) throw new Error('THREE_SUBMIT_CAPTURE_ERRORS');
+    await this.compiler.verifyCandidatePolicy(candidate);
     const root = path.join(this.compiler.outputRoot, 'delivery', randomUUID()), payload = path.join(root, 'payload'); await mkdir(payload, { recursive: true });
     await copyClosed(candidate.sourceRoot, path.join(payload, 'source')); await copyClosed(candidate.playableRoot, path.join(payload, 'playable')); await copyClosed(played.root, path.join(payload, 'playtest')); await copyClosed(captures.root, path.join(payload, 'captures')); await writeFile(path.join(payload, 'episode.json'), episode.bytes);
     for (const prefix of ['source', 'playable']) await verifyFiles(path.join(payload, prefix), Object.fromEntries(Object.entries(candidate.files).filter(([name]) => name.startsWith(`${prefix}/`)).map(([name, hash]) => [name.slice(prefix.length + 1), hash])));
     await verifyFiles(path.join(payload, 'playtest'), played.files); await verifyFiles(path.join(payload, 'captures'), captures.files);
-    const manifest = { kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
+    await this.compiler.verifyCandidatePolicy({...candidate,sourceRoot:path.join(payload,'source'),playableRoot:path.join(payload,'playable')});
+    const manifest = { assetPolicySha256:candidate.assetPolicySha256, kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
     await json(path.join(payload, 'delivery.json'), manifest); const hashes = await hashTree(payload); await json(path.join(payload, 'artifact-hashes.json'), { schemaVersion: 1, files: hashes });
     const temporary = path.join(root, 'creator-delivery.tar.gz'); await createClosedArchive(root, temporary);
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files); await verifyFiles(captures.root, captures.files);

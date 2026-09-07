@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ThreeCompiler, hashTree } from '../three-creator/compiler.js';
+import { validateAssetPolicySnapshot, verifyAssetPolicyBundle } from '../three-creator/asset-policy.mjs';
 import { canonicalHash, type EpisodeFile, type EpisodeSourceManifest } from './contracts.js';
 import { installEpisodePresentation } from './presentation.js';
 import cameraProvenance from './compat/creator-camera-provenance.json';
@@ -18,6 +19,42 @@ async function verifyRegularFile(file: string): Promise<void> {
 export async function verifyFile(file: EpisodeFile): Promise<void> {
   await verifyRegularFile(file.path);
   if (sha(await readFile(file.path)) !== file.sha256) throw new Error('EPISODE_SOURCE_FILE_CHANGED');
+}
+/** Policy is carried by the delivered bundle, never resolved from current Host config. */
+async function verifyCarriedAssetPolicy(options: {
+  expectedHash: unknown; sourceRoot: string; playableRoot: string;
+  sourceFiles: Record<string, string>; playableFiles: Record<string, string>;
+}): Promise<string | undefined> {
+  let snapshotExists = false;
+  try { await lstat(path.join(options.playableRoot, 'asset-policy.json')); snapshotExists = true; }
+  catch (error: any) { if (error.code !== 'ENOENT') throw error; }
+  const snapshotListed = Object.hasOwn(options.playableFiles, 'asset-policy.json');
+  const hashPresent = options.expectedHash !== undefined;
+  if (!hashPresent && !snapshotExists && !snapshotListed) return undefined; // Explicit historical compatibility.
+  if (!hashPresent || !snapshotExists || !snapshotListed || typeof options.expectedHash !== 'string' || !/^[a-f0-9]{64}$/.test(options.expectedHash)) {
+    throw new Error('EPISODE_ASSET_POLICY_PAIR_REQUIRED');
+  }
+  const readClosedTree = async (root: string, inventory: Record<string, string>): Promise<Record<string, Uint8Array>> => {
+    if (canonicalHash(await hashTree(root)) !== canonicalHash(inventory)) throw new Error('EPISODE_ASSET_POLICY_INVENTORY_CHANGED');
+    const files: Record<string, Uint8Array> = {};
+    for (const [relative, expected] of Object.entries(inventory)) {
+      const file = closedPath(root, relative); await verifyRegularFile(file);
+      const bytes = await readFile(file);
+      if (sha(bytes) !== expected) throw new Error('EPISODE_ASSET_POLICY_FILE_CHANGED');
+      files[relative] = bytes;
+    }
+    return files;
+  };
+  const sourceFiles = await readClosedTree(options.sourceRoot, options.sourceFiles);
+  const playableFiles = await readClosedTree(options.playableRoot, options.playableFiles);
+  if (!Object.hasOwn(playableFiles, 'asset-definitions.json')) throw new Error('EPISODE_ASSET_POLICY_DEFINITIONS_MISSING');
+  const parse = (name: string): unknown => {
+    try { return JSON.parse(Buffer.from(playableFiles[name]!).toString('utf8')); }
+    catch { throw new Error('EPISODE_ASSET_POLICY_JSON_INVALID'); }
+  };
+  verifyAssetPolicyBundle({ snapshot: validateAssetPolicySnapshot(parse('asset-policy.json')), expectedHash: options.expectedHash,
+    sourceFiles, playableFiles, assetDefinitions: parse('asset-definitions.json') as Parameters<typeof verifyAssetPolicyBundle>[0]['assetDefinitions'] });
+  return options.expectedHash;
 }
 /** Resolve portable manifest paths before IO; every path remains under its own bundle. */
 export function resolveEpisodeSourcePaths(value: EpisodeSourceManifest, manifestPath: string): EpisodeSourceManifest {
@@ -49,6 +86,8 @@ export async function loadEpisodeSource(file: string): Promise<EpisodeSourceMani
   const header = JSON.parse(await readFile(file, 'utf8')) as EpisodeSourceManifest;
   if (header.kind !== 'three-episode-source' || header.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(header.worldBuildHash) || !header.targets?.length) throw new Error('EPISODE_SOURCE_INVALID');
   const source = resolveEpisodeSourcePaths(header, file);
+  await verifyCarriedAssetPolicy({ expectedHash: source.assetPolicySha256, sourceRoot: source.sourceRoot,
+    playableRoot: source.playableRoot, sourceFiles: source.sourceFiles, playableFiles: source.playableFiles });
   for (const [relative, hash] of Object.entries(source.sourceFiles)) await verifyFile({ path: closedPath(source.sourceRoot, relative), sha256: hash });
   if (canonicalHash(await hashTree(source.playableRoot)) !== canonicalHash(source.playableFiles)) throw new Error('EPISODE_PLAYABLE_CHANGED');
   await verifyFile(source.opening);
@@ -121,11 +160,15 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     const regression=JSON.parse(await readFile(regressionFile,'utf8'));
     if(regression.status!=='succeeded'||regression.result?.status!=='passed'||regression.result?.worldBuildHash!==delivery.worldBuildHash)throw new Error('EPISODE_REPAIR_REGRESSION_REQUIRED');
   }
+  const selected = Object.entries(delivery.files as Record<string, string>).filter(([key]) => /^(source|playable|captures)\//.test(key));
+  if (!selected.length || selected.length > 10_000) throw new Error('EPISODE_SOURCE_INVENTORY_INVALID');
+  const assetPolicySha256 = await verifyCarriedAssetPolicy({ expectedHash: delivery.assetPolicySha256,
+    sourceRoot: path.join(payload, 'source'), playableRoot: path.join(payload, 'playable'),
+    sourceFiles: Object.fromEntries(selected.filter(([key]) => key.startsWith('source/')).map(([key, hash]) => [key.slice(7), hash])),
+    playableFiles: Object.fromEntries(selected.filter(([key]) => key.startsWith('playable/')).map(([key, hash]) => [key.slice(9), hash])) });
   await mkdir(output, { recursive: true });
   if((await readdir(output)).length)throw new Error('EPISODE_SOURCE_OUTPUT_NOT_EMPTY');
   const sourceRoot = path.join(output, 'source'), playableRoot = path.join(output, 'playable');
-  const selected = Object.entries(delivery.files as Record<string, string>).filter(([key]) => /^(source|playable|captures)\//.test(key));
-  if (!selected.length || selected.length > 10_000) throw new Error('EPISODE_SOURCE_INVENTORY_INVALID');
   for (const [relative, hash] of selected) {
     const from = closedPath(payload, relative), to = closedPath(output, relative);
     await verifyFile({ path: from, sha256: hash });
@@ -179,6 +222,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash,
     sourceWorldBuildHash: delivery.worldBuildHash, sourceRuntimeHash: delivery.runtimeHash,
     sourceDeliveryManifestSha256: sha(manifestBytes), sourceRoot, playableRoot, sourceFiles,
+    ...(assetPolicySha256 ? { assetPolicySha256 } : {}),
     ...(referenceImage ? { referenceImage } : {}),
     playableFiles, opening: await imageFile(openingEntry),
     targets: await Promise.all(targetCaptures.map(async (entry: any) => {
