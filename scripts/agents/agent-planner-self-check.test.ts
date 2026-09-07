@@ -1042,6 +1042,6 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
       } finally {
         await rm(root, { recursive: true, force: true });
       }
-    }, 30_000);
+    }, 180_000); // Rebuilds the frozen SDK type graph, like agent-self-check.test.ts.
   }
 });

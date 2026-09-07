@@ -3420,6 +3420,29 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   其余 431 个文件的通过证据保留，不能描述为在新 SHA 上重新跑过一次完整绿色 aggregate。
   重型组和 Playground build 仍待继续；尚未合 main。
 
+  `126e548e` 重型终局为 39/43 files、770/775 tests passed，耗时 1,870.95s。
+  五个失败不是统一规划失败：Native checker 内嵌源码漂移一项，重建工具的两个
+  mutation 测试超过自身 30s 预算，authoring Browser 遇到 ResizeObserver 清除
+  render receipt，以及 P1.5 台阶离地前错误进入 sliding。前两项同步生成工具并使
+  重建测试使用同类工具已有的 180s 测试预算，生产超时不变；Browser 仅等待同一
+  暂停 Tick 的真实新帧，原截图、Hash、Full Reload 和 Runtime 校验不变。
+  三个重建测试与 Browser 已定向通过，Native Skill 完整复验 110/110 通过。
+
+  台阶问题定位到 **CF-04/G1 下坡逻辑偏移**：pinned old
+  `preservePlanarTranslationOnWalkableSupport` 只补上坡切线，向下位移交给 Body
+  snap-down；此前迁移却同时注入了负 Y，导致 Capsule 沿边缘滑落并清空 coyote。
+  已恢复只补正向 Y，原 P1.5 supported→air→coyote jump 断言原封不动通过。
+  坡面反向复验又用真实 Havok 复现部分支撑修正误报：负 X 修正已兑现，但 Y
+  下降与冻结的正 Y recovery 相反，整向量点积错误地取消了 X 的额度。现逐轴
+  只扣除同向、实际发生且不超过冻结支撑分量的修正；超量反例仍拒绝，没有新增
+  支撑查询、缓存、生产 gate 或扩大步高/求解器容差。Movement/Body/Golden 三文件
+  183/183、P1.5/真实 Body conformance/Native ramp 三文件 50/50 已通过。
+  Runtime 修复后再次生成工具包，并通过重建精确字节 1/1、live/frozen 与 portable
+  工具 3/3、迁出仓库独立 typecheck 1/1；内嵌 Movement/资源分配源码已逐字核实。
+  typecheck、3C（11/34/10）和 Playground build 通过，build 仅保留 chunk-size warning。
+  本轮原失败项均已有定向绿色证据，但没有再跑一次新的全仓 aggregate；精确候选 CI、
+  新图 Case 和人类审核仍待完成。全部 CF 未关闭，main 仍未合入。
+
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
   用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。

@@ -1460,6 +1460,30 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it.each([
+    ["bounded", -0.0010888887713697004, false],
+    ["excessive", -0.003, true],
+  ] as const)("accounts for %s horizontal recovery when vertical recovery is not realized", (_name, appliedX, rejects) => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = {
+      ...supportedSupport(normal),
+      averageSurfaceVelocityMetersPerSecondXYZ: [-0.06, 0.12, 0],
+    };
+    driver.contacts = [groundContact(normal)];
+    driver.onIntegrate = () => {
+      // Real Havok one-meter-ramp reversal: X recovery is applied, while
+      // the same Tick's descent moves opposite to the frozen Y recovery.
+      driver.position = [appliedX, 1 - 0.000544453985302229, 0];
+      driver.velocity = [0, 0, 0];
+    };
+    try {
+      const resolve = () => beginAndResolve(port, 1, [-0.00011111099564931337, 0, 0]);
+      if (rejects) expect(resolve).toThrow("native collision resolution amplified horizontal proposal progress");
+      else expect(resolve().resolution.appliedTranslationMetersXYZ[0]).toBeCloseTo(appliedX, 12);
+    } finally { port.dispose(); }
+  });
+
   it("allows takeoff when the frozen support translation is not applied", () => {
     const { driver, port } = createPort();
     driver.support = {

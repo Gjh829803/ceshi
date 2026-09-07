@@ -49,7 +49,10 @@
   The current lattice/shape, Ground Analysis, final Havok traversal and Builder
   guidance must close together before the final generated Case.
   The G1 real-Havok reproducer also requires the existing Character Movement
-  owner to lift supported planar velocity onto the current admitted tangent;
+  owner to lift supported planar velocity onto the current admitted uphill
+  tangent only. Pinned `preservePlanarTranslationOnWalkableSupport` leaves
+  downward motion to Body snap-down; do not inject a downward tangent at a
+  ledge and turn supported departure into sliding. Jump keeps precedence, and
   the BodyPort must not classify uphill tangent displacement as takeoff. Keep
   its single support query and transactional departure state. Discount frozen
   support/recovery translation only on actually applied components, without

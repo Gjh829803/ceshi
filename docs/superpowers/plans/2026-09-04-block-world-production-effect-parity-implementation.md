@@ -1202,8 +1202,10 @@ G1 focused checkpoint (2026-09-07, parent `d6995a05`):
 - Actual Havok exposed sustained speed loss on a 26.565-degree incline:
   resetting supported velocity Y to zero repeatedly projects away X speed.
   Character Movement now lifts its planar proposal using the admitted Body
-  sample normal, as pinned-old free-ground does on stable support. Jump keeps
-  precedence; there is no old Block height-sampler or cached support normal.
+  sample normal. The [aggregate follow-up](../../18-refactor-progress-and-backlog.md)
+  corrects the initial overbroad downward-tangent implementation: pinned-old
+  free-ground lifts uphill only.
+  Jump keeps precedence; there is no old Block height-sampler or cached support normal.
 - BodyPort distinguishes upward tangent movement from support-plane departure.
   Its existing departure state retains commit/abort/reset ownership. Frozen
   support/recovery velocity is discounted only where actually applied: partially

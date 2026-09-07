@@ -688,15 +688,16 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     if (takeoffProposed) {
       verticalVelocity = this.#options.jumpSpeedMetersPerSecond;
     } else if (sample.support.mode === "supported") {
-      // Old free-ground movement lifts planar velocity onto the admitted
-      // support tangent without shrinking XZ speed. The existing Body sample
-      // is the sole support source; no retained surface or height lookup.
+      // Pinned old free-ground lifts uphill only, preserving XZ speed.
+      // Downhill motion belongs to Body snap-down; forcing a negative tangent
+      // follows rounded ledge contacts into SLIDING and destroys coyote time.
+      // The existing Body sample remains the sole support source.
       const normal = sample.support.normalXYZ;
       if (Math.abs(normal[1]) > 0.000001) {
-        verticalVelocity = checkedFinite(
+        verticalVelocity = Math.max(0, checkedFinite(
           -(normal[0] * horizontal[0] + normal[2] * horizontal[1]) / normal[1],
           "supported surface velocity Y",
-        );
+        ));
       }
     } else if (sample.support.mode === "unsupported") {
       const locomotion = this.#currentSnapshot.locomotion;

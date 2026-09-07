@@ -445,9 +445,10 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
 
   it.each([
     [-0.4472135954999579, 1.2, false],
-    [0.4472135954999579, -1.2, false],
+    [0.4472135954999579, 0, false],
     [-0.4472135954999579, 5.5, true],
-  ] as const)("CF-04/G1 lifts planar velocity on committed support: normalX=%s Y=%s jump=%s", (normalX, expectedY, jump) => {
+    [0.4472135954999579, 5.5, true],
+  ] as const)("CF-04/G1 lifts uphill only and leaves descent to Body snap-down: normalX=%s Y=%s jump=%s", (normalX, expectedY, jump) => {
     const runtime = createCharacterMovementRuntimeV1(options());
     const before = runtime.snapshot();
     const token = runtime.beginTick(command(1, {

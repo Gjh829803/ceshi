@@ -1190,16 +1190,13 @@ function removeBoundedSupportTranslation(
   const unexplained = freezeVec3(applied.map(
     (component, axis) => component - proposed[axis]!,
   ));
-  const acceptedRatio = Math.min(1, Math.max(
-    0,
-    dot(unexplained, supportDelta) / maximumContributionSquared,
-  ));
   return freezeVec3(applied.map((component, axis) => {
-    const contribution = supportDelta[axis]! * acceptedRatio;
+    const contribution = supportDelta[axis]!;
     const direction = Math.sign(contribution);
     // The manifold may block part of the frozen surface/recovery velocity.
     // Never subtract an unapplied axis and thereby manufacture amplification
-    // on that axis. Each accepted component remains bounded by both the
+    // on that axis. Opposite Y descent must not cancel realized X recovery
+    // through a shared dot-product ratio. Each component is bounded by both the
     // frozen contribution and the observed displacement beyond the proposal.
     const observedContribution = Math.max(0, unexplained[axis]! * direction);
     return component - direction * Math.min(Math.abs(contribution), observedContribution);
