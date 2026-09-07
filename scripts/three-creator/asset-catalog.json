@@ -280,9 +280,9 @@
       "resources": [
         {
           "path": "humanoid/source/manifest.json",
-          "uri": "./assets/resources/ab81a9c1669f647c9e3e0e6b773624cdad11be2546f758380fb8cc2b00dbb742.json",
-          "sha256": "ab81a9c1669f647c9e3e0e6b773624cdad11be2546f758380fb8cc2b00dbb742",
-          "byteLength": 41371,
+          "uri": "./assets/resources/f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff.json",
+          "sha256": "f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff",
+          "byteLength": 38260,
           "sourcePath": "assets/three-creator/training/humanoid/source/manifest.json"
         },
         {
@@ -784,9 +784,9 @@
         },
         {
           "path": "humanoid/source/THIRD_PARTY_NOTICES.md",
-          "uri": "./assets/resources/d89ffeafc5db24f96da4417c83cbf48d000a4af749865b15af972006ca8a3a92.md",
-          "sha256": "d89ffeafc5db24f96da4417c83cbf48d000a4af749865b15af972006ca8a3a92",
-          "byteLength": 7613,
+          "uri": "./assets/resources/8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524.md",
+          "sha256": "8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524",
+          "byteLength": 6595,
           "sourcePath": "assets/three-creator/training/humanoid/source/THIRD_PARTY_NOTICES.md"
         },
         {
@@ -798,9 +798,9 @@
         },
         {
           "path": "humanoid/source/gasp-research/LICENSE-NOTICE.txt",
-          "uri": "./assets/resources/2f31459eb57a518f2d1cbcebf11a014697ccb5204cd790e499a253f1a231609d.txt",
-          "sha256": "2f31459eb57a518f2d1cbcebf11a014697ccb5204cd790e499a253f1a231609d",
-          "byteLength": 322,
+          "uri": "./assets/resources/ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c.txt",
+          "sha256": "ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c",
+          "byteLength": 407,
           "sourcePath": "assets/three-creator/training/humanoid/source/gasp-research/LICENSE-NOTICE.txt"
         },
         {
@@ -830,310 +830,289 @@
           "id": "idle-loop",
           "file": "gasp-research/idle-loop.experimental.glb",
           "metadata": "gasp-research/idle-loop.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "walk-loop",
           "file": "gasp-research/walk-loop.experimental.glb",
           "metadata": "gasp-research/walk-loop.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "run-loop",
           "file": "gasp-research/run-loop.experimental.glb",
           "metadata": "gasp-research/run-loop.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "hurdle-1m",
           "file": "gasp-research/hurdle-1m.experimental.glb",
           "metadata": "gasp-research/hurdle-1m.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "mantle-1m",
           "file": "gasp-research/mantle-1m.experimental.glb",
           "metadata": "gasp-research/mantle-1m.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "climb-2m5",
           "file": "gasp-research/climb-2m5.experimental.glb",
           "metadata": "gasp-research/climb-2m5.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "crouch-idle",
           "file": "gasp-research/crouch-idle.experimental.glb",
           "metadata": "gasp-research/crouch-idle.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "crouch-walk",
           "file": "gasp-research/crouch-walk.experimental.glb",
           "metadata": "gasp-research/crouch-walk.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "jump-stand",
           "file": "gasp-research/jump-stand.experimental.glb",
           "metadata": "gasp-research/jump-stand.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "jump-run",
           "file": "gasp-research/jump-run.experimental.glb",
           "metadata": "gasp-research/jump-run.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "fall-loop",
           "file": "gasp-research/fall-loop.experimental.glb",
           "metadata": "gasp-research/fall-loop.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "land-light",
           "file": "gasp-research/land-light.experimental.glb",
           "metadata": "gasp-research/land-light.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "land-heavy",
           "file": "gasp-research/land-heavy.experimental.glb",
           "metadata": "gasp-research/land-heavy.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "land-run-light",
           "file": "gasp-research/land-run-light.experimental.glb",
           "metadata": "gasp-research/land-run-light.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "land-run-heavy",
           "file": "gasp-research/land-run-heavy.experimental.glb",
           "metadata": "gasp-research/land-run-heavy.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "run-start",
           "file": "gasp-research/run-start.experimental.glb",
           "metadata": "gasp-research/run-start.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "run-stop",
           "file": "gasp-research/run-stop.experimental.glb",
           "metadata": "gasp-research/run-stop.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "turn-left",
           "file": "gasp-research/turn-left.experimental.glb",
           "metadata": "gasp-research/turn-left.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "turn-right",
           "file": "gasp-research/turn-right.experimental.glb",
           "metadata": "gasp-research/turn-right.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "turn-back-left",
           "file": "gasp-research/turn-back-left.experimental.glb",
           "metadata": "gasp-research/turn-back-left.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "turn-back-right",
           "file": "gasp-research/turn-back-right.experimental.glb",
           "metadata": "gasp-research/turn-back-right.metadata.json",
-          "source": "Epic GASP",
-          "license": "UE-Only source; existing local research conversion"
+          "source": "Epic GASP"
         },
         {
           "id": "roll",
           "file": "actions/roll.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "slide-start",
           "file": "actions/slide-start.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "slide-loop",
           "file": "actions/slide-loop.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "slide-exit",
           "file": "actions/slide-exit.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "carry-walk",
           "file": "actions/carry-walk.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "pickup",
           "file": "actions/pickup.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "sit-enter",
           "file": "actions/sit-enter.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "sit-idle",
           "file": "actions/sit-idle.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "sit-exit",
           "file": "actions/sit-exit.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "hang-enter",
           "file": "actions/hang-enter.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "hang-exit",
           "file": "actions/hang-exit.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "hang-idle",
           "file": "actions/hang-idle.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "hang-left",
           "file": "actions/hang-left.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "hang-right",
           "file": "actions/hang-right.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "climb-up",
           "file": "actions/climb-up.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "climb-down",
           "file": "actions/climb-down.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "climb-ledge",
           "file": "actions/climb-ledge.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-enter",
           "file": "actions/prone-enter.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-exit",
           "file": "actions/prone-exit.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-idle",
           "file": "actions/prone-idle.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-forward",
           "file": "actions/prone-forward.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-backward",
           "file": "actions/prone-backward.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-left",
           "file": "actions/prone-left.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "prone-right",
           "file": "actions/prone-right.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "swim-idle",
           "file": "swimming/swim-idle.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "swim-forward",
           "file": "swimming/swim-forward.clip.json",
           "source": "Quaternius UAL",
-          "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+          "license": "CC0 source motion"
         },
         {
           "id": "swim-freestyle",
           "file": "swimming/swim-freestyle.clip.json",
           "source": "CMU 125/06",
-          "license": "CMU terms; Epic-derived target skeleton retains separate restrictions"
+          "license": "CMU terms"
         }
       ],
       "boneCount": 101,

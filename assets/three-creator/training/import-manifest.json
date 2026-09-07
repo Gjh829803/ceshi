@@ -39,9 +39,9 @@
   "resources": [
     {
       "path": "humanoid/source/manifest.json",
-      "uri": "./assets/resources/ab81a9c1669f647c9e3e0e6b773624cdad11be2546f758380fb8cc2b00dbb742.json",
-      "sha256": "ab81a9c1669f647c9e3e0e6b773624cdad11be2546f758380fb8cc2b00dbb742",
-      "byteLength": 41371,
+      "uri": "./assets/resources/f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff.json",
+      "sha256": "f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff",
+      "byteLength": 38260,
       "sourcePath": "assets/three-creator/training/humanoid/source/manifest.json"
     },
     {
@@ -543,9 +543,9 @@
     },
     {
       "path": "humanoid/source/THIRD_PARTY_NOTICES.md",
-      "uri": "./assets/resources/d89ffeafc5db24f96da4417c83cbf48d000a4af749865b15af972006ca8a3a92.md",
-      "sha256": "d89ffeafc5db24f96da4417c83cbf48d000a4af749865b15af972006ca8a3a92",
-      "byteLength": 7613,
+      "uri": "./assets/resources/8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524.md",
+      "sha256": "8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524",
+      "byteLength": 6595,
       "sourcePath": "assets/three-creator/training/humanoid/source/THIRD_PARTY_NOTICES.md"
     },
     {
@@ -557,9 +557,9 @@
     },
     {
       "path": "humanoid/source/gasp-research/LICENSE-NOTICE.txt",
-      "uri": "./assets/resources/2f31459eb57a518f2d1cbcebf11a014697ccb5204cd790e499a253f1a231609d.txt",
-      "sha256": "2f31459eb57a518f2d1cbcebf11a014697ccb5204cd790e499a253f1a231609d",
-      "byteLength": 322,
+      "uri": "./assets/resources/ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c.txt",
+      "sha256": "ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c",
+      "byteLength": 407,
       "sourcePath": "assets/three-creator/training/humanoid/source/gasp-research/LICENSE-NOTICE.txt"
     },
     {
