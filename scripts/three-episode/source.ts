@@ -1,9 +1,11 @@
-import { copyFile, lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ThreeCompiler, hashTree } from '../three-creator/compiler.js';
 import { canonicalHash, type EpisodeFile, type EpisodeSourceManifest } from './contracts.js';
+import { installEpisodePresentation } from './presentation.js';
+import cameraProvenance from './compat/creator-camera-provenance.json';
 
 const sha = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
 export function closedPath(root: string, relative: string): string {
@@ -66,8 +68,19 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     : delivery.schemaVersion === 2 && delivery.status === 'ready';
   // Historical v1's status name predates direct publication. Only its actual
   // technical delivery/closed bytes matter; no assistant review is reintroduced.
-  if (delivery.kind !== 'three-creator-delivery' || delivery.profile !== 'three-sdk' || delivery.technicalStatus !== 'passed' || !delivered || !/^[a-f0-9]{64}$/.test(delivery.worldBuildHash)) throw new Error('EPISODE_REQUIRES_CLOSED_THREE_DELIVERY');
+  if (!['three-creator-delivery','three-episode-repaired-delivery'].includes(delivery.kind) || delivery.profile !== 'three-sdk' || delivery.technicalStatus !== 'passed' || !delivered || !/^[a-f0-9]{64}$/.test(delivery.worldBuildHash)) throw new Error('EPISODE_REQUIRES_CLOSED_THREE_DELIVERY');
+  if(delivery.kind==='three-episode-repaired-delivery'){
+    const evidenceFile=closedPath(payload,delivery.repairEvidence?.path);
+    await verifyFile({path:evidenceFile,sha256:delivery.repairEvidence?.sha256});
+    const evidence=JSON.parse(await readFile(evidenceFile,'utf8'));
+    if(evidence.kind!=='manual-humanoid-motion-repair'||evidence.worldBuildHash!==delivery.worldBuildHash||evidence.sourceHash!==delivery.sourceHash||evidence.runtimeHash!==delivery.runtimeHash)throw new Error('EPISODE_REPAIR_EVIDENCE_MISMATCH');
+    const regressionFile=closedPath(payload,delivery.regressionEvidence?.path);
+    await verifyFile({path:regressionFile,sha256:delivery.regressionEvidence?.sha256});
+    const regression=JSON.parse(await readFile(regressionFile,'utf8'));
+    if(regression.status!=='succeeded'||regression.result?.status!=='passed'||regression.result?.worldBuildHash!==delivery.worldBuildHash)throw new Error('EPISODE_REPAIR_REGRESSION_REQUIRED');
+  }
   await mkdir(output, { recursive: true });
+  if((await readdir(output)).length)throw new Error('EPISODE_SOURCE_OUTPUT_NOT_EMPTY');
   const sourceRoot = path.join(output, 'source'), playableRoot = path.join(output, 'playable');
   const selected = Object.entries(delivery.files as Record<string, string>).filter(([key]) => /^(source|playable|captures)\//.test(key));
   if (!selected.length || selected.length > 10_000) throw new Error('EPISODE_SOURCE_INVENTORY_INVALID');
@@ -79,11 +92,13 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   const sourceFiles = await hashTree(sourceRoot);
   const runtimeWorkspace = path.join(output, '.runtime-build');
   await mkdir(runtimeWorkspace, { recursive: true });
-  const runtime = await new ThreeCompiler(runtimeWorkspace, 'three-sdk').prepareRuntime();
+  const cameraCompatibility=[cameraProvenance.deliveryRuntimeHash,...cameraProvenance.compatibleDeliveryRuntimeHashes].includes(delivery.runtimeHash);
+  const runtime = await new ThreeCompiler(runtimeWorkspace, 'three-sdk').prepareRuntime(cameraCompatibility?{cameraModulePath:fileURLToPath(new URL('./compat/creator-camera.ts',import.meta.url))}:{});
   for (const [relative] of Object.entries(await hashTree(runtime.root))) {
     const to = closedPath(path.join(playableRoot, 'runtime'), relative);
     await mkdir(path.dirname(to), { recursive: true }); await copyFile(closedPath(runtime.root, relative), to);
   }
+  await installEpisodePresentation(playableRoot);
   // Compiler cache belongs to the host; it never enters the author input closure.
   const originalSourceEntries = Object.fromEntries(selected.filter(([key]) => key.startsWith('source/')).map(([key, hash]) => [key.slice(7), hash]));
   if (canonicalHash(sourceFiles) !== canonicalHash(originalSourceEntries)) throw new Error('EPISODE_AUTHOR_SOURCE_CHANGED');
@@ -91,7 +106,8 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   const runtimeHash = canonicalHash(runtimeFiles), playableFiles = await hashTree(playableRoot);
   const originalRuntimeFiles = Object.fromEntries(selected.filter(([key]) => key.startsWith('playable/runtime/')).map(([key, hash]) => [key.slice(17), hash]));
   const runtimeChanged = canonicalHash(originalRuntimeFiles) !== canonicalHash(runtimeFiles);
-  const worldBuildHash = runtimeChanged ? canonicalHash({ kind: 'three-episode-runtime-derivation', sourceWorldBuildHash: delivery.worldBuildHash, sourceHash: delivery.sourceHash, runtimeHash, playableFiles }) : delivery.worldBuildHash;
+  const playableChanged=canonicalHash(playableFiles)!==canonicalHash(Object.fromEntries(selected.filter(([key])=>key.startsWith('playable/')).map(([key,hash])=>[key.slice(9),hash])));
+  const worldBuildHash = runtimeChanged || playableChanged ? canonicalHash({ kind: 'three-episode-runtime-derivation', sourceWorldBuildHash: delivery.worldBuildHash, sourceHash: delivery.sourceHash, runtimeHash, playableFiles }) : delivery.worldBuildHash;
   const captures = JSON.parse(await readFile(path.join(output, 'captures/captures.json'), 'utf8'));
   const imageFile = async (entry: any): Promise<EpisodeFile> => {
     const file = path.join(output, 'captures', path.basename(entry.image.path));
@@ -109,6 +125,13 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     await mkdir(path.dirname(filename), { recursive: true }); await copyFile(options.referenceImage.path, filename);
     referenceImage = { path: filename, sha256: options.referenceImage.sha256, byteLength: (await lstat(filename)).size };
   }
+  let targetCaptures=captures.images.filter((entry:any)=>entry.view==='entity-triview');
+  if(captures.selectionPolicy==='important-representatives-v1'){
+    const ids=captures.conditioningEntityIds;
+    if(!Array.isArray(ids)||!ids.length||ids.some((id:any)=>typeof id!=='string')||new Set(ids).size!==ids.length)throw new Error('EPISODE_TARGET_SELECTION_INVALID');
+    targetCaptures=targetCaptures.filter((entry:any)=>entry.entityIds?.some((id:string)=>ids.includes(id)));
+    if(ids.some((id:string)=>!targetCaptures.some((entry:any)=>entry.entityIds?.includes(id))))throw new Error('EPISODE_SELECTED_TARGET_MISSING');
+  }
   const source: EpisodeSourceManifest = {
     kind: 'three-episode-source', schemaVersion: 1, worldId: options.worldId,
     sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash,
@@ -116,7 +139,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     sourceDeliveryManifestSha256: sha(manifestBytes), sourceRoot, playableRoot, sourceFiles,
     ...(referenceImage ? { referenceImage } : {}),
     playableFiles, opening: await imageFile(openingEntry),
-    targets: await Promise.all(captures.images.filter((entry: any) => entry.view === 'entity-triview').map(async (entry: any) => {
+    targets: await Promise.all(targetCaptures.map(async (entry: any) => {
       const entityId = entry.orientationTargetId ?? entry.entityIds?.[0];
       if (typeof entityId !== 'string' || !entityId) throw new Error('EPISODE_CAPTURE_TARGET_INVALID');
       return { id: entityId, entityId, name: entityId, role: entry.entityIds?.includes('player') ? 'primary-subject' : 'complete-target', whiteboxTriview: await imageFile(entry) };
@@ -127,7 +150,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   await saveEpisodeSource(path.join(output, 'source.json'), source);
   await writeJson(path.join(output, 'derivation.json'), { schemaVersion: 1, sourceWorldBuildHash: source.sourceWorldBuildHash, worldBuildHash,
     sourceRuntimeHash: source.sourceRuntimeHash, runtimeHash, authorSourceUnchanged: true, authorCompiledEntriesUnchanged: selected.filter(([key]) => key.startsWith('playable/compiled/')).every(([key, hash]) => playableFiles[key.slice(9)] === hash),
-    runtimeFiles, originalDeliveryManifestSha256: source.sourceDeliveryManifestSha256 });
+    cameraCompatibility:cameraCompatibility?cameraProvenance:null, presentation:'world-canvas-only-v1', runtimeFiles, originalDeliveryManifestSha256: source.sourceDeliveryManifestSha256 });
   return source;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

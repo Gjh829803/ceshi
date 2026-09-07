@@ -150,6 +150,14 @@ it('resumes an admitted six-clip boundary without a planner or GPU job and rejec
  const capture=vi.fn(async()=>{throw new Error('unexpected GPU dispatch');}),runCodex=vi.fn(async()=>{throw new Error('unexpected planner');});
  const options={sourceManifestPath,outputRoot:setup.root,episodeId:'fixture-episode',stopBeforeSeedance:true as const,until:'capture' as const,runtimeConfig:{},capture,cloud:{runCodex} as any};
  expect((await runEpisodeWorkflow(options)).status).toBe('paused-before-visuals');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ // Queue suspension must publish the checkpoint before authorizing a CPU continuation.
+ const admittedState=JSON.parse(await readFile(path.join(setup.root,'episode.json'),'utf8'));
+ await writeFile(path.join(setup.root,'episode.json'),JSON.stringify({...admittedState,segments:[]}));
+ capture.mockRejectedValueOnce(Object.assign(new Error('queued'),{code:'EPISODE_CAPTURE_BATCH_PENDING',taskId:'capture-test',cohortId:'cohort-test'}));
+ const checkpointOrder:string[]=[];
+ const paused=await runEpisodeWorkflow({...options,publishS3Prefix:'s3://bucket/checkpoint',cloud:{runCodex,publishDirectory:async()=>{checkpointOrder.push('published');}} as any,batchQueue:{checkpointReady:async()=>{checkpointOrder.push('continuation-ready');}} as any});
+ expect(paused.status).toBe('paused-capture-queue');expect(checkpointOrder).toEqual(['published','continuation-ready']);expect(runCodex).not.toHaveBeenCalled();
+ await writeFile(path.join(setup.root,'episode.json'),JSON.stringify(admittedState));capture.mockClear();
  // A completed legacy summary cannot silently bypass the new input policy.
  await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify({...summary,playerCaptureVersion:'legacy-constant-travel'}));
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('unexpected GPU dispatch');expect(capture).toHaveBeenCalledOnce();expect(runCodex).not.toHaveBeenCalled();

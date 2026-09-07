@@ -79,7 +79,7 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
     },
     async generateVideo() { calls.videos++; assert.fail('Seedance must never be called by this pipeline'); },
   };
-  return { root, source, capture, calls, options: { source, capture, cloud, episodeId: 'fixture-episode', outputRoot: path.join(root, 'output'), stopBeforeSeedance: true } };
+  return { root, source, capture, calls, options: { streaming:false, source, capture, cloud, episodeId: 'fixture-episode', outputRoot: path.join(root, 'output'), stopBeforeSeedance: true } };
 }
 
 test('rejects foreign world/runtime recordings and incomplete capture states before provider work', async () => {
@@ -295,4 +295,48 @@ test('continues existing anchors without regeneration, preserving spent budgets 
  const {validateAnchorContinuation,carriedUserAnchorAcceptance}=await import('./anchor-continuation.mjs');
  const changed=structuredClone(result.plan);changed.variants[0].concept='changed accepted variant';assert.throws(()=>validateAnchorContinuation(continuation,{source:setup.source,plan:changed,whiteboxOpeningSha256:setup.capture.segments[0].firstFrame.sha256}),/variant.*changed/);
  assert.equal(carriedUserAnchorAcceptance(calibration,continuation,{...carried,scope:'later-frame'},result.plan.variants[0]),null);
+});
+
+test('streaming prepares six requests before a later anchor finishes, with no video submission', async () => {
+ const setup=await fixture();let unblock;const blocked=new Promise(resolve=>{unblock=resolve;});let entered;const pending=new Promise(resolve=>{entered=resolve;});
+ const generate=setup.options.cloud.generateImages;
+ setup.options.cloud.generateImages=async args=>{if(args.items[0].prompt.includes('Create styled scene segment-00')&&args.items[0].prompt.includes('"id":"style-01"')){entered();await blocked;}return generate(args);};
+ const run=runThreeEpisodeVisuals({...setup.options,streaming:true});
+ try {
+  await Promise.race([pending,new Promise((_,reject)=>setTimeout(()=>reject(Error('streaming did not reach next anchor')),15000))]);
+  const ready=JSON.parse(await readFile(path.join(setup.options.outputRoot,'ready-render-requests.json'),'utf8'));
+  assert.equal(ready.preparedRequestCount,6);assert.equal(ready.styles[0].id,'style-00');assert.equal(setup.calls.events,1);assert.equal(setup.calls.videos,0);
+  assert(ready.requests.every(r=>r.stopBeforeSeedance&&r.providerSubmitted===false));
+ }finally{unblock();}
+ const result=await run;assert.equal(result.preparedRequestCount,60);
+ const before={images:setup.calls.images,events:setup.calls.events,codex:setup.calls.codex};await runThreeEpisodeVisuals({...setup.options,streaming:true});assert.deepEqual({images:setup.calls.images,events:setup.calls.events,codex:setup.calls.codex},before);
+});
+
+test('a failed style does not block later streaming requests or erase completed styles',async()=>{
+ const setup=await fixture();const generate=setup.options.cloud.generateImages;
+ setup.options.cloud.generateImages=async args=>{if(args.items[0].prompt.includes('Create styled scene segment-00')&&args.items[0].prompt.includes('"id":"style-01"'))throw Error('FIXTURE_STYLE_ONE_QUOTA');return generate(args);};
+ await assert.rejects(runThreeEpisodeVisuals({...setup.options,streaming:true}),/FIXTURE_STYLE_ONE_QUOTA/);
+ const ready=JSON.parse(await readFile(path.join(setup.options.outputRoot,'ready-render-requests.json'),'utf8'));
+ assert.equal(ready.preparedRequestCount,54);assert(!ready.styles.some(s=>s.id==='style-01'));assert(ready.styles.some(s=>s.id==='style-09'));assert.equal(setup.calls.videos,0);
+ const counts=[];await assert.rejects(runThreeEpisodeVisuals({...setup.options,streaming:true,onProgress:async s=>{if(Number.isInteger(s.preparedRequestCount))counts.push(s.preparedRequestCount);}}),/FIXTURE_STYLE_ONE_QUOTA/);assert(counts.length);assert(counts.every(n=>n===54));
+});
+
+test('event prompts can finish with real motion and accepted appearance before any styled image is generated',async()=>{
+ const {prefetchThreeEpisodeEvents}=await import('./event-prefetch.mjs');const s=await fixture();const anchor=s.capture.segments[0].firstFrame,variant={id:'style-00',geminiEventPrompt:'Use the accepted appearance with the actual motion'},appearanceLock={anchorSha256:anchor.sha256,subjectAppearance:'accepted subject'};
+ const args={variant,capture:s.capture,anchor,appearanceLock,outputRoot:s.options.outputRoot,cloud:s.options.cloud};const result=await prefetchThreeEpisodeEvents(args);assert.equal(result.events.length,5);assert.equal(s.calls.images,0);assert.equal(s.calls.events,1);await prefetchThreeEpisodeEvents(args);assert.equal(s.calls.events,1);
+});
+
+test('human rejected anchor versions are excluded without forcing ten-style completion',async()=>{
+ const setup=await fixture(),baseline=await runThreeEpisodeVisuals(setup.options),before=setup.calls.images;
+ const rejected=[2,3].map(i=>({caseId:'fixture-episode',styleId:'style-0'+i,imageSha256:baseline.anchors[i].sha256}));
+ const result=await runThreeEpisodeVisuals({...setup.options,streaming:true,loadRejectionPolicy:async()=>({rejections:rejected})});
+ assert.equal(result.preparedRequestCount,48);assert.equal(result.expectedRequestCount,48);assert.deepEqual(result.excludedStyleIds,['style-02','style-03']);assert.equal(setup.calls.images,before);assert.equal(result.batchDiversityStatus,'not-applicable-user-exclusions');
+});
+
+test('reviewed clips reach a complete package while another styled frame is still blocked',async()=>{
+ const setup=await fixture();let unblock;const gate=new Promise(r=>{unblock=r;});let delivered;const ready=new Promise(r=>{delivered=r;});const image=setup.options.cloud.generateImages;
+ setup.options.cloud.generateImages=async args=>{if(args.items[0].prompt.includes('"id":"style-00"')&&args.items[0].prompt.includes('for segment-05.'))await gate;return image(args);};
+ const run=runThreeEpisodeVisuals({...setup.options,streaming:true,onProgress:async s=>{if(s.variants[0].fastPreparedRequestCount)delivered();}});
+ let timer;try{await Promise.race([ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('no early clip package')),10000);})]);const pkg=JSON.parse(await readFile(path.join(setup.options.outputRoot,'fast-ready/style-00/ready-clips.json'),'utf8'));assert(pkg.preparedRequestCount>=1&&pkg.preparedRequestCount<6);assert(pkg.requests.every(r=>r.segmentId!=='segment-05'&&r.styledTriviews.length===7&&r.providerSubmitted===false));}finally{clearTimeout(timer);unblock();}
+ await run;
 });

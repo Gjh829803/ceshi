@@ -40,7 +40,7 @@ export function createCloudClient(overrides = {}) {
   const pendingUploads = new Map();
   const request = overrides.request ?? lwdpRequest;
   const poll = overrides.poll ?? pollGenerationJob;
-  async function config() { return configuration ??= overrides.config ?? await loadLwdpGenerationConfig(); }
+  async function config() { return configuration ??= overrides.config ?? await loadLwdpGenerationConfig(process.env); }
   async function settings() {
     return runtime ??= overrides.runtime ?? await json(path.join(root, '.codex-tmp/three-episode-runtime.json'));
   }
@@ -71,11 +71,26 @@ export function createCloudClient(overrides = {}) {
     const temporary = `${destination}.download-${process.pid}.part`;
     await transfer(uri, temporary); await bytes(temporary); await rename(temporary, destination);
   }
+  async function cancelTrackedJob(remote) {
+    if(remote.pipeline==='gemini')return {status:'cancellation-unconfirmed',isTerminal:false,attentionRequired:true,cancellationError:'EPISODE_GEMINI_INFLIGHT_CANCELLATION_UNSUPPORTED'};
+    if(!['codex','t2i'].includes(remote.pipeline)||!remote.requestId)throw Error('EPISODE_REMOTE_IDENTITY_INVALID');
+    const cfg=await config();
+    const options={config:cfg,maxAttempts:1,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(5000)})};
+    const recovered=remote.jobId?{job_id:remote.jobId}:jobValue(await request(`/api/v1/generation/jobs/by-request-id/${encodeURIComponent(remote.requestId)}?pipeline=${remote.pipeline}`,options));
+    if(!recovered?.job_id)throw Error('EPISODE_CANCELLATION_SUBMISSION_UNKNOWN');
+    const job=jobValue(await request(`/api/v1/generation/jobs/${encodeURIComponent(recovered.job_id)}/cancel`,{...options,method:'POST'}));
+    return {jobId:recovered.job_id,status:job.status,isTerminal:terminal.has(job.status),attentionRequired:false,cancellationError:null};
+  }
   async function executeJob({ pipeline, taskId, payload, outputRoot, downloads }) {
+    await overrides.assertActive?.();
     const evidenceRoot = path.join(path.resolve(outputRoot), '.cloud', id(taskId));
     const statePath = path.join(evidenceRoot, 'state.json');
     const intentPath = path.join(evidenceRoot, 'intent.json');
     const payloadHash = digest(JSON.stringify(payload));
+    async function persistRemote(value){
+      await save(statePath,value);
+      await overrides.trackRemote?.({pipeline,requestId:payload.request_id,...(value.jobId?{jobId:value.jobId}:{}),status:value.status,isTerminal:value.status==='submission-rejected'||value.isTerminal===true});
+    }
     const existing = await optionalJson(intentPath);
     if (existing && existing.payloadHash !== payloadHash) throw new Error('EPISODE_CLOUD_IMMUTABLE_REQUEST_CHANGED');
     let state = await optionalJson(statePath) ?? { kind: 'three-episode-cloud-task', schemaVersion: 1, requestId: payload.request_id, pipeline, taskId, payloadHash, status: 'prepared' };
@@ -91,34 +106,39 @@ export function createCloudClient(overrides = {}) {
         const recovered = jobValue(await request(`/api/v1/generation/jobs/by-request-id/${encodeURIComponent(payload.request_id)}?pipeline=${pipeline}`, { config: cfg, maxAttempts: 1 }));
         if (!recovered?.job_id) throw new Error('EPISODE_EXACT_REQUEST_NOT_FOUND');
         state = { ...state, jobId: recovered.job_id, status: 'submitted', recoveredByRequestId: true };
-        await save(statePath, state);
+        await persistRemote(state);
       } catch (error) {
-        state = { ...state, status: 'submission-unknown' }; await save(statePath, state);
+        state = { ...state, status: 'submission-unknown' }; await persistRemote(state);
         throw cloudError('EPISODE_SUBMISSION_UNKNOWN', state, error);
       }
     }
     if (!state.jobId) {
       await save(path.join(evidenceRoot, 'payload.json'), payload);
       await save(intentPath, { payloadHash, requestId: payload.request_id, createdAt: new Date().toISOString() });
-      await save(statePath, { ...state, status: 'submitting' });
+      await persistRemote({ ...state, status: 'submitting' });
+      try{await overrides.assertActive?.();}catch(error){
+        if(error.code==='EPISODE_COHORT_CANCELLED')await persistRemote({...state,status:'cancelled',isTerminal:true});
+        throw error;
+      }
       try {
         const submitted = jobValue(await request(pipeline === 'codex' ? '/api/v1/generation/codex/jobs' : '/api/v1/generation/jobs', { config: cfg, method: 'POST', body: payload, maxAttempts: 1 }));
         if (!submitted?.job_id) throw new Error('EPISODE_SUBMISSION_RESPONSE_INVALID');
-        state = { ...state, jobId: submitted.job_id, status: 'submitted' }; await save(statePath, state);
+        state = { ...state, jobId: submitted.job_id, status: 'submitted' }; await persistRemote(state);
       } catch (error) {
         if (Number.isInteger(error.status) && ![408, 429, 500, 502, 503, 504].includes(error.status)) {
-          state = { ...state, status: 'submission-rejected', httpStatus: error.status }; await save(statePath, state);
+          state = { ...state, status: 'submission-rejected', httpStatus: error.status }; await persistRemote(state);
           throw cloudError('EPISODE_SUBMISSION_REJECTED', state, error);
         }
-        state = { ...state, status: 'submission-unknown' }; await save(statePath, state);
+        state = { ...state, status: 'submission-unknown' }; await persistRemote(state);
         // Recovery is read-only and keeps the exact durable request; a restart also uses it.
         try {
           const recovered = jobValue(await request(`/api/v1/generation/jobs/by-request-id/${encodeURIComponent(payload.request_id)}?pipeline=${pipeline}`, { config: cfg, maxAttempts: 1 }));
           if (!recovered?.job_id) throw error;
-          state = { ...state, jobId: recovered.job_id, status: 'submitted', recoveredByRequestId: true }; await save(statePath, state);
+          state = { ...state, jobId: recovered.job_id, status: 'submitted', recoveredByRequestId: true }; await persistRemote(state);
         } catch { throw cloudError('EPISODE_SUBMISSION_UNKNOWN', state, error); }
       }
     }
+    await overrides.assertActive?.();
     const echo = await request(`/api/v1/generation/jobs/${state.jobId}/config`, { config: cfg, maxAttempts: 2 });
     await save(path.join(evidenceRoot, 'config.json'), echo);
     const effective = echo.config ?? echo.data?.config ?? echo;
@@ -134,11 +154,12 @@ export function createCloudClient(overrides = {}) {
     try {
       job = jobValue(await poll(state.jobId, { config: cfg, timeoutMs: (await settings()).maximumWaitMilliseconds ?? 7_200_000, intervalMs: 7_000, onProgress: current => { overrides.onProgress?.({ taskId, jobId: state.jobId, status: current.status, counters: current.counters }); } }));
     } catch (error) {
-      state = { ...state, status: 'remote-pending' }; await save(statePath, state); throw cloudError('EPISODE_REMOTE_PENDING', state, error);
+      state = { ...state, status: 'remote-pending' }; await persistRemote(state); throw cloudError('EPISODE_REMOTE_PENDING', state, error);
     }
+    await overrides.assertActive?.();
     const items = await request(`/api/v1/generation/jobs/${state.jobId}/items?size=1000`, { config: cfg, maxAttempts: 2 });
     await save(path.join(evidenceRoot, 'job.json'), job); await save(path.join(evidenceRoot, 'items.json'), items);
-    state = { ...state, status: job.status, isTerminal: terminal.has(job.status), error: job.error ?? null }; await save(statePath, state);
+    state = { ...state, status: job.status, isTerminal: terminal.has(job.status), error: job.error ?? null }; await persistRemote(state);
     const expectedIds = pipeline === 'codex' ? payload.tasks.map(task => task.id) : payload.items.map(item => item.id);
     try { assertSuccessfulJob(job, items, expectedIds); }
     catch (error) { throw cloudError('EPISODE_CLOUD_TERMINAL_FAILED', state, error); }
@@ -149,7 +170,7 @@ export function createCloudClient(overrides = {}) {
       try { await download(output.s3Uri, output.path); artifacts.push({ path: output.path, s3Uri: output.s3Uri, sha256: digest(await bytes(output.path)) }); }
       catch (error) { if (output.required !== false) throw error; }
     }
-    state = { ...state, status: 'delivered', artifacts, finishedAt: new Date().toISOString() }; await save(statePath, state);
+    state = { ...state, status: 'delivered', artifacts, finishedAt: new Date().toISOString() }; await persistRemote(state);
     return state;
   }
   async function runCodex(args) {
@@ -167,7 +188,8 @@ export function createCloudClient(overrides = {}) {
       let hasFailedPredecessor = false;
       for (const entry of entries.filter(name => name !== taskId && (name === logicalTaskId || name.startsWith(routingPrefix) || name.startsWith(`${logicalTaskId}-retry-`)))) {
         const previous = await optionalJson(path.join(outputRoot, '.cloud', entry, 'state.json'));
-        if (previous && (!previous.isTerminal || !['failed', 'completed', 'submit_failed'].includes(previous.status))) throw new Error('EPISODE_CODEX_ROUTING_REQUIRES_TERMINAL_FAILED_ATTEMPT');
+        const explicitlyRecoverableCancellation = retryAttempt > 0 && ['cancelled','stopped'].includes(previous?.status) && conf.codexRetryCancelledJobs?.includes(previous.jobId);
+        if (previous && (!previous.isTerminal || (!['failed', 'completed', 'submit_failed'].includes(previous.status) && !explicitlyRecoverableCancellation))) throw new Error('EPISODE_CODEX_ROUTING_REQUIRES_TERMINAL_FAILED_ATTEMPT');
         if (previous) hasFailedPredecessor = true;
       }
       if (retryAttempt && !hasFailedPredecessor) throw new Error('EPISODE_CODEX_RETRY_REQUIRES_TERMINAL_FAILED_PREDECESSOR');
@@ -240,6 +262,7 @@ export function createCloudClient(overrides = {}) {
     return executeJob({ pipeline: 't2i', taskId, payload, outputRoot, downloads: [...args.items.map(item => ({ path: item.outputPath, required: true, s3Uri: s3(payload.output_s3_prefix, 'images', `${item.id}.png`) })), { path: path.join(outputRoot, '.cloud', taskId, 't2i-delivery-report.json'), required: true, s3Uri: s3(payload.output_s3_prefix, 'reports/t2i_delivery_report.json') }] });
   }
   async function generateEvents(args) {
+    await overrides.assertActive?.();
     if (args.model !== 'gemini-3.5-flash' || args.videos?.length !== 3 || args.images?.length !== 3 || args.videos.some(video => video.samplingFps !== .25)) throw new Error('EPISODE_GEMINI_INPUT_CONTRACT_INVALID');
     inside(args.outputRoot, args.outputPath);
     const taskRoot = path.join(args.outputRoot, '.cloud', id(args.taskId));
@@ -252,11 +275,13 @@ export function createCloudClient(overrides = {}) {
     if (existing) throw cloudError('EPISODE_GEMINI_PREVIOUS_ATTEMPT_REQUIRES_RECONCILIATION', existing);
     await save(requestFile, { ...args, inputHash: identity });
     await save(stateFile, { taskId: args.taskId, status: 'running', inputHash: identity, model: args.model, startedAt: new Date().toISOString() });
+    await overrides.trackRemote?.({pipeline:'gemini',requestId:identity,status:'running',isTerminal:false});
+    await overrides.assertActive?.();
     try {
       const runner = overrides.execute ?? execute;
       await runner('python3', [path.join(root, 'scripts/cloud/three-episode-gemini.py'), '--request', requestFile], { cwd: root, maxBuffer: 1024 * 1024 });
       const result = await json(args.outputPath); if (result.events?.length !== 5) throw new Error('EPISODE_GEMINI_EVENT_COUNT_INVALID');
-      const state = { taskId: args.taskId, inputHash: identity, status: 'delivered', model: args.model, outputHash: digest(await bytes(args.outputPath)), finishedAt: new Date().toISOString() }; await save(stateFile, state); return state;
+      const state = { taskId: args.taskId, inputHash: identity, status: 'delivered', model: args.model, outputHash: digest(await bytes(args.outputPath)), finishedAt: new Date().toISOString() }; await save(stateFile, state); await overrides.trackRemote?.({pipeline:'gemini',requestId:identity,status:'delivered',isTerminal:true}); return state;
     } catch (error) { await save(stateFile, { taskId: args.taskId, inputHash: identity, status: 'failed-or-unknown', model: args.model }); throw error; }
   }
   async function uploadArtifact(localPath, s3Uri) { await bytes(localPath); await transfer(localPath, s3Uri); return { s3Uri, sha256: digest(await bytes(localPath)) }; }
@@ -297,7 +322,7 @@ export function createCloudClient(overrides = {}) {
     });
     return manifest;
   }
-  return { runCodex, generateImages, generateEvents, uploadArtifact, downloadArtifact: download, publishDirectory, hydrateDirectory };
+  return { cancelTrackedJob, runCodex, generateImages, generateEvents, uploadArtifact, downloadArtifact: download, publishDirectory, hydrateDirectory };
 }
 const defaultClient = createCloudClient();
 export const runCodex = args => defaultClient.runCodex(args);

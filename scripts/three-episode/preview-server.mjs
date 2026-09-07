@@ -3,14 +3,18 @@ import { createReadStream } from 'node:fs';
 import { stat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {createHumanReviewHandler} from './human-review-store.mjs';
+import {createRejectionPublisher} from './rejection-publisher.mjs';
 
 /** Local artifact preview with byte ranges so native video controls can seek. */
-export async function serveEpisodePreview({ root, port = 53747 }) {
+export async function serveEpisodePreview({ root, port = 53747, policyS3Uri }) {
   const directory = await realpath(root);
   const inside = file => { const relative = path.relative(directory, file); return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative); };
   const mime = { '.html':'text/html; charset=utf-8', '.json':'application/json', '.mp4':'video/mp4', '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp', '.css':'text/css', '.js':'text/javascript' };
+  const humanReview = createHumanReviewHandler(directory,{onSaved:createRejectionPublisher(directory,policyS3Uri)});
   const server = createServer(async (request, response) => {
     try {
+      if (new URL(request.url,'http://localhost').pathname === '/human-ten/api/reviews') { await humanReview(request,response); return; }
       if (!['GET','HEAD'].includes(request.method)) { response.writeHead(405).end(); return; }
       const url = new URL(request.url, 'http://localhost');
       let file = path.resolve(directory, `.${decodeURIComponent(url.pathname)}`);
@@ -42,6 +46,6 @@ export async function serveEpisodePreview({ root, port = 53747 }) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   if (!process.argv[2]) throw new Error('Usage: node scripts/three-episode/preview-server.mjs REPORT_DIRECTORY [PORT]');
-  const server = await serveEpisodePreview({root:process.argv[2],port:Number(process.argv[3]??53747)});
+  const server = await serveEpisodePreview({root:process.argv[2],port:Number(process.argv[3]??53747),policyS3Uri:process.argv[4]});
   console.log(JSON.stringify({pid:process.pid,address:server.address(),root:path.resolve(process.argv[2])}));
 }

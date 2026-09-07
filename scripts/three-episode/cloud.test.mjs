@@ -14,7 +14,7 @@ async function fixture(t, behavior = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'episode-cloud-')); t.after(() => rm(root, { recursive: true, force: true }));
   const calls = []; let payload;
   const runtime = { launcherPath: '/fsx/pinned/cloud-launcher.mjs', codexBinary: '/fsx/pinned/codex', outputS3Root: 's3://test-bucket/three-episode', ...behavior.runtime };
-  const client = createCloudClient({ repoRoot: root, runtime, config: { baseUrl: 'https://unit.invalid', token: 'never-log-synthetic', userId: 'unit' }, request: async (url, options) => {
+  const client = createCloudClient({ repoRoot: root, runtime, assertActive:behavior.assertActive, trackRemote:behavior.trackRemote, config: { baseUrl: 'https://unit.invalid', token: 'never-log-synthetic', userId: 'unit' }, request: async (url, options) => {
     calls.push({ url, method: options.method ?? 'GET' });
     if (options.method === 'POST') { payload = options.body; if (behavior.postError) throw behavior.postError; return { job: { job_id: 'gen_abc123' } }; }
     if (url.includes('by-request-id')) { if (behavior.lookupError) throw behavior.lookupError; return { job_id: 'gen_abc123' }; }
@@ -81,7 +81,7 @@ test('MCP child strips provider and account authentication; only model keeps pla
   assert(!Object.keys(modelEnvironment(runtime, '/task', inherited)).some(key => /^(LWDP|AWS|GOOGLE)/.test(key)));
 });
 test('Host Job uses formal Secret injection and explicit pre-Seedance stop', () => {
-  const args = { jobId: 'test-episode', image: `registry/worldkit@sha256:${'a'.repeat(64)}`, sourceArchiveS3Uri: 's3://bucket/closure.tar.gz', runArgs: ['scripts/three-episode/run.mjs', '--stop-before-seedance'] };
+  const args = { jobId: 'test-episode', image: `registry/worldkit@sha256:${'a'.repeat(64)}`, sourceArchiveSha256:'f'.repeat(64), sourceArchiveS3Uri: 's3://bucket/closure.tar.gz', runArgs: ['scripts/three-episode/run.mjs', '--stop-before-seedance'] };
   const job = threeEpisodeHostJob(args); const container = job.spec.template.spec.containers[0];
   assert.equal(container.env.find(e => e.name === 'LWDP_GENERATION_API_TOKEN').valueFrom.secretKeyRef.name, 'lwdp-generation-token');
   assert.equal(job.spec.backoffLimit, 0); assert.throws(() => threeEpisodeHostJob({ ...args, runArgs: [] }), /PRE_SEEDANCE_STOP/);
@@ -127,28 +127,23 @@ test('publication hydrates exact content hashes and rejects changed remote bytes
   objects.set(manifest.files[0].s3Uri, Buffer.from('changed')); await rm(path.join(output, 'capture-summary.json'));
   await assert.rejects(client.hydrateDirectory('s3://bucket/artifacts', output), /HASH_MISMATCH/);
 });
-test('capture dispatch requests one real GPU and resumes exact Job without model/provider calls', async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'episode-capture-cloud-')); t.after(() => rm(root, { recursive: true, force: true }));
-  const worldBuildHash = 'a'.repeat(64); const sourceManifestPath = path.join(root, 'source.json'); const planPath = path.join(root, 'plan.json');
-  await writeFile(sourceManifestPath, JSON.stringify({ worldBuildHash, runtimeHash: 'b'.repeat(64) })); await writeFile(planPath, JSON.stringify({ worldBuildHash }));
-  const conf = { workerImage: `registry/image@sha256:${'c'.repeat(64)}`, sourceArchiveS3Uri: 's3://bucket/frozen.tar.gz', captureS3Root: 's3://bucket/captures' };
-  let job; let creates = 0; let uploads = 0;
-  const dispatcher = createCaptureDispatcher({ runtimeConfig: conf, kube: async (args, input) => { if (args[0] === 'create') { creates++; job = input; } return { ...job, status: { conditions: [{ type: 'Complete', status: 'True' }] } }; }, cloud: {
-    uploadArtifact: async () => { uploads++; }, hydrateDirectory: async (prefix, outputRoot) => { await mkdir(outputRoot, { recursive: true }); await writeFile(path.join(outputRoot, 'capture-summary.json'), JSON.stringify({ kind: 'three-episode-capture-summary', playerCaptureVersion: PLAYER_CAPTURE_VERSION, worldBuildHash, status: 'completed', segments: [{ segmentId: 'segment-00', status: 'completed', outputRoot: '/episode/output/capture/segments/segment-00/recipe' }] })); },
-  } });
-  const args = { sourceManifestPath, planPath, worldBuildHash, outputRoot: path.join(root, 'capture') };
-  const first = await dispatcher.run(args); await dispatcher.run(args);
-  assert.equal(creates, 1); assert.equal(uploads, 1);
-  const container = job.spec.template.spec.containers[0]; assert.equal(container.resources.requests['nvidia.com/gpu'], 1);
-  assert.equal(container.env.find(entry => entry.name === 'WORLDKIT_CAPTURE_GPU').value, '1'); assert(container.args.includes('--capture-only')); assert(container.args.includes('--stop-before-seedance'));
-  assert.equal(first.segments[0].outputRoot, path.join(args.outputRoot, 'segments/segment-00/recipe'));
+test('capture dispatch enqueues once, yields CPU and admits only verified remote results', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'episode-batch-enqueue-')); t.after(() => rm(root,{recursive:true,force:true}));
+  const worldBuildHash='a'.repeat(64), sourceManifestPath=path.join(root,'source.json'), planPath=path.join(root,'plan.json');
+  await writeFile(sourceManifestPath,JSON.stringify({worldBuildHash,runtimeHash:'b'.repeat(64),sourceHash:'d'.repeat(64)}));await writeFile(planPath,JSON.stringify({worldBuildHash}));
+  const tasks=new Map();let enqueues=0;
+  const queue={task:async(_,id)=>tasks.get(id),enqueue:async(_,input)=>{enqueues++;tasks.set(input.id,{input});}};
+  const cloud={uploadArtifact:async()=>{},hydrateDirectory:async(_,out)=>{await mkdir(out,{recursive:true});await writeFile(path.join(out,'capture-summary.json'),JSON.stringify({kind:'three-episode-capture-summary',playerCaptureVersion:PLAYER_CAPTURE_VERSION,worldBuildHash,status:'completed',segments:[{segmentId:'segment-00',status:'completed',outputRoot:'/episode/output/capture/segments/segment-00/recipe'}]}));}};
+  const dispatcher=createCaptureDispatcher({queue,cloud,kube:async()=>{throw Error('must not launch K8s job');},runtimeConfig:{workerImage:`registry/image@sha256:${'c'.repeat(64)}`,sourceArchiveS3Uri:'s3://bucket/source.tar.gz',sourceArchiveSha256:'e'.repeat(64),captureS3Root:'s3://bucket/capture',captureCohortId:'cohort-one'}});
+  const args={sourceManifestPath,planPath,worldBuildHash,outputRoot:path.join(root,'capture'),caseId:'case-one'};
+  await assert.rejects(dispatcher.run(args),{code:'EPISODE_CAPTURE_BATCH_PENDING'});
+  await assert.rejects(dispatcher.run(args),{code:'EPISODE_CAPTURE_BATCH_PENDING'});assert.equal(enqueues,1);
+  tasks.values().next().value.receipt={status:'capture-succeeded'};
+  assert.equal((await dispatcher.run(args)).status,'completed');assert.equal(enqueues,1);
 });
-test('unknown K8s create resolves exact name and never creates a duplicate on restart', async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'episode-capture-unknown-')); t.after(() => rm(root, { recursive: true, force: true }));
-  const worldBuildHash = 'a'.repeat(64); for (const name of ['source.json', 'plan.json']) await writeFile(path.join(root, name), JSON.stringify({ worldBuildHash })); let creates = 0;
-  const dispatcher = createCaptureDispatcher({ runtimeConfig: { workerImage: `registry/image@sha256:${'c'.repeat(64)}`, sourceArchiveS3Uri: 's3://bucket/frozen.tar.gz', captureS3Root: 's3://bucket/captures' }, kube: async args => { if (args[0] === 'create') creates++; throw new Error('transport unavailable'); }, cloud: { uploadArtifact: async () => {} } });
-  const args = { sourceManifestPath: path.join(root, 'source.json'), planPath: path.join(root, 'plan.json'), outputRoot: path.join(root, 'capture'), worldBuildHash };
-  await assert.rejects(dispatcher.run(args), /transport/); await assert.rejects(dispatcher.run(args), /transport/); assert.equal(creates, 1);
+test('capture cannot infer an upstream-complete singleton when cohort is absent', async()=>{
+  const dispatcher=createCaptureDispatcher({runtimeConfig:{captureS3Root:'s3://bucket/capture'}});
+  await assert.rejects(dispatcher.run({}),/COHORT_REQUIRED/);
 });
 
 test('image routing uses existing pool IDs with a stable request and rejects switching a live attempt',async t=>{
@@ -209,3 +204,31 @@ test('cloud reviewer pool recovery retains failed evidence and cannot duplicate 
   f.runtime.imageRetryAttempts={'cancelled-image':1};await assert.rejects(f.client.generateImages(args),/REQUIRES_TERMINAL_FAILED/);assert.equal(f.calls.filter(c=>c.method==='POST').length,1);
   f.runtime.imageRetryCancelledJobs=['gen_abc123'];behavior.pollStatus='succeeded';await f.client.generateImages(args);assert.notEqual(f.payload().request_id,first);assert.notEqual(f.payload().options.codex_account_ids[0],account);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
  });
+
+test('cancellation before submit creates no paid request',async t=>{
+ const f=await fixture(t,{assertActive:async()=>{throw Object.assign(Error('cancelled'),{code:'EPISODE_COHORT_CANCELLED'});}});
+ await assert.rejects(f.client.runCodex(f.args),{code:'EPISODE_COHORT_CANCELLED'});assert.equal(f.calls.length,0);
+});
+test('durable remote intent precedes POST and survives a lost submit response',async t=>{
+ const events=[];const f=await fixture(t,{postError:Error('timeout'),lookupError:Error('unavailable'),trackRemote:async r=>events.push(structuredClone(r))});
+ await assert.rejects(f.client.runCodex(f.args),{code:'EPISODE_SUBMISSION_UNKNOWN'});
+ assert.equal(events[0].status,'submitting');assert.equal(events[0].requestId,f.payload().request_id);assert.equal(events[0].pipeline,'codex');
+ assert.equal(events.at(-1).status,'submission-unknown');assert.equal(f.calls.filter(c=>c.method==='POST').length,1);
+});
+test('cancel reconciles only the exact request then cancels its job without creating another',async()=>{
+ const calls=[];const client=createCloudClient({config:{},request:async(url,options)=>{calls.push({url,method:options.method??'GET'});return url.includes('by-request-id')?{job:{job_id:'owned-job'}}:{job:{job_id:'owned-job',status:'cancelled'}};}});
+ const result=await client.cancelTrackedJob({pipeline:'t2i',requestId:'owned-request'});
+ assert.equal(result.isTerminal,true);assert.deepEqual(calls,[{url:'/api/v1/generation/jobs/by-request-id/owned-request?pipeline=t2i',method:'GET'},{url:'/api/v1/generation/jobs/owned-job/cancel',method:'POST'}]);
+});
+test('missing exact request remains unresolved and Gemini cancellation is never invented',async()=>{
+ let posts=0;const client=createCloudClient({config:{},request:async(_url,options)=>{if(options.method==='POST')posts++;throw Error('404 or transport');}});
+ await assert.rejects(client.cancelTrackedJob({pipeline:'codex',requestId:'unknown'}));assert.equal(posts,0);
+ const result=await client.cancelTrackedJob({pipeline:'gemini',requestId:'request-one'});assert.equal(result.isTerminal,false);assert.equal(result.attentionRequired,true);
+});
+
+test('resuming cancelled Codex work requires exact job authorization and never duplicates active work',async t=>{
+ const behavior={pollStatus:'cancelled',runtime:{codexAccountIds:['account-a','account-b']}};const f=await fixture(t,behavior);
+ await assert.rejects(f.client.runCodex(f.args),/TERMINAL_FAILED/);const first=f.payload().request_id;
+ f.runtime.codexRetryAttempts={[f.args.taskId]:1};await assert.rejects(f.client.runCodex(f.args),/REQUIRES_TERMINAL_FAILED/);
+ f.runtime.codexRetryCancelledJobs=['gen_abc123'];behavior.pollStatus='succeeded';await f.client.runCodex(f.args);assert.notEqual(f.payload().request_id,first);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
+});

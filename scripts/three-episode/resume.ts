@@ -15,4 +15,4 @@ const prior=JSON.parse(await readFile(path.join(output,'episode.json'),'utf8'));
 if(prior.status!=='failed'&&!String(prior.status).startsWith('paused-'))throw new Error('EPISODE_RESUME_REQUIRES_STOPPED_ATTEMPT');
 const planRelative=path.relative(path.resolve(output),prior.planPath??'');
 if(!planRelative||planRelative.startsWith('..')||path.isAbsolute(planRelative))throw new Error('EPISODE_RESUME_REQUIRES_SAME_OUTPUT_ROOT');
-await runEpisodeWorkflow({sourceManifestPath:path.resolve(sourceManifest),outputRoot:path.resolve(output),episodeId:prior.episodeId,cloud,publishS3Prefix,stopBeforeSeedance:true});
+await runEpisodeWorkflow({sourceManifestPath:path.resolve(sourceManifest),outputRoot:path.resolve(output),episodeId:prior.episodeId,publishS3Prefix,stopBeforeSeedance:true});

@@ -1,3 +1,4 @@
+import { caseRuntimeConfig } from './case-config.js';
 import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, lstat } from 'node:fs/promises';
@@ -7,6 +8,8 @@ import { loadEpisodeSource } from './source.js';
 import { canonicalHash, PRE_SEEDANCE_PROFILE, assertPreSeedanceProfile, validateEpisodePlan, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
 import { runCaptureSegments, normalizeCaptureForVisuals, type CaptureSummary } from './capture.js';
 import { createCloudClient, type CloudClient } from './cloud.mjs';
+import { createBatchQueue, recordCpuReceipt } from './batch-controller.mjs';
+import { createBatchStore } from './batch-store.mjs';
 import { createCaptureDispatcher } from './capture-cloud.mjs';
 import { runThreeEpisodeVisuals } from './visuals.mjs';
 import { enqueueDeliveredWorld } from './outbox.mjs';
@@ -24,15 +27,19 @@ export interface EpisodeWorkflowOptions {
   sourceManifestPath: string; outputRoot: string; episodeId?: string;
   until?: 'plan' | 'capture' | 'pre-seedance'; stopBeforeSeedance: true;
   runtimeConfig?: Record<string, any>; cloud?: Cloud;
-  capture?: (options: { sourceManifestPath: string; planPath: string; outputRoot: string; worldBuildHash: string; segmentIds?: string[] }) => Promise<CaptureSummary>;
+  capture?: (options: { sourceManifestPath: string; planPath: string; outputRoot: string; worldBuildHash: string; segmentIds?: string[]; caseId?: string; cohortId?: string; continuation?: any }) => Promise<CaptureSummary>;
+  batchQueue?: ReturnType<typeof createBatchQueue>;
   onProgress?: (state: any) => void | Promise<void>; publishS3Prefix?: string;
 }
 export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
   if (options.stopBeforeSeedance !== true || !['plan', 'capture', 'pre-seedance'].includes(options.until ?? 'pre-seedance')) throw new Error('EPISODE_VIDEO_NOT_AUTHORIZED');
   const source = await loadEpisodeSource(options.sourceManifestPath), output = path.resolve(options.outputRoot);
   const episodeId = options.episodeId ?? `episode-${source.worldId.slice(0, 60)}-${canonicalHash({ worldBuildHash: source.worldBuildHash, profile: PRE_SEEDANCE_PROFILE }).slice(0, 12)}`;
-  const conf = options.runtimeConfig ?? await json(path.join(REPO, '.codex-tmp/three-episode-runtime.json'));
-  const cloud: Cloud = options.cloud ?? createCloudClient({ onProgress: (event: any) => process.stdout.write(JSON.stringify({kind:'episode-cloud-progress',...event})+'\n') });
+  const conf = caseRuntimeConfig(options.runtimeConfig ?? await json(path.join(REPO, '.codex-tmp/three-episode-runtime.json')) ?? {}, options.sourceManifestPath, REPO, digest(await readFile(options.sourceManifestPath)));
+  if(process.env.WORLDKIT_SOURCE_ARCHIVE_SHA256)conf.sourceArchiveSha256=process.env.WORLDKIT_SOURCE_ARCHIVE_SHA256;
+  const queue=options.batchQueue??(conf.captureCohortId?createBatchQueue({store:createBatchStore({namespace:conf.namespace??'lwdp'})}):undefined);
+  const assertActive=async()=>{if(conf.captureCohortId)await queue!.assertActive(conf.captureCohortId);};
+  const cloud: Cloud = options.cloud ?? createCloudClient({ assertActive, trackRemote:async(remote:any)=>{if(conf.captureCohortId)await queue!.trackRemote(conf.captureCohortId,episodeId,remote);}, onProgress: (event: any) => process.stdout.write(JSON.stringify({kind:'episode-cloud-progress',...event})+'\n') });
   await mkdir(output, { recursive: true });
   const statePath = path.join(output, 'episode.json'), prior = await json(statePath);
   if (prior && (prior.worldBuildHash !== source.worldBuildHash || prior.episodeId !== episodeId)) throw new Error('EPISODE_RESUME_SOURCE_CHANGED');
@@ -78,14 +85,18 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     if(repair)for(const segment of plan.segments)if(!repair.failedSegmentIds.includes(segment.id)&&canonicalHash(segment)!==canonicalHash(repair.previousPlan.segments.find(s=>s.id===segment.id)))throw new Error('EPISODE_REPAIR_CHANGED_PASSING_SEGMENT');
     await save(path.join(taskRoot,'result.json'),{inputHash,planSha256:digest(await readFile(planPath)),evidenceSha256:digest(await readFile(evidencePath)),provider});return{plan,planPath};
   }
+  let pendingCapture: any = null;
+  let primaryError:any;
+  if(!options.capture && !options.publishS3Prefix) throw new Error('EPISODE_BATCH_CHECKPOINT_REQUIRED');
   try {
+    await assertActive();
     await update('planning',{status:'running',error:null});
     let plan:EpisodePlan,planPath:string;
     if(state.planPath){planPath=state.planPath;plan=validateEpisodePlan(await json(planPath),{worldBuildHash:source.worldBuildHash});if(canonicalHash(plan)!==state.planHash)throw new Error('EPISODE_PLAN_CHANGED');}
     else{({plan,planPath}=await planWorld());await update('planned',{planPath,planHash:canonicalHash(plan)});}
     if(options.until==='plan'){await update('planned',{status:'paused-before-capture'});return state;}
-    const capture=options.capture??createCaptureDispatcher({runtimeConfig:conf,cloud,onProgress:(event:any)=>process.stdout.write(JSON.stringify({kind:'episode-capture-cloud',...event})+'\n')}).run;
-    let summary:CaptureSummary; let segmentIds:string[]|undefined;
+    const capture=options.capture??createCaptureDispatcher({runtimeConfig:conf,cloud,...(options.batchQueue?{queue:options.batchQueue}:{}),onProgress:(event:any)=>process.stdout.write(JSON.stringify({kind:'episode-capture-cloud',...event})+'\n')}).run;
+    let summary:CaptureSummary; let segmentIds:string[]|undefined=state.pendingSegmentIds;
     const admittedCapture = state.segments?.length===6 && state.segments.every((segment:any)=>segment.status==='completed')
       ? await json(path.join(output,'capture','capture-summary.local.json')) as CaptureSummary|null : null;
     if(admittedCapture?.playerCaptureVersion===PLAYER_CAPTURE_VERSION){
@@ -94,7 +105,14 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
       await update('whitebox-capture',{status:'running',segments:summary.segments,captureReused:true});
     }else for(;;){
       await update('whitebox-capture',{status:'running'});
-      summary=await capture({sourceManifestPath:path.resolve(options.sourceManifestPath),planPath,outputRoot:path.join(output,'capture'),worldBuildHash:source.worldBuildHash,...(segmentIds?{segmentIds}:{})});
+      let continuation:any;
+      if(!options.capture&&options.publishS3Prefix){
+        const checkpointS3Uri=`${options.publishS3Prefix}/capture-checkpoints/${canonicalHash(plan)}`;
+        await cloud.publishDirectory(output,checkpointS3Uri);
+        continuation={stopBeforeSeedance:true,outputRoot:path.relative(REPO,output),checkpointS3Uri,publishS3Uri:options.publishS3Prefix,...(options.until?{until:options.until}:{}),...(process.env.WORLDKIT_EPISODE_HOST_JOB?{producerJobName:process.env.WORLDKIT_EPISODE_HOST_JOB}:{})};
+      }
+      await assertActive();
+      summary=await capture({sourceManifestPath:path.resolve(options.sourceManifestPath),planPath,outputRoot:path.join(output,'capture'),worldBuildHash:source.worldBuildHash,caseId:episodeId,cohortId:conf?.captureCohortId,continuation,...(segmentIds?{segmentIds}:{})});
       await update('whitebox-capture',{segments:summary.segments});
       if(summary.status==='completed')break;
       const failures=summary.segments.filter(s=>s.status==='failed');
@@ -106,26 +124,65 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
       await update('route-repair',{failedSegmentIds:segmentIds});
       const previousPlan=plan;({plan,planPath}=await planWorld({previousPlan,failedSegmentIds:segmentIds,failures:reports}));
       if(canonicalHash(plan)===canonicalHash(previousPlan))throw new Error('EPISODE_REPAIR_DID_NOT_CHANGE_FAILED_PLAN');
-      await update('route-repaired',{planPath,planHash:canonicalHash(plan)});
+      await update('route-repaired',{planPath,planHash:canonicalHash(plan),pendingSegmentIds:segmentIds});
     }
     const captureInput=await normalizeCaptureForVisuals(summary!,{worldBuildHash:source.worldBuildHash,runtimeHash:source.runtimeHash});
     await save(path.join(output,'capture-input.json'),captureInput);
     if(options.until==='capture'){await update('whitebox-completed',{status:'paused-before-visuals'});return state;}
+    await assertActive();
     await update('style-planning');
-    const visuals=await runThreeEpisodeVisuals({source,capture:captureInput,episodeId,outputRoot:path.join(output,'visuals'),cloud,stopBeforeSeedance:true,
+    let publishedPreparedCount=0;
+    const visuals=await runThreeEpisodeVisuals({source,capture:captureInput,episodeId,outputRoot:path.join(output,'visuals'),cloud,stopBeforeSeedance:true,...(options.publishS3Prefix?{publishS3Prefix:options.publishS3Prefix}:{}),
       ...(conf?.anchorContinuation?{anchorContinuation:conf.anchorContinuation}:{}),
       ...(conf?.referenceStyleVariantId?{referenceStyleVariantId:conf.referenceStyleVariantId}:{}),
       ...(conf?.stylePlanCandidate?{stylePlanCandidate:conf.stylePlanCandidate}:{}),
-      onProgress:async(visualState:any)=>{await update(visualState.stage==='planning'?'style-planning':visualState.stage,{visualState});}});
-    if(visuals.status!=='pre-seedance-ready'||visuals.preparedRequestCount!==60||visuals.providerVideoSubmissionCount!==0)throw new Error('EPISODE_PRE_SEEDANCE_CLOSURE_INVALID');
-    await update('pre-seedance-ready',{status:'prepared',preparedRequestCount:60,visualManifestPath:path.join(output,'visuals/pre-seedance-manifest.json'),finishedAt:new Date().toISOString()});
+      onProgress:async(visualState:any)=>{
+        const preparedRequestCount=visualState.preparedRequestCount??0;
+        await update(visualState.stage==='planning'?'style-planning':visualState.stage,{visualState,preparedRequestCount});
+        if(options.publishS3Prefix&&preparedRequestCount>publishedPreparedCount){
+          await cloud.publishDirectory(output,options.publishS3Prefix);
+          publishedPreparedCount=preparedRequestCount;
+        }
+      }});
+    const expected=visuals.expectedRequestCount??60;
+    if(visuals.status!=='pre-seedance-ready'||!Number.isInteger(expected)||expected<0||expected>60||visuals.preparedRequestCount!==expected||visuals.providerVideoSubmissionCount!==0)throw new Error('EPISODE_PRE_SEEDANCE_CLOSURE_INVALID');
+    await update('pre-seedance-ready',{status:expected?'prepared':'excluded-by-user',preparedRequestCount:expected,expectedRequestCount:expected,visualManifestPath:path.join(output,'visuals/pre-seedance-manifest.json'),finishedAt:new Date().toISOString()});
     return state;
-  }catch(error:any){await update(state.stage,{status:'failed',error:{code:error.code??/^[A-Z_]+/.exec(error.message)?.[0]??'EPISODE_FAILED',message:String(error.message).slice(0,6000),jobId:error.jobId??null}});throw error;}
-  finally{await stateWrites;if(options.publishS3Prefix)await cloud.publishDirectory(output,options.publishS3Prefix);}
+  }catch(error:any){
+    if(error.code==='EPISODE_CAPTURE_BATCH_PENDING'){
+      pendingCapture=error;await update('whitebox-capture',{status:'paused-capture-queue',captureTaskId:error.taskId,cohortId:error.cohortId});return state;
+    }
+    primaryError=error;
+    // Persist the original failure before fallible reporting or producer cleanup.
+    await stateWrites.catch(()=>{});stateWrites=Promise.resolve();
+    Object.assign(state,{status:error.code==='EPISODE_COHORT_CANCELLED'?'cancelled':'failed',error:{code:error.code??/^[A-Z_]+/.exec(error.message)?.[0]??'EPISODE_FAILED',message:String(error.message).slice(0,6000),jobId:error.jobId??error.state?.jobId??null}});
+    try{await save(statePath,state);}catch(cleanupError:any){process.stderr.write(`episode failure persistence: ${cleanupError.message}\n`);}
+    if(conf.captureCohortId&&!/PENDING|UNKNOWN/.test(error.code??error.message??'')){
+      try{await queue!.failPendingProducer(conf.captureCohortId,episodeId);}
+      catch(cleanupError:any){state.cleanupError=String(cleanupError.message).slice(0,1500);await save(statePath,state).catch(()=>{});}
+    }
+    throw error;
+  }finally{
+    try{
+      await stateWrites;
+      if(options.publishS3Prefix){
+        await cloud.publishDirectory(output,options.publishS3Prefix);
+        if(process.env.WORLDKIT_CPU_TASK&&process.env.WORLDKIT_CPU_COHORT&&process.env.WORLDKIT_EPISODE_HOST_JOB){
+          const succeeded=!primaryError&&['prepared','paused-before-visuals','excluded-by-user'].includes(state.status);
+          const retryable=state.status==='failed'&&/PENDING|UNKNOWN|ETIMEDOUT|ECONNRESET|HTTP_5|transport|network|timeout/i.test((state.error?.code??'')+' '+(state.error?.message??''));
+          await recordCpuReceipt(queue?.store??createBatchStore({namespace:conf.namespace??'lwdp'}),process.env.WORLDKIT_CPU_COHORT,process.env.WORLDKIT_CPU_TASK,{jobName:process.env.WORLDKIT_EPISODE_HOST_JOB,status:succeeded?'succeeded':state.status==='cancelled'?'cancelled':'failed',retryable,checkpointS3Uri:options.publishS3Prefix,stage:state.stage,error:state.error??null,finishedAt:new Date().toISOString()});
+        }
+        if(pendingCapture&&options.capture)await (queue??createBatchQueue({store:createBatchStore({namespace:conf.namespace??'lwdp'})})).checkpointReady(pendingCapture.cohortId,pendingCapture.taskId,{stopBeforeSeedance:true,outputRoot:path.relative(REPO,output),checkpointS3Uri:options.publishS3Prefix,publishS3Uri:options.publishS3Prefix});
+      }
+    }catch(cleanupError:any){
+      if(!primaryError)throw cleanupError;
+      process.stderr.write(`episode cleanup failed after ${state.error?.code}: ${cleanupError.message}\n`);
+    }
+  }
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const args=process.argv.slice(2), switches=new Set(['--stop-before-seedance','--capture-only']),valued=new Set(['--source-manifest','--output-root','--episode-id','--until','--plan-s3','--plan','--publish-s3','--segment-ids']);
+  const args=process.argv.slice(2), switches=new Set(['--stop-before-seedance','--capture-only']),valued=new Set(['--source-manifest','--output-root','--episode-id','--until','--plan-s3','--plan','--publish-s3','--segment-ids','--checkpoint-s3','--cohort']);
   for(let i=0;i<args.length;i++){if(switches.has(args[i]!))continue;if(!valued.has(args[i]!)||!args[++i])throw new Error('EPISODE_CLI_ARGUMENT_INVALID');}
   const value=(flag:string)=>{const index=args.indexOf(flag);return index<0?undefined:args[index+1];};
   if(!args.includes('--stop-before-seedance'))throw new Error('EPISODE_REQUIRES_PRE_SEEDANCE_STOP');
@@ -136,8 +193,12 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
     const planPath=value('--plan')??path.join(outputRoot,'input-plan.json');if(planS3)await cloud.downloadArtifact(planS3,planPath);
     const plan=validateEpisodePlan(await json(planPath),{worldBuildHash:source.worldBuildHash});
     let summary:CaptureSummary|undefined;
-    try{summary=await runCaptureSegments({playableRoot:source.playableRoot,plan,outputRoot,runtimeHash:source.runtimeHash,...(value('--segment-ids')?{segmentIds:value('--segment-ids')!.split(',')}:{}),onProgress:event=>{process.stdout.write(JSON.stringify(event)+'\n');}});}
+    try{summary=await runCaptureSegments({playableRoot:source.playableRoot,plan,outputRoot,runtimeHash:source.runtimeHash,...(value('--segment-ids')?{segmentIds:value('--segment-ids')!.split(',')}:{}),onProgress:async event=>{process.stdout.write(JSON.stringify(event)+'\n');if(publishS3Prefix&&['completed','failed','cached'].includes(event.status))await cloud.publishDirectory(outputRoot,publishS3Prefix);}});}
     finally{if(publishS3Prefix)await cloud.publishDirectory(outputRoot,publishS3Prefix);}
     if(summary?.status!=='completed')process.exitCode=2;
-  }else await runEpisodeWorkflow({sourceManifestPath,outputRoot,stopBeforeSeedance:true,...(value('--episode-id')?{episodeId:value('--episode-id')!}:{}),...(until?{until}:{}),...(publishS3Prefix?{publishS3Prefix}:{})});
+  }else { const checkpoint=value('--checkpoint-s3');if(checkpoint)await cloud.hydrateDirectory(checkpoint,outputRoot);
+    const runtimeConfig=await json(path.join(REPO,'.codex-tmp/three-episode-runtime.json'));
+    if(value('--cohort'))runtimeConfig.captureCohortId=value('--cohort');
+    await runEpisodeWorkflow({sourceManifestPath,outputRoot,runtimeConfig,stopBeforeSeedance:true,...(value('--episode-id')?{episodeId:value('--episode-id')!}:{}),...(until?{until}:{}),...(publishS3Prefix?{publishS3Prefix}:{})});
+  }
 }

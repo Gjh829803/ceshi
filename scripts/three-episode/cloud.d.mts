@@ -1,4 +1,5 @@
 export interface CloudClient {
+ cancelTrackedJob(remote: Record<string, any>): Promise<any>;
  runCodex(args: Record<string, unknown>): Promise<any>;
  generateImages(args: Record<string, unknown>): Promise<any>;
  generateEvents(args: Record<string, unknown>): Promise<any>;

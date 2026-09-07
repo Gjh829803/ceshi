@@ -1,3 +1,4 @@
+import {customMovementAdapter,ARBORIST_CAPTURE_ADAPTER} from './custom-movement.js';
 import { createServer } from 'node:http';
 import { lstat, readFile, realpath, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,6 +22,7 @@ export interface EpisodeObservation {
   renderOverrides: { fogDisabled: boolean };
 }
 export interface EpisodeCaptureSession {
+  readonly customMovementAdapterId?: string;
   readonly errors: readonly string[];
   capabilities(): Promise<EpisodeCapabilities>;
   probeStart(start: EpisodeStart): Promise<EpisodeStartProbe>;
@@ -107,11 +109,20 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
       if (!port || typeof port[method] !== 'function') throw new Error(`EPISODE_PORT_METHOD_MISSING: ${method}`);
       return await port[method](...args);
     }, { method, args });
+    const initialCapabilities:EpisodeCapabilities=await call('capabilities');
+    const adapterId=await customMovementAdapter(root,initialCapabilities.movement.movementId);
     const session: BrowserSession = {
+      ...(adapterId?{customMovementAdapterId:adapterId}:{}),
       page, errors,
       capabilities: () => call('capabilities'), probeStart: start => call('probeStart', [start]),
       prepareSegment: (start, viewport) => call('prepareSegment', [start, viewport]),
-      advance: (input, ticks) => call('advance', [input, ticks]), frame: mimeType => call('frame', [mimeType]),
+      advance: async (input, ticks) => {
+        if(adapterId===ARBORIST_CAPTURE_ADAPTER&&input.jumpPressed)await page.evaluate(async()=>{
+          window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space',key:' ',bubbles:true,repeat:false}));
+          await Promise.resolve();window.dispatchEvent(new KeyboardEvent('keyup',{code:'Space',key:' ',bubbles:true}));
+        });
+        return call('advance',[input,ticks]);
+      }, frame: mimeType => call('frame', [mimeType]),
       release: () => call('release'), close,
       screenshot: async () => page.evaluate(() => {
         const observer = (window as any).__WORLDKIT_EVAL__;

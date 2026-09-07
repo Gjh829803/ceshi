@@ -21,8 +21,9 @@ provider submission is implemented in this lane.**
   UI canvases and displayed model output are excluded. UI already authored
   inside the original Three scene is still scene geometry and cannot be
   automatically separated.
-- `capture-cloud.mjs` dispatches the isolated GPU capture child and retains
-  successful segments across route repairs. Route decisions remain Agent-owned.
+- `capture-cloud.mjs` enqueues a registered capture task and returns a durable
+  paused state. A single L4 batch worker records the six segments; successful
+  segments survive route repairs. Route decisions remain Agent-owned.
 - `visuals.mjs` locks independently accepted style anchors, generates complete
   target tri-views and segment openings, prepares video-only events, and writes
   `pre-seedance-manifest.json`. All target IDs are retained.
@@ -44,6 +45,98 @@ pnpm exec tsx scripts/three-episode/source.ts \
 
 The portable `source.json` records original and derived world/runtime hashes.
 Only the new production copy receives the current SDK.
+
+## Batch admission and deployment
+
+Only whitebox recording/first-frame/tri-view extraction requests a GPU. Planner
+observations use the existing CPU SwiftShader browser path. The formal queue
+admits 100 compatible Episode tasks, or immediately admits the remainder once
+all registered producers in that cohort have reached a known terminal state.
+One task means all six recordings for one Episode. GPU concurrency is one;
+H100 and individual GPU Host submissions are rejected.
+
+The queue uses Kubernetes ConfigMap `resourceVersion` compare-and-swap, one
+immutable case roster per cohort, and one global GPU execution slot. Each cohort
+is bounded to 250 cases and 850 KB of state; larger campaigns must register
+multiple cohorts. Cases cannot be added to a sealed roster. No queue timeout
+is treated as proof that upstream has finished.
+
+Before starting CPU prepare jobs, register their exact Episode IDs:
+
+```sh
+node scripts/three-episode/batch-cli.mjs register \
+  --cohort production-run-001 --cases-file /absolute/case-ids.json
+```
+
+The JSON file is an array of the actual `--episode-id` values. Prepare failures
+that reach a known final state are recorded by the workflow. For externally
+managed producers, explicitly report final failure/cancellation; never use
+this to hide an unknown or still-running submission:
+
+```sh
+node scripts/three-episode/batch-cli.mjs terminal \
+  --cohort production-run-001 --case actual-episode-id --status failed-final
+node scripts/three-episode/batch-cli.mjs status --cohort production-run-001
+node scripts/three-episode/batch-cli.mjs reconcile
+```
+
+Add `captureCohortId`, `sourceArchiveSha256` and, if different from the default,
+`sourceManifestRelativePath` to `.codex-tmp/three-episode-runtime.json`.
+The archive hash is mandatory for both CPU Host and capture. Freeze the updated
+code into the source capsule and worker image; old r9/r10 archives must not be
+replayed. The image must contain `batch-cli.mjs`; the source capsule must contain
+the same compatible batch implementation. The small-tail test used image `455922bb…`; the final controller image is
+`00637f56…`. Full digests and scope are recorded in the validation report.
+
+`three-episode-batch-infrastructure.mjs <digest-pinned-image> [namespace]` emits
+an installation List containing dedicated service accounts/RBAC, a single-card
+`g6.2xlarge` Spot NodePool, a one-minute CPU reconciler CronJob and fail-closed
+admission policies. The pool reuses the existing
+`ray-gpu-ec2-all-baked` NodeClass and waits two idle minutes before considering
+consolidation. Confirm NodeClass/AMI, CPU capacity, image digest and AWS read
+permissions before activation. Apply admission policy/RBAC first, then pool and
+reconciler. Disable the old dispatcher for these tasks before enabling this one;
+its global slot is not shared with the new Three queue.
+
+The dedicated accounts, RBAC, single-card pool and admission policies are now
+installed. A pool-scoped NVIDIA device-plugin DaemonSet was added because the
+shared plugin does not tolerate this pool's isolation taint; shared DaemonSets
+were not changed. Live server admission accepted the L4 Pod and rejected the
+H100 Pod. Both reconciler CronJobs are deliberately suspended and the global
+queue is paused after the bounded test; no unattended production is enabled.
+
+The real small-tail test completed one Episode/six clips and CPU capture
+admission. Two Spot fleet attempts had no capacity; this test temporarily used
+one g6.2xlarge On-Demand instance, then restored Spot. The instance, Node,
+NodeClaim and root EBS volume were all verified removed. No new style images or
+Seedance jobs were submitted. This verifies the capture/continuation/resource
+boundary, not a new full visual-generation campaign or 100-case throughput.
+
+GPU workers publish a verified per-case receipt; CPU reconciliation submits a
+separate pre-Seedance continuation after the producing CPU Job ends. CPU
+postprocessing has its own two-slot admission cap, independent of the GPU slot. The old
+Seedance-capable `episode-render` path is not called. An admitted batch interrupted
+at the Pod level may recover at most once, after the old Pod is terminal; only
+missing cases/segments run again. A bad case does not restart the entire batch.
+Unknown create results reconcile the same Job identity. `pause` freezes dispatch
+and cancels an active owned GPU Job on reconciliation; `cancel --cohort ID` is
+persistent and cannot be undone by recovery. `resume` only removes the global
+pause; it does not resurrect cancelled cohorts.
+
+The CPU reconciler separately records `cleanup-pending` and `resource-closed`.
+It queries EC2, Spot request and volume evidence using project-local AWS
+credentials. Missing read permissions or incomplete volume evidence keep it
+pending. It never terminates shared nodes itself. CPU terminal receipts are persisted after the checkpoint upload. Confirmed
+transient failures can resume once from the latest checkpoint; unknown removed
+Jobs release capacity only after their Pods are absent, remain attention-required,
+and are not blindly resubmitted. Successful whitebox media is retained.
+
+GPU workers cache one hash-locked capsule (compressed limit 1 GiB, expanded limit
+4 GiB). They verify the uploaded manifest against local bytes; CPU admission
+performs the complete media download/hash verification. The one-case cloud test
+did not measure a repeated-capsule cache hit or savings across different worlds.
+
+See [implementation and verification](../../docs/superpowers/plans/2026-09-06-three-episode-batch-capture.md).
 
 ## Cloud execution
 
@@ -197,3 +290,78 @@ actual `episode_submit_plan` receipt and original source manifest. It validates
 source/runtime/scene closure and does not run a Host route planner. Normal cloud
 capture, style reviews and pre-Seedance preparation then continue through
 `workflow.ts`. Keep the immutable run inputs, logs and provider request journals.
+
+### Failure and cancellation closure (r13)
+
+The workflow records its original error before attempting producer cleanup or
+publication. Only a still-pending producer may be failed by this cleanup; a
+restored pre-capture checkpoint does not imply the producer is still pending.
+CPU success requires an explicit `prepared` or `paused-before-visuals` state and
+a successful checkpoint publication. Cleanup failures preserve the primary error.
+A missing application receipt is `unknown`, even if Kubernetes says Complete.
+
+CPU receipt identity includes an unacknowledged `cpuPending` attempt. Its durable
+success prevents another create after Job TTL; retryable failure uses the latest
+checkpoint with a maximum of two attempts. Old-attempt receipts are rejected.
+Slots are released only after the owned execution has no active Pods.
+
+Cohort cancellation prevents new submissions and the reconciler deletes active
+owned CPU Jobs, including a Job created concurrently with cancellation. Cancellation
+cleanup still runs with queue admission paused; suspending the CronJob itself
+requires an explicit `reconcile` invocation to perform cleanup.
+Before each Codex/T2I POST, the worker persists its exact pipeline/request identity
+in the cohort. Cancellation resolves unknown submissions by that identity and
+cancels only the resulting owned job. Each reconcile handles at most three remote
+cancellations, with five-second HTTP timeouts and durable retry state. Terminal
+remote history stays in local/S3 journals; the cohort retains only outstanding
+calls and its last cancellation result, keeping the queue bounded.
+Already-issued synchronous Gemini requests have no supported cancellation API.
+They remain `cancellation-unconfirmed` with `attentionRequired`, never falsely
+reported stopped or automatically resubmitted. New downstream calls are blocked.
+
+The r13 controller image and frozen source capsule are recorded in
+[the fix verification report](../../docs/reviews/2026-09-06-three-episode-fixes-validation.md).
+Both deployed CronJobs remain suspended. Existing source archives and completed
+cohorts remain immutable; new work must select the new image and matching source
+archive together. This update does not start a cohort or submit Seedance.
+
+### Human-ten delivery compatibility and UI removal
+
+`prepareEpisodeSource` recognizes the original runtime hash recorded in
+`compat/creator-camera-provenance.json`. For that delivery it compiles the pinned
+Creator camera kernel with the SDK Episode port. The kernel's original follow,
+quaternion transition and collision code is retained; the only behavioral extension
+is rebasing its pose/memory when the SDK initializes an Episode segment. Selection
+happens at build time: there is one camera writer, one scene and one physics world.
+The override bytes participate in the runtime cache identity; default builds do
+not consume the compatibility kernel.
+
+The derived page loads `episode-presentation.js` and hides DOM HUD, instructions,
+menus, notifications and secondary canvases, including elements created later.
+Only the observer renderer's canvas is shown and captured. Nodes remain available
+to author callbacks. World-space signs/materials remain part of the scene. This is
+scoped to the production copy; author sources and compiled scene entries are
+unchanged, while the new HTML/presentation bytes receive a new playable identity.
+An existing nonempty output directory is rejected instead of overwritten.
+
+For `important-representatives-v1`, use the manifest's conditioning entity list
+rather than every historical triview. The capture alias `player` resolves through
+`orientationTargetId` to the real actor (for example `traveler`). The exact original
+reference is retained for the required original-style candidate.
+
+The human-ten adapter is currently local only. See
+[adaptation evidence](../../docs/reviews/2026-09-06-three-episode-human-ten-adaptation.md).
+No real case recording, cloud submission, deployment or Seedance run accompanied
+this adaptation.
+
+### 已录制案例的独立后处理并发
+
+全局队列 `maximumCpuSlots` 默认 2，显式生产配置允许 1–9；案例拥有安全检查点和有效接续回执后，即可独立进入 CPU 后处理，无需等待其他案例补录。每个后处理 Host 请求 500m CPU / 4Gi，保留 4 CPU / 12Gi 上限。GPU 的单卡 L4 约束保持独立。并发上限是准入容量，必须另查 Pod 是否 Running 和服务端账号槽位，不能把 Pending 算作正在生成。账号额度表不保证实时可用，以实际任务错误为准；增大并发不绕过额度或有界重试。
+
+### 按样式独立准备 Seedance 输入
+
+默认采用 streaming 流程：单个样式的锚点检查、首帧与全部目标三视图、素材检查、视觉事件、六条渲染请求按依赖接续。优先 style-00，一套样式可使用配置允许的图像并发槽；后续样式不受前一套明确失败的影响。任何时候都不调用视频提交接口。
+
+`visuals/ready-render-requests.json` 是独立样式就绪清单，保存世界/锚点/素材检查/请求hash，`readinessScope=independent-style`。每新增六条请求即发布检查点，恢复时先重新校验既有请求对应文件和hash，保留仍有效的就绪样式；失效输入不继续展示为就绪。跨样式差异检查作为后续批次报告，不能自动改写已就绪的样式；其pending/检查结果与单样式就绪分开报告。完整60条汇总仍写pre-seedance-manifest.json。`streaming=false`保留原批次流程用于兼容与回归。
+
+冻结过的捕获源包通过独立CPU streaming overlay升级：镜像与三个工作流文件hash均固定，补丁安装在源包解压之后，不能改动捕获GPU。全局队列streamingOverlay决定后续CPU接续采用哪个版本；运行中Host需先停止唯一工作流写入、发布完整检查点，再通过队列身份迁移切换Host；不得同时运行两个写入者。保留在途provider request/job ID，以原请求恢复。

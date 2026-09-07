@@ -1,3 +1,4 @@
+import {ARBORIST_CAPTURE_ADAPTER} from './custom-movement.js';
 import { createHash } from 'node:crypto';
 import { readdir, lstat, readFile, mkdir, writeFile, rename, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -89,10 +90,10 @@ function inputBasis(frame: EpisodeFrame): Vec3 {
   if (!value || value.length !== 3 || value.some(number => !Number.isFinite(number))) throw new Error('EPISODE_CONTROL_BASIS_MISSING');
   return value;
 }
-function movementForCapture(capabilities: EpisodeCapabilities): RouteMovement {
+function movementForCapture(capabilities: EpisodeCapabilities,session:EpisodeCaptureSession): RouteMovement {
   if (!capabilities.movement) throw new Error('EPISODE_CONTROLLED_MOVEMENT_UNAVAILABLE');
   const movement = capabilities.movement;
-  if (movement.kind !== 'ground') throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: this route controller currently supports the SDK ground movement basis; a custom movement needs its declared capture controller');
+  if (movement.kind !== 'ground' && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: this route controller currently supports the SDK ground movement basis; a custom movement needs its declared capture controller');
   if (!(movement.walkSpeedMetersPerSecond > 0) || !(movement.runSpeedMetersPerSecond > 0)) throw new Error('EPISODE_CONTROLLED_MOVEMENT_SPEED_UNAVAILABLE');
   return movement as RouteMovement;
 }
@@ -121,7 +122,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
     initialTick = initialSnapshot.simulationTick;
     const opening = await session.frame('image/png');
     await writeFile(path.join(root, 'first-frame.png'), imageBytes(opening.imageDataUrl, 'image/png'));
-    const controller = new PlayerCaptureController(segment, movementForCapture(capabilities), capabilities.camera.mode, start => session.probeStart(start));
+    const controller = new PlayerCaptureController(segment, movementForCapture(capabilities,session), capabilities.camera.mode, start => session.probeStart(start));
     encoder = (options.encoderFactory ?? createRenderedFrameEncoder)({ outputPath: path.join(root, 'video.mp4'), frameRate: PROFILE.captureFps, frameCount: PROFILE.captureFrameCount });
     for (let index = 0; index < PROFILE.captureFrameCount; index += 1) {
       const frame = await session.frame('image/jpeg');

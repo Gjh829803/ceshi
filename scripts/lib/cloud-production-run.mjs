@@ -303,6 +303,8 @@ export function parseGpuCaptureBatchManifest(value) {
   const dispatchReason = manifest?.dispatchReason ?? "capacity-threshold";
   const isDrainedTail = dispatchReason === "producer-drained";
   const isReadyWave = dispatchReason === "ready-wave";
+  const isProducerComplete = dispatchReason === "producer-complete";
+  const closure = manifest?.producerClosure;
   const drainEvidence = manifest?.drainEvidence;
   if (
     manifest?.kind !== "worldkit-gpu-capture-batch-manifest" ||
@@ -315,7 +317,7 @@ export function parseGpuCaptureBatchManifest(value) {
     !Number.isSafeInteger(manifest?.taskCount) ||
     !Array.isArray(manifest?.tasks) ||
     manifest.taskCount !== manifest.tasks.length ||
-    !["capacity-threshold", "producer-drained", "ready-wave"].includes(dispatchReason) ||
+    !["capacity-threshold", "producer-drained", "ready-wave", "producer-complete"].includes(dispatchReason) ||
     (isDrainedTail
       ? manifest.taskCount < 1 || drainEvidence?.inFlightPrepareCount !== 0 ||
         drainEvidence?.readyRecordCount !== manifest.taskCount ||
@@ -325,6 +327,14 @@ export function parseGpuCaptureBatchManifest(value) {
         !Number.isFinite(Date.parse(drainEvidence?.newestReadyAt ?? "")) ||
         Date.parse(drainEvidence.observedAt) - Date.parse(drainEvidence.newestReadyAt) <
           drainEvidence.tailIdleSeconds * 1_000
+      : isProducerComplete
+        ? manifest.taskCount < 1 || manifest.taskCount > 100 || closure?.sealed !== true ||
+          !HASH.test(closure?.caseListHash ?? "") || !STABLE_ID.test(closure?.cohortId ?? "") ||
+          !Number.isSafeInteger(closure?.registered) || closure.registered < 1 ||
+          !Number.isSafeInteger(closure?.terminal) || closure.terminal < 0 || closure.terminal > closure.registered ||
+          !Array.isArray(closure?.repairTaskIds) ||
+          (closure.terminal !== closure.registered &&
+            (closure.repairTaskIds.length !== manifest.taskCount || manifest.tasks.some(t => !closure.repairTaskIds.includes(t.executionId))))
       : isReadyWave
         ? manifest.taskCount < 1
         : manifest.taskCount < manifest.minimumBatchSize)
@@ -342,6 +352,7 @@ export function parseGpuCaptureBatchManifest(value) {
     entryHashes: tasks.map(cloudProductionContentHash),
   };
   if (manifest.dispatchReason !== undefined) identity.dispatchReason = dispatchReason;
+  if (isProducerComplete) identity.producerClosure = closure;
   const expectedHash = cloudProductionContentHash(identity);
   if (expectedHash !== manifest.batchHash ||
       manifest.batchId !== `gpu-capture-${expectedHash.slice(7, 31)}`) {

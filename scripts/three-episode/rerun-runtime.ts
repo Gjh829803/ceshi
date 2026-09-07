@@ -23,4 +23,4 @@ for(const name of await readdir(tasks)){
  await cp(path.join(tasks,name),destination,{recursive:true,errorOnExist:true,force:false});copied++;
 }
 process.stdout.write(JSON.stringify({kind:'episode-runtime-rerun',previousWorldBuildHash:prior.worldBuildHash,copiedCompletedImageRecipes:copied,reuseRequiresExactInputAndFileHashes:true})+'\n');
-await runEpisodeWorkflow({sourceManifestPath:path.resolve(source),outputRoot,episodeId,cloud,publishS3Prefix,stopBeforeSeedance:true});
+await runEpisodeWorkflow({sourceManifestPath:path.resolve(source),outputRoot,episodeId,publishS3Prefix,stopBeforeSeedance:true});

@@ -99,7 +99,9 @@
     "verify:bna1-clean-break": "tsx scripts/verification/verify-bna1-clean-break.ts",
     "verify:3c-migration": "tsx scripts/verification/verify-3c-migration.ts",
     "verify:workspace-boundaries": "tsx scripts/testing/verify-workspace-boundaries.ts",
-    "benchmark:route-r1b-surface-preflight": "tsx scripts/verification/benchmark-route-r1b-surface-preflight.ts"
+    "benchmark:route-r1b-surface-preflight": "tsx scripts/verification/benchmark-route-r1b-surface-preflight.ts",
+    "cloud:episode:three-batch": "node scripts/three-episode/batch-cli.mjs",
+    "cloud:episode:three-batch-infrastructure": "node scripts/cloud/three-episode-batch-infrastructure.mjs"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",
