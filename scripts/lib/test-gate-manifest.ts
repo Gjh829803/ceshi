@@ -377,6 +377,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/three-episode/contracts.test.ts", lane: "contract" },
   { path: "scripts/three-episode/mcp.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-episode/route-controller.test.ts", lane: "contract" },
+  { path: "scripts/three-episode/source-export.test.ts", lane: "contract" },
   { path: "scripts/three-episode/workflow.test.ts", lane: "contract" },
   { path: "scripts/verification/locomotion-capability-state.test.ts", lane: "contract" },
   { path: "scripts/verification/verification-browser-launch.test.ts", lane: "contract" },

@@ -1,4 +1,4 @@
-import { copyFile, lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,8 +12,12 @@ export function closedPath(root: string, relative: string): string {
   if (!relative || path.isAbsolute(relative) || relative.includes('\\') || relative.split('/').some(s => !s || s === '.' || s === '..')) throw new Error('EPISODE_SOURCE_PATH_INVALID');
   return path.join(root, relative);
 }
+async function verifyRegularFile(file: string): Promise<void> {
+  if (!(await lstat(file)).isFile() || await realpath(file) !== path.resolve(file)) throw new Error('EPISODE_SOURCE_FILE_CHANGED');
+}
 export async function verifyFile(file: EpisodeFile): Promise<void> {
-  if (!(await lstat(file.path)).isFile() || await realpath(file.path) !== path.resolve(file.path) || sha(await readFile(file.path)) !== file.sha256) throw new Error('EPISODE_SOURCE_FILE_CHANGED');
+  await verifyRegularFile(file.path);
+  if (sha(await readFile(file.path)) !== file.sha256) throw new Error('EPISODE_SOURCE_FILE_CHANGED');
 }
 /** Resolve portable manifest paths before IO; every path remains under its own bundle. */
 export function resolveEpisodeSourcePaths(value: EpisodeSourceManifest, manifestPath: string): EpisodeSourceManifest {
@@ -51,7 +55,45 @@ export async function loadEpisodeSource(file: string): Promise<EpisodeSourceMani
   if (source.referenceImage) await verifyFile(source.referenceImage);
   if (source.worldPlan) await verifyFile(source.worldPlan);
   for (const target of source.targets) await verifyFile(target.whiteboxTriview);
+  if (source.contextPath) await verifyRegularFile(source.contextPath);
   return source;
+}
+
+/** Copy the manifest's complete dependency closure, not a directory-name allowlist. */
+export async function copyEpisodeSourceBundle(sourceManifestPath: string, outputRoot: string): Promise<EpisodeSourceManifest> {
+  const source = await loadEpisodeSource(sourceManifestPath);
+  const inputRoot = path.dirname(path.resolve(sourceManifestPath)), output = path.resolve(outputRoot);
+  const outputRelative = path.relative(inputRoot, output);
+  if (!outputRelative || (!outputRelative.startsWith(`..${path.sep}`) && outputRelative !== '..' && !path.isAbsolute(outputRelative))) throw new Error('EPISODE_SOURCE_OUTPUT_OVERLAP');
+  const relative = (file: string) => { const rel = path.relative(inputRoot, file).split(path.sep).join('/'); closedPath(inputRoot, rel); return rel; };
+  const files = new Map<string, string>();
+  for (const [name, hash] of Object.entries(source.sourceFiles)) files.set(closedPath(source.sourceRoot, name), hash);
+  for (const [name, hash] of Object.entries(source.playableFiles)) files.set(closedPath(source.playableRoot, name), hash);
+  for (const image of [source.opening, ...source.targets.map(target => target.whiteboxTriview), source.referenceImage, source.worldPlan]) {
+    if (image) files.set(image.path, image.sha256);
+  }
+  if (source.contextPath) files.set(source.contextPath, sha(await readFile(source.contextPath)));
+  for (const file of files.keys()) if (relative(file) === 'source.json') throw new Error('EPISODE_SOURCE_RESERVED_PATH');
+  await mkdir(output, { recursive: true });
+  if ((await readdir(output)).length) throw new Error('EPISODE_SOURCE_OUTPUT_NOT_EMPTY');
+  for (const [file, expected] of files) {
+    await verifyFile({ path: file, sha256: expected });
+    const destination = closedPath(output, relative(file));
+    await mkdir(path.dirname(destination), { recursive: true });
+    await copyFile(file, destination);
+    await verifyFile({ path: destination, sha256: expected });
+  }
+  const rebase = (file: string) => closedPath(output, relative(file));
+  const image = (file: EpisodeFile): EpisodeFile => ({ ...file, path: rebase(file.path) });
+  const copied: EpisodeSourceManifest = { ...source, sourceRoot: rebase(source.sourceRoot), playableRoot: rebase(source.playableRoot),
+    opening: image(source.opening), targets: source.targets.map(target => ({ ...target, whiteboxTriview: image(target.whiteboxTriview) })),
+    ...(source.referenceImage ? { referenceImage: image(source.referenceImage) } : {}),
+    ...(source.worldPlan ? { worldPlan: image(source.worldPlan) } : {}),
+    ...(source.contextPath ? { contextPath: rebase(source.contextPath) } : {}) };
+  const manifest = path.join(output, 'source.json');
+  await saveEpisodeSource(manifest, copied);
+  try { return await loadEpisodeSource(manifest); }
+  catch (error) { await rm(manifest, { force: true }); throw error; }
 }
 async function writeJson(file: string, value: unknown) { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, `${JSON.stringify(value, null, 2)}\n`); }
 /**
@@ -151,10 +193,17 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   await writeJson(path.join(output, 'derivation.json'), { schemaVersion: 1, sourceWorldBuildHash: source.sourceWorldBuildHash, worldBuildHash,
     sourceRuntimeHash: source.sourceRuntimeHash, runtimeHash, authorSourceUnchanged: true, authorCompiledEntriesUnchanged: selected.filter(([key]) => key.startsWith('playable/compiled/')).every(([key, hash]) => playableFiles[key.slice(9)] === hash),
     cameraCompatibility:cameraCompatibility?cameraProvenance:null, presentation:'world-canvas-only-v1', runtimeFiles, originalDeliveryManifestSha256: source.sourceDeliveryManifestSha256 });
-  return source;
+  return loadEpisodeSource(path.join(output, 'source.json'));
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2);
+  if (args[0] === '--verify' || args[0] === '--copy') {
+    if ((args[0] === '--verify' && args.length !== 2) || (args[0] === '--copy' && (args.length !== 4 || args[2] !== '--output'))) throw new Error('EPISODE_SOURCE_CLI_ARGUMENT_INVALID');
+    const source = args[0] === '--verify' ? await loadEpisodeSource(path.resolve(args[1]!)) : await copyEpisodeSourceBundle(path.resolve(args[1]!), path.resolve(args[3]!));
+    process.stdout.write(`${JSON.stringify({ status: 'verified', worldBuildHash: source.worldBuildHash, runtimeHash: source.runtimeHash })}\n`);
+  } else {
   const value = (flag: string) => process.argv[process.argv.indexOf(flag) + 1]!;
   const source = await prepareEpisodeSource({ payloadRoot: value('--payload'), outputRoot: value('--output'), worldId: value('--world-id'), ...(process.argv.includes('--reference-image') ? { referenceImage: { path: path.resolve(value('--reference-image')), sha256: value('--reference-image-sha256') } } : {}), ...(process.argv.includes('--source-url') ? { sourceUrl: value('--source-url') } : {}) });
   process.stdout.write(`${JSON.stringify({ sourceManifest: path.join(path.resolve(value('--output')), 'source.json'), worldBuildHash: source.worldBuildHash, sourceWorldBuildHash: source.sourceWorldBuildHash })}\n`);
+  }
 }

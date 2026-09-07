@@ -63,3 +63,26 @@ style-conditioned render requests. It still requires `--stop-before-seedance`.
 Automatic Creator delivery subscription, video-provider submission and final
 generated-video acceptance remain subsequent work; the new branch does not
 represent them as deployed or complete.
+
+
+## Follow-up: complete source bundle export
+
+The recording task confirmed the missing reference image belonged to its capture
+patch packaging step, not the original SDK derivative. The original ten local
+derivatives already had those images and their closure hashes. Its frozen r2
+package and production queue were not changed by this follow-up.
+
+`source.ts` now exposes complete manifest-driven copying through
+`three:episode:source --copy ... --output ...` and received-package verification
+through `--verify ...`. The loader also checks that an optional contextPath is an
+ordinary package-local file. A missing context had a failing reproducer before
+the change. Tests cover relocation after deleting the original, omission of
+reference/plan/context files, corrupted inputs, symlinks and existing outputs.
+
+All 77 Episode tests, typecheck and the 380-file test census passed. A real local
+human-ten-04 copy was archived, extracted to another directory and verified with
+runtimeHash `f059b8feadea05343244191a53a86f9e5c6fd082bccd0f3893b4aa6fb34672fe`
+and unchanged worldBuildHash
+`106852bff22ee139bb53b959cd9ccaf65cb519257513aecdd70d60fd1a65020c`.
+No SDK bytes, original source bundle, production worktree, frozen package, GPU
+queue, review record or provider task was modified by that verification.

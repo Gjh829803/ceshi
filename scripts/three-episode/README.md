@@ -46,6 +46,30 @@ pnpm exec tsx scripts/three-episode/source.ts \
 The portable `source.json` records original and derived world/runtime hashes.
 Only the new production copy receives the current SDK.
 
+## Portable source copying and received-package verification
+
+When preparing a capture capsule from an existing `source.json`, copy its full
+manifest dependency closure. Do not select only `source/`, `playable/` and
+`captures/`: the original reference, world plan and context may live elsewhere.
+
+```sh
+pnpm three:episode:source --copy /absolute/original/source.json --output /absolute/new-capsule/case
+pnpm three:episode:source --verify /absolute/unpacked-capsule/case/source.json
+```
+
+`copyEpisodeSourceBundle` copies all declared source/playable files and the
+opening, target views, optional reference image, world plan and context. It
+checks each copied file and runs `loadEpisodeSource` on the destination before
+returning. Runtime and world identities remain unchanged; it neither rewrites
+the SDK nor copies unrelated review stores. The output must be a new or empty
+directory outside the source bundle.
+
+Run `--verify` again **after transport and extraction**, before admitting a
+capture job. A locally valid source cannot prove a later archive retained every
+file. A declared context must be an ordinary package-local file; images and
+source/playable files also retain their declared hash validation. Source
+preparation from a Creator payload now reloads its completed output as well.
+
 ## Batch admission and deployment
 
 Only whitebox recording/first-frame/tri-view extraction requests a GPU. Planner
