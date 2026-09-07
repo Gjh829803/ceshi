@@ -8,10 +8,48 @@ import {Simulation} from './simulation';
 import type {MapDefinition} from './environment/types';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
+import type {TrainingControl} from './control-tuning';
 const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]},{id:'wall',position:[0,2,10],size:[30,4,1]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'car',name:'Car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],playerSpawn:[0,.03,0]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it.each(['plane','sub','space','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
+  const speeds=[];
+  for(const stronger of [false,true]){
+   const sceneMap:MapDefinition={...map,boxes:[map.boxes[0]!],water:mode==='sub'?[{id:'pool',min:[-90,-5,-90],max:[90,40,90],surface:40}]:[],regions:[{...map.regions[0]!,modes:[mode]}],spawns:[]};
+   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:sceneMap,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'craft',assetId:'craft',spec:{...spec,mode,spawn:[-20,mode==='mount'?.03:25,-20]},object:new Group()}]}});
+   try{const r=world.training!;const tuning:Partial<TrainingControl>=mode==='plane'?{drag:stronger?5:0,dragQuadratic:0}:mode==='sub'?{verticalAcceleration:stronger?12:2}:mode==='space'?{grip:0,brakeDamping:stronger?8:0}:mode==='dragon'?{groundDeceleration:stronger?8:1}:{coastDeceleration:stronger?8:1};
+    r.applyProfile({vehicles:{craft:tuning}});r.simulation.active=0;r.simulation.transition=0;const v=r.simulation.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='sub'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
+    world.step({training:{...emptyInput(),lift:mode==='sub'?1:0,boost:mode==='space'}},30);speeds.push(mode==='sub'?v.velocity.y:v.velocity.z);
+    expect(r.snapshot().controls.vehicles.craft).toMatchObject(tuning);
+   }finally{world.dispose();}
+  }
+  if(mode==='sub')expect(speeds[1]!-speeds[0]!).toBeGreaterThan(3);else expect(speeds[0]!-speeds[1]!).toBeGreaterThan(2);
+ });
+ it('tunes release deceleration independently per instance and preserves it through reset',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({vehicles:{'car-1':{coastDeceleration:1},'car-2':{coastDeceleration:8}}});
+   r.applyProfile({vehicles:{'car-1':{directionChangeDeceleration:4,groundDeceleration:3}}});
+   const velocities=[];
+   for(const id of ['car-1','car-2']){r.simulation.active=id==='car-1'?0:1;r.simulation.transition=0;const v=r.simulation.vehicle!;v.velocity.set(0,0,10);world.step({training:emptyInput()},30);velocities.push(v.velocity.z);}
+   expect(velocities[0]).toBeCloseTo(9.5,1);expect(velocities[1]).toBeCloseTo(6,1);
+   expect(r.exportProfile().vehicles?.['car-1']?.accel).toBe(10);
+   await world.reset();expect(r.exportProfile().vehicles?.['car-1']?.coastDeceleration).toBe(1);
+  }finally{world.dispose();}
+ });
+ it('configures independent boosted speed, steering response and character stopping acceleration atomically',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({vehicles:{'car-1':{speed:4,maxSpeed:7,reverseSpeed:2,steeringResponse:3,steeringReturn:20}},character:{coastDeceleration:1}});
+   const before=r.exportProfile();expect(()=>r.applyProfile({vehicles:{'car-1':{coastDeceleration:-1}},character:{speed:99}})).toThrow();expect(r.exportProfile()).toEqual(before);
+   r.simulation.active=0;r.simulation.transition=0;world.step({training:{...emptyInput(),forward:1}},90);expect(r.simulation.vehicle!.velocity.z).toBeCloseTo(4,1);
+   world.step({training:{...emptyInput(),forward:1,boost:true}},60);expect(r.simulation.vehicle!.velocity.z).toBeCloseTo(7,1);
+   r.simulation.active=-1;r.prepareCharacter([0,.03,-20]);world.step({moveZRatio:-1},60);const speed=r.simulation.player.velocity.length();world.step({},30);expect(r.simulation.player.velocity.length()).toBeGreaterThan(speed-.7);
+   r.switchMap({...map,id:'tuning-map'});expect(r.exportProfile().vehicles?.['car-1']?.maxSpeed).toBe(7);
+  }finally{world.dispose();}
+ });
+ it('rejects invalid authored vehicle tuning during world creation',async()=>{
+  await expect(createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec:{...spec,coastDeceleration:-1},object:new Group()}]}})).rejects.toThrow('TRAINING_CONTROL_INVALID: coastDeceleration');
+ });
  it.each([
   {name:'thin pillar',position:[0,2,-2],size:[.06,4,.2]},
   {name:'head above low wall',position:[0,1.125,-2],size:[6,2.25,.2]},

@@ -6,7 +6,7 @@ import { renderAssetThumbnails } from './ui/thumbnails';
 import { mountInspector } from './platform/inspector';
 import { SPECS } from './config';
 import { getMap,MAPS } from './environment/maps';
-import { applyControlProfile, applyCameraProfile } from './platform/profile-runtime';
+import { applyControlProfile, applyCameraProfile, readEffectiveControlProfile } from './platform/profile-runtime';
 import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfileV1 } from './platform/profiles';
 import { buildVehicle } from './models';
 import { FrameRateMeter } from './fps';
@@ -153,7 +153,7 @@ const humanPanel=mountHumanoidLab(document.body,{
 });
 const workbench=mountWorkbench(document.body,{
   onOpenChange:onPanelChange,onPrepare:prepareSelection,getMapId:()=>session.map.id,getAssetId:()=>sim.vehicle?.spec.id??'person',
-  getProfile:id=>structuredClone(profiles.get(id)!),
+  getProfile:id=>readEffectiveControlProfile(runtime,profiles.get(id)!),
   applyProfile:value=>{const profile=parseAssetProfile(value);applyControlProfile(runtime,profile);profiles.set(profile.assetId,profile);syncCameraProfile(true);if(paused)renderPausedState();},
   saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
   resetProfile:id=>{clearAssetProfile(localStorage,id);const profile=getDefaultProfile(id)!;profiles.set(id,profile);applyControlProfile(runtime,profile);syncCameraProfile(true);if(paused)renderPausedState();},
@@ -161,13 +161,18 @@ const workbench=mountWorkbench(document.body,{
   togglePause:()=>pause(!paused,false),step:()=>{if(!ready)return;pause(true,false);runtime.setInput(emptyInput());sdk.step({},1);renderPausedState(FIXED_STEP);},
 });
 const cameraDirection=new T.Vector3();
+function movementState(){
+  const v=sim.vehicle,c=v?.spec??sim.characterControl;
+  return {family:v?.spec.mode??'character',control:training.readTrainingControl(c),velocity:(v?.velocity??sim.player.velocity).toArray(),grounded:v?.grounded??sim.player.grounded};
+}
 const inspector=mountInspector(el('inspectorHost'),{
   getAssetId:()=>sim.vehicle?.spec.id??'person',
   getSubject:()=>({name:sim.vehicle?.spec.name??'主体人物',subtitle:sim.vehicle?`${sim.vehicle.spec.en} / ${sim.vehicle.spec.kernel}`:'TRAVERSAL / 101 BONES · 48 CLIPS',state:paused?'已暂停':sim.vehicle?'驾驶中':character.clipLabel,color:sim.vehicle?.spec.color??'#b4d7c2'}),
-  getProfile:id=>structuredClone(profiles.get(id)!),
-  applyProfile:value=>{const profile=parseAssetProfile(value);profiles.set(profile.assetId,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  getProfile:id=>readEffectiveControlProfile(runtime,profiles.get(id)!),
+  applyProfile:(value,tab)=>{const profile=parseAssetProfile(value);if(tab==='movement')applyControlProfile(runtime,profile);else applyCameraProfile(runtime,profile);profiles.set(profile.assetId,profile);if(paused)renderPausedState();},
   saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
-  resetProfile:id=>{const profile=structuredClone(profiles.get(id)!);profile.camera=getDefaultProfile(id)!.camera;saveAssetProfile(localStorage,profile);profiles.set(id,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  resetProfile:(id,tab)=>{const profile=structuredClone(profiles.get(id)!),defaults=getDefaultProfile(id)!;if(tab==='movement'){profile.control=defaults.control;applyControlProfile(runtime,profile);}else {profile.camera=defaults.camera;applyCameraProfile(runtime,profile);}profiles.set(id,profile);if(paused)renderPausedState();},
+  getMovement:movementState,
   getCamera:()=>{camera.getWorldDirection(cameraDirection);return {mode:follow.mode,distance:camera.position.distanceTo(follow.target),fovDegrees:camera.fov,yawRadians:Math.atan2(cameraDirection.x,cameraDirection.z),pitchRadians:Math.asin(cameraDirection.y),collisionLimited:follow.collisionLimited};},
   setCameraMode,
   getTelemetry:()=>({speedKmh:(sim.vehicle?.velocity.length()??sim.player.velocity.length())*3.6,altitudeMeters:(sim.vehicle?.position??sim.player.position).y,paused,position:(sim.vehicle?.position??sim.player.position).toArray(),headingDegrees:((sim.vehicle?.yaw??sim.player.yaw)*180/Math.PI%360+360)%360}),
@@ -276,7 +281,7 @@ const exportButton=document.createElement('button');exportButton.textContent='�
 el('advancedButton').parentElement!.append(exportButton);
 // Small local command surface for repeatable training selections and state inspection.
 const labAPI={
-  getState:()=>({mapId:session.map.id,activeVehicle:sim.vehicle?.spec.id??null,mode:sim.vehicle?.spec.mode??'character',position:(sim.vehicle?.position??sim.player.position).toArray(),speed:sim.vehicle?.speed??sim.player.velocity.length(),animation:sim.player.animation,ready,paused,simulationTime:sim.time,camera:{mode:follow.mode,yaw:follow.yaw,pitch:follow.pitch,distance:follow.distance,position:camera.position.toArray(),target:follow.target.toArray()},vehicleCount:SPECS.length,creature:sim.vehicle?.creature,creatureSources:visuals.filter(v=>v.creature).map(v=>({id:v.root.name,...v.creature!.sourceStatus}))}),
+  getState:()=>({mapId:session.map.id,activeVehicle:sim.vehicle?.spec.id??null,mode:sim.vehicle?.spec.mode??'character',position:(sim.vehicle?.position??sim.player.position).toArray(),speed:sim.vehicle?.speed??sim.player.velocity.length(),movement:movementState(),animation:sim.player.animation,ready,paused,simulationTime:sim.time,camera:{mode:follow.mode,yaw:follow.yaw,pitch:follow.pitch,distance:follow.distance,position:camera.position.toArray(),target:follow.target.toArray()},vehicleCount:SPECS.length,creature:sim.vehicle?.creature,creatureSources:visuals.filter(v=>v.creature).map(v=>({id:v.root.name,...v.creature!.sourceStatus}))}),
   selectVehicle:(id:string)=>{const n=SPECS.findIndex(s=>s.id===id);if(n<0)throw new Error('Unknown vehicle');visit(n);return labAPI.getState();},
   reset:async()=>{await sdk.reset();syncTeleport();return labAPI.getState();},
   humanoidState:()=>({...humanoidState(),events:sim.humanoid?.events.slice(-6),position:sim.humanoid?.position.toArray(),targets:[...sim.humanoid!.skills.targets.values()].map(t=>({id:t.definition.id,state:t.state,position:t.position.toArray()}))}),

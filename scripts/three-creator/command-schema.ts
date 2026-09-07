@@ -1,4 +1,5 @@
 import type { WorldCommand } from '@worldkit/three';
+import {training} from '@worldkit/three';
 import { objectSchema } from './schema-helpers.js';
 const string={type:'string',minLength:1}, boolean={type:'boolean'}, number={type:'number'};
 const vec3={type:'array',items:number,minItems:3,maxItems:3};
@@ -7,10 +8,10 @@ const scalar={anyOf:[{type:'number'},{type:'boolean'},{type:'string'}]};
 const axis={type:'number',minimum:-1,maximum:1};
 const trainingInput=objectSchema({forward:axis,steer:axis,roll:axis,lift:axis,pitch:axis,strafe:axis,boost:boolean,brake:boolean,slow:boolean,jump:boolean,
  humanoid:objectSchema(Object.fromEntries(['toggleCrouch','slide','roll','interact','putDown','prone','climb','toggleSwimStyle'].map(key=>[key,boolean])),[])},['forward','steer','roll','lift','pitch','strafe','boost','brake','slow','jump']);
-const trainingProfile=objectSchema({character:objectSchema({speed:number,accel:number,grip:number,steer:number},[]),
+const trainingProfile=objectSchema({character:objectSchema(training.CONTROL_SCHEMA_PROPERTIES,[]),
  cameraDistanceMeters:{anyOf:[{type:'number',minimum:1,maximum:40},{type:'null'}]},
  camera:objectSchema({recenterDelaySeconds:number,recenterResponsePerSecond:number,followResponsePerSecond:number,baseFovDegrees:number,targetHeightOffset:number,horizontalOffset:number,collisionEnabled:boolean,collisionRadiusMeters:number},[]),
- vehicles:{type:'object',additionalProperties:objectSchema({speed:number,accel:number,grip:number,steer:number,camera:number},[])}},[]);
+ vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:number},[])}},[]);
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[

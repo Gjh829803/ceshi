@@ -2,6 +2,7 @@ export { Character, Character as TrainingCharacter } from './character';
 export { FollowCamera } from './camera';
 export { Simulation, emptyInput, createVehicle, type Input, type HumanoidInput, type VehicleState, type PlayerState } from './simulation';
 export type { VehicleSpec } from './config';
+export * from './control-tuning';
 export type * from './environment/types';
 export { vehicleBody } from './environment/queries';
 export * from './platform/session';
