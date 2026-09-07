@@ -24,7 +24,7 @@ export const workspaceMarkup=`
       <canvas id="map" width="376" height="364" aria-label="场地区域和载具位置地图"></canvas>
       <div class="map-footer"><span class="status-dot"></span><span id="zone">载具整备区</span></div>
     </section>
-    <div class="stage-actions"><button id="quickButton" class="subtle-button" aria-expanded="false"><span data-icon="assets" data-size="16"></span>快速前往 <span data-icon="chevron" data-size="12"></span></button><button id="resetButton" class="subtle-button" title="R 复位"><span data-icon="reset" data-size="17"></span>复位</button><button id="pauseButton" class="subtle-button">暂停</button></div>
+    <div class="stage-actions"><label class="subtle-button collider-toggle">碰撞体<select id="colliderSelect" aria-label="碰撞体显示"><option value="person">人</option><option value="all">全部</option><option value="off" selected>关闭</option></select></label><button id="quickButton" class="subtle-button" aria-expanded="false"><span data-icon="assets" data-size="16"></span>快速前往 <span data-icon="chevron" data-size="12"></span></button><button id="resetButton" class="subtle-button" title="R 复位"><span data-icon="reset" data-size="17"></span>复位</button><button id="pauseButton" class="subtle-button">暂停</button></div>
     <section class="quick-panel" id="quickPanel" hidden><h3>收藏与最近使用</h3><nav id="quickSlots" aria-label="载具快捷槽"></nav><p>数字 1–6 前往 · 完整列表见资产库</p></section>
     <div class="interaction" id="interaction"><kbd>F</kbd>进入 越野车</div><div class="bottom-hint" id="bottomHint"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

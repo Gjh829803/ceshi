@@ -1,3 +1,4 @@
+import type { CollisionDebugMode } from './capsule-debug';
 import { MAPS } from '../environment/maps';
 import { training } from '@worldkit/three';
 type HumanoidInput=training.HumanoidInput;
@@ -12,7 +13,7 @@ interface Options {
   getState():Record<string,unknown>;
   getAutoTraverse():boolean;setAutoTraverse(value:boolean):void;
   getSmoothing():boolean;setSmoothing(value:boolean):void;
-  getDebug():boolean;setDebug(value:boolean):void;
+  getDebug():CollisionDebugMode;setDebug(value:CollisionDebugMode):void;
 }
 const make=<K extends keyof HTMLElementTagNameMap>(tag:K,text='',cls='')=>{const n=document.createElement(tag);n.textContent=text;n.className=cls;return n;};
 /** Searchable workshop entry; adding assets or trials does not add permanent HUD buttons. */
@@ -30,7 +31,11 @@ export function mountHumanoidLab(host:HTMLElement,o:Options){
   }
   dialog.append(make('p','靠近障碍后，按住 WASD 朝向障碍并按 Space 翻越 / 攀上；游泳上岸也使用这个组合。单按 Space 普通跳跃，壁面 / 梯子攀爬中按 B 或 Space 脱离。F 上下载具 · Q 滑铲（先助跑） · V 翻滚 · C 蹲伏。方向键环绕相机，相机模式使用页面「相机」按钮切换。','wb-note'));
   const toggles=make('div','','wb-parameter-grid'),refreshToggles:(()=>void)[]=[];
-  for(const [title,get,set] of [['自动翻越 / 攀上（调试，默认关闭）',o.getAutoTraverse,o.setAutoTraverse],['原人物动画平滑混合',o.getSmoothing,o.setSmoothing],['显示人物碰撞与探测',o.getDebug,o.setDebug]] as const){const label=make('label',title,'wb-field'),input=make('input');input.type='checkbox';input.checked=get();input.onchange=()=>set(input.checked);refreshToggles.push(()=>{input.checked=get();});label.append(input);toggles.append(label);}
+  for(const [title,get,set] of [['自动翻越 / 攀上（调试，默认关闭）',o.getAutoTraverse,o.setAutoTraverse],['原人物动画平滑混合',o.getSmoothing,o.setSmoothing]] as const){const label=make('label',title,'wb-field'),input=make('input');input.type='checkbox';input.checked=get();input.onchange=()=>set(input.checked);refreshToggles.push(()=>{input.checked=get();});label.append(input);toggles.append(label);}
+  const debugLabel=make('label','碰撞体显示','wb-field'),debugSelect=make('select');
+  for(const [value,title] of [['person','人'],['all','全部'],['off','关闭']] as const){const option=make('option',title);option.value=value;debugSelect.append(option);}
+  debugSelect.value=o.getDebug();debugSelect.onchange=()=>o.setDebug(debugSelect.value as CollisionDebugMode);
+  refreshToggles.push(()=>{debugSelect.value=o.getDebug();});debugLabel.append(debugSelect);toggles.append(debugLabel);
   const filters=make('div','','wb-parameter-grid'),select=make('select'),search=make('input');
   select.setAttribute('aria-label','人物测试地图');search.type='search';search.placeholder='搜索动作、场景或测试点';search.setAttribute('aria-label','搜索人物测试点');
   for(const map of MAPS.filter(m=>m.characterTrials?.length)){const option=make('option',map.name);option.value=map.id;select.append(option);}select.value='character-workshop';filters.append(select,search);

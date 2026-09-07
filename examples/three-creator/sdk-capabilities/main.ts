@@ -18,6 +18,7 @@ import { mountWorkbench } from './platform/workbench';
 import { defaultRegion, prepareCourse } from './platform/scenarios';
 import { buildInteractionVisuals } from './humanoid/interaction-visuals';
 import { mountHumanoidLab } from './humanoid/panel';
+import { createCollisionDebug,type CollisionDebugMode } from './humanoid/capsule-debug';
 import { HumanoidDemo, humanoidTraversalReady } from './humanoid/demo';
 import type { CharacterTrial } from './environment/types';
 import './ui/workspace.css';
@@ -70,14 +71,22 @@ syncCameraProfile();
 const frameClock={reset(){}};
 const presentation={get vehicles(){return sim.vehicles;},get player(){return sim.player;},get targets(){return training.readInteractionTargets(sim.humanoid);},snap(_sim:unknown){}};
 const pressed=new Set<string>();let dragging=false,lastX=0,lastY=0,jumpPressed=false,paused=false,ready=true,toastUntil=0,lastMessage='',lastActive=-99;
-let humanCommands:HumanoidInput={},humanDemo:HumanoidDemo|null=null,humanDebug=false;
+let humanCommands:HumanoidInput={},humanDemo:HumanoidDemo|null=null;
+let collisionMode:CollisionDebugMode='off';
 let disposeThumbnails:(()=>void)|undefined;
-const capsuleDebug=new T.Mesh(new T.CapsuleGeometry(.28,1.12,4,8),new T.MeshBasicMaterial({color:0x72ffb4,wireframe:true,transparent:true,opacity:.6}));capsuleDebug.visible=false;scene.add(capsuleDebug);let debugHeight=1.68;
+const collisionDebug=createCollisionDebug(scene);
 let panelOpen=false,quickSlots:AssetEntry[]=[];
 const elementCache=new Map<string,HTMLElement>();
 const el=(id:string)=>{let element=elementCache.get(id);if(!element){element=document.getElementById(id)!;elementCache.set(id,element);}return element;};
 const setText=(id:string,value:string)=>{const element=el(id);if(element.textContent!==value)element.textContent=value;};
 const setHTML=(id:string,value:string)=>{const element=el(id);if(element.innerHTML!==value)element.innerHTML=value;};
+const colliderSelect=document.querySelector<HTMLSelectElement>('#colliderSelect')!;
+function setCollisionMode(value:CollisionDebugMode){
+  collisionMode=value;colliderSelect.value=value;colliderSelect.parentElement!.classList.toggle('active',value!=='off');
+  collisionDebug.update(sim.humanoid,collisionMode,session.map.boxes);
+  if(paused||panelOpen)renderPausedState();
+}
+colliderSelect.onchange=()=>setCollisionMode(colliderSelect.value as CollisionDebugMode);
 const fpsMeter=new FrameRateMeter();
 const pacingPanel=new FramePacingPanel(el('performancePanel'));
 function resetFPS(state:string){fpsMeter.reset();pacingPanel.reset();setText('fpsReadout',`渲染回调 —/s · ${state}`);el('fpsReadout').removeAttribute('data-slow');}
@@ -140,7 +149,7 @@ const humanPanel=mountHumanoidLab(document.body,{
   onAction:command=>{if(sim.vehicle){toast('请先离开载具，再执行人物动作');return;}humanDemo=null;if(paused)pause(false);if(command==='jump')jumpPressed=true;else humanCommands={...humanCommands,...command};sdkPresentation.focus();},
   getAutoTraverse:()=>sim.humanoid?.autoTraverse??false,setAutoTraverse:value=>{if(sim.humanoid)sim.humanoid.autoTraverse=value;},
   getSmoothing:()=>character.sourceCharacter?.smoothing??true,setSmoothing:value=>{if(character.sourceCharacter)character.sourceCharacter.smoothing=value;},
-  getDebug:()=>humanDebug,setDebug:value=>{humanDebug=value;},
+  getDebug:()=>collisionMode,setDebug:setCollisionMode,
 });
 const workbench=mountWorkbench(document.body,{
   onOpenChange:onPanelChange,onPrepare:prepareSelection,getMapId:()=>session.map.id,getAssetId:()=>sim.vehicle?.spec.id??'person',
@@ -183,7 +192,7 @@ el('downloadManifest').onclick=()=>{const template={schema:'vector.asset-contrib
 // Delegation also covers rows and quick slots rebuilt after search/favorites.
 const releaseUIInput=(event:Event)=>{const target=event.target instanceof HTMLElement?event.target.closest('button,input,select,textarea'):null;if(target&&!target.hasAttribute('data-key'))clearInput();};
 document.addEventListener('pointerdown',releaseUIInput);document.addEventListener('focusin',releaseUIInput);
-window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();capsuleDebug.geometry.dispose();capsuleDebug.material.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
+window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();collisionDebug.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
 document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);pressed.add(b.dataset.key!);if(b.dataset.key==='Space')jumpPressed=true;};const release=()=>pressed.delete(b.dataset.key!);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;});
 const resizeStage=()=>{const width=canvas.clientWidth,height=canvas.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(ready&&(paused||panelOpen))renderPausedState();};
 const stageObserver=new ResizeObserver(resizeStage);stageObserver.observe(el('stage'));
@@ -240,6 +249,7 @@ function updateUI(){
 function updateCreatureVisual(n:number,dt:number){const visual=visuals[n]!,state=sim.vehicles[n]!,c=state.creature;
   if(visual.root.visible&&visual.creature)visual.creature.update({position:state.position,rotation:state.rotation,speed:state.speed,steering:state.steering,grounded:state.grounded,time:sim.time,gait:c?.gait??'rest',phase:c?.phase??0,flying:c?.flying??false,...(c?{leadPosition:c.leadPosition,leadYaw:c.leadYaw}:{})},dt);}
 function updateVisuals(dt:number){
+  collisionDebug.update(sim.humanoid,collisionMode,session.map.boxes);
   visuals.forEach((vis,n)=>{const state=sim.vehicles[n]!;updateCreatureVisual(n,dt);updateVehicleWheels(vis,state,{grounded:state.grounded&&!state.submerged,dt,revision:sim.teleportRevision,active:n===sim.active});if(n===sim.active)vis.rotors.forEach(r=>r.rotation.z+=(state.speed+4)*dt*4);vis.label.visible=n!==sim.active&&camera.position.distanceToSquared(state.position)<8100;});
   const held=character.carriedAttachment;interactionVisuals.update(training.readInteractionTargets(sim.humanoid).map(target=>held&&target.id===held.id&&target.state==='carried'?{...target,position:held.position}:target));
   world.update(sim.time,sim.vehicle?.position??sim.player.position,follow.underwater);

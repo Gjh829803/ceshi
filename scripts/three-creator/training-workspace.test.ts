@@ -1,5 +1,6 @@
-import {describe,it,expect} from 'vitest';
-import {Group,PerspectiveCamera} from 'three';
+import {describe,it,expect,vi} from 'vitest';
+import {Group,PerspectiveCamera,Scene} from 'three';
+import {createCapsuleDebug,createCollisionDebug} from '../../examples/three-creator/sdk-capabilities/humanoid/capsule-debug';
 import {createWorld} from '@worldkit/three';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../examples/three-creator/sdk-capabilities/platform/profiles';
 import {applyCameraProfile,applyControlProfile} from '../../examples/three-creator/sdk-capabilities/platform/profile-runtime';
@@ -8,6 +9,61 @@ import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
 import {defaultRegion,prepareCourse} from '../../examples/three-creator/sdk-capabilities/platform/scenarios';
 
 describe('training workspace configuration',()=>{
+ it('shows the live collider pose and dimensions, hiding disabled colliders and releasing its scene object',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
+  const scene=new Scene(),debug=createCapsuleDebug(scene);
+  try{const h=world.training!.simulation.humanoid!,c=h.capsule;
+   debug.update(c,false);expect(debug.mesh.visible).toBe(false);
+   debug.update(c,true);expect(debug.mesh.visible).toBe(true);
+   expect(debug.mesh.geometry.parameters.radius).toBe(c.radius());
+   expect(debug.mesh.geometry.parameters.height).toBe(c.halfHeight()*2);
+   const geometry=debug.mesh.geometry;debug.update(c,true);expect(debug.mesh.geometry).toBe(geometry);
+   // Read back a changed real Rapier shape, rather than testing authored constants.
+   c.setHalfHeight(.31);c.setRadius(.22);
+   h.body.setTranslation({x:4,y:3,z:2},true);h.world.propagateModifiedBodyPositionsToColliders();
+   debug.update(c,true);expect(debug.mesh.geometry.parameters.height).toBeCloseTo(.62);
+   expect(debug.mesh.geometry.parameters.radius).toBeCloseTo(.22);
+   expect(debug.mesh.position.toArray()).toEqual([c.translation().x,c.translation().y,c.translation().z]);
+   c.setEnabled(false);debug.update(c,true);expect(debug.mesh.visible).toBe(false);
+   c.setEnabled(true);debug.update(c,true);expect(debug.mesh.visible).toBe(true);
+   debug.update(undefined,true);expect(debug.mesh.visible).toBe(false);
+  }finally{debug.dispose();world.dispose();}
+  expect(scene.children).toHaveLength(0);
+ });
+ it('renders all live Rapier shapes only in all mode and follows map replacement',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
+  const scene=new Scene(),debug=createCollisionDebug(scene);
+  try{const h=world.training!.simulation.humanoid!,spy=vi.spyOn(h.world,'debugRender');
+   debug.update(h,'off');expect(spy).not.toHaveBeenCalled();expect(scene.children.every(o=>!o.visible)).toBe(true);
+   debug.update(h,'person');expect(spy).not.toHaveBeenCalled();expect(debug.person.mesh.visible).toBe(true);expect(debug.all.visible).toBe(false);
+   debug.update(h,'all');expect(debug.person.mesh.visible).toBe(false);expect(debug.all.visible).toBe(true);
+   expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(h.world.debugRender().vertices));
+   expect(debug.all.geometry.getAttribute('position').count).toBeGreaterThan(100);
+   world.training!.switchMap(getMap('indoor-lab'));const next=world.training!.simulation.humanoid!;
+   debug.update(next,'all');expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(next.world.debugRender().vertices));
+   debug.update(next,'off');expect(scene.children.every(o=>!o.visible)).toBe(true);
+  }finally{debug.dispose();world.dispose();}
+  expect(scene.children).toHaveLength(0);
+ });
+ it('hides every ground tile without disabling physics or hiding raised floors and ramps',async()=>{
+  const map={...getMap('indoor-lab'),boxes:[
+   {id:'lab-ground',position:[0,-2.5,0] as const,size:[130,5,150] as const},
+   {id:'raised-floor',position:[0,4,0] as const,size:[30,1,30] as const},
+   {id:'ramp',position:[15,1,0] as const,size:[4,1,8] as const,rotation:[.3,0,0] as const},
+  ]};
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
+  const scene=new Scene(),debug=createCollisionDebug(scene);
+  try{const h=world.training!.simulation.humanoid!,count=h.world.colliders.len();
+   debug.update(h,'all',map.boxes);
+   const ground=new Set<number>();h.world.forEachCollider(c=>{if(c.translation().y===-2.5)ground.add(c.handle);});
+   const expected=h.world.debugRender(undefined,c=>!ground.has(c.handle));
+   expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(expected.vertices));
+   expect(expected.vertices.length).toBeGreaterThan(0);
+   expect(expected.vertices.length).toBeLessThan(h.world.debugRender().vertices.length);
+   expect(h.world.colliders.len()).toBe(count);
+   h.world.forEachCollider(c=>expect(c.isEnabled()).toBe(true));
+  }finally{debug.dispose();world.dispose();}
+ });
  it('uses the authored indoor camera default while keeping explicit distance edits across maps',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
   try{const r=world.training!,profile=getDefaultProfile('person')!;applyCameraProfile(r,profile);world.step({},1);expect(r.followCamera.distance).toBe(8.8);
