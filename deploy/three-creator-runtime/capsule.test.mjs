@@ -69,7 +69,13 @@ test('staged assets are independent of retired applications and preserve catalog
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
-      const relative = `examples/three-creator/sdk-capabilities/${name}`;
+      for (const example of ['sdk-capabilities','character-actions']) {
+        const relative = `examples/three-creator/${example}/${name}`;
+        assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
+      }
+    }
+    for (const name of ['asset-policy.mjs', 'asset-policy.d.mts', 'asset-policy.json']) {
+      const relative = `scripts/three-creator/${name}`;
       assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
     }
     const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));

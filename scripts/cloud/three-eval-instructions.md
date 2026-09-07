@@ -15,9 +15,27 @@ the SDK profile offers the thin SDK and its examples. Both have the same referen
 creative request, catalog assets, budget and browser evidence tools. Search assets
 by exact identity and inspect their limitations; diagnostic samples are not proof
 of faithful subject appearance. Do not install dependencies or change supplied tools.
-For humanoid leads, default to G-bot and its supplied idle/walk/run/jump actions.
-Clothing, colors or headwear alone do not justify rebuilding locomotion. Customize
-appearance where practical; if a custom humanoid is needed, prefer proven motions.
+Read `creator_describe_environment` first. Its `assetPolicy` gives this task's
+allowed asset IDs, default humanoid, custom-asset rule and frozen policy hash.
+For humanoid leads, select `assetPolicy.defaultHumanoidAssetId` in project.json,
+load it through world.assets.load and pass the asset to addCharacter. Use
+assets_search/assets_describe for permitted models, motions and limitations;
+project.json selects resources but cannot expand the Host's allowed catalog.
+Clothing, colors and headwear may customize the preset's visual children while
+retaining its rig and SDK animation owner. Other characters remain available when
+the reference or task needs them; prefer proven motions for a custom humanoid.
+For supported traversal, swimming or object interactions, search the allowed
+catalog by the required action and read the `character-actions` schema and example
+topic. Asset responses include `characterUsage` with integration and conditions;
+use the ordinary default for basic locomotion, and the permitted full kit when
+the scene needs contextual movement. The Training
+character's full contextual actions use TrainingCharacter. Ordinary locomotion does not
+by itself implement those physical abilities. The raw profile can load the catalog
+preset model and clips through Three; it cannot import the SDK runtime.
+When a water interaction differs from intent, inspect `feedback.water` and the
+playtest `feedback.waterTimeline` for measured depth, immersion and existing
+decision flags. Use the suggested scene checks to investigate; these diagnostics
+are advisory and do not add acceptance requirements or authorize changing SDK rules.
 Inspect actual walking and running from the side: forward-facing travel, natural
 knee/elbow flexion, foot contact and strides matching movement speed. Verify jump
 and landing transitions too; moving limbs alone do not establish correct animation.

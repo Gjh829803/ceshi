@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "allowedAssetIds": [
+    "humanoid.preset-101",
+    "humanoid.source-101",
+    "quadruped.animal.large-static",
+    "training.bike",
+    "training.boat",
+    "training.carriage",
+    "training.dragon",
+    "training.glider",
+    "training.horse",
+    "training.hover",
+    "training.patrol-boat",
+    "training.plane",
+    "training.racer",
+    "training.rescue-hover",
+    "training.rover",
+    "training.slide",
+    "training.space",
+    "training.sub",
+    "training.survey-space",
+    "training.touring-bike",
+    "training.trail-rover",
+    "training.trainer-plane"
+  ],
+  "defaultHumanoidAssetId": "humanoid.preset-101",
+  "allowCustomAssets": true
+}

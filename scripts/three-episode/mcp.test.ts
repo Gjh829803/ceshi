@@ -35,7 +35,7 @@ const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.CapsuleGeometr
 world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:.35}});world.setControlledEntity('actor');world.setCameraFollow({targetEntityId:'actor'});await world.start();`);
  candidate=await new ThreeCompiler(workspace,'three-sdk').prepare();
  const imagePath=path.join(candidate.root,'fixture-opening.png'),imageBytes=await sharp({create:{width:1,height:1,channels:3,background:'#193148'}}).png().toBuffer();await writeFile(imagePath,imageBytes);
- source={kind:'three-episode-source',schemaVersion:1,worldId:'mcp-fixture',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,
+ source={kind:'three-episode-source',schemaVersion:1,worldId:'mcp-fixture',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,assetPolicySha256:candidate.assetPolicySha256,
   sourceWorldBuildHash:candidate.worldBuildHash,sourceRuntimeHash:candidate.runtimeHash,sourceDeliveryManifestSha256:'f'.repeat(64),sourceRoot:candidate.sourceRoot,playableRoot:candidate.playableRoot,
   sourceFiles:await hashTree(candidate.sourceRoot),playableFiles:await hashTree(candidate.playableRoot),opening:{path:imagePath,sha256:sha(imageBytes)},targets:[{id:'actor',name:'Actor',role:'primary-subject',entityId:'actor',whiteboxTriview:{path:imagePath,sha256:sha(imageBytes)}}]};
  sourceManifest=path.join(candidate.root,'source.json');await writeFile(sourceManifest,JSON.stringify(source));

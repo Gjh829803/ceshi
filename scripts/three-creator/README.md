@@ -29,6 +29,67 @@ The persistent CLI accepts one JSON request per line, for example
 poll `operations_get`. Keep one MCP/CLI session through playtest and submit.
 An unrelated fresh process cannot trust a model-written saved playtest receipt.
 
+## Host asset policy
+
+[`asset-policy.json`](asset-policy.json) is the Host-owned source of allowed
+catalog IDs, `defaultHumanoidAssetId` and `allowCustomAssets`. The default excludes
+the retired default character, selects `humanoid.preset-101`, and permits custom
+assets. It does not require every character to use a preset or restrict ordinary
+Three geometry. AI-owned `project.json` selects assets; it never grants permission.
+
+Read `creator_describe_environment.assetPolicy` for the effective task settings
+and snapshot hash. Search and exact descriptions return only allowed entries;
+the starter and schema examples use the configured default. Example bundles that
+require unavailable assets are not returned.
+
+Asset results also include `characterUsage`. Search by a skill such as `游泳`,
+`滑铲` or `pickup` to discover the contextual kit; read the `character-actions`
+schema for trigger/scene conditions and the same example topic for a standalone
+48-clip character with a real deep-water volume. Six discrete skill requests,
+state-driven animations and input-driven posture changes are described separately.
+This example needs only `humanoid.source-101`, not the full vehicle catalog.
+
+For water debugging, read `world_inspect.feedback.water` and the recorded
+`world_playtest.feedback.waterTimeline`. They use measured SDK contact and its
+existing decision flags, suggest geometry/position checks, and distinguish missing
+declarations from missing contact. All feedback is advisory; it never introduces
+a new admission or delivery gate. The timeline keeps the initial observed state
+plus changes (latest 128, with omitted count), not every repeated frame.
+
+One local MCP/CLI service freezes settings at startup. For a Host-managed task
+that must survive process restarts, both entry points accept
+`--asset-policy-snapshot /absolute/host-owned/snapshot.json` and
+`--asset-policy-sha256 SHA256`. The snapshot must be outside the author workspace;
+both arguments are required together. The configured public definitions must
+match the installed catalog. Editing author files or the snapshot on disk cannot
+change a running service's permissions; modified bytes fail pinned restart checks.
+
+Cloud plans freeze the snapshot in task identity. Before the model starts, the
+launcher checks the installed catalog/resources and retains the snapshot under
+the Host cache, outside the writable workspace. MCP restarts use that pinned
+copy. New plans require a launcher that implements this contract; an old deployed
+lock cannot silently ignore policy. Existing plans resume with their original
+snapshot and lock, rather than adopting the latest defaults.
+
+Compilation rejects disallowed selected IDs, exact denied bytes (including
+renamed files and literal base64 data URLs), and author-written Host outputs
+`asset-policy.json`, `asset-definitions.json`, `runtime/` and `compiled/`.
+When `allowCustomAssets` is false, unlisted external model/media/font files,
+recognized model/animation JSON and literal data URLs are rejected. Ordinary
+scene code and geometry are still allowed. This is asset admission, not a hostile
+JavaScript sandbox or proof of provenance for arbitrarily modified/generated or
+re-encoded models. Shared dependencies needed by allowed assets are not denied.
+
+Every new candidate includes `playable/asset-policy.json`; its hash contributes
+to source identity and is recorded as `assetPolicySha256` in the delivery. Submit
+checks packaged definitions/dependencies and actual bytes again. Episode import,
+transport and reload verify this carried policy without reading today's config.
+Historical deliveries lacking both snapshot and marker keep their old path;
+partial policy records are rejected. A config edit never rewrites old worlds.
+
+Policy/config/source changes require a new built and deployed production capsule
+before cloud tasks use them. Editing this checkout does not update a running job.
+
 `creator_get_examples` returns runnable minimal HTML/main.ts, project.json and an
 input episode. The examples demonstrate integration, not a completed playable
 world. With the SDK, compose any Three camera first and call

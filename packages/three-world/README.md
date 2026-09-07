@@ -115,13 +115,104 @@ launch state. The top-level start position then names the vehicle origin; facing
 retains the SDK's semantic -Z convention. The entire body and medium are checked
 before initialization, and subsequent frames advance through the same solver.
 
+<!-- topic:character-actions -->
+## Choosing and triggering character actions
+
+Read the current environment asset policy, then search/describe the selected
+character. Asset tools return `characterUsage`: clip count, integration route,
+guide/example topics, and (for the allowed Training kit in SDK tasks) the actual
+SDK skill summaries and key bindings. Clip counts are not counts of executable
+skills. Ordinary ground characters automatically select idle/walk/run/jump/fall
+when those clips are supplied; extra clips alone do not add physical abilities.
+
+<!-- asset-info:humanoid.source-101 -->
+For contextual character movement, select `humanoid.source-101` and read
+`creator_get_examples({topic:'character-actions'})`. This small example loads all
+48 supplied clips with `TrainingCharacter`, has no vehicle dependency, and shows
+commanded rolling plus automatic deep-water swimming. Its short input episode is
+a debugging example, not a complete Creator delivery or all-action acceptance.
+Interactive key bindings below are not the Creator episode key allowlist. The
+example episode uses supported movement keys to enter water; discrete skill
+requests can use the existing schemaVersion 2 episode `commands` contract.
+
+Initialize `createWorld({training:{map,character,vehicles:[]},...})`; this selects
+the Training solver as the world's only physics backend. Do not layer a second
+controller/mixer on an ordinary `addCharacter` world. Scene visuals are authored
+in Three; Training receives actual collision boxes, water and interaction anchors.
+
+| Motion family | Trigger | Required scene/state |
+| --- | --- | --- |
+| Stand, walk, run, jump, fall, landing | Movement/input and actual support state | Ground/collision geometry; animation follows the controller |
+| Swim idle/forward/freestyle | Automatic deep-water contact; N changes style | Declare `map.water`; provide an actual pool bottom and banks, not a ground collider covering the pool |
+| Roll / slide | V / Q or `training.action` | Land, ground support, standing, free hands, no conflicting action/cooldown; slide also requires speed >= 2.5 m/s |
+| Pickup / carry / put down | E / G or `training.action` | `map.interactions` pickup anchor, reachable approach and clear path; <= 8 kg; source's table-height grasp must fit the actual object; placement needs support/clearance |
+| Sit / stand up | E / E or Space; corresponding skill request | Seat interaction and its collider IDs, clear approach; standing up needs headroom |
+| Prone / crawling | Z, then directional input | Clear low capsule route; enough headroom to stand again |
+| Wall / ladder | B to enter/release; directional input; Space to detach | Registered `map.climbSurfaces` bound to actual colliders, valid proximity/orientation and available space |
+| Hurdle / mantle / climb onto a ledge | Direction toward the obstacle + Space | Actual obstacle probe and compatible source motion, clear top/path/headroom; directional request can catch a ledge during approach |
+
+Water contact uses the declared horizontal bounds and a ray against the actual
+supporting collider to measure local depth. Current entry requires depth > 1.28 m
+and feet > 0.95 m below the surface. Remaining in swim uses depth > 1.16 m and
+feet > 0.5 m below the surface to prevent shoreline flicker. The water controller
+applies vertical velocity/buoyancy through collision movement; it does not simply
+teleport the character to the water plane. Shallow water returns to walking.
+The animation owner then selects swim idle or a moving swim clip from actual
+state/speed/style. A blue material alone never enables swimming.
+
+Only `roll`, `slide`, `pickup`, `putDown`, `sit`, `standUp` are discrete
+`training.action` requests. Crouch, prone, climb and swim-style changes use input;
+walk/run/landing and swim transitions are controller state, not invented action
+commands. There is no dedicated put-down clip. Some clips are transition material.
+
+```ts
+// Approach targets with real input before requesting interaction.
+const receipt = await world.execute({
+  type:'training.action',
+  request:{requestId:'pick-parcel-1',action:'pickup',targetId:'parcel'},
+});
+// Inspect receipt. If accepted, poll its operationId using world.operations.get,
+// or world_get_operation from Creator. Do not repeat an unknown request outcome.
+```
+
+Inspect `world.snapshot().training.character` for state, swimming, stance,
+carrying/seated and active action. Runtime eligibility checks are authoritative:
+a clip existing or a request being accepted does not prove action completion.
+Render pickup objects from the shared Training interaction state so a held object
+does not remain duplicated at its initial position. Test real inputs and scene
+conditions in a short playtest before the full recording; preserve rejections.
+
+For debugging, `world.snapshot().training.water` exposes the declared volume
+count, whether the humanoid water controller is active, and a detached copy of its
+latest contact sample. Contact includes water ID, surface/depth in metres,
+submersion ratio, feet below surface, the existing entry/retention thresholds and
+their recorded pass/fail flags. These are observations, not writable parameters
+or an additional physics query. Mounted/traversing characters suppress stale
+contact; a null contact after initialization/reset is not proof that no water
+was declared.
+
+Creator `world_inspect` returns `feedback.water` with a diagnostic code, measured
+evidence and suggested scene checks. `world_playtest` includes the same advisory
+feedback and `feedback.waterTimeline`: the first sampled state plus changes,
+with actual wall time/simulation tick, retaining the latest 128 events and the
+omitted count. Causes include no declaration, no contact, shallow actual support,
+insufficient immersion and active swimming. Check intended geometry and position
+before changing a scene. Feedback never changes validation, swim thresholds,
+playtest status or submission eligibility; old/raw snapshots without these fields
+report unavailable diagnostics rather than guessed state.
+
+Training map/interaction headings use the source's +Z convention, while normal
+SDK entity facing/capture uses -Z. Follow the actual map types and example anchors;
+do not rotate source skeletons or change SDK physics to fit a scene.
+<!-- /asset-info -->
+
 <!-- topic:getting-started -->
 ## Start a world
 
 ```ts
 const world = await createWorld({scene, camera, canvas});
 world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
-const hero = await world.assets.load('humanoid.g-bot');
+const hero = await world.assets.load('humanoid.preset-101');
 world.addCharacter({id:'hero', asset:hero});
 world.setControlledEntity('hero');
 world.setCameraFollow(); // continue the camera composition already authored above
@@ -130,12 +221,11 @@ await world.start();
 ```
 
 Asset IDs must be selected in project.json. `createWorld` reads the Host-provided
-same-origin './asset-definitions.json'. A custom complete character is an ordinary
-Group passed as `addCharacter({id,object,body:{heightMeters,radiusMeters}})`.
-Its tails, clothes and other visual descendants move with the root; keep their
-collisions out of the character body.
-An `object` character has no supplied limb animation. For a humanoid, prefer the
-G-bot asset path above; see Assets below for custom-rig axes and motion checks.
+same-origin './asset-definitions.json'. Humanoid leads use the configured default
+catalog asset above. Clothes, colors and headwear may customize visual descendants
+while retaining its rig and SDK animation ownership. Other characters remain
+available for scenes that need them. `addCharacter({id,object,body})` accepts custom
+subjects but supplies no automatic limb animation; prefer proven humanoid motions.
 
 An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
 Create `world.createPresentation()` for game UI and future model-video display.
@@ -200,10 +290,26 @@ The SDK initializes available idle pose and owns animation after addCharacter.
 No manual AnimationMixer/update(0), hash entry, retargeting or private file path is
 needed. An actionId in an asset is an animation, not a physical movement ability.
 
-For humanoid leads, start with `humanoid.g-bot` and pass the loaded `asset` to
-`addCharacter`; this enables the supplied idle/walk/run/jump actions. A custom
-`object` gets physics and movement, but no automatic limb animation. Differences
-in clothing or color alone do not require writing a new gait.
+For humanoid leads, read `assetPolicy.defaultHumanoidAssetId` from the Creator
+environment and pass the loaded `asset` to `addCharacter`. Asset search and exact
+descriptions expose only the allowed task catalog. Other assets and custom
+characters remain supported according to that task's policy.
+
+<!-- asset-info:humanoid.preset-101 -->
+`humanoid.preset-101` uses the Playground's original 101-bone model with
+supplied idle/walk/run/jump/fall clips through ordinary `ground.standard` movement.
+Landing returns to idle/walk/run. Clothing and color changes can retain the preset
+body and rig.
+<!-- /asset-info -->
+<!-- asset-info:humanoid.source-101 -->
+The Training Playground body with all 48 contextual actions is available as
+`humanoid.source-101` through `TrainingCharacter`; read the `training` schema and
+`independent-world` example for traversal, swimming and interactions. Those
+abilities also require supported scene geometry/targets. An animation does not
+create their physics.
+<!-- /asset-info -->
+Existing worlds keep their original asset identity; current task permissions do
+not retroactively rewrite historical deliveries.
 
 The actor's default local front is **-Z**, up is **+Y**, and limbs usually extend
 down **-Y**. In that frame a knee flexes backward with **negative X** rotation;
@@ -217,7 +323,7 @@ For asynchronous changes in a running world:
 
 ```ts
 await world.runTask(async scope => {
-  const asset = await scope.assets.load('humanoid.g-bot');
+  const asset = await scope.assets.load('humanoid.preset-101');
   scope.addCharacter({id:'guide',asset});
 });
 ```

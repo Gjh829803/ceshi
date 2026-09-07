@@ -34,6 +34,8 @@ export interface EpisodeSourceManifest {
   kind: 'three-episode-source'; schemaVersion: 1;
   worldId: string; sourceHash: string; worldBuildHash: string; runtimeHash: string;
   sourceWorldBuildHash: string; sourceRuntimeHash: string; sourceDeliveryManifestSha256: string;
+  /** Pinned Creator policy; absent only for historical policy-less deliveries. */
+  assetPolicySha256?: string;
   sourceRoot: string; playableRoot: string; sourceFiles: Record<string, string>;
   playableFiles: Record<string, string>; opening: EpisodeFile;
   targets: EpisodeVisualTarget[]; referenceImage?: EpisodeFile; worldPlan?: EpisodeFile;

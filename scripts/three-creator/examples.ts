@@ -27,15 +27,20 @@ const world = await createWorld({scene,camera,canvas});
 scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
 const ground = new THREE.Mesh(new THREE.BoxGeometry(60,0.2,60),new THREE.MeshStandardMaterial({color:0x759955}));
 ground.position.y=-0.1; world.addEntity({id:'ground',object:ground,role:'terrain'});
-// Select humanoid.g-bot in project.json. The asset path uses its supplied motions.
-const player = await world.assets.load('humanoid.g-bot');
+// Select humanoid.preset-101 in project.json. Use the preset body and authored motions.
+const player = await world.assets.load('humanoid.preset-101');
 world.addCharacter({id:'player',asset:player});
 world.setControlledEntity('player');
 world.setCameraFollow(); // follow from the authored camera without reframing
 world.setCaptureTargets(['player']);
 await world.start(); // prepares baseline and installs the real same-scene observer
 // WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.
-// A custom object has no automatic limb animation; prefer supplied humanoid actions.
-// Local front is -Z. Inspect custom knees/elbows from the side during movement.
+// The default humanoid uses the preset body and authored motions; other assets remain optional.
+// Local front is -Z. Inspect the supplied motions from the side during movement.
 // This is a minimal integration example, not a completed reference reconstruction.
 `;
+
+/** Render the starter from the Host task's allowed default, never author config. */
+export function sdkExample(assetId: string): string {
+  return SDK_EXAMPLE.replaceAll('humanoid.preset-101', assetId);
+}

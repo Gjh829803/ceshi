@@ -11,6 +11,7 @@ export { HumanoidController } from './humanoid/controller';
 export { SWIM_ROOT_DEPTH } from './humanoid/water-physics';
 export { createActionBridge } from './humanoid/action-api';
 export type { SkillRequest } from './humanoid/action-schema';
+export { SKILL_DEFINITIONS } from './humanoid/action-schema';
 export { readInteractionTargets } from './humanoid/render-state';
 export { updateVehicleWheels, resetVehicleWheels } from './vehicle-animation';
 export type { TrainingOptions, TrainingProfile, TrainingRuntime, TrainingVehicleInstance, TrainingSnapshot } from './runtime';

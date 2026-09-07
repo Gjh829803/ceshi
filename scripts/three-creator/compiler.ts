@@ -4,9 +4,10 @@ import { readFile, writeFile, mkdir, readdir, lstat, realpath, copyFile, rm } fr
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { realpathSync } from 'node:fs';
+import { realpathSync, readFileSync, lstatSync } from 'node:fs';
 import { PROJECT_SCHEMA, type Project, type CreatorProfile, sha256 } from './contracts.js';
 import { catalogResources, publicCatalogValue, readCatalogResource } from './asset-resources.js';
+import { createAssetPolicySnapshot, validateAssetPolicySnapshot, assetPolicyHash, verifyAssetPolicySources, verifyAssetPolicyBundle, type AssetPolicySnapshot } from './asset-policy.mjs';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
@@ -17,7 +18,8 @@ const EXCLUDED = new Set(['.git', '.three-creator', 'node_modules', 'outputs', '
 const HOST_OWNED_ROOTS = new Set(['scratch']);
 const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.glb', '.gltf', '.bin', '.wasm', '.woff', '.woff2', '.ttf', '.txt', '.mp3', '.ogg', '.wav']);
 export type AssetCatalogEntry = Record<string, any> & { id: string; uri: string; sha256: string; byteLength: number; sourcePath: string };
-export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
+export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; assetPolicySha256: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
+export type AssetPolicyOptions = { assetPolicySnapshotPath?: string; assetPolicySha256?: string };
 export type PrebuiltRuntimeManifest = { schemaVersion: 1; profile: CreatorProfile; cacheIdentity: string; runtimeHash: string; files: Record<string, string> };
 export function isWithin(root: string, file: string): boolean { const relative = path.relative(root, file); return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative); }
 export async function hashTree(root: string): Promise<Record<string, string>> {
@@ -63,8 +65,40 @@ export class ThreeCompiler {
   private candidates = new Map<string, Candidate>();
   private runtimes = new Map<string, { files: Record<string, string>; hash: string }>();
   private addons = new Map<string, string>();
-  constructor(workspace: string, readonly profile: CreatorProfile) {
+  private policyContext?: { snapshot:AssetPolicySnapshot; catalog:AssetCatalogEntry[]; hash:string };
+  private readonly policyOptions: AssetPolicyOptions;
+  constructor(workspace: string, readonly profile: CreatorProfile, options: AssetPolicyOptions = {}) {
     this.workspace = realpathSync(path.resolve(workspace)); this.outputRoot = path.join(this.workspace, '.three-creator');
+    this.policyOptions={...options};
+  }
+  private initializePolicy() {
+    if(this.policyContext)return this.policyContext;
+    const options=this.policyOptions;
+    let frozenPolicy:AssetPolicySnapshot;
+    const catalog = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'scripts/three-creator/asset-catalog.json'),'utf8'));
+    if(catalog.schemaVersion!==1||!Array.isArray(catalog.assets))throw new Error('THREE_CATALOG_INVALID');
+    const frozenCatalog:AssetCatalogEntry[]=catalog.assets;
+    const hasPin=options.assetPolicySnapshotPath!==undefined||options.assetPolicySha256!==undefined;
+    if(hasPin&&(!options.assetPolicySnapshotPath||!options.assetPolicySha256))throw new Error('THREE_ASSET_POLICY_PIN_REQUIRED');
+    if(options.assetPolicySnapshotPath){
+      const file=realpathSync(options.assetPolicySnapshotPath),stat=lstatSync(options.assetPolicySnapshotPath);
+      if(!stat.isFile()||stat.isSymbolicLink()||file===this.workspace||isWithin(this.workspace,file))throw new Error('THREE_ASSET_POLICY_HOST_PATH_REQUIRED');
+      frozenPolicy=validateAssetPolicySnapshot(JSON.parse(readFileSync(file,'utf8')));
+      if(assetPolicyHash(frozenPolicy)!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_HASH_MISMATCH');
+      if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
+    }else{
+      frozenPolicy=createAssetPolicySnapshot(JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'scripts/three-creator/asset-policy.json'),'utf8')),frozenCatalog);
+    }
+    return this.policyContext={snapshot:frozenPolicy,catalog:frozenCatalog,hash:assetPolicyHash(frozenPolicy)};
+  }
+  get assetPolicySha256():string {return this.initializePolicy().hash;}
+  assetPolicy(): AssetPolicySnapshot { return structuredClone(this.initializePolicy().snapshot); }
+  allowedAssets(): AssetCatalogEntry[] { const {catalog,snapshot}=this.initializePolicy();return structuredClone(catalog.filter(asset=>snapshot.policy.allowedAssetIds.includes(asset.id))); }
+  async verifyCandidatePolicy(candidate:Candidate):Promise<void>{
+    const readTree=async(root:string)=>Object.fromEntries(await Promise.all(Object.keys(await hashTree(root)).map(async name=>[name,await readFile(path.join(root,name))])));
+    const [sourceFiles,playableFiles]=await Promise.all([readTree(candidate.sourceRoot),readTree(candidate.playableRoot)]);
+    verifyAssetPolicyBundle({snapshot:this.assetPolicy(),expectedHash:candidate.assetPolicySha256,sourceFiles,playableFiles,
+      assetDefinitions:JSON.parse(playableFiles['asset-definitions.json']!.toString())});
   }
   async sourceFiles(): Promise<Map<string, Buffer>> {
     const root = await realpath(this.workspace), result = new Map<string, Buffer>(); let size = 0;
@@ -141,13 +175,14 @@ export class ThreeCompiler {
   }
   async prepare(): Promise<Candidate> {
     const sourceFiles = await this.sourceFiles();
+    verifyAssetPolicySources(this.assetPolicy(),Object.fromEntries(sourceFiles));
     const project = sourceFiles.has('project.json') ? JSON.parse(sourceFiles.get('project.json')!.toString()) : { schemaVersion: 1, assetIds: [] };
     if (!checkProject(project)) throw new Error(`THREE_PROJECT_INVALID: ${JSON.stringify(checkProject.errors)}`);
-    const runtime = await this.prepareRuntime();
     const sources = Object.fromEntries([...sourceFiles].map(([name, data]) => [name, sha256(data)]));
-    const assets = await readCatalog();
-    const selected = (project as Project).assetIds.map(id => { const asset = assets.find(a => a.id === id); if (!asset) throw new Error(`THREE_ASSET_UNKNOWN: ${id}`); return asset; });
-    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset) }));
+    const assets = this.allowedAssets();
+    const selected = (project as Project).assetIds.map(id => { const asset = assets.find(a => a.id === id); if (!asset) throw new Error(`THREE_ASSET_POLICY_DENIED: ${id}`); return asset; });
+    const runtime = await this.prepareRuntime();
+    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256 }));
     const worldBuildHash = sha256(JSON.stringify({ sourceHash, runtimeHash: runtime.hash, profile: this.profile }));
     const previous = this.candidates.get(worldBuildHash);
     if (previous) { await verifyFiles(previous.root, previous.files); return { ...previous, candidateCacheHit: true, runtimeCacheHit: true }; }
@@ -162,6 +197,7 @@ export class ThreeCompiler {
         }
     }
     await writeFile(path.join(playableRoot, 'asset-definitions.json'), JSON.stringify({ schemaVersion: 1, assets: selected.map(publicAsset) }, null, 2));
+    await writeFile(path.join(playableRoot, 'asset-policy.json'), JSON.stringify(this.assetPolicy(), null, 2));
     const imports: Record<string, string> = { three: './runtime/three.js' };
     if (this.profile === 'three-sdk') imports['@worldkit/three'] = './runtime/worldkit-three.js';
     const addonImports = new Set<string>();
@@ -212,7 +248,8 @@ export class ThreeCompiler {
     const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>`;
     html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, value => value + injected) : injected + html;
     await writeFile(path.join(playableRoot, 'index.html'), html);
-    const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };
+    const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };
+    await this.verifyCandidatePolicy(candidate);
     this.candidates.set(worldBuildHash, candidate); return candidate;
   }
 }

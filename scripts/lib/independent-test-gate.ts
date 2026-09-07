@@ -31,6 +31,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
     { path: "scripts/cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-episode-scheduling.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-eval-asset-policy.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval-effort.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval-progress.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval.test.mjs", lane: "node" },

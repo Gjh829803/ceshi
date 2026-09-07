@@ -32,7 +32,7 @@ const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5
   await writeFile(path.join(candidate.root,'captures/captures.json'),JSON.stringify(captures));
   const files=await hashTree(candidate.root);
   // Fixture header selects the production compatibility path; it is not a real Creator delivery.
-  await writeFile(path.join(candidate.root,'delivery.json'),JSON.stringify({kind:'three-creator-delivery',schemaVersion:1,profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:provenance.deliveryRuntimeHash,files}));
+  await writeFile(path.join(candidate.root,'delivery.json'),JSON.stringify({kind:'three-creator-delivery',schemaVersion:1,profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:provenance.deliveryRuntimeHash,assetPolicySha256:candidate.assetPolicySha256,files}));
   if(origin==='manual-repair'){
    const headerPath=path.join(candidate.root,'delivery.json'),header=JSON.parse(await readFile(headerPath,'utf8'));
    const repair=Buffer.from(JSON.stringify({kind:'manual-humanoid-motion-repair',worldBuildHash:header.worldBuildHash,sourceHash:header.sourceHash,runtimeHash:header.runtimeHash}));

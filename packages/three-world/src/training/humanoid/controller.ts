@@ -201,6 +201,12 @@ export class HumanoidController {
       const depth=Math.max(0,volume.surfaceY-Math.max(volume.bottomY,floorY));
       this.water={volumeId:volume.id,surfaceY:volume.surfaceY,depth,
         submersion:Math.max(0,Math.min(1,(volume.surfaceY-this.position.y)/this.capsuleHeight)),
+        feetBelowSurfaceMeters:volume.surfaceY-this.position.y,
+        requiredDepthMeters:wasSwimming?SWIM_ROOT_DEPTH+.01:SWIM_ROOT_DEPTH+.13,
+        requiredFeetBelowSurfaceMeters:wasSwimming?.5:.95,
+        depthCheckPassed:depth>(wasSwimming?SWIM_ROOT_DEPTH+.01:SWIM_ROOT_DEPTH+.13),
+        immersionCheckPassed:this.position.y<volume.surfaceY-(wasSwimming?.5:.95),
+        wasSwimmingAtSample:wasSwimming,
         entrySpeed:this.waterEntrySpeed,entrySerial:this.waterEntrySerial};
       // Hysteresis prevents repeated stance switches at the sloping shoreline.
       this.swimming=depth>(wasSwimming?SWIM_ROOT_DEPTH+.01:SWIM_ROOT_DEPTH+.13)

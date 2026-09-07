@@ -30,7 +30,7 @@ describe('Three semantic target views', () => {
       for (const [name, source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
       const candidate = await service.compiler.prepare();
       const catalog = JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
-      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.g-bot');
+      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.preset-101');
       expect(humanoid).toBeDefined();
       for (const action of ['idle','walk','run','jump']) expect(humanoid.actions[action].clipName).toBeTruthy();
       expect(sha256(await readFile(path.join(candidate.playableRoot,humanoid.uri)))).toBe(humanoid.sha256);

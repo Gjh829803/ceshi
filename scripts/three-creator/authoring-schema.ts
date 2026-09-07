@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -22,6 +22,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
  presentation: ['createPresentation','state','execute','getEntityState','reset'],
  training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'character-actions':['training','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
 export function publicContractTopic(source: string, topic: AuthoringTopic): string {

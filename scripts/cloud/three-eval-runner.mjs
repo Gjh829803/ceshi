@@ -12,6 +12,7 @@ import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
 import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from "./three-account-routing.mjs";
+import {freezeRunAssetPolicy} from "./three-eval-mcp-bridge.mjs";
 import {runWithExecutionSlots} from "./three-execution-slots.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -98,6 +99,12 @@ const accountPolicyBytes=await readFile(accountPolicyPath);
 if(previousPlan?.accountPolicySha256&&previousPlan.accountPolicySha256!==sha256(accountPolicyBytes))throw Error("CREATOR_FROZEN_ACCOUNT_POLICY_CHANGED");
 const accountPolicy=JSON.parse(accountPolicyBytes);
 const accountInventory=JSON.parse(await readFile(accountInventoryPath,"utf8"));
+const frozenAssetPolicy = await freezeRunAssetPolicy({toolkitRoot: repo, previousPlan});
+if (!previousPlan && frozenAssetPolicy.assetPolicySha256) {
+  for (const name of ["three-eval-launcher.mjs", "three-eval-mcp-bridge.mjs"]) {
+    if (lock.launcherFilesSha256[name] !== await fileSha256(path.join(repo, "scripts/cloud", name))) throw new Error("THREE_ASSET_POLICY_LAUNCHER_NOT_PINNED");
+  }
+}
 const plans = [];
 for (const item of manifest.cases) {
   if (!/^[a-z0-9][a-z0-9-]{2,99}$/.test(item.id)) throw new Error("Invalid case id");
@@ -108,7 +115,7 @@ for (const item of manifest.cases) {
   const originalEffectivePrompt = (await readFile(promptPath, "utf8")).trimEnd();
   const effectivePrompt = creativePromptFromSource(originalEffectivePrompt);
   if (originalEffectivePrompt !== item.effectiveUserPrompt.trimEnd()) throw new Error(`Effective prompt mismatch: ${item.id}`);
-  const caseInput = {schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, ...(suite === "sdk-only" ? {experimentRevision} : {})};
+  const caseInput = {...frozenAssetPolicy, schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, ...(suite === "sdk-only" ? {experimentRevision} : {})};
   const caseHash = sha256(JSON.stringify(caseInput));
   const requestId = `wk3-${sha256(`${runId}:${caseHash}`).slice(0, 16)}-${item.id}-a1`;
   const outputS3Prefix = `${s3Root}/${runId}/${item.id}/${caseHash.slice(0, 16)}`;
@@ -131,7 +138,7 @@ for (const item of manifest.cases) {
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
 const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
-await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeLockPath:lock.runtimeLockPath,accountPolicyPath,accountInventoryPath,accountPolicySha256:sha256(accountPolicyBytes), runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
+await writeJson(path.join(outputRoot, "evaluation-plan.json"), {...frozenAssetPolicy, schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeLockPath:lock.runtimeLockPath,accountPolicyPath,accountInventoryPath,accountPolicySha256:sha256(accountPolicyBytes), runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=${sourceManifest.cases.length} profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
 for (const key of ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete process.env[key];
@@ -282,6 +289,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
     if(state.accountRouting.identitySha256&&!state.accountRouting.verified)throw Error("CREATOR_ACCOUNT_ROUTING_MISMATCH");
+    if (frozenAssetPolicy.assetPolicySha256 && (result.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256 || launcher.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256)) throw new Error("THREE_ASSET_POLICY_DELIVERY_MISMATCH");
     state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id), expectedReasoningEffort: reasoningEffort});
     state.phase = "delivered"; delete state.failure; await save();
   } catch (error) {

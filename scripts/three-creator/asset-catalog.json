@@ -2,6 +2,104 @@
   "schemaVersion": 1,
   "assets": [
     {
+      "id": "humanoid.preset-101",
+      "displayName": "Default preset humanoid / Playground 101-bone character",
+      "uri": "./assets/subjects/bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4.glb",
+      "sha256": "bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4",
+      "byteLength": 4643232,
+      "sourcePath": "assets/three-creator/humanoid/preset-101/v1/preset-101.glb",
+      "usage": "reusable",
+      "recommendedFor": [
+        "default humanoid character",
+        "human motion proxy"
+      ],
+      "recommendedBody": {
+        "heightMeters": 1.8,
+        "radiusMeters": 0.35
+      },
+      "locomotionBindingIds": [
+        "ground.standard"
+      ],
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          3.141592653589793,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {
+        "idle": {
+          "clipName": "idle",
+          "loop": true,
+          "blendSeconds": 0.1,
+          "timeScale": 1
+        },
+        "walk": {
+          "clipName": "walk",
+          "loop": true,
+          "blendSeconds": 0.1,
+          "timeScale": 1.2
+        },
+        "run": {
+          "clipName": "run",
+          "loop": true,
+          "blendSeconds": 0.1,
+          "timeScale": 0.96
+        },
+        "jump": {
+          "clipName": "jump",
+          "loop": false,
+          "blendSeconds": 0.1,
+          "timeScale": 1
+        },
+        "fall": {
+          "clipName": "fall",
+          "loop": true,
+          "blendSeconds": 0.1,
+          "timeScale": 1
+        }
+      },
+      "limitations": [
+        "Recommended default humanoid; other catalog assets and custom characters remain supported.",
+        "Five ordinary locomotion clips. Landing returns to grounded locomotion; no standalone landing action.",
+        "Gait rates match default ground speeds (walk 2.4 m/s, run 4.8 m/s); custom speeds need visual stride checks.",
+        "Full 48-action traversal/interaction uses humanoid.source-101 with TrainingCharacter and supported scene conditions."
+      ],
+      "resources": [
+        {
+          "path": "humanoid/source/THIRD_PARTY_NOTICES.md",
+          "uri": "./assets/resources/8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524.md",
+          "sha256": "8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524",
+          "byteLength": 6595,
+          "sourcePath": "assets/three-creator/training/humanoid/source/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "path": "humanoid/source/gasp-research/LICENSE-NOTICE.txt",
+          "uri": "./assets/resources/ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c.txt",
+          "sha256": "ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c",
+          "byteLength": 407,
+          "sourcePath": "assets/three-creator/training/humanoid/source/gasp-research/LICENSE-NOTICE.txt"
+        }
+      ],
+      "provenance": {
+        "sourceAssetId": "humanoid.source-101",
+        "repository": "vehicle-training-ground",
+        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+        "derived": true,
+        "sourceManifest": "assets/three-creator/humanoid/preset-101/v1/provenance.json"
+      }
+    },
+    {
       "id": "humanoid.g-bot",
       "displayName": "G Bot animated humanoid",
       "uri": "./assets/subjects/4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f.glb",

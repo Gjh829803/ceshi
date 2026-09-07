@@ -109,7 +109,7 @@ describe('WorldAssets', () => {
     let finish!: (value: Response) => void;
     fetchBytes.mockImplementationOnce(() => new Promise<Response>(resolvePromise => { finish = resolvePromise; }));
     const pending = library.load('humanoid.g-bot'); const rejected = expect(pending).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
-    library.dispose(); finish(new Response(await readFile(resolve(catalog.assets[0]!.sourcePath)))); await rejected;
+    library.dispose(); finish(new Response(await readFile(resolve(catalog.assets.find(asset => asset.id === 'humanoid.g-bot')!.sourcePath)))); await rejected;
     expect(() => library.search('')).toThrow('ASSET_LIBRARY_DISPOSED');
     await expect(library.load('humanoid.g-bot')).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
   });
