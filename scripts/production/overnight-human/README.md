@@ -343,3 +343,28 @@ not depend on the summary category alone. The actual later attempt had a clean
 a non-timeout launcher, wrong job/task/runtime, or unconfirmed cleanup; evidence
 is in `OUT/timeout-selector-verification-20260907-0712.json`. Snapshot retrieval
 and downstream archive/browser checks remain separate required steps.
+
+## Closed at the deadline; shared human feedback remains available
+
+All known jobs have drained. The final result is 200 normal final deliveries,
+3 recovered final archives and 9 intermediate playables: 212 available worlds,
+with 88 cases without an artifact. The 300-final-delivery goal was not achieved
+(97 short). At the initial 08:00 check, 211 were public; recovered case 079
+published at 08:00:44 and then passed public browser verification. Its original
+251.35-second clean episode and all original bytes remain preserved. The final
+intermediate list is 001/034/079/096/218/221/228/267/277.
+
+Controller and publisher have exited; heartbeat 300 is PAUSED. Do not restart
+this closed campaign merely to poll unchanged state. See OUT/closed-20260907.json,
+production-summary-20260907.md and deadline-outcome-20260907-0800.json for the
+counts, deadline distinction, actual quality-review scope and failure causes.
+
+The user's separately requested shared human-review UI is deployed. Viewer
+commit c3cd56ac owns direct world links and per-person, per-build autosaved
+pass/fail feedback. Publisher commit f72a66d1 preserves the fourth UI file,
+reviews.mjs. The gateway uses versioned ConfigMap
+worldkit-creator-reviews-73c283ecd613 and keeps artifact files read-only. Human
+feedback persists in a separate private FSx mount; publishing artifacts must
+never overwrite it. Shared human votes are not seeded from assistant account
+checks and never gate play. The review service stays available after production
+monitoring stops; cloud verification used a separate smoke run.
