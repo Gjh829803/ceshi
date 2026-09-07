@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   copyFile,
   mkdtemp,
@@ -15,7 +16,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { deflateSync } from "node:zlib";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 
@@ -468,6 +469,28 @@ afterEach(async () => {
 
 // This suite now runs a real semantic compiler (often twice per repair fixture).
 describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
+  it("copies each comparison raster only once while preserving exact PNG bytes", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const { main } = await import("../../.codex/skills/worldkit-native-block-builder/scripts/render-visual-review.source.js");
+    const from = vi.spyOn(Buffer, "from");
+    let rasterCopies: number;
+    try {
+      await main(["--execution-role", "host-replay", "--workspace", workspace]);
+      rasterCopies = from.mock.calls.filter(args => args[0] instanceof Uint8Array &&
+        [1544 * 768 * 4, 1928 * 540 * 4].includes(args[0].byteLength)).length;
+    } finally {
+      from.mockRestore();
+    }
+    const hashes = await Promise.all(["builder-top-down-comparison.png", "builder-entry-comparison.png"].map(async file =>
+      createHash("sha256").update(await readFile(path.join(workspace, "attempts/advisory", file))).digest("hex")));
+    // Hashes captured from the original encoder on the same real render fixture.
+    expect(hashes).toEqual([
+      "368cbc619cf121f685ad66b1e8024719db60769d2b0323d090b55f10ceeb3671",
+      "e406b9b36c03699e01b9066e412146367dacdba85d53647f81305d14c6f90eb1",
+    ]);
+    expect(rasterCopies).toBeLessThanOrEqual(2);
+  });
+
   it("keeps the old registered ordinary-human proxy exclusion local to Hosted selection", async () => {
     const workspace = await createWorkspace();
     const manifestPath = path.join(workspace, "native-block-authoring.json");

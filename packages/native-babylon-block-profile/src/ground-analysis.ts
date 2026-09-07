@@ -1385,17 +1385,32 @@ function computeGroundAnalysis(
     rows.push(cell);
     supportCellsByHorizontalCell.set(`${x},${z}`, rows);
   }
+  // Reverse the membership lookup once. Populate each bucket in the original
+  // nodesById order so neighbor insertion and all downstream evidence stay
+  // unchanged. Retain all surface memberships even for repeated top-cell keys.
+  const surfaceIdsByTopCellKey = new Map<string, string[]>();
+  for (const surface of surfaces) {
+    for (const key of new Set(surface.topCellKeys)) {
+      const ids = surfaceIdsByTopCellKey.get(key) ?? [];
+      ids.push(surface.id);
+      surfaceIdsByTopCellKey.set(key, ids);
+    }
+  }
+  const nodesBySurfaceId = new Map<string, MutableNode[]>();
+  for (const node of nodesById.values()) {
+    for (const id of surfaceIdsByTopCellKey.get(node.topCellKey) ?? []) {
+      const nodes = nodesBySurfaceId.get(id) ?? [];
+      nodes.push(node);
+      nodesBySurfaceId.set(id, nodes);
+    }
+  }
   for (const surface of surfaces) {
     const centerNode = nodeByStandIndices.get(positionKey(
       surface.positionMetersXYZ,
     ));
     if (isNil(centerNode)) continue;
-    const surfaceTopCellKeys = new Set(surface.topCellKeys);
-    for (const node of nodesById.values()) {
-      if (
-        node.id === centerNode.id ||
-        !surfaceTopCellKeys.has(node.topCellKey)
-      ) continue;
+    for (const node of nodesBySurfaceId.get(surface.id) ?? []) {
+      if (node.id === centerNode.id) continue;
       connect(centerNode, node);
     }
   }

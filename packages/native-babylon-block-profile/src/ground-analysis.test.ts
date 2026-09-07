@@ -286,6 +286,29 @@ const SPAWN = Object.freeze({
 });
 
 describe("Babylon Native Block Subject-relative ground analysis", () => {
+  it("bounds surface membership work on a tiled floor without changing the Ground report", () => {
+    const cells = rectangle(-8, 7, -8, 7);
+    let singletonCellLookups = 0;
+    const originalHas = Set.prototype.has;
+    Set.prototype.has = function (value: unknown) {
+      if (this.size === 1 && typeof value === "string" && /^-?\d+,-?\d+,-?\d+$/.test(value)) {
+        singletonCellLookups += 1;
+      }
+      return originalHas.call(this, value);
+    };
+    let report: ReturnType<typeof analyze>;
+    try {
+      report = analyze({ supportTopCellKeys: cells, caseIntent: caseIntent({ spawn: SPAWN }) });
+    } finally {
+      Set.prototype.has = originalHas;
+    }
+    // Captured from the original all-node scan, including every report field.
+    expect(sha256CanonicalJson(report)).toBe("sha256:15998effbd67848459d50900475aa09ff89ba72d975becf2a218bfc826b338a9");
+    expect(singletonCellLookups).toBeLessThanOrEqual(
+      8 * (cells.length + report.metrics.standablePositionCount),
+    );
+  });
+
   it.each(["supported", "hole", "headroom", "optional"] as const)(
     "keeps source feedback equal to formal Ground without forged identity: %s", (scenario) => {
       const receipt = capability();

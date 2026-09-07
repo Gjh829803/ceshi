@@ -761,10 +761,11 @@ function pngChunk(type: string, data: Uint8Array): Buffer {
 
 function encodePng(raster: Raster): Buffer {
   const scanlines = Buffer.alloc((raster.width * 4 + 1) * raster.height);
+  const pixels = Buffer.from(raster.pixels);
   for (let y = 0; y < raster.height; y += 1) {
     const rowOffset = y * (raster.width * 4 + 1);
     scanlines[rowOffset] = 0;
-    Buffer.from(raster.pixels).copy(
+    pixels.copy(
       scanlines,
       rowOffset + 1,
       y * raster.width * 4,

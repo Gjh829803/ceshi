@@ -3443,6 +3443,64 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本轮原失败项均已有定向绿色证据，但没有再跑一次新的全仓 aggregate；精确候选 CI、
   新图 Case 和人类审核仍待完成。全部 CF 未关闭，main 仍未合入。
 
+- CF 生产性能修复（2026-09-07，主会话；用户要求优先修复并提交供同事验证）：
+  - Browser transport 删除完整磁盘读取后的重复 verifier，startup 与每次 fresh read
+    均复用该次受信文件读取的 admission；无跨请求缓存，不删 IO、Hash、合同、漂移检查。
+    真实解析计数 RED 为 4 对 2，修复后为 2 对 2；transport/file-reader 两文件
+    21/21 通过，包括篡改、替换、符号链接、并发 freshness 与 disposal。
+    同一 15,760,869-byte 包 transport 实测 9,738ms → 4,950ms；单次诊断而非统计基准。
+  - Ground 将每个 surface 全扫描节点改为反向 membership 索引，按原节点插入顺序
+    构建 bucket，重复 top-cell 的所有 surface membership 也保留。256 点用例原有
+    65,280 次 singleton cell Set 查询触发 RED；优化后通过线性工作量界限和原完整报告
+    Hash 对照。Ground 完整文件 38/38 通过。对真实 Case 原 Ground 数据只读重放，
+    1,052ms、10,339 点，去掉 Formal identity 的全部分析字段与原报告逐项完全一致。
+  - PNG 将全 raster 拷贝从逐行执行移到循环外；真实 renderer RED 为两张图拷贝
+    1,308 次，修复后最多 2 次，两个 PNG 的完整 SHA-256 均与修复前相同。
+    已重建工具并同步代表性 fixture；不修改本次 Run 或历史 Attempt 的冻结工具。
+  - 使用同一真实包启动 shell/runtime 两个 Vite 服务，未覆盖默认 30s timeout，
+    两服务均 ready（Vite 各约 8.66s，包含父进程预读的总耗时 15.472s），随后主动停止。
+    停止时 dependency scan 出现 EPIPE 取消警告；这是启动 smoke，不是新的 Browser
+    Capture 或同事 21.6MB 包的复验。子服务原始输出留存/角色化故障日志仍待补齐，
+    本批先交付性能根因修复，不将日志问题写为已解决。
+  - Node 23.11.0 下 typecheck、Native Skill 完整 gate 111/111（293.75s）均已通过，
+    提交后需同事对其原大包复验。临时 Node 25.8.1 下 Ground、transport、file-reader、
+    Planner execution 四文件 77/77 通过；PNG 字节对照在 Node 22.21.0 与 25.8.1
+    各 1/1 通过。Node 25.8.1 同包双 Vite 启动 ready，各约 7.59s，总计 13.433s，
+    同样未覆盖 30s timeout；默认 Node 与项目依赖未修改。这里只证明这批变更和
+    规划目录交接的定向兼容，不是 Node 25 全仓 CI 或完整付费生成 Case 验收。
+    未修改生产 gates、采样、参数、30s 启动预算或修复轮次，未启动新的完整 Case。
+  - 原 Run `run-20260907031645-3447` 已返回 `native-world-agent-result.exitCode: 0`、
+    `WORLDKIT_STAGE ready`，开场图和两张三视图已交付。这属于原候选的生成/白膜证据；
+    用户授权性能修改发生在末尾风格任务仍运行时，不充当修复后 exact-SHA E2E 证据。
+    风格任务报告仍有比例/轮廓差异，Evaluation/strict diagnostic 状态未被改写；
+    普通生产跑通不等于 CF-16/22 等完整旧分支效果对齐或全 CF 完成，main 未合入。
+
+- CF 生产性能诊断检查点（2026-09-07，冻结候选 `21d671ba`，以下为修复前证据）：
+  - 同事在 `bdec216e` 的大包 Capture 前遇到 `WORLDKIT_SERVER_START_TIMEOUT`。
+    代码确认：文件读取通过 `assembleWorldPackageDirectoryV1` 已完整验包，Browser
+    transport 随后再次调用 verifier；父进程和 shell/runtime 两个 Vite 子进程都创建
+    transport，子进程 readiness 预算仍为 30s。当前候选这些路径与 `bdec216e` 无差异。
+    先前 startup snapshot 优化只删除配置阶段的额外读取，未消除这个内部重复校验。
+    Capture 的 `forwardOutput: false` 目前直接 drain 子进程输出，不能从失败记录
+    区分 shell/runtime 的启动细节。不是模型生成失败，也不是截图效果拒绝。
+  - 本机只读基线：对 `cloud-temple-cf-tools-0907/final/world-package` 依次执行
+    `readWorldPackageDirectoryV1` 和 `verifyWorldPackageDirectoryV1`，20 文件、
+    15,760,869 bytes，首次读取含校验 5,674ms、第二次校验 5,356ms、合计 11,030ms。
+    Package Root 为 `9afe505d45719106f74bd9a61ab3bfad2ba361cf3466d088e9f305ab41dd7993`。
+    这是单次本机诊断，不是同事 21.6MB 包 41.8s 的本地复现，也不是完整启动基准。
+    verifier 还在逐文件 JSON admission 后重复解析部分具体合同，须一并测量归因。
+  - 两个额外已确认但未修复的热点：Ground 每个 surface 遍历全部站立节点；
+    advisory PNG 每行 `Buffer.from(raster.pixels)` 复制完整图片。同事 63% 集合操作
+    采样仅作瓶颈线索，不将全部时间归因到单行，也不据此声称已测得优化收益。
+  - 后续顺序：优先闭合启动重复校验/脱敏诊断，再处理 Ground 索引和 PNG 单次复制；
+    保持验包/篡改检测、节点连接顺序、采样、生产 gates、30s 预算和修复轮次。
+    当前 Run 仍执行风格图任务，运行期间只读诊断和更新状态，不修改冻结实现。
+  - 当前新 Run `run-20260907031645-3447` 复用断电前已接受的规划，Builder 单次
+    任务 exit 0（958,768ms）；Native Check/Ground 通过，10,339 个站立点全部可达，
+    Package/Capture 已完成，普通生产 `productionOutcome: passed`、白膜 published。
+    Evaluation 仍 incomplete、strict diagnostic failed（`NBR70_BLOCKER_IDENTITY_MISMATCH`、
+    `NBR70_EVALUATION_NOT_PASSED`）；风格图和全 CF 效果验收未完成，不能写为完整通过。
+
 - 断电后的恢复检查点（2026-09-07，`bdec216e`）：新 Case
   `cloud-temple-cf-tools-0907` 的 Planner 在原任务内完成一次中心偏差修复，最终
   Subject center 0.507099、self-check passed、Host plan-ready；规划已完整落盘。
