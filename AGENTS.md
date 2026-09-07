@@ -39,6 +39,14 @@ consumer checks where applicable, not unrelated runtime or cloud replay.
   external to Git. Private runtime configuration remains under ignored
   `.codex-tmp`; never commit credentials or copy them into model workspaces.
 
+## Model and account selection
+
+For GPT-6 task classification, consult
+`docs/evaluations/gpt6-three/account-performance/gpt6-capabilities-20260907.md`.
+Its 18 labels are user-confirmed model capabilities. Use the referenced local
+email mapping for exact identity matching; check current availability separately
+and preserve existing quality evidence. Unlisted capability is unknown.
+
 ## Existing production and changes
 
 This branch does not take ownership of existing production processes. Do not

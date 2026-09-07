@@ -55,6 +55,10 @@ SDK 集成同时保留 Creator 的开场镜头/代表对象捕获和 Episode 的
 是完整汇总；单 clip 包可以先交付。锚点通过、Prompt 完成、素材就绪和最终
 视频生成完成必须分别显示，不能互相代替。
 
+## 任务分类与账号能力
+
+模型与账号选择先查[用户确认的 GPT-6 账号清单](evaluations/gpt6-three/account-performance/gpt6-capabilities-20260907.md)。其中 18 个账号已由用户确认支持 GPT-6；实时额度、登录状态和历史质量独立判断。
+
 ## 批量生产和恢复
 
 `batch-cli.mjs` 注册固定 cohort 清单；`batch-controller.mjs`、`batch-store.mjs`
