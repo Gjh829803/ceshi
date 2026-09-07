@@ -35,7 +35,7 @@ import {
   type NativeBlockRepairInstructionV1,
 } from "./repair-request.js";
 import { parseNativeSubjectHostContextV1, type NativeSubjectHostContextV1 } from "./native-subject-host-context.js";
-import { validateNativeWorldPlannerInputClosureV1 } from
+import { NATIVE_BLOCK_BUILDER_TASK_INSTRUCTION_V1, validateNativeWorldPlannerInputClosureV1 } from
   "./native-world-case-preparation.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
@@ -203,7 +203,6 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly cloudOutputS3Root?: string;
   readonly runDirectoryPath: string;
   readonly inputDirectoryPath: string;
-  readonly taskInstructionPath: string;
   readonly builderSkillPath: string;
   readonly nativeSceneApiPath: string;
   readonly nativeSceneProfilePath: string;
@@ -575,6 +574,13 @@ export async function prepareNativeBlockGenerationTaskV1(
   }
   const inputRoot = await canonicalRoot(input.inputDirectoryPath, "Generation input root");
   const caseRoot = await canonicalRoot(path.dirname(inputRoot.requestedPath), "Generation Case root");
+  // The Host selects SDK tools independently of the accepted Planner/Case files.
+  // Copy only the declared Skill files into this Attempt, never a checkout path.
+  const builderToolRoot = await canonicalRoot(path.dirname(input.builderSkillPath), "Generation Builder Skill root");
+  const freezeBuilderTool = async (relativePath: string): Promise<FrozenFileV1> => {
+    const file = await freezeFile(builderToolRoot, path.join(builderToolRoot.requestedPath, relativePath));
+    return Object.freeze({ ...file, relativePath: `builder-skill/${file.relativePath}` });
+  };
   const requestedRunDirectoryPath = path.resolve(input.runDirectoryPath);
   if (path.basename(requestedRunDirectoryPath) !== input.runId) {
     throw new TypeError("Generation runId must match the run directory name.");
@@ -649,8 +655,8 @@ export async function prepareNativeBlockGenerationTaskV1(
   }
   const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, ...caseReferenceFiles] = await Promise.all([
     freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reconstructionCase.sceneBriefRef)),
-    freezeFile(inputRoot, input.taskInstructionPath),
-    freezeFile(inputRoot, input.builderSkillPath),
+    Promise.resolve(frozenCanonicalFile("task-instruction.md", new TextEncoder().encode(NATIVE_BLOCK_BUILDER_TASK_INSTRUCTION_V1))),
+    freezeBuilderTool(path.basename(input.builderSkillPath)),
     freezeFile(inputRoot, input.nativeSceneApiPath),
     freezeFile(inputRoot, input.nativeSceneProfilePath),
     freezeFile(inputRoot, input.blockProfilePath),
@@ -749,9 +755,9 @@ export async function prepareNativeBlockGenerationTaskV1(
     reconstructionCase.referenceInputs[index]!.mediaType === "application/json"
   );
   const builderBundle = await Promise.all([
-    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "references/native-block-output-contract.md")),
-    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/self-check.mjs")),
-    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/render-visual-review.mjs")),
+    freezeBuilderTool("references/native-block-output-contract.md"),
+    freezeBuilderTool("scripts/self-check.mjs"),
+    freezeBuilderTool("scripts/render-visual-review.mjs"),
   ]);
   const visualReviewRenderer = builderBundle.find(({ relativePath }) =>
     relativePath === BUILDER_VISUAL_REVIEW_RENDERER_PATH

@@ -1379,6 +1379,45 @@ Physics presets from six visual roles. Under the latest user scheduling, finish
 the current candidate/Case/merge first, then resolve these remaining CF contracts
 on the requested new worktree without labeling the overall goal complete.
 
+### CF-31/FRESH-BUILDER-TOOLS (2026-09-07)
+
+Main-agent-only, sequential. Owners: production entry selects the current SDK
+Builder Skill; Generation Request freezes exactly its four declared files into
+the existing Attempt inputs and binds their hashes. Planner/Case files remain
+under their original canonical input root and hash checks. No new task, gate,
+repair count, budget or Scene Source is added. Pinned old `run-spatial-world-agent.sh`
+supports build-only and executes the current checkout's Builder Skill/instructions,
+not an earlier Case's archived executable tools.
+
+RED evidence: selecting a current Skill outside the accepted Case input directory
+was rejected by the misplaced root restriction; production selected the archived
+Case Skill; even after tool selection was repaired, the new Attempt still consumed
+the old Case instruction. Fix both ends. Freeze the Host-selected Skill in a
+separate canonical tool root, remapping only its declared files into the existing
+`inputs/builder-skill/` namespace. Preserve no-follow, canonical ancestor, mid-read
+mutation checks and immutable Attempt writes. Extract the existing instruction
+strings into one SDK constant shared with Case preparation; remove the replaced
+`taskInstructionPath` constructor field from all current callers. No instruction
+wording changes. Archived Case instructions remain historical data, not a fallback.
+
+Required evidence: new Run chooses current tool bytes/hashes, later live mutation
+does not affect the frozen Attempt, previous Attempt/Case bytes and planning refs
+remain unchanged, stale Case instruction is not executed, symlinked Skill file/root/
+renderer ancestor reject before Attempt creation, and original Host-only recovery
+does not dispatch a new Builder. The three Generation/Production/Case preparation
+files pass 131/131; typecheck and zero-debt boundaries pass. Fresh full production
+and exact-SHA CI remain separate requirements; this does not close all CF-31.
+
+CF-19 composite feedback audit remains open: `captureSource` throws collected
+overlap errors before Ground, and `deriveBabylonNativeBlockSourceGroundGeometryV1`
+also requires unique occupancy. Removing the renderer throw alone is insufficient.
+The existing layout overlap enumeration is all-pairs, so a dense diagnostic path
+must not accidentally add quadratic work. Resolve provisional overlap-bearing
+feedback in the shared owner, without returning a sanitized accepted Layout or
+weakening the strict logical-ground binder. Required RED: independent real overlap
+plus a disconnected course reports both in one existing cycle, still no PNGs;
+retain malformed/incomplete source, dense-overlap and strict-admission negatives.
+
 ### CF-19/GROUND-COMPONENT-FEEDBACK (2026-09-07)
 
 Main-agent-only, sequential; depends on the existing CF-19 source Ground feedback.

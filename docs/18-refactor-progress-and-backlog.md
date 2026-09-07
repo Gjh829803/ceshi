@@ -3443,6 +3443,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本轮原失败项均已有定向绿色证据，但没有再跑一次新的全仓 aggregate；精确候选 CI、
   新图 Case 和人类审核仍待完成。全部 CF 未关闭，main 仍未合入。
 
+- CF-31/FRESH-BUILDER-TOOLS（2026-09-07，主会话顺序执行，当前未提交）：修复新建
+  build-only/生产 Run 继续读取旧 Case Builder Skill 的偏移。生产入口改为指定当前
+  SDK Skill；Generation owner 在独立 canonical 工具根目录读取四个声明文件，
+  仍按原路径复制到 Attempt 的 `inputs/builder-skill/` 并绑定 Hash，不暴露工作树。
+  同时将 Case 准备中的现有入口指令抽成唯一 SDK 常量，新 Generation 直接冻结它；
+  删除 `taskInstructionPath` 参数及全部当前调用，旧 Case 指令不再是执行 fallback。
+  抽取前后全部指令字符串字节一致，无新增 gate、轮次或参数变化。已接受的 Brief、
+  图片、Case/Profile/API 约束和旧 Attempt 保持原始文件/身份；Host-only 恢复继续
+  使用既有 Attempt，不创建新的 Builder。
+  三项 RED 分别覆盖生产路由仍选旧 Skill、当前工具根被错误拒绝和仍执行旧指令。
+  Generation/Production/Case-preparation 三文件 131/131 通过，覆盖新工具 Hash、
+  冻结后的 live mutation、旧 Case/Attempt 保留、三类符号链接拒绝与现有恢复入口。
+  typecheck、零债务 workspace boundaries 通过；工具一致性/源码重放定向检查 2/2
+  通过（不是再跑完整 110 项）。
+  本切片不代表全部 CF-31 或新的真实 Case 已通过。
+
 - 最新 fresh Case（候选 `2767cfe7`，2026-09-07）：
   `cloud-temple-cf-closure-0907` / `run-20260907004906-9998` 的 Planner 和 Host
   规划复验通过；本地 Builder 单物理任务在 1,800,306ms 终局 `task-timeout`。

@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -370,7 +371,6 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     cloudOutputS3Root: "s3://bucket/worldkit",
     runDirectoryPath: path.join(fixtureValue.root, "runs", "initial"),
     inputDirectoryPath: fixtureValue.inputDirectory,
-    taskInstructionPath: path.join(fixtureValue.inputDirectory, "instruction.md"),
     builderSkillPath: path.join(fixtureValue.inputDirectory, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(fixtureValue.inputDirectory, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(fixtureValue.inputDirectory, "native-scene-profile.json"),
@@ -969,6 +969,64 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       );
     } finally {
       await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("freezes the Host-selected current Builder tools without changing accepted Case inputs or an earlier Attempt", async () => {
+    const value = await fixture();
+    const currentRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-current-builder-tools-"));
+    try {
+      const old = await prepareNativeBlockGenerationTaskV1(input(value));
+      const oldRendererPath = path.join(old.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs");
+      const oldRenderer = await readFile(oldRendererPath);
+      await cp(path.join(value.inputDirectory, "builder-skill"), currentRoot, { recursive: true });
+      const liveRendererPath = path.join(currentRoot, "scripts/render-visual-review.mjs");
+      const currentRenderer = Buffer.concat([oldRenderer, Buffer.from("\n// current-sdk-tool\n")]);
+      await writeFile(liveRendererPath, currentRenderer);
+      const current = await prepareNativeBlockGenerationTaskV1({
+        ...input(value), runId: "current-tools", runDirectoryPath: path.join(value.root, "runs/current-tools"),
+        builderSkillPath: path.join(currentRoot, "SKILL.md"),
+      });
+      expect(await readFile(path.join(current.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs"))).toEqual(currentRenderer);
+      expect(current.generationRequest.contextInputs).toContainEqual({
+        inputRef: "inputs/builder-skill/scripts/render-visual-review.mjs", contentHash: sha256Bytes(currentRenderer),
+      });
+      await writeFile(liveRendererPath, "later mutation");
+      expect(await readFile(path.join(current.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs"))).toEqual(currentRenderer);
+      expect(await readFile(oldRendererPath)).toEqual(oldRenderer);
+      expect(await readFile(path.join(value.inputDirectory, "builder-skill/scripts/render-visual-review.mjs"))).toEqual(oldRenderer);
+      expect(current.generationRequest.referenceInputs).toEqual(old.generationRequest.referenceInputs);
+      const instruction = await readFile(path.join(current.taskWorkspacePath, current.generationRequest.taskInstructionRef), "utf8");
+      expect(instruction).toContain("Read inputs/builder-skill/SKILL.md");
+      expect(instruction).not.toBe(await readFile(path.join(value.inputDirectory, "instruction.md"), "utf8"));
+    } finally {
+      await Promise.all([rm(value.root, { recursive: true, force: true }), rm(currentRoot, { recursive: true, force: true })]);
+    }
+  });
+
+  it.each(["tool-root", "skill-file", "renderer-ancestor"])("rejects a symlinked current Builder %s before freezing an Attempt", async mode => {
+    const value = await fixture();
+    const currentRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-current-builder-links-"));
+    try {
+      const skillRoot = path.join(currentRoot, "builder");
+      await cp(path.join(value.inputDirectory, "builder-skill"), skillRoot, { recursive: true });
+      let selectedRoot = skillRoot;
+      if (mode === "tool-root") {
+        selectedRoot = path.join(currentRoot, "linked-builder");
+        await symlink(skillRoot, selectedRoot);
+      } else if (mode === "skill-file") {
+        await rename(path.join(skillRoot, "SKILL.md"), path.join(skillRoot, "original.md"));
+        await symlink(path.join(skillRoot, "original.md"), path.join(skillRoot, "SKILL.md"));
+      } else {
+        await rename(path.join(skillRoot, "scripts"), path.join(skillRoot, "original-scripts"));
+        await symlink(path.join(skillRoot, "original-scripts"), path.join(skillRoot, "scripts"));
+      }
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value), builderSkillPath: path.join(selectedRoot, "SKILL.md"),
+      })).rejects.toThrow(/symbolic.link|canonical/i);
+      await expect(lstat(path.join(value.root, "runs/initial/attempts/0"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await Promise.all([rm(value.root, { recursive: true, force: true }), rm(currentRoot, { recursive: true, force: true })]);
     }
   });
 
@@ -1761,11 +1819,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const externalInput = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-external-input-"));
     const externalOutput = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-external-output-"));
     try {
-      await writeFile(path.join(externalInput, "instruction.md"), "outside\n");
+      await writeFile(path.join(externalInput, "native-scene-api.json"), "outside\n");
       await symlink(externalInput, path.join(value.inputDirectory, "linked"));
       await expect(prepareNativeBlockGenerationTaskV1({
         ...input(value),
-        taskInstructionPath: path.join(value.inputDirectory, "linked", "instruction.md"),
+        nativeSceneApiPath: path.join(value.inputDirectory, "linked", "native-scene-api.json"),
       })).rejects.toThrow(/symbolic link|canonical|outside/i);
 
       await symlink(externalOutput, path.join(value.root, "linked-runs"));

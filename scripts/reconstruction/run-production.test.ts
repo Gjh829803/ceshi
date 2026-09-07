@@ -708,6 +708,15 @@ async function runWithBackend(
 }
 
 describe("runWorldReconstructionProductionV1", () => {
+  it("selects this SDK's live Builder Skill for a fresh run of an existing Case", async () => {
+    const value = await fixture();
+    const selected = ownersFor(value, await receiptFor(value));
+    await run(value, selected.owners);
+    const generation = vi.mocked(selected.owners.createRunPorts).mock.calls[0]![0].generationInput;
+    expect(generation.inputDirectoryPath).toBe(path.join(value.caseRoot, "inputs"));
+    expect(generation.builderSkillPath).toBe(path.join(value.repositoryRoot, ".codex/skills/worldkit-native-block-builder/SKILL.md"));
+  });
+
   it("freezes complete-target scope and retains it across Host recovery without another generation", async () => {
     const value = await fixture();
     const receipt = await receiptFor(value);

@@ -547,7 +547,6 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     backend: "local",
     runDirectoryPath,
     inputDirectoryPath,
-    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"),
     builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(inputDirectoryPath, "native-scene-profile.json"),

@@ -842,8 +842,7 @@ async function runProduction(
     runDirectoryPath: outputDirectoryPath,
     inputDirectoryPath,
     ...(input.backend === "cloud" ? { cloudOutputS3Root } : {}),
-    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"),
-    builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
+    builderSkillPath: path.join(repositoryRoot, ".codex/skills/worldkit-native-block-builder/SKILL.md"),
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(
       inputDirectoryPath,
