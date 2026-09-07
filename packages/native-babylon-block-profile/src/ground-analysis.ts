@@ -1771,19 +1771,21 @@ function computeGroundAnalysis(
 
   const disconnectedCount = nodesById.size - reachableNodeIds.size;
   if (input.caseIntent.requireSingleReachableComponent && disconnectedCount > 0) {
+    const disconnectedNodes = [...nodesById.values()]
+      .filter(({ isReachableFromSpawn }) => !isReachableFromSpawn);
+    const disconnectedComponentCount = new Set(disconnectedNodes.map(node => node.componentId)).size;
     failureFacts.push(stateFailureFact({
       acceptanceTargetRef: input.caseIntent.spawn.acceptanceTargetRef,
       targetId: input.caseIntent.id,
       metricId: "ground-component-reachability",
       expectedValue: "one-spawn-reachable-component",
-      actualValue: `${componentIds.length}-components-${disconnectedCount}-positions-disconnected`,
+      actualValue: `${disconnectedComponentCount}-components-${disconnectedCount}-positions-disconnected`,
       evidenceRef: input.caseIntent.groundModelEvidenceRef,
       affectedSourceBlockIds: Object.freeze([...new Set(
-        [...nodesById.values()]
-          .filter(({ isReachableFromSpawn }) => !isReachableFromSpawn)
+        disconnectedNodes
           .map(({ support }) => support.sourceBlockId),
       )].sort(stableCompare)),
-      message: `${disconnectedCount} standable positions across ${componentIds.length} components are disconnected from Spawn.`,
+      message: `${disconnectedCount} standable positions across ${disconnectedComponentCount} components are disconnected from Spawn.`,
       instruction: `Connect the explicit ground components with supported Block geometry within the trusted step limit, or remove unintended isolated support; do not add a hidden foundation.`,
     }));
   }

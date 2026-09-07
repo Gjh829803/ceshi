@@ -326,7 +326,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/agents/agent-planner-self-check.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/agents/agent-self-check.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/agents/builder-skill.test.ts", lane: "contract" },
-  { path: "scripts/agents/native-block-builder-skill.test.ts", lane: "contract" },
+  { path: "scripts/agents/native-block-builder-skill.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/agents/planner-execution.test.ts", lane: "contract" },
   { path: "scripts/agents/planner-skill.test.ts", lane: "contract" },
   { path: "scripts/agents/run-world-agent.test.ts", lane: "contract" },

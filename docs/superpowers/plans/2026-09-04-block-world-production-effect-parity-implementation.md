@@ -1379,6 +1379,63 @@ Physics presets from six visual roles. Under the latest user scheduling, finish
 the current candidate/Case/merge first, then resolve these remaining CF contracts
 on the requested new worktree without labeling the overall goal complete.
 
+### CF-19/GROUND-COMPONENT-FEEDBACK (2026-09-07)
+
+Main-agent-only, sequential; depends on the existing CF-19 source Ground feedback.
+Own `native-block-ground-feedback.ts`, the Ground owner's diagnostic component count,
+their focused tests and live/representative renderer copies. No graph, geometry,
+Subject envelope, gate, production timeout or repair-budget changes.
+
+Pinned old `9e35ab53:packages/block-world/src/check.ts:1142` rejects disconnected
+standable positions when `requireSingleReachableComponent` is true. Its same-task
+feedback includes each component's point count, metric bounds and sample position,
+largest first, capped at 16. Current feedback had dropped all coordinates despite
+the Host report retaining every node's position/component/reachability. Summarize
+that existing graph, without a parallel connectivity owner. Correct the existing
+failure text's total-component count to count only disconnected components; keep
+the total graph metric unchanged.
+
+Required evidence: disconnected-corner RED, real-bridge GREEN, largest-first/16-row
+bound with 18 disconnected components, source insertion-order stability, connected
+empty summary, optional-ground policy unchanged, live/frozen byte identity, full
+Native Builder Skill check and typecheck. Replay the exact failed source from
+`cloud-temple-cf-closure-0907/run-20260907004906-9998` in a disposable workspace;
+retain all original failed artifacts. Expected result remains failure with 365
+disconnected positions and 11 disconnected components (12 total), now with bounds.
+This is diagnostic parity, not proof of identical old/new sampling or a successful
+new paid Builder task. Complete sampling equivalence and composite overlap/Ground
+feedback remain separate CF follow-ups; do not close the parent task here.
+
+Next sampling audit (`CF-04/GROUND-SAMPLING-DIFF`, main-agent-only, sequential):
+old `check.ts:896–956` considers one top-center per support Block; current
+`ground-analysis.ts:1304–1312` considers exposed microcell centers, reconstructed
+surface centers and authored Spawn/target/band positions. This is a verified
+candidate-set difference, not yet proof of a false rejection. Compare identical
+geometry, explicit ground/solid membership and Subject envelope under both actual
+algorithms before changing sampling. Do not remove valid diagnostics or edit the
+failed generated scene to manufacture a passing example. Any change needs a
+minimal old-pass/current-fail reproducer, owner regression and direct consumers.
+
+First real-source comparison completed using a disposable pinned-source harness:
+65,710 identical captured Blocks, inspected explicit ground/solid group mapping,
+compiled Subject height 1.92m and effective footprint radius 0.32m. Old reports
+135 disconnected positions in 11 components; current reports 365 in 11. All 11
+component bounds match, and both targets/bands are reachable in both. This Case
+therefore does not supply an old-pass/current-fail connectivity reproducer.
+The mapping is diagnostic only, not the production preset contract or full old
+Native acceptance. Other old adjacency errors involve the representation mapping
+and need separate interpretation, never an automatic new production gate.
+Ground 37/37, Native Skill 110/110 (including 18-component truncation/order and
+bridge repair), typecheck, frozen bytes and 482-file census pass locally.
+
+CI grouping correction: `native-block-builder-skill.test.ts` was still in the
+parallel contract lane despite repeated compiler/renderer/bundle subprocesses
+and measured 294.30s standalone runtime. CI `34070524337` at `2767cfe7` had five
+test deadlines in this file. Move the entire file to the existing serial isolated
+resource-heavy lane with `measured-duration`; remove no test and change no timeout.
+Census is 482 files: 438 contract + 44 resource-heavy. Only a new CI run can prove
+the grouping change resolves the observed contention failures.
+
 ### CF-19/GROUND-FEEDBACK minimum flow blocker (2026-09-07)
 
 `CF-02/PACKAGE-PROGRESS`: startup snapshot fix `23c995cf` passes real

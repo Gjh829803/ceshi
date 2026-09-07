@@ -7,6 +7,8 @@ import {
 import type { BabylonNativeBlockCreateInputV1, BabylonNativeBlockStaticColliderSelectionV1 } from "@whitebox-world/native-babylon-block-profile";
 import { BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF, resolveTraversalGraphBuilderProfileV2 } from "@whitebox-world/traversal";
 import type { WorldRuntimeBootstrapV1 } from "@whitebox-world/runtime-contracts";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { groupBy, orderBy } from "lodash-es";
 import { createNativeBlockGroundIntentV1, type NativeBlockGroundIntentInputV1 } from "./native-ground-case-intent.js";
 
 /** Same-task authoring feedback, never a Package or Runtime admission receipt. */
@@ -38,8 +40,31 @@ export function checkNativeBlockGroundFeedbackV1(input: NativeBlockGroundIntentI
     budget: { kind: "babylon-native-block-ground-analysis-budget", schemaVersion: 1,
       maximumSolidOccupancyCellCount: blockCount * 16, maximumSupportTopCellCount: blockCount * 4 },
   });
+  // Summarize the existing Host graph; never derive a second connectivity graph.
+  // Legacy check.ts reports the largest 16 disconnected components with bounds.
+  const disconnectedComponentSummaries = orderBy(Object.values(groupBy(
+    report.standableNodes.filter(node => !node.isReachableFromSpawn),
+    node => node.componentId,
+  )).map(nodes => {
+    const minimum = new Vector3(Infinity, Infinity, Infinity);
+    const maximum = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const node of nodes) {
+      minimum.minimizeInPlaceFromFloats(...node.positionMetersXYZ);
+      maximum.maximizeInPlaceFromFloats(...node.positionMetersXYZ);
+    }
+    const sample = orderBy(nodes, node => node.positionMetersXYZ.join(","))[0]!;
+    return Object.freeze({
+      standPositionCount: nodes.length,
+      minimumMetersXYZ: Object.freeze([minimum.x, minimum.y, minimum.z]),
+      maximumMetersXYZ: Object.freeze([maximum.x, maximum.y, maximum.z]),
+      sampleStandPositionMetersXYZ: sample.positionMetersXYZ,
+    });
+  }), [summary => summary.standPositionCount,
+    summary => summary.sampleStandPositionMetersXYZ.join(",")], ["desc", "asc"]);
   return Object.freeze({
     outcome: report.admissionOutcome,
+    disconnectedComponentCount: disconnectedComponentSummaries.length,
+    disconnectedComponentSummaries: Object.freeze(disconnectedComponentSummaries.slice(0, 16)),
     failureFacts: Object.freeze(report.failureFacts.slice(0, 32).map(fact => Object.freeze({
       ...fact, affectedSourceBlockIds: Object.freeze(fact.affectedSourceBlockIds.slice(0, 32)),
       omittedAffectedSourceBlockCount: Math.max(0, fact.affectedSourceBlockIds.length - 32),

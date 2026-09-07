@@ -838,6 +838,13 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     }));
     expect(result.analysisOutcome).toBe(requireSingleReachableComponent ? "failed" : "passed");
     expect(result.admissionOutcome).toBe(result.analysisOutcome);
+    if (requireSingleReachableComponent) {
+      const disconnectedFact = result.failureFacts.find(fact => fact.metricId === "ground-component-reachability")!;
+      expect(disconnectedFact.details).toMatchObject({
+        actualValue: `1-components-${result.metrics.disconnectedStandablePositionCount}-positions-disconnected`,
+      });
+      expect(disconnectedFact.message).toContain("across 1 components");
+    }
     expect(result.failureFacts.map(({ metricId }) => metricId)).toEqual(
       requireSingleReachableComponent
         ? ["ground-component-reachability", "ground-target-reachability"] : [],

@@ -1091,10 +1091,41 @@ export default defineBabylonNativeScene({ kind: "babylon-native-scene-module", i
     expect(rejected.exitCode).toBe(2);
     expect(rejected.stderr).toContain("ground-traversal-band-reachability");
     expect(rejected.stderr).toContain("corner-band");
+    const disconnectedFeedback = JSON.parse(rejected.stderr.split("NATIVE_BLOCK_BUILDER_GROUND_INVALID: ")[1]!.trim());
+    expect(disconnectedFeedback).toMatchObject({
+      disconnectedComponentCount: 1,
+      disconnectedComponentSummaries: [{
+        minimumMetersXYZ: [16, 8, -65],
+        maximumMetersXYZ: [19, 8, -62],
+      }],
+    });
+    expect(disconnectedFeedback.disconnectedComponentSummaries[0].standPositionCount)
+      .toBe(disconnectedFeedback.metrics.disconnectedStandablePositionCount);
+    expect(disconnectedFeedback.disconnectedComponentSummaries[0].sampleStandPositionMetersXYZ)
+      .toHaveLength(3);
+    const islands = Array.from({ length: 17 }, (_, index) =>
+      `session.createBlock({ id: "island-${index}", shape: "full", paletteRole: "route", colliderGroupId: "ground-group", centerMetersXYZ: [${100 + index * 10},7.5,0] });`);
+    const summariesByOrder = [];
+    for (const rows of [islands, [...islands].reverse()]) {
+      await writeFile(path.join(workspace, "scene.ts"), source.replace("const hasBridge = false;", `${rows.join("\n")}\nconst hasBridge = false;`));
+      const manyIslands = await runVisualReview(workspace, [], "builder-feedback");
+      expect(manyIslands.exitCode).toBe(2);
+      const feedback = JSON.parse(manyIslands.stderr.split("NATIVE_BLOCK_BUILDER_GROUND_INVALID: ")[1]!.trim());
+      expect(feedback.disconnectedComponentCount).toBe(18);
+      expect(feedback.disconnectedComponentSummaries).toHaveLength(16);
+      // The 52-position bypass comes first; equal-size islands have stable position ordering.
+      expect(feedback.disconnectedComponentSummaries.map((row: { minimumMetersXYZ: number[] }) => row.minimumMetersXYZ[0]))
+        .toEqual([16, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240]);
+      summariesByOrder.push(feedback.disconnectedComponentSummaries);
+    }
+    expect(summariesByOrder[0]).toEqual(summariesByOrder[1]);
     await writeFile(path.join(workspace, "scene.ts"), source.replace("hasBridge = false", "hasBridge = true"));
     const accepted = await runVisualReview(workspace, [], "builder-feedback");
     expect(accepted.exitCode, accepted.stderr).toBe(0);
-    expect(JSON.parse(accepted.stdout)).toMatchObject({ groundFeedback: { outcome: "passed", failureFacts: [] } });
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ groundFeedback: {
+      outcome: "passed", failureFacts: [],
+      disconnectedComponentCount: 0, disconnectedComponentSummaries: [],
+    } });
   });
 
   it("accepts exactly the three non-empty outputs and emits byte-stable canonical evidence", async () => {

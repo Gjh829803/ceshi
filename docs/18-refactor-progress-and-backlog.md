@@ -3443,6 +3443,42 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本轮原失败项均已有定向绿色证据，但没有再跑一次新的全仓 aggregate；精确候选 CI、
   新图 Case 和人类审核仍待完成。全部 CF 未关闭，main 仍未合入。
 
+- 最新 fresh Case（候选 `2767cfe7`，2026-09-07）：
+  `cloud-temple-cf-closure-0907` / `run-20260907004906-9998` 的 Planner 和 Host
+  规划复验通过；本地 Builder 单物理任务在 1,800,306ms 终局 `task-timeout`。
+  三份源码已保留，两张 advisory PNG 缺失；production failed、not-published，
+  后续 Native Check/Package/Capture 未启动。不能称为完整链路成功或已合 main。
+  原始 retained 源码 SHA-256 为
+  `c568d57011c39f30576db55a0ff451c2462a6acb29fe78c82ab882f735635c80`。
+  其精确副本离线自检通过，但 Ground 仍有 365 个断开站立点。原失败日志仅保留
+  有界尾段且内容以源码 diff 为主，不足以重建完整模型耗时或证明单一超时成因。
+
+  CF-19/GROUND-COMPONENT-FEEDBACK（主会话顺序执行，当前未提交）：按 pinned old
+  `check.ts:1142` 恢复前 16 个断开区域的站立点数、坐标范围和样本位置；复用已有
+  Host graph，未改采样、连通性 gate、生产超时或修复次数。修正错误文本把总区域数
+  当断开区域数的问题，保留总数 metric。两个 RED 分别证明缺摘要和误报计数；
+  Ground 37/37、初始断开→真实连接桥回归 1/1 通过。新增 18 区域截断/顺序稳定性
+  已随完整 Native Builder Skill 110/110 通过（305.38s），typecheck 通过。
+  精确失败源码离线复放仍 exit 2：41,628 standable、41,263 reachable、365
+  disconnected，全部指标不变；新摘要给出 11 个断开区域（总数 12），最大区域
+  176 点，范围 `[-2,7,-92]` 至 `[2,7,-83]`。原 Case/冻结工具未被覆盖；本次不是
+  新模型尝试，不证明老新版会算出相同的 365 点，也不关闭整个 CF-19。
+  GitHub CI `34070524337` 在 `2767cfe7` 已终局 failed；此前定位的 5 项失败均为
+  Native Builder Skill 测试超时，不能表述为全绿或已获合并批准。该文件已从并行
+  contract 移入现有串行 resource-heavy lane，测试数量/断言/超时均不变；census
+  482 files = 438 contract + 44 resource-heavy 通过，新 CI 结果仍待。
+
+  追加旧算法对照：临时 harness 直接从 `9e35ab53` 读取 `check.ts` 及其相对模块，
+  对同一源码采集的 65,710 个 Blocks 按明确的一个 static-surface 组及两个 solid
+  组映射为旧 walkable/obstacle，其余为 visual-only；使用同一编译后主体净空
+  1.92m 和有效脚印半径 0.32m。旧算法得出 9,222 standable、9,087 reachable、
+  135 disconnected，断开 11 个区域；逐区域坐标范围与当前 365 点的 11 区域一致。
+  两个 target 和两条 band 在旧算法也都可达。由此本例的断开失败不只是新增微格
+  采样导致；但这是显式分组映射后的 Ground 专项比较，不是完整旧版 Native Case，
+  不证明所有 preset/采样/Runtime 行为等价。旧算法另报 buried support 等邻接高度
+  诊断，不能不核对两种表示就直接恢复为当前额外 gate。临时报告在
+  `.codex-tmp/cf-ground-legacy-diagnostic-report.json`，原失败输出没有改写或发布。
+
 - 更新的真实 Case（`67c0b729`，`paper-moon-054-cf-ground-0907` /
   `run-20260906214232-75736`）也已结束，未发布。Planner 及 Host 复验通过；Builder
   用完原三轮任务内修复，最终仍有瀑布/山体方块重叠，两张必需的 advisory PNG 缺失。
