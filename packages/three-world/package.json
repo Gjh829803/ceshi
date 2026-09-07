@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./camera-compat": {
+      "types": "./src/camera-compat.ts"
+    },
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "three": "0.185.1",

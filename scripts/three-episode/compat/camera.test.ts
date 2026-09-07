@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {ThreeCameraRig} from './creator-camera.js';
-import type {Vec3} from '../../../packages/three-world/src/engine-contracts.js';
+import type {Vec3} from '@worldkit/three';
 
 describe('delivered Creator camera compatibility',()=>{
  it('retains the pinned follow kernel byte-for-byte outside the Episode relocation extension',async()=>{
   const provenance=JSON.parse(await readFile(new URL('./creator-camera-provenance.json',import.meta.url),'utf8'));
   const file=await readFile(new URL('./creator-camera.ts',import.meta.url),'utf8');
-  const original=file.replace(/^\/\/ Compatibility kernel[^\n]*\n/,'').replace("from '../../../packages/three-world/src/engine-contracts.js'","from './engine-contracts.js'").replace(/  \/\*\* Rebase camera memory[\s\S]*?(?=  snapshot\(\): CameraRigState)/,'');
+  const original=file.replace(/^\/\/ Compatibility kernel[^\n]*\n/,'').replace("from '@worldkit/three/camera-compat'","from './engine-contracts.js'").replace(/  \/\*\* Rebase camera memory[\s\S]*?(?=  snapshot\(\): CameraRigState)/,'');
   expect(createHash('sha256').update(original).digest('hex')).toBe(provenance.originalCameraSha256);
  });
  it('rebases pending camera pose and memory once, preserves projection, and resets for another segment',()=>{

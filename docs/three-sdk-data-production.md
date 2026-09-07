@@ -142,3 +142,5 @@ git diff --check
 ```
 
 合并职责与证据要求见 [整合计划](superpowers/plans/2026-09-07-three-sdk-data-production.md)。
+
+本次合并的实际结果见 [整合验证记录](reviews/2026-09-07-three-sdk-data-production-integration.md)。

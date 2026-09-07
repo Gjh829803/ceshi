@@ -1,6 +1,6 @@
 // Compatibility kernel for the pinned Creator delivery; see creator-camera-provenance.json.
 import * as THREE from 'three';
-import type { PhysicsPort, Vec3 } from '../../../packages/three-world/src/engine-contracts.js';
+import type { PhysicsPort, Vec3 } from '@worldkit/three/camera-compat';
 
 export type CameraRigFollowOptions = Readonly<{
   targetEntityId: string;

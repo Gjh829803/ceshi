@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ThreeCameraRig } from './creator-camera.js';
-import { ThreePhysics } from '../../../packages/three-world/src/physics.js';
-import type { Vec3 } from '../../../packages/three-world/src/engine-contracts.js';
+import { ThreePhysics } from '@worldkit/three/testing';
+import type { Vec3 } from '@worldkit/three';
 
 const distance = (a: Vec3, b: Vec3) => new THREE.Vector3(...a).distanceTo(new THREE.Vector3(...b));
 const unobstructed = (target: Vec3, eye: Vec3) => ({ distanceMeters: distance(target, eye) });
