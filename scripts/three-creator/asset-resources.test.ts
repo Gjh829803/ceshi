@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { catalogResources, publicCatalogValue, readCatalogResource } from './asset-resources.js';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -19,7 +19,7 @@ describe('catalog dependency closure', () => {
     }
   });
   it('verifies dependency bytes, size and repository containment', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'three-resources-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'three-resources-')));
     try {
       await writeFile(path.join(root, 'clip.json'), '{}');
       const entry = { ...resource, sourcePath: 'clip.json', byteLength: 2, sha256: createHash('sha256').update('{}').digest('hex') };
