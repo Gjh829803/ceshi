@@ -301,8 +301,11 @@ export class WorldEngine {
     if (!this.navigation) throw new Error('WORLD_NAVIGATION_DISABLED');
     const objects = [...this.entities.values()].filter(e => e.character === undefined && ['fixed', 'kinematic'].includes(e.options.physics?.kind ?? 'none')).map(e => e.object);
     this.scene.updateMatrixWorld(true);
-    const scale = actor.object.getWorldScale(new THREE.Vector3());
-    const settings = { radiusMeters: (actor.character?.radiusMeters ?? DEFAULT_CHARACTER_OPTIONS.radiusMeters) * Math.max(Math.abs(scale.x), Math.abs(scale.z)), heightMeters: (actor.character?.heightMeters ?? DEFAULT_CHARACTER_OPTIONS.heightMeters) * Math.abs(scale.y), maximumStepHeightMeters: actor.character?.maximumStepHeightMeters ?? DEFAULT_CHARACTER_OPTIONS.maximumStepHeightMeters, maximumSlopeDegrees: THREE.MathUtils.radToDeg(actor.character?.maximumSlopeRadians ?? DEFAULT_CHARACTER_OPTIONS.maximumSlopeRadians) };
+    // Navigation uses the installed collider dimensions. Decomposing the visual
+    // matrix again makes heading-only rounding trigger unnecessary rebuilds.
+    const body = this.physics.characterSettings(actor.options.id);
+    const settings = { radiusMeters: body.radiusMeters, heightMeters: body.heightMeters,
+      maximumStepHeightMeters: body.maximumStepHeightMeters, maximumSlopeDegrees: THREE.MathUtils.radToDeg(body.maximumSlopeRadians) };
     const geometryState = objects.map(root => { const signature = geometrySignature(root); return [root.uuid, root.matrixWorld.elements, signature]; });
     const signature = JSON.stringify({ settings, geometryState });
     if (this.navigationDirty || signature !== this.navigationSignature) {

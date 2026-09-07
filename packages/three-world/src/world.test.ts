@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorld } from './engine.js';
 import { WorldKeyboard } from './input.js';
+import { ThreeNavigation } from './navigation.js';
 
 function ground(): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(80, 80, 20, 20), new THREE.MeshBasicMaterial()); mesh.rotation.x = -Math.PI / 2; return mesh;
@@ -162,12 +163,19 @@ describe('ThreeWorld', () => {
   });
   it('uses a real navigation route around obstacles and reports unsupported navigation', async () => {
     const world = await fixture(true);
+    const rebuild = vi.spyOn(ThreeNavigation.prototype, 'rebuild');
     try {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 10), new THREE.MeshBasicMaterial()); wall.position.set(4, 2, -2); world.addEntity({ id: 'Wall', object: wall, role: 'obstacle' });
       const npc = actor(); npc.position.set(1, .05, -2); world.addCharacter({ id: 'NPC', object: npc }); world.step({}, 60);
       const result = world.execute({ type: 'actor.move-to', entityId: 'NPC', targetPositionMetersXYZ: [8, 0, -2], run: true }); expect(result).toMatchObject({ status: 'applied' });
       world.step({}, 600); expect(new THREE.Vector3(...point(world, 'NPC')).distanceTo(new THREE.Vector3(8, 0, -2))).toBeLessThan(.8); expect(world.snapshot().errors).toEqual([]);
-    } finally { world.dispose(); }
+      // Turning changes matrix decomposition rounding, not the physical capsule.
+      expect(rebuild).toHaveBeenCalledTimes(1);
+      expect(world.execute({ type: 'entity.set-scale', entityId: 'NPC', scaleXYZ: [2, 2, 2] }).status).toBe('applied');
+      expect(world.execute({ type: 'actor.move-to', entityId: 'NPC', targetPositionMetersXYZ: [10, 0, -2] }).status).toBe('applied');
+      expect(rebuild).toHaveBeenCalledTimes(2);
+      expect(rebuild.mock.lastCall?.[1]).toMatchObject({radiusMeters:.7,heightMeters:3.6});
+    } finally { rebuild.mockRestore(); world.dispose(); }
     const disabled = await fixture(false); try {
       disabled.addCharacter({ id: 'NPC', object: actor() }); const capabilities = disabled.capabilities() as { entityId: string; commands: string[] }[];
       expect(capabilities.find(c => c.entityId === 'NPC')!.commands).not.toContain('actor.move-to');
