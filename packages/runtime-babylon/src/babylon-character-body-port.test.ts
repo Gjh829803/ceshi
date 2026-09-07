@@ -649,6 +649,124 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it.each((["supported", "sliding"] as const).flatMap((mode) => [
+    { mode, name: "empty", contacts: [], hasAdmittedContact: false },
+    { mode, name: "oblique admitted", contacts: [groundContact([0.6, 0.8, 0])], hasAdmittedContact: true },
+    { mode, name: "wall", contacts: [groundContact([1, 0, 0])], hasAdmittedContact: false },
+    { mode, name: "out of band", contacts: [{ ...groundContact([0.6, 0.8, 0]), distanceMeters: 0.16 }], hasAdmittedContact: false },
+  ]))(
+    "CF03 projects $mode zero-normal support with $name contacts",
+    ({ mode, contacts, hasAdmittedContact }) => {
+      const { driver, port } = createPort();
+      driver.support = { ...supportedSupport([0, 0, 0]), mode };
+      driver.contacts = contacts;
+      const token = createMovementTickTokenV1();
+      const sample = port.beginTick({ token, tick: 1 });
+      expect(sample.support).toMatchObject(hasAdmittedContact
+        ? { mode, normalXYZ: [0.6, 0.8, 0] }
+        : { mode: "unsupported" });
+      port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+      expect(driver.checkSupportCalls).toBe(1);
+      expect(driver.integrateCalls).toBe(1);
+      expect(driver.lastIntegrateRequest?.supportBeforeIntegrate).toMatchObject({
+        mode: hasAdmittedContact ? mode : "unsupported",
+        averageSurfaceNormalXYZ: hasAdmittedContact ? [0.6, 0.8, 0] : [0, 0, 0],
+      });
+      port.abortTick(token);
+      port.dispose();
+    },
+  );
+
+  it("CF03 discards zero-normal support during authored upward departure", () => {
+    const { driver, port } = createPort();
+    const firstToken = createMovementTickTokenV1();
+    port.beginTick({ token: firstToken, tick: 1 });
+    const resolution = port.resolve({
+      token: firstToken,
+      proposal: proposal(firstToken, 1, [0, 5.5 / 60, 0], [0, 5.5, 0]),
+    });
+    expect(resolution.support.mode).toBe("unsupported");
+    port.commitTick(firstToken);
+    driver.support = supportedSupport([0, 0, 0]);
+    const nextToken = createMovementTickTokenV1();
+    expect(port.beginTick({ token: nextToken, tick: 2 }).support.mode)
+      .toBe("unsupported");
+    expect(driver.checkSupportCalls).toBe(2);
+    expect(driver.integrateCalls).toBe(1);
+    port.abortTick(nextToken);
+    port.dispose();
+  });
+
+  it("CF03 never promotes native unsupported and clears its integration surface data", () => {
+    const { driver, port } = createPort();
+    driver.support = {
+      ...unsupportedSupport(),
+      averageSurfaceNormalXYZ: [0, 4, 0],
+      isSurfaceDynamic: true,
+      averageSurfaceVelocityMetersPerSecondXYZ: [1, 2, 3],
+      averageAngularSurfaceVelocityRadiansPerSecondXYZ: [3, 2, 1],
+    };
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support.mode).toBe("unsupported");
+    port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+    expect(driver.lastIntegrateRequest?.supportBeforeIntegrate).toEqual({
+      mode: "unsupported", averageSurfaceNormalXYZ: [0, 0, 0], isSurfaceDynamic: false,
+      averageSurfaceVelocityMetersPerSecondXYZ: [0, 0, 0],
+      averageAngularSurfaceVelocityRadiansPerSecondXYZ: [0, 0, 0],
+    });
+    port.commitTick(token);
+    expect(port.readCommittedSupportEvidence()).toMatchObject({
+      support: { mode: "unsupported" }, contacts: [],
+    });
+    port.dispose();
+  });
+
+  it("CF03 averages only admitted contacts and preserves commit, abort and reset ownership", () => {
+    const { driver, port } = createPort();
+    driver.support = { ...supportedSupport([0, 0, 0]), mode: "sliding" };
+    driver.contacts = [groundContact([0.6, 0.8, 0]), groundContact([-0.6, 0.8, 0]),
+      groundContact([0, -1, 0]), groundContact([1, 0, 0]),
+      { ...groundContact([0, 0.6, 0.8]), distanceMeters: 0.16 }];
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support).toMatchObject({ mode: "sliding", normalXYZ: [0, 1, 0] });
+    port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+    port.commitTick(token);
+    const evidence = port.readCommittedSupportEvidence();
+    expect(evidence).toMatchObject({ support: { mode: "sliding", normalXYZ: [0, 1, 0] } });
+    expect(evidence?.contacts).toHaveLength(2);
+    driver.contacts = [];
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe("unsupported");
+    port.abortTick(next);
+    expect(port.readCommittedSupportEvidence()).toBe(evidence);
+    expect(driver.checkSupportCalls).toBe(2);
+    expect(port.resetToState({ positionMetersXYZ: [0, 1, 0], linearVelocityMetersPerSecondXYZ: [0, 0, 0] }))
+      .toEqual({ mode: "unsupported" });
+    expect(port.readCommittedSupportEvidence()).toBeUndefined();
+    driver.contacts = [groundContact([0.6, 0.8, 0])];
+    expect(port.resetToState({ positionMetersXYZ: [0, 1, 0], linearVelocityMetersPerSecondXYZ: [0, 0, 0] }))
+      .toMatchObject({ mode: "sliding", normalXYZ: [0.6, 0.8, 0] });
+    port.dispose();
+  });
+
+  it.each([Number.NaN, Infinity])("CF03 rejects non-finite support even with admitted contacts: %s", (bad) => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport([bad, 0, 0]);
+    expect(() => port.beginTick({ token: createMovementTickTokenV1(), tick: 1 })).toThrow("3C_INPUT_INVALID");
+    expect(driver.integrateCalls).toBe(0);
+    expect(driver.restoreCalls).toBe(1);
+    port.dispose();
+  });
+
+  it("CF03 rejects accessor-backed support without reading its getter", () => {
+    const { driver, port } = createPort();
+    let reads = 0;
+    Object.defineProperty(driver.support, "averageSurfaceNormalXYZ", { enumerable: true, get() { reads += 1; return [0, 0, 0]; } });
+    expect(() => port.beginTick({ token: createMovementTickTokenV1(), tick: 1 })).toThrow("3C_INPUT_INVALID");
+    expect(reads).toBe(0);
+    port.dispose();
+  });
+
   it("allows an immediate failed-begin retry but stales it after a newer begin succeeds", () => {
     const immediate = createPort();
     const token = createMovementTickTokenV1();
@@ -1324,6 +1442,48 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("does not invent horizontal amplification from a partially applied slope recovery velocity", () => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = {
+      ...supportedSupport(normal),
+      averageSurfaceVelocityMetersPerSecondXYZ: [-0.026343052327037597, 0.052686104654075194, 0],
+    };
+    driver.contacts = [groundContact(normal)];
+    driver.onIntegrate = () => {
+      driver.position = [0.004444444444444473, 1.0035872124336862, 0];
+      driver.velocity = [0.26666666666666666, 0.13333333333333333, 0];
+    };
+    const { resolution } = beginAndResolve(port, 1, [0.0044444444444444444, 0.0022222222222222222, 0]);
+    expect(resolution.appliedTranslationMetersXYZ[0]).toBeCloseTo(0.0044444444444444444, 12);
+    expect(resolution.support.mode).toBe("supported");
+    port.dispose();
+  });
+
+  it.each([
+    ["bounded", -0.0010888887713697004, false],
+    ["excessive", -0.003, true],
+  ] as const)("accounts for %s horizontal recovery when vertical recovery is not realized", (_name, appliedX, rejects) => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = {
+      ...supportedSupport(normal),
+      averageSurfaceVelocityMetersPerSecondXYZ: [-0.06, 0.12, 0],
+    };
+    driver.contacts = [groundContact(normal)];
+    driver.onIntegrate = () => {
+      // Real Havok one-meter-ramp reversal: X recovery is applied, while
+      // the same Tick's descent moves opposite to the frozen Y recovery.
+      driver.position = [appliedX, 1 - 0.000544453985302229, 0];
+      driver.velocity = [0, 0, 0];
+    };
+    try {
+      const resolve = () => beginAndResolve(port, 1, [-0.00011111099564931337, 0, 0]);
+      if (rejects) expect(resolve).toThrow("native collision resolution amplified horizontal proposal progress");
+      else expect(resolve().resolution.appliedTranslationMetersXYZ[0]).toBeCloseTo(appliedX, 12);
+    } finally { port.dispose(); }
+  });
+
   it("allows takeoff when the frozen support translation is not applied", () => {
     const { driver, port } = createPort();
     driver.support = {
@@ -1520,6 +1680,25 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     driver.support = supportedSupport();
     const next = createMovementTickTokenV1();
     expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe("supported");
+    port.abortTick(next);
+    port.dispose();
+  });
+
+  it.each([
+    ["uphill tangent", [0.04, 0.02, 0] as Vec3, "supported"],
+    ["uphill takeoff", [0.04, 0.09, 0] as Vec3, "unsupported"],
+  ] as const)("distinguishes %s from support-plane separation across Ticks", (_name, delta, mode) => {
+    const { driver, port } = createPort();
+    const normal: Vec3 = [-0.4472135954999579, 0.8944271909999159, 0];
+    driver.support = supportedSupport(normal);
+    driver.contacts = [groundContact(normal)];
+
+    const { token, resolution } = beginAndResolve(port, 1, delta);
+    expect(resolution.support.mode).toBe(mode);
+    port.commitTick(token);
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe(mode);
+    expect(driver.checkSupportCalls).toBe(2);
     port.abortTick(next);
     port.dispose();
   });

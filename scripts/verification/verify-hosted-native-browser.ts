@@ -363,6 +363,163 @@ async function main(): Promise<void> {
         ?.entityState.positionMetersXYZ,
     );
 
+    const cameraSnapshot = async (id: string) => page!.evaluate(async (requestId) => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1, id: requestId,
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "snapshot.get",
+      });
+    }, id) as Promise<typeof beforePhysicalInput & { snapshot: { view: { camera: {
+      viewYawOffsetRadians: number; viewPitchOffsetRadians: number; viewDistanceOffsetMeters: number;
+    } } } }>;
+    const cameraBefore = (await cameraSnapshot("request.browser.camera.before")).snapshot.view.camera;
+    const canvasBounds = await frame.locator("canvas").boundingBox();
+    assert(canvasBounds !== null);
+    const pointerX = canvasBounds.x + canvasBounds.width / 2;
+    const pointerY = canvasBounds.y + canvasBounds.height / 2;
+    await page.mouse.move(pointerX, pointerY);
+    await page.mouse.down();
+    await page.mouse.move(pointerX + 40, pointerY + 20);
+    await page.mouse.up();
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(100);
+    // Existing Director damping consumes committed time, not event callbacks.
+    // Settle through the public fixed-input path before comparing old deltas.
+    await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const receipt = await probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.camera.settle",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }) as { status: string };
+      if (receipt.status !== "succeeded") throw new Error("Camera settle failed");
+    });
+    const cameraAfter = (await cameraSnapshot("request.browser.camera.after")).snapshot.view.camera;
+    assert(Math.abs(cameraAfter.viewYawOffsetRadians - cameraBefore.viewYawOffsetRadians + 0.24) < 0.001,
+      "physical drag must apply the old yaw sensitivity through Runtime");
+    assert(Math.abs(cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians - 0.08) < 0.001,
+      "physical drag must apply the old pitch sensitivity through Runtime");
+    assert(Math.abs(cameraAfter.viewDistanceOffsetMeters - cameraBefore.viewDistanceOffsetMeters - 0.8) < 0.001,
+      "physical wheel must apply the old zoom sensitivity through Runtime");
+
+    await page.mouse.move(pointerX + 60, pointerY + 30);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(pointerX + 80, pointerY + 40);
+    await page.mouse.up({ button: "right" });
+    await page.mouse.down();
+    await frame.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await page.mouse.move(pointerX + 100, pointerY + 50);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    const cameraAfterIgnoredInput = (await cameraSnapshot("request.browser.camera.ignored")).snapshot.view.camera;
+    for (const key of ["viewYawOffsetRadians", "viewPitchOffsetRadians", "viewDistanceOffsetMeters"] as const) {
+      assert(Math.abs(cameraAfterIgnoredInput[key] - cameraAfter[key]) < 0.001,
+        "released/right-button/blurred pointer must not move the camera");
+    }
+
+    await frame.locator("canvas").focus();
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(250);
+    await page.keyboard.up("ArrowLeft");
+    await page.waitForTimeout(250);
+    const cameraAfterArrow = (await cameraSnapshot("request.browser.camera.arrow")).snapshot.view.camera;
+    assert(cameraAfterArrow.viewYawOffsetRadians > cameraAfterIgnoredInput.viewYawOffsetRadians + 0.01,
+      "Native Hosted must consume the old arrow camera controls");
+    await page.keyboard.down("l");
+    await page.waitForTimeout(250);
+    await page.keyboard.up("l");
+    await page.waitForTimeout(250);
+    const cameraAfterLetter = (await cameraSnapshot("request.browser.camera.letter")).snapshot.view.camera;
+    assert(cameraAfterLetter.viewYawOffsetRadians < cameraAfterArrow.viewYawOffsetRadians - 0.01,
+      "Native Hosted must retain the old I/J/K/L camera bindings");
+
+    await page.keyboard.down("w");
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(100);
+    const resetWhileHeld = await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.keyboard.reset",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "session.reset",
+      });
+    }) as typeof beforePhysicalInput;
+    await page.waitForTimeout(250);
+    const afterResetWhileHeld = await cameraSnapshot("request.browser.keyboard.after-reset");
+    const resetPosition = resetWhileHeld.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    const afterResetPosition = afterResetWhileHeld.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    for (const axis of [0, 2]) assert(Math.abs(resetPosition[axis]! - afterResetPosition[axis]!) < 1e-6,
+      "Reset must clear held movement before the next display input");
+    assert.equal(afterResetWhileHeld.snapshot.view.camera.viewYawOffsetRadians, 0,
+      "Reset must clear arrow velocity and held camera keys");
+    await page.keyboard.up("w");
+    await page.keyboard.up("ArrowLeft");
+
+    // Fault injection stays in the verifier, never in a generated Module or a
+    // production debug port. Restore the real method before throwing once.
+    await frame.locator("canvas").focus();
+    await page.keyboard.down("w");
+    await page.keyboard.down("ArrowLeft");
+    const recoveredWarning = page.waitForEvent("console", {
+      predicate: (message) => message.text() === "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+      timeout: 30_000,
+    }).catch((error: unknown) => error);
+    const injectionModule = await frame.evaluate(async () => {
+      const moduleUrl = performance.getEntriesByType("resource")
+        .map(({ name }) => name)
+        .find((name) => new URL(name).pathname.includes("characterController"));
+      if (moduleUrl === undefined) throw new Error("Loaded Babylon Character module missing from Browser resource evidence");
+      const { PhysicsCharacterController } = await import(moduleUrl);
+      const prototype = PhysicsCharacterController.prototype;
+      const checkSupport = prototype.checkSupport;
+      prototype.checkSupport = function () {
+        prototype.checkSupport = checkSupport;
+        throw new Error("3C_INPUT_INVALID: browser verifier one-shot support rejection");
+      };
+      return moduleUrl;
+    });
+    const recoveryResult = await recoveredWarning;
+    if (recoveryResult instanceof Error) {
+      throw new Error(`Browser recovery failed: ${JSON.stringify({
+        injectionModule, errors, body: await frame.locator("body").textContent(),
+      })}`, { cause: recoveryResult });
+    }
+    // Clearing physical input does not bypass the old Director damping. Settle
+    // its already-committed target through ordinary deterministic input first.
+    await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const receipt = await probe.submit({
+        kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "request.browser.recovery.damping",
+        runtimeSessionId: new URL(probe.frame.src).searchParams.get("runtimeSessionId")!,
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }) as { status: string };
+      if (receipt.status !== "succeeded") throw new Error("Recovery damping failed");
+    });
+    await page.waitForTimeout(500);
+    const afterRecovery = await cameraSnapshot("request.browser.recovery.settled");
+    await page.waitForTimeout(250);
+    const afterRecoveryWait = await cameraSnapshot("request.browser.recovery.continued");
+    assert(afterRecoveryWait.snapshot.world.simulationTick > afterRecovery.snapshot.world.simulationTick,
+      "a recovered physical-input frame must keep scheduling simulation");
+    assert(Math.abs(afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians -
+      afterRecovery.snapshot.view.camera.viewYawOffsetRadians) < 0.0001,
+      `recovery must clear the held arrow and its velocity: ${JSON.stringify({
+        before: afterRecovery.snapshot.view.camera.viewYawOffsetRadians,
+        after: afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians,
+        ticks: [afterRecovery.snapshot.world.simulationTick, afterRecoveryWait.snapshot.world.simulationTick],
+      })}`);
+    const recoveredPosition = afterRecovery.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    const recoveredPositionAfter = afterRecoveryWait.snapshot.world.subjectStatesByEntityId["g-bot-primary"]!.entityState.positionMetersXYZ;
+    assert(Math.hypot(recoveredPositionAfter[0]! - recoveredPosition[0]!,
+      recoveredPositionAfter[2]! - recoveredPosition[2]!) < 0.01,
+    "recovery must clear held movement input");
+    await page.keyboard.up("w");
+    await page.keyboard.up("ArrowLeft");
+
     const receipt = await page.evaluate(async () =>
       window.__WORLDKIT_HOSTED_RUNTIME__!.submit({
         kind: "worldkit-runtime-session-request",
@@ -419,6 +576,22 @@ async function main(): Promise<void> {
         unrelatedPublicAssetsBlocked: true,
         repositoryRootFileSystemBlocked: true,
         subjectAssetContentHashRequired: true,
+        preparedInputRecovery: {
+          recoveredWarningObserved: true,
+          clearsHeldMovementAndArrowVelocity: true,
+          settledSimulationTick: afterRecovery.snapshot.world.simulationTick,
+          continuedSimulationTick: afterRecoveryWait.snapshot.world.simulationTick,
+          settledYawDeltaRadians: afterRecoveryWait.snapshot.view.camera.viewYawOffsetRadians -
+            afterRecovery.snapshot.view.camera.viewYawOffsetRadians,
+        },
+        physicalPointerCamera: {
+          yawDeltaRadians: cameraAfter.viewYawOffsetRadians - cameraBefore.viewYawOffsetRadians,
+          pitchDeltaRadians: cameraAfter.viewPitchOffsetRadians - cameraBefore.viewPitchOffsetRadians,
+          zoomDeltaMeters: cameraAfter.viewDistanceOffsetMeters - cameraBefore.viewDistanceOffsetMeters,
+          releasedRightButtonAndBlurIgnored: true,
+          arrowAndLetterCameraKeysConsumed: true,
+          resetClearsHeldMovementAndArrowVelocity: true,
+        },
         runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,
       },

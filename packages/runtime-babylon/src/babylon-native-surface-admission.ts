@@ -11,6 +11,9 @@ import type {
   WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
+import { evaluateBabylonNativeBlockSourceStandabilityV1,
+  type BabylonNativeBlockLogicalGroundModelV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 
 export const BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1 = 0.0001;
 const POINT_IN_TRIANGLE_TOLERANCE = 1e-9;
@@ -66,6 +69,9 @@ export type BabylonNativeSurfaceAdmissionResultV1 =
     }>;
 
 export interface AdmitBabylonNativeSurfacesInputV1 {
+  readonly spawnGeometry:
+    | Readonly<{ kind: "native-block-source"; groundModel: BabylonNativeBlockLogicalGroundModelV1 }>
+    | Readonly<{ kind: "collider-surface" }>;
   readonly contribution: BabylonNativeSceneContributionV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
   readonly controlledSubject: RuntimeSubjectDescriptorV1;
@@ -513,6 +519,24 @@ export function admitBabylonNativeSurfacesV1(
     return rejected("WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_OUTSIDE_BOUNDS", spawn);
   }
 
+  const sourceStandability = input.spawnGeometry.kind === "native-block-source"
+    ? evaluateBabylonNativeBlockSourceStandabilityV1({
+        groundModel: input.spawnGeometry.groundModel,
+        positionMetersXYZ: spawn,
+        capsuleRadiusMeters: input.controlledSubject.collider.radiusMeters,
+        capsuleHeightMeters: input.controlledSubject.collider.heightMeters,
+      }) : undefined;
+  if (sourceStandability !== undefined && !sourceStandability.isStandable) {
+    if (sourceStandability.supportCoverageBasisPoints !== 10_000) {
+      return rejected("WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING", spawn);
+    }
+    const relatedColliderIds = input.spawnGeometry.kind === "native-block-source"
+      ? input.spawnGeometry.groundModel.colliderGroups.filter(group =>
+          group.sourceBlockIds.some(id => sourceStandability.affectedSourceBlockIds.includes(id)))
+          .map(group => group.colliderId) : [];
+    return rejected("WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED", spawn, relatedColliderIds);
+  }
+
   const allTriangles = input.contribution.staticColliders.flatMap(
     triangleProjections,
   );
@@ -527,8 +551,8 @@ export function admitBabylonNativeSurfacesV1(
         "subject-slope-compatible"
       ? triangleProjections(collider).filter((triangle) =>
         triangle.normal.y > POINT_IN_TRIANGLE_TOLERANCE &&
-        triangle.slopeDegrees <=
-          input.controlledSubject.collider.maxSlopeDegrees
+        (sourceStandability !== undefined || triangle.slopeDegrees <=
+          input.controlledSubject.collider.maxSlopeDegrees)
       )
       : [];
     if (faces.length === 0) continue;
@@ -555,8 +579,9 @@ export function admitBabylonNativeSurfacesV1(
       const height = supportHeight(spawn[0], spawn[2], face);
       if (
         !isNil(height) &&
-        height <= spawn[1] +
-          BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1
+        (sourceStandability !== undefined
+          ? collider.id === sourceStandability.support?.colliderId
+          : height <= spawn[1] + BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1)
       ) {
         candidates.push(Object.freeze({
           ...face,
@@ -566,7 +591,9 @@ export function admitBabylonNativeSurfacesV1(
     }
   }
   const support = candidates.sort((left, right) =>
-    right.supportHeightMeters - left.supportHeightMeters ||
+    (sourceStandability !== undefined
+      ? Math.abs(left.supportHeightMeters - spawn[1]) - Math.abs(right.supportHeightMeters - spawn[1])
+      : right.supportHeightMeters - left.supportHeightMeters) ||
     left.collider.colliderSubshapeId.localeCompare(
       right.collider.colliderSubshapeId,
     ) ||
@@ -576,7 +603,7 @@ export function admitBabylonNativeSurfacesV1(
     return rejected("WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING", spawn);
   }
   if (
-    Math.abs(spawn[1] - support.supportHeightMeters) >
+    sourceStandability === undefined && Math.abs(spawn[1] - support.supportHeightMeters) >
       BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1
   ) {
     return rejected(
@@ -584,7 +611,11 @@ export function admitBabylonNativeSurfacesV1(
       spawn,
     );
   }
-  const obstruction = obstructsCapsule(input, support, allTriangles);
+  // Source admission already checks the old full footprint/clearance contract.
+  // Smoothing may intentionally intersect the source feet; only checkSupport
+  // and the existing Character transaction may settle the real body later.
+  const obstruction = sourceStandability === undefined
+    ? obstructsCapsule(input, support, allTriangles) : undefined;
   if (!isNil(obstruction)) {
     return rejected(
       "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED",

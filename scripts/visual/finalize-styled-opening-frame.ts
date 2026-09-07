@@ -8,6 +8,9 @@ import {
   validateWhiteboxTriviewManifestV1,
   type WhiteboxTriviewManifestV1,
 } from "@whitebox-world/runtime-contracts";
+import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
+import { visualCapturePaths } from "./visual-capture-paths.js";
+import type { WorldGenerationSceneSourceKindV1 } from "@whitebox-world/scene-authoring-contracts";
 
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
@@ -42,12 +45,15 @@ export async function finalizeStyledOpeningFrame(options: {
   sceneId: string;
   sceneRoot: string;
   userFramePath: string;
+  sceneSource?: WorldGenerationSceneSourceKindV1;
 }): Promise<void> {
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(options.sceneId)) throw new Error("scene-id is invalid.");
   const sceneRoot = await realpath(path.resolve(options.sceneRoot));
-  const openingFramePath = path.join(sceneRoot, "opening-frame.png");
+  const capturePaths = visualCapturePaths(options.sceneSource);
+  const openingFramePath = path.join(sceneRoot, capturePaths.opening);
   const styledFramePath = path.join(sceneRoot, "styled-opening-frame.png");
-  const captureManifestPath = path.join(sceneRoot, "triviews", "whitebox-triview-manifest.json");
+  const captureManifestPath = path.join(sceneRoot, capturePaths.manifest);
+  const promptBundlePath = path.join(sceneRoot, "visual-generation-prompts.json");
   const [userFormat] = await Promise.all([
     assertImage(path.resolve(options.userFramePath)),
     assertImage(openingFramePath),
@@ -70,9 +76,14 @@ export async function finalizeStyledOpeningFrame(options: {
     throw new Error(captureErrors.map(({ code, instancePath, message }) =>
       `${code} ${instancePath}: ${message}`).join("\n"));
   }
+  const promptBundleBytes = await readFile(promptBundlePath);
+  parseVisualGenerationPromptsV2(JSON.parse(promptBundleBytes.toString("utf8")), {
+    sceneId: options.sceneId,
+    visualTargetIds: captureManifest.whiteboxTriviews.map(({ visualTargetId }) => visualTargetId),
+  });
   const triViews = [];
   for (const target of captureManifest.whiteboxTriviews) {
-    const triViewPath = path.join(sceneRoot, "triviews", target.imageUri);
+    const triViewPath = path.join(sceneRoot, capturePaths.triviewRoot, target.imageUri);
     await assertImage(triViewPath);
     triViews.push({
       visualTargetId: target.visualTargetId,
@@ -85,9 +96,13 @@ export async function finalizeStyledOpeningFrame(options: {
     schemaVersion: 1,
     sceneId: options.sceneId,
     status: "passed",
-    whiteboxOpeningFrame: { path: "opening-frame.png", contentHash: await hash(openingFramePath) },
+    whiteboxOpeningFrame: { path: capturePaths.opening, contentHash: await hash(openingFramePath) },
     userFirstFrame: { path: path.basename(userTarget), contentHash: await hash(userTarget) },
     styledOpeningFrame: { path: "styled-opening-frame.png", contentHash: await hash(styledFramePath) },
+    promptBundle: {
+      path: "visual-generation-prompts.json",
+      contentHash: `sha256:${createHash("sha256").update(promptBundleBytes).digest("hex")}`,
+    },
     supplementalTriviews: triViews,
   };
   await Promise.all([
@@ -107,6 +122,8 @@ export async function main(arguments_: readonly string[] = process.argv.slice(2)
     sceneId: option(arguments_, "--scene-id"),
     sceneRoot: option(arguments_, "--scene-root"),
     userFramePath: option(arguments_, "--user-frame"),
+    sceneSource: visualCapturePaths(arguments_.includes("--scene-source")
+      ? option(arguments_, "--scene-source") : undefined).source,
   });
   process.stdout.write("ok\n");
 }

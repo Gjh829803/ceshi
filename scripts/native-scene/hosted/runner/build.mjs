@@ -71,6 +71,13 @@ async function bundleEntry({
         fileName: () => fileName,
       },
       rollupOptions: {
+        treeshake: {
+          // This barrel only re-exports. Keep the Runtime's used owners, not
+          // unused Authoring validation reached through Ground tooling exports.
+          moduleSideEffects: (id) => !id.split(path.sep).join("/").endsWith(
+            "/packages/native-babylon-block-profile/src/host.ts",
+          ),
+        },
         external: (specifier) =>
           specifier.startsWith(BUILTIN_PREFIX) || external(specifier),
         output: {

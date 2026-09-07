@@ -19,7 +19,7 @@ export const NATIVE_BLOCK_REPAIR_FORBIDDEN_MUTATION_TARGETS_V1 = Object.freeze([
   "profile",
   "gameplay-bootstrap",
   "world-runtime-bootstrap",
-  "world-bounds",
+  "world-bounds-policy",
   "derived-bootstrap",
   "acceptance-thresholds",
   "runtime",
@@ -152,7 +152,7 @@ export function parseNativeBlockRepairInstructionV1(
   }
   const priorEvidence = parseRepairEvidence(value.priorEvidence);
   const owner = value.frozenOwnerIdentities as Record<string, unknown>;
-  const ownerKeys = ["caseHash", "evaluationProfileHash", "gameplayBootstrapHash", "worldRuntimeBootstrapHash", "worldBoundsHash", "bootstrapInputHash"];
+  const ownerKeys = ["caseHash", "evaluationProfileHash", "subjectHostContextHash", "worldBoundsPolicyHash", "bootstrapInputHash"];
   if (typeof owner !== "object" || isNil(owner) || Array.isArray(owner) || Object.keys(owner).length !== ownerKeys.length || ownerKeys.some((key) => typeof owner[key] !== "string" || !SHA256_PATTERN.test(owner[key] as string))) {
     fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "owner identities");
   }

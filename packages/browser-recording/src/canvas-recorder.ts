@@ -87,23 +87,29 @@ export class CanvasRecorder {
         ? MediaRecorder.isTypeSupported(candidate)
         : false,
     );
-    this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
-    this.captureCanvas.width = this.width;
-    this.captureCanvas.height = this.height;
-    this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
-    if (this.captureContext === null) {
-      this.finish();
-      throw new Error("无法建立 1280×720 白膜录制画布。");
-    }
-    this.drawCaptureFrame();
-    this.drawTimer = window.setInterval(
-      () => this.drawCaptureFrame(),
-      1_000 / this.frameRate,
-    );
-    this.stream = this.captureCanvas.captureStream(this.frameRate);
-    this.chunks = [];
-    this.stopPromise = null;
     try {
+      // Match the legacy start-time raster decision, not CSS dimensions. A
+      // later Runtime resize does not replace the stream or alter its canvas;
+      // direct capture does not promise a fixed encoded raster after resizing.
+      if (this.canvas.width === this.width && this.canvas.height === this.height) {
+        this.stream = this.canvas.captureStream(this.frameRate);
+      } else {
+        this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
+        this.captureCanvas.width = this.width;
+        this.captureCanvas.height = this.height;
+        this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
+        if (this.captureContext === null) {
+          throw new Error("无法建立 1280×720 白膜录制画布。");
+        }
+        this.drawCaptureFrame();
+        this.drawTimer = window.setInterval(
+          () => this.drawCaptureFrame(),
+          1_000 / this.frameRate,
+        );
+        this.stream = this.captureCanvas.captureStream(this.frameRate);
+      }
+      this.chunks = [];
+      this.stopPromise = null;
       this.mediaRecorder = new MediaRecorder(this.stream, {
         ...(mimeType === "" ? {} : { mimeType }),
         videoBitsPerSecond: this.videoBitsPerSecond,
@@ -127,12 +133,15 @@ export class CanvasRecorder {
     const recorder = this.mediaRecorder;
     const durationMs = Math.max(0, this.now() - this.startedAt);
     this.stateValue = "stopping";
+    let rejectStop!: (reason: unknown) => void;
+    let detachStopListeners!: () => void;
     this.stopPromise = new Promise<CanvasRecordingResult>((resolve, reject) => {
-      recorder.addEventListener("error", () => {
+      rejectStop = reject;
+      const handleError = (): void => {
         this.finish();
         reject(new Error("录屏失败，浏览器没有成功编码视频。"));
-      }, { once: true });
-      recorder.addEventListener("stop", () => {
+      };
+      const handleStop = (): void => {
         const mimeType = recorder.mimeType || this.chunks[0]?.type || "video/webm";
         const blob = new Blob(this.chunks, { type: mimeType });
         this.finish();
@@ -146,15 +155,31 @@ export class CanvasRecorder {
           extension: recordingExtension(mimeType),
           mimeType,
         });
-      }, { once: true });
-      recorder.stop();
+      };
+      recorder.addEventListener("error", handleError, { once: true });
+      recorder.addEventListener("stop", handleStop, { once: true });
+      detachStopListeners = () => {
+        recorder.removeEventListener("error", handleError);
+        recorder.removeEventListener("stop", handleStop);
+      };
     });
-    return this.stopPromise;
+    const stopPromise = this.stopPromise;
+    try {
+      recorder.stop();
+    } catch (error) {
+      detachStopListeners();
+      this.finish();
+      rejectStop(error);
+    }
+    return stopPromise;
   }
 
   dispose(): void {
-    if (this.mediaRecorder?.state !== "inactive") this.mediaRecorder?.stop();
-    this.finish();
+    try {
+      if (this.mediaRecorder?.state !== "inactive") this.mediaRecorder?.stop();
+    } finally {
+      this.finish();
+    }
   }
 
   private readonly handleDataAvailable = (event: BlobEvent): void => {

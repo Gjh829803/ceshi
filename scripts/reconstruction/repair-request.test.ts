@@ -31,9 +31,8 @@ const DIMENSIONS = [
 const OWNER_HASHES = Object.freeze({
   caseHash: H("1"),
   evaluationProfileHash: H("2"),
-  gameplayBootstrapHash: H("3"),
-  worldRuntimeBootstrapHash: H("4"),
-  worldBoundsHash: H("5"),
+  subjectHostContextHash: H("3"),
+  worldBoundsPolicyHash: H("5"),
   bootstrapInputHash: H("6"),
 });
 
@@ -232,7 +231,7 @@ describe("createNativeBlockRepairInstructionV1", () => {
       "profile",
       "gameplay-bootstrap",
       "world-runtime-bootstrap",
-      "world-bounds",
+      "world-bounds-policy",
       "derived-bootstrap",
       "acceptance-thresholds",
       "runtime",

@@ -769,6 +769,19 @@ export function auditBabylonNativeSceneAuthoritySnapshotV1(
   }
 }
 
+function createAuthorityMethodGuard(
+  originalMethod: (...args: never[]) => unknown,
+  recordViolation: () => never,
+  allowCall: ((args: readonly unknown[]) => boolean) | undefined,
+): (this: unknown, ...args: readonly unknown[]) => unknown {
+  // Return an anonymous expression directly: tsx's keepNames decorates a named
+  // expression per allocation, adding a property dictionary to every hot guard.
+  return function(this: unknown, ...args: readonly unknown[]): unknown {
+    if (allowCall?.(args)) return Reflect.apply(originalMethod, this, args);
+    return recordViolation();
+  };
+}
+
 function installOwnMethodGuard(
   owner: Record<string, unknown>,
   key: string,
@@ -782,15 +795,11 @@ function installOwnMethodGuard(
   Object.defineProperty(owner, key, {
     configurable: true,
     enumerable: originalOwnDescriptor?.enumerable ?? false,
-    value: function guardedAuthorityMethod(
-      this: unknown,
-      ...args: readonly unknown[]
-    ): unknown {
-      if (allowCall?.(args)) {
-        return Reflect.apply(originalMethod, this, args);
-      }
-      return recordViolation();
-    },
+    value: createAuthorityMethodGuard(
+      originalMethod as (...args: never[]) => unknown,
+      recordViolation,
+      allowCall,
+    ),
     writable: true,
   });
   restorers.push(() => {
@@ -840,6 +849,7 @@ interface CreatedObjectAuditRecordV1 {
   readonly object: Record<string, unknown>;
   readonly surface: EffectiveCreatedObjectSurfaceV1;
   readonly observableBaselinesByKey: Map<string, ObservableBaselineV1>;
+  readonly observableGettersByKey: Map<string, () => unknown>;
   readonly allowedObserversByKey: Map<string, readonly unknown[]>;
   readonly directValuesByKey: Map<string, () => unknown>;
   readonly retainedCollectionsByKey: Map<string, readonly unknown[]>;
@@ -859,10 +869,15 @@ const CREATED_OBJECT_SURFACE_BY_KIND_V1 = new Map(
     [surface.kind, surface] as const
   ),
 );
+const EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1 = new Map<
+  CreatedObjectSurfaceV1["kind"], EffectiveCreatedObjectSurfaceV1
+>();
 
 function effectiveCreatedObjectSurface(
   kind: CreatedObjectSurfaceV1["kind"],
 ): EffectiveCreatedObjectSurfaceV1 {
+  const cached = EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1.get(kind);
+  if (typeof cached !== "undefined") return cached;
   const surfaces: CreatedObjectSurfaceV1[] = [];
   let currentKind: CreatedObjectSurfaceV1["kind"] | undefined = kind;
   while (typeof currentKind !== "undefined") {
@@ -876,7 +891,7 @@ function effectiveCreatedObjectSurface(
   const flatten = (
     select: (surface: CreatedObjectSurfaceV1) => readonly string[],
   ): readonly string[] => Object.freeze(surfaces.flatMap(select));
-  return Object.freeze({
+  const effective = Object.freeze({
     observableKeys: flatten(({ observableKeys }) => observableKeys),
     callbackSetterKeys: flatten(({ callbackSetterKeys }) => callbackSetterKeys),
     directCallbackKeys: flatten(({ directCallbackKeys }) => directCallbackKeys),
@@ -885,6 +900,8 @@ function effectiveCreatedObjectSurface(
     ),
     forbiddenMethodKeys: flatten(({ forbiddenMethodKeys }) => forbiddenMethodKeys),
   });
+  EFFECTIVE_CREATED_OBJECT_SURFACE_BY_KIND_V1.set(kind, effective);
+  return effective;
 }
 
 function inheritedPropertyDescriptor(
@@ -962,6 +979,22 @@ function instrumentObservable(
   );
 }
 
+function readObservableProviderValue(
+  owner: Record<string, unknown>,
+  originalOwnDescriptor: PropertyDescriptor | undefined,
+  descriptor: PropertyDescriptor | undefined,
+  hasProviderAssignedValue: boolean,
+  providerAssignedValue: unknown,
+): unknown {
+  if (hasProviderAssignedValue) return providerAssignedValue;
+  if (typeof originalOwnDescriptor !== "undefined") {
+    return "value" in originalOwnDescriptor
+      ? originalOwnDescriptor.value
+      : originalOwnDescriptor.get?.call(owner);
+  }
+  return descriptor?.get?.call(owner);
+}
+
 function installObservableSurfaceAccessor(
   owner: Record<string, unknown>,
   key: string,
@@ -971,7 +1004,7 @@ function installObservableSurfaceAccessor(
   allowNotification: (args: readonly unknown[]) => boolean,
   allowMutation: () => boolean,
   allowProviderAssignment: boolean,
-): void {
+): () => unknown {
   const originalOwnDescriptor = Object.getOwnPropertyDescriptor(owner, key);
   const descriptor = inheritedPropertyDescriptor(owner, key);
   let baseline: ObservableBaselineV1 | undefined;
@@ -979,20 +1012,12 @@ function installObservableSurfaceAccessor(
     allowProviderAssignment && key === "onMeshReadyObservable";
   let hasProviderAssignedValue = false;
   let providerAssignedValue: unknown;
-  const readProviderValue = (): unknown => {
-    if (hasProviderAssignedValue) return providerAssignedValue;
-    if (typeof originalOwnDescriptor !== "undefined") {
-      return "value" in originalOwnDescriptor
-        ? originalOwnDescriptor.value
-        : originalOwnDescriptor.get?.call(owner);
-    }
-    return descriptor?.get?.call(owner);
-  };
-  Object.defineProperty(owner, key, {
+  const accessor: PropertyDescriptor = {
     configurable: true,
     enumerable: originalOwnDescriptor?.enumerable ?? descriptor?.enumerable ?? false,
     get(): unknown {
-      const observable = readProviderValue();
+      const observable = readObservableProviderValue(owner, originalOwnDescriptor,
+        descriptor, hasProviderAssignedValue, providerAssignedValue);
       if (typeof baseline === "undefined") {
         baseline = captureObservableBaseline(observable);
         baselinesByKey.set(key, baseline);
@@ -1014,7 +1039,8 @@ function installObservableSurfaceAccessor(
           hasProviderAssignedValue = true;
           providerAssignedValue = value;
         }
-        const observable = readProviderValue();
+        const observable = readObservableProviderValue(owner, originalOwnDescriptor,
+          descriptor, hasProviderAssignedValue, providerAssignedValue);
         baseline = captureObservableBaseline(observable);
         baselinesByKey.set(key, baseline);
         instrumentObservable(
@@ -1027,7 +1053,8 @@ function installObservableSurfaceAccessor(
       }
       recordViolation();
     },
-  });
+  };
+  Object.defineProperty(owner, key, accessor);
   restorers.push(() => {
     if (typeof originalOwnDescriptor === "undefined") {
       Reflect.deleteProperty(owner, key);
@@ -1043,6 +1070,7 @@ function installObservableSurfaceAccessor(
       Object.defineProperty(owner, key, originalOwnDescriptor);
     }
   });
+  return accessor.get!;
 }
 
 function installCreatedDirectValueGuard(
@@ -1116,6 +1144,9 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
   const snapshot = captureBabylonNativeSceneAuthoritySnapshotV1(candidate);
   const restorers: Array<() => void> = [];
   const createdObjects: CreatedObjectAuditRecordV1[] = [];
+  const instrumentedObjectsByKind = new Map<
+    CreatedObjectSurfaceV1["kind"], WeakSet<object>
+  >();
   const standardMaterialTransitions: StandardMaterialTransitionV1[] = [];
   const guardedPhysicsMethodsByKey = new Map<string, unknown>();
   let providerMutationDepth = 0;
@@ -1244,6 +1275,12 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
   ): void => {
     const object = publicObject(input);
     const kind = createdObjectKind(insertionKey, object);
+    let instrumentedObjects = instrumentedObjectsByKind.get(kind);
+    if (instrumentedObjects?.has(object)) return;
+    if (typeof instrumentedObjects === "undefined") {
+      instrumentedObjects = new WeakSet();
+      instrumentedObjectsByKind.set(kind, instrumentedObjects);
+    }
     const surface = effectiveCreatedObjectSurface(kind);
     const transition: StandardMaterialTransitionV1 | undefined =
       kind === "standard-material" && !isExisting
@@ -1262,6 +1299,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       object,
       surface,
       observableBaselinesByKey: new Map(),
+      observableGettersByKey: new Map(),
       allowedObserversByKey: new Map(),
       directValuesByKey: new Map(),
       retainedCollectionsByKey: new Map(),
@@ -1299,7 +1337,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       });
     }
     for (const key of surface.observableKeys) {
-      installObservableSurfaceAccessor(
+      const getter = installObservableSurfaceAccessor(
         object,
         key,
         recordViolation,
@@ -1314,6 +1352,7 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
         },
         !isExisting,
       );
+      record.observableGettersByKey.set(key, getter);
     }
     for (const key of surface.directCallbackKeys) {
       record.directValuesByKey.set(
@@ -1368,6 +1407,9 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       installOwnMethodGuard(object, key, recordViolation, restorers);
     }
     createdObjects.push(record);
+    // Babylon re-submits shared Geometry on every attachment. Preserve the
+    // original record and guards instead of nesting another disposal wrapper.
+    instrumentedObjects.add(object);
   };
 
   for (const transformNode of candidate.scene.transformNodes) {
@@ -1462,6 +1504,15 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       let createdObjectInvalid = false;
       for (const record of createdObjects) {
         for (const key of record.surface.observableKeys) {
+          // A never-read guard has observed no callbacks to audit. Reading it
+          // here would allocate Babylon's lazy Observable and instrument all
+          // its methods purely for the audit. Keep the live guard installed;
+          // deletion/replacement still follows the rejecting path below.
+          if (
+            !record.observableBaselinesByKey.has(key) &&
+            Object.getOwnPropertyDescriptor(record.object, key)?.get ===
+              record.observableGettersByKey.get(key)
+          ) continue;
           const observable = record.object[key];
           const baseline = record.observableBaselinesByKey.get(key);
           if (
@@ -1518,6 +1569,11 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
       if (restored) return;
       restored = true;
       for (const restore of restorers.reverse()) restore();
+      // The lease is closed. Keeping these closures/records would retain every
+      // generated object even after its Scene and the object were disposed.
+      restorers.length = 0;
+      createdObjects.length = 0;
+      standardMaterialTransitions.length = 0;
     },
   });
 }

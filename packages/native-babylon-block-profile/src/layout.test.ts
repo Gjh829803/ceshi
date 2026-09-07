@@ -14,7 +14,7 @@ interface LayoutModule {
   ): Readonly<{
     blocks: readonly Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole: string;
       visualGroupId?: string;
       centerMetersXYZ: readonly [number, number, number];
@@ -46,49 +46,19 @@ function record(
   scene: Scene,
   input: Readonly<{
     id: string;
-    shape?: "full" | "half" | "quarter" | "small" | "step";
+    shape?: "full" | "half" | "quarter" | "small";
     paletteRole?: "ground" | "route" | "structure";
     visualGroupId?: string;
     declaredCenterMetersXYZ?: readonly [number, number, number];
     declaredRotationQuarterTurnsY?: 0 | 1 | 2 | 3;
   }>,
 ): BabylonNativeBlockSessionRecordV1 {
-  const shape = input.shape ?? "full";
-  const size = ({
-    full: [1, 1, 1],
-    half: [1, 0.5, 1],
-    quarter: [0.5, 0.5, 1],
-    small: [0.5, 0.5, 0.5],
-    step: [1, 0.25, 1],
-  } satisfies Record<typeof shape, readonly [number, number, number]>)[shape];
-  const mesh = MeshBuilder.CreateBox(input.id, {
-    width: size[0],
-    height: size[1],
-    depth: size[2],
-  }, scene);
-  const centerMetersXYZ = input.declaredCenterMetersXYZ ?? ([0, 0, 0] as const);
-  const rotationQuarterTurnsY = input.declaredRotationQuarterTurnsY ?? 0;
-  mesh.position.set(...centerMetersXYZ);
-  mesh.rotation.y = rotationQuarterTurnsY * Math.PI / 2;
-  const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
-  const indices = mesh.getIndices()!;
-  return Object.freeze({
-    input: Object.freeze({
-      id: input.id,
-      shape,
-      paletteRole: input.paletteRole ?? "ground",
-      centerMetersXYZ,
-      rotationQuarterTurnsY,
-      ...(input.visualGroupId === undefined
-        ? {}
-        : { visualGroupId: input.visualGroupId }),
-    }),
-    mesh,
-    localGeometrySnapshot: Object.freeze({
-      positions: Object.freeze(Array.from(positions)),
-      indices: Object.freeze(Array.from(indices)),
-    }),
-  });
+  return Object.freeze({ input: Object.freeze({
+    id: input.id, shape: input.shape ?? "full", paletteRole: input.paletteRole ?? "ground",
+    centerMetersXYZ: input.declaredCenterMetersXYZ ?? [0, 0, 0] as const,
+    rotationQuarterTurnsY: input.declaredRotationQuarterTurnsY ?? 0,
+    ...(input.visualGroupId === undefined ? {} : { visualGroupId: input.visualGroupId }),
+  }) });
 }
 
 function withScene(run: (scene: Scene) => void): void {
@@ -103,13 +73,30 @@ function withScene(run: (scene: Scene) => void): void {
 }
 
 describe("Babylon Native block profile layout", () => {
-  it("derives an asymmetric block from its final nested Babylon world transform", async () => {
+  it("handles large intent inventories without spreading Blocks onto the JS call stack", async () => {
+    const { deriveBabylonNativeBlockLayoutV1 } = await import("./layout.js");
+    const { deriveBabylonNativeBlockVisualGroupsV1 } = await import("./babylon-visual-adapter.js");
+    const { createBabylonNativeBlockProfileCheckResultV1 } = await import("./check.js");
+    withScene(scene => {
+      const records = Array.from({ length: 262_144 }, (_, index) => record(scene, {
+        id: `large-${index}`, shape: "small", visualGroupId: "large-group",
+        declaredCenterMetersXYZ: [index * 0.5 + 0.25, 0.25, 0.25],
+      }));
+      const layout = deriveBabylonNativeBlockLayoutV1(scene, records);
+      expect(layout.blocks).toHaveLength(records.length);
+      expect(layout.issues).toEqual([]);
+      expect(layout.unsupportedBlockIds).toEqual([]);
+      const groups = deriveBabylonNativeBlockVisualGroupsV1(layout);
+      expect(groups[0]).toMatchObject({ minimumMetersXYZ: [0, 0, 0],
+        maximumMetersXYZ: [131072, 0.5, 0.5] });
+      expect(createBabylonNativeBlockProfileCheckResultV1("large-layout", records, layout).visualGroups).toEqual(groups);
+      expect(scene.meshes).toHaveLength(0);
+    });
+  }, 30_000);
+  it("derives asymmetric intent directly without any Babylon world-transform owner", async () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const root = new TransformNode("root", scene);
-      root.position.set(1, 0, 0);
-      root.rotation.y = Math.PI / 2;
       const entry = record(scene, {
         id: "ridge-quarter",
         shape: "quarter",
@@ -118,9 +105,6 @@ describe("Babylon Native block profile layout", () => {
         declaredCenterMetersXYZ: [1.5, 0.25, -0.25],
         declaredRotationQuarterTurnsY: 1,
       });
-      entry.mesh.parent = root;
-      entry.mesh.position.set(0.25, 0.25, 0.5);
-      entry.mesh.rotation.y = 0;
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [entry]);
 
@@ -136,7 +120,7 @@ describe("Babylon Native block profile layout", () => {
         minimumMetersXYZ: [1, 0, -0.5],
         maximumMetersXYZ: [2, 0.5, 0],
         occupiedMicroCellKeys: [
-          "2,0,-1", "3,0,-1", "2,1,-1", "3,1,-1",
+          "2,0,-1", "3,0,-1",
         ],
       }]);
     });
@@ -171,55 +155,17 @@ describe("Babylon Native block profile layout", () => {
     });
   });
 
-  it("reports invalid final Mesh lifecycle and transforms without publishing them", async () => {
+  it("rejects invalid intent lattice and a disposed Candidate without allocating geometry", async () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
-    const engine = new NullEngine();
-    const scene = new Scene(engine);
-    const foreignScene = new Scene(engine);
-    try {
-      const disposed = record(scene, { id: "disposed-block" });
-      disposed.mesh.dispose();
-      const foreign = record(foreignScene, { id: "foreign-block" });
-      const scaled = record(scene, { id: "scaled-block" });
-      scaled.mesh.scaling.set(2, 1, 1);
-      const tilted = record(scene, { id: "tilted-block" });
-      tilted.mesh.rotation.x = Math.PI / 4;
-      const diagonal = record(scene, { id: "diagonal-block" });
-      diagonal.mesh.rotation.y = Math.PI / 4;
-      const offGrid = record(scene, { id: "off-grid-block" });
-      offGrid.mesh.position.set(0.1, 0, 0);
-      const drifted = record(scene, {
-        id: "drifted-block",
-        declaredCenterMetersXYZ: [0, 0.5, 0],
-      });
-      drifted.mesh.position.set(2, 0.5, 0);
-
-      const layout = deriveBabylonNativeBlockLayoutV1(scene, [
-        disposed,
-        foreign,
-        scaled,
-        tilted,
-        diagonal,
-        offGrid,
-        drifted,
-      ]);
-
-      expect(layout.blocks).toEqual([]);
-      expect(layout.issues.map(({ blockId, code }) => [blockId, code]))
-        .toEqual([
-          ["diagonal-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
-          ["disposed-block", "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED"],
-          ["drifted-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
-          ["foreign-block", "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH"],
-          ["off-grid-block", "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID"],
-          ["scaled-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
-          ["tilted-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
-        ]);
-    } finally {
-      foreignScene.dispose();
+    withScene(scene => {
+      const offGrid = record(scene, { id: "off-grid", declaredCenterMetersXYZ: [0.1, 0, 0] });
+      expect(deriveBabylonNativeBlockLayoutV1(scene, [offGrid]).issues)
+        .toMatchObject([{ blockId: "off-grid", code: "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID" }]);
+      expect(scene.meshes).toHaveLength(0);
       scene.dispose();
-      engine.dispose();
-    }
+      expect(deriveBabylonNativeBlockLayoutV1(scene, [record(scene, { id: "disposed-scene" })]).issues)
+        .toMatchObject([{ code: "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH" }]);
+    });
   });
 
   it("distinguishes face contact, stacking, and occupied-cell overlap", async () => {
@@ -260,9 +206,7 @@ describe("Babylon Native block profile layout", () => {
         relatedBlockId: "overlap-block",
         microCellKeys: [
           "-1,0,-1", "-1,0,0", "-1,1,-1", "-1,1,0",
-          "-1,2,-1", "-1,2,0", "-1,3,-1", "-1,3,0",
           "0,0,-1", "0,0,0", "0,1,-1", "0,1,0",
-          "0,2,-1", "0,2,0", "0,3,-1", "0,3,0",
         ],
       });
     });
@@ -316,15 +260,15 @@ describe("Babylon Native block profile layout", () => {
     withScene((scene) => {
       const lowStep = record(scene, {
         id: "low-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        declaredCenterMetersXYZ: [0, 0.125, 0],
+        declaredCenterMetersXYZ: [0, 0.25, 0],
       });
       const highStep = record(scene, {
         id: "high-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        declaredCenterMetersXYZ: [1, 0.375, 0],
+        declaredCenterMetersXYZ: [1, 0.75, 0],
       });
       const oneMeterHigh = record(scene, {
         id: "one-meter-high",
@@ -358,19 +302,19 @@ describe("Babylon Native block profile layout", () => {
     });
   });
 
-  it("supports quarter-meter step stacking without overlap", async () => {
+  it("supports half-meter step stacking without overlap", async () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
       const base = record(scene, {
         id: "base-step",
-        shape: "step",
-        declaredCenterMetersXYZ: [0, 0.125, 0],
+        shape: "half",
+        declaredCenterMetersXYZ: [0, 0.25, 0],
       });
       const top = record(scene, {
         id: "top-step",
-        shape: "step",
-        declaredCenterMetersXYZ: [0, 0.375, 0],
+        shape: "half",
+        declaredCenterMetersXYZ: [0, 0.75, 0],
       });
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [top, base]);
@@ -378,7 +322,7 @@ describe("Babylon Native block profile layout", () => {
       expect(layout.issues).toEqual([]);
       expect(layout.unsupportedBlockIds).toEqual([]);
       expect(layout.blocks.map(({ centerMetersXYZ }) => centerMetersXYZ))
-        .toEqual([[0, 0.125, 0], [0, 0.375, 0]]);
+        .toEqual([[0, 0.25, 0], [0, 0.75, 0]]);
     });
   });
 });

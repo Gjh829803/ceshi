@@ -12,8 +12,8 @@ function palette(identityColor: string) {
     schemaVersion: 1,
     sceneId: "palette-profile-test",
     sceneBriefHash: SCENE_BRIEF_HASH,
-    movementMode: "ground-walk",
-    movementModeLabel: "Ground walk",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["Ground walk"],
     targets: [
       {
         id: "visual-target-1",
@@ -50,6 +50,19 @@ function palette(identityColor: string) {
 }
 
 describe("parseVisualIdentityPaletteV1", () => {
+  it("preserves every ordered movement/label pair and rejects the removed singular contract", () => {
+    const source = { ...palette("#D9A514"), movementModes: ["flight", "ground-walk", "custom"],
+      movementModeLabels: ["空中飞行（滑翔翼）", "陆地步行", "磁力墙面行走"] };
+    const expected = { sceneSourceKind: "babylon-native" as const, sceneId: source.sceneId, sceneBriefHash: SCENE_BRIEF_HASH };
+    const parsed = parseVisualIdentityPaletteV1(source, expected);
+    expect(parsed.movementModes).toEqual(source.movementModes);
+    expect(parsed.movementModeLabels).toEqual(source.movementModeLabels);
+    expect(Object.isFrozen(parsed.movementModes)).toBe(true);
+    expect(() => parseVisualIdentityPaletteV1({ ...source, movementModeLabels: ["飞行"] }, expected)).toThrow();
+    expect(() => parseVisualIdentityPaletteV1({ ...source, movementModes: ["flight", "invented-mode", "custom"] }, expected)).toThrow();
+    const { movementModes: _modes, movementModeLabels: _labels, ...identity } = source;
+    expect(() => parseVisualIdentityPaletteV1({ ...identity, movementMode: "ground-walk", movementModeLabel: "陆地步行" }, expected)).toThrow();
+  });
   it("keeps the Native old target-3 yellow and Canonical target-3 purple isolated", () => {
     expect(parseVisualIdentityPaletteV1(palette("#D9A514"), {
       sceneSourceKind: "babylon-native",

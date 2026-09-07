@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -14,6 +15,24 @@ assert.ok(counts.length > 0 && new Set(counts).size === counts.length && counts.
   NATIVE_BLOCK_BUDGET_SAMPLE_COUNTS.some((allowed) => n === allowed)));
 const output = path.resolve(process.env.WORLDKIT_NATIVE_BUDGET_OUTPUT_DIRECTORY ??
   `output/playwright/native-block-budget-${Date.now()}`);
+
+function hashTrackedDiff(): Promise<ReturnType<typeof sha256Bytes>> {
+  // Frozen tool bundles make the tracked diff large. Hash the same complete
+  // bytes incrementally instead of buffering/truncating them before a workload.
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const child = spawn("git", ["diff", "HEAD", "--", "."], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    child.stdout.on("data", (bytes: Buffer) => hash.update(bytes));
+    child.stdout.once("error", (error) => { child.kill(); reject(error); });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code !== 0 || signal !== null) reject(new Error(`Budget diff identity failed (${signal ?? code}).`));
+      else resolve(`sha256:${hash.digest("hex")}`);
+    });
+  });
+}
 
 async function main() {
   await mkdir(output, { recursive: true });
@@ -47,7 +66,7 @@ async function main() {
       scope: "synthetic-native-package-real-babylon-runtime-not-formal-case",
       host: { platform: os.platform(), architecture: os.arch(), cpu: os.cpus()[0]?.model, totalMemoryBytes: os.totalmem() },
       head: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
-      trackedDiffHash: sha256Bytes(execFileSync("git", ["diff", "HEAD", "--", "."])),
+      trackedDiffHash: await hashTrackedDiff(),
       workloadHash: sha256Bytes(await readFile("scripts/verification/native-block-budget/workload.ts")),
       measurementSourceHashes: Object.fromEntries(await Promise.all([
         "scripts/verification/benchmark-native-block-budget.ts",

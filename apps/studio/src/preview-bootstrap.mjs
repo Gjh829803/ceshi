@@ -1,16 +1,12 @@
 import { createHash } from "node:crypto";
+import { tsImport } from "tsx/esm/api";
+
+const { validateSceneBriefImplementationMapV1 } = await tsImport(
+  "@whitebox-world/runtime-contracts", { parentURL: import.meta.url },
+);
 
 const ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const HASH = /^sha256:[a-f0-9]{64}$/;
-const COLOR = /^#[a-fA-F0-9]{6}$/;
-const MAXIMUM_VISUAL_CAPTURE_TARGETS = 5;
-const VISUAL_CAPTURE_ROLES = new Set([
-  "primary-subject",
-  "key-object",
-  "primary-landmark",
-  "secondary-landmark",
-  "background-identity",
-]);
 
 export class StudioPreviewBootstrapError extends Error {
   constructor(code, message, options) {
@@ -126,101 +122,6 @@ function requireStableRecord(before, after) {
   }
 }
 
-function validStringArray(value) {
-  return Array.isArray(value) && value.length > 0 &&
-    value.every((item) => typeof item === "string" && ID.test(item)) &&
-    new Set(value).size === value.length;
-}
-
-function sameStringSet(left, right) {
-  return left.length === right.length &&
-    [...left].sort().every((value, index) => value === [...right].sort()[index]);
-}
-
-function hasExactKeys(value, keys) {
-  return Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
-}
-
-function validateImplementationMap(value) {
-  if (
-    value.kind !== "worldkit-scene-brief-implementation-map" ||
-    value.schemaVersion !== 1 ||
-    !ID.test(value.sceneId ?? "") ||
-    !ID.test(value.authoringSpecId ?? "") ||
-    !HASH.test(value.sceneBriefHash ?? "") ||
-    !HASH.test(value.authoringSpecHash ?? "") ||
-    !hasExactKeys(value, [
-      "kind",
-      "schemaVersion",
-      "sceneId",
-      "sceneBriefHash",
-      "authoringSpecId",
-      "authoringSpecHash",
-      "visualTargetMappings",
-      "visualCaptureGroups",
-    ]) ||
-    !Array.isArray(value.visualTargetMappings) ||
-    !Array.isArray(value.visualCaptureGroups)
-  ) return false;
-
-  if (
-    value.visualTargetMappings.length < 1 ||
-    value.visualTargetMappings.length > MAXIMUM_VISUAL_CAPTURE_TARGETS ||
-    value.visualCaptureGroups.length < 1 ||
-    value.visualCaptureGroups.length > MAXIMUM_VISUAL_CAPTURE_TARGETS
-  ) return false;
-
-  const mappingTargetIds = [];
-  const mappedEntityIds = [];
-  const mappingsByTargetId = new Map();
-  for (const mapping of value.visualTargetMappings) {
-    if (
-      mapping === null || typeof mapping !== "object" || Array.isArray(mapping) ||
-      !hasExactKeys(mapping, ["visualTargetId", "runtimeEntityIds"]) ||
-      !ID.test(mapping.visualTargetId ?? "") ||
-      !validStringArray(mapping.runtimeEntityIds)
-    ) return false;
-    mappingTargetIds.push(mapping.visualTargetId);
-    mappedEntityIds.push(...mapping.runtimeEntityIds);
-    mappingsByTargetId.set(mapping.visualTargetId, mapping.runtimeEntityIds);
-  }
-  if (
-    new Set(mappingTargetIds).size !== mappingTargetIds.length ||
-    new Set(mappedEntityIds).size !== mappedEntityIds.length
-  ) return false;
-
-  const groupTargetIds = [];
-  const groupedEntityIds = [];
-  let primarySubjectCount = 0;
-  for (const group of value.visualCaptureGroups) {
-    if (
-      group === null || typeof group !== "object" || Array.isArray(group) ||
-      !hasExactKeys(group, [
-        "visualTargetId",
-        "runtimeEntityIds",
-        "role",
-        "semanticClassId",
-        "identityColor",
-      ]) ||
-      !ID.test(group.visualTargetId ?? "") ||
-      !validStringArray(group.runtimeEntityIds) ||
-      !VISUAL_CAPTURE_ROLES.has(group.role) ||
-      typeof group.semanticClassId !== "string" || !group.semanticClassId.trim() ||
-      !COLOR.test(group.identityColor ?? "")
-    ) return false;
-    groupTargetIds.push(group.visualTargetId);
-    groupedEntityIds.push(...group.runtimeEntityIds);
-    if (group.role === "primary-subject") primarySubjectCount += 1;
-    const mappedIds = mappingsByTargetId.get(group.visualTargetId);
-    if (mappedIds === undefined || !sameStringSet(mappedIds, group.runtimeEntityIds)) {
-      return false;
-    }
-  }
-  return new Set(groupTargetIds).size === groupTargetIds.length &&
-    new Set(groupedEntityIds).size === groupedEntityIds.length &&
-    primarySubjectCount === 1 &&
-    sameStringSet(mappingTargetIds, groupTargetIds);
-}
 
 function validateEvaluationRun(record, source) {
   if (source === null && record.origin === "existing-scene-brief-world") return;
@@ -270,7 +171,7 @@ export function assembleStudioPreviewBootstrapV1({
     authoringSpec.kind !== "worldkit-authoring-spec" ||
     authoringSpec.schemaVersion !== 4 ||
     authoringSpec.id !== recordBefore.sceneId ||
-    !validateImplementationMap(implementationMap) ||
+    validateSceneBriefImplementationMapV1(implementationMap).length > 0 ||
     implementationMap.sceneId !== recordBefore.sceneId ||
     implementationMap.authoringSpecId !== authoringSpec.id ||
     implementationMap.authoringSpecHash !== authoringSpecHash

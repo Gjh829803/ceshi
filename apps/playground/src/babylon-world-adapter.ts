@@ -1,7 +1,14 @@
 import {
+  type CameraInputAction, CAMERA_KEY_ACTION_MAP, CAMERA_YAW_RADIANS_PER_TICK,
+  CAMERA_PITCH_RADIANS_PER_TICK, CAMERA_KEYBOARD_ACCELERATION_SECONDS,
+  CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS, advanceKeyboardCameraRadiansPerTick,
+  SEMANTIC_INPUT_ACTION_ORDER, isPhysicalGameplayKeyV1, semanticActionsForPhysicalCodesV1,
+} from "@whitebox-world/runtime-babylon";
+import {
   parseCanonicalSceneExecutionPlanV1,
   parseWorldRuntimeBootstrapV1,
   validateVisualCaptureGroupsV1,
+  inspectWhiteboxTriviewPixelsV1,
   type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
   type CameraPreviewStateV1,
@@ -31,6 +38,7 @@ import type {
 } from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
+  isRecoverablePreparedFixedInputFailure,
   FIXED_TIME_STEP_SECONDS,
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
@@ -77,34 +85,7 @@ const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputAction
   jump: "jump",
 };
 
-const KEY_ACTION_MAP: Readonly<Record<string, readonly SemanticInputActionV1[]>> = {
-  KeyW: ["move-forward"],
-  KeyS: ["move-backward"],
-  KeyA: ["move-left"],
-  KeyD: ["move-right"],
-  ControlLeft: ["brake"],
-  ControlRight: ["brake"],
-  AltLeft: ["handbrake"],
-  AltRight: ["handbrake"],
-  KeyE: ["primary-action"],
-  KeyQ: ["secondary-action"],
-  KeyF: ["aim"],
-  KeyR: ["camera-recenter"],
-  KeyC: ["camera-look-back"],
-  KeyV: ["camera-shoulder-swap"],
-};
 
-type CameraInputAction = Extract<
-  InputAction,
-  "cameraLeft" | "cameraRight" | "cameraUp" | "cameraDown"
->;
-
-const CAMERA_KEY_ACTION_MAP: Readonly<Partial<Record<string, CameraInputAction>>> = {
-  ArrowLeft: "cameraLeft",
-  ArrowRight: "cameraRight",
-  ArrowUp: "cameraUp",
-  ArrowDown: "cameraDown",
-};
 
 function isCameraInputAction(action: InputAction): action is CameraInputAction {
   return action === "cameraLeft" ||
@@ -113,16 +94,12 @@ function isCameraInputAction(action: InputAction): action is CameraInputAction {
     action === "cameraDown";
 }
 
-const CAMERA_YAW_RADIANS_PER_TICK = 0.025;
-const CAMERA_PITCH_RADIANS_PER_TICK = 0.015;
-const CAMERA_KEYBOARD_ACCELERATION_SECONDS = 0.20;
-const CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS = 0.15;
 const MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME = 5;
-const CONTEXTUAL_KEY_CODES = new Set(["ShiftLeft", "ShiftRight", "Space"]);
 
 export type ArrowInputClearReasonV1 =
   | "startup"
   | "blur"
+  | "fixed-input-recovery"
   | "simulation-reset"
   | "possession-unbound"
   | "possession-rebind";
@@ -137,47 +114,7 @@ export interface ArrowInputDiagnosticSnapshotV1 {
   readonly lastClearReason: ArrowInputClearReasonV1;
 }
 
-function moveTowards(
-  current: number,
-  target: number,
-  maximumDelta: number,
-): number {
-  if (Math.abs(target - current) <= maximumDelta) return target;
-  return current + Math.sign(target - current) * maximumDelta;
-}
 
-function advanceKeyboardCameraRadiansPerTick(
-  currentRadiansPerTick: number,
-  inputDirection: number,
-  maximumRadiansPerTick: number,
-): number {
-  const transitionSeconds = inputDirection === 0
-    ? CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS
-    : CAMERA_KEYBOARD_ACCELERATION_SECONDS;
-  return moveTowards(
-    currentRadiansPerTick,
-    inputDirection * maximumRadiansPerTick,
-    maximumRadiansPerTick * FIXED_TIME_STEP_SECONDS / transitionSeconds,
-  );
-}
-
-const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
-  "move-forward",
-  "move-backward",
-  "move-left",
-  "move-right",
-  "jump",
-  "run",
-  "boost",
-  "brake",
-  "handbrake",
-  "primary-action",
-  "secondary-action",
-  "aim",
-  "camera-recenter",
-  "camera-look-back",
-  "camera-shoulder-swap",
-];
 
 export function mapPlaygroundInputActions(
   actions: readonly InputAction[],
@@ -192,69 +129,26 @@ export function mapPlaygroundInputActions(
 
 export class PhysicalKeyboardActionTracker {
   readonly #pressedCodes = new Set<string>();
-  #spacePressPending = false;
-  #spaceReleasePending = false;
-  #spacePressShiftPending = false;
 
   press(code: string): boolean {
-    if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
-    if (code === "Space" && !this.#pressedCodes.has(code)) {
-      this.#spacePressPending = true;
-      this.#spacePressShiftPending =
-        this.#pressedCodes.has("ShiftLeft") || this.#pressedCodes.has("ShiftRight");
-    }
+    if (!isPhysicalGameplayKeyV1(code)) return false;
     this.#pressedCodes.add(code);
     return true;
   }
 
   release(code: string): boolean {
-    if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
-    if (code === "Space" && this.#spacePressPending) {
-      this.#spaceReleasePending = true;
-      return true;
-    }
+    if (!isPhysicalGameplayKeyV1(code)) return false;
     this.#pressedCodes.delete(code);
     return true;
   }
 
   clear(): void {
     this.#pressedCodes.clear();
-    this.#spacePressPending = false;
-    this.#spaceReleasePending = false;
-    this.#spacePressShiftPending = false;
   }
 
-  actions(activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1"):
+  actions(motionKernelRef = "worldkit://motion-kernel/free-ground@1"):
     readonly SemanticInputActionV1[] {
-    const active = new Set<SemanticInputActionV1>();
-    for (const code of this.#pressedCodes) {
-      for (const action of KEY_ACTION_MAP[code] ?? []) active.add(action);
-      if (code === "ShiftLeft" || code === "ShiftRight") {
-        active.add(
-          activeMotionKernelRef.endsWith("/free-ground@1") ||
-              activeMotionKernelRef.endsWith("/forward-steer@1")
-            ? "run"
-            : "boost",
-        );
-      }
-      if (code === "Space") {
-        if (
-          activeMotionKernelRef.endsWith("/free-ground@1") ||
-          activeMotionKernelRef.endsWith("/forward-steer@1")
-        ) active.add("jump");
-        else if (activeMotionKernelRef.endsWith("/unpowered-glide@1")) {
-          active.add("primary-action");
-        } else active.add("brake");
-      }
-    }
-    if (this.#spacePressPending) {
-      if (this.#spacePressShiftPending && active.has("jump")) active.add("run");
-      if (this.#spaceReleasePending) this.#pressedCodes.delete("Space");
-      this.#spacePressPending = false;
-      this.#spaceReleasePending = false;
-      this.#spacePressShiftPending = false;
-    }
-    return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => active.has(action));
+    return semanticActionsForPhysicalCodesV1(this.#pressedCodes, motionKernelRef);
   }
 }
 
@@ -871,6 +765,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.visualCaptureGroups = groups.map((target) => Object.freeze({
       ...target,
       runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),
+      frontDirectionWorldXZ: Object.freeze([...target.frontDirectionWorldXZ]) as readonly [number, number],
     }));
     return this.listVisualCaptureGroups();
   }
@@ -884,19 +779,23 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (target === undefined) {
       throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${visualTargetId}`);
     }
+    const capture = this.activeRuntime().captureArtifactView({
+      kind: "entity-triview",
+      widthPixels: Math.max(3, this.canvas.width),
+      heightPixels: Math.max(1, this.canvas.height),
+      entityIds: target.runtimeEntityIds,
+      identityColor: target.identityColor,
+      frontDirectionWorldXZ: target.frontDirectionWorldXZ,
+      renderStyle: "runtime-lit-review",
+    });
     return {
       kind: "worldkit-whitebox-triview-capture",
       schemaVersion: 1,
       visualTargetId,
       runtimeEntityIds: [...target.runtimeEntityIds],
       views: ["front", "right", "back"],
-      imageDataUri: this.activeRuntime().captureArtifactView({
-        kind: "entity-triview",
-        widthPixels: Math.max(3, this.canvas.width),
-        heightPixels: Math.max(1, this.canvas.height),
-        entityIds: target.runtimeEntityIds,
-        identityColor: target.identityColor,
-      }).dataUrl,
+      imageDataUri: capture.dataUrl,
+      inspection: inspectWhiteboxTriviewPixelsV1(capture.pixelsRgba, capture.widthPixels, capture.heightPixels),
     };
   }
 
@@ -1019,6 +918,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         instance.binding.id,
       ),
       identityColor: prototype.instanceColor,
+      frontDirectionWorldXZ: [0, -1],
     }).dataUrl;
   }
 
@@ -1445,8 +1345,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const ticks = this.consumeFixedTicks(timestampMilliseconds);
     if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
+      let inputRuntime: BabylonWorldRuntime | undefined;
       try {
-        const runtimeProjection = this.activeRuntime().snapshot();
+        inputRuntime = this.activeRuntime();
+        const runtimeProjection = inputRuntime.snapshot();
         const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
           ? runtimeProjection.possessionTarget.controlledEntityId
           : undefined;
@@ -1483,14 +1385,34 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         );
       } catch (error) {
         if (this.disposed) return;
-        this.paused = true;
-        this.frameLoopDiagnostic = {
-          severity: "error",
-          code: "WORLDKIT_RUNTIME_FRAME_FAILED",
-          instancePath: "",
-          message: "The runtime was paused after a simulation frame failed.",
-        };
-        console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
+        const failure = inputRuntime?.consumeFixedInputFailureDiagnostic();
+        let recovered = false;
+        if (isRecoverablePreparedFixedInputFailure(error, failure)) {
+          this.clearPhysicalInputState("fixed-input-recovery");
+          try {
+            await this.coordinator.runFixedInput({ actions: [], ticks: 1 });
+            recovered = true;
+            this.frameLoopDiagnostic = {
+              severity: "warning", code: "WORLDKIT_RUNTIME_FRAME_RECOVERED", instancePath: "",
+              message: "A rejected input frame was rolled back and the runtime recovered safely.",
+            };
+            console.warn("WORLDKIT_RUNTIME_FRAME_RECOVERED", error);
+          } catch (recoveryError) {
+            inputRuntime?.consumeFixedInputFailureDiagnostic();
+            console.error("WORLDKIT_RUNTIME_FRAME_RECOVERY_FAILED", recoveryError);
+          }
+        }
+        if (!recovered) {
+          this.paused = true;
+          this.coordinator.setPaused(true);
+          this.frameLoopDiagnostic = {
+            severity: "error",
+            code: "WORLDKIT_RUNTIME_FRAME_FAILED",
+            instancePath: "",
+            message: "The runtime was paused after a simulation frame failed.",
+          };
+          console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
+        }
       } finally {
         this.animationPending = false;
       }

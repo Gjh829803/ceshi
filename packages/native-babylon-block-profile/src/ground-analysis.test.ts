@@ -15,6 +15,7 @@ import {
 } from "./chunk-policy.js";
 import {
   analyzeBabylonNativeBlockGroundV1,
+  analyzeBabylonNativeBlockSourceGroundV1,
   type BabylonNativeBlockGroundAnalysisBudgetV1,
   type BabylonNativeBlockGroundCaseIntentV1,
 } from "./ground-analysis.js";
@@ -56,8 +57,7 @@ function capability(
     resourceLockHash: H("a"),
     subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
     subjectDefinitionHash: H("a"),
-    colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
-    colliderProfileHash: H("a"),
+    colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1", colliderProfileHash: H("a") },
     physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
     physicsBodyProfileHash: H("a"),
     locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
@@ -200,7 +200,7 @@ function logicalModel(input: Readonly<{
 
 function position(topCellKey: string): readonly [number, number, number] {
   const [x, y, z] = topCellKey.split(",").map(Number);
-  return Object.freeze([(x! + 0.5) * 0.5, y! * 0.25, (z! + 0.5) * 0.5]);
+  return Object.freeze([(x! + 0.5) * 0.5, y! * 0.5, (z! + 0.5) * 0.5]);
 }
 
 function caseIntent(input: Partial<BabylonNativeBlockGroundCaseIntentV1> &
@@ -286,6 +286,69 @@ const SPAWN = Object.freeze({
 });
 
 describe("Babylon Native Block Subject-relative ground analysis", () => {
+  it("bounds surface membership work on a tiled floor without changing the Ground report", () => {
+    const cells = rectangle(-8, 7, -8, 7);
+    let singletonCellLookups = 0;
+    const originalHas = Set.prototype.has;
+    Set.prototype.has = function (value: unknown) {
+      if (this.size === 1 && typeof value === "string" && /^-?\d+,-?\d+,-?\d+$/.test(value)) {
+        singletonCellLookups += 1;
+      }
+      return originalHas.call(this, value);
+    };
+    let report: ReturnType<typeof analyze>;
+    try {
+      report = analyze({ supportTopCellKeys: cells, caseIntent: caseIntent({ spawn: SPAWN }) });
+    } finally {
+      Set.prototype.has = originalHas;
+    }
+    // Captured from the original all-node scan, including every report field.
+    expect(sha256CanonicalJson(report)).toBe("sha256:15998effbd67848459d50900475aa09ff89ba72d975becf2a218bfc826b338a9");
+    expect(singletonCellLookups).toBeLessThanOrEqual(
+      8 * (cells.length + report.metrics.standablePositionCount),
+    );
+  });
+
+  it.each(["supported", "hole", "headroom", "optional"] as const)(
+    "keeps source feedback equal to formal Ground without forged identity: %s", (scenario) => {
+      const receipt = capability();
+      const groundModel = logicalModel({
+        capability: receipt,
+        supportTopCellKeys: scenario === "hole" ? [] : rectangle(-2, 3, -2, 3),
+        blockerCellKeys: scenario === "headroom" ? ["0,2,0"] : [],
+      });
+      const intent = caseIntent({ spawn: SPAWN,
+        ...(scenario === "optional" ? { groundFailurePolicy: "measure-only", requireSingleReachableComponent: false } : {}),
+      });
+      const { caseHash: _caseHash, ...sourceIntent } = intent;
+      const { identity: _identity, logicalGroundModelHash: _hash, kind: _kind, schemaVersion: _version, ...geometry } = groundModel;
+      const sourceInput = { groundModel: geometry, envelope: receipt.envelope,
+        caseIntent: sourceIntent, measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY, budget: ANALYSIS_BUDGET };
+      const before = JSON.stringify(sourceInput);
+      const source = analyzeBabylonNativeBlockSourceGroundV1(sourceInput);
+      const formal = analyzeBabylonNativeBlockGroundV1({ groundModel,
+        walkableTopology: buildBabylonNativeBlockWalkableTopologyV1({ groundModel, policy: BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1 }),
+        traversalCapabilityEnvelopeReceipt: receipt, caseIntent: intent,
+        worldPackageRootHash: PACKAGE_HASH, measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY, budget: ANALYSIS_BUDGET });
+      const { identity: _formalIdentity, kind: _formalKind, schemaVersion: _formalVersion, ...analysis } = formal;
+      expect(source).toEqual(analysis);
+      expect(source).not.toHaveProperty("identity");
+      expect(JSON.stringify(sourceInput)).toBe(before);
+    },
+  );
+
+  it("uses the legacy Capsule radius without an added clearance footprint", () => {
+    // Radius .35 reaches the four adjacent cells but not the diagonal corners
+    // (.353553m away). The old catalog publishes exactly collider.radiusMeters.
+    const report = analyze({
+      capabilityOverrides: { capsuleRadiusMeters: 0.35 },
+      supportTopCellKeys: ["0,1,0", "-1,1,0", "1,1,0", "0,1,-1", "0,1,1"],
+      caseIntent: caseIntent({ spawn: SPAWN }),
+    });
+    expect(report.admissionOutcome).toBe("passed");
+    expect(report.failureFacts).toEqual([]);
+  });
+
   it("publishes deterministic standability, connectivity, band and report metrics", () => {
     const target = Object.freeze({
       id: "remote-target",
@@ -304,7 +367,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             target.standPositionMetersXYZ,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional: true,
         }]),
       }),
     });
@@ -372,13 +435,13 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     ]);
     const spawn = Object.freeze({
       ...SPAWN,
-      standPositionMetersXYZ: Object.freeze([0, 0.25, 0.5]) as
+      standPositionMetersXYZ: Object.freeze([0, 0.5, 0.5]) as
         readonly [number, number, number],
     });
     const target = Object.freeze({
       id: "upper-target",
       acceptanceTargetRef: "worldkit://acceptance-target/upper@1",
-      standPositionMetersXYZ: Object.freeze([0, 0.5, -0.5]) as
+      standPositionMetersXYZ: Object.freeze([0, 1, -0.5]) as
         readonly [number, number, number],
     });
     const result = analyze({
@@ -396,11 +459,11 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.reachableRequiredTargetCount).toBe(1);
     expect(result.standableNodes).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        positionMetersXYZ: [0, 0.25, 0.5],
+        positionMetersXYZ: [0, 0.5, 0.5],
         isReachableFromSpawn: true,
       }),
       expect.objectContaining({
-        positionMetersXYZ: [0, 0.5, -0.5],
+        positionMetersXYZ: [0, 1, -0.5],
         isReachableFromSpawn: true,
       }),
     ]));
@@ -423,16 +486,16 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       caseIntent: caseIntent({
         spawn: Object.freeze({
           ...SPAWN,
-          standPositionMetersXYZ: [-0.25, 0.25, -0.25] as const,
+          standPositionMetersXYZ: [-0.25, 0.5, -0.25] as const,
         }),
         requireSingleReachableComponent: false,
       }),
     });
 
     expect(result.standableNodes.map(({ positionMetersXYZ }) =>
-      positionMetersXYZ)).not.toContainEqual([-0.25, 0.25, 0]);
+      positionMetersXYZ)).not.toContainEqual([-0.25, 0.5, 0]);
     expect(result.standableNodes.map(({ positionMetersXYZ }) =>
-      positionMetersXYZ)).not.toContainEqual([0, 0.25, 0]);
+      positionMetersXYZ)).not.toContainEqual([0, 0.5, 0]);
   });
 
   it("rejects a narrow surface using full Capsule-footprint union coverage", () => {
@@ -450,7 +513,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
   });
 
-  it("includes the trusted traversal clearance margin in footprint coverage", () => {
+  it("admits a fitting source footprint without the Heightfield clearance margin", () => {
     const result = analyze({
       supportTopCellKeys: rectangle(0, 3, 0, 0),
       capabilityOverrides: { capsuleRadiusMeters: 0.24 },
@@ -460,9 +523,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }) }),
     });
 
-    expect(result.analysisOutcome).toBe("failed");
-    expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
-    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.failureFacts.map(({ metricId }) => metricId)).not.toContain(
       "ground-support-coverage-basis-points",
     );
   });
@@ -470,7 +533,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
   it("reports exact low-overhead clearance without changing the Capsule", () => {
     const result = analyze({
       supportTopCellKeys: rectangle(-1, 1, -1, 1),
-      blockerCellKeys: ["0,4,0"],
+      blockerCellKeys: ["0,3,0"],
       capabilityOverrides: { capsuleHeightMeters: 1.2 },
       caseIntent: caseIntent({ spawn: SPAWN }),
     });
@@ -480,9 +543,9 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(clearance?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 1_200,
-      actualMillimeters: 750,
+      actualMillimeters: 1_000,
       maximumAllowedDriftMillimeters: 0,
-      exceededByMillimeters: 450,
+      exceededByMillimeters: 200,
       correctionDirection: "increase",
     });
   });
@@ -500,42 +563,49 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(clearance?.details).toMatchObject({
       kind: "millimeters-threshold",
       expectedMillimeters: 3_000,
-      actualMillimeters: 500,
-      exceededByMillimeters: 2_500,
+      actualMillimeters: 1_000,
+      exceededByMillimeters: 2_000,
     });
   });
 
-  it("reports the closest directed step frontier for an unreachable target", () => {
+  it.each([true, false])("reports the closest directed step frontier only when connectivity is required=%s", (requireSingleReachableComponent) => {
     const target = Object.freeze({
       id: "high-target",
       acceptanceTargetRef: "worldkit://acceptance-target/high@1",
-      standPositionMetersXYZ: position("1,3,0"),
+      standPositionMetersXYZ: position("1,7,0"),
     });
     const result = analyze({
       supportTopCellKeys: [
         ...rectangle(-1, 0, -1, 1, 1),
-        ...rectangle(1, 2, -1, 1, 3),
+        ...rectangle(1, 2, -1, 1, 7),
       ],
       caseIntent: caseIntent({
         spawn: SPAWN,
         requiredTargets: Object.freeze([target]),
+        requireSingleReachableComponent,
       }),
     });
 
     const step = result.failureFacts.find(({ metricId }) =>
       metricId === "ground-step-up-millimeters");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    if (!requireSingleReachableComponent) {
+      expect(step).toBeUndefined();
+      expect(result.failureFacts).toEqual([]);
+      expect(result.admissionOutcome).toBe("passed");
+      return;
+    }
     expect(step?.details).toEqual({
       kind: "millimeters-threshold",
       expectedMillimeters: 0,
-      actualMillimeters: 500,
-      maximumAllowedDriftMillimeters: 300,
-      exceededByMillimeters: 200,
+      actualMillimeters: 3_000,
+      maximumAllowedDriftMillimeters: 1_000,
+      exceededByMillimeters: 2_000,
       correctionDirection: "decrease",
     });
-    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
   });
 
-  it("applies the trusted maximum slope to smoothed adjacent support", () => {
+  it("CF-04/G1 does not apply raw-height step/slope vetoes to an old automatically smoothed join", () => {
     const target = Object.freeze({
       id: "slope-target",
       acceptanceTargetRef: "worldkit://acceptance-target/slope@1",
@@ -553,17 +623,14 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     });
 
-    expect(result.analysisOutcome).toBe("failed");
-    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
-    expect(result.failureFacts.find(({ metricId }) =>
-      metricId === "ground-step-up-millimeters")?.details).toMatchObject({
-      actualMillimeters: 250,
-      maximumAllowedDriftMillimeters: 9,
-      exceededByMillimeters: 241,
-    });
+    // This graph is old structural connectivity, not a claim that the current
+    // Character can traverse every slope. Actual motion remains Runtime-owned.
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(1);
+    expect(result.failureFacts).toEqual([]);
   });
 
-  it("keeps a one-meter route rise reachable through four admitted quarter-meter joins", () => {
+  it("keeps a two-meter route rise reachable through four admitted half-meter joins", () => {
     const lowLanding = rectangle(-4, -3, -1, 0, 0);
     const firstTread = rectangle(-2, -1, -1, 0, 1);
     const secondTread = rectangle(0, 1, -1, 0, 2);
@@ -596,7 +663,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.failureFacts).toEqual([]);
   });
 
-  it("rejects an exact Spawn height that differs from the final smoothed topology", () => {
+  it("CF-04/G1 preserves old source-top Spawn/waypoint intent without adding a post-smoothing exact-height gate", () => {
     const target = Object.freeze({
       id: "smoothed-target",
       acceptanceTargetRef: "worldkit://acceptance-target/smoothed@1",
@@ -620,35 +687,20 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             position("-1,1,0"),
             target.standPositionMetersXYZ,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional: true,
         }]),
       }),
     });
 
-    expect(result.admissionOutcome).toBe("failed");
-    const mismatches = result.failureFacts.filter(({ metricId }) =>
-      metricId === "ground-support-height-millimeters");
-    expect(mismatches).toHaveLength(2);
-    const mismatch = mismatches.find(({ targetId }) =>
-      targetId === "spawn-check");
-    expect(mismatch).toMatchObject({
-      targetId: "spawn-check",
-      details: {
-        kind: "millimeters-threshold",
-        expectedMillimeters: 250,
-        actualMillimeters: 312.5,
-        correctionDirection: "decrease",
-      },
-    });
-    expect(mismatch?.affectedSourceBlockIds.length).toBeGreaterThan(0);
-    expect(mismatch?.affectedSourceBlockIds.length).toBeLessThan(12);
-    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.failureFacts).toEqual([]);
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(1);
   });
 
   it("preserves directed step-down evidence from a higher Spawn", () => {
     const highSpawn = Object.freeze({
       ...SPAWN,
-      standPositionMetersXYZ: position("0,3,0"),
+      standPositionMetersXYZ: position("0,7,0"),
     });
     const target = Object.freeze({
       id: "low-target",
@@ -657,7 +709,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
     const result = analyze({
       supportTopCellKeys: [
-        ...rectangle(-1, 0, -1, 1, 3),
+        ...rectangle(-1, 0, -1, 1, 7),
         ...rectangle(1, 2, -1, 1, 1),
       ],
       caseIntent: caseIntent({
@@ -670,14 +722,14 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       metricId === "ground-step-down-millimeters");
     expect(step?.details).toMatchObject({
       kind: "millimeters-threshold",
-      actualMillimeters: 500,
-      maximumAllowedDriftMillimeters: 300,
-      exceededByMillimeters: 200,
+      actualMillimeters: 3_000,
+      maximumAllowedDriftMillimeters: 1_000,
+      exceededByMillimeters: 2_000,
       correctionDirection: "decrease",
     });
   });
 
-  it("rejects a detour that leaves the declared traversal band", () => {
+  it.each([true, false])("rejects a detour that leaves the declared traversal band with bidirectional=%s", (isBidirectional) => {
     const support = [...new Set([
       ...rectangle(-1, 1, -1, 0),
       ...rectangle(-1, 3, 2, 3),
@@ -695,7 +747,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             destination,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional,
         }]),
       }),
     });
@@ -711,17 +763,17 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       },
     });
     expect(failure?.message).toContain(
-      "segment segment-000 from [0.25,0.25,0.25] to [1.75,0.25,0.25]",
+      "segment segment-000 from [0.25,0.5,0.25] to [1.75,0.5,0.25]",
     );
     expect(failure?.repairInstruction).toContain(
-      "between [0.25,0.25,0.25] and [1.75,0.25,0.25]",
+      "between [0.25,0.5,0.25] and [1.75,0.5,0.25]",
     );
     expect(failure?.repairInstruction).toContain(
       "both endpoint supports exist, but no connected path stays inside the band",
     );
   });
 
-  it("identifies the exact missing endpoint in a traversal band", () => {
+  it.each([true, false])("identifies the exact missing endpoint in a traversal band with bidirectional=%s", (isBidirectional) => {
     const unsupportedDestination = position("4,1,0");
     const result = analyze({
       supportTopCellKeys: rectangle(-1, 1, -1, 1),
@@ -735,7 +787,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             SPAWN.standPositionMetersXYZ,
             unsupportedDestination,
           ]),
-          halfWidthMeters: 0.5,
+          halfWidthMeters: 0.5, isBidirectional,
         }]),
       }),
     });
@@ -783,7 +835,90 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     );
   });
 
-  it("rejects duplicate targets before analysis", () => {
+  it.each([false, true])("preserves disconnected ground target measurements with required connectivity=%s", (requireSingleReachableComponent) => {
+    const remote = position("11,1,11");
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 2, -1, 1),
+        ...rectangle(10, 12, 10, 12),
+      ],
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent,
+        requiredTargets: [
+          { id: "middle-target", acceptanceTargetRef: "worldkit://acceptance-target/middle@1",
+            standPositionMetersXYZ: position("1,1,0") },
+          { id: "remote-target", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+            standPositionMetersXYZ: remote },
+        ],
+      }),
+    });
+    expect(result.metrics).toMatchObject({
+      requiredTargetCount: 2, reachableRequiredTargetCount: 1, componentCount: 2,
+    });
+    expect(result.metrics.disconnectedStandablePositionCount).toBeGreaterThan(0);
+    expect(result.standableNodes).toContainEqual(expect.objectContaining({
+      positionMetersXYZ: remote, isReachableFromSpawn: false,
+    }));
+    expect(result.analysisOutcome).toBe(requireSingleReachableComponent ? "failed" : "passed");
+    expect(result.admissionOutcome).toBe(result.analysisOutcome);
+    if (requireSingleReachableComponent) {
+      const disconnectedFact = result.failureFacts.find(fact => fact.metricId === "ground-component-reachability")!;
+      expect(disconnectedFact.details).toMatchObject({
+        actualValue: `1-components-${result.metrics.disconnectedStandablePositionCount}-positions-disconnected`,
+      });
+      expect(disconnectedFact.message).toContain("across 1 components");
+    }
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toEqual(
+      requireSingleReachableComponent
+        ? ["ground-component-reachability", "ground-target-reachability"] : [],
+    );
+  });
+
+  it.each(["unsupported", "blocked"] as const)("still rejects an optional ground target that is %s", (condition) => {
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 1, -1, 1),
+        ...(condition === "blocked" ? rectangle(10, 12, 10, 12) : []),
+      ],
+      ...(condition === "blocked" ? { blockerCellKeys: ["11,2,11"] } : {}),
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent: false,
+        requiredTargets: [{ id: "remote-target",
+          acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          standPositionMetersXYZ: position("11,1,11") }],
+      }),
+    });
+    expect(result.admissionOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    expect(result.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "remote-target",
+      metricId: condition === "blocked"
+        ? "ground-clearance-millimeters" : "ground-support-coverage-basis-points",
+    }));
+    expect(result.failureFacts.map(({ metricId }) => metricId))
+      .not.toContain("ground-target-reachability");
+  });
+
+  it("still rejects a disconnected explicit band when global connectivity is optional", () => {
+    const remote = position("11,1,11");
+    const result = analyze({
+      supportTopCellKeys: [...rectangle(-1, 1, -1, 1), ...rectangle(10, 12, 10, 12)],
+      caseIntent: caseIntent({
+        spawn: SPAWN, requireSingleReachableComponent: false,
+        requiredTargets: [{ id: "remote-target", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          standPositionMetersXYZ: remote }],
+        requiredTraversalBands: [{ id: "declared-band", acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+          centerlineStandPositionsMetersXYZ: [SPAWN.standPositionMetersXYZ, remote],
+          halfWidthMeters: 1, isBidirectional: false }],
+      }),
+    });
+    expect(result.admissionOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId))
+      .toEqual(["ground-traversal-band-reachability"]);
+  });
+
+  it("rejects duplicate anchor IDs or positions, but permits a shared Case obligation", () => {
     const target = Object.freeze({
       id: "same-target",
       acceptanceTargetRef: "worldkit://acceptance-target/same@1",
@@ -797,7 +932,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
 
-    expect(() => analyze({
+    const sharedObligation = analyze({
       supportTopCellKeys: rectangle(-1, 3, -1, 1),
       caseIntent: caseIntent({
         spawn: SPAWN,
@@ -810,7 +945,39 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
           }),
         ]),
       }),
+    });
+    expect(sharedObligation.metrics.requiredTargetCount).toBe(2);
+    expect(sharedObligation.metrics.reachableRequiredTargetCount).toBe(2);
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 3, -1, 1),
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets: [
+        target, { ...target, id: "same-position-other-id" },
+      ] }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+  });
+
+  it("analyzes more than 256 exploration anchors and still rejects unsupported declared targets", () => {
+    const requiredTargets = Array.from({ length: 257 }, (_, index) => ({
+      id: `target-${String(index).padStart(3, "0")}`,
+      acceptanceTargetRef: "worldkit://acceptance-target/ground@1",
+      standPositionMetersXYZ: position(`${index % 17 + 1},1,${Math.floor(index / 17) + 1}`),
+    }));
+    const supportTopCellKeys = rectangle(-1, 19, -1, 19);
+    const result = analyze({ supportTopCellKeys,
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets }),
+    });
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.metrics.requiredTargetCount).toBe(257);
+    expect(result.metrics.reachableRequiredTargetCount).toBe(257);
+    const unsupported = analyze({ supportTopCellKeys,
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets: [
+        ...requiredTargets.slice(0, -1),
+        { ...requiredTargets.at(-1)!, standPositionMetersXYZ: position("50,1,50") },
+      ] }),
+    });
+    expect(unsupported.admissionOutcome).toBe("failed");
+    expect(unsupported.metrics.requiredTargetCount).toBe(257);
+    expect(unsupported.metrics.reachableRequiredTargetCount).toBe(256);
   });
 
   it("does not invent cross-domain uniqueness between Spawn and target IDs", () => {

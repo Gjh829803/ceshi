@@ -9,6 +9,40 @@
 **本轮边界：** 只冻结产品方案、接口边界、实施任务图与验收标准，不修改 Runtime 代码
 **事实基线：** GitHub `main` `2fd8c1c2694a861e213ad2c72e9cb3aefec087ce`；Babylon.js `9.23.0`；Havok `1.3.14`
 
+## CF-04/12 Native Block 旧生产行为修订（2026-09-07）
+
+用户最新要求完成 CF-04/12 并严格遵循旧 `codex/block-world-main-integration@9e35ab53`
+的生产行为。实际旧 Block 路由启用遮挡实例淡出，并跳过第三人称 Spring Arm；
+不能把本文面向硬碰撞 Golden 的“镜头绝不穿墙”同时宣称为旧 Block 行为。
+本节明确修订 Native Block 的目标策略；下述接线已实现，但完整 CF-04/12 验收尚未完成。
+
+- 已验证 Native Block Package 的第三人称使用旧构图/遮挡淡出策略。镜头可穿越场景
+  遮挡几何，不再为这个场景源承诺相机硬碰撞；人物碰撞、支撑、行动和移动权威不变。
+- Canonical 及非 Block Native Source 保留本文 Hard Decollider 策略。策略由 Host
+  从已锁定的场景源/Profile 身份派生，不从 Mesh 名称、URL、环境变量或可变 Preview
+  布尔开关推断，不增加旧/新迁移模式。两类场景仍只有一个 Camera Director。
+- Profile → authored opening → Context Modifiers → Preview 顺序不变。Native Module
+  不创建相机；不通过给 Query Provider 伪造“无碰撞”返回值实现旧策略。
+- 旧九射线只选择展示遮挡实例，绝不用于人物接地或物理查询。选择周期 `1/15s`、
+  水平/垂直 margin `0.45/0.55m`、coverage `0.3`、opacity `0.3/0.5`、淡入/恢复
+  `0.15/0.25s` 与旧代码一致。唯一 Host 显示批次提供完整实例 bounds 和实际材料。
+- 淡出状态必须随当前相机事务完成 Snapshot/Hash/Reset/Replay/Rollback；旧类只有
+  不完整 inspection snapshot，不能原封不动复制为新的隐藏 Runtime 状态。Render
+  不得推进另一份计时器。提交时序与旧呈现结果的关系须用逐步轨迹和 Browser 证明。
+- Opening 使用同一实际相机/淡出；top-down 和 entity-triview 暂停淡出，异常也必须
+  恢复完整原状态。Identity mask 保留现有不透明语义量测定义，不把淡出孔洞误当成
+  实体几何缺失。需要更新量测解释时在同一合同内显式处理。
+- 上述策略、状态合同、显示批次、材质/Shader、Capture、Reset、清理必须一起验证；
+  不能仅删除 Spring Arm 调用就称完成。不得弱化 `verify:3c-migration` 的结构断言。
+
+当前 `native-block-subject-occlusion.ts` 已接入 Host 真批次、唯一 CameraComponent
+事务、Director 和公开 Snapshot；保留旧 controlled-Subject 采样回退，不在目标缺失时
+新增失败门禁。实际 WebGL2 探针覆盖淡出、首张不透明身份 mask 和截图状态/像素恢复。
+身份 Shader 在既有 render-ready 中预编译，不添加 render、Tick 或模型修复轮次。
+这些 focused 证据不是整条多入口/真实生产验收。本文其余硬碰撞验收继续适用于硬碰撞策略，不把那些
+验收套在旧式 Native Block 上制造额外生产 gate。两轮人工 Feel Review、正式 Browser
+与整条生产链证据仍独立开放。完整任务见 CF 参数审计的 OCC-A/B/C 表。
+
 ---
 
 ## 0. 结论先行
@@ -564,6 +598,68 @@ interface CameraCollisionSnapshotV1 {
 | Visibility Samples | 1 个 Target | Golden 先用 Target/胸口；Indoor 阶段升级头部+胸口等 2–3 点 |
 
 这些数值必须通过固定 Fixture 和人工 Feel Review 冻结。UE 默认 Probe Size 或 Unity Camera Radius 只能作为量级参考，不能直接成为 Whitebox 的产品参数。
+
+CF-04 旧链对齐修订（2026-09-06）：上述 Clear Hold 和 half-life 是首轮建议，不是
+已验收默认值。按用户明确的旧链参数/时序原则，Babylon SpringArm adapter 使用
+`clearHoldSeconds = 0`、`recoveryHalfLifeSeconds = 0`，并原样传递 Profile 的
+`collisionRecoveryMetersPerSecond`，不额外限制为 3 m/s。这复现 `9e35ab53`
+SpringArm 的立即收回、首个 clear tick 开始按配置速度线性恢复及到达即停止。
+复用 Hard Decollider 已有的零 half-life 线性分支，不新增旧/新运行模式或状态所有者；
+V2 query、紧急姿态验证、最终安全位置提交及 Snapshot/Reset/Rollback 边界不变。
+本修订不宣称 Director 前后处理顺序、渲染插值或完整 Feel Review 已对齐。
+
+CF-04/R3 顺序修订（2026-09-06，承接 R2）：恢复旧链“理想臂先碰撞/恢复，仍处于
+收缩时不再套位置缓动”的行为。Director 同时提供围绕最终 resolved target 的理想
+位置和无碰撞时的平滑/transition 位置；SpringArm 先把理想臂交给唯一 Hard Decollider。
+仅当未收缩且平滑位置不同，才验证实际平滑位置：安全则由同一 Hard Decollider
+记录实际 last-safe pose，不把显示臂长覆盖成下一 Tick 的名义恢复状态；遇障则在
+同 Tick 以零额外时间做最终安全 clamp。任一步失败整体回滚，Director 仍唯一提交
+相机，查询仍在 Physics commit 后。常态最多两次 query，含紧急验证最多三次，
+没有第二个相机状态所有者、恢复计时器、质量门禁或旧/新模式。
+这取代第 2.3 节、第 14.1 节中把“碰撞时绕过位置阻尼”一概视为待删除行为的建议：
+当前用户要求优先复现旧恢复速度，最终几何安全仍保留。目标平滑后统一查询/LookAt
+的现有修复没有回退成旧双 Target；移动 Target、完整 Profile 切换构图和 Render
+插值仍须分别对拍，不能用静止 Target 的恢复轨迹宣称整体像素/手感等价。
+
+CF-04/R4 移动目标修订（2026-09-06）：旧 View Solver 与 current 源码一致；旧 Director
+分别对理想位置和 LookAt 做平滑，不把平滑 Target 的偏移叠加到理想位置，也不以
+名义臂长再次裁剪到平滑 Target 的距离。恢复这两个旧行为。SpringArm 的
+`desiredTarget` 是名义臂参考点，`resolvedTarget` 是本 Tick 实际 LookAt；前者仅用于
+旧臂碰撞/恢复，不能冒充最终视线安全证据。即使仍处于收缩，只要最终 Target 或机位
+不同，必须对真实最终路径重查并在必要时 clamp；紧急路径沿用已验证的脱困 Target。
+这修订 L2 的查询组织，不恢复旧“只查 raw Target 却直接渲染另一个 Target”的缺陷。
+Hard Decollider 的 `lastSafeTargetPositionMetersXYZ` 表示移动参考锚点；最终 clamp
+若使用平滑 Target，由同一 owner 将距离重基到名义锚点，不能把下一 Tick 的恢复长度
+和显示长度混用。无新增持久状态/计时器，最终 Pose 仍仅 Director 提交。五文件 132 项
+focused/真实 Havok 回归通过，仅证明本批轨迹与安全事务，不宣称完整视觉/手感验收。
+
+CF-04/R5 committed render history 修订（2026-09-06）：`9e35ab53` 已有相机显示插值，
+不是新增手感功能。恢复同一个 CameraComponent 内的 previous/current committed
+position、LookAt、FOV history、同 Tick 更新规则、reset marker 和事务 capture/restore；
+Runtime.renderFrame 再次通过其 render(alpha) 调用 Scene。显示结束或抛错均在 finally
+恢复权威 Pose，并刷新 Babylon View Matrix；插值不推进 Director、Gameplay 或 SpringArm。
+不恢复旧 renderFrame 中的零时长 Director 更新，current 的固定 Tick 单次提交仍有效。
+Director 直接返回 unchanged/committed/reset 的本次提交结果：重复 Tick 不消耗 pending
+reset，已有 target-rebind/teleport 分支使显示历史塌缩，不在显示层复制运动/切换判断。
+
+安全适配使用现有 V2 sphere port：仅 alpha<1 的显示采样最多检查两个几何段——完整
+previous→current 相机位置段，以及实际采样 LookAt→机位。阻挡或查询不可用时直接显示
+已提交 current pose，不更新状态、不产生 source repair、业务失败或新的普通 gate。
+alpha=1 保持旧直接渲染，不额外查询。Babylon 9.23.0 setTarget 对精确平行 Z 的位置
+微调由实际应用后的相机位置参与检查；没有复制引擎的 epsilon 算法。本批只承诺既有
+sphere 安全合同，不冒充新增 Near-plane Box/FOV 体积能力。六文件 145 项通过，包括
+真实 Havok 的“两端各自安全但中间被挡”、渲染异常恢复、FOV、重绑/传送和回滚。
+这仍不是 Browser 像素/手感验收，也不关闭完整 CF-04。
+
+CF-04/R6 切换与最终参考系（2026-09-06）：对照旧源码确认 Profile/algorithm 变化时
+重置 SpringArm、捕获切换起点、使用新 Profile transitionSeconds 均为旧行为，保留。
+Orbit↔Follow 在 30/60/120Hz 类步长、clear/blocked 共 12 组逐 Tick 位置/LookAt/FOV
+轨迹已对拍通过。复核 R3/R4 最终安全适配发现旧名义臂长不能直接限制另一条最终路径：
+已有 2m 名义约束会把 5m 安全终段误缩到 2m；10m 名义臂也会把安全的 12m 显示臂误缩
+到 10m。最终 clamp 前由同一 Hard Decollider 只变换空间参考系和候选长度，不推进
+时间、不将未验证候选写成 last-safe；clamp 后仍回到名义参考系供下一 Tick 恢复。
+两个 RED 已转绿，原 state/rollback/query 数量及业务 gate 不变。此处没有修改 Profile
+参数来遮掩换算错误。最终六文件 151 项通过，仍不代表全入口 Browser/真实效果验收。
 
 ---
 

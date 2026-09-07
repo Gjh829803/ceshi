@@ -1,8 +1,11 @@
+import { builtInSubjectResourceRegistry, createSubjectResourceRegistry, type SubjectRegistryResourceInputV3 } from "@whitebox-world/subject-registry";
 import {
+  cp,
   lstat,
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -11,7 +14,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
-import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { normalizeAuthoringSpecV4, parseSceneBriefV1, type ComposedSubjectDesignV1 } from "@whitebox-world/authoring";
+import {
+  createValidPackageSubjectWorldV4,
+  createValidRiggedPackageSubjectWorldV4,
+} from "@whitebox-world/authoring/testing";
 import sharp from "sharp";
 
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
@@ -23,7 +30,6 @@ import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCas
 import {
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationBootstrapV1,
-  deriveNativeBlockSubjectVisualReviewProxyV1,
   prepareNativeBlockGenerationTaskV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
@@ -31,12 +37,24 @@ import {
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
 } from "./native-block-production-budget.js";
+import { evaluateBlockSourceResourceBudgetV1 } from "./native-block-source-budget.test-support.js";
 import {
+  deriveNativeBlockSubjectVisualReviewProxyV1,
   parseNativeBlockSubjectVisualReviewProxyV1,
 } from "./native-block-subject-visual-review-proxy.js";
 import { createNativeBlockRepairInstructionV1 } from "./repair-request.js";
+import { checkNativeSubjectHostedSelectionV1, createNativeSubjectAuthoringCatalogV1, createNativeSubjectHostContextV1, parseNativeSubjectHostContextV1, resolveNativeSubjectAuthoringClosureV1 } from "./native-subject-host-context.js";
 import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
   "../native-scene/admission-budget.js";
+import {
+  compileNativeSubjectHostClosureV1,
+  compileNativeSubjectHostClosureFromDesignV1,
+  type NativeSubjectHostClosureInputV1,
+} from "./native-subject-host-closure.js";
+import {
+  checkNativeComposedSubjectDesignV1,
+  compileNativeComposedSubjectDefinitionV1,
+} from "./native-composed-subject-definition.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
 const API_HASH = hash("a");
@@ -59,8 +77,8 @@ function nativeVisualIdentityPaletteText(
     schemaVersion: 1,
     sceneId: "cloud-temple-t-gate-native-block",
     sceneBriefHash,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["陆地步行"],
     targets: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.map(
       (identityColor, index) => ({
         id: `visual-target-${index + 1}`,
@@ -306,6 +324,10 @@ async function writePriorRepairContext(
     })),
     writeFile(path.join(priorAttemptRoot, "evaluation.json"), input.evaluationText),
     writeFile(path.join(priorAttemptRoot, "capture", "opening.png"), "opening"),
+    ...["world-side.png", "world-top-down.png", "opening-identity-mask.png",
+      "world-side-identity-mask.png", "world-top-down-identity-mask.png",
+      "semantic-view-observation-set.json"].map((name) =>
+      writeFile(path.join(priorAttemptRoot, "capture", name), name)),
     writeFile(path.join(priorAttemptRoot, "capture", "opening-observation.json"), "{}"),
     writeFile(path.join(priorAttemptRoot, "capture", "collider-overlay.png"), "collider"),
     writeFile(path.join(priorAttemptRoot, "capture", "collider-overlay-observation.json"), "{}"),
@@ -334,7 +356,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
       openingComposition: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", targetRefs: ["worldkit://composition-target/opening@1"], regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"] },
       spawnSupport: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", spawnMarkerId: "spawn", supportColliderId: "ground", expectedMedium: "ground", expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
       colliders: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", contributionId: "ground-contribution", colliderId: "ground", role: "ground", requiresOverlay: true }],
-      groundConnectivity: { requireSingleReachableComponent: true, requiredTraversalBands: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", id: "ground-band", centerlineStandPositionsXYZMeters: [{ xMeters: 0, yMeters: 0, zMeters: 0 }, { xMeters: 0, yMeters: 0, zMeters: -1 }], halfWidthMeters: 1 }] },
+      groundConnectivity: { mode: "case-defined" as const, requireSingleReachableComponent: true, requiredTraversalBands: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", id: "ground-band", centerlineStandPositionsXYZMeters: [{ xMeters: 0, yMeters: 0, zMeters: 0 }, { xMeters: 0, yMeters: 0, zMeters: -1 }], halfWidthMeters: 1 }] },
       criticalTraversalChecks: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", id: "walk", evidenceKind: "scripted-fixed-input", expectation: "pass", checkpointIds: ["spawn"], fixedInputSequence: [{ actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 1 }] }],
       deterministicBuild: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", requiresCandidateReplay: true, requiresWorldPackageIdentityAgreement: true, requiresBuildIdentityAgreement: true, requiresCaptureIdentityAgreement: true },
     },
@@ -349,26 +371,24 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     cloudOutputS3Root: "s3://bucket/worldkit",
     runDirectoryPath: path.join(fixtureValue.root, "runs", "initial"),
     inputDirectoryPath: fixtureValue.inputDirectory,
-    taskInstructionPath: path.join(fixtureValue.inputDirectory, "instruction.md"),
     builderSkillPath: path.join(fixtureValue.inputDirectory, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(fixtureValue.inputDirectory, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(fixtureValue.inputDirectory, "native-scene-profile.json"),
     blockProfilePath: path.join(fixtureValue.inputDirectory, "block-profile.json"),
-    hostClosureRootPath: path.resolve("apps/playground/public/world-packages/cloud-ridge"),
-    gameplayBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json"),
-    worldRuntimeBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json"),
-    worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-    worldBoundsPath: path.join(fixtureValue.inputDirectory, "world-bounds.json"),
-    worldBounds: {
+    subjectHostContext: createNativeSubjectHostContextV1(reconstructionCase.id, "camera-main"),
+    worldBoundsPolicyPath: path.join(fixtureValue.inputDirectory, "world-bounds-policy.json"),
+    worldBoundsPolicy: {
+      mode: "fixed",
+      worldBounds: {
       centerMetersXZ: [0, -15],
       sizeMetersXZ: [180, 180],
       heightRangeMeters: [-40, 100],
+      },
     } as const,
     bootstrapId: "fixture-native",
     sceneModuleRef: "worldkit://native-scene/fixture@1",
     seed: 17,
     budgets: {
-      maximumBlockCount: 2000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200000,
       maximumStaticColliderTriangleCount: 100000,
@@ -378,7 +398,445 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
   };
 }
 
+function subjectHostInput(subject: NativeSubjectHostClosureInputV1["subject"]): NativeSubjectHostClosureInputV1 {
+  return {
+    worldId: "cf12-subject",
+    seed: 17,
+    controlledEntityId: "requested-subject",
+    subject,
+    resourceBudget: createValidPackageSubjectWorldV4().world.resourceBudget,
+    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+    initialCamera: {
+      mode: "third-person",
+      cameraEntityId: "camera-main",
+      pitchRadians: 0.12,
+      distanceMeters: 7,
+      targetHeightMeters: 1.4,
+      fovDegrees: 56,
+      manualSwitchAllowed: true,
+    },
+  };
+}
+
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  function composedDesign(rigged = false): ComposedSubjectDesignV1 {
+    const definition = (rigged ? createValidRiggedPackageSubjectWorldV4() : createValidPackageSubjectWorldV4())
+      .resources.subjectDefinitions[0]!;
+    return {
+      id: definition.id,
+      category: definition.category,
+      bodyTopology: definition.bodyTopology,
+      semanticClassId: definition.semanticClassId,
+      displayName: definition.aiMetadata.displayName,
+      description: definition.aiMetadata.description,
+      visualParts: definition.visualParts.map((part) => {
+        if (part.kind === "primitive") return part;
+        const { appearance: _appearance, ...design } = part;
+        return design;
+      }),
+      visualBinding: definition.visualBinding.mode === "static" ? { mode: "static" } : {
+        ...definition.visualBinding,
+        colliderProfileRef: definition.colliderPolicy.kind === "profile" ? definition.colliderPolicy.colliderProfileRef : "invalid",
+      },
+    };
+  }
+
+  function nativeComposedDesign(rigged = false): ComposedSubjectDesignV1 {
+    const design = composedDesign(rigged);
+    design.visualParts = design.visualParts.map((part) => ({ ...part, id: part.id.replaceAll(".", "-") }));
+    return design;
+  }
+
+  it.each([false, true])("compiles the complete old composed Subject defaults and real Host proxy (rigged=%s)", (rigged) => {
+    const design = composedDesign(rigged);
+    const before = stringifyCanonicalJson(design);
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    const expected = (rigged ? createValidRiggedPackageSubjectWorldV4() : createValidPackageSubjectWorldV4())
+      .resources.subjectDefinitions[0]!;
+    // The pinned old Block compiler overrides these Authoring fixture fields.
+    expected.authoringAvailability = "advanced";
+    expected.allowedOverridePaths = [];
+    expected.sockets = [];
+    expected.mountSlots = [];
+    expected.relationshipCapabilityRefs = [];
+    expected.aiMetadata.semanticTags = [design.category, design.bodyTopology, "block-world-composed"];
+    for (const part of expected.visualParts) {
+      part.localTransform.rotationEulerRadiansXYZ ??= [0, 0, 0];
+    }
+    expect(result.value).toEqual(expected);
+    // Captured by executing compilePackageSubjectDefinitions from pinned
+    // 9e35ab53 against these same two designs, not generated from this helper.
+    expect(sha256CanonicalJson(result.value)).toBe(rigged
+      ? "sha256:934d6eb2626feb4dec4d0fa122f56fa36eec8cd519baf1c3fa59fd27466d697b"
+      : "sha256:a84f80b27bd08ff0fb6c5e5225f155b9fa02ae2fe5e8e3c7f9f9d26b4a918ba0");
+    const closure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: result.value }), builtInSubjectResourceRegistry);
+    const expectedClosure = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition: expected }), builtInSubjectResourceRegistry);
+    expect(closure).toEqual(expectedClosure);
+    if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
+    const proxy = deriveNativeBlockSubjectVisualReviewProxyV1({
+      worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
+      worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
+    }, builtInSubjectResourceRegistry);
+    expect(proxy.subjectDefinitionRef).toBe(`package://subject-definition/${design.id}@1`);
+    expect(proxy.cuboids.length).toBeGreaterThan(0);
+    expect(stringifyCanonicalJson(design)).toBe(before);
+    expect(compileNativeComposedSubjectDefinitionV1(design)).toEqual(result);
+  });
+
+  it("quantizes all composed primitive dimensions and transforms as the pinned old compiler", () => {
+    const design = composedDesign();
+    const shapes = [
+      { kind: "box", sizeMetersXYZ: [0.80000000004, 0.7, 1.4] },
+      { kind: "sphere", radiusMeters: 0.10000000006 },
+      { kind: "cylinder", radiusMeters: 0.10000000006, heightMeters: 0.70000000006 },
+      { kind: "capsule", radiusMeters: 0.10000000006, heightMeters: 0.70000000006 },
+    ] as const;
+    design.visualParts = shapes.map((shape, index) => ({
+      id: `part-${index}`, kind: "primitive", shape,
+      localTransform: { positionMetersXYZ: [-0.00000000004, 0.35, 0], rotationEulerRadiansXYZ: [0, 0.12000000004, 0] },
+      colliderContribution: index === 3 ? "exclude" : "include", semanticTags: ["body"],
+    }));
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.value.visualParts.map((part) => part.kind === "primitive" && part.shape)).toEqual([
+      { kind: "box", sizeMetersXYZ: [0.8, 0.7, 1.4] },
+      { kind: "sphere", radiusMeters: 0.1 },
+      { kind: "cylinder", radiusMeters: 0.1, heightMeters: 0.7 },
+      { kind: "capsule", radiusMeters: 0.1, heightMeters: 0.7 },
+    ]);
+    expect(result.value.visualParts.every((part) =>
+      !Object.is(part.localTransform.positionMetersXYZ[0], -0) && part.localTransform.rotationEulerRadiansXYZ?.[1] === 0.12)).toBe(true);
+    expect(result.value.visualParts[3]).toMatchObject({ colliderContribution: "exclude" });
+    expect(design.visualParts[0]!.localTransform.positionMetersXYZ[0]).toBe(-0.00000000004);
+  });
+
+  it("rejects malformed composed design through the existing Subject schema and never executes accessors", () => {
+    const invalid = composedDesign();
+    invalid.visualParts[0]!.localTransform.positionMetersXYZ = [0, Number.NaN, 0];
+    expect(compileNativeComposedSubjectDefinitionV1(invalid).ok).toBe(false);
+    expect(compileNativeComposedSubjectDefinitionV1({
+      ...composedDesign(), profiles: { physicsBodyProfileRef: "forged" },
+    } as ComposedSubjectDesignV1).ok).toBe(false);
+    const coerced = composedDesign();
+    coerced.visualParts[0]!.localTransform.positionMetersXYZ = ["0", 0.85, 0] as unknown as readonly [number, number, number];
+    expect(compileNativeComposedSubjectDefinitionV1(coerced).ok).toBe(false);
+    const accessor = composedDesign();
+    let executed = false;
+    Object.defineProperty(accessor, "visualParts", { enumerable: true, get() { executed = true; throw new Error("accessor"); } });
+    expect(compileNativeComposedSubjectDefinitionV1(accessor).ok).toBe(false);
+    expect(executed).toBe(false);
+  });
+
+  it("preserves composed asset transforms, exact rigged refs and independent output data", () => {
+    const design = composedDesign(true);
+    const asset = design.visualParts[0]!;
+    if (asset.kind !== "asset") throw new Error("Missing asset fixture.");
+    asset.localTransform.positionMetersXYZ = [0.1234567894, 0.00000000004, -0.00000000004];
+    asset.localTransform.rotationEulerRadiansXYZ = [0, 0.2345678914, 0];
+    asset.localTransform.scaleXYZ = [1.00000000004, 1.1234567894, 1];
+    const original = structuredClone(design);
+    const result = compileNativeComposedSubjectDefinitionV1(design);
+    if (!result.ok || result.value === undefined) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.value.visualParts[0]).toEqual({
+      ...asset,
+      appearance: { mode: "whitebox-neutral" },
+      localTransform: {
+        positionMetersXYZ: [0.123456789, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0.234567891, 0],
+        scaleXYZ: [1, 1.123456789, 1],
+      },
+    });
+    if (design.visualBinding.mode !== "rigged") throw new Error("Missing rigged fixture.");
+    expect(result.value.visualBinding).toEqual({
+      mode: "rigged", rigProfileRef: design.visualBinding.rigProfileRef, animationSetRef: design.visualBinding.animationSetRef,
+    });
+    expect(result.value.colliderPolicy).toEqual({ kind: "profile", colliderProfileRef: design.visualBinding.colliderProfileRef });
+    expect(result.value.actionOrPoseSetRef).toBe(design.visualBinding.animationSetRef);
+    result.value.visualParts[0]!.localTransform.positionMetersXYZ = [9, 9, 9];
+    (result.value.profiles.allowedControlFeelProfileRefs as string[]).push("changed-output");
+    expect(design).toEqual(original);
+    const replay = compileNativeComposedSubjectDefinitionV1(design);
+    expect(replay.value?.profiles.allowedControlFeelProfileRefs).not.toContain("changed-output");
+    expect(replay.value?.visualParts[0]!.localTransform.positionMetersXYZ).toEqual([0.123456789, 0, 0]);
+  });
+
+  it.each([
+    ["worldkit://subject-definition/missing@1", "AUTHORING_REFERENCE_NOT_FOUND"],
+    ["worldkit://subject-definition/vehicle.four-wheel.arcade@1", "SUBJECT_CAPABILITY_UNSATISFIED"],
+    ["worldkit://subject-definition/glider.paraglider.unpowered@1", "SUBJECT_CAPABILITY_UNSATISFIED"],
+  ])("preserves existing rejection for unavailable Subject %s without substitution", (subjectDefinitionRef, code) => {
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef }), builtInSubjectResourceRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Unavailable Subject was substituted.");
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === code)).toBe(true);
+    expect(result).not.toHaveProperty("worldRuntimeBootstrap");
+  });
+
+  it("resolves registered Subject proposals through the same exact Host owner without fallback", () => {
+    const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
+    const input = subjectHostInput({ source: "registry", subjectDefinitionRef });
+    const { subject: _subject, ...hostInput } = input;
+    expect(compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "registered", subjectDefinitionRef },
+    }, builtInSubjectResourceRegistry)).toEqual(compileNativeSubjectHostClosureV1(input, builtInSubjectResourceRegistry));
+    for (const subjectDesign of [undefined, { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/missing@1" },
+      { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/glider.paraglider.unpowered@1" },
+      { kind: "registered", subjectDefinitionRef, runtime: {} }]) {
+      const result = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign }, builtInSubjectResourceRegistry);
+      expect(result.ok).toBe(false);
+      expect(result).not.toHaveProperty("worldRuntimeBootstrap");
+    }
+    let executed = false;
+    const accessor = { kind: "registered" };
+    Object.defineProperty(accessor, "subjectDefinitionRef", { enumerable: true, get() { executed = true; return subjectDefinitionRef; } });
+    expect(compileNativeSubjectHostClosureFromDesignV1({ ...hostInput, subjectDesign: accessor }, builtInSubjectResourceRegistry).ok).toBe(false);
+    expect(executed).toBe(false);
+  });
+
+  it.each(["registered", "registered-heavy", "composed"])("uses the actual compiled %s Subject cost in old source accounting", (kind) => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const closure = compileNativeSubjectHostClosureFromDesignV1({ ...hostInput,
+      subjectDesign: kind !== "composed"
+        ? { kind: "registered", subjectDefinitionRef: kind === "registered-heavy"
+            ? "worldkit://subject-definition/xier120.tracked@1"
+            : "worldkit://subject-definition/humanoid.g-bot@2" }
+        : { kind: "composed", definition: nativeComposedDesign() },
+    }, builtInSubjectResourceRegistry);
+    if (!closure.ok) throw new Error("fixture Subject must compile");
+    const before = structuredClone(closure.subjectResourceCost);
+    expect(before.vertices).toBeGreaterThan(0);
+    expect(before.triangles).toBeGreaterThan(0);
+    const accounting = evaluateBlockSourceResourceBudgetV1({
+      sourceBlockCount: 8_000, runtimeClusterCount: 2, solidRuntimeClusterCount: 1,
+      subjectResourceCost: closure.subjectResourceCost,
+    });
+    expect(accounting.usage).toEqual({
+      vertices: before.vertices + 52, triangles: before.triangles + 26, colliders: before.colliders + 2,
+    });
+    expect(accounting.diagnostics).toEqual([]);
+    expect(closure.subjectResourceCost).toEqual(before);
+    if (kind === "registered-heavy") {
+      expect(before.vertices).toBe(172_536);
+      expect(evaluateBlockSourceResourceBudgetV1({
+        sourceBlockCount: 8_000, runtimeClusterCount: 8_000, solidRuntimeClusterCount: 1,
+        subjectResourceCost: closure.subjectResourceCost,
+      }).diagnostics).toMatchObject([{
+        code: "COMPILER_RESOURCE_BUDGET_EXCEEDED", instancePath: "/world/resourceBudget/maxVertices",
+        details: { actual: 364_540, maximum: 342_000 },
+      }]);
+    }
+  });
+
+  it("preserves the old composed Subject part-count, identity and tag policies at Host compilation", () => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "composed", definition },
+    }, builtInSubjectResourceRegistry);
+    const base = nativeComposedDesign();
+    const parts = base.visualParts;
+    expect(compile(base).ok).toBe(true);
+    for (const definition of [
+      { ...base, id: "bad.id" }, { ...base, displayName: " " }, { ...base, description: "\t" },
+      { ...base, semanticClassId: "xx" },
+      { ...base, visualParts: [...parts, parts[0]!] },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, id: "bad.id" } : part) },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, semanticTags: [] } : part) },
+      { ...base, visualParts: parts.map((part, i) => i === 0 ? { ...part, semanticTags: ["x"] } : part) },
+      { ...base, visualParts: Array.from({ length: 49 }, (_, i) => ({ ...parts[i % parts.length]!, id: `part-${i}` })) },
+    ]) {
+      expect(compile(definition)).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_INVALID" })] });
+    }
+    expect(compile({ ...base, visualParts: Array.from({ length: 48 }, (_, i) => ({ ...parts[i % parts.length]!, id: `part-${i}` })) }).ok).toBe(true);
+  });
+
+  it("keeps the old human/biped visual-height and asset-scale limits without applying them to other bodies", () => {
+    const { subject: _subject, ...hostInput } = subjectHostInput({ source: "registry", subjectDefinitionRef: "unused" });
+    const compile = (definition: ComposedSubjectDesignV1) => compileNativeSubjectHostClosureFromDesignV1({
+      ...hostInput, subjectDesign: { kind: "composed", definition },
+    }, builtInSubjectResourceRegistry);
+    const human = nativeComposedDesign();
+    human.category = "human";
+    human.bodyTopology = "biped";
+    const heightDesign = (height: number): ComposedSubjectDesignV1 => ({ ...human, visualParts: [{
+      id: "body", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.4, height, 0.4] },
+      localTransform: { positionMetersXYZ: [0, height / 2, 0] }, colliderContribution: "include", semanticTags: ["body"],
+    }] });
+    for (const height of [1.6, 2.1]) expect(compile(heightDesign(height)).ok).toBe(true);
+    for (const height of [1.59, 2.11]) {
+      expect(compile(heightDesign(height))).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_SCALE_INVALID" })] });
+    }
+    expect(compile({ ...heightDesign(1.4), category: "animal", bodyTopology: "quadruped" }).ok).toBe(true);
+    const rigged = nativeComposedDesign(true);
+    const asset = rigged.visualParts[0]!;
+    if (asset.kind !== "asset") throw new Error("Missing asset fixture.");
+    asset.localTransform.scaleXYZ = [1, 1.26, 1];
+    expect(compile(rigged)).toMatchObject({ ok: false, diagnostics: [expect.objectContaining({ code: "NATIVE_SUBJECT_DESIGN_SCALE_INVALID" })] });
+  });
+
+  it("preserves old Subject policy epsilon and rotated primitive measurements including excluded visual parts", () => {
+    const base = nativeComposedDesign();
+    const shapes = [
+      { kind: "box", sizeMetersXYZ: [1.4, 1.8, 1.4] },
+      { kind: "sphere", radiusMeters: 0.9 },
+      { kind: "cylinder", radiusMeters: 0.8, heightMeters: 1.8 },
+      { kind: "capsule", radiusMeters: 0.8, heightMeters: 1.8 },
+    ] as const;
+    for (const shape of shapes) {
+      for (const tilt of [0, 1e-8, 2e-8, Math.PI / 2]) {
+        const design: ComposedSubjectDesignV1 = { ...base, category: "human", bodyTopology: "biped", visualParts: [{
+          id: "body", kind: "primitive", shape, localTransform: { positionMetersXYZ: [0, 0.9, 0], rotationEulerRadiansXYZ: [tilt, 0, 0] },
+          colliderContribution: "exclude", semanticTags: ["body"],
+        }] };
+        const diagnostics = checkNativeComposedSubjectDesignV1(design);
+        expect(diagnostics.length).toBe(shape.kind === "sphere" || tilt <= 1e-8 ? 0 : 1);
+      }
+    }
+    const asset = nativeComposedDesign(true);
+    const part = asset.visualParts[0]!;
+    if (part.kind !== "asset") throw new Error("Missing asset fixture.");
+    for (const [scale, rejected] of [[1.25, false], [1.25 + 1e-8, false], [1.25 + 2e-8, true]] as const) {
+      part.localTransform.scaleXYZ = [1, scale, 1];
+      expect(checkNativeComposedSubjectDesignV1(asset).length > 0).toBe(rejected);
+    }
+  });
+
+  it("validates package Subject data with the existing schema before compilation", () => {
+    const definition = createValidPackageSubjectWorldV4().resources.subjectDefinitions[0]!;
+    const part = definition.visualParts[0]!;
+    if (part.kind !== "primitive" || part.shape.kind !== "box") throw new Error("Missing body fixture.");
+    part.shape.sizeMetersXYZ = [-1, 0.7, 1.4];
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }), builtInSubjectResourceRegistry);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Malformed Subject was compiled.");
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty("worldRuntimeBootstrap");
+  });
+
+  it("rejects accessor-bearing Subject data without executing the accessor", () => {
+    const definition = createValidPackageSubjectWorldV4().resources.subjectDefinitions[0]!;
+    let executed = false;
+    Object.defineProperty(definition.visualParts[0]!, "shape", {
+      enumerable: true,
+      get() { executed = true; throw new Error("untrusted accessor"); },
+    });
+    const result = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "package", definition }), builtInSubjectResourceRegistry);
+    expect(executed).toBe(false);
+    expect(result).toMatchObject({ ok: false, diagnostics: [{ code: "NATIVE_SUBJECT_HOST_INPUT_INVALID" }] });
+  });
+
+  it("binds changed package silhouette to Runtime, locks and proxy without mutating the prior closure", () => {
+    const definition = createValidPackageSubjectWorldV4().resources.subjectDefinitions[0]!;
+    const options = subjectHostInput({ source: "package", definition });
+    const first = compileNativeSubjectHostClosureV1(options, builtInSubjectResourceRegistry);
+    if (!first.ok) throw new Error(JSON.stringify(first.diagnostics));
+    const firstBytes = stringifyCanonicalJson(first);
+    definition.visualParts[0]!.localTransform.positionMetersXYZ = [3, 1, -2];
+    const second = compileNativeSubjectHostClosureV1(options, builtInSubjectResourceRegistry);
+    if (!second.ok) throw new Error(JSON.stringify(second.diagnostics));
+    expect(stringifyCanonicalJson(first)).toBe(firstBytes);
+    expect(second.worldRuntimeBootstrap.contentHash).not.toBe(first.worldRuntimeBootstrap.contentHash);
+    expect(second.registryLock).not.toEqual(first.registryLock);
+    expect(second.gameplayBootstrap.contentHash).toBe(first.gameplayBootstrap.contentHash);
+    const proxies = [first, second].map((closure) => deriveNativeBlockSubjectVisualReviewProxyV1({
+      worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
+      worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
+    }, builtInSubjectResourceRegistry));
+    expect(proxies[1]!.subjectDefinitionHash).not.toBe(proxies[0]!.subjectDefinitionHash);
+    expect(proxies[1]!.subjectRuntimeDescriptorHash).not.toBe(proxies[0]!.subjectRuntimeDescriptorHash);
+    expect(proxies[1]!.cuboids).not.toEqual(proxies[0]!.cuboids);
+    const { contentHash: _runtimeHash, ...runtimeBody } = first.worldRuntimeBootstrap;
+    const wrongLock = createWorldRuntimeBootstrapV1({
+      ...runtimeBody,
+      runtimeResourceLockEntries: first.worldRuntimeBootstrap.runtimeResourceLockEntries.map((entry) =>
+        entry.resourceRef.startsWith("package://subject-definition/") ? { ...entry, contentHash: hash("e") } : entry),
+    });
+    expect(() => deriveNativeBlockSubjectVisualReviewProxyV1({
+      worldRuntimeBootstrap: wrongLock,
+      worldRuntimeBootstrapRef: first.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(wrongLock))) as Sha256HashV1,
+    }, builtInSubjectResourceRegistry)).toThrow(/Subject definition Registry closure failed/);
+  });
+
+  it.each(["registered", "registered-primitive", "primitive", "rigged", "designed-primitive", "designed-rigged"] as const)(
+    "compiles a %s Host Subject closure without the Cloud Ridge world",
+    async (kind) => {
+      const value = await fixture();
+      try {
+        const base = input(value);
+        const sourceWorld = kind === "rigged" || kind === "designed-rigged"
+          ? createValidRiggedPackageSubjectWorldV4()
+          : createValidPackageSubjectWorldV4();
+        if (kind === "designed-primitive" || kind === "designed-rigged") {
+          const composed = compileNativeComposedSubjectDefinitionV1(nativeComposedDesign(kind === "designed-rigged"));
+          if (!composed.ok || composed.value === undefined) throw new Error(JSON.stringify(composed.diagnostics));
+          sourceWorld.resources.subjectDefinitions = [composed.value];
+        }
+        const definition = sourceWorld.resources.subjectDefinitions[0]!;
+        const selectedSubject = kind === "registered" || kind === "registered-primitive"
+          ? { source: "registry" as const, subjectDefinitionRef: kind === "registered"
+              ? "worldkit://subject-definition/humanoid.g-bot@2"
+              : "worldkit://subject-definition/quadruped.ground-proxy@1" }
+          : { source: "package" as const, definition };
+        const closureInput = {
+          ...subjectHostInput(selectedSubject),
+          worldId: base.case.id,
+          seed: base.seed,
+          resourceBudget: sourceWorld.world.resourceBudget,
+        };
+        const original = structuredClone(closureInput);
+        const { subject: _subject, ...designHostInput } = closureInput;
+        const closure = kind === "designed-primitive" || kind === "designed-rigged"
+          ? compileNativeSubjectHostClosureFromDesignV1({
+            ...designHostInput,
+            subjectDesign: { kind: "composed", definition: nativeComposedDesign(kind === "designed-rigged") },
+          }, builtInSubjectResourceRegistry)
+          : compileNativeSubjectHostClosureV1(closureInput, builtInSubjectResourceRegistry);
+        expect(closure.ok).toBe(true);
+        if (!closure.ok) throw new Error(JSON.stringify(closure.diagnostics));
+        expect(closureInput).toEqual(original);
+        expect(compileNativeSubjectHostClosureV1(closureInput, builtInSubjectResourceRegistry)).toEqual(closure);
+        const expectedRef = selectedSubject.source === "registry"
+          ? selectedSubject.subjectDefinitionRef
+          : `package://subject-definition/${definition.id}@${definition.version}`;
+        const subject = closure.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+        expect(subject.subjectDefinitionRef).toBe(expectedRef);
+        expect(subject.entityId).toBe("requested-subject");
+        expect(closure.gameplayBootstrap.entityDescriptors).toEqual([
+          expect.objectContaining({ id: subject.entityId, entityDefinitionRef: expectedRef }),
+        ]);
+        expect(closure.worldRuntimeBootstrap.initialCamera).toEqual({
+          ...closureInput.initialCamera,
+          cameraRigProfileRef: subject.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
+          targetEntityId: "requested-subject",
+        });
+        if (selectedSubject.source === "package") {
+          const normalized = normalizeAuthoringSpecV4(sourceWorld);
+          if (!normalized.ok || normalized.value === undefined) throw new Error(JSON.stringify(normalized.diagnostics));
+          const expected = normalized.value.resources.subjectDefinitions.find((row) => row.subjectDefinitionRef === expectedRef)!;
+          expect(subject.subjectDefinitionHash).toBe(expected.subjectDefinitionHash);
+          expect(subject.visualParts.map((part) => part.id)).toEqual(expected.visualParts.map((part) => part.id));
+          expect(subject.collider).toEqual(expected.collider);
+          expect(closure.subjectResourceCost).toEqual(expected.resourceCost);
+        }
+        const proxy = deriveNativeBlockSubjectVisualReviewProxyV1({
+          worldRuntimeBootstrap: closure.worldRuntimeBootstrap,
+          worldRuntimeBootstrapRef: closure.worldRuntimeBootstrapRef,
+          worldRuntimeBootstrapBytesHash: sha256Bytes(new TextEncoder().encode(stringifyCanonicalJson(closure.worldRuntimeBootstrap))) as Sha256HashV1,
+        }, builtInSubjectResourceRegistry);
+        expect(proxy.subjectDefinitionHash).toBe(subject.subjectDefinitionHash);
+        expect(proxy.subjectRuntimeDescriptorHash).toBe(sha256CanonicalJson(subject));
+        expect(proxy.worldRuntimeBootstrapContentHash).toBe(closure.worldRuntimeBootstrap.contentHash);
+        expect(proxy.cuboids.length).toBeGreaterThan(0);
+      } finally {
+        await rm(value.root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("freezes the same static Collider budget used by Native admission", () => {
     expect({
       maximumStaticColliderCount:
@@ -514,6 +972,64 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
+  it("freezes the Host-selected current Builder tools without changing accepted Case inputs or an earlier Attempt", async () => {
+    const value = await fixture();
+    const currentRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-current-builder-tools-"));
+    try {
+      const old = await prepareNativeBlockGenerationTaskV1(input(value));
+      const oldRendererPath = path.join(old.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs");
+      const oldRenderer = await readFile(oldRendererPath);
+      await cp(path.join(value.inputDirectory, "builder-skill"), currentRoot, { recursive: true });
+      const liveRendererPath = path.join(currentRoot, "scripts/render-visual-review.mjs");
+      const currentRenderer = Buffer.concat([oldRenderer, Buffer.from("\n// current-sdk-tool\n")]);
+      await writeFile(liveRendererPath, currentRenderer);
+      const current = await prepareNativeBlockGenerationTaskV1({
+        ...input(value), runId: "current-tools", runDirectoryPath: path.join(value.root, "runs/current-tools"),
+        builderSkillPath: path.join(currentRoot, "SKILL.md"),
+      });
+      expect(await readFile(path.join(current.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs"))).toEqual(currentRenderer);
+      expect(current.generationRequest.contextInputs).toContainEqual({
+        inputRef: "inputs/builder-skill/scripts/render-visual-review.mjs", contentHash: sha256Bytes(currentRenderer),
+      });
+      await writeFile(liveRendererPath, "later mutation");
+      expect(await readFile(path.join(current.taskWorkspacePath, "inputs/builder-skill/scripts/render-visual-review.mjs"))).toEqual(currentRenderer);
+      expect(await readFile(oldRendererPath)).toEqual(oldRenderer);
+      expect(await readFile(path.join(value.inputDirectory, "builder-skill/scripts/render-visual-review.mjs"))).toEqual(oldRenderer);
+      expect(current.generationRequest.referenceInputs).toEqual(old.generationRequest.referenceInputs);
+      const instruction = await readFile(path.join(current.taskWorkspacePath, current.generationRequest.taskInstructionRef), "utf8");
+      expect(instruction).toContain("Read inputs/builder-skill/SKILL.md");
+      expect(instruction).not.toBe(await readFile(path.join(value.inputDirectory, "instruction.md"), "utf8"));
+    } finally {
+      await Promise.all([rm(value.root, { recursive: true, force: true }), rm(currentRoot, { recursive: true, force: true })]);
+    }
+  });
+
+  it.each(["tool-root", "skill-file", "renderer-ancestor"])("rejects a symlinked current Builder %s before freezing an Attempt", async mode => {
+    const value = await fixture();
+    const currentRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-current-builder-links-"));
+    try {
+      const skillRoot = path.join(currentRoot, "builder");
+      await cp(path.join(value.inputDirectory, "builder-skill"), skillRoot, { recursive: true });
+      let selectedRoot = skillRoot;
+      if (mode === "tool-root") {
+        selectedRoot = path.join(currentRoot, "linked-builder");
+        await symlink(skillRoot, selectedRoot);
+      } else if (mode === "skill-file") {
+        await rename(path.join(skillRoot, "SKILL.md"), path.join(skillRoot, "original.md"));
+        await symlink(path.join(skillRoot, "original.md"), path.join(skillRoot, "SKILL.md"));
+      } else {
+        await rename(path.join(skillRoot, "scripts"), path.join(skillRoot, "original-scripts"));
+        await symlink(path.join(skillRoot, "original-scripts"), path.join(skillRoot, "scripts"));
+      }
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value), builderSkillPath: path.join(selectedRoot, "SKILL.md"),
+      })).rejects.toThrow(/symbolic.link|canonical/i);
+      await expect(lstat(path.join(value.root, "runs/initial/attempts/0"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await Promise.all([rm(value.root, { recursive: true, force: true }), rm(currentRoot, { recursive: true, force: true })]);
+    }
+  });
+
   it("freezes one canonical native request with three source and two advisory router outputs", async () => {
     const value = await fixture();
     try {
@@ -583,55 +1099,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         sha256Bytes(prepared.bootstrapBytes),
       );
       expect(new TextDecoder().decode(prepared.bootstrapBytes)).not.toMatch(/\n$/);
-      const subjectVisualReviewProxy =
-        parseNativeBlockSubjectVisualReviewProxyV1(JSON.parse(
-          new TextDecoder().decode(prepared.subjectVisualReviewProxyBytes),
-        ));
-      const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(
-        new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes),
-      ));
-      const controlledSubject = runtime.subjectRuntimeDescriptors.find(
-        ({ entityId }) => entityId === runtime.initialControlledEntityId,
-      )!;
-      expect(subjectVisualReviewProxy).toEqual(prepared.subjectVisualReviewProxy);
-      expect(subjectVisualReviewProxy).toMatchObject({
-        initialControlledEntityId: runtime.initialControlledEntityId,
-        subjectDefinitionRef: controlledSubject.subjectDefinitionRef,
-        subjectDefinitionHash: controlledSubject.subjectDefinitionHash,
-        subjectRuntimeDescriptorHash: sha256CanonicalJson(controlledSubject),
-        worldRuntimeBootstrapRef:
-          "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-        worldRuntimeBootstrapContentHash: runtime.contentHash,
-        worldRuntimeBootstrapBytesHash:
-          sha256Bytes(prepared.worldRuntimeBootstrapBytes),
-      });
-      expect(subjectVisualReviewProxy.cuboids).toHaveLength(1);
-      expect(subjectVisualReviewProxy.cuboids[0]!.id).toBe("body.asset");
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[0])
-        .toBeCloseTo(-0.9025658369064331, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[0])
-        .toBeCloseTo(0.9025661945343018, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[1])
-        .toBeCloseTo(-0.0003511549439281225, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[1])
-        .toBeCloseTo(1.8088831901550293, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.minimumMetersXYZ[2])
-        .toBeCloseTo(-0.17174167931079876, 12);
-      expect(subjectVisualReviewProxy.cuboids[0]!.maximumMetersXYZ[2])
-        .toBeCloseTo(0.14895710349082958, 12);
+      expect(JSON.parse(new TextDecoder().decode(prepared.subjectHostContextBytes))).toEqual(prepared.subjectHostContext);
+      expect(prepared.subjectHostContext.resources.length).toBeGreaterThan(0);
       expect(prepared.bootstrap).toMatchObject({
-        gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot-subject-world.8201@1",
-        initialControlledEntityId: "g-bot-primary",
+        gameplayBootstrapRef: "worldkit://gameplay-bootstrap/cloud-temple-t-gate-native-block.17@1",
+        initialControlledEntityId: "cloud-temple-t-gate-native-block-subject",
         spawnMarkerId: "spawn",
         seed: 17,
       });
       expect(prepared.generationRequest.contextInputs.map((entry) => entry.inputRef)).toEqual(
         expect.arrayContaining([
-          "inputs/gameplay-bootstrap.json",
-          "inputs/world-runtime-bootstrap.json",
-          "inputs/subject-visual-review-proxy.json",
-          "inputs/world-bounds.json",
-          "inputs/registry-lock.json",
+          "inputs/subject-host-context.json",
+          "inputs/world-bounds-policy.json",
           "inputs/builder-skill/scripts/render-visual-review.mjs",
         ]),
       );
@@ -639,21 +1118,19 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         resolveWorldReconstructionFrozenOwnerIdentitiesV1({
           reconstructionCase: input(value).case,
           evaluationProfile: input(value).profile,
-          gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
-          worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
-          worldBounds: JSON.parse(new TextDecoder().decode(prepared.worldBoundsBytes)),
+          subjectHostContext: prepared.subjectHostContext,
+          worldBoundsPolicy: JSON.parse(new TextDecoder().decode(prepared.worldBoundsPolicyBytes)),
           bootstrap: prepared.bootstrap,
         }),
       );
       expect(() => resolveWorldReconstructionFrozenOwnerIdentitiesV1({
         reconstructionCase: input(value).case,
         evaluationProfile: input(value).profile,
-        gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
-        worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
-        worldBounds: JSON.parse(new TextDecoder().decode(prepared.worldBoundsBytes)),
+        subjectHostContext: prepared.subjectHostContext,
+        worldBoundsPolicy: JSON.parse(new TextDecoder().decode(prepared.worldBoundsPolicyBytes)),
         bootstrap: {
           ...prepared.bootstrap,
-          gravityMetersPerSecondSquaredXYZ: [0, -1, 0],
+          gameplayBootstrapRef: "worldkit://gameplay-bootstrap/changed@1",
         },
       })).toThrowError("World reconstruction frozen owner identity closure failed");
       for (const contextInput of prepared.generationRequest.contextInputs) {
@@ -664,16 +1141,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       const durableRoute = JSON.parse(await readFile(path.join(attemptRoot, "scene-authoring-route-decision.json"), "utf8"));
       const durableRequest = JSON.parse(await readFile(path.join(attemptRoot, "generation-request.json"), "utf8"));
       const durableAttempt = JSON.parse(await readFile(path.join(attemptRoot, "attempt.json"), "utf8"));
-      const hostClosure = JSON.parse(await readFile(path.join(attemptRoot, "inputs", "host-closure.json"), "utf8"));
+      const hostContext = JSON.parse(await readFile(path.join(attemptRoot, "inputs", "subject-host-context.json"), "utf8"));
       expect(sha256CanonicalJson(durableRoute)).toBe(prepared.generationRequest.routeDecisionHash);
       expect(durableRequest).toEqual(prepared.generationRequest);
       expect(durableAttempt).toEqual(prepared.attempt);
-      expect(hostClosure).toMatchObject({
-        kind: "native-block-generation-host-closure",
-        worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-        worldRuntimeBootstrapResolvedVersion: "1",
-        worldRuntimeBootstrapHash: prepared.hostClosure.worldRuntimeBootstrapHash,
-      });
+      expect(hostContext).toEqual(prepared.subjectHostContext);
       await rm(prepared.taskWorkspacePath, { recursive: true, force: false });
       // Cleanup may remove the disposable task, but not any frozen input needed
       // for an explicit Host replay of this same dispatch.
@@ -708,11 +1180,10 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         const descriptor = JSON.parse(new TextDecoder().decode(durableDescriptorBytes));
         expect(descriptor).toMatchObject({ resourceRef: expectedRef, contentHash: expectedHash });
       }
-      expect(JSON.parse(await readFile(path.join(attemptRoot, "inputs", "host-closure.json"), "utf8"))).toEqual(hostClosure);
       expect(await readFile(path.join(
         attemptRoot,
-        "inputs/subject-visual-review-proxy.json",
-      ))).toEqual(Buffer.from(prepared.subjectVisualReviewProxyBytes));
+        "inputs/subject-host-context.json",
+      ))).toEqual(Buffer.from(prepared.subjectHostContextBytes));
       for (const relativePath of [
         "builder-skill/scripts/render-visual-review.mjs",
         "entry-whitebox-target.png",
@@ -843,6 +1314,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "inputs/attempts/0/attempt-result.json",
         "inputs/attempts/0/evaluation.json",
         "inputs/attempts/0/capture/opening.png",
+        "inputs/attempts/0/capture/world-side.png",
+        "inputs/attempts/0/capture/world-top-down.png",
+        "inputs/attempts/0/capture/opening-identity-mask.png",
+        "inputs/attempts/0/capture/world-side-identity-mask.png",
+        "inputs/attempts/0/capture/world-top-down-identity-mask.png",
+        "inputs/attempts/0/capture/semantic-view-observation-set.json",
         "inputs/attempts/0/capture/opening-observation.json",
         "inputs/attempts/0/capture/collider-overlay.png",
         "inputs/attempts/0/capture/collider-overlay-observation.json",
@@ -888,10 +1365,10 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "never stop after fixing only the largest drift row",
       );
       expect(repairTaskInstruction).toContain(
-        "A target edge clipped at 0 or 10000 means the target extends beyond the captured frame",
+        "a boundary at 0 or 10000 alone does not prove clipping",
       );
       expect(repairTaskInstruction).toContain(
-        "add mass at comparable camera depth and height",
+        "Pixel drift uses adjust-geometry, not an assumed resize or move",
       );
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
         attempt1.generationRequest.taskInstructionHash,
@@ -917,6 +1394,62 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }
+  });
+
+  it("freezes rejected identity pixels for Opening repair and rejects a missing mask", async () => {
+    const value = await fixture();
+    try {
+      const runId = "opening-pixel-repair";
+      const runDirectoryPath = path.join(value.root, "runs", runId);
+      const initial = await prepareNativeBlockGenerationTaskV1({ ...input(value), runId, runDirectoryPath });
+      const priorAttemptRoot = path.join(runDirectoryPath, "attempts", "0");
+      const priorSourceRef = "artifact://run/attempts/0/source";
+      const priorSourceHash = hash("d");
+      await writePriorRepairContext(priorAttemptRoot, {
+        sceneAuthoringAttemptRef: `worldkit://scene-authoring-attempt/${initial.attempt.id}@1`,
+        sceneAuthoringAttemptHash: initial.attemptHash, priorSourceRef, priorSourceHash, evaluationText: "{}",
+      });
+      const rejectedRoot = path.join(priorAttemptRoot, "rejected-capture");
+      await cp(path.join(priorAttemptRoot, "capture"), rejectedRoot, { recursive: true });
+      const gate = { kind: "worldkit-opening-composition-host-gate", schemaVersion: 1, status: "failed", diagnostics: [] };
+      await writeFile(path.join(rejectedRoot, "opening-composition-gate-result.json"), stringifyCanonicalJson(gate));
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        priorAttemptIndex: 0, nextAttemptIndex: 1, priorSourceRef, priorSourceHash,
+        diagnostics: [parseWorldReconstructionDiagnosticV1({
+          kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: "opening-pixel-drift",
+          code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT", dimensionId: "opening-composition",
+          acceptanceTargetRef: "worldkit://acceptance-target/gate@1", targetRef: "worldkit://composition-target/opening@1",
+          targetId: "gate-group", metricId: "opening-region-min-x-basis-points",
+          details: { kind: "basis-points-threshold", expectedBasisPoints: 100, actualBasisPoints: 500,
+            maximumAllowedDriftBasisPoints: 100, exceededByBasisPoints: 300, correctionDirection: "decrease" },
+          evidenceRefs: ["artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json"],
+          message: "Opening visible pixels drift from reference.",
+          repairAction: { kind: "revise-native-source", targetKind: "composition-target", targetId: "gate-group",
+            operation: "adjust-geometry", instruction: "Compare identity and display pixels; preserve holes and occlusion." },
+        })],
+        priorEvidence: { kind: "opening-composition-gate-result",
+          resultRef: "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+          resultHash: sha256CanonicalJson(gate) as Sha256HashV1 },
+        priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
+        priorGenerationRequestHash: initial.generationRequestHash, frozenOwnerIdentities: initial.frozenOwnerIdentities,
+      });
+      const removedPath = path.join(rejectedRoot, "opening-identity-mask.png");
+      const maskBytes = await readFile(removedPath);
+      await rm(removedPath);
+      const nextInput = { ...input(value), runId, runDirectoryPath, attemptIndex: 1 as const, repairInstruction };
+      await expect(prepareNativeBlockGenerationTaskV1(nextInput)).rejects.toThrow();
+      await writeFile(removedPath, maskBytes);
+      const repaired = await prepareNativeBlockGenerationTaskV1(nextInput);
+      for (const name of ["opening-identity-mask.png", "world-side-identity-mask.png",
+        "world-top-down-identity-mask.png", "semantic-view-observation-set.json"]) {
+        const inputRef = `inputs/attempts/0/rejected-capture/${name}`;
+        const context = repaired.generationRequest.contextInputs.find((entry) => entry.inputRef === inputRef);
+        expect(context).toBeDefined();
+        const frozenBytes = await readFile(path.join(repaired.taskWorkspacePath, inputRef));
+        expect(frozenBytes).toEqual(await readFile(path.join(rejectedRoot, name)));
+        expect(sha256Bytes(frozenBytes)).toBe(context?.contentHash);
+      }
+    } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 
   it("freezes Ground Analysis evidence without inventing Capture inputs for Attempt 1", async () => {
@@ -1266,13 +1799,16 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
-  it("rejects a World Runtime Bootstrap identity not admitted by the selected Registry Lock", async () => {
+  it("rejects a frozen Registry resource whose bytes do not match its lock", async () => {
     const value = await fixture();
     try {
+      const requestInput = input(value);
+      const context = structuredClone(requestInput.subjectHostContext);
+      const forged = { ...context, resources: context.resources.map((resource, index) =>
+        index === 0 ? { ...resource, contentHash: hash("0") } : resource) };
       await expect(prepareNativeBlockGenerationTaskV1({
-        ...input(value),
-        worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/not-admitted@1",
-      })).rejects.toThrow(/not admitted/i);
+        ...requestInput, subjectHostContext: forged,
+      })).rejects.toThrow(/Registry resource hash mismatch/i);
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }
@@ -1283,11 +1819,11 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const externalInput = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-external-input-"));
     const externalOutput = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-external-output-"));
     try {
-      await writeFile(path.join(externalInput, "instruction.md"), "outside\n");
+      await writeFile(path.join(externalInput, "native-scene-api.json"), "outside\n");
       await symlink(externalInput, path.join(value.inputDirectory, "linked"));
       await expect(prepareNativeBlockGenerationTaskV1({
         ...input(value),
-        taskInstructionPath: path.join(value.inputDirectory, "linked", "instruction.md"),
+        nativeSceneApiPath: path.join(value.inputDirectory, "linked", "native-scene-api.json"),
       })).rejects.toThrow(/symbolic link|canonical|outside/i);
 
       await symlink(externalOutput, path.join(value.root, "linked-runs"));
@@ -1508,63 +2044,149 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
-  it("derives Bootstrap only from closed Host owners and rejects a Gameplay crosswire", async () => {
-    const packageRoot = path.resolve("apps/playground/public/world-packages/cloud-ridge");
-    const gameplay = parseGameplayBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "gameplay/bootstrap.json"), "utf8")));
-    const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "runtime/world-runtime-bootstrap.json"), "utf8")));
-    const value = await fixture();
-    try {
-      const preparedInput = input(value);
-      const { contentHash: _contentHash, ...gameplayBody } = gameplay;
-      const mismatchedGameplay = createGameplayBootstrapV1({
-        ...gameplayBody,
-        resourceRef: "worldkit://gameplay-bootstrap/crosswired@1",
-      });
-      expect(() => deriveNativeBlockGenerationBootstrapV1({
-        reconstructionCase: preparedInput.case,
-        gameplayBootstrap: mismatchedGameplay,
-        worldRuntimeBootstrap: runtime,
-        worldBounds: preparedInput.worldBounds,
-        bootstrapId: preparedInput.bootstrapId,
-        sceneModuleRef: preparedInput.sceneModuleRef,
-        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-        nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
-        seed: preparedInput.seed,
-      })).toThrow(/owner closure/i);
-    } finally {
-      await rm(value.root, { recursive: true, force: true });
+
+  it("freezes a compiled Hosted catalog without removing SDK-only humanoid fixtures from the Registry", () => {
+    const context = createNativeSubjectHostContextV1("catalog-test", "camera-main");
+    const { subjects, rejectedSubjects } = context.authoringCatalog;
+    const definitions = builtInSubjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" });
+    expect([...subjects, ...rejectedSubjects].map(({ subjectDefinitionRef }) => subjectDefinitionRef).sort())
+      .toEqual(definitions.map(({ resourceRef }) => resourceRef).sort());
+    const proxyRef = "worldkit://subject-definition/humanoid.third-person@1";
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === proxyRef)).toBe(false);
+    expect(rejectedSubjects.find(({ subjectDefinitionRef }) => subjectDefinitionRef === proxyRef)?.diagnostics)
+      .toMatchObject([{ code: "NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED" }]);
+    expect(context.resources.some(({ resourceRef }) => resourceRef === proxyRef)).toBe(true);
+    expect(compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: proxyRef }), builtInSubjectResourceRegistry).ok).toBe(true);
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/humanoid.g-bot@2")).toBe(true);
+    expect(subjects.some(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/quadruped.ground-proxy@1")).toBe(true);
+    for (const row of subjects) {
+      const compiled = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: row.subjectDefinitionRef }), builtInSubjectResourceRegistry);
+      if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+      const actual = compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+      expect(row.subjectDefinitionHash).toBe(actual.subjectDefinitionHash);
+      expect(row.collider).toEqual(actual.collider);
+      expect(row.cameraContext).toEqual(actual.capabilityAssembly.cameraContext);
+      expect(row.visualReviewProxy.cuboids.length).toBeGreaterThan(0);
+    }
+    expect(createNativeSubjectHostContextV1("catalog-test", "camera-main")).toEqual(context);
+    const forged = structuredClone(context);
+    Object.assign(forged.authoringCatalog.subjects[0]!, { executableMovementModes: ["flight"] });
+    expect(() => parseNativeSubjectHostContextV1(forged)).toThrow(/catalog differs from its frozen Registry/);
+    const missing = structuredClone(context);
+    Object.assign(missing.authoringCatalog, { subjects: [] });
+    expect(() => parseNativeSubjectHostContextV1(missing)).toThrow(/catalog differs from its frozen Registry/);
+  });
+
+  it("preserves the old registered Subject advisory center without rotating its asset-bound offset", () => {
+    // Literal 9e35ab53 agent-authoring-catalog.json G Bot proxy; this is the
+    // old software-review approximation, not a new Runtime transform oracle.
+    const row = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry).subjects
+      .find(({ subjectDefinitionRef }) => subjectDefinitionRef === "worldkit://subject-definition/humanoid.g-bot@2")!;
+    const proxy = row.visualReviewProxy.cuboids[0]!;
+    const minimum = [-0.9025661945343018, -0.0003511549439281225, -0.14895710349082958];
+    const maximum = [0.9025658369064331, 1.8088831901550293, 0.17174167931079876];
+    for (let axis = 0; axis < 3; axis += 1) {
+      expect(proxy.minimumMetersXYZ[axis]).toBeCloseTo(minimum[axis]!, 10);
+      expect(proxy.maximumMetersXYZ[axis]).toBeCloseTo(maximum[axis]!, 10);
     }
   });
 
-  it("rejects multiple Runtime Subjects before deriving the Native projection", async () => {
-    const packageRoot = path.resolve("apps/playground/public/world-packages/cloud-ridge");
-    const gameplay = parseGameplayBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "gameplay/bootstrap.json"), "utf8")));
-    const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(await readFile(path.join(packageRoot, "runtime/world-runtime-bootstrap.json"), "utf8")));
+  it("preserves old registered advisory XYZ rotation and scale without changing the compiled visual transform", () => {
+    const resources = structuredClone(builtInSubjectResourceRegistry.listDiscoverableResources().map(({ contentHash: _hash, ...resource }) =>
+      resource as SubjectRegistryResourceInputV3));
+    const ref = "worldkit://subject-definition/humanoid.g-bot@2";
+    const definition = resources.find(resource => resource.kind === "subject-definition" && resource.resourceRef === ref);
+    if (definition?.kind !== "subject-definition") throw new Error("G Bot fixture missing");
+    const part = definition.visualParts[0]!;
+    const transform = { positionMetersXYZ: [1.2, 0.5, -1.1], rotationEulerRadiansXYZ: [0.2, 0.4, -0.3], scaleXYZ: [1.2, 0.8, 0.9] };
+    Object.assign(part, { localTransform: transform });
+    const registry = createSubjectResourceRegistry(resources);
+    const row = createNativeSubjectAuthoringCatalogV1(registry).subjects.find(subject => subject.subjectDefinitionRef === ref)!;
+    // Executed 9e35ab53 scripts/lib/agent-authoring-catalog.ts visualProxy on
+    // this exact registered definition. Multi-axis rotation is XYZ, not YXZ.
+    const minimum = [-0.06026366106754155, 0.22389626699974852, -1.7742169049538743];
+    const maximum = [2.460263231914099, 2.2229293611691325, -0.40527697680815344];
+    for (let axis = 0; axis < 3; axis += 1) {
+      expect(row.visualReviewProxy.cuboids[0]!.minimumMetersXYZ[axis]).toBeCloseTo(minimum[axis]!, 10);
+      expect(row.visualReviewProxy.cuboids[0]!.maximumMetersXYZ[axis]).toBeCloseTo(maximum[axis]!, 10);
+    }
+    const compiled = compileNativeSubjectHostClosureV1(subjectHostInput({ source: "registry", subjectDefinitionRef: ref }), registry);
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!.visualParts[0]!.localTransform).toEqual(transform);
+  });
+
+  it("isolates catalog cache callers and invalidates it when a dependent Camera Profile changes", () => {
+    const baseline = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry);
+    const caller = createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry);
+    Object.assign(caller.subjects[0]!.cameraContext, { defaultCameraRigProfileRef: "forged" });
+    expect(createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry)).toEqual(baseline);
+    const resources = structuredClone(builtInSubjectResourceRegistry.listDiscoverableResources().map(({ contentHash: _hash, ...resource }) =>
+      resource as SubjectRegistryResourceInputV3));
+    const usedProfile = baseline.subjects.flatMap(({ cameraContext }) => cameraContext.cameraRigProfiles)
+      .find(({ parameters }) => typeof parameters.baseFovDegrees === "number");
+    const profile = resources.find((resource) => resource.kind === "camera-rig-profile" && resource.resourceRef === usedProfile?.resourceRef);
+    if (profile === undefined || profile.kind !== "camera-rig-profile") throw new Error("Camera Profile fixture missing");
+    const baseFovDegrees = Number(profile.parameters.baseFovDegrees) + 1;
+    Object.assign(profile.parameters, { baseFovDegrees });
+    const changed = createNativeSubjectAuthoringCatalogV1(createSubjectResourceRegistry(resources));
+    const consumers = changed.subjects.flatMap(({ cameraContext }) => cameraContext.cameraRigProfiles)
+      .filter(({ resourceRef }) => resourceRef === profile.resourceRef);
+    expect(consumers.length).toBeGreaterThan(0);
+    for (const consumer of consumers) expect(consumer.parameters.baseFovDegrees).toBe(baseFovDegrees);
+    expect(changed).not.toEqual(baseline);
+    expect(createNativeSubjectAuthoringCatalogV1(builtInSubjectResourceRegistry)).toEqual(baseline);
+  });
+
+  it.each(["registered", "composed", "rigged"] as const)("compiles output-selected %s from actual frozen Native Request inputs", async (kind) => {
     const value = await fixture();
     try {
-      const preparedInput = input(value);
-      const { contentHash: _contentHash, ...runtimeBody } = runtime;
-      const multipleSubjects = createWorldRuntimeBootstrapV1({
-        ...runtimeBody,
-        subjectRuntimeDescriptors: [
-          ...runtime.subjectRuntimeDescriptors,
-          { ...runtime.subjectRuntimeDescriptors[0]!, entityId: "secondary-subject" },
-        ],
-      });
-      expect(() => deriveNativeBlockGenerationBootstrapV1({
-        reconstructionCase: preparedInput.case,
-        gameplayBootstrap: gameplay,
-        worldRuntimeBootstrap: multipleSubjects,
-        worldBounds: preparedInput.worldBounds,
-        bootstrapId: preparedInput.bootstrapId,
-        sceneModuleRef: preparedInput.sceneModuleRef,
-        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-        nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
-        seed: preparedInput.seed,
-      })).toThrow(/owner closure/i);
-    } finally {
-      await rm(value.root, { recursive: true, force: true });
-    }
+      const requestInput = input(value);
+      const prepared = await prepareNativeBlockGenerationTaskV1(requestInput);
+      const authoring = {
+        kind: "native-block-authoring", schemaVersion: 1, entryModulePath: "scene.ts",
+        blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1", visualGroups: [],
+        groundExploration: { mode: "case-defined" }, openingCamera: prepared.bootstrap.initialCamera,
+        controlledSubject: { visualTargetId: "visual-target-1", design: kind === "registered"
+          ? { kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/quadruped.ground-proxy@1" }
+          : { kind: "composed", definition: nativeComposedDesign(kind === "rigged") } },
+      };
+      const frozen = JSON.parse(await readFile(path.join(prepared.taskWorkspacePath, "inputs/subject-host-context.json"), "utf8"));
+      expect(frozen.authoringCatalog).toEqual(prepared.subjectHostContext.authoringCatalog);
+      const closure = resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap, authoring });
+      const descriptor = closure.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+      expect(descriptor.entityId).toBe(prepared.bootstrap.initialControlledEntityId);
+      expect(descriptor.subjectDefinitionRef).toBe(kind === "registered"
+        ? "worldkit://subject-definition/quadruped.ground-proxy@1"
+        : `package://subject-definition/${nativeComposedDesign(kind === "rigged").id}@1`);
+      expect(closure.gameplayBootstrap.resourceRef).toBe(prepared.bootstrap.gameplayBootstrapRef);
+      expect(closure.executableMovementModes).toEqual(["ground-walk"]);
+      expect(checkNativeSubjectHostedSelectionV1(closure, ["ground-walk"])).toEqual([]);
+      const requestedModes = ["flight", "ground-walk", "ground-ride", "ground-drive", "water-surface", "underwater", "ground-slide", "custom"] as const;
+      expect(checkNativeSubjectHostedSelectionV1(closure, requestedModes)).toMatchObject([{
+        code: "NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED", instancePath: "/controlledSubject",
+        details: { requestedMovementModes: requestedModes,
+          executableMovementModes: ["ground-walk"],
+          missingMovementModes: requestedModes.filter((mode) => mode !== "ground-walk"),
+        },
+      }]);
+      expect(closure.subjectVisualReviewProxy.subjectDefinitionHash).toBe(descriptor.subjectDefinitionHash);
+      expect(closure.subjectVisualReviewProxy.worldRuntimeBootstrapBytesHash).toBe(sha256Bytes(closure.worldRuntimeBootstrapBytes));
+      expect(resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap, authoring })).toEqual(closure);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen,
+        bootstrap: { ...prepared.bootstrap, gameplayBootstrapRef: "worldkit://gameplay-bootstrap/crosswired@1" }, authoring,
+      })).toThrow(/Gameplay resource identity mismatch/);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap,
+        authoring: { ...authoring, controlledSubject: { visualTargetId: "visual-target-1", design: {
+          kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/missing@1",
+        } } },
+      })).toThrow(/AUTHORING_REFERENCE_NOT_FOUND/);
+      expect(() => resolveNativeSubjectAuthoringClosureV1({ context: frozen, bootstrap: prepared.bootstrap,
+        authoring: { ...authoring, controlledSubjects: [authoring.controlledSubject, authoring.controlledSubject] },
+      })).toThrow();
+      expect(prepared.generationRequest.contextInputs.filter(({ inputRef }) => inputRef === "inputs/subject-host-context.json"))
+        .toEqual([{ inputRef: "inputs/subject-host-context.json", contentHash: sha256Bytes(prepared.subjectHostContextBytes) }]);
+      expect(prepared.generationRequest.contextInputs.some(({ inputRef }) => /(?:gameplay-bootstrap|world-runtime-bootstrap|subject-visual-review-proxy|host-closure)\.json$/.test(inputRef))).toBe(false);
+    } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 
   it("fails closed when the Host-owned Subject visual proxy cannot close an asset", async () => {
@@ -1584,7 +2206,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       worldRuntimeBootstrapRef:
         "worldkit://world-runtime-bootstrap/cloud-ridge@1",
       worldRuntimeBootstrapBytesHash: sha256Bytes(runtimeBytes) as Sha256HashV1,
-    })).toThrow(/Subject Asset Registry closure failed/);
+    }, builtInSubjectResourceRegistry)).toThrow(/Subject Asset Registry closure failed/);
   });
 
   it("ignores an untrusted prewritten Bootstrap and changes identity when Host seed changes", async () => {
@@ -1599,7 +2221,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         seed: 18,
       });
       expect(first.bootstrap.seed).toBe(17);
-      expect(first.bootstrap.initialControlledEntityId).toBe("g-bot-primary");
+      expect(first.bootstrap.initialControlledEntityId).toBe("cloud-temple-t-gate-native-block-subject");
       expect(first.generationRequestHash).not.toBe(second.generationRequestHash);
       expect(first.generationRequest.bootstrapInputHash).not.toBe(second.generationRequest.bootstrapInputHash);
     } finally {

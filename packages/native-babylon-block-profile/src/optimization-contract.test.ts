@@ -101,7 +101,6 @@ async function finalizedEpoch(reverse: boolean): Promise<Readonly<{
       build(buildContext): void {
         session = createBabylonNativeBlockProfileSessionV1(
           buildContext,
-          Object.freeze({ maximumBlockCount: 2 }),
         );
         for (const block of reverse ? [...blocks].reverse() : blocks) {
           session.createBlock(block);
@@ -190,15 +189,15 @@ describe("NBR-65 current topology optimization contract", () => {
         schemaVersion: 1,
         chunkPolicyHash: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
         thinInstanceGroups: [{
-          residencyGroupId: "grid-chunk-xp0-zp0",
+          visualChunkIndexXZ: [0, 0],
           blockIds: ["wall-a", "wall-b"],
         }],
         independentVisualBlockIds: [],
         topologyColliderIds: ["wall-collider"],
         baselineResources: {
-          visualMeshCount: 2,
-          visualDrawUnitCount: 2,
-          visualGeometryBufferSetCount: 2,
+          visualMeshCount: 1,
+          visualDrawUnitCount: 1,
+          visualGeometryBufferSetCount: 1,
           paletteMaterialCount: 1,
           colliderProxyCount: 1,
         },

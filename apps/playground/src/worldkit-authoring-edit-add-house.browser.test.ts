@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import type { Page } from "playwright";
 import { isNil } from "lodash-es";
 
 import {
@@ -122,6 +123,20 @@ function expectPng(buffer: Buffer): void {
   expect(buffer.subarray(0, 8).equals(PNG_SIGNATURE)).toBe(true);
 }
 
+async function waitForRenderedTick(page: Page, simulationTick: number): Promise<void> {
+  // Layout can resize the canvas after runFixedInput renders. Its receipt is
+  // correctly invalidated; wait for a real replacement at the same paused Tick.
+  await page.waitForFunction(async (tick) => {
+    try {
+      return (await window.__WORLDKIT__!.waitForRenderReady(tick)).simulationTick === tick;
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) ||
+        error.code !== "WORLDKIT_RENDER_WAIT_FAILED") throw error;
+      return false;
+    }
+  }, simulationTick, { timeout: 5_000 });
+}
+
 describe("WorldKit authoring edit add-house Full Reload", () => {
   it("publishes add-house through the trusted authoring page and shows the new house", async () => {
     const staleChangeSet = loadAddHouseChangeSet(
@@ -196,9 +211,7 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
           beforeIdentity.playerPositionMetersXYZ[1]!,
       )).toBeLessThan(0.05);
 
-      await page.evaluate(async (tick) => {
-        await window.__WORLDKIT__!.waitForRenderReady(tick);
-      }, movedBeforePrepare.simulationTick);
+      await waitForRenderedTick(page, movedBeforePrepare.simulationTick);
       const beforeRuntimePng = pngFromDataUrl(
         await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot()),
       );
@@ -360,9 +373,7 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
         worldPackageRootHash: beforeIdentity.worldPackageRootHash,
       });
 
-      await page.evaluate(async () => {
-        await window.__WORLDKIT__!.waitForRenderReady(0);
-      });
+      await waitForRenderedTick(page, 0);
       const afterRuntimePng = pngFromDataUrl(
         await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot()),
       );

@@ -16,6 +16,19 @@ export interface TraversalRuntimeImplementationIdentityV1 {
   readonly runtimeAdapterHash: `sha256:${string}`;
 }
 
+/** Provenance of the already compiled Capsule, never a geometry derivation request. */
+export type TraversalColliderSourceV1 =
+  | Readonly<{
+      kind: "profile";
+      colliderProfileRef: string;
+      colliderProfileHash: `sha256:${string}`;
+    }>
+  | Readonly<{
+      kind: "derive";
+      colliderDerivationProfileRef: string;
+      colliderDerivationProfileHash: `sha256:${string}`;
+    }>;
+
 export interface ResolvedTraversalLockV1 {
   readonly kind: "resolved-traversal-lock";
   readonly schemaVersion: 1;
@@ -23,8 +36,7 @@ export interface ResolvedTraversalLockV1 {
   readonly resourceLockHash: `sha256:${string}`;
   readonly subjectDefinitionRef: string;
   readonly subjectDefinitionHash: `sha256:${string}`;
-  readonly colliderProfileRef: string;
-  readonly colliderProfileHash: `sha256:${string}`;
+  readonly colliderSource: TraversalColliderSourceV1;
   readonly physicsBodyProfileRef: string;
   readonly physicsBodyProfileHash: `sha256:${string}`;
   readonly locomotionProfileRef: string;
@@ -147,8 +159,7 @@ export interface TraversalCapabilityEnvelopeV1 {
   readonly traversalMode: "ground";
   readonly subjectEntityId: string;
   readonly resourceLockHash: `sha256:${string}`;
-  readonly colliderProfileRef: string;
-  readonly colliderProfileHash: `sha256:${string}`;
+  readonly colliderSource: TraversalColliderSourceV1;
   readonly physicsBodyProfileRef: string;
   readonly physicsBodyProfileHash: `sha256:${string}`;
   readonly locomotionProfileRef: string;

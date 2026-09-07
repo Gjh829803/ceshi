@@ -58,6 +58,7 @@ import {
   hashWorldReconstructionEvidenceSetV1,
   hashWorldReconstructionStrictDiagnosticReceiptV1,
   getWorldReconstructionFinalEvaluatedAttemptV1,
+  parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
   hashWorldReconstructionRunReceiptV1,
@@ -114,14 +115,11 @@ async function entryPng(left = 43, right = 56): Promise<Uint8Array> {
   }).png().toBuffer());
 }
 const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
-  kind: "reach-bounds" as const,
+  kind: "reach-position" as const,
   checkpointId: "gate-approach",
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
-  sourceBoundsMeters: {
-    minimumMetersXYZ: [-2, -1, -5.1] as const,
-    maximumMetersXYZ: [2, 1, -4.2] as const,
-  },
+  standPositionMetersXYZ: [0, 0, -4.65] as const,
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
 }, {
@@ -239,7 +237,6 @@ function generationRequestFixture(input: ReturnType<
     bootstrapInputHash: attempt.sourceInput.bootstrapInputHash,
     seed: attempt.seed,
     budgets: {
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
@@ -687,6 +684,9 @@ async function completeRunFixture(
     })
     : originalCaptureReceipt;
   await writeFile(path.join(captureDirectoryPath, "opening.png"), openingPng);
+  for (const { viewId, bytes } of fixture.identityMaskPngs) {
+    await writeFile(path.join(captureDirectoryPath, `${viewId}-identity-mask.png`), bytes);
+  }
   for (const name of ["world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
@@ -730,12 +730,16 @@ async function completeRunFixture(
   if (
     !forgePassedEvaluation &&
     evaluationPasses &&
+    !evidenceOptions.withoutScriptedTraversal &&
     evaluation.outcome !== "passed"
   ) {
     throw new Error("fixture evidence must earn a passed evaluation");
   }
   if (!evaluationPasses && evaluation.outcome === "passed") {
     throw new Error("fixture evidence must retain a non-passing evaluation");
+  }
+  if (evidenceOptions.withoutScriptedTraversal && evaluation.outcome !== "incomplete") {
+    throw new Error("fixture without scripts must retain incomplete traversal evidence");
   }
   await writeJson(path.join(attemptDirectoryPath, "evidence-set.json"), evidence);
   await writeJson(path.join(attemptDirectoryPath, "evaluation.json"), evaluation);
@@ -800,10 +804,10 @@ async function completeRunFixture(
     worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
     captureReceiptHash,
     evaluationResultHash: evaluationHash,
-    outcome: strictDiagnosticFails ? "failed" : "passed",
+    outcome: strictDiagnosticFails ? "failed" : evidenceOptions.withoutScriptedTraversal ? "incomplete" : "passed",
     diagnosticCodes: strictDiagnosticFails
       ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
-      : [],
+      : evidenceOptions.withoutScriptedTraversal ? ["NBR70_EVALUATION_NOT_PASSED"] : [],
     cleanupOutcome: strictDiagnosticFails ? "not-started" : "completed",
   });
   await writeJson(
@@ -915,6 +919,29 @@ describe("Native Block reconstruction final artifact publisher integration", () 
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
+
+  it("publishes a no-script production Capture but rejects it as strict traversal acceptance", async () => {
+    const fixture = await completeRunFixture({ withoutScriptedTraversal: true });
+    try {
+      await expect(verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      })).resolves.toMatchObject({ outcome: "verified", playability: { mode: "skipped" },
+        strictDiagnosticCodes: expect.arrayContaining(["NBR70_EVALUATION_NOT_PASSED"]),
+      });
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: Object.freeze({ mode: "skipped" }),
+      })).rejects.toThrow("NBR70_SCRIPTED_TRAVERSAL_REQUIRED");
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture, launch: await finalLaunchFixture(fixture),
+      })).resolves.toMatchObject({ outcome: "published" });
+      expect(parseWorldReconstructionStrictDiagnosticReceiptV1(JSON.parse(await readFile(
+        path.join(fixture.caseDirectoryPath, "final/strict-diagnostic.json"), "utf8",
+      )))).toMatchObject({ outcome: "incomplete", diagnosticCodes: ["NBR70_EVALUATION_NOT_PASSED"] });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   it("publishes the exact statically verified candidate and bound diagnostic", async () => {
     const fixture = await completeRunFixture();
@@ -1291,6 +1318,9 @@ async function addRepairAttempt(input: Readonly<{
   for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureRoot, `${name}.png`), PNG);
   }
+  for (const { viewId, bytes } of fixture.identityMaskPngs) {
+    await writeFile(path.join(captureRoot, `${viewId}-identity-mask.png`), bytes);
+  }
   await writeJson(path.join(captureRoot, "opening-observation.json"),
     fixture.openingObservation);
   await writeJson(path.join(captureRoot, "semantic-view-observation-set.json"), semanticViewObservationSet);
@@ -1414,7 +1444,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       throw new Error("fixture must include trusted Block metadata");
     }
     const valid = {
-      caseBlockerColliderIds: ["palette-ground-blocker"],
+      caseBlockers: fixture.reconstructionCase.expected.colliders.filter(({ role }) => role === "blocker"),
       formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
       materializerMetadata,
@@ -1445,8 +1475,13 @@ describe("Native Block reconstruction E2E verifier", () => {
         },
       })).not.toThrow();
     for (const invalid of [
-      { ...valid, caseBlockerColliderIds: [] },
-      { ...valid, caseBlockerColliderIds: ["palette-ground-blocker", "foreign"] },
+      { ...valid, caseBlockers: [] },
+      { ...valid, caseBlockers: [...valid.caseBlockers,
+        { ...valid.caseBlockers[0]!, colliderId: "foreign", contributionId: "foreign" }] },
+      { ...valid, caseBlockers: valid.caseBlockers.map((blocker) =>
+        ({ ...blocker, contributionId: "foreign" })) },
+      { ...valid, caseBlockers: valid.caseBlockers.map((blocker) =>
+        ({ ...blocker, acceptanceTargetRef: "worldkit://acceptance-target/foreign@1" })) },
       {
         ...valid,
         formalChecks: valid.formalChecks.map((check) => ({
@@ -1492,7 +1527,7 @@ describe("Native Block reconstruction E2E verifier", () => {
         );
     }
 
-    const mismatch = { ...valid, caseBlockerColliderIds: [] };
+    const mismatch = { ...valid, caseBlockers: [] };
     expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
       .verifyBlockerEvidenceClosureForContext({
         ...mismatch,
@@ -1514,6 +1549,126 @@ describe("Native Block reconstruction E2E verifier", () => {
         mode: "strict-acceptance",
         diagnosticAuthority: "historical",
       })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  });
+
+  it("CF-13 rejects a blocker target mismatch even when Collider and visual group IDs still match", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true, includePaletteTraversalDisagreement: true,
+      traversalCheckExpectation: "block",
+      traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
+      traversalCheckpoints: [
+        { checkpointId: "gate-approach", outcome: "reached", observedAtTick: 1 },
+        { checkpointId: "gate-limit", outcome: "blocked", observedAtTick: 1 },
+      ],
+    });
+    const verified = fixture.verifiedWorldPackage;
+    if (verified.kind !== "babylon-native-scene" || !verified.nativeBlockMaterializerMetadata) {
+      throw new Error("Native fixture metadata required");
+    }
+    const input = {
+      caseBlockers: fixture.reconstructionCase.expected.colliders.filter(({ role }) => role === "blocker"),
+      formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks.map((check) =>
+        ({ ...check, acceptanceTargetRef: "worldkit://acceptance-target/foreign@1" })),
+      contribution: verified.nativeSceneContribution,
+      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+    };
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosure(input)).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosureForContext({
+      ...input, mode: "production-integrity", diagnosticAuthority: "terminal",
+    })).toEqual({ blockerColliderIds: [], strictDiagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"] });
+
+    // Collider acceptance and visual identity are separate domains. This Case
+    // declares a blocker-only acceptance target with no new visual group.
+    const colliderOnlyTargetRef = "worldkit://acceptance-target/blocker-only@1";
+    const colliderOnlyCase = parseWorldReconstructionCaseV1({
+      ...fixture.reconstructionCase,
+      acceptanceTargetRefs: [...fixture.reconstructionCase.acceptanceTargetRefs, colliderOnlyTargetRef].sort(),
+      expected: { ...fixture.reconstructionCase.expected,
+        colliders: fixture.reconstructionCase.expected.colliders.map((collider) => collider.role === "blocker"
+          ? { ...collider, acceptanceTargetRef: colliderOnlyTargetRef } : collider),
+        criticalTraversalChecks: fixture.reconstructionCase.expected.criticalTraversalChecks.map((check) =>
+          check.expectation === "block" ? { ...check, acceptanceTargetRef: colliderOnlyTargetRef } : check),
+      },
+    });
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure({
+      ...input,
+      caseBlockers: colliderOnlyCase.expected.colliders.filter(({ role }) => role === "blocker"),
+      formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks.map((check) =>
+        check.checkExpectation === "block" ? { ...check, acceptanceTargetRef: colliderOnlyTargetRef } : check),
+    })).toEqual(["palette-ground-blocker"]);
+  });
+
+  it("CF-13 accepts an explicit no-blocker Case without inventing a block check for visual targets", () => {
+    const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
+    const verified = fixture.verifiedWorldPackage;
+    if (verified.kind !== "babylon-native-scene" || !verified.nativeBlockMaterializerMetadata) {
+      throw new Error("Native fixture metadata required");
+    }
+    const caseBlockers = fixture.reconstructionCase.expected.colliders.filter(({ role }) => role === "blocker");
+    expect(caseBlockers).toEqual([]);
+    expect(fixture.reconstructionCase.expected.semanticSilhouetteTargets.length).toBeGreaterThan(0);
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure({
+      caseBlockers, formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
+      contribution: verified.nativeSceneContribution,
+      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+    })).toEqual([]);
+  });
+
+  it("CF-13 keeps separate Collider identities across shared or separate acceptance targets", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true, includePaletteTraversalDisagreement: true,
+      traversalCheckExpectation: "block", traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
+      traversalCheckpoints: [
+        { checkpointId: "gate-approach", outcome: "reached", observedAtTick: 1 },
+        { checkpointId: "gate-limit", outcome: "blocked", observedAtTick: 1 },
+      ],
+    });
+    const verified = fixture.verifiedWorldPackage;
+    if (verified.kind !== "babylon-native-scene" || !verified.nativeBlockMaterializerMetadata) {
+      throw new Error("Native fixture metadata required");
+    }
+    const metadata = verified.nativeBlockMaterializerMetadata;
+    const originalId = "palette-ground-blocker";
+    const secondId = "second-ground-blocker";
+    const blocker = fixture.reconstructionCase.expected.colliders.find(({ role }) => role === "blocker")!;
+    const collider = verified.nativeSceneContribution.staticColliders.find(({ id }) => id === originalId)!;
+    const join = metadata.colliderJoins.find(({ colliderId }) => colliderId === originalId)!;
+    const check = fixture.captureReceipt.formalRequest.scriptedTraversal.checks[0]!;
+    const criterion = check.checkpointCriteria.find(({ kind }) => kind === "block-plane")!;
+    const input = {
+      caseBlockers: [blocker, { ...blocker, colliderId: secondId, contributionId: secondId }],
+      formalChecks: [{ ...check, checkpointCriteria: [...check.checkpointCriteria,
+        { ...criterion, colliderId: secondId, checkpointId: "second-gate-limit" }] }],
+      contribution: { ...verified.nativeSceneContribution, staticColliders: [
+        ...verified.nativeSceneContribution.staticColliders, { ...collider, id: secondId },
+      ] },
+      materializerMetadata: { ...metadata, colliderJoins: [...metadata.colliderJoins, { ...join, colliderId: secondId }] },
+    };
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure(input))
+      .toEqual([originalId, secondId]);
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure({
+      ...input, caseBlockers: [blocker, { ...blocker, colliderId: secondId, contributionId: secondId,
+        acceptanceTargetRef: "worldkit://acceptance-target/foreign@1" }],
+    })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
+    const secondTargetRef = "worldkit://acceptance-target/second-blocker@1";
+    const separate = {
+      ...input,
+      caseBlockers: [blocker, { ...blocker, colliderId: secondId, contributionId: secondId,
+        acceptanceTargetRef: secondTargetRef }],
+      formalChecks: [check, { ...check, id: "second-block-check", acceptanceTargetRef: secondTargetRef,
+        checkpointCriteria: [{ ...criterion, colliderId: secondId, checkpointId: "second-gate-limit" }] }],
+    };
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure(separate))
+      .toEqual([originalId, secondId]);
+    // Every Collider ID still exists exactly once: only the check-to-target
+    // attribution is swapped. ID-set equality must not accept that evidence.
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1.verifyBlockerEvidenceClosure({
+      ...separate, formalChecks: separate.formalChecks.map((row) => ({ ...row,
+        acceptanceTargetRef: row.acceptanceTargetRef === secondTargetRef
+          ? blocker.acceptanceTargetRef : secondTargetRef,
+      })),
+    })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
   });
 
   it("rejects contributed Case blockers without a dedicated scripted block check", () => {
@@ -1551,9 +1706,10 @@ describe("Native Block reconstruction E2E verifier", () => {
 
     expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
       .verifyBlockerEvidenceClosure({
-        caseBlockerColliderIds: [
-          "palette-ground-blocker",
-          "unmeasured-case-blocker",
+        caseBlockers: [
+          ...fixture.reconstructionCase.expected.colliders.filter(({ role }) => role === "blocker"),
+          { colliderId: "unmeasured-case-blocker", contributionId: "unmeasured-case-blocker",
+            acceptanceTargetRef: fixture.reconstructionCase.expected.colliders[0]!.acceptanceTargetRef },
         ],
         formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
         contribution: {

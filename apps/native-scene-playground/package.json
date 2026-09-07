@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "9.23.0",
+    "@whitebox-world/browser-recording": "workspace:*",
     "@whitebox-world/gameplay": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/native-babylon": "workspace:*",

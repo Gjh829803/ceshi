@@ -37,6 +37,12 @@ The trusted Host owns validation, Registry closure, Gameplay Bootstrap, compilat
 - `推断的世界延伸` separates playable continuation inferred from a partial view;
 - `仅视觉层设想` prevents lighting, texture and style from becoming collision geometry;
 - `运动模式`, `空间`, `通行`, `首帧`, and `视觉目标` describe requested behavior and composition.
+- `运动模式` uses 1-8 ordered `- 模式：说明` rows, matching the pinned legacy flow.
+  The first row describes the initial mode; standard labels may include parenthesized
+  equipment, and custom labels remain user intent. The Brief exposes `movementModes`;
+  Host Palette and CLI preserve ordered `movementModes`/`movementModeLabels` arrays.
+  There is no singular-field fallback. Parsing these modes is not Runtime support:
+  Native Host owns Subject/capability selection, while Native Builder owns only geometry.
 
 Movement labels are requests, not proof of runtime support. Shape and behavior stay independent: the Builder may use a complete Registry Subject or assemble one package-local controlled silhouette from an exact registered Subject Asset plus primitive visual parts. It selects an exact implemented Registry closure when one compiles without reserved relationships. Otherwise the hosted workflow preserves the complete requested silhouette and world topology, uses the documented ground closure as an explicit playable approximation, and records requested versus implemented behavior in Subject metadata. A missing same-named preset never permits an Agent to omit the world, and per-scene Builder work never adds SDK motion bases or edits Registry/Runtime/Compiler code.
 

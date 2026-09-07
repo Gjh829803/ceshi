@@ -28,6 +28,9 @@ import {
   createBabylonNativeIsolatedRuntimeEntryV1,
   type CreateBabylonNativeIsolatedRuntimeEntryInputV1,
 } from "./babylon-native-isolated-runtime-entry";
+import { GroundAwarePhysicsCharacterController } from "./babylon-character-body-port";
+import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { finishHostedInteractiveInputV1 } from "./browser-fixed-input-recovery";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -206,14 +209,11 @@ function formalRequestFixture(
     maximumMetersXYZ: [8, 6, 8],
   } as const;
   const criterion = {
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "checkpoint",
     expectation: "reach",
     sourceVisualGroupId: "route",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-1, 0, -1],
-      maximumMetersXYZ: [1, 2, 1],
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   } as const;
@@ -280,6 +280,7 @@ function formalRequestFixture(
   } as const;
   return parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "formal.capture.request",
     formalRequestRef: "artifact://case/test/formal-world-capture-request.json",
@@ -399,6 +400,10 @@ describe("Babylon Native isolated Runtime entry", () => {
 
     expect(snapshot.runtimeSessionId).toBe(input.request.runtimeSessionId);
     expect(snapshot.runtime.phase).toBe("ready");
+    expect(entry.physicalInputContext()).toEqual({
+      worldSessionId: snapshot.worldSessionId,
+      possessionTarget: { mode: "possessed", controlledEntityId: "g-bot-primary" },
+    });
     // Cloud-ridge keeps 3 logical Colliders plus the possessed character. The
     // Runtime realizes those Colliders as a spawn-ring of 4 m Chunk parts, so
     // the committed body count is the resident set rather than one body per
@@ -456,6 +461,78 @@ describe("Babylon Native isolated Runtime entry", () => {
     expect(sceneRender).toHaveBeenCalledTimes(2);
     expect(engineResize).toHaveBeenCalledOnce();
     await entry.dispose();
+  });
+
+  it("renders actual Native Camera interpolation through the isolated entry without changing committed state", async () => {
+    const input = await entryInput();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.interpolation`);
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({ ...input, engineFactory: () => engine });
+    try {
+      const run = async (id: string, ticks: number) => {
+        const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, id, {
+          type: "fixed-input.run", input: { actions: ["move-right"], ticks },
+        }));
+        if (receipt.status !== "succeeded" || receipt.requestType !== "fixed-input.run") throw new Error("fixed input failed");
+        return receipt.snapshot;
+      };
+      const previous = await run("request.interpolation.warmup", 60);
+      const current = await run("request.interpolation.next", 1);
+      if (previous.view.camera.mode !== "tracking" || current.view.camera.mode !== "tracking") throw new Error("tracking camera missing");
+      const a = previous.view.camera.actualPositionMetersXYZ;
+      const b = current.view.camera.actualPositionMetersXYZ;
+      if (a === undefined || b === undefined) throw new Error("resolved camera pose missing");
+      expect(Math.hypot(...b.map((value, axis) => value - a[axis]!))).toBeGreaterThan(1e-5);
+      const scene = engine.scenes[0]!;
+      const positions: number[][] = [];
+      scene.onBeforeRenderObservable.add(() => positions.push(scene.activeCamera!.position.asArray()));
+      for (const alpha of [0, 0.5, 1]) entry.renderFrame(alpha);
+      for (const [index, alpha] of [0, 0.5, 1].entries()) {
+        for (let axis = 0; axis < 3; axis++) {
+          expect(positions[index]![axis]).toBeCloseTo(a[axis]! + (b[axis]! - a[axis]!) * alpha, 6);
+        }
+      }
+      const after = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.interpolation.snapshot", { type: "snapshot.get" }));
+      if (after.status !== "succeeded" || after.requestType !== "snapshot.get") throw new Error("snapshot failed");
+      expect(after.snapshot.world).toEqual(current.world);
+      expect(after.snapshot.view).toEqual(current.view);
+    } finally { await entry.dispose(); }
+  });
+
+  it("serializes local camera deltas after fixed input and resets through the same Runtime owner", async () => {
+    const input = await entryInput();
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    try {
+      const fixed = entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.fixed", {
+        type: "fixed-input.run", input: { actions: [], ticks: 1 },
+      }));
+      const deltas = { yawDeltaRadians: 0.12, pitchDeltaRadians: 0.1, zoomDeltaMeters: 0.4 };
+      const adjustment = entry.adjustCameraView(deltas);
+      deltas.yawDeltaRadians = 2;
+      const adjusted = await adjustment;
+      expect((await fixed).status).toBe("succeeded");
+      expect(adjusted.world.simulationTick).toBe(1);
+      expect(adjusted.view.camera).toMatchObject({
+        mode: "tracking", viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0, viewDistanceOffsetMeters: 0,
+      });
+      const snapshot = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.snapshot", { type: "snapshot.get" }));
+      if (snapshot.status !== "succeeded" || snapshot.requestType !== "snapshot.get") throw new Error("snapshot failed");
+      expect(snapshot.snapshot.view).toEqual(adjusted.view);
+      const settled = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.settle", {
+        type: "fixed-input.run", input: { actions: [], ticks: 30 },
+      }));
+      if (settled.status !== "succeeded" || settled.requestType !== "fixed-input.run") throw new Error("fixed input failed");
+      if (settled.snapshot.view.camera.mode !== "tracking") throw new Error("tracking missing");
+      expect(settled.snapshot.view.camera.viewYawOffsetRadians).toBeCloseTo(0.12 * (1 - Math.exp(-16 * 0.5)), 6);
+      expect(settled.snapshot.view.camera.viewPitchOffsetRadians).toBeCloseTo(0.08 * (1 - Math.exp(-14 * 0.5)), 6);
+      expect(settled.snapshot.view.camera.viewDistanceOffsetMeters).toBeGreaterThan(0.39);
+      const reset = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.pointer.reset", { type: "session.reset" }));
+      if (reset.status !== "succeeded" || reset.requestType !== "session.reset") throw new Error("reset failed");
+      expect(reset.snapshot.view.camera).toMatchObject({
+        viewYawOffsetRadians: 0, viewPitchOffsetRadians: 0, viewDistanceOffsetMeters: 0,
+      });
+    } finally { await entry.dispose(); }
+    await expect(entry.adjustCameraView({ yawDeltaRadians: 0.1 })).rejects.toThrow("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
   });
 
   it("routes fixed input, snapshot and close through Runtime Session Protocol V1", async () => {
@@ -653,6 +730,113 @@ describe("Babylon Native isolated Runtime entry", () => {
       diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" },
     });
   }, 30_000);
+
+  it("retains a rolled-back invalid-input Session without retrying a protocol request", async () => {
+    const input = await entryInput("runtime.hosted.input-rollback");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.warmup", {
+      type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 5 },
+    }));
+    const before = entry.initialSnapshot();
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => { throw new Error("3C_INPUT_INVALID: injected invalid contact"); });
+    const observedFailure = vi.spyOn(BabylonWorldRuntime.prototype, "consumeFixedInputFailureDiagnostic");
+    try {
+      const request = protocolRequest(input.request.runtimeSessionId, "request.input-rollback", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 3 },
+      });
+      const rejected = await entry.submit(request);
+      expect(observedFailure.mock.results[0]?.value).toEqual({ stage: "prepare", errorCode: "3C_INPUT_INVALID" });
+      expect(rejected).toMatchObject({
+        status: "rejected", diagnostic: { code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED" },
+      });
+      expect(JSON.stringify(rejected)).not.toContain("injected invalid contact");
+      expect(entry.initialSnapshot()).toEqual(before);
+      expect(await entry.submit(request)).toEqual(rejected);
+      expect(entry.initialSnapshot()).toEqual(before);
+      const recovered = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.neutral", {
+        type: "fixed-input.run", input: { actions: [], ticks: 1 },
+      }));
+      expect(recovered).toMatchObject({ status: "succeeded", snapshot: {
+        worldSessionId: before.worldSessionId, world: { simulationTick: 6 },
+      } });
+    } finally {
+      failure.mockRestore();
+      observedFailure.mockRestore();
+      await entry.dispose();
+    }
+  });
+
+  it.each(["invalid-contact", "internal-error"] as const)("keeps failed native integration fatal (%s)", async (kind) => {
+    const input = await entryInput("runtime.hosted.fatal-input");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "integrate")
+      .mockImplementationOnce(() => { throw new Error(kind === "invalid-contact"
+        ? "3C_INPUT_INVALID: cannot undo an external integration" : "private integration failure"); });
+    try {
+      const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.fatal", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 1 },
+      }));
+      expect(receipt).toMatchObject({ status: "rejected", diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" } });
+      expect(JSON.stringify(receipt)).not.toContain("private");
+      await expect(finishHostedInteractiveInputV1({
+        receipt,
+        clearPhysicalInput() { throw new Error("must not try recovery"); },
+        async submitNeutralInput() { throw new Error("must not dispatch a neutral Tick"); },
+      })).rejects.toThrow("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      expect(await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.after-fatal", {
+        type: "snapshot.get",
+      }))).toMatchObject({ status: "rejected", diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" } });
+    } finally {
+      failure.mockRestore();
+      await entry.dispose();
+    }
+  });
+
+  it.each([false, true])("browser input makes one neutral recovery attempt (retryFails=%s)", async (retryFails) => {
+    const input = await entryInput("runtime.hosted.browser-recovery");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const checkSupport = GroundAwarePhysicsCharacterController.prototype.checkSupport;
+    let isRecovery = false;
+    let recoveryFailureInjected = false;
+    const failure = vi.spyOn(GroundAwarePhysicsCharacterController.prototype, "checkSupport")
+      .mockImplementationOnce(() => { throw new Error("3C_INPUT_INVALID: rejected browser input"); })
+      .mockImplementation(function (this: GroundAwarePhysicsCharacterController, ...args) {
+        if (isRecovery && retryFails && !recoveryFailureInjected) {
+          recoveryFailureInjected = true;
+          throw new Error("3C_INPUT_INVALID: rejected neutral input");
+        }
+        return checkSupport.apply(this, args);
+      });
+    const pressedCodes = new Set(["KeyW", "ArrowLeft"]);
+    let arrowVelocity = 0.025;
+    const submittedInputs: unknown[] = [];
+    try {
+      const receipt = await entry.submit(protocolRequest(input.request.runtimeSessionId, "request.browser", {
+        type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 3 },
+      }));
+      const completion = finishHostedInteractiveInputV1({
+        receipt,
+        clearPhysicalInput() { pressedCodes.clear(); arrowVelocity = 0; },
+        async submitNeutralInput(neutral) {
+          expect(pressedCodes.size).toBe(0);
+          expect(arrowVelocity).toBe(0);
+          submittedInputs.push(neutral);
+          isRecovery = true;
+          return entry.submit(protocolRequest(input.request.runtimeSessionId, "request.browser.neutral", {
+            type: "fixed-input.run", input: neutral,
+          }));
+        },
+      });
+      if (retryFails) await expect(completion).rejects.toThrow("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      else await expect(completion).resolves.toBe(true);
+      expect(submittedInputs).toEqual([{ actions: [], ticks: 1 }]);
+      expect(entry.initialSnapshot().world.simulationTick).toBe(retryFails ? 0 : 1);
+    } finally {
+      failure.mockRestore();
+      await entry.dispose();
+    }
+  });
 
   it("binds a post-swap reset cleanup failure to the committed new World", async () => {
     const input = await entryInput("runtime.hosted.reset-cleanup-failure");

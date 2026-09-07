@@ -14,6 +14,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { tsImport } from "tsx/esm/api";
+
+const { visualCapturePaths } = await tsImport(
+  "../../../scripts/visual/visual-capture-paths.ts", { parentURL: import.meta.url },
+);
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const RECORDING_ID_PATTERN = /^recording-[0-9]{8}t[0-9]{6}-[a-f0-9]{6}$/;
@@ -324,6 +329,7 @@ export function createRecordingWorkbenchService(options = {}) {
   const autoRunJobs = options.autoRunJobs ?? true;
   const spawnImplementation = options.spawnImplementation ?? spawn;
   const codexBackendProvider = options.codexBackendProvider ?? (() => "cloud");
+  const sceneContextProvider = options.sceneContextProvider;
   const generationRunner = options.generationRunner;
   const transcodeRecording = options.transcodeRecording;
   const composeTriviewComparison = options.composeTriviewComparison;
@@ -426,10 +432,30 @@ export function createRecordingWorkbenchService(options = {}) {
     };
   }
 
+  async function resolveSceneContext(sceneId) {
+    if (!ID_PATTERN.test(sceneId)) return null;
+    if (typeof sceneContextProvider === "function") {
+      const context = await sceneContextProvider(sceneId);
+      if (context?.sceneSourceKind === "babylon-native" &&
+          !/^sha256:[a-f0-9]{64}$/.test(context.worldPackageRootHash ?? "")) return null;
+      return ["canonical", "babylon-native"].includes(context?.sceneSourceKind) ? context : null;
+    }
+    // Standalone Canonical workbench retains its existing availability behavior.
+    return await fileExists(path.join(repoRoot, "artifacts", "scenes", sceneId, "authoring.json"))
+      ? { sceneSourceKind: "canonical" } : null;
+  }
+
   async function sceneAvailable(sceneId) {
-    return ID_PATTERN.test(sceneId) && await fileExists(
-      path.join(repoRoot, "artifacts", "scenes", sceneId, "authoring.json"),
-    );
+    return await resolveSceneContext(sceneId) !== null;
+  }
+
+  async function assertRecordingWorld(sceneId, source) {
+    const context = await resolveSceneContext(sceneId);
+    if ((source?.worldPackageRootHash !== undefined || context?.sceneSourceKind === "babylon-native") &&
+        (context?.sceneSourceKind !== "babylon-native" ||
+         source?.worldPackageRootHash !== context.worldPackageRootHash)) {
+      throw new RecordingBundleNotReadyError("录屏绑定的 Native Package 已变化，请打开当前世界重新录制。");
+    }
   }
 
   async function readRecord(sceneId, recordingId) {
@@ -446,13 +472,15 @@ export function createRecordingWorkbenchService(options = {}) {
   }
 
   async function resolveSceneAssets(sceneId) {
+    const context = await resolveSceneContext(sceneId);
     const artifactRoot = path.join(repoRoot, "artifacts", "scenes", sceneId);
-    const worldPlanPath = path.join(
+    const worldPlanPath = context?.sceneSourceKind === "babylon-native"
+      ? path.join(artifactRoot, "inputs", "world-plan.png") : path.join(
       repoRoot, "apps", "playground", "public", "scene-plans", sceneId, "world-plan.png",
     );
     const openingFramePath = path.join(artifactRoot, "styled-opening-frame.png");
     const manifest = await readJson(path.join(artifactRoot, "styled-triviews-manifest.json"));
-    const declaredTargets = Array.isArray(manifest?.targets) ? manifest.targets : [];
+    const declaredTargets = context && Array.isArray(manifest?.targets) ? manifest.targets : [];
     const triViews = [];
     const unresolvedVisualTargetIds = [];
     const seenVisualTargetIds = new Set();
@@ -475,18 +503,19 @@ export function createRecordingWorkbenchService(options = {}) {
         unresolvedVisualTargetIds.push(target.visualTargetId);
         continue;
       }
-      const whiteboxPath = path.join(
-        artifactRoot,
-        "triviews",
-        target.visualTargetId,
-        "whitebox-triview.png",
-      );
+      // Both Source finalizers publish the real Capture path. Never construct a
+      // Canonical alias for Native or infer a target from a different directory.
+      const whiteboxRelativePath = target?.whiteboxTriview?.path;
+      const expectedWhiteboxPath = `${visualCapturePaths(context.sceneSourceKind).triviewRoot}/${target.visualTargetId}/whitebox-triview.png`;
+      const whiteboxPath = whiteboxRelativePath === expectedWhiteboxPath
+        ? path.resolve(artifactRoot, whiteboxRelativePath) : null;
       triViews.push({
         visualTargetId: target.visualTargetId,
         role: target.role ?? "landmark",
         semanticClassId: target.semanticClassId ?? null,
         styledPath,
-        whiteboxPath: await fileExists(whiteboxPath) ? whiteboxPath : null,
+        whiteboxPath: whiteboxPath?.startsWith(`${artifactRoot}${path.sep}`) &&
+          await fileExists(whiteboxPath) ? whiteboxPath : null,
       });
     }
     triViews.sort((left, right) => {
@@ -730,6 +759,7 @@ export function createRecordingWorkbenchService(options = {}) {
   }
 
   async function runGeneration(sceneId, recordingId, frozenCodexBackend = null) {
+    await assertRecordingWorld(sceneId, (await readRecord(sceneId, recordingId))?.source);
     if (typeof generationRunner === "function") {
       await generationRunner({
         sceneId,
@@ -777,6 +807,7 @@ export function createRecordingWorkbenchService(options = {}) {
   }
 
   async function prepareBundle(sceneId, recordingId, record) {
+    await assertRecordingWorld(sceneId, record.source);
     const assets = await resolveSceneAssets(sceneId);
     const temporaryRoot = await mkdtemp(path.join(recordingRoot(sceneId, recordingId), ".bundle-"));
     const folderName = `${sceneId}-${recordingId}`;
@@ -947,12 +978,12 @@ export function createRecordingWorkbenchService(options = {}) {
     }
   }
 
-  async function handleApi(request, response, url) {
+  async function handleApi(request, response, url, recordingContext = null) {
     const collection = /^\/api\/recording-worlds\/([a-z0-9-]+)\/recordings$/.exec(url.pathname);
     if (collection && request.method === "GET") {
       const sceneId = collection[1];
       if (!await sceneAvailable(sceneId)) {
-        sendError(response, 404, "没有找到可录制的 Canonical 世界。");
+        sendError(response, 404, "没有找到可录制的世界。");
         return true;
       }
       sendJson(response, 200, {
@@ -966,10 +997,19 @@ export function createRecordingWorkbenchService(options = {}) {
 
     if (collection && request.method === "POST") {
       const sceneId = collection[1];
-      if (!await sceneAvailable(sceneId)) {
-        sendError(response, 404, "没有找到可录制的 Canonical 世界。");
+      const sceneContext = await resolveSceneContext(sceneId);
+      if (!sceneContext) {
+        sendError(response, 404, "没有找到可录制的世界。");
         return true;
       }
+      if (recordingContext && (recordingContext.sceneId !== sceneId ||
+          sceneContext.sceneSourceKind !== "babylon-native" ||
+          recordingContext.worldPackageRootHash !== sceneContext.worldPackageRootHash)) {
+        sendError(response, 409, "录制页面绑定的 Native Package 已变化，请重新打开。");
+        return true;
+      }
+      const sourceIdentity = sceneContext.sceneSourceKind === "babylon-native"
+        ? { worldPackageRootHash: sceneContext.worldPackageRootHash } : {};
       const contentType = String(request.headers["content-type"] || "").split(";", 1)[0].trim();
       const extension = contentType === "video/mp4" ? "mp4" : contentType === "video/webm" ? "webm" : null;
       if (!extension) {
@@ -1000,6 +1040,7 @@ export function createRecordingWorkbenchService(options = {}) {
           durationSeconds,
         );
         const normalizedMetadata = await stat(path.join(root, normalized.fileName));
+        await assertRecordingWorld(sceneId, sourceIdentity);
         const timestamp = now();
         const record = {
           kind: "worldkit-playground-recording",
@@ -1010,6 +1051,7 @@ export function createRecordingWorkbenchService(options = {}) {
           createdAt: timestamp,
           updatedAt: timestamp,
           source: {
+            ...sourceIdentity,
             fileName: normalized.fileName,
             extension: normalized.extension,
             mimeType: normalized.mimeType,
@@ -1067,6 +1109,8 @@ export function createRecordingWorkbenchService(options = {}) {
         sendError(response, 404, "录屏记录不存在。");
         return true;
       }
+      try { await assertRecordingWorld(sceneId, record.source); }
+      catch (error) { sendError(response, 409, error); return true; }
       const key = `${sceneId}:${recordingId}`;
       const alreadyScheduled = activeJobs.has(key) ||
         queue.some((item) => `${item.sceneId}:${item.recordingId}` === key);

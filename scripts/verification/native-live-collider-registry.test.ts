@@ -79,20 +79,43 @@ const productionWorldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(JSON.parse(
 ));
 
 function moduleFixture(
-  profile: "single-block" | "quarter-meter-ramp" = "single-block",
+  profile: "single-block" | "half-meter-ramp" | "one-meter-ramp" | "smoothed-spawn" = "single-block",
+  spawnFixture: "supported" | "hole" | "head-obstruction" | "off-source-height" = "supported",
 ): BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
-      const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: profile === "single-block" ? 1 : 512,
-      });
-      if (profile === "quarter-meter-ramp") {
+      const session = createBabylonNativeBlockProfileSessionV1(context);
+      if (profile === "smoothed-spawn") {
+        for (let x = -1; x <= 1; x++) for (let z = -2; z <= 2; z++) {
+          if (spawnFixture === "hole" && x === 0 && z === 0) continue;
+          session.createBlock({ id: `spawn-floor-${x + 1}-${z + 2}`, shape: "full", paletteRole: "ground",
+            colliderGroupId: "spawn-ground", centerMetersXYZ: [x, -0.5, z] });
+        }
+        session.createBlockGrid({ idPrefix: "spawn-left", shape: "half", paletteRole: "ground",
+          colliderGroupId: "spawn-ground", minimumCenterMetersXYZ: [-1, 0.25, -2], repeatCountXYZ: [1, 1, 5] });
+        if (spawnFixture === "head-obstruction") {
+          session.createBlock({ id: "head-obstruction", shape: "small", paletteRole: "structure", centerMetersXYZ: [0.25, 1.25, 0.25] });
+        }
+        session.finalize({ staticColliders: [{ id: "ground",
+          colliderGeometrySource: { kind: "block-group", colliderGroupId: "spawn-ground" },
+          traversalBinding: { kind: "static-surface", surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" },
+          exposedEdgePolicy: "none", frictionRatio: 0.75, restitutionRatio: 0,
+        }, ...(spawnFixture === "head-obstruction" ? [{ id: "head-obstruction",
+          colliderGeometrySource: { kind: "block" as const, blockId: "head-obstruction" },
+          traversalBinding: { kind: "not-traversable" as const }, exposedEdgePolicy: "none" as const,
+        }] : [])] });
+        context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId,
+          positionMetersXYZ: [0, spawnFixture === "off-source-height" ? 0.5 : 0, 0], facingRadians: 0 });
+        return;
+      }
+      if (profile === "half-meter-ramp" || profile === "one-meter-ramp") {
         for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
-          const riseCount = xMeters < 2
-            ? 0
-            : Math.min(8, xMeters - 1);
+          const riseCount = profile === "one-meter-ramp"
+            ? (xMeters < 2 ? 0 : xMeters < 6 ? 1 : 2)
+            : xMeters < 2 ? 0 : Math.min(4, xMeters - 1);
           for (let zMeters = -2; zMeters <= 2; zMeters += 1) {
             session.createBlock({
               id: `ramp-base-x${xMeters + 3}-z${zMeters + 2}`,
@@ -104,11 +127,11 @@ function moduleFixture(
             for (let riseIndex = 0; riseIndex < riseCount; riseIndex += 1) {
               session.createBlock({
                 id: `ramp-rise-x${xMeters + 3}-z${zMeters + 2}-y${riseIndex}`,
-                shape: "step",
+                shape: profile === "one-meter-ramp" ? "full" : "half",
                 paletteRole: "ground",
                 centerMetersXYZ: [
                   xMeters,
-                  0.125 + riseIndex * 0.25,
+                  profile === "one-meter-ramp" ? 0.5 + riseIndex : 0.25 + riseIndex * 0.5,
                   zMeters,
                 ],
                 colliderGroupId: "ramp-ground-group",
@@ -117,7 +140,6 @@ function moduleFixture(
           }
         }
         session.finalize({
-          displayGapMeters: 0.04,
           staticColliders: [{
             id: "ground",
             colliderGeometrySource: Object.freeze({
@@ -150,7 +172,6 @@ function moduleFixture(
         centerMetersXYZ: [0, -0.5, 0],
       });
       session.finalize({
-        displayGapMeters: 0.04,
         staticColliders: [{
           id: "ground",
           colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "ground-block" }),
@@ -275,6 +296,7 @@ function packageFixture(
       contributionHash: hashBabylonNativeSceneContributionV1(contribution),
       profileInventoryHash: evidence.profileInventoryHash,
       settledVisualHash: contribution.profileSettlement.settledVisualHash,
+      settledVisualTargetCount: contribution.profileSettlement.targetCount,
       blocks: evidence.checkedLayout.layout.blocks.map((block) => ({
         blockId: block.id,
         runtimeEntityId: `native-block:${block.id}`,
@@ -467,19 +489,50 @@ function activeLocomotion(
 }
 
 describe("SDK-owned Native live collider registry", () => {
-  it("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp", async () => {
+  it.each([
+    ["hole", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING"],
+    ["head-obstruction", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED"],
+    ["off-source-height", "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING"],
+  ] as const)("source Spawn still rejects %s without creating a replacement position", async (fixture, code) => {
+    await expect(createRuntime({ module: moduleFixture("smoothed-spawn", fixture) })).rejects.toThrow(code);
+  });
+
+  it("admits the legacy source Spawn below its smoothed top without moving it or inserting a Tick", async () => {
+    const { runtime, controlledEntityId } = await createRuntime({ module: moduleFixture("smoothed-spawn") });
+    try {
+      const initial = runtime.snapshot();
+      expect(initial.tick).toBe(0);
+      expect(initial.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ).toEqual([0, 0, 0]);
+      const first = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(first.tick).toBe(1);
+      // Independently executed pinned 9e35ab53 Compiler + Babylon/Havok trace.
+      expect(first.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[0]).toBeCloseTo(0.0005324383398838228, 6);
+      expect(first.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[1]).toBeCloseTo(0.002129753359535247, 6);
+      const settled = await runtime.runFixedInput({ actions: [], ticks: 29 });
+      expect(settled.tick).toBe(30);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[0]).toBeCloseTo(0.012651358340479573, 6);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ[1]).toBeCloseTo(0.05060543336191836, 6);
+      expect(settled.subjectStatesByEntityId[controlledEntityId]!.locomotion).toMatchObject({ status: "active", supportMode: "supported" });
+      runtime.reset();
+      expect(runtime.snapshot().tick).toBe(0);
+      expect(runtime.snapshot().subjectStatesByEntityId[controlledEntityId]!.positionMetersXYZ).toEqual([0, 0, 0]);
+    } finally { await runtime.dispose(); }
+  });
+
+  it.each(["half-meter-ramp", "one-meter-ramp"] as const)("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp: %s", async (profile) => {
     const {
       runtime,
       expectedWalkSpeedMetersPerSecond,
       expectedCameraDistanceMeters,
       controlledEntityId,
     } = await createRuntime({
-      module: moduleFixture("quarter-meter-ramp"),
+      module: moduleFixture(profile),
     });
     try {
       let snapshot = runtime.snapshot();
       const rampSamples = [];
       const rampCameraSamples = [];
+      const steadySlopeSamples = [];
       for (let tick = 0; tick < 480; tick += 1) {
         snapshot = await runtime.runFixedInput({
           actions: ["move-right"],
@@ -492,20 +545,35 @@ describe("SDK-owned Native live collider registry", () => {
         ) {
           rampSamples.push(subject);
           rampCameraSamples.push(snapshot.camera);
+          // The 1m source tops form a 26.565-degree incline from x=4.5
+          // to x=6.5. Measure its interior, beyond the capsule's mixed
+          // flat/ramp manifold. The old contact projection also slows at
+          // changing normals; the invariant here is no sustained slope drag.
+          if (profile === "half-meter-ramp" || (
+            subject.positionMetersXYZ[0] >= 5.25 &&
+            subject.positionMetersXYZ[0] <= 5.75
+          )) {
+            steadySlopeSamples.push(subject);
+          }
         }
         if (subject.positionMetersXYZ[0] >= 10) break;
       }
       expect(rampSamples.length).toBeGreaterThan(30);
       expect(rampSamples.every(({ movementMedium }) =>
         movementMedium === "ground")).toBe(true);
-      expect(Math.min(...rampSamples.map(({ speedMetersPerSecond }) =>
+      expect(steadySlopeSamples.length).toBeGreaterThan(10);
+      expect(Math.min(...steadySlopeSamples.map(({ speedMetersPerSecond }) =>
         speedMetersPerSecond))).toBeGreaterThanOrEqual(
           expectedWalkSpeedMetersPerSecond * 0.9,
         );
-      expect(Math.max(...rampCameraSamples.map((camera) =>
-        (camera.requestedArmLengthMeters ?? expectedCameraDistanceMeters) -
-        (camera.effectiveArmLengthMeters ?? 0),
-      ))).toBeLessThanOrEqual(0.02);
+      for (const camera of rampCameraSamples) {
+        // Native follows the old subject-fade lane, not the Canonical hard
+        // collision arm. Verify its actual pose instead of treating an absent
+        // hard-collision-only effectiveArmLengthMeters as a zero-length arm.
+        expect(camera.subjectOcclusion?.isEnabled).toBe(true);
+        expect(camera.actualPositionMetersXYZ).toEqual(camera.desiredPositionMetersXYZ);
+        expect(camera.requestedArmLengthMeters).toBeCloseTo(expectedCameraDistanceMeters, 8);
+      }
       expect(rampCameraSamples.every(({ decollisionPhase }) =>
         decollisionPhase !== "emergency-inside" &&
         decollisionPhase !== "constrained")).toBe(true);

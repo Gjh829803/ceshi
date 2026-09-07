@@ -14,10 +14,11 @@ describe("bounded Native representation measurement", () => {
   it.each([0, 2_001, 8_001, 100_000, NaN])("rejects an unmeasured workload size %s", (count) => {
     expect(() => budgetWorkloadDimensions(count)).toThrow(RangeError);
   });
-  it("selects the measured 8k candidate without relaxing Collider or physics topology budgets", () => {
+  it("keeps contribution and output budgets without a fixed source-count gate", () => {
     expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1).toMatchObject({
       ...BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
-      maximumBlockCount: 8_000, maximumOutputBytes: 4_000_000, timeoutSeconds: 1_800,
+      maximumOutputBytes: 4_000_000, timeoutSeconds: 1_800,
     });
+    expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1).not.toHaveProperty("maximumBlockCount");
   });
 });

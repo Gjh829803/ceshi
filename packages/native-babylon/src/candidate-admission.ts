@@ -1032,20 +1032,22 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
             "Create one independent invisible Collider proxy for every static collision join.",
           );
         }
-        if (target.collisionBinding.kind === "static-collider") {
-          const retained = colliderById.get(target.collisionBinding.colliderId);
-          if (
-            isNil(retained) ||
-            retained.mesh === target.mesh ||
-            joinedColliderIds.has(target.collisionBinding.colliderId)
-          ) {
-            throw failure(
-              "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
-              `Profile target '${target.elementId}' has an invalid Collider join.`,
-              "Join each static target to one unique registered independent Collider proxy.",
-            );
+        if (target.collisionBinding.kind === "static-colliders") {
+          for (const colliderId of target.collisionBinding.colliderIds) {
+            const retained = colliderById.get(colliderId);
+            if (
+              isNil(retained) ||
+              retained.mesh === target.mesh ||
+              joinedColliderIds.has(colliderId)
+            ) {
+              throw failure(
+                "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+                `Profile target '${target.elementId}' has an invalid Collider join.`,
+                "Join every static Collider to exactly one target using an independent proxy.",
+              );
+            }
+            joinedColliderIds.add(colliderId);
           }
-          joinedColliderIds.add(target.collisionBinding.colliderId);
         }
       }
       if (

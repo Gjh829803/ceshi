@@ -46,10 +46,14 @@ async function fixture(): Promise<{
   const routeDecisionPath = path.join(directory, "scene-authoring-route-decision.json");
   const attemptPath = path.join(directory, "scene-authoring-attempt.json");
   const resultPath = path.join(directory, "scene-authoring-attempt-result.json");
-  const brief = await readFile(
-    path.resolve("artifacts/scenes/cloud-ridge-celestial-gate/scene-brief.md"),
+  const template = await readFile(
+    path.resolve(".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md"),
     "utf8",
   );
+  // Current input comes from the maintained Planner template, not an immutable
+  // historical generation whose Brief/receipts belong to an older contract.
+  const brief = template.match(/```md\r?\n([\s\S]*?)\r?\n```/)?.[1];
+  if (!brief) throw new Error("Current Planner Brief template is missing.");
   const source = JSON.parse(
     await readFile(path.resolve("examples/authoring/basic-world.json"), "utf8"),
   );

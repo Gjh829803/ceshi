@@ -82,6 +82,13 @@ export interface FreezeBabylonNativeBlockLogicalGroundModelInputV1 {
   readonly selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }
 
+/** Source geometry shared by authoring feedback and the Host identity binder. */
+export type BabylonNativeBlockSourceGroundGeometryV1 = Pick<
+  BabylonNativeBlockLogicalGroundModelV1,
+  "declaredTraversalSurfaceProfileRefs" | "colliderGroups" |
+  "solidOccupancyCells" | "exposedSupportTopCells"
+>;
+
 const INPUT_CODE = "WORLDKIT_NATIVE_BLOCK_LOGICAL_GROUND_INPUT_INVALID";
 const IDENTITY_CODE = "WORLDKIT_NATIVE_BLOCK_LOGICAL_GROUND_IDENTITY_MISMATCH";
 const SOURCE_MISSING_CODE = "WORLDKIT_NATIVE_BLOCK_LOGICAL_GROUND_SOURCE_MISSING";
@@ -368,13 +375,37 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
 
   const checkedLayoutInventoryHash =
     hashBabylonNativeBlockCheckedLayoutInventoryV1(rawInput.checkedLayout);
+  const geometry = deriveBabylonNativeBlockSourceGroundGeometryV1({
+    blocks: rawInput.checkedLayout.layout.blocks, selections: rawInput.selections,
+  });
+  const identity = deepFreezePlainData({
+    buildEpochId: rawInput.buildEpochId,
+    checkedLayoutInventoryHash,
+    profileInventoryHash: rawInput.profileInventoryHash,
+    nativeSceneBootstrapHash: rawInput.nativeSceneBootstrapHash,
+  });
+  const body = deepFreezePlainData({
+    kind: "babylon-native-block-logical-ground-model" as const,
+    schemaVersion: 1 as const, identity, ...geometry,
+  });
+  return Object.freeze({ ...body,
+    logicalGroundModelHash: sha256CanonicalJson(body) as Sha256HashV1,
+  });
+}
+
+export function deriveBabylonNativeBlockSourceGroundGeometryV1(input: Readonly<{
+  blocks: readonly BabylonNativeBlockLayoutEntryV1[];
+  selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
+}>): BabylonNativeBlockSourceGroundGeometryV1 {
+  requireClosedKeys(input, ["blocks", "selections"], [], "sourceGround");
+  assertAcyclicPlainData(input);
   const blocksById = new Map<string, BabylonNativeBlockLayoutEntryV1>();
   const blocksByColliderGroupId = new Map<
     string,
     BabylonNativeBlockLayoutEntryV1[]
   >();
   const sourceBlockIdByCellKey = new Map<string, string>();
-  for (const entry of rawInput.checkedLayout.layout.blocks) {
+  for (const entry of input.blocks) {
     if (blocksById.has(entry.id)) {
       return fail(SOURCE_DUPLICATE_CODE, `Block '${entry.id}' appears twice.`);
     }
@@ -401,7 +432,7 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
   const colliderIds = new Set<string>();
   const selectedSourceKeys = new Set<string>();
   const selectedBlockIds = new Set<string>();
-  const resolved = [...rawInput.selections]
+  const resolved = [...input.selections]
     .map((selection, index) => {
       validateSelection(selection, index);
       if (colliderIds.has(selection.id)) {
@@ -492,23 +523,10 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
     stableCompare(left.topCellKey, right.topCellKey) ||
     stableCompare(left.colliderId, right.colliderId)));
 
-  const identity = deepFreezePlainData({
-    buildEpochId: rawInput.buildEpochId,
-    checkedLayoutInventoryHash,
-    profileInventoryHash: rawInput.profileInventoryHash,
-    nativeSceneBootstrapHash: rawInput.nativeSceneBootstrapHash,
-  });
-  const body = deepFreezePlainData({
-    kind: "babylon-native-block-logical-ground-model" as const,
-    schemaVersion: 1 as const,
-    identity,
+  return deepFreezePlainData({
     declaredTraversalSurfaceProfileRefs,
     colliderGroups,
     solidOccupancyCells,
     exposedSupportTopCells,
-  });
-  return Object.freeze({
-    ...body,
-    logicalGroundModelHash: sha256CanonicalJson(body) as Sha256HashV1,
   });
 }

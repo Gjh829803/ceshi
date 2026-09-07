@@ -199,7 +199,6 @@ async function makeInput() {
     bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
     seed: nativeSceneBootstrap.seed,
     budgets: {
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
@@ -342,11 +341,11 @@ async function makeInput() {
     },
     packageId: "package-input.package",
     worldId: "package-input-world",
-    worldBounds: {
+    worldBoundsPolicy: { mode: "fixed" as const, worldBounds: {
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [100, 100],
       heightRangeMeters: [-20, 80],
-    },
+    } },
     resourceBudget: {
       maximumVertices: 1_000,
       maximumTriangles: 1_000,
@@ -668,11 +667,20 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     const input = await makeInput();
     await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
       ...input,
-      worldBounds: {
+      worldBoundsPolicy: { mode: "fixed", worldBounds: {
         centerMetersXZ: [0, 0],
         sizeMetersXZ: [2, 2],
         heightRangeMeters: [-20, 80],
-      },
+      } },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    expect(input.createCount).toBe(2);
+    expect(input.disposeCount).toBe(2);
+  }, 45_000);
+
+  it("does not derive Block bounds for a generic Native module without checked Block evidence", async () => {
+    const input = await makeInput();
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...input, worldBoundsPolicy: { mode: "checked-block-layout" },
     })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
     expect(input.createCount).toBe(2);
     expect(input.disposeCount).toBe(2);

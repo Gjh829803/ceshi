@@ -1,12 +1,21 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import { validateSubjectDesignV1, type SubjectDesignV1 } from "@whitebox-world/authoring/subject-design";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  admitNativeBlockGroundExplorationV1,
+  isValidVisualTargetFrontDirectionWorldXZV1,
+  parseBabylonNativeInitialCameraV1,
+  parseNativeBlockGroundExplorationV1,
+  type BabylonNativeInitialCameraV1,
+  type NativeBlockGroundExplorationV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
   type WorldReconstructionCaseV1,
 } from "@whitebox-world/validation/reconstruction-contracts";
-import { isEqual, isNil } from "lodash-es";
+import { isEqual, isNil, min, max } from "lodash-es";
 
 import type {
   BabylonNativeBlockVisualGroupInventoryV1,
@@ -26,6 +35,7 @@ export interface NativeBlockAuthoringVisualGroupV1 {
   readonly acceptanceTargetRef: string;
   readonly semanticClassId: string;
   readonly identityColorHex: `#${string}`;
+  readonly frontDirectionWorldXZ: readonly [number, number];
 }
 
 export interface NativeBlockAuthoringManifestV1 {
@@ -35,6 +45,12 @@ export interface NativeBlockAuthoringManifestV1 {
   readonly blockProfileRef:
     typeof BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1;
   readonly visualGroups: readonly NativeBlockAuthoringVisualGroupV1[];
+  readonly controlledSubject: Readonly<{
+    visualTargetId: string;
+    design: SubjectDesignV1;
+  }>;
+  readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
 }
 
 export interface NativeBlockVisualResourceListV1 {
@@ -44,6 +60,8 @@ export interface NativeBlockVisualResourceListV1 {
 }
 
 export interface NativeBlockAuthoringLayoutBindingV1 {
+  readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
   readonly kind: "native-block-authoring-layout-binding";
   readonly schemaVersion: 1;
   readonly caseHash: Sha256HashV1;
@@ -55,6 +73,7 @@ export interface NativeBlockAuthoringLayoutBindingV1 {
     visualGroupId: string;
     semanticClassId: string;
     identityColorHex: `#${string}`;
+    frontDirectionWorldXZ: readonly [number, number];
     blockIds: readonly string[];
     paletteRoles: BabylonNativeBlockVisualGroupInventoryV1["paletteRoles"];
     minimumMetersXYZ: BabylonNativeBlockVisualGroupInventoryV1["minimumMetersXYZ"];
@@ -228,16 +247,31 @@ export function parseNativeBlockAuthoringManifestV1(
 ): NativeBlockAuthoringManifestV1 {
   const code = "WORLDKIT_NATIVE_BLOCK_AUTHORING_MANIFEST_INVALID";
   assertPlainData(input, code);
-  if (containsAuthorityField(input)) {
-    return fail(code, "Subject, Camera, Physics, Runtime and Gameplay authority fields are forbidden");
-  }
   const source = exactRecord(input, [
     "kind",
     "schemaVersion",
     "entryModulePath",
     "blockProfileRef",
     "visualGroups",
+    "controlledSubject",
+    "openingCamera",
+    "groundExploration",
   ], code, "manifest");
+  const { openingCamera: cameraIntent, controlledSubject: subjectIntent, ...declarations } = source;
+  if (containsAuthorityField(declarations)) {
+    return fail(code, "Subject, Camera, Physics, Runtime and Gameplay authority fields are forbidden");
+  }
+  let openingCamera: BabylonNativeInitialCameraV1;
+  try { openingCamera = parseBabylonNativeInitialCameraV1(cameraIntent); }
+  catch { return fail(code, "openingCamera must contain only the closed third-person numeric intent"); }
+  const subject = exactRecord(subjectIntent, ["visualTargetId", "design"], code, "controlledSubject");
+  if (typeof subject.visualTargetId !== "string" || !/^visual-target-[1-5]$/.test(subject.visualTargetId)) {
+    return fail(code, "controlledSubject requires one declared visualTargetId");
+  }
+  const subjectDesign = validateSubjectDesignV1(subject.design);
+  if (!subjectDesign.ok || subjectDesign.value === undefined) {
+    return fail(code, "controlledSubject requires the closed registered/composed Subject design");
+  }
   if (
     source.kind !== "native-block-authoring" ||
     source.schemaVersion !== 1 ||
@@ -252,6 +286,7 @@ export function parseNativeBlockAuthoringManifestV1(
       "acceptanceTargetRef",
       "semanticClassId",
       "identityColorHex",
+      "frontDirectionWorldXZ",
     ], code, path);
     const visualGroupId = text(row.visualGroupId, code, `${path}/visualGroupId`);
     const semanticClassId = text(row.semanticClassId, code, `${path}/semanticClassId`);
@@ -268,6 +303,9 @@ export function parseNativeBlockAuthoringManifestV1(
     if (!IDENTITY_COLOR_HEX.test(identityColorHex)) {
       return fail(code, `${path}/identityColorHex must be uppercase #RRGGBB`);
     }
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(row.frontDirectionWorldXZ)) {
+      return fail(code, `${path}/frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates`);
+    }
     return Object.freeze({
       visualGroupId,
       acceptanceTargetRef: stableRef(
@@ -277,6 +315,7 @@ export function parseNativeBlockAuthoringManifestV1(
       ),
       semanticClassId,
       identityColorHex: identityColorHex as `#${string}`,
+      frontDirectionWorldXZ: Object.freeze([...row.frontDirectionWorldXZ]) as readonly [number, number],
     });
   });
   requireStrictlySortedUnique(
@@ -299,6 +338,9 @@ export function parseNativeBlockAuthoringManifestV1(
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+    controlledSubject: Object.freeze({ visualTargetId: subject.visualTargetId, design: structuredClone(subjectDesign.value) }),
+    openingCamera,
+    groundExploration: parseNativeBlockGroundExplorationV1(source.groundExploration),
     visualGroups: Object.freeze(visualGroups),
   });
 }
@@ -378,10 +420,10 @@ function derivedVisualGroups(
           sortedBlocks.map(({ paletteRole }) => paletteRole),
         )].sort(stableCompare)),
         minimumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-          Math.min(...sortedBlocks.map((block) => block.minimumMetersXYZ[axis]!)),
+          min(sortedBlocks.map((block) => block.minimumMetersXYZ[axis]!))!,
         ) as [number, number, number]),
         maximumMetersXYZ: Object.freeze([0, 1, 2].map((axis) =>
-          Math.max(...sortedBlocks.map((block) => block.maximumMetersXYZ[axis]!)),
+          max(sortedBlocks.map((block) => block.maximumMetersXYZ[axis]!))!,
         ) as [number, number, number]),
       });
     }));
@@ -461,6 +503,13 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   }
   const semanticTargetRefs = reconstructionCase.expected.semanticSilhouetteTargets
     .map(({ acceptanceTargetRef }) => acceptanceTargetRef);
+  const expectedSpawn = reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+  const groundExploration = admitNativeBlockGroundExplorationV1(
+    authoringManifest.groundExploration,
+    reconstructionCase.expected.groundConnectivity.mode,
+    [expectedSpawn.xMeters, expectedSpawn.yMeters, expectedSpawn.zMeters],
+    reconstructionCase.expected.groundConnectivity.requireSingleReachableComponent,
+  );
   const caseHash = hashWorldReconstructionCaseV1(
     reconstructionCase,
   ) as Sha256HashV1;
@@ -546,6 +595,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
         visualGroupId: row.visualGroupId,
         semanticClassId: row.semanticClassId,
         identityColorHex: row.identityColorHex,
+        frontDirectionWorldXZ: row.frontDirectionWorldXZ,
         blockIds: Object.freeze([...checkedGroup.blockIds]),
         paletteRoles: Object.freeze([...checkedGroup.paletteRoles]),
         minimumMetersXYZ: Object.freeze([...checkedGroup.minimumMetersXYZ]) as
@@ -556,6 +606,8 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
     });
   return Object.freeze({
     kind: "native-block-authoring-layout-binding",
+    openingCamera: authoringManifest.openingCamera,
+    groundExploration,
     schemaVersion: 1,
     caseHash,
     authoringManifestHash,

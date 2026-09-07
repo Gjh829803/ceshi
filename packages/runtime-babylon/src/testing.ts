@@ -14,3 +14,5 @@ export {
   formalCaptureRequestFixtureV1,
   formalHostedPayloadFixtureV1,
 } from "./formal-world-capture-test-fixture.js";
+export { FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 } from "./formal-world-capture-provider.js";
+export { NativeBlockSubjectOcclusionFadeV1 } from "./native-block-subject-occlusion.js";

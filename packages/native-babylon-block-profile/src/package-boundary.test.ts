@@ -1,7 +1,16 @@
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
+
+it("imports the actual Native Profile entry with string code generation disabled", () => {
+  const result = spawnSync(process.execPath, [
+    "--disallow-code-generation-from-strings", "--import", "tsx", "--input-type=module",
+    "-e", 'await import("@whitebox-world/native-babylon-block-profile");',
+  ], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), encoding: "utf8" });
+  expect(result.status, result.stderr.slice(-1200)).toBe(0);
+}, 15_000);
 
 import type {
   BabylonNativeBlockReconstructionCorpusCaseIdV1 as TestingCorpusCaseIdV1,
@@ -76,6 +85,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       },
       dependencies: {
         "@babylonjs/core": "9.23.0",
+        "@whitebox-world/authoring": "workspace:*",
         "@whitebox-world/native-babylon": "workspace:*",
         "@whitebox-world/protocol": "workspace:*",
         "@whitebox-world/runtime-contracts": "workspace:*",
@@ -87,6 +97,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     });
     expect(Object.keys(manifest.dependencies as object).sort()).toEqual([
       "@babylonjs/core",
+      "@whitebox-world/authoring",
       "@whitebox-world/native-babylon",
       "@whitebox-world/protocol",
       "@whitebox-world/runtime-contracts",
@@ -128,6 +139,14 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       for (const specifier of specifiers) {
         if (specifier === "@whitebox-world/native-babylon/host") {
           expect(isHostBoundary, path).toBe(true);
+        } else if (specifier === "@whitebox-world/authoring/subject-design") {
+          // CF-12 uses the existing closed Subject intent parser, not a
+          // second Canonical world parser or a Native-owned Runtime Subject.
+          expect(path.endsWith("/authoring-manifest.ts"), path).toBe(true);
+          expect(source.match(/import\s*\{([^}]+)\}\s*from\s*["']@whitebox-world\/authoring\/subject-design["']/)?.[1]
+            ?.split(",").map((name) => name.trim()).sort()).toEqual([
+              "type SubjectDesignV1", "validateSubjectDesignV1",
+            ]);
         } else {
           expect(specifier, path).not.toMatch(
             /native-babylon\/host|runtime-babylon|@babylonjs\/havok|three|@whitebox-world\/(?:authoring|compiler|runtime-host|world)(?:\/|$)|^babylonjs$|^node:|^(?:fs|path|http|https|net|tls|dgram|dns)$/,
@@ -189,10 +208,13 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "bindBlockMaterializerMetadataToSemanticCaptureTargetsV1",
       "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
+      "createBabylonNativeBlockInputParsersV1",
       "createBabylonNativeBlockProfileSessionV1",
+      "createBabylonNativeBlockVisualClustersV1",
       "hashBabylonNativeBlockCheckedLayoutInventoryV1",
       "hashNativeBlockAuthoringManifestV1",
       "hashNativeBlockVisualResourceListV1",
+      "isBabylonNativeBlockIdV1",
       "parseNativeBlockAuthoringManifestV1",
       "parseNativeBlockVisualResourceListV1",
     ]);
@@ -235,12 +257,16 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "partitionBabylonNativeBlockCollisionIntoChunksV1",
       "applyBabylonNativeBlockCaptureIsolationV1",
       "freezeBabylonNativeBlockLogicalGroundModelV1",
+      "deriveBabylonNativeBlockSourceGroundGeometryV1",
+      "deriveBabylonNativeBlockSourceLayoutV1",
       "BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1",
       "buildBabylonNativeBlockWalkableTopologyV1",
       "buildBabylonNativeBlockGroundBoundaryV1",
       "createBabylonNativeBlockGroundBoundaryContributionV1",
       "materializeBabylonNativeBlockWalkableTopologyV1",
       "analyzeBabylonNativeBlockGroundV1",
+      "analyzeBabylonNativeBlockSourceGroundV1",
+      "evaluateBabylonNativeBlockSourceStandabilityV1",
       "assessBabylonNativeBlockOptimizationV1",
       "BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1",
       "BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1",
@@ -265,8 +291,10 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "babylonNativeBlockCenterAlignsToGridV1",
       "babylonNativeBlockOccupiedMicroCellKeysV1",
       "createBabylonNativeBlockColliderRuntimeFixtureModuleV1",
+      "createBabylonNativeBlockProfileCheckResultV1",
       "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
       "createBabylonNativeBlockReconstructionCorpusModuleV1",
+      "deriveBabylonNativeBlockLayoutV1",
       "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
       "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
     ].sort());

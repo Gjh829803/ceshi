@@ -780,9 +780,7 @@ export function assertBabylonNativeWorldPackageMembershipV1(
           hostProfileSettlement.profileInventoryHash ||
         materializerMetadata.settledVisualHash !==
           hostProfileSettlement.settledVisualHash ||
-        materializerMetadata.blocks.length +
-          materializerMetadata.colliderJoins.filter(({ proxyKind }) =>
-            proxyKind === "continuous-walkable-surface").length !==
+        materializerMetadata.settledVisualTargetCount !==
           hostProfileSettlement.targetCount ||
         !isEqual(materializerColliderIds, contributionColliderIds)
       )

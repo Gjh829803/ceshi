@@ -112,7 +112,6 @@ export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
     ({ visualGroupId }) => visualGroupId,
   );
   if (
-    input.semanticSilhouetteTargets.length === 0 ||
     caseTargetRefs.some((value) => typeof value !== "string" || value.length === 0) ||
     caseGroupIds.some((value) => typeof value !== "string" || value.length === 0) ||
     new Set(caseTargetRefs).size !== caseTargetRefs.length ||
@@ -146,6 +145,10 @@ export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
       "palette-invalid",
       error instanceof Error ? error.message : String(error),
     );
+  }
+  if (!palette.targets.some((target) => target.role === "primary-subject" &&
+    target.visualTargetId === authoringManifest.controlledSubject.visualTargetId)) {
+    return rejected("manifest-invalid", "Controlled Subject must bind the exact Palette primary Subject target.");
   }
   const sortedCaseTargetRefs = [...caseTargetRefs].sort(stableCompare);
   const sortedManifestTargetRefs = authoringManifest.visualGroups

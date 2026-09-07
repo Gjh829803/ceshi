@@ -1,3 +1,4 @@
+import { createBabylonNativeBlockVisualClustersV1, type BabylonNativeBlockVisualClusterSourceV1 } from "./visual-clusters.js";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { groupBy, isEqual } from "lodash-es";
 
@@ -34,7 +35,12 @@ export type BabylonNativeBlockOptimizationResidencyGroupV1 =
 
 export interface BabylonNativeBlockThinInstanceGroupV1 {
   readonly id: string;
-  readonly residencyGroupId: string;
+  readonly visualChunkIndexXZ: readonly [number, number];
+  readonly clusters: readonly Readonly<{
+    sourceBlockIds: readonly string[];
+    minimumMetersXYZ: readonly [number, number, number];
+    maximumMetersXYZ: readonly [number, number, number];
+  }>[];
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly semanticCaptureClassId: string;
@@ -304,54 +310,43 @@ export function createBabylonNativeBlockResidencyGroupsV1(
 
 /**
  * Single owner of Thin Instance batch membership. A batch may join Blocks only
- * inside one Chunk, one fixed shape, one palette role and at most one semantic
- * visual group; every other Block stays an independent Mesh.
+ * inside one 32m visual Chunk, one fixed shape, one palette role and at most one semantic
+ * visual group. Singleton partitions use the same display path as the pinned
+ * old renderer, so they also participate in per-instance Subject occlusion.
  */
-export type BabylonNativeBlockBatchMembershipV1 = Readonly<{
-  id: string;
-  shape: BabylonNativeBlockShapeKindV1;
-  paletteRole: BabylonNativeBlockPaletteRoleV1;
-  visualGroupId?: string;
-}>;
-
 export function createBabylonNativeBlockThinInstanceGroupsV1(
-  blocks: readonly BabylonNativeBlockBatchMembershipV1[],
-  residencyByBlockId: ReadonlyMap<string, string>,
+  blocks: readonly BabylonNativeBlockVisualClusterSourceV1[],
 ): Readonly<{
   groups: readonly BabylonNativeBlockThinInstanceGroupV1[];
   independentBlockIds: readonly string[];
 }> {
-  const candidateBlocks = blocks.filter((block) =>
-    residencyByBlockId.get(block.id)?.startsWith("grid-chunk-") === true);
-  const partitions = groupBy(candidateBlocks, (block) => JSON.stringify([
-    residencyByBlockId.get(block.id),
-    block.shape,
-    block.paletteRole,
-    block.visualGroupId ?? null,
+  const clusters = createBabylonNativeBlockVisualClustersV1(blocks);
+  const partitions = groupBy(clusters, (cluster) => JSON.stringify([
+    cluster.chunkIndexXZ, cluster.source.shape, cluster.source.paletteRole,
+    cluster.source.visualGroupId ?? null,
   ]));
-  const eligiblePartitions = Object.entries(partitions)
-    .filter(([, members]) => members.length >= 2)
-    .sort(([left], [right]) => stableCompare(left, right));
   const groupedBlockIds = new Set<string>();
-  const groups = eligiblePartitions.map(([, members], index) => {
-    const first = members[0]!;
-    const blockIds = members.map(({ id }) => id).sort(stableCompare);
-    blockIds.forEach((id) => groupedBlockIds.add(id));
-    return {
-      id: `thin-instance-group-${String(index + 1).padStart(4, "0")}`,
-      residencyGroupId: residencyByBlockId.get(first.id)!,
-      shape: first.shape,
-      paletteRole: first.paletteRole,
-      semanticCaptureClassId:
-        `worldkit.native-block.group.${first.visualGroupId ?? "ungrouped"}`,
-      blockIds,
-    };
-  });
+  const groups = Object.entries(partitions)
+    .sort(([left], [right]) => stableCompare(left, right))
+    .map(([, members], index) => {
+      const first = members[0]!;
+      const blockIds = members.flatMap(({ sourceBlockIds }) => sourceBlockIds).sort(stableCompare);
+      blockIds.forEach((id) => groupedBlockIds.add(id));
+      return Object.freeze({
+        id: `thin-instance-group-${String(index + 1).padStart(4, "0")}`,
+        visualChunkIndexXZ: first.chunkIndexXZ,
+        shape: first.source.shape,
+        paletteRole: first.source.paletteRole,
+        semanticCaptureClassId: `worldkit.native-block.group.${first.source.visualGroupId ?? "ungrouped"}`,
+        blockIds: Object.freeze(blockIds),
+        clusters: Object.freeze(members.map(({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }) =>
+          Object.freeze({ sourceBlockIds, minimumMetersXYZ, maximumMetersXYZ }))),
+      });
+    });
   return Object.freeze({
-    groups,
-    independentBlockIds: blocks.map(({ id }) => id)
-      .filter((id) => !groupedBlockIds.has(id))
-      .sort(stableCompare),
+    groups: Object.freeze(groups),
+    independentBlockIds: Object.freeze(blocks.map(({ id }) => id)
+      .filter((id) => !groupedBlockIds.has(id)).sort(stableCompare)),
   });
 }
 
@@ -395,7 +390,6 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
   );
   const thin = createBabylonNativeBlockThinInstanceGroupsV1(
     blocks,
-    residency.residencyGroupIdByBlockId,
   );
   assertExactCoverage(
     blocks.map(({ id }) => id),
@@ -411,10 +405,12 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
   const topologyColliderIds = colliders.map(({ colliderId }) => colliderId)
     .sort(stableCompare);
 
+  const authoringClusterCount = thin.groups.reduce(
+    (sum, group) => sum + group.clusters.length, thin.independentBlockIds.length);
   const baselineResources = {
-    visualMeshCount: blocks.length,
-    visualDrawUnitCount: blocks.length,
-    visualGeometryBufferSetCount: blocks.length,
+    visualMeshCount: authoringClusterCount,
+    visualDrawUnitCount: authoringClusterCount,
+    visualGeometryBufferSetCount: authoringClusterCount,
     paletteMaterialCount: new Set(blocks.map(({ paletteRole }) => paletteRole))
       .size,
     colliderProxyCount: colliders.length,

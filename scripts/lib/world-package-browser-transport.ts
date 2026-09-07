@@ -1,5 +1,4 @@
 import {
-  verifyWorldPackageDirectoryV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageFileIntegrityEntryV1,
 } from "@whitebox-world/world-package";
@@ -18,6 +17,8 @@ export interface CreateWorldPackageBrowserTransportV1Input {
 }
 
 export interface WorldPackageBrowserTransportPortsV1 {
+  /** Trusted reader: returns only after the complete directory admission,
+   * including symlink-safe IO, inventory, hashes, and semantic validation. */
   readonly readDirectory?: typeof readWorldPackageDirectoryV1;
 }
 
@@ -28,6 +29,12 @@ export interface WorldPackageBrowserTransportV1 {
     | "babylon-native-scene";
   readonly fileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
   readonly receipt: WorldPackageBuildReceiptV1;
+  /** Already-admitted bytes for startup construction only, not a freshness
+   * assertion. HTTP handlers must keep using readReceipt()/read(). */
+  readStartupSnapshot(packagePath: string): Readonly<{
+    receiptBytes: Uint8Array;
+    fileBytes: Uint8Array;
+  }>;
   readReceipt(): Promise<Uint8Array>;
   read(packagePath: string): Promise<Uint8Array>;
   dispose(): void;
@@ -84,12 +91,14 @@ export async function createWorldPackageBrowserTransportV1(
     packageDirectoryPath: input.packageDirectoryPath,
     ...readLimits,
   });
-  const initialVerified = verifyWorldPackageDirectoryV1(initialDirectory);
-  const worldPackageRootHash = initialVerified.receipt.worldPackageRootHash;
-  const receipt = initialVerified.receipt;
+  // The file reader already calls assembleWorldPackageDirectoryV1, including
+  // its complete verifier. Repeating that admission here can exceed the Vite
+  // startup deadline for large Block metadata. Never cache across disk reads.
+  const receipt = initialDirectory.receipt;
+  const worldPackageRootHash = receipt.worldPackageRootHash;
   const receiptBytes = canonicalJsonBytes(receipt);
   const fileIntegrityEntries = Object.freeze(
-    initialVerified.receipt.fileIntegrityEntries.map((entry) =>
+    receipt.fileIntegrityEntries.map((entry) =>
       Object.freeze({ ...entry })),
   );
   const admittedPaths = new Set(fileIntegrityEntries.map((entry) => entry.path));
@@ -117,8 +126,7 @@ export async function createWorldPackageBrowserTransportV1(
         packageDirectoryPath: input.packageDirectoryPath,
         ...readLimits,
       });
-      const currentVerified = verifyWorldPackageDirectoryV1(currentDirectory);
-      if (currentVerified.receipt.worldPackageRootHash !== worldPackageRootHash) {
+      if (currentDirectory.receipt.worldPackageRootHash !== worldPackageRootHash) {
         fail(
           "WORLD_PACKAGE_BROWSER_PACKAGE_DRIFTED",
           "the Package Root changed after transport admission",
@@ -155,9 +163,20 @@ export async function createWorldPackageBrowserTransportV1(
 
   return Object.freeze({
     worldPackageRootHash,
-    sceneSourceKind: initialVerified.kind,
+    sceneSourceKind: receipt.manifest.sceneSource.kind,
     fileIntegrityEntries,
     receipt,
+    readStartupSnapshot(packagePath: string) {
+      requireActive();
+      const admittedPath = requireAdmittedPackagePath(packagePath, admittedPaths);
+      const bytes = initialBytesByPath.get(admittedPath);
+      if (isNil(bytes)) return fail("WORLD_PACKAGE_BROWSER_PATH_UNADMITTED",
+        "the requested file is absent from the admitted startup snapshot");
+      return Object.freeze({
+        receiptBytes: new Uint8Array(receiptBytes),
+        fileBytes: new Uint8Array(bytes),
+      });
+    },
     async readReceipt(): Promise<Uint8Array> {
       requireActive();
       await verifyStillAdmitted();

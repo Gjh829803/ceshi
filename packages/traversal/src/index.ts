@@ -150,6 +150,7 @@ export {
   resolveTraversalGraphBuilderProfile,
 } from "./profile-registry.js";
 export type {
+  TraversalColliderSourceV1,
   TraversalSurfaceIdentityV1,
   TraversalRuntimeImplementationIdentityV1,
   ResolvedTraversalLockV1,

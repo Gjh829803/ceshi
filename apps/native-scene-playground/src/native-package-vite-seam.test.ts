@@ -25,12 +25,13 @@ import {
   createWorldPackageTestInputV1,
 } from
   "@whitebox-world/world-package/testing";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveConfig, type Connect, type Plugin, type UserConfig } from "vite";
 
 import { writeWorldPackageDirectoryV1 } from
   "../../../scripts/lib/file-world-package.js";
 import { createNativeScenePlaygroundViteConfigV1 } from "../vite.config.js";
+import { nativeSceneSubjectAssetResolver } from "./subject-asset-resolver.js";
 
 const SHELL_ORIGIN = "http://127.0.0.1:35174";
 const RUNTIME_ORIGIN = "http://127.0.0.1:35175";
@@ -58,7 +59,7 @@ function nativePackagePlugin(config: UserConfig): Plugin {
   return plugin;
 }
 
-async function createConfig(): Promise<UserConfig> {
+async function createConfig(overrides: Record<string, string> = {}): Promise<UserConfig> {
   return createNativeScenePlaygroundViteConfigV1({
     WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
     WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
@@ -67,6 +68,7 @@ async function createConfig(): Promise<UserConfig> {
     WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
     WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+    ...overrides,
   });
 }
 
@@ -90,7 +92,7 @@ function middlewareStack(config: UserConfig): readonly Connect.NextHandleFunctio
 
 async function invoke(
   stack: readonly Connect.NextHandleFunction[],
-  input: Readonly<{ method: string; url: string }>,
+  input: Readonly<{ method: string; url: string; host?: string }>,
 ): Promise<Readonly<{
   statusCode: number;
   headers: Readonly<Record<string, string | number | readonly string[]>>;
@@ -100,7 +102,7 @@ async function invoke(
   const request = Object.assign(new EventEmitter(), {
     method: input.method,
     url: input.url,
-    headers: { host: new URL(SHELL_ORIGIN).host },
+    headers: { host: input.host ?? new URL(SHELL_ORIGIN).host },
   }) as IncomingMessage;
   const chunks: Uint8Array[] = [];
   const headers: Record<string, string | number | readonly string[]> = {};
@@ -164,10 +166,67 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await rm(testRootPath, { recursive: true, force: true });
 });
 
 describe("Native Playground verified Package Vite seam", () => {
+  const goldenPath = "/subject-assets/humanoid/golden/v2/golden-humanoid.glb";
+  const goldenHash = "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8";
+
+  it("serves the old Golden asset only with its locked content hash", async () => {
+    const stack = middlewareStack(await createConfig());
+    const response = await invoke(stack, { method: "GET",
+      url: `${goldenPath}?worldkit-content-hash=${encodeURIComponent(goldenHash)}` });
+    expect(response.statusCode).toBe(200);
+    expect(Buffer.from(response.bytes)).toEqual(await readFile(new URL(
+      `../../playground/public${goldenPath}`, import.meta.url,
+    )));
+    for (const url of [goldenPath, `${goldenPath}?worldkit-content-hash=wrong`,
+      "/subject-assets/unknown.glb"]) {
+      const rejected = await invoke(stack, { method: "GET", url });
+      expect(rejected.statusCode).toBe(404);
+      expect(rejected.reachedFallback).toBe(false);
+    }
+  });
+
+  it("resolves the Host-selected Golden subject through the actual asset middleware", async () => {
+    const stack = middlewareStack(await createConfig());
+    vi.stubGlobal("location", { origin: RUNTIME_ORIGIN });
+    vi.stubGlobal("fetch", async (value: URL, options: RequestInit) => {
+      expect(value.origin).toBe(RUNTIME_ORIGIN);
+      expect(options).toEqual({ mode: "same-origin", credentials: "same-origin",
+        redirect: "error", cache: "no-store" });
+      const response = await invoke(stack, { method: "GET", host: value.host,
+        url: value.pathname + value.search });
+      return new Response(new Uint8Array(response.bytes), { status: response.statusCode });
+    });
+    const resolved = await nativeSceneSubjectAssetResolver.resolveSubjectAsset({
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
+      artifactContentHash: goldenHash, byteLength: 48_060, mediaType: "model/gltf-binary",
+    });
+    expect(resolved.sourceLabel).toBe(goldenPath);
+    expect(Buffer.from(resolved.bytes)).toEqual(await readFile(new URL(
+      `../../playground/public${goldenPath}`, import.meta.url,
+    )));
+  });
+
+  it("keeps Studio capability server-only and rejects a Runtime or mismatched Package binding", async () => {
+    const binding = { sceneId: "palace", worldPackageRootHash: packageDirectory.receipt.worldPackageRootHash,
+      studioOrigin: "http://127.0.0.1:3000", capability: "a".repeat(64) };
+    const config = await createConfig({ WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify(binding) });
+    expect(JSON.parse(config.define!.__WORLDKIT_RECORDING_CONTEXT__)).toEqual({
+      sceneId: binding.sceneId, worldPackageRootHash: binding.worldPackageRootHash,
+    });
+    expect(JSON.stringify(config.define)).not.toContain(binding.capability);
+    expect(JSON.stringify(config.define)).not.toContain(binding.studioOrigin);
+    await expect(createConfig({ WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify(binding) })).rejects.toThrow("BINDING_SOURCE_MISMATCH");
+    await expect(createConfig({ WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify({ ...binding,
+      worldPackageRootHash: `sha256:${"f".repeat(64)}` }) })).rejects.toThrow("BINDING_SOURCE_MISMATCH");
+    const standalone = await createConfig();
+    expect(standalone.define!.__WORLDKIT_RECORDING_CONTEXT__).toBe("null");
+  });
   it("fails closed without an explicit Package path", async () => {
     await expect(createNativeScenePlaygroundViteConfigV1({
       WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
@@ -204,6 +263,7 @@ describe("Native Playground verified Package Vite seam", () => {
     expect(runtimeConfig.optimizeDeps).toEqual({
       include: [
         "@babylonjs/core/Maths/math.viewport.js",
+        "@babylonjs/core/Meshes/Builders/boxBuilder.js",
         "@babylonjs/core/scene.js",
       ],
     });
@@ -236,6 +296,17 @@ describe("Native Playground verified Package Vite seam", () => {
     expect(verifierConfig.define).toMatchObject({
       __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: "true",
     });
+  });
+
+  it("allows Studio media only in the trusted shell and keeps Runtime media blocked", async () => {
+    const stack = middlewareStack(await createConfig());
+    const shell = await invoke(stack, { method: "GET", url: "/" });
+    const runtime = await invoke(stack, { method: "GET", url: "/", host: new URL(RUNTIME_ORIGIN).host });
+    expect(shell.headers["content-security-policy"]).toContain("media-src 'self'");
+    expect(shell.headers["content-security-policy"]).toContain("img-src 'self' data:");
+    expect(runtime.headers["content-security-policy"]).toContain("media-src 'none'");
+    expect(runtime.headers["content-security-policy"]).toContain("img-src data:");
+    expect(String(runtime.headers["content-security-policy"])).not.toContain("media-src 'self'");
   });
 
   it("injects only explicit trusted formal Capture construction identities", async () => {

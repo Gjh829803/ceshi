@@ -1,31 +1,118 @@
 import { Camera } from "@babylonjs/core/Cameras/camera.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
+import { BoundingInfo } from "@babylonjs/core/Culling/boundingInfo.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import { extractMinAndMax } from "@babylonjs/core/Maths/math.functions.js";
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration.js";
+import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture.js";
+import { Constants } from "@babylonjs/core/Engines/constants.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import type { FormalWorldBoundsMetersV1 } from "@whitebox-world/runtime-contracts";
+import {
+  type FormalWorldBoundsMetersV1,
+  inspectWhiteboxTriviewPixelsV1,
+  WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  applyBabylonNativeBlockCaptureIsolationV1,
+  babylonNativeBlockLiveVisualHandleMeshV1,
+  babylonNativeBlockLiveVisualHandleWorldMatrixV1,
+  peekBabylonNativeBlockLiveHandleRegistryV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 
 import {
   fitOrthographicBoundsToWorldExtentsV1,
   orientCameraAtExactPose,
 } from "./formal-world-camera.js";
 
+// Preserve the old capture's active animation dependencies without visible pixels.
+const TRIVIEW_NON_TARGET_VISIBILITY = 1e-6;
+const TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW = 8;
+const REVIEW_TRIVIEW_ELEVATION_RADIANS_V1 = 10 * Math.PI / 180;
+
+function panelHasRenderableForeground(
+  context: CanvasRenderingContext2D,
+  outputWidthPixels: number,
+  heightPixels: number,
+  panelIndex: number,
+): boolean {
+  return inspectWhiteboxTriviewPixelsV1(
+    context.getImageData(0, 0, outputWidthPixels, heightPixels).data,
+    outputWidthPixels,
+    heightPixels,
+  ).viewInspections[panelIndex]!.isRenderable;
+}
+
+export interface BabylonTriviewProjectionV1 {
+  readonly halfHeightMeters: number;
+  readonly viewDirectionsWorldXYZ: readonly [
+    readonly [number, number, number],
+    readonly [number, number, number],
+    readonly [number, number, number],
+  ];
+}
+
+export function deriveBabylonTriviewProjectionV1(options: Readonly<{
+  sizeMetersXYZ: readonly [number, number, number];
+  panelAspectRatio: number;
+  frontDirectionWorldXZ: readonly [number, number];
+}>): BabylonTriviewProjectionV1 {
+  const [frontX, frontZ] = options.frontDirectionWorldXZ;
+  const front = new Vector3(frontX, 0, frontZ);
+  if (!Number.isFinite(options.panelAspectRatio) || options.panelAspectRatio <= 0 ||
+      ![options.sizeMetersXYZ[0], options.sizeMetersXYZ[1], options.sizeMetersXYZ[2]]
+        .every((value) => Number.isFinite(value) && value >= 0) ||
+      Math.abs(front.lengthSquared() - 1) > 1e-9) {
+    throw new Error("BABYLON_ARTIFACT_TRIVIEW_PROJECTION_INVALID");
+  }
+  // Runtime scenes are right-handed. Looking from the target's local right
+  // keeps its semantic front pointing toward the right edge of the center panel.
+  const right = Vector3.Cross(front, Vector3.UpReadOnly).normalize();
+  const horizontalSpanMeters = (axis: Vector3): number =>
+    Math.abs(axis.x) * options.sizeMetersXYZ[0] +
+    Math.abs(axis.z) * options.sizeMetersXYZ[2];
+  const maximumHorizontalSpanMeters = Math.max(
+    horizontalSpanMeters(right),
+    horizontalSpanMeters(front),
+  );
+  const halfHeightMeters = Math.max(
+    options.sizeMetersXYZ[1] * 0.58,
+    (maximumHorizontalSpanMeters * 0.58) / options.panelAspectRatio,
+    0.5,
+  );
+  const stable = (value: number): number => Object.is(value, -0) ? 0 : value;
+  return {
+    halfHeightMeters,
+    viewDirectionsWorldXYZ: [
+      [stable(front.x), 0, stable(front.z)],
+      [stable(right.x), 0, stable(right.z)],
+      [stable(-front.x), 0, stable(-front.z)],
+    ],
+  };
+}
+
 export interface BabylonArtifactProjectedBoundsV1 {
   readonly centerRatioXY: readonly [number, number];
   readonly sizeRatioXY: readonly [number, number];
 }
 
-export interface BabylonArtifactCaptureResultV1 {
+export interface BabylonArtifactCapturedPixelsV1 {
   readonly dataUrl: string;
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly pixelsRgba: Uint8ClampedArray;
+}
+
+export interface BabylonArtifactCaptureResultV1 extends BabylonArtifactCapturedPixelsV1 {
+  /** @internal Optional requested identity pass, never a replacement display image. */
+  readonly identityMask?: BabylonArtifactCapturedPixelsV1;
   readonly projectedBoundsByEntityId: Readonly<
     Record<string, BabylonArtifactProjectedBoundsV1>
   >;
@@ -42,9 +129,53 @@ export interface BabylonArtifactCaptureMeasurementContextV1 {
 }
 
 interface BabylonArtifactMeasuredRequestV1 {
+  /** @internal Trusted explicit live-handle projection; no entity/name inference. */
+  readonly identityMaskColorsByMesh?: (
+    scene: Scene,
+  ) => ReadonlyMap<AbstractMesh, string>;
   readonly measureAfterRender?: (
     context: BabylonArtifactCaptureMeasurementContextV1,
   ) => unknown;
+}
+
+function createIdentityMaterial(
+  scene: Scene,
+  originalMaterial: Material | null,
+  color: string,
+  imageProcessing: ImageProcessingConfiguration,
+): StandardMaterial {
+  const material = new StandardMaterial("worldkit.artifact.identity", scene);
+  material.disableLighting = true;
+  material.fogEnabled = false;
+  material.imageProcessingConfiguration = imageProcessing;
+  material.diffuseColor = Color3.Black();
+  material.specularColor = Color3.Black();
+  material.emissiveColor = Color3.FromHexString(color);
+  if (originalMaterial !== null) {
+    material.backFaceCulling = originalMaterial.backFaceCulling;
+    material.sideOrientation = originalMaterial.sideOrientation;
+  }
+  return material;
+}
+
+/**
+ * Prepare the exact identity shader variants before issuing synchronous capture.
+ * Scene readiness covers display materials only: a newly introduced identity
+ * material can otherwise skip Thin Instances on its first parallel compile.
+ * This waits for shaders without rendering or advancing any simulation state.
+ */
+export async function prepareBabylonArtifactIdentityCaptureV1(scene: Scene): Promise<void> {
+  const imageProcessing = new ImageProcessingConfiguration();
+  imageProcessing.isEnabled = false;
+  for (const mesh of scene.meshes) {
+    if (!mesh.isVisible || mesh.isDisposed()) continue;
+    const material = createIdentityMaterial(scene, mesh.material, "#000000", imageProcessing);
+    try {
+      await material.forceCompilationAsync(mesh, { useInstances: mesh.hasThinInstances || mesh.hasInstances });
+    } finally {
+      material.dispose();
+    }
+  }
 }
 
 export interface BabylonArtifactCameraPoseV1 {
@@ -103,6 +234,9 @@ export type BabylonArtifactCaptureRequestV1 = (
       heightPixels: number;
       entityIds: readonly string[];
       identityColor: string;
+      frontDirectionWorldXZ: readonly [number, number];
+      /** `runtime-lit-review` is the formal human-review whitebox output. */
+      renderStyle?: "semantic-mask" | "runtime-lit-review";
     }>
   | Readonly<{
       kind: "explicit-collider-overlay";
@@ -136,10 +270,7 @@ function renderingCanvas(engine: AbstractEngine): HTMLCanvasElement {
   return canvas;
 }
 
-function readCanvas(canvas: HTMLCanvasElement): Omit<
-  BabylonArtifactCaptureResultV1,
-  "projectedBoundsByEntityId"
-> {
+function readCanvas(canvas: HTMLCanvasElement): BabylonArtifactCapturedPixelsV1 {
   const output = document.createElement("canvas");
   output.width = canvas.width;
   output.height = canvas.height;
@@ -152,6 +283,29 @@ function readCanvas(canvas: HTMLCanvasElement): Omit<
     heightPixels: output.height,
     pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
   };
+}
+
+function readIdentityTarget(target: RenderTargetTexture): BabylonArtifactCapturedPixelsV1 {
+  const { width, height } = target.getSize();
+  // Babylon 9.23's synchronous readback keeps this existing capture transaction
+  // synchronous and returns framebuffer rows bottom-to-top, unlike a 2D canvas.
+  const bytes = target._readPixelsSync();
+  if (!(bytes instanceof Uint8Array) || bytes.length !== width * height * 4) {
+    throw new Error("BABYLON_ARTIFACT_IDENTITY_PIXELS_UNAVAILABLE");
+  }
+  const output = document.createElement("canvas");
+  output.width = width;
+  output.height = height;
+  const context = output.getContext("2d");
+  if (context === null) throw new Error("BABYLON_ARTIFACT_2D_CANVAS_UNAVAILABLE");
+  const image = context.getImageData(0, 0, width, height);
+  const rowBytes = width * 4;
+  for (let y = 0; y < height; y += 1) {
+    image.data.set(bytes.subarray((height - y - 1) * rowBytes, (height - y) * rowBytes), y * rowBytes);
+  }
+  context.putImageData(image, 0, 0);
+  return { dataUrl: output.toDataURL("image/png"), widthPixels: width, heightPixels: height,
+    pixelsRgba: image.data };
 }
 
 function meshesForEntity(scene: Scene, entityId: string): readonly AbstractMesh[] {
@@ -268,32 +422,78 @@ function renderTriview(
   scene: Scene,
   engine: AbstractEngine,
   request: Extract<BabylonArtifactCaptureRequestV1, { kind: "entity-triview" }>,
+  restoreSteps: Array<() => void>,
 ): BabylonArtifactCaptureResultV1 {
-  const targets = request.entityIds.flatMap((entityId) => meshesForEntity(scene, entityId));
+  const nativeRegistry = peekBabylonNativeBlockLiveHandleRegistryV1(scene);
+  const nativeByEntityId = new Map(nativeRegistry?.blocks.map(handle => [handle.runtimeEntityId, handle]));
+  const nativeHandles = [...new Set(request.entityIds.flatMap(entityId => {
+    const handle = nativeByEntityId.get(entityId);
+    return handle === undefined ? [] : [handle];
+  }))];
+  const entityMeshes = request.entityIds.filter(entityId => !nativeByEntityId.has(entityId))
+    .flatMap(entityId => meshesForEntity(scene, entityId));
+  const targets = [...new Set([...entityMeshes, ...nativeHandles.map(babylonNativeBlockLiveVisualHandleMeshV1)])];
   if (targets.length === 0) {
     throw new Error(
       `BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: ${request.entityIds.join(",")}`,
     );
   }
+  // Batch bounds include unrelated instances. Measure each selected logical
+  // Block from its real local vertices and the registry's authoritative pose,
+  // before the existing isolation owner temporarily masks other instances.
+  const localBoundsByMesh = new Map<AbstractMesh, ReturnType<typeof extractMinAndMax>>();
+  const bounds = [
+    ...entityMeshes.map(mesh => mesh.getHierarchyBoundingVectors(true)),
+    ...nativeHandles.map(handle => {
+      const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+      let local = localBoundsByMesh.get(mesh);
+      if (local === undefined) {
+        const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+        if (positions === null || positions.length === 0) throw new Error("BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE");
+        local = extractMinAndMax(positions, 0, positions.length / 3);
+        localBoundsByMesh.set(mesh, local);
+      }
+      const box = new BoundingInfo(local.minimum, local.maximum,
+        babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle)).boundingBox;
+      return { min: box.minimumWorld, max: box.maximumWorld };
+    }),
+  ];
+  if (nativeRegistry !== undefined && nativeHandles.length > 0) {
+    const isolation = applyBabylonNativeBlockCaptureIsolationV1({
+      registry: nativeRegistry, targetBlockIds: nativeHandles.map(handle => handle.blockId),
+    });
+    restoreSteps.push(() => isolation.restore());
+  }
   const targetSet = new Set(targets);
-  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.isVisible] as const));
+  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.visibility] as const));
+  const activeMeshSelection = new Map(
+    targets.map((mesh) => [mesh, mesh.alwaysSelectAsActiveMesh] as const),
+  );
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
+  restoreSteps.push(() => restoreMaterialColors(materialColors));
+  for (const [mesh, value] of visibility) restoreSteps.push(() => { mesh.visibility = value; });
+  for (const [mesh, value] of activeMeshSelection) restoreSteps.push(() => { mesh.alwaysSelectAsActiveMesh = value; });
   const identityColor = Color3.FromHexString(request.identityColor);
+  const isRuntimeLitReview = request.renderStyle === "runtime-lit-review";
   for (const mesh of scene.meshes) {
-    mesh.isVisible = targetSet.has(mesh);
-    if (targetSet.has(mesh) && mesh.material !== null) {
+    mesh.visibility = targetSet.has(mesh) ? 1 : TRIVIEW_NON_TARGET_VISIBILITY;
+    if (!isRuntimeLitReview && targetSet.has(mesh) && mesh.material !== null) {
       tintMaterial(mesh.material, identityColor, materialColors);
     }
   }
+  for (const mesh of targets) {
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.computeWorldMatrix(true);
+  }
   const minimum = new Vector3(
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.x)),
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.y)),
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.z)),
+    Math.min(...bounds.map(({ min }) => min.x)),
+    Math.min(...bounds.map(({ min }) => min.y)),
+    Math.min(...bounds.map(({ min }) => min.z)),
   );
   const maximum = new Vector3(
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.x)),
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.y)),
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.z)),
+    Math.max(...bounds.map(({ max }) => max.x)),
+    Math.max(...bounds.map(({ max }) => max.y)),
+    Math.max(...bounds.map(({ max }) => max.z)),
   );
   const center = minimum.add(maximum).scale(0.5);
   const size = maximum.subtract(minimum);
@@ -304,50 +504,71 @@ function renderTriview(
   const context = output.getContext("2d");
   if (context === null) throw new Error("BABYLON_ARTIFACT_2D_CANVAS_UNAVAILABLE");
   const camera = new FreeCamera("worldkit.artifact.triview", Vector3.Zero(), scene);
+  restoreSteps.push(() => camera.dispose());
   camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ = 0.01;
   const panelAspect = panelWidth / request.heightPixels;
   const distance = Math.max(size.x, size.y, size.z, 1) * 3;
-  const views = [
-    { direction: new Vector3(0, 0, -1), horizontalMeters: size.x },
-    { direction: new Vector3(1, 0, 0), horizontalMeters: size.z },
-    { direction: new Vector3(0, 0, 1), horizontalMeters: size.x },
-  ];
+  const projection = deriveBabylonTriviewProjectionV1({
+    sizeMetersXYZ: [size.x, size.y, size.z],
+    panelAspectRatio: panelAspect,
+    frontDirectionWorldXZ: request.frontDirectionWorldXZ,
+  });
+  const views = projection.viewDirectionsWorldXYZ.map(
+    ([x, y, z]) => new Vector3(x, y, z),
+  );
   engine.setSize(panelWidth, request.heightPixels, true);
   const canvas = renderingCanvas(engine);
-  scene.clearColor = Color4.FromHexString("#F1F1EDFF");
+  scene.clearColor = Color4.FromHexString(`${WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1}FF`);
   scene.activeCamera = camera;
-  try {
-    for (let index = 0; index < views.length; index += 1) {
-      const view = views[index]!;
-      const halfHeight = Math.max(
-        size.y * 0.58,
-        (view.horizontalMeters * 0.58) / Math.max(panelAspect, 0.01),
-        0.5,
-      );
-      camera.orthoLeft = -halfHeight * panelAspect;
-      camera.orthoRight = halfHeight * panelAspect;
-      camera.orthoTop = halfHeight;
-      camera.orthoBottom = -halfHeight;
-      camera.position.copyFrom(center.add(view.direction.scale(distance)));
-      camera.upVector.copyFromFloats(0, 1, 0);
-      camera.setTarget(center);
+  for (let index = 0; index < views.length; index += 1) {
+    const canonicalViewDirection = views[index]!;
+    // A strict horizontal orthographic view intentionally removes depth.
+    // The review-only capture keeps the same Front/Right/Back azimuth while
+    // revealing a small amount of the top faces so voxel scale and volume
+    // remain legible to a human reviewer.
+    const viewDirection = isRuntimeLitReview
+      ? new Vector3(
+          canonicalViewDirection.x * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+          Math.sin(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+          canonicalViewDirection.z * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+        )
+      : canonicalViewDirection;
+    const halfHeight = projection.halfHeightMeters;
+    camera.orthoLeft = -halfHeight * panelAspect;
+    camera.orthoRight = halfHeight * panelAspect;
+    camera.orthoTop = halfHeight;
+    camera.orthoBottom = -halfHeight;
+    camera.position.copyFrom(center.add(viewDirection.scale(distance)));
+    camera.upVector.copyFromFloats(0, 1, 0);
+    camera.setTarget(center);
+    // Rigged assets can require multiple renders to refresh skinning and
+    // active-mesh state after the capture camera replaces the gameplay camera.
+    // Retry the actual panel, not just the scene call, so a blank first frame
+    // can never silently become a successful three-view artifact.
+    for (
+      let attempt = 0;
+      attempt < TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW;
+      attempt += 1
+    ) {
       scene.render();
-      scene.render();
+      engine.flushFramebuffer();
       context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+      if (panelHasRenderableForeground(
+        context,
+        output.width,
+        request.heightPixels,
+        index,
+      )) break;
     }
-    return {
-      dataUrl: output.toDataURL("image/png"),
-      widthPixels: output.width,
-      heightPixels: output.height,
-      pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
-      projectedBoundsByEntityId: {},
-    };
-  } finally {
-    camera.dispose();
-    restoreMaterialColors(materialColors);
-    for (const [mesh, isVisible] of visibility) mesh.isVisible = isVisible;
   }
+  return {
+    dataUrl: output.toDataURL("image/png"),
+    widthPixels: output.width,
+    heightPixels: output.height,
+    pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
+    projectedBoundsByEntityId: {},
+  };
 }
 
 export function captureBabylonArtifactViewV1(options: Readonly<{
@@ -359,10 +580,11 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
   const { scene, engine, camera, request } = options;
   const previousCamera = scene.activeCamera;
   const previousClearColor = scene.clearColor.clone();
+  const previousPostProcessesEnabled = scene.postProcessesEnabled;
   const previousWidth = engine.getRenderWidth(true);
   const previousHeight = engine.getRenderHeight(true);
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
-  const originalMaterialByMesh = new Map<AbstractMesh, Material>();
+  const originalMaterialByMesh = new Map<AbstractMesh, Material | null>();
   const temporaryMaterials = new Set<Material>();
   const temporaryTextures = new Set<BaseTexture>();
   const overlayState = new Map<AbstractMesh, Readonly<{
@@ -370,11 +592,17 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     material: Material | null;
   }>>();
   let temporaryCamera: FreeCamera | undefined;
+  const triviewRestoreSteps: Array<() => void> = [];
   let primaryError: unknown;
   try {
     try {
+    if (request.identityMaskColorsByMesh !== undefined &&
+      request.kind !== "opening-frame" && request.kind !== "world-side" &&
+      request.kind !== "formal-world-top-down") {
+      throw new Error("BABYLON_ARTIFACT_IDENTITY_VIEW_INVALID");
+    }
     if (request.kind === "entity-triview") {
-      return renderTriview(scene, engine, request);
+      return renderTriview(scene, engine, request, triviewRestoreSteps);
     }
     engine.setSize(request.widthPixels, request.heightPixels, true);
     if (
@@ -539,8 +767,53 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       widthPixels: request.widthPixels,
       heightPixels: request.heightPixels,
     });
+    let identityMask: BabylonArtifactCapturedPixelsV1 | undefined;
+    if (request.identityMaskColorsByMesh !== undefined) {
+      const colorsByMesh = request.identityMaskColorsByMesh(scene);
+      for (const [mesh, color] of colorsByMesh) {
+        if (mesh.isDisposed() || mesh.getScene() !== scene || !/^#[0-9A-F]{6}$/.test(color)) {
+          throw new Error("BABYLON_ARTIFACT_IDENTITY_HANDLE_INVALID");
+        }
+      }
+      scene.clearColor = Color4.FromHexString("#000000FF");
+      scene.postProcessesEnabled = false;
+      const imageProcessing = new ImageProcessingConfiguration();
+      imageProcessing.isEnabled = false;
+      for (const mesh of scene.meshes) {
+        if (!mesh.isVisible) continue;
+        const originalMaterial = mesh.material;
+        if (!originalMaterialByMesh.has(mesh)) originalMaterialByMesh.set(mesh, originalMaterial);
+        const material = createIdentityMaterial(scene, originalMaterial,
+          colorsByMesh.get(mesh) ?? "#000000", imageProcessing);
+        temporaryMaterials.add(material);
+        mesh.material = material;
+      }
+      // The display framebuffer has MSAA: averaging adjacent identities can
+      // invent a third *valid* identity color. Render the same camera into an
+      // exact single-sample byte target, without changing the display context.
+      const identityCamera = scene.activeCamera!;
+      const previousOutputTarget = identityCamera.outputRenderTarget;
+      const identityTarget = new RenderTargetTexture("worldkit.artifact.identity-pixels",
+        { width: request.widthPixels, height: request.heightPixels }, scene, {
+          generateMipMaps: false, doNotChangeAspectRatio: true,
+          type: Constants.TEXTURETYPE_UNSIGNED_BYTE, format: Constants.TEXTUREFORMAT_RGBA,
+          samplingMode: Constants.TEXTURE_NEAREST_SAMPLINGMODE, samples: 1,
+          generateDepthBuffer: true, generateStencilBuffer: true, useSRGBBuffer: false,
+        });
+      temporaryTextures.add(identityTarget);
+      try {
+        identityCamera.outputRenderTarget = identityTarget;
+        // Babylon 9.23 skips camera input and animation advances here.
+        scene.render(false, true);
+        scene.render(false, true);
+        identityMask = readIdentityTarget(identityTarget);
+      } finally {
+        identityCamera.outputRenderTarget = previousOutputTarget;
+      }
+    }
     return {
       ...captured,
+      ...(identityMask === undefined ? {} : { identityMask }),
       projectedBoundsByEntityId: projectedBounds(
         scene,
         scene.activeCamera!,
@@ -563,6 +836,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         cleanupErrors.push(error);
       }
     };
+    for (const restore of triviewRestoreSteps.reverse()) cleanup(restore);
     cleanup(() => temporaryCamera?.dispose());
     for (const [mesh, state] of overlayState) cleanup(() => {
       mesh.material = state.material;
@@ -576,6 +850,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     for (const texture of temporaryTextures) cleanup(() => texture.dispose());
     cleanup(() => { scene.activeCamera = previousCamera; });
     cleanup(() => { scene.clearColor = previousClearColor; });
+    cleanup(() => { scene.postProcessesEnabled = previousPostProcessesEnabled; });
     cleanup(() => engine.setSize(previousWidth, previousHeight, true));
     if (previousCamera !== null) cleanup(() => scene.render());
     if (cleanupErrors.length > 0) {

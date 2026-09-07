@@ -19,6 +19,9 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function manifestValue() {
   return {
     kind: "native-block-authoring",
+    controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
+    groundExploration: { mode: "case-defined" as const },
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -27,14 +30,32 @@ function manifestValue() {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       semanticClassId: "worldkit.native-block.group.central-ascent",
       identityColorHex: "#AEB8C4",
+      frontDirectionWorldXZ: [1, 0] as const,
     }, {
       visualGroupId: "upper-t-junction-group",
       acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
       semanticClassId: "worldkit.native-block.group.upper-t-junction",
       identityColorHex: "#C9A96B",
+      frontDirectionWorldXZ: [0, -1] as const,
     }],
   };
 }
+
+describe("Native declared semantic front", () => {
+  it("retains and hashes each authored front without camera or mesh inference", () => {
+    const value = manifestValue();
+    const parsed = parseNativeBlockAuthoringManifestV1(value);
+    expect(parsed.visualGroups[0]).toMatchObject({ frontDirectionWorldXZ: [1, 0] });
+    expect(Object.isFrozen(Reflect.get(parsed.visualGroups[0]!, "frontDirectionWorldXZ"))).toBe(true);
+    const turned = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: [-1, 0] })) };
+    expect(hashNativeBlockAuthoringManifestV1(turned)).not.toBe(hashNativeBlockAuthoringManifestV1(value));
+  });
+  it.each([undefined, [0, 0], [1, 1], [0.5, 0], [0, -1, 0]])("rejects an absent or non-cardinal front: %j", (front) => {
+    const value = manifestValue();
+    const invalid = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: front })) };
+    expect(() => parseNativeBlockAuthoringManifestV1(invalid)).toThrow();
+  });
+});
 
 function reconstructionCaseValue() {
   return {
@@ -156,10 +177,10 @@ function reconstructionCaseValue() {
           "worldkit://acceptance-target/upper-t-junction@1",
         contributionId: "upper-step-contribution",
         colliderId: "upper-step",
-        role: "step",
+        role: "ground",
         requiresOverlay: true,
       }],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef:
@@ -241,7 +262,7 @@ function checkedLayoutValue() {
       diagnostics: [],
       metrics: {
         blockCount: 2,
-        blockCountByShape: { full: 2, half: 0, quarter: 0, small: 0, step: 0 },
+        blockCountByShape: { full: 2, half: 0, quarter: 0, small: 0 },
         blockCountByPaletteRole: {
           ground: 0,
           route: 1,
@@ -306,6 +327,24 @@ type MutableCheckedLayout = {
 };
 
 describe("Native Block authoring manifest", () => {
+  it("binds required data-only opening tuning into authoring identity without admitting Camera ownership", () => {
+    const openingCamera = { mode: "third-person", distanceMeters: 5.5,
+      targetHeightMeters: 1.1, pitchRadians: 0.12, fovDegrees: 56 };
+    const source = { ...manifestValue(), openingCamera };
+    const parsed = parseNativeBlockAuthoringManifestV1(source);
+    expect(parsed.openingCamera).toEqual(openingCamera);
+    expect(Object.isFrozen(parsed.openingCamera)).toBe(true);
+    expect(hashNativeBlockAuthoringManifestV1(source)).not.toBe(
+      hashNativeBlockAuthoringManifestV1({ ...source,
+        openingCamera: { ...openingCamera, distanceMeters: 6 } }),
+    );
+    for (const invalid of [undefined, { ...openingCamera, targetEntityId: "player" },
+      { ...openingCamera, fovDegrees: 180 }, { ...openingCamera, distanceMeters: 0 }]) {
+      expect(() => parseNativeBlockAuthoringManifestV1({ ...source, openingCamera: invalid })).toThrow();
+    }
+    expect(() => parseNativeBlockAuthoringManifestV1({ ...source, camera: openingCamera })).toThrow();
+  });
+
   it("parses and freezes the one current authoring contract", () => {
     const parsed = parseNativeBlockAuthoringManifestV1(manifestValue());
 
@@ -359,6 +398,9 @@ describe("Native Block authoring manifest", () => {
     ["extra top-level field", { ...manifestValue(), camera: { mode: "third-person" } }],
     ["missing entry module", {
       kind: "native-block-authoring",
+      controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
+      groundExploration: { mode: "case-defined" as const },
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: manifestValue().visualGroups,
@@ -419,11 +461,55 @@ describe("Native Block authoring manifest", () => {
 });
 
 describe("Native Block authoring to checked Layout binding", () => {
+  it("binds empty source ground evidence only when the frozen Case makes it optional", () => {
+    const base = bindingInput();
+    const groundExploration = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    const authoringManifest = parseNativeBlockAuthoringManifestV1({ ...manifestValue(), groundExploration });
+    const authoringManifestHash = hashNativeBlockAuthoringManifestV1(authoringManifest);
+    for (const requireSingleReachableComponent of [false, true]) {
+      const reconstructionCase = parseWorldReconstructionCaseV1({
+        ...base.reconstructionCase, expected: { ...base.reconstructionCase.expected,
+          groundConnectivity: { mode: "source-authored", requireSingleReachableComponent, requiredTraversalBands: [] } },
+      });
+      const bind = () => bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+        ...base, authoringManifest, authoringManifestHash, reconstructionCase,
+      });
+      if (requireSingleReachableComponent) expect(bind).toThrow(/middle and remote/);
+      else expect(bind().groundExploration).toEqual(groundExploration);
+    }
+  });
+
+  it("binds source-authored exploration identity and cannot override a case-defined route", () => {
+    const base = bindingInput();
+    const spawn = base.reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+    const groundExploration = { mode: "source-authored", requiredTargets: [
+      { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
+      { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 0, -5] },
+    ], requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1, isBidirectional: true,
+      centerlineStandPositionsMetersXYZ: [[spawn.xMeters, spawn.yMeters, spawn.zMeters], [4, 0, 0], [4, 0, -3]] }] };
+    const authoringManifest = parseNativeBlockAuthoringManifestV1({ ...manifestValue(), groundExploration });
+    const authoringManifestHash = hashNativeBlockAuthoringManifestV1(authoringManifest);
+    expect(authoringManifestHash).not.toBe(base.authoringManifestHash);
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...base.reconstructionCase, expected: { ...base.reconstructionCase.expected,
+        groundConnectivity: { mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [] } },
+    });
+    const input = { ...base, authoringManifest, authoringManifestHash, reconstructionCase };
+    const bound = bindNativeBlockAuthoringManifestToCheckedLayoutV1(input);
+    expect(bound.groundExploration).toEqual(groundExploration);
+    expect(bound.authoringManifestHash).toBe(authoringManifestHash);
+    expect(() => bindNativeBlockAuthoringManifestToCheckedLayoutV1({ ...input,
+      reconstructionCase: base.reconstructionCase })).toThrow();
+    expect(() => bindNativeBlockAuthoringManifestToCheckedLayoutV1({ ...input,
+      authoringManifestHash: base.authoringManifestHash })).toThrow(/identity is stale/);
+  });
+
   it("binds every Case target to exactly one checked visual group without Mesh discovery", () => {
     const result = bindNativeBlockAuthoringManifestToCheckedLayoutV1(bindingInput());
 
     expect(result).toMatchObject({
       kind: "native-block-authoring-layout-binding",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       caseHash: hashWorldReconstructionCaseV1(
         bindingInput().reconstructionCase,
@@ -440,6 +526,7 @@ describe("Native Block authoring to checked Layout binding", () => {
       "upper-t-junction-group",
     ]);
     expect(result.visualGroups[0]).toMatchObject({
+      frontDirectionWorldXZ: [1, 0],
       blockIds: ["central-ascent-block"],
       paletteRoles: ["route"],
       minimumMetersXYZ: [-0.5, 0, -1.5],
@@ -448,6 +535,7 @@ describe("Native Block authoring to checked Layout binding", () => {
     expect(JSON.stringify(result)).not.toMatch(/mesh|tag|name/i);
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.visualGroups)).toBe(true);
+    expect(Object.isFrozen(result.visualGroups[0]?.frontDirectionWorldXZ)).toBe(true);
   });
 
   it("rejects a Manifest that swaps Case-owned target-to-group mappings", () => {

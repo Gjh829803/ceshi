@@ -146,10 +146,11 @@ export interface WorldReconstructionExpectedV1 {
     readonly acceptanceTargetRef: string;
     readonly contributionId: string;
     readonly colliderId: string;
-    readonly role: "ground" | "blocker" | "step";
+    readonly role: "ground" | "blocker";
     readonly requiresOverlay: boolean;
   }>[];
   readonly groundConnectivity: Readonly<{
+    readonly mode: "case-defined" | "source-authored";
     readonly requireSingleReachableComponent: boolean;
     readonly requiredTraversalBands:
       readonly WorldReconstructionGroundTraversalBandV1[];
@@ -177,10 +178,10 @@ export type WorldReconstructionViewRequirementV1 =
       coverageBasisPoints: number;
     }>;
 
-export type WorldReconstructionStructuralProjectionV1 =
-  | Readonly<{ outcome: "outside-viewport" | "outside-depth-range" }>
+export type WorldReconstructionVisiblePixelProjectionV1 =
+  | Readonly<{ outcome: "not-visible" }>
   | Readonly<{
-      outcome: "projected";
+      outcome: "visible";
       normalizedBounds: WorldReconstructionNormalizedBoundsV1;
       normalizedCenter: WorldReconstructionNormalizedCenterV1;
       coverageBasisPoints: number;
@@ -269,7 +270,7 @@ export type WorldReconstructionObservedDimensionV1 =
         targets: readonly Readonly<{
           acceptanceTargetRef: string;
           visualGroupId: string;
-          structuralProjection: WorldReconstructionStructuralProjectionV1;
+          visiblePixelProjection: WorldReconstructionVisiblePixelProjectionV1;
         }>[];
       }>[];
     }>
@@ -299,7 +300,7 @@ export type WorldReconstructionObservedDimensionV1 =
       contributions: readonly Readonly<{
         contributionId: string;
         colliderId: string;
-        role: "ground" | "blocker" | "step";
+        role: "ground" | "blocker";
         hasOverlay: boolean;
       }>[];
     }>
@@ -519,6 +520,7 @@ export interface WorldReconstructionRepairActionV1 {
     | "bind"
     | "move"
     | "resize"
+    | "adjust-geometry"
     | "reorder"
     | "adjust-support"
     | "set-traversal-binding"
@@ -676,21 +678,18 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
         targetKind: "visual-group",
         operation: metricId.endsWith("semantic-target-binding")
           ? "bind"
-          : metricId.endsWith("reference-projection") ||
-              metricId.includes("semantic-center-")
-          ? "move"
-          : "resize",
+          : "adjust-geometry",
       },
     ] as const),
   ),
-  "opening-region-presence": { targetKind: "composition-target", operation: "add" },
-  "opening-region-min-x-basis-points": { targetKind: "composition-target", operation: "resize" },
-  "opening-region-min-y-basis-points": { targetKind: "composition-target", operation: "resize" },
-  "opening-region-max-x-basis-points": { targetKind: "composition-target", operation: "resize" },
-  "opening-region-max-y-basis-points": { targetKind: "composition-target", operation: "resize" },
-  "opening-anchor-presence": { targetKind: "composition-target", operation: "add" },
-  "opening-anchor-x-basis-points": { targetKind: "composition-target", operation: "move" },
-  "opening-anchor-y-basis-points": { targetKind: "composition-target", operation: "move" },
+  "opening-region-presence": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-region-min-x-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-region-min-y-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-region-max-x-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-region-max-y-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-anchor-presence": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-anchor-x-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
+  "opening-anchor-y-basis-points": { targetKind: "composition-target", operation: "adjust-geometry" },
   "opening-target-order": { targetKind: "composition-target", operation: "reorder" },
   "spawn-marker-identity": { targetKind: "spawn-marker", operation: "bind" },
   "spawn-support-collider-identity": { targetKind: "static-collider", operation: "bind" },
@@ -1340,19 +1339,19 @@ function parseViewRequirements(
   }));
 }
 
-function parseStructuralProjection(
+function parseVisiblePixelProjection(
   value: unknown,
   contract: string,
   path: string,
-): WorldReconstructionStructuralProjectionV1 {
+): WorldReconstructionVisiblePixelProjectionV1 {
   const source = object(value, contract, path);
   const outcome = enumValue(
     source.outcome,
-    ["projected", "outside-viewport", "outside-depth-range"] as const,
+    ["visible", "not-visible"] as const,
     contract,
     `${path}/outcome`,
   );
-  if (outcome !== "projected") {
+  if (outcome !== "visible") {
     exactFields(source, ["outcome"], contract, path);
     return Object.freeze({ outcome });
   }
@@ -1402,21 +1401,21 @@ function parseTopologyRelation(value: unknown, contract: string, path: string): 
   });
 }
 
-function parseTopology(value: unknown, contract: string, path: string, allowEmpty: boolean): Omit<WorldReconstructionExpectedV1["topology"], "acceptanceTargetRef"> {
+function parseTopology(value: unknown, contract: string, path: string): Omit<WorldReconstructionExpectedV1["topology"], "acceptanceTargetRef"> {
   const source = object(value, contract, path);
   exactFields(source, ["nodeIds", "relations", "layerIds"], contract, path);
-  const nodeIds = sortedStrings(source.nodeIds, contract, `${path}/nodeIds`, allowEmpty);
+  const nodeIds = sortedStrings(source.nodeIds, contract, `${path}/nodeIds`, true);
   const relations = array(source.relations, contract, `${path}/relations`).map((entry, index) =>
     parseTopologyRelation(entry, contract, `${path}/relations/${index}`)
   );
   const relationKeys = relations.map(({ fromNodeId, relation, toNodeId }) => `${fromNodeId}\0${relation}\0${toNodeId}`);
-  if ((!allowEmpty && relations.length === 0) || relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key)) {
+  if (relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key)) {
     fail(contract, `${path}/relations`, "must be unique and strictly sorted");
   }
   if (relations.some(({ fromNodeId, toNodeId }) => !nodeIds.includes(fromNodeId) || !nodeIds.includes(toNodeId))) {
     fail(contract, `${path}/relations`, "relation endpoints must name declared nodes");
   }
-  return Object.freeze({ nodeIds, relations: Object.freeze(relations), layerIds: sortedStrings(source.layerIds, contract, `${path}/layerIds`, allowEmpty) });
+  return Object.freeze({ nodeIds, relations: Object.freeze(relations), layerIds: sortedStrings(source.layerIds, contract, `${path}/layerIds`, true) });
 }
 
 function parseTraversalChecks(value: unknown, contract: string, path: string, declaredAcceptanceTarget: (value: unknown, path: string) => string): readonly WorldReconstructionTraversalCheckV1[] {
@@ -1441,8 +1440,8 @@ function parseTraversalChecks(value: unknown, contract: string, path: string, de
       fixedInputSequence: Object.freeze(fixedInputSequence),
     });
   });
-  if (checks.length === 0 || checks.some((row, index) => index > 0 && checks[index - 1]!.id >= row.id)) {
-    fail(contract, path, "must be non-empty, unique, and sorted by id");
+  if (checks.some((row, index) => index > 0 && checks[index - 1]!.id >= row.id)) {
+    fail(contract, path, "must be unique and sorted by id");
   }
   const checkpointIds = checks.flatMap((check) => check.checkpointIds);
   if (new Set(checkpointIds).size !== checkpointIds.length) {
@@ -1459,9 +1458,13 @@ function parseGroundConnectivity(
 ): WorldReconstructionExpectedV1["groundConnectivity"] {
   const source = object(value, contract, path);
   exactFields(source, [
+    "mode",
     "requireSingleReachableComponent",
     "requiredTraversalBands",
   ], contract, path);
+  if (source.mode !== "case-defined" && source.mode !== "source-authored") {
+    fail(contract, `${path}/mode`, "must select case-defined or source-authored");
+  }
   const requiredTraversalBands = array(
     source.requiredTraversalBands,
     contract,
@@ -1534,6 +1537,7 @@ function parseGroundConnectivity(
     );
   }
   return Object.freeze({
+    mode: source.mode as "case-defined" | "source-authored",
     requireSingleReachableComponent: boolean(
       source.requireSingleReachableComponent,
       contract,
@@ -1550,6 +1554,13 @@ function assertGroundConnectivityMatchesExpectedRuntimeV1(
   contract: string,
 ): void {
   const bands = groundConnectivity.requiredTraversalBands;
+  if (groundConnectivity.mode === "source-authored") {
+    if (bands.length !== 0 ||
+        (spawnSupport.expectedMedium === "air" && groundConnectivity.requireSingleReachableComponent)) {
+      fail(contract, "expected/groundConnectivity", "source-authored policy requires no pre-invented metric bands and air Spawn requires false single-component policy");
+    }
+    return;
+  }
   if (spawnSupport.expectedMedium === "air") {
     if (groundConnectivity.requireSingleReachableComponent || bands.length > 0) {
       fail(
@@ -1618,14 +1629,14 @@ function assertTraversalChecksMatchColliderRolesV1(
       check.acceptanceTargetRef,
     );
     const matches = check.expectation === "pass"
-      ? roles?.has("ground") === true || roles?.has("step") === true
+      ? roles?.has("ground") === true
       : roles?.has("blocker") === true;
     if (!matches) {
       fail(
         contract,
         `expected/criticalTraversalChecks/${check.id}/acceptanceTargetRef`,
         check.expectation === "pass"
-          ? "pass traversal target must bind at least one ground or step collider"
+          ? "pass traversal target must bind at least one ground collider"
           : "block traversal target must bind at least one blocker collider",
       );
     }
@@ -1638,7 +1649,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
   if (source.kind !== expectedKind) fail(contract, `${path}/kind`, `expected ${expectedKind}`);
   if (dimensionId === "topology") {
     exactFields(source, ["kind", "nodeIds", "relations", "layerIds"], contract, path);
-    return Object.freeze({ kind: "topology-observed", ...parseTopology({ nodeIds: source.nodeIds, relations: source.relations, layerIds: source.layerIds }, contract, path, true) });
+    return Object.freeze({ kind: "topology-observed", ...parseTopology({ nodeIds: source.nodeIds, relations: source.relations, layerIds: source.layerIds }, contract, path) });
   }
   if (dimensionId === "semantic-silhouette") {
     exactFields(source, ["kind", "views"], contract, path);
@@ -1660,7 +1671,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
           exactFields(row, [
             "acceptanceTargetRef",
             "visualGroupId",
-            "structuralProjection",
+            "visiblePixelProjection",
           ], contract, itemPath);
           return Object.freeze({
             acceptanceTargetRef: text(
@@ -1673,10 +1684,10 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
               contract,
               `${itemPath}/visualGroupId`,
             ),
-            structuralProjection: parseStructuralProjection(
-              row.structuralProjection,
+            visiblePixelProjection: parseVisiblePixelProjection(
+              row.visiblePixelProjection,
               contract,
-              `${itemPath}/structuralProjection`,
+              `${itemPath}/visiblePixelProjection`,
             ),
           });
         });
@@ -1720,7 +1731,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
       const itemPath = `${path}/contributions/${index}`;
       const row = object(entry, contract, itemPath);
       exactFields(row, ["contributionId", "colliderId", "role", "hasOverlay"], contract, itemPath);
-      return Object.freeze({ contributionId: text(row.contributionId, contract, `${itemPath}/contributionId`), colliderId: text(row.colliderId, contract, `${itemPath}/colliderId`), role: enumValue(row.role, ["ground", "blocker", "step"] as const, contract, `${itemPath}/role`), hasOverlay: boolean(row.hasOverlay, contract, `${itemPath}/hasOverlay`) });
+      return Object.freeze({ contributionId: text(row.contributionId, contract, `${itemPath}/contributionId`), colliderId: text(row.colliderId, contract, `${itemPath}/colliderId`), role: enumValue(row.role, ["ground", "blocker"] as const, contract, `${itemPath}/role`), hasOverlay: boolean(row.hasOverlay, contract, `${itemPath}/hasOverlay`) });
     });
     if (contributions.some((row, index) => index > 0 && contributions[index - 1]!.contributionId >= row.contributionId)) fail(contract, `${path}/contributions`, "must be unique and strictly sorted by contributionId");
     return Object.freeze({ kind: "collider-observed", contributions: Object.freeze(contributions) });
@@ -1770,7 +1781,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   };
   const topologySource = object(expectedSource.topology, contract, "expected/topology");
   exactFields(topologySource, ["acceptanceTargetRef", "nodeIds", "relations", "layerIds"], contract, "expected/topology");
-  const topology = Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(topologySource.acceptanceTargetRef, "expected/topology/acceptanceTargetRef"), ...parseTopology({ nodeIds: topologySource.nodeIds, relations: topologySource.relations, layerIds: topologySource.layerIds }, contract, "expected/topology", false) });
+  const topology = Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(topologySource.acceptanceTargetRef, "expected/topology/acceptanceTargetRef"), ...parseTopology({ nodeIds: topologySource.nodeIds, relations: topologySource.relations, layerIds: topologySource.layerIds }, contract, "expected/topology") });
   const semanticSilhouetteTargets = array(expectedSource.semanticSilhouetteTargets, contract, "expected/semanticSilhouetteTargets").map((entry, index) => {
     const path = `expected/semanticSilhouetteTargets/${index}`;
     const row = object(entry, contract, path);
@@ -1786,7 +1797,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
       ),
     });
   });
-  if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
+  if (semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be unique and sorted by acceptanceTargetRef");
   if (new Set(semanticSilhouetteTargets.map(({ visualGroupId }) =>
     visualGroupId)).size !== semanticSilhouetteTargets.length) {
     fail(contract, "expected/semanticSilhouetteTargets", "visualGroupId values must be unique");
@@ -1835,7 +1846,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     const path = `expected/colliders/${index}`;
     const row = object(entry, contract, path);
     exactFields(row, ["acceptanceTargetRef", "contributionId", "colliderId", "role", "requiresOverlay"], contract, path);
-    return Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`), contributionId: text(row.contributionId, contract, `${path}/contributionId`), colliderId: text(row.colliderId, contract, `${path}/colliderId`), role: enumValue(row.role, ["ground", "blocker", "step"] as const, contract, `${path}/role`), requiresOverlay: boolean(row.requiresOverlay, contract, `${path}/requiresOverlay`) });
+    return Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`), contributionId: text(row.contributionId, contract, `${path}/contributionId`), colliderId: text(row.colliderId, contract, `${path}/colliderId`), role: enumValue(row.role, ["ground", "blocker"] as const, contract, `${path}/role`), requiresOverlay: boolean(row.requiresOverlay, contract, `${path}/requiresOverlay`) });
   });
   if (colliders.length === 0 || colliders.some((row, index) => index > 0 && colliders[index - 1]!.contributionId >= row.contributionId)) fail(contract, "expected/colliders", "must be non-empty, unique, and sorted by contributionId");
   if (new Set(colliders.map(({ colliderId }) => colliderId)).size !== colliders.length) {
@@ -1845,8 +1856,8 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   if (!colliders.some(({ acceptanceTargetRef, colliderId, role }) =>
     colliderId === supportColliderId &&
     acceptanceTargetRef === spawnAcceptanceTargetRef &&
-    (role === "ground" || role === "step")
-  )) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground or step collider bound to the same acceptance target");
+    role === "ground"
+  )) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground collider bound to the same acceptance target");
   const spawnSupport = Object.freeze({
     acceptanceTargetRef: spawnAcceptanceTargetRef,
     spawnMarkerId: text(
@@ -1973,7 +1984,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
     exactFields(row, ["acceptanceTargetRef", "maximumBoundsDriftBasisPoints", "maximumCenterDriftBasisPoints", "maximumCoverageDriftBasisPoints"], contract, path);
     return Object.freeze({ acceptanceTargetRef: text(row.acceptanceTargetRef, contract, `${path}/acceptanceTargetRef`), maximumBoundsDriftBasisPoints: basisPoints(row.maximumBoundsDriftBasisPoints, contract, `${path}/maximumBoundsDriftBasisPoints`), maximumCenterDriftBasisPoints: basisPoints(row.maximumCenterDriftBasisPoints, contract, `${path}/maximumCenterDriftBasisPoints`), maximumCoverageDriftBasisPoints: basisPoints(row.maximumCoverageDriftBasisPoints, contract, `${path}/maximumCoverageDriftBasisPoints`) });
   });
-  if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "thresholds/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
+  if (semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "thresholds/semanticSilhouetteTargets", "must be unique and sorted by acceptanceTargetRef");
   const openingThresholds = object(thresholdsSource.openingComposition, contract, "thresholds/openingComposition");
   exactFields(openingThresholds, ["regions", "anchors"], contract, "thresholds/openingComposition");
   const parseOpeningThresholds = (value: unknown, path: string) => {
@@ -2430,6 +2441,7 @@ function parseWorldReconstructionRepairActionV1(
       "bind",
       "move",
       "resize",
+      "adjust-geometry",
       "reorder",
       "adjust-support",
       "set-traversal-binding",

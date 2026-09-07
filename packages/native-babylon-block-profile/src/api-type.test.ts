@@ -24,7 +24,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<0 | 1 | 2 | 3>();
     expectTypeOf<BabylonNativeBlockCreateInputV1>().toEqualTypeOf<Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole:
         | "ground"
         | "route"
@@ -46,7 +46,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlock"]>()
       .returns
-      .toEqualTypeOf<Mesh>();
+      .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["finalize"]>()
       .parameter(0)
       .toEqualTypeOf<Readonly<BabylonNativeBlockProfileFinalizeInputV1>>();
@@ -61,7 +61,7 @@ describe("Babylon Native block profile public types", () => {
   it("names the dense repetition argument as a grid create input", () => {
     expectTypeOf<BabylonNativeBlockGridCreateInputV1>().toEqualTypeOf<Readonly<{
       idPrefix: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
+      shape: "full" | "half" | "quarter" | "small";
       paletteRole:
         | "ground"
         | "route"
@@ -88,7 +88,7 @@ describe("Babylon Native block profile public types", () => {
       .toEqualTypeOf<Readonly<BabylonNativeBlockGridCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlockGrid"]>()
       .returns
-      .toEqualTypeOf<readonly Mesh[]>();
+      .toEqualTypeOf<readonly Readonly<BabylonNativeBlockCreateInputV1>[]>();
   });
 
   it("exposes one closed current-only Collider geometry source", () => {

@@ -1,7 +1,8 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 } from
+  "@whitebox-world/native-babylon-block-profile/shapes";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
-import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
   BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
@@ -22,6 +23,8 @@ import {
 } from "@whitebox-world/protocol";
 import {
   hashBabylonNativeSceneBootstrapV1,
+  admitBabylonNativeOpeningCameraV1,
+  admitNativeBlockGroundExplorationV1,
   parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
   worldResourceLockEntriesV1,
@@ -46,12 +49,11 @@ import {
 } from "@whitebox-world/validation";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
-  hashWorldPackageWorldBoundsV1,
-  parseWorldPackageWorldBoundsV1,
   verifyWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
+import { parseNativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -91,9 +93,9 @@ import { admitBabylonNativeSourceGraphV1 } from
   "../native-scene/source-admission.js";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
-  parseNativeBlockGenerationHostClosureV1,
   parseResolvedNativeBlockGenerationResourceV1,
 } from "./generation-request.js";
+import { checkNativeSubjectHostedSelectionV1, parseNativeSubjectHostContextV1, resolveNativeSubjectAuthoringClosureV1 } from "./native-subject-host-context.js";
 import {
   parseNativeBlockSubjectVisualReviewProxyV1,
 } from "./native-block-subject-visual-review-proxy.js";
@@ -112,8 +114,6 @@ const SOURCE_FILES = Object.freeze([
 ] as const);
 const BUILDER_VISUAL_REVIEW_RENDERER_INPUT_REF =
   "inputs/builder-skill/scripts/render-visual-review.mjs";
-const SUBJECT_VISUAL_REVIEW_PROXY_INPUT_REF =
-  "inputs/subject-visual-review-proxy.json";
 const BUILDER_VISUAL_REVIEW_INPUTS = Object.freeze([
   Object.freeze({
     inputRef: "entry-whitebox-target.png",
@@ -438,7 +438,7 @@ interface NativeBlockBuilderCapturedLayoutIdentityV1 {
     readonly centerMetersXYZ: readonly [number, number, number];
     readonly rotationQuarterTurnsY: number;
   }>[];
-  readonly displayGapMeters: number;
+  readonly displayScaleRatio: number;
   readonly spawn: Readonly<{
     readonly id: string;
     readonly positionMetersXYZ: readonly [number, number, number];
@@ -470,9 +470,7 @@ function parseCapturedLayoutIdentityV1(
     identity.kind !== "native-block-builder-captured-layout-identity" ||
     identity.schemaVersion !== 1 ||
     !Array.isArray(identity.blocks) ||
-    typeof identity.displayGapMeters !== "number" ||
-    !Number.isFinite(identity.displayGapMeters) ||
-    identity.displayGapMeters < 0 ||
+    identity.displayScaleRatio !== BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1 ||
     typeof identity.spawn !== "object" ||
     isNil(identity.spawn) ||
     Array.isArray(identity.spawn)
@@ -512,7 +510,6 @@ function checkedCapturedLayoutIdentityV1(input: Readonly<{
           Parameters<
             typeof createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1
           >[0]["checkedLayout"],
-        displayGapMeters: input.captured.displayGapMeters,
         colliderInventory: input.checkedEpochEvidence.colliderInventory,
       }).profileInventoryHash;
   } catch (error) {
@@ -530,6 +527,8 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
   worldRuntimeBootstrap: ReturnType<typeof parseWorldRuntimeBootstrapV1>;
   worldRuntimeBootstrapRef: string;
   worldRuntimeBootstrapBytesHash: Sha256HashV1;
+  subjectHostContextBytes: Uint8Array;
+  subjectProxyBytes: Uint8Array;
   sourceOutputByteLength: number;
   rendererSourceBytes: Uint8Array;
   authoringManifestBytes: Uint8Array;
@@ -552,14 +551,7 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
     return fail("native-block-visual-review-renderer-stale");
   }
 
-  const subjectProxyBytes = await readVisualReviewFileNoFollow(
-    input.attemptDirectoryPath,
-    SUBJECT_VISUAL_REVIEW_PROXY_INPUT_REF,
-    "native-block-subject-visual-review-proxy-stale",
-  );
-  const subjectProxyRows = input.generationRequest.contextInputs.filter(
-    ({ inputRef }) => inputRef === SUBJECT_VISUAL_REVIEW_PROXY_INPUT_REF,
-  );
+  const subjectProxyBytes = input.subjectProxyBytes;
   let subjectProxy: ReturnType<
     typeof parseNativeBlockSubjectVisualReviewProxyV1
   >;
@@ -576,8 +568,6 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
     );
   const controlledSubject = controlledSubjects[0];
   if (
-    subjectProxyRows.length !== 1 ||
-    subjectProxyRows[0]!.contentHash !== contentHash(subjectProxyBytes) ||
     controlledSubjects.length !== 1 ||
     controlledSubject === undefined ||
     subjectProxy.initialControlledEntityId !==
@@ -667,7 +657,7 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
       Object.freeze({ path: "scene.ts", bytes: input.rendererSourceBytes }),
       Object.freeze({ path: "native-block-authoring.json", bytes: input.authoringManifestBytes }),
       Object.freeze({ path: "native-scene.bootstrap.json", bytes: input.bootstrapBytes }),
-      Object.freeze({ path: "subject-visual-review-proxy.json", bytes: subjectProxyBytes }),
+      Object.freeze({ path: "subject-host-context.json", bytes: input.subjectHostContextBytes }),
       Object.freeze({ path: "world-plan.png", bytes: visualInputBytes[1]! }),
       Object.freeze({ path: "entry-whitebox-target.png", bytes: visualInputBytes[0]! }),
     ] as const);
@@ -687,6 +677,7 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
     try {
       await execFileAsync(process.execPath, [
         path.join(replayInputDirectoryPath, "renderer.mjs"),
+        "--execution-role", "host-replay",
         "--workspace",
         replayInputDirectoryPath,
         "--source",
@@ -695,8 +686,8 @@ async function replayAndVerifyNativeBlockVisualReviewV1(input: Readonly<{
         path.join(replayInputDirectoryPath, "native-block-authoring.json"),
         "--bootstrap",
         path.join(replayInputDirectoryPath, "native-scene.bootstrap.json"),
-        "--subject-visual-review-proxy",
-        path.join(replayInputDirectoryPath, "subject-visual-review-proxy.json"),
+        "--subject-host-context",
+        path.join(replayInputDirectoryPath, "subject-host-context.json"),
         "--world-plan",
         path.join(replayInputDirectoryPath, "world-plan.png"),
         "--entry-target",
@@ -860,11 +851,8 @@ export async function packageNativeBlockAttemptV1(
     attemptBytes,
     generationReceiptBytes,
     bootstrapBytes,
-    gameplayBytes,
-    runtimeBytes,
-    boundsBytes,
-    hostClosureBytes,
-    registryLockBytes,
+    subjectHostContextBytes,
+    worldBoundsPolicyBytes,
     nativeSceneApiBytes,
     nativeSceneProfileBytes,
     blockProfileBytes,
@@ -879,11 +867,8 @@ export async function packageNativeBlockAttemptV1(
     readFileNoFollow(attemptDirectoryPath, "attempt.json"),
     readFileNoFollow(attemptDirectoryPath, "generation-receipt.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/native-scene.bootstrap.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/gameplay-bootstrap.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/world-runtime-bootstrap.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/world-bounds.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/host-closure.json"),
-    readFileNoFollow(attemptDirectoryPath, "inputs/registry-lock.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/subject-host-context.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/world-bounds-policy.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/native-scene-api.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/native-scene-profile.json"),
     readFileNoFollow(attemptDirectoryPath, "inputs/block-profile.json"),
@@ -928,20 +913,9 @@ export async function packageNativeBlockAttemptV1(
   const bootstrap = parseBabylonNativeSceneBootstrapV1(
     json(bootstrapBytes, "bootstrap-invalid"),
   );
-  const gameplay = parseGameplayBootstrapV1(
-    json(gameplayBytes, "gameplay-invalid"),
-  );
-  const runtime = parseWorldRuntimeBootstrapV1(
-    json(runtimeBytes, "runtime-invalid"),
-  );
-  const bounds = parseWorldPackageWorldBoundsV1(
-    json(boundsBytes, "world-bounds-invalid"),
-  );
-  const hostClosure = parseNativeBlockGenerationHostClosureV1(
-    json(hostClosureBytes, "host-closure-invalid"),
-  );
-  const registryOwner = worldResourceLockEntriesV1(
-    json(registryLockBytes, "registry-lock-invalid") as never,
+  const subjectHostContext = parseNativeSubjectHostContextV1(json(subjectHostContextBytes, "host-closure-invalid"));
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(
+    json(worldBoundsPolicyBytes, "world-bounds-policy-invalid"),
   );
   const authoringManifestValue = json(
     authoringManifestBytes,
@@ -1030,16 +1004,41 @@ export async function packageNativeBlockAttemptV1(
   const authoringManifest = parseNativeBlockAuthoringManifestV1(
     authoringManifestValue,
   );
+  const subjectContextRows = generationRequest.contextInputs.filter(({ inputRef }) =>
+    inputRef === "inputs/subject-host-context.json");
+  const boundsRows = generationRequest.contextInputs.filter(({ inputRef }) =>
+    inputRef === "inputs/world-bounds-policy.json");
+  if (subjectContextRows.length !== 1 || subjectContextRows[0]!.contentHash !== contentHash(subjectHostContextBytes) ||
+    boundsRows.length !== 1 || boundsRows[0]!.contentHash !== contentHash(worldBoundsPolicyBytes) ||
+    subjectHostContext.worldId !== reconstructionCase.id) return fail("host-identity-closure-mismatch");
+  const subjectClosure = resolveNativeSubjectAuthoringClosureV1({
+    context: subjectHostContext, bootstrap, authoring: authoringManifest,
+  });
+  const selectionDiagnostics = checkNativeSubjectHostedSelectionV1(subjectClosure, sceneBrief.value.movementModes.map(({ mode }) => mode));
+  if (selectionDiagnostics.length > 0) throw new NativeBlockPackageErrorV1(selectionDiagnostics.map(({ code }) => code), selectionDiagnostics);
+  const gameplay = subjectClosure.gameplayBootstrap;
+  const runtime = subjectClosure.worldRuntimeBootstrap;
+  const runtimeBytes = subjectClosure.worldRuntimeBootstrapBytes;
+  const worldRuntimeBootstrapRef = subjectClosure.worldRuntimeBootstrapRef;
+  try {
+    admitBabylonNativeOpeningCameraV1(authoringManifest.openingCamera, runtime);
+  } catch (error) {
+    return fail("native-block-opening-camera-invalid", error);
+  }
+  try {
+    const spawn = reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+    admitNativeBlockGroundExplorationV1(authoringManifest.groundExploration,
+      reconstructionCase.expected.groundConnectivity.mode,
+      [spawn.xMeters, spawn.yMeters, spawn.zMeters],
+      reconstructionCase.expected.groundConnectivity.requireSingleReachableComponent);
+  } catch (error) {
+    return fail("native-block-ground-exploration-invalid", error);
+  }
   if (
     blockProfile.resourceRef !== BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1 ||
     authoringManifest.blockProfileRef !== blockProfile.resourceRef ||
     generationRequest.bootstrapInputHash !==
-      hashBabylonNativeSceneBootstrapV1(bootstrap) ||
-    hostClosure.gameplayBootstrapRef !== gameplay.resourceRef ||
-    hostClosure.gameplayBootstrapHash !== gameplay.contentHash ||
-    hostClosure.worldRuntimeBootstrapHash !== runtime.contentHash ||
-    hostClosure.worldBoundsHash !== hashWorldPackageWorldBoundsV1(bounds) ||
-    hostClosure.initialControlledEntityId !== runtime.initialControlledEntityId
+      hashBabylonNativeSceneBootstrapV1(bootstrap)
   ) return fail("host-identity-closure-mismatch");
 
   const parentDirectoryPath = path.dirname(outputDirectoryPath);
@@ -1134,15 +1133,15 @@ export async function packageNativeBlockAttemptV1(
     ) return fail("source-bundle-stale");
     const runtimeOwnerEntries = runtime.runtimeResourceLockEntries;
     if (runtimeOwnerEntries.some((entry) =>
-      !registryOwner.some((ownerEntry) => isEqual(ownerEntry, entry)))) {
+      !subjectClosure.registryLock.some((ownerEntry) => isEqual(ownerEntry, entry)))) {
       return fail("registry-runtime-closure-mismatch");
     }
     const registryLock = worldResourceLockEntriesV1([
       ...runtimeOwnerEntries,
       {
         resourceKind: "world-runtime-bootstrap",
-        resourceRef: hostClosure.worldRuntimeBootstrapRef,
-        resolvedVersion: hostClosure.worldRuntimeBootstrapResolvedVersion,
+        resourceRef: worldRuntimeBootstrapRef,
+        resolvedVersion: worldRuntimeBootstrapRef.split("@").at(-1)!,
         contentHash: runtime.contentHash,
       },
       {
@@ -1163,8 +1162,7 @@ export async function packageNativeBlockAttemptV1(
         resolvedVersion: nativeSceneProfile.resolvedVersion,
         contentHash: nativeSceneProfile.contentHash,
       },
-      ...registryOwner.filter(({ resourceKind }) =>
-        resourceKind === "traversal-surface-profile"),
+      subjectHostContext.traversalSurfaceProfileLock,
     ]);
     const profile = (resolution: typeof nativeSceneApi): BabylonNativeSceneResolvedProfileV1 =>
       Object.freeze({
@@ -1197,7 +1195,7 @@ export async function packageNativeBlockAttemptV1(
       },
       packageId: `${reconstructionCase.id}.native.package`,
       worldId: reconstructionCase.id,
-      worldBounds: bounds,
+      worldBoundsPolicy,
       resourceBudget: {
         maximumVertices: generationRequest.budgets.maximumStaticColliderVertexCount,
         maximumTriangles: generationRequest.budgets.maximumStaticColliderTriangleCount,
@@ -1217,7 +1215,7 @@ export async function packageNativeBlockAttemptV1(
       sceneAuthoringAttemptResultRef,
       sceneAuthoringAttemptResult: attemptResult,
       gameplayBootstrap: gameplay,
-      worldRuntimeBootstrapRef: hostClosure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapRef,
       worldRuntimeBootstrap: runtime,
       registryLock,
       nativeBlockAuthoring: {
@@ -1234,8 +1232,10 @@ export async function packageNativeBlockAttemptV1(
       generationRequest,
       reconstructionCase,
       worldRuntimeBootstrap: runtime,
-      worldRuntimeBootstrapRef: hostClosure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapRef,
       worldRuntimeBootstrapBytesHash: contentHash(runtimeBytes),
+      subjectHostContextBytes,
+      subjectProxyBytes: subjectClosure.subjectVisualReviewProxyBytes,
       sourceOutputByteLength: [...sourceBytesByPath.values()].reduce(
         (sum, bytes) => sum + bytes.byteLength,
         0,
@@ -1260,14 +1260,16 @@ export async function packageNativeBlockAttemptV1(
     const groundModelEvidenceRef =
       `artifact://world-reconstruction-case/${reconstructionCase.id}/${attempt.id}/logical-ground-model.json`;
     const analyzedGround = analyzeProductionNativeBlockGroundV1({
+      groundExploration: materializerMetadata.groundExploration,
+      openingCamera: verified.nativeBlockMaterializerMetadata!.openingCamera,
       reconstructionCase,
       worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
+      subjectResources: subjectClosure.normalizedSubjectResources,
       registryLock: verified.registryLock,
       contribution: verified.nativeSceneContribution,
       worldBounds: verified.manifest.worldBounds,
       checkedEpochEvidence,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
-      maximumBlockCount: generationRequest.budgets.maximumBlockCount,
       groundModelEvidenceRef,
     });
     const groundAnalysisReportPath = path.join(

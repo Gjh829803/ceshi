@@ -16,8 +16,8 @@ const palette = {
   schemaVersion: 1,
   sceneId: "native-identity-admission",
   sceneBriefHash: SCENE_BRIEF_HASH,
-  movementMode: "ground-walk",
-  movementModeLabel: "Ground walk",
+  movementModes: ["ground-walk"],
+  movementModeLabels: ["Ground walk"],
   targets: [
     { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
     { id: "visual-target-2", visualTargetId: "visual-target-2", targetKind: "landmark", name: "Gate", description: "primary gate", role: "primary-landmark", semanticClassId: "visual.gate", identityColor: "#F28E2B" },
@@ -28,11 +28,14 @@ const palette = {
 function manifest(identityColorHex: string) {
   return {
     kind: "native-block-authoring",
+    controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
+    groundExploration: { mode: "case-defined" as const },
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
     visualGroups: [{
-      visualGroupId: "moon-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "moon-group",
       acceptanceTargetRef: "worldkit://acceptance-target/visual-target-3@1",
       semanticClassId: "visual.moon",
       identityColorHex,
@@ -41,6 +44,18 @@ function manifest(identityColorHex: string) {
 }
 
 describe("admitNativeBlockVisualIdentityBindingsV1", () => {
+  it("admits an exact empty target set but still rejects undeclared or missing groups", () => {
+    const input = { sceneId: "native-identity-admission", sceneBriefSemanticHash: SCENE_BRIEF_HASH,
+      semanticSilhouetteTargets: [], visualIdentityPalette: { ...palette, targets: [palette.targets[0]] },
+      authoringManifest: { ...manifest("#D9A514"), visualGroups: [] } };
+    expect(admitNativeBlockVisualIdentityBindingsV1(input)).toMatchObject({ outcome: "passed", bindings: [] });
+    expect(admitNativeBlockVisualIdentityBindingsV1({ ...input, authoringManifest: manifest("#D9A514") }))
+      .toMatchObject({ outcome: "rejected", diagnostics: [{ reason: "manifest-case-bijection-mismatch" }] });
+    expect(admitNativeBlockVisualIdentityBindingsV1({ ...input, semanticSilhouetteTargets,
+      visualIdentityPalette: palette }))
+      .toMatchObject({ outcome: "rejected", diagnostics: [{ reason: "manifest-case-bijection-mismatch" }] });
+  });
+
   it("admits Native target-3 only with the old frozen yellow", () => {
     expect(admitNativeBlockVisualIdentityBindingsV1({
       sceneId: "native-identity-admission",

@@ -1,4 +1,7 @@
 import "./style.css";
+import "@whitebox-world/browser-recording/workbench.css";
+import { createFormalCaptureStartupReporterV1, installRuntimeFlightRecorderV1, type FormalCaptureStartupStageV1 } from "@whitebox-world/runtime-babylon";
+import { installRuntimeFlightControlsV1 } from "./runtime-flight-controls.js";
 
 import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
@@ -18,11 +21,11 @@ import type {
 import { CAMERA_TUNING_SAFETY_LIMITS_V1 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
-import { CanvasRecorder } from "./canvas-recorder.js";
-import {
-  installRecordingWorkbench,
-  recordingWorkbenchSceneId,
-} from "./recording-workbench.js";
+import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
+import { downloadRecording } from "@whitebox-world/browser-recording/download";
+import { installFeatureListWindow } from "./feature-list-window.js";
+import { installRecordingWorkbench } from "@whitebox-world/browser-recording/workbench";
+import { recordingWorkbenchSceneId } from "./recording-workbench-route.js";
 import type {
   FeatureInspection,
   OpeningCompositionReport,
@@ -164,6 +167,15 @@ app.innerHTML = `
           <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
         </button>
         <button class="button button-primary" id="capture-button" type="button">保存截图</button>
+        <details class="topbar-more" id="runtime-diagnostics-controls" hidden>
+          <summary class="button button-subtle">运行诊断</summary>
+          <div class="topbar-more-menu">
+            <button id="runtime-diagnostics-mark" type="button">记录当前现场</button>
+            <button id="runtime-diagnostics-copy" type="button">复制诊断摘要</button>
+            <button id="runtime-diagnostics-download" type="button">下载诊断 JSON</button>
+            <p id="runtime-diagnostics-status" role="status" aria-live="polite"></p>
+          </div>
+        </details>
         ${viewerMode ? `
           <div class="topbar-more">
             <button class="button button-subtle" id="more-actions-button" type="button" aria-haspopup="menu" aria-expanded="false">更多 <span aria-hidden="true">⋮</span></button>
@@ -716,7 +728,7 @@ function activeActionFromSnapshotV4(
   ).find((state) => state.actorEntityId === actorEntityId)?.semanticActionRef;
 }
 
-function downloadJson(filename: string, payload: unknown): void {
+function downloadJson(filename: string, payload: unknown, revokeDelayMilliseconds = 0): void {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
     type: "application/json",
   });
@@ -724,7 +736,7 @@ function downloadJson(filename: string, payload: unknown): void {
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+  window.setTimeout(() => URL.revokeObjectURL(link.href), revokeDelayMilliseconds);
 }
 
 interface TuningWorkbenchContextV1 {
@@ -2612,8 +2624,10 @@ function setupArtifactPlayground(
 ): () => void {
   const abortController = new AbortController();
   let captureTimer: number | undefined;
+  let featureListWindow: ReturnType<typeof installFeatureListWindow> | undefined;
   const rollback = (): void => {
     abortController.abort();
+    featureListWindow?.dispose();
     if (!isNil(captureTimer)) window.clearTimeout(captureTimer);
     delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     delete document.documentElement.dataset.artifactCapture;
@@ -2635,21 +2649,7 @@ function setupArtifactPlayground(
       );
     const renderFeatureList = (features: readonly FeatureInspection[]): void => {
       requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
-      featureList.replaceChildren(...features.map((feature) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
-        button.dataset.featureId = feature.id;
-        button.innerHTML = `
-          <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
-          <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
-          <em>${feature.status}</em>
-        `;
-        button.addEventListener("click", () => selectFeature(feature.id), {
-          signal: abortController.signal,
-        });
-        return button;
-      }));
+      featureListWindow!.update(features, selectedFeatureId);
     };
     const selectFeature = (featureId: string): void => {
       selectedFeatureId = featureId;
@@ -2683,6 +2683,8 @@ function setupArtifactPlayground(
         <div class="diagnostic-section"><h4>Diagnostics</h4>${diagnostics}</div>
       `;
     };
+
+    featureListWindow = installFeatureListWindow({ root: featureList, onSelect: selectFeature });
 
     const automationApi: PlaygroundArtifactAutomationApiV1 = Object.freeze({
       version: 1,
@@ -2781,6 +2783,7 @@ function setupArtifactPlayground(
 
 if (runtimeRoute.mode === "unknown") {
   delete window.__WORLDKIT__;
+  delete window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   document.documentElement.dataset.worldkitStatus = "error";
   requiredElement("#adapter-name").textContent = "route-error";
@@ -2792,6 +2795,14 @@ if (runtimeRoute.mode === "unknown") {
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
   let startupStage = "host-resolver";
+  const startupReporter = createFormalCaptureStartupReporterV1(
+    (value) => { window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__ = value; },
+    "host-resolver",
+  );
+  const advanceStartupStage = (stage: FormalCaptureStartupStageV1) => {
+    startupStage = stage;
+    startupReporter.progress(stage);
+  };
   let preparationError: unknown;
   let prepared: Readonly<{
     loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
@@ -2799,14 +2810,14 @@ if (runtimeRoute.mode === "unknown") {
     BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
   }> | undefined;
   try {
-    startupStage = "module-import";
+    advanceStartupStage("module-import");
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
     const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import(
       "./authoring-loader.js"
     );
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
     let visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
-    startupStage = "viewer-source-load";
+    advanceStartupStage("viewer-source-load");
     if (runtimeRoute.studioWorldId === undefined) {
       const bootstrapUrl = new URL(
         "/__worldkit/viewer-bootstrap",
@@ -2892,7 +2903,7 @@ if (runtimeRoute.mode === "unknown") {
         const subjectAssetResolver = createFetchSubjectAssetResolver(
           PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
         );
-        startupStage = "runtime-create";
+        advanceStartupStage("runtime-create");
         const adapter = await BabylonWorldAdapter.create(
           loaded.runtimeWorldConfiguration,
           {
@@ -2904,7 +2915,7 @@ if (runtimeRoute.mode === "unknown") {
                     loaded.gameplayActionRequestResolver,
                 }),
             onInitializationStage(stage) {
-              startupStage = `runtime:${stage}`;
+              advanceStartupStage(`runtime-${stage}`);
             },
           },
         );
@@ -2915,11 +2926,12 @@ if (runtimeRoute.mode === "unknown") {
           viewport,
           trackAdapter,
           setStartupStage(stage) {
-            startupStage = stage;
+            advanceStartupStage(stage);
           },
         });
         return createdAdapter;
       } catch (error) {
+        startupReporter.finish("error");
         captureAuthoringStartupFailure(startupStage, error);
         throw error;
       }
@@ -2932,6 +2944,8 @@ if (runtimeRoute.mode === "unknown") {
     | { dispose(): void }
     | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
+  let runtimeFlightRecorder: ReturnType<typeof installRuntimeFlightRecorderV1> | undefined;
+  let runtimeFlightControls: ReturnType<typeof installRuntimeFlightControlsV1> | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
@@ -2974,6 +2988,34 @@ if (runtimeRoute.mode === "unknown") {
         disposeAuthoringWorkbenchAdapterBinding?.();
         disposeAuthoringWorkbenchAdapterBinding = workbench.bindAdapterDiagnostics(createdAdapter);
       }
+      try {
+        runtimeFlightControls?.dispose();
+        runtimeFlightRecorder?.dispose();
+        runtimeFlightRecorder = installRuntimeFlightRecorderV1({
+          target: window,
+          diagnosticSessionId: window.crypto.randomUUID(),
+          visibilityState: () => document.visibilityState,
+          history: { worldId: recordingWorkbenchSceneId(runtimeRoute) ?? adapter.name,
+            storage: () => window.localStorage, events: { window, document } },
+          source: { read: () => ({
+            progressMode: "continuous",
+            worldSessionId: adapter.runtimeSnapshot().worldSessionId,
+            snapshot: adapter.snapshot(),
+            hasRuntimeFailure: adapter.runtimeDiagnostics().some(({ code }) =>
+              code === "WORLDKIT_RUNTIME_FRAME_FAILED" || code === "WORLDKIT_RUNTIME_RESET_FAILED"),
+          }) },
+        });
+        runtimeFlightControls = installRuntimeFlightControlsV1({ recorder: runtimeFlightRecorder,
+          root: requiredElement<HTMLElement>("#runtime-diagnostics-controls"), status: requiredElement("#runtime-diagnostics-status"),
+          markButton: requiredElement("#runtime-diagnostics-mark"), copyButton: requiredElement("#runtime-diagnostics-copy"),
+          downloadButton: requiredElement("#runtime-diagnostics-download"),
+          download: (filename, bundle) => downloadJson(filename, bundle, 10_000),
+          copyText: (text) => window.navigator.clipboard.writeText(text),
+          copyFallback: (text) => { window.prompt("复制运行诊断摘要", text); },
+        });
+      } catch {
+        // Advisory diagnostics never veto a ready world or change its controls.
+      }
       startPlayground(adapter, () => pageLifecycle.dispose(), {
         resetSimulation: async () => {
           await browserInstallation.api.reset();
@@ -2984,9 +3026,17 @@ if (runtimeRoute.mode === "unknown") {
       });
     },
     rollbackPageState() {
+      runtimeFlightControls?.dispose();
+      runtimeFlightControls = undefined;
+      runtimeFlightRecorder?.dispose();
+      runtimeFlightRecorder = undefined;
       delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     },
     disposeRuntimeHost: async () => {
+      runtimeFlightControls?.dispose();
+      runtimeFlightControls = undefined;
+      runtimeFlightRecorder?.dispose();
+      runtimeFlightRecorder = undefined;
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();
@@ -2997,9 +3047,15 @@ if (runtimeRoute.mode === "unknown") {
   let pageSetupSucceeded = false;
   try {
     pageSetupSucceeded = await pageLifecycle.completeSetup();
-    if (pageSetupSucceeded) resolvePageSetupReady();
-    else rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
+    if (pageSetupSucceeded) {
+      startupReporter.finish("ready", "page-setup");
+      resolvePageSetupReady();
+    } else {
+      startupReporter.finish("error", "page-setup");
+      rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
+    }
   } catch (error) {
+    startupReporter.finish("error", "page-setup");
     rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
     captureAuthoringStartupFailure("page-setup", error);
     document.documentElement.dataset.worldkitStatus = "error";
@@ -3010,6 +3066,7 @@ if (runtimeRoute.mode === "unknown") {
   }
 } else {
   delete window.__WORLDKIT__;
+  delete window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   delete document.documentElement.dataset.worldkitStatus;
   const { BabylonArtifactRenderer } = await import("./babylon-artifact-renderer.js");
@@ -3069,6 +3126,7 @@ async function resetPlaygroundWorld(): Promise<void> {
 }
 
 let selectedFeatureId: string | null = null;
+const featureListWindow = installFeatureListWindow({ root: featureList, onSelect: selectFeature });
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -3080,21 +3138,7 @@ function resourceTotal(feature: FeatureInspection): number {
 
 function renderFeatureList(features: readonly FeatureInspection[]): void {
   requiredElement("#feature-count").textContent = `${features.length} FEATURES`;
-  featureList.replaceChildren(
-    ...features.map((feature) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `feature-item${selectedFeatureId === feature.id ? " selected" : ""}`;
-      button.dataset.featureId = feature.id;
-      button.innerHTML = `
-        <span class="feature-icon ${feature.resources[0]?.kind ?? "mesh"}"></span>
-        <span><strong>${feature.id}</strong><small>${feature.type} · v${feature.version}</small></span>
-        <em>${feature.status}</em>
-      `;
-      button.addEventListener("click", () => selectFeature(feature.id));
-      return button;
-    }),
-  );
+  featureListWindow.update(features, selectedFeatureId);
 }
 
 function selectFeature(featureId: string): void {
@@ -3262,21 +3306,6 @@ function updateRecordingUi(recording: boolean): void {
   if (!recording) requiredElement("#recording-time").textContent = "00:00";
 }
 
-function downloadRecording(blob: Blob, extension: "mp4" | "webm"): string {
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  const sceneId = adapter.getWorldSpec()?.id ?? "whitebox-world";
-  const filename = `${sceneId}-gameplay-${new Date().toISOString().replaceAll(":", "-")}.${extension}`;
-  link.download = filename;
-  link.href = url;
-  link.hidden = true;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return filename;
-}
-
 function showViewportFeedback(message: string, persist = false): void {
   const toast = requiredElement<HTMLDivElement>("#recording-toast");
   if (viewportFeedbackTimer !== undefined) {
@@ -3323,14 +3352,14 @@ requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", a
   try {
     const result = await canvasRecorder.stop();
     if (recordingWorkbench === undefined) {
-      const filename = downloadRecording(result.blob, result.extension);
+      const filename = downloadRecording(result.blob, result.extension, adapter.getWorldSpec()?.id);
       showRecordingSaved(filename, result.blob, result.durationMs);
     } else {
       try {
         const recording = await recordingWorkbench.uploadRecording(result);
         showRecordingSaved(recording.title, result.blob, result.durationMs);
       } catch (error) {
-        const filename = downloadRecording(result.blob, result.extension);
+        const filename = downloadRecording(result.blob, result.extension, adapter.getWorldSpec()?.id);
         showRecordingSaved(filename, result.blob, result.durationMs, false);
         window.alert(error instanceof Error ? error.message : String(error));
       }
@@ -3485,6 +3514,7 @@ installPageExitDisposal({
   dispose: async () => {
     if (recordingTimer !== null) window.clearInterval(recordingTimer);
     if (viewportFeedbackTimer !== undefined) window.clearTimeout(viewportFeedbackTimer);
+    featureListWindow.dispose();
     canvasRecorder.dispose();
     recordingWorkbench?.dispose();
     if (disposeBrowserRuntime === undefined) adapter.dispose();

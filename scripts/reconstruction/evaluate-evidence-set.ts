@@ -18,7 +18,6 @@ import {
   parseFormalWorldCaptureReceiptV1,
   type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeContributionTraversalBindingV1,
-  type BabylonNativeBlockMaterializerShapeV1,
   type BabylonNativeStaticColliderContributionV1,
   type FormalColliderOverlayObservationV1,
   type FormalOpeningObservationV1,
@@ -34,6 +33,7 @@ import {
   hashSceneAuthoringAttemptV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
+import { measureFormalIdentityMaskV1, projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 import {
   hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
@@ -66,6 +66,7 @@ export interface BuildWorldReconstructionEvidenceSetInputV1 {
   readonly captureReceipt: FormalWorldCaptureReceiptV1;
   readonly openingObservation: FormalOpeningObservationV1;
   readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
+  readonly identityMaskPngs: readonly Readonly<{ viewId: string; bytes: Uint8Array }>[];
   readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
   readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
   readonly scriptedTraversalObservation: FormalScriptedTraversalObservationV1;
@@ -173,17 +174,14 @@ const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
 
 export function projectColliderEvidenceRoleV1(
   binding: BabylonNativeContributionTraversalBindingV1,
-  sourceBlockShapes: readonly BabylonNativeBlockMaterializerShapeV1[],
-): "ground" | "blocker" | "step" {
+): "ground" | "blocker" {
   if (binding.kind === "not-traversable") return "blocker";
   if (
     binding.kind === "static-surface" &&
     binding.traversalSurfaceProfileRef ===
       GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF
   ) {
-    return sourceBlockShapes.length === 1 && sourceBlockShapes[0] === "step"
-      ? "step"
-      : "ground";
+    return "ground";
   }
   stale("Contribution traversalBinding does not admit a blocker or ground collider role");
 }
@@ -443,7 +441,8 @@ export function buildWorldReconstructionEvidenceSetV1(
     [semanticViewObservationSet, "semantic views", "receipt-ready"],
     [spawn, "spawn support", "receipt-ready"],
     [overlay, "collider overlay", "receipt-ready"],
-    [traversal, "traversal", "independent-reset"],
+    [traversal, "traversal", formalRequest.scriptedTraversal.checks.length === 0
+      ? "receipt-ready" : "independent-reset"],
   ] as const) {
     assertObservationIdentity(
       observation,
@@ -453,19 +452,13 @@ export function buildWorldReconstructionEvidenceSetV1(
     );
   }
   const firstTraversalCheck = traversal.checks[0];
-  if (firstTraversalCheck === undefined) {
-    stale("traversal evidence contains no independently reset check");
+  if (formalRequest.scriptedTraversal.checks.length > 0) {
+    if (firstTraversalCheck === undefined) stale("traversal evidence contains no independently reset check");
+    exact(traversal.resetReadySnapshotHash, firstTraversalCheck.resetReadySnapshotHash,
+      "traversal identity Snapshot does not match its first reset check");
+    sameCanonical(traversal.resetReadySnapshot, firstTraversalCheck.resetReadySnapshot,
+      "traversal identity Snapshot payload does not match its first reset check");
   }
-  exact(
-    traversal.resetReadySnapshotHash,
-    firstTraversalCheck.resetReadySnapshotHash,
-    "traversal identity Snapshot does not match its first reset check",
-  );
-  sameCanonical(
-    traversal.resetReadySnapshot,
-    firstTraversalCheck.resetReadySnapshot,
-    "traversal identity Snapshot payload does not match its first reset check",
-  );
   exact(captureReceipt.openingObservationContentHash,
     hashFormalOpeningObservationV1(opening),
     "opening observation content hash does not match Capture Receipt");
@@ -597,19 +590,17 @@ export function buildWorldReconstructionEvidenceSetV1(
       if (sourceBlockIds === undefined || sourceBlockIds.length === 0) {
         stale("Contribution collider is absent from trusted Block metadata");
       }
-      const sourceBlockShapes = sourceBlockIds.map((sourceBlockId) => {
+      for (const sourceBlockId of sourceBlockIds) {
         const sourceBlock = metadataBlocks.get(sourceBlockId);
         if (sourceBlock === undefined) {
           stale("Contribution collider Block is absent from trusted Block metadata");
         }
-        return sourceBlock.shape;
-      });
+      }
       return {
         contributionId: collider.id,
         colliderId: collider.id,
         role: projectColliderEvidenceRoleV1(
           collider.traversalBinding,
-          sourceBlockShapes,
         ),
         hasOverlay: overlayColliderIds.has(collider.id),
       };
@@ -652,6 +643,19 @@ export function buildWorldReconstructionEvidenceSetV1(
     const relation = observedRelationRows.find((candidate) => relationKey(candidate) === key);
     if (relation === undefined) stale("topology relation canonicalization failed");
     return relation;
+  });
+
+  if (rawInput.identityMaskPngs.length !== captureReceipt.views.length ||
+    rawInput.identityMaskPngs.some((mask, index) => mask.viewId !== captureReceipt.views[index]!.viewId)) {
+    stale("identity mask view inventory does not match Capture");
+  }
+  const pixelProjectionsByView = new Map(captureReceipt.views.map((view, index) => [
+    view.viewId, measureFormalIdentityMaskV1({ view, pngBytes: rawInput.identityMaskPngs[index]!.bytes,
+      targets: semanticMap.bindings.map(({ acceptanceTargetRef, identityColor }) => ({ acceptanceTargetRef, identityColor })) }),
+  ] as const));
+  const openingPixelComposition = projectOpeningCompositionPixelsV1({
+    bindings: semanticMap.bindings.filter(({ compositionTargetRef }) => openingTargetRefs.has(compositionTargetRef)),
+    projections: pixelProjectionsByView.get("opening")!,
   });
 
   return parseWorldReconstructionEvidenceSetV1({
@@ -713,18 +717,19 @@ export function buildWorldReconstructionEvidenceSetV1(
       },
       {
         dimensionId: "opening-composition",
-        evidenceRefs: [captureReceipt.openingObservationArtifactRef],
+        evidenceRefs: uniqueSorted([captureReceipt.openingObservationArtifactRef,
+          captureReceipt.views.find(({ viewId }) => viewId === "opening")!.identityMaskPngArtifactRef]),
         observed: {
           kind: "opening-composition-observed",
-          regions: openingGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedBounds: group.normalizedBounds })),
-          anchors: openingGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedCenter: group.normalizedCenter })),
+          ...openingPixelComposition,
           orderedTargetRefs: depthOrderedGroups.map(({ compositionTargetRef }) => compositionTargetRef),
           distances,
         },
       },
       {
         dimensionId: "semantic-silhouette",
-        evidenceRefs: [captureReceipt.semanticViewObservationSetArtifactRef],
+        evidenceRefs: uniqueSorted([captureReceipt.semanticViewObservationSetArtifactRef,
+          ...captureReceipt.views.map(({ identityMaskPngArtifactRef }) => identityMaskPngArtifactRef)]),
         observed: {
           kind: "semantic-silhouette-observed",
           views: semanticViewObservationSet.views.map((view) => ({
@@ -732,15 +737,7 @@ export function buildWorldReconstructionEvidenceSetV1(
             targets: view.targets.map((target) => ({
               acceptanceTargetRef: target.acceptanceTargetRef,
               visualGroupId: target.blockVisualGroupId,
-              structuralProjection: target.structuralProjection.outcome === "projected"
-                ? {
-                    outcome: target.structuralProjection.outcome,
-                    normalizedBounds: target.structuralProjection.normalizedBounds,
-                    normalizedCenter: target.structuralProjection.normalizedCenter,
-                    coverageBasisPoints:
-                      target.structuralProjection.coverageBasisPoints,
-                  }
-                : { outcome: target.structuralProjection.outcome },
+              visiblePixelProjection: pixelProjectionsByView.get(view.viewId)!.get(target.acceptanceTargetRef)!,
             })),
           })),
         },

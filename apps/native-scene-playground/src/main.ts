@@ -2,7 +2,12 @@ import type {
   BabylonRuntimeProjectionV1,
   BabylonWorldRuntimeInitializationStageV1,
 } from "@whitebox-world/runtime-babylon";
-import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
+import {
+  FIXED_TIME_STEP_SECONDS, CAMERA_KEY_ACTION_MAP, CAMERA_YAW_RADIANS_PER_TICK,
+  CAMERA_PITCH_RADIANS_PER_TICK, advanceKeyboardCameraRadiansPerTick,
+  isPhysicalGameplayKeyV1,
+  finishHostedInteractiveInputV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
 } from "@whitebox-world/runtime-babylon";
@@ -33,13 +38,19 @@ import {
   startHostedFormalCaptureFrameRouteV1,
   startHostedFormalCaptureShellRouteV1,
 } from "./hosted-formal-capture-route.js";
-import { consumeHostedInteractiveInputV1 } from
+import { renderHostedInteractiveFrameV1 } from
   "./hosted-interactive-input.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { presentPageFailureV1 } from "./page-failure.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
+import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
+import { installHostedRecordingControls } from "./hosted-recording-controls.js";
+import { installHostedRecordingWorkbench, type HostedRecordingContext } from "./hosted-recording-workbench.js";
+import "@whitebox-world/browser-recording/workbench.css";
+
+declare const __WORLDKIT_RECORDING_CONTEXT__: HostedRecordingContext | null;
 
 declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
@@ -390,18 +401,51 @@ async function startHostedShell(): Promise<void> {
     runtimeSessionId,
     sessionNonce,
     protocolBudget: browserProtocolBudget().protocol,
+    recordingEnabled: true,
   });
   // Sandbox and credentialless policy must be installed before first navigation.
   viewport.append(frame);
+  let recordingControls: ReturnType<typeof installHostedRecordingControls> | undefined;
+  let recordingWorkbench: ReturnType<typeof installHostedRecordingWorkbench> | undefined;
+  let disposed = false;
+  window.addEventListener("beforeunload", () => {
+    disposed = true;
+    recordingControls?.dispose();
+    recordingWorkbench?.dispose();
+    bridge.dispose();
+  }, { once: true });
   window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
     phase: () => bridge.phase(),
     waitUntilReady: () => bridge.waitUntilReady(),
     submit: (request) => bridge.submit(request),
     frame,
   });
-  await bridge.waitUntilReady();
+  const ready = await bridge.waitUntilReady();
+  if (disposed) return;
+  if (ready.type !== "ready") throw new Error("NATIVE_RECORDING_RUNTIME_NOT_READY");
+  try {
+    recordingWorkbench = installHostedRecordingWorkbench({
+      root: requiredElement<HTMLElement>("[data-recording-workbench]"),
+      context: __WORLDKIT_RECORDING_CONTEXT__,
+      worldPackageRootHash: ready.worldPackageRootHash,
+    });
+  } catch (error) {
+    bridge.dispose();
+    throw error;
+  }
+  bridge.recording().onDisposed(() => recordingWorkbench?.dispose());
   requiredElement<HTMLElement>("[data-state]").textContent = "READY";
-  window.addEventListener("beforeunload", () => bridge.dispose(), { once: true });
+  recordingControls = installHostedRecordingControls({
+    button: requiredElement<HTMLButtonElement>("[data-record]"),
+    time: requiredElement<HTMLElement>("[data-recording-time]"),
+    status: requiredElement<HTMLElement>("[data-recording-status]"),
+    client: bridge.recording(),
+    save: result => recordingWorkbench!.save(result),
+    focusCanvas: () => frame.contentWindow?.focus(),
+  });
+  requiredElement<HTMLElement>("[data-recording-panel]").hidden = false;
+  requiredElement<HTMLElement>("[data-recording-status]").textContent = __WORLDKIT_RECORDING_CONTEXT__
+    ? "停止后保存到录制列表；上传失败会下载原始备份" : "停止后下载本地白膜录屏";
 }
 
 async function startHostedFrame(): Promise<void> {
@@ -475,67 +519,145 @@ async function startHostedFrame(): Promise<void> {
     runtimeSessionId,
     sessionNonce,
     protocolBudget: requestBody.effectiveBudget.protocol,
+    createRecorder: () => new CanvasRecorder(canvas),
+    onBeforeReset: () => clearPhysicalInput(true),
   });
   const pressedCodes = new Set<string>();
-  const contextualCodes = new Set([
-    "KeyW", "KeyA", "KeyS", "KeyD",
-    "ShiftLeft", "ShiftRight", "Space",
-  ]);
+  let lastInputContext = entry.physicalInputContext();
+  let keyboardYawRadiansPerTick = 0;
+  let keyboardPitchRadiansPerTick = 0;
   let localRequestSequence = 0;
-  let localInputTail = Promise.resolve();
-  let previousTimestamp = performance.now();
+  let previousTimestamp: number | undefined;
   let accumulatedSeconds = 0;
   let frameRequest = 0;
-  const runLocalInput = (input: FixedInputV1): void => {
-    const requestSequence = ++localRequestSequence;
-    localInputTail = localInputTail.then(async () => {
-      const receipt = await entry.submit({
-        kind: "worldkit-runtime-session-request",
-        schemaVersion: 1,
-        id: `request.browser-local-input.${requestSequence}`,
-        runtimeSessionId,
-        type: "fixed-input.run",
-        input,
-      });
-      if (receipt.status !== "succeeded") {
-        throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
-      }
-    }).catch(showFailure);
-  };
-  const renderLoop = (timestamp: number): void => {
-    if (hostedFrame.isDisposed()) return;
-    const elapsedSeconds = Math.min(
-      0.1,
-      Math.max(0, (timestamp - previousTimestamp) / 1_000),
-    );
-    previousTimestamp = timestamp;
-    accumulatedSeconds += elapsedSeconds;
-    const consumedInput = consumeHostedInteractiveInputV1({
-      accumulatedSeconds,
-      pressedCodes,
-    });
-    accumulatedSeconds = consumedInput.remainingSeconds;
-    if (consumedInput.input !== undefined) runLocalInput(consumedInput.input);
-    entry.renderFrame();
-    if (!hostedFrame.isDisposed()) {
-      frameRequest = requestAnimationFrame(renderLoop);
+  const clearPhysicalInput = (resetClock = false): void => {
+    pressedCodes.clear();
+    keyboardYawRadiansPerTick = 0;
+    keyboardPitchRadiansPerTick = 0;
+    if (resetClock) {
+      previousTimestamp = undefined;
+      accumulatedSeconds = 0;
     }
   };
+  const runLocalInput = async (input: FixedInputV1): Promise<void> => {
+    const requestSequence = ++localRequestSequence;
+    const cameraActions = new Set([...pressedCodes].map(code => CAMERA_KEY_ACTION_MAP[code]));
+    const yawDirection = Number(cameraActions.has("cameraLeft")) - Number(cameraActions.has("cameraRight"));
+    const pitchDirection = Number(cameraActions.has("cameraDown")) - Number(cameraActions.has("cameraUp"));
+    const cameraAdjustments = [];
+    for (let tick = 0; tick < input.ticks; tick++) {
+      keyboardYawRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        keyboardYawRadiansPerTick, yawDirection, CAMERA_YAW_RADIANS_PER_TICK,
+      );
+      keyboardPitchRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        keyboardPitchRadiansPerTick, pitchDirection, CAMERA_PITCH_RADIANS_PER_TICK,
+      );
+      if (keyboardYawRadiansPerTick !== 0 || keyboardPitchRadiansPerTick !== 0) {
+        cameraAdjustments.push(entry.adjustCameraView({
+          yawDeltaRadians: keyboardYawRadiansPerTick,
+          pitchDeltaRadians: keyboardPitchRadiansPerTick,
+        }));
+      }
+    }
+    // Queue every old per-Tick arrow delta, then the fixed batch, synchronously
+    // on the same isolated entry tail; other browser events cannot interleave.
+    const fixed = entry.submit({
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: `request.browser-local-input.${requestSequence}`,
+      runtimeSessionId,
+      type: "fixed-input.run",
+      input,
+    });
+    const [receipt] = await Promise.all([fixed, ...cameraAdjustments]);
+    const recovered = await finishHostedInteractiveInputV1({
+      receipt,
+      clearPhysicalInput,
+      submitNeutralInput: (neutral) => entry.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: `request.browser-local-input.${++localRequestSequence}`,
+        runtimeSessionId,
+        type: "fixed-input.run",
+        input: neutral,
+      }),
+    });
+    if (recovered) {
+      console.warn("WORLDKIT_RUNTIME_FRAME_RECOVERED");
+    }
+  };
+  const renderLoop = async (timestamp: number): Promise<void> => {
+    if (hostedFrame.isDisposed()) return;
+    const context = entry.physicalInputContext();
+    if (context.worldSessionId !== lastInputContext.worldSessionId) clearPhysicalInput(true);
+    else if (context.possessionTarget.mode === "unbound" ||
+      lastInputContext.possessionTarget.mode !== context.possessionTarget.mode ||
+      (lastInputContext.possessionTarget.mode === "possessed" &&
+        lastInputContext.possessionTarget.controlledEntityId !== context.possessionTarget.controlledEntityId)) {
+      clearPhysicalInput();
+    }
+    lastInputContext = context;
+    const elapsedSeconds = previousTimestamp === undefined
+      ? 0 : Math.max(0, (timestamp - previousTimestamp) / 1_000);
+    previousTimestamp = timestamp;
+    accumulatedSeconds += elapsedSeconds;
+    accumulatedSeconds = await renderHostedInteractiveFrameV1({
+      accumulatedSeconds,
+      pressedCodes,
+      ...(context.motionKernelRef === undefined ? {} : { motionKernelRef: context.motionKernelRef }),
+      runFixedInput: runLocalInput,
+      renderFrame: (alpha) => { entry.renderFrame(alpha); },
+      isDisposed: () => hostedFrame.isDisposed(),
+    });
+    if (!hostedFrame.isDisposed()) {
+      frameRequest = requestAnimationFrame(scheduleRender);
+    }
+  };
+  const scheduleRender = (timestamp: number): void => {
+    void renderLoop(timestamp).catch(showFailure);
+  };
   window.addEventListener("keydown", (event) => {
-    if (!contextualCodes.has(event.code)) return;
+    if (!isPhysicalGameplayKeyV1(event.code) && CAMERA_KEY_ACTION_MAP[event.code] === undefined) return;
     event.preventDefault();
     pressedCodes.add(event.code);
   });
   window.addEventListener("keyup", (event) => pressedCodes.delete(event.code));
-  window.addEventListener("blur", () => pressedCodes.clear());
+  let activeCameraPointerId: number | undefined;
+  let lastCameraPointerPosition: readonly [number, number] = [0, 0];
+  window.addEventListener("blur", () => {
+    clearPhysicalInput();
+    activeCameraPointerId = undefined;
+  });
   canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    activeCameraPointerId = event.pointerId;
+    lastCameraPointerPosition = [event.clientX, event.clientY];
     canvas.focus();
     canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
   });
+  canvas.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== activeCameraPointerId) return;
+    const deltaX = event.clientX - lastCameraPointerPosition[0];
+    const deltaY = event.clientY - lastCameraPointerPosition[1];
+    lastCameraPointerPosition = [event.clientX, event.clientY];
+    void entry.adjustCameraView({
+      yawDeltaRadians: -deltaX * 0.006,
+      pitchDeltaRadians: deltaY * 0.005,
+    }).catch(showFailure);
+    event.preventDefault();
+  });
+  canvas.addEventListener("wheel", (event) => {
+    void entry.adjustCameraView({ zoomDeltaMeters: event.deltaY * 0.008 }).catch(showFailure);
+    event.preventDefault();
+  }, { passive: false });
   const releasePointer = (event: PointerEvent): void => {
+    if (event.pointerId !== activeCameraPointerId) return;
+    activeCameraPointerId = undefined;
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
     }
+    event.preventDefault();
   };
   canvas.addEventListener("pointerup", releasePointer);
   canvas.addEventListener("pointercancel", releasePointer);
@@ -543,10 +665,10 @@ async function startHostedFrame(): Promise<void> {
   window.addEventListener("resize", () => entry.resize());
   window.addEventListener("beforeunload", () => {
     cancelAnimationFrame(frameRequest);
-    pressedCodes.clear();
+    clearPhysicalInput();
     void hostedFrame.dispose();
   }, { once: true });
-  frameRequest = requestAnimationFrame(renderLoop);
+  frameRequest = requestAnimationFrame(scheduleRender);
   canvas.focus();
 }
 

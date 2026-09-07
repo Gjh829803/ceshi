@@ -20,6 +20,9 @@ import {
   type FormalSpawnSupportObservationV1,
   type FormalWorldCaptureReceiptV1,
   type FormalWorldCaptureRequestV1,
+  type WhiteboxTriviewManifestV1,
+  deriveFormalWhiteboxTriviewManifestV1,
+  inspectWhiteboxTriviewPixelsV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalJsonBytes,
@@ -51,9 +54,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { PNG } from "pngjs";
+import { writeWhiteboxTriviewCaptures } from "../scenes/whitebox-triview-capture.js";
 import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
+import { measureFormalIdentityMaskV1, projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 import {
   parseWorldReconstructionExecutionPurposeV1,
   type WorldReconstructionExecutionPurposeV1,
@@ -63,6 +70,7 @@ import {
   createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
+  type StartConcreteCaptureOnlyHostedTransportInputV1,
 } from "./hosted-session-capture.js";
 import {
   evaluateOpeningCompositionHostGateV1,
@@ -84,9 +92,13 @@ export interface JoinedFormalCapturePackageRequestV1 {
 }
 
 export interface FormalCaptureArtifactBytesV1 {
+  readonly whiteboxTriviewPngs: readonly Uint8Array[];
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
   readonly worldTopDownPng: Uint8Array;
+  readonly openingIdentityMaskPng: Uint8Array;
+  readonly worldSideIdentityMaskPng: Uint8Array;
+  readonly worldTopDownIdentityMaskPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservationJson: Uint8Array;
   readonly semanticViewObservationSetJson: Uint8Array;
@@ -113,6 +125,8 @@ export interface PublishFormalCaptureDirectoryInputV1 {
 }
 
 export interface PublishRejectedCaptureDirectoryInputV1 {
+  /** Used for identity joins only; rejected directories never publish this receipt. */
+  readonly receiptJson: Uint8Array;
   readonly outputDirectoryPath: string;
   readonly artifacts: FormalCaptureArtifactBytesV1;
   readonly openingGateResult: OpeningCompositionHostGateResultV1;
@@ -132,6 +146,7 @@ export interface CaptureHostedWorldPackageInputV1 {
   readonly rejectedOutputDirectoryPath?: string;
   readonly port?: number;
   readonly budget?: FormalCaptureArtifactBudgetV1;
+  readonly onRuntimeFlightDiagnostic?: NonNullable<StartConcreteCaptureOnlyHostedTransportInputV1["onRuntimeFlightDiagnostic"]>;
   /** Required by the production reconstruction owner; omitted only by low-level transport tests. */
   readonly openingGate?: Readonly<{
     readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
@@ -248,27 +263,6 @@ function mismatch(pathName: string): never {
   throw new Error(`FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH: ${pathName}`);
 }
 
-function worldBounds(
-  verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
-): Readonly<{
-  minimumMetersXYZ: readonly [number, number, number];
-  maximumMetersXYZ: readonly [number, number, number];
-}> {
-  const bounds = verifiedPackage.manifest.worldBounds;
-  return Object.freeze({
-    minimumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] - bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[0],
-      bounds.centerMetersXZ[1] - bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-    maximumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] + bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[1],
-      bounds.centerMetersXZ[1] + bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-  });
-}
-
 export function assertFormalCaptureRequestMatchesVerifiedPackageV1(
   input: Readonly<{
     verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1;
@@ -336,7 +330,7 @@ export function assertFormalCaptureRequestMatchesVerifiedPackageV1(
     return mismatch("semanticCaptureMap/bindings");
   }
 
-  const expectedWorldBounds = worldBounds(verifiedPackage);
+  const expectedWorldBounds = deriveNativeFormalWorldCaptureBoundsV1(metadata);
   const [opening, worldSide, worldTopDown] = request.views;
   if (
     !isEqual(worldSide.worldBoundsMeters, expectedWorldBounds) ||
@@ -421,6 +415,10 @@ function assertPayloadArtifactHashes(
   payload: FormalHostedWorldCapturePayloadV1,
   receipt: FormalWorldCaptureReceiptV1,
 ): void {
+  if (payload.whiteboxTriviewPngs.length !== receipt.whiteboxTriviews.length ||
+    receipt.whiteboxTriviews.some((row, index) => sha256Bytes(payload.whiteboxTriviewPngs[index]!) !== row.pngContentHash)) {
+    mismatch("whiteboxTriviews/pngContentHash");
+  }
   const pngHashes = new Map([
     ["opening", sha256Bytes(payload.openingPng)],
     ["world-side", sha256Bytes(payload.worldSidePng)],
@@ -429,6 +427,16 @@ function assertPayloadArtifactHashes(
   for (const view of receipt.views) {
     if (pngHashes.get(view.viewId) !== view.pngContentHash) {
       mismatch(`views/${view.viewId}/pngContentHash`);
+    }
+  }
+  const identityHashes = new Map([
+    ["opening", sha256Bytes(payload.openingIdentityMaskPng)],
+    ["world-side", sha256Bytes(payload.worldSideIdentityMaskPng)],
+    ["world-top-down", sha256Bytes(payload.worldTopDownIdentityMaskPng)],
+  ]);
+  for (const view of receipt.views) {
+    if (identityHashes.get(view.viewId) !== view.identityMaskPngContentHash) {
+      mismatch(`views/${view.viewId}/identityMaskPngContentHash`);
     }
   }
   if (
@@ -491,9 +499,13 @@ function validateHostedPayload(
   });
   return Object.freeze({
     artifacts: Object.freeze({
+      whiteboxTriviewPngs: Object.freeze(payload.whiteboxTriviewPngs.map(png => new Uint8Array(png))),
       openingPng: new Uint8Array(payload.openingPng),
       worldSidePng: new Uint8Array(payload.worldSidePng),
       worldTopDownPng: new Uint8Array(payload.worldTopDownPng),
+      openingIdentityMaskPng: new Uint8Array(payload.openingIdentityMaskPng),
+      worldSideIdentityMaskPng: new Uint8Array(payload.worldSideIdentityMaskPng),
+      worldTopDownIdentityMaskPng: new Uint8Array(payload.worldTopDownIdentityMaskPng),
       colliderOverlayPng: new Uint8Array(payload.colliderOverlayPng),
       openingObservationJson: canonicalJsonBytes(openingObservation),
       semanticViewObservationSetJson:
@@ -600,6 +612,7 @@ export async function captureHostedWorldPackageV1(
     createCaptureOnlyHostedTransportStarterV1({
       packageDirectoryPath,
       ...(input.port === undefined ? {} : { port: input.port }),
+      ...(input.onRuntimeFlightDiagnostic === undefined ? {} : { onRuntimeFlightDiagnostic: input.onRuntimeFlightDiagnostic }),
     });
   let payload: FormalHostedWorldCapturePayloadV1;
   try {
@@ -635,7 +648,15 @@ export async function captureHostedWorldPackageV1(
         reconstructionCase: input.openingGate.reconstructionCase,
         evaluationProfile: input.openingGate.evaluationProfile,
         openingObservation: payload.openingObservation,
-        expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
+        openingPixelComposition: projectOpeningCompositionPixelsV1({
+          bindings: joined.request.semanticCaptureMap.bindings,
+          projections: measureFormalIdentityMaskV1({
+            view: validated.receipt.views.find(({ viewId }) => viewId === "opening")!,
+            pngBytes: payload.openingIdentityMaskPng,
+            targets: joined.request.semanticCaptureMap.bindings,
+          }),
+        }),
+        expectedCamera: joined.verifiedPackage.nativeBlockMaterializerMetadata!.openingCamera,
       });
       if (openingCompositionGateBlocksPublicationV1({
         executionPurpose: input.openingGate.executionPurpose,
@@ -647,6 +668,7 @@ export async function captureHostedWorldPackageV1(
         }
         try {
           await publishRejectedCaptureDirectoryV1({
+            receiptJson: validated.receiptJson,
             outputDirectoryPath: rejectedOutputDirectoryPath,
             artifacts: validated.artifacts,
             openingGateResult,
@@ -723,6 +745,18 @@ export async function captureHostedWorldPackageV1(
   });
 }
 
+function parsedTriviewPublication(input: Readonly<{
+  receiptJson: Uint8Array; artifacts: FormalCaptureArtifactBytesV1; budget: FormalCaptureArtifactBudgetV1;
+}>): Readonly<{ receipt: FormalWorldCaptureReceiptV1; manifest: WhiteboxTriviewManifestV1 | undefined }> {
+  assertJson(input.receiptJson, input.budget.maximumJsonBytesPerArtifact, "formal-world-capture-receipt.json");
+  const receipt = parseFormalWorldCaptureReceiptV1(JSON.parse(new TextDecoder().decode(input.receiptJson)));
+  if (input.artifacts.whiteboxTriviewPngs.length !== receipt.whiteboxTriviews.length ||
+    receipt.whiteboxTriviews.some((row, index) => sha256Bytes(input.artifacts.whiteboxTriviewPngs[index]!) !== row.pngContentHash)) {
+    mismatch("whiteboxTriviews/pngContentHash");
+  }
+  return { receipt, manifest: deriveFormalWhiteboxTriviewManifestV1(receipt) };
+}
+
 export async function publishRejectedCaptureDirectoryV1(
   input: PublishRejectedCaptureDirectoryInputV1,
 ): Promise<void> {
@@ -743,10 +777,18 @@ export async function publishRejectedCaptureDirectoryV1(
     input.budget.maximumJsonBytesPerArtifact,
     "maximumJsonBytesPerArtifact",
   );
+  const { manifest } = parsedTriviewPublication(input);
+  const triviewRows: Array<readonly [string, Uint8Array, "png" | "json"]> = (manifest?.whiteboxTriviews ?? []).map((row, index) =>
+    [`triviews/${row.imageUri}`, input.artifacts.whiteboxTriviewPngs[index]!, "png"]);
+  if (triviewRows.length > 0) triviewRows.push(["triviews/whitebox-triview-manifest.json", canonicalJsonBytes(manifest), "json"]);
   const rows = [
+    ...triviewRows,
     ["opening.png", input.artifacts.openingPng, "png"],
     ["world-side.png", input.artifacts.worldSidePng, "png"],
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
+    ["opening-identity-mask.png", input.artifacts.openingIdentityMaskPng, "png"],
+    ["world-side-identity-mask.png", input.artifacts.worldSideIdentityMaskPng, "png"],
+    ["world-top-down-identity-mask.png", input.artifacts.worldTopDownIdentityMaskPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
     ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],
@@ -779,6 +821,7 @@ export async function publishRejectedCaptureDirectoryV1(
   try {
     for (const [relativePath, bytes] of rows) {
       await input.hooks?.beforeWrite?.(relativePath);
+      await mkdir(path.dirname(path.join(stagingDirectoryPath, relativePath)), { recursive: true });
       await writeFile(path.join(stagingDirectoryPath, relativePath), bytes, {
         flag: "wx",
         mode: 0o600,
@@ -818,6 +861,9 @@ export async function publishFormalCaptureDirectoryV1(
     ["opening.png", input.artifacts.openingPng, "png"],
     ["world-side.png", input.artifacts.worldSidePng, "png"],
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
+    ["opening-identity-mask.png", input.artifacts.openingIdentityMaskPng, "png"],
+    ["world-side-identity-mask.png", input.artifacts.worldSideIdentityMaskPng, "png"],
+    ["world-top-down-identity-mask.png", input.artifacts.worldTopDownIdentityMaskPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
     ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],
@@ -845,6 +891,22 @@ export async function publishFormalCaptureDirectoryV1(
     input.budget.maximumJsonBytesPerArtifact,
     "formal-world-capture-receipt.json",
   );
+  const { receipt } = parsedTriviewPublication(input);
+  const triviewCaptures = receipt.formalRequest.visualCaptureGroups.map((target, index) => {
+    const pngBytes = input.artifacts.whiteboxTriviewPngs[index]!;
+    assertPng(pngBytes, input.budget.maximumPngBytesPerArtifact, `triviews/${target.visualTargetId}/whitebox-triview.png`);
+    const bytes = Buffer.from(pngBytes);
+    if (bytes.byteLength < 24 || bytes.readUInt32BE(16) !== Math.max(1, Math.floor(receipt.formalRequest.views[0].widthPixels / 3)) * 3 ||
+      bytes.readUInt32BE(20) !== receipt.formalRequest.views[0].heightPixels) mismatch("whiteboxTriviews/raster");
+    const png = PNG.sync.read(Buffer.from(pngBytes));
+    return { target, capture: {
+      kind: "worldkit-whitebox-triview-capture" as const, schemaVersion: 1 as const,
+      visualTargetId: target.visualTargetId, runtimeEntityIds: target.runtimeEntityIds,
+      views: ["front", "right", "back"] as const,
+      imageDataUri: `data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}`,
+      inspection: inspectWhiteboxTriviewPixelsV1(new Uint8ClampedArray(png.data.buffer, png.data.byteOffset, png.data.byteLength), png.width, png.height),
+    } };
+  });
   if (!(await missing(outputDirectoryPath))) {
     throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
   }
@@ -857,6 +919,20 @@ export async function publishFormalCaptureDirectoryV1(
   ));
   let published = false;
   try {
+    if (triviewCaptures.length > 0) {
+      await writeWhiteboxTriviewCaptures(
+        path.join(stagingDirectoryPath, "triviews"), triviewCaptures, {
+          failedOutputPath: path.join(outputDirectoryPath, "triviews"),
+          beforeWrite: relativePath => input.hooks?.beforeWrite?.(`triviews/${relativePath}`) ?? Promise.resolve(),
+        },
+      );
+      const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt)!;
+      const relativePath = "triviews/whitebox-triview-manifest.json";
+      const bytes = canonicalJsonBytes(manifest);
+      assertJson(bytes, input.budget.maximumJsonBytesPerArtifact, relativePath);
+      await input.hooks?.beforeWrite?.(relativePath);
+      await writeFile(path.join(stagingDirectoryPath, relativePath), bytes, { flag: "wx", mode: 0o600 });
+    }
     for (const [relativePath, bytes] of rows) {
       await input.hooks?.beforeWrite?.(relativePath);
       await writeFile(path.join(stagingDirectoryPath, relativePath), bytes, {

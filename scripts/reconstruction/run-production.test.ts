@@ -29,6 +29,7 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   sha256CanonicalJson,
+  stringifyCanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
@@ -77,14 +78,6 @@ const REAL_CASE_ROOT = path.join(
   "artifacts",
   "scenes",
   "cloud-temple-t-gate-native-block",
-);
-const REAL_HOST_CLOSURE_ROOT = path.join(
-  REPOSITORY_ROOT,
-  "apps",
-  "playground",
-  "public",
-  "world-packages",
-  "cloud-ridge",
 );
 const CASE_ID = "cloud-temple-t-gate-native-block";
 const RUN_ID = "p-test-run";
@@ -169,16 +162,6 @@ async function fixture(): Promise<ProductionFixtureV1> {
     recursive: true,
     filter: (sourcePath) => !excludedEvidenceRoots.has(sourcePath),
   });
-  const hostClosureRoot = path.join(
-    repositoryRoot,
-    "apps",
-    "playground",
-    "public",
-    "world-packages",
-    "cloud-ridge",
-  );
-  await mkdir(path.dirname(hostClosureRoot), { recursive: true });
-  await cp(REAL_HOST_CLOSURE_ROOT, hostClosureRoot, { recursive: true });
   return Object.freeze({
     repositoryRoot,
     caseRoot,
@@ -403,7 +386,7 @@ async function publishQualityEvaluationArtifacts(
     message: "Opening target is outside the accepted region.",
     repairAction: {
       kind: "revise-native-source",
-      operation: "resize",
+      operation: "adjust-geometry",
       targetKind: "composition-target",
       targetId: "opening-target",
       instruction: "Resize the opening target.",
@@ -725,6 +708,47 @@ async function runWithBackend(
 }
 
 describe("runWorldReconstructionProductionV1", () => {
+  it("selects this SDK's live Builder Skill for a fresh run of an existing Case", async () => {
+    const value = await fixture();
+    const selected = ownersFor(value, await receiptFor(value));
+    await run(value, selected.owners);
+    const generation = vi.mocked(selected.owners.createRunPorts).mock.calls[0]![0].generationInput;
+    expect(generation.inputDirectoryPath).toBe(path.join(value.caseRoot, "inputs"));
+    expect(generation.builderSkillPath).toBe(path.join(value.repositoryRoot, ".codex/skills/worldkit-native-block-builder/SKILL.md"));
+  });
+
+  it("freezes complete-target scope and retains it across Host recovery without another generation", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const initial = ownersFor(value, receipt, { runCore: vi.fn(async input => {
+      await createWorldReconstructionRunJournalV1({ executionPurpose: "production", runId: input.runId,
+        caseRef: input.caseRef, evaluationProfileRef: receipt.evaluationProfileRef,
+        frozenOwnerIdentities: input.frozenOwnerIdentities, outputDirectoryPath: input.outputDirectoryPath });
+      throw new WorldReconstructionRunClosedErrorV1(["WORLD_RECONSTRUCTION_CAPTURE_FAILED"], "completed");
+    }) });
+    const input = { repositoryRoot: value.repositoryRoot, casePath: value.casePath, outputDirectoryPath: value.outputDirectoryPath,
+      backend: "local" as const, routePolicy: { requiredCapabilityRefs: [], requestedSourceKind: "babylon-native" as const, nativeTrustAdmitted: true } };
+    expect(await runWorldReconstructionProductionV1({ ...input, visualCaptureScope: "complete-targets" }, initial.owners))
+      .toMatchObject({ productionOutcome: "failed" });
+    expect(initial.owners.createRunPorts).toHaveBeenCalledWith(expect.objectContaining({ visualCaptureScope: "complete-targets" }));
+    const scopePath = path.join(value.outputDirectoryPath, "inputs/visual-capture-scope.json");
+    const frozen = await readFile(scopePath);
+    expect(JSON.parse(frozen.toString())).toEqual({ kind: "world-reconstruction-capture-scope", schemaVersion: 1, visualCaptureScope: "complete-targets" });
+    const recovered = ownersFor(value, receipt, { createRunPorts: vi.fn(async () => { throw new Error("SCOPE_TEST_STOP_BEFORE_EXECUTION"); }) });
+    const resume = { ...input, executionMode: "resume-host-only" as const };
+    await expect(runWorldReconstructionProductionV1({ ...resume, visualCaptureScope: "world-only" }, recovered.owners))
+      .rejects.toThrow("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+    expect(recovered.owners.createRunPorts).not.toHaveBeenCalled();
+    expect(await runWorldReconstructionProductionV1(resume, recovered.owners)).toMatchObject({ productionOutcome: "failed", cleanupOutcome: "not-started" });
+    expect(recovered.owners.createRunPorts).toHaveBeenCalledWith(expect.objectContaining({ visualCaptureScope: "complete-targets" }));
+    expect(recovered.owners.runCore).not.toHaveBeenCalled();
+    expect(initial.owners.runCore).toHaveBeenCalledOnce();
+    expect(await readFile(scopePath)).toEqual(frozen);
+    await writeFile(scopePath, "{}");
+    await expect(runWorldReconstructionProductionV1(resume, recovered.owners)).rejects.toThrow("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+    expect(recovered.owners.createRunPorts).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ["before-final-write", "completed"], ["after-final-write", "completed"],
     ["before-final-write", "cleanup-joined"], ["before-final-write", "completed-before"],
@@ -978,6 +1002,7 @@ describe("runWorldReconstructionProductionV1", () => {
     });
 
     await expect(freeze({
+      visualCaptureScope: "world-only",
       outputDirectoryPath: value.outputDirectoryPath,
       caseBytes: new TextEncoder().encode("case"),
       profileBytes: new TextEncoder().encode("profile"),
@@ -1004,6 +1029,7 @@ describe("runWorldReconstructionProductionV1", () => {
     });
 
     await expect(freeze({
+      visualCaptureScope: "world-only",
       outputDirectoryPath: value.outputDirectoryPath,
       caseBytes: new TextEncoder().encode("case"),
       profileBytes: new TextEncoder().encode("profile"),
@@ -1546,9 +1572,8 @@ describe("runWorldReconstructionProductionV1", () => {
     bundle.corePorts.rehashOwnerIdentities.mockImplementationOnce(async () => ({
       caseHash: H("a"),
       evaluationProfileHash: H("b"),
-      gameplayBootstrapHash: H("c"),
-      worldRuntimeBootstrapHash: H("d"),
-      worldBoundsHash: H("e"),
+      subjectHostContextHash: H("c"),
+      worldBoundsPolicyHash: H("e"),
       bootstrapInputHash: H("f"),
     }));
 
@@ -1611,6 +1636,22 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(corePorts.cleanup).toHaveBeenCalledOnce();
     expect(owners.verifyRun).not.toHaveBeenCalled();
     expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("rejects a changed frozen capture scope before final publication", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const selected = ownersFor(value, receipt);
+    vi.mocked(selected.owners.verifyRun).mockImplementationOnce(async () => {
+      const file = path.join(value.outputDirectoryPath, "inputs/visual-capture-scope.json");
+      const original = JSON.parse(await readFile(file, "utf8"));
+      expect(original.visualCaptureScope).toBe("world-only");
+      await writeFile(file, stringifyCanonicalJson({ ...original, visualCaptureScope: "complete-targets" }));
+      return productionIntegrityFor(receipt);
+    });
+    expect(await run(value, selected.owners)).toMatchObject({ productionOutcome: "failed", publicationOutcome: "not-published",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID"] });
+    expect(selected.owners.publishFinal).not.toHaveBeenCalled();
   });
 
   it("rechecks frozen source identity after verification before final publication", async () => {
@@ -1718,31 +1759,19 @@ describe("runWorldReconstructionProductionV1", () => {
       .toMatchObject({ code: "ENOENT" });
   });
 
-  it("does not create a run directory when Host closure validation fails", async () => {
+  it("does not read a preselected Cloud Ridge Host closure when starting production", async () => {
     const value = await fixture();
-    await writeFile(
-      path.join(
-        value.repositoryRoot,
-        "apps",
-        "playground",
-        "public",
-        "world-packages",
-        "cloud-ridge",
-        "registry-lock.json",
-      ),
-      "{}\n",
-    );
+    const retiredPath = path.join(value.repositoryRoot,
+      "apps/playground/public/world-packages/cloud-ridge/registry-lock.json");
+    await mkdir(path.dirname(retiredPath), { recursive: true });
+    await writeFile(retiredPath, "{}\n");
     const receipt = await receiptFor(value);
     const { owners } = ownersFor(value, receipt);
-
-    await expect(run(value, owners)).rejects.toThrow(
-      "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-    );
-    await expect(lstat(value.outputDirectoryPath)).rejects.toMatchObject({
-      code: "ENOENT",
+    await expect(run(value, owners)).resolves.toMatchObject({
+      productionOutcome: "passed", publicationOutcome: "published",
     });
-    expect(owners.createRunPorts).not.toHaveBeenCalled();
-    expect(owners.runCore).not.toHaveBeenCalled();
+    expect(owners.createRunPorts).toHaveBeenCalledOnce();
+    expect(owners.runCore).toHaveBeenCalledOnce();
   });
 
   it("records returned strict diagnostics without vetoing production publication", async () => {

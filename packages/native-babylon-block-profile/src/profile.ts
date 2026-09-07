@@ -1,6 +1,12 @@
 export { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from
   "@whitebox-world/runtime-contracts";
 
+/** The existing Profile identifier contract, shared by Host and authoring feedback. */
+export function isBabylonNativeBlockIdV1(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{2,79}$/.test(value) &&
+    value.normalize("NFC") === value;
+}
+
 export const BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1 = Object.freeze([
   "ground",
   "route",

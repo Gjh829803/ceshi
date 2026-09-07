@@ -4,7 +4,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBabylonNativeBlockVisualsV1 } from
   "./babylon-visual-adapter.js";
@@ -55,6 +55,7 @@ const BLOCKS = Object.freeze([
 const cleanups: Array<() => void> = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   while (cleanups.length > 0) cleanups.pop()!();
 });
 
@@ -62,13 +63,6 @@ function record(
   scene: Scene,
   spec: typeof BLOCKS[number],
 ): BabylonNativeBlockSessionRecordV1 {
-  const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1.full;
-  const mesh = MeshBuilder.CreateBox(spec.id, {
-    width: size[0],
-    height: size[1],
-    depth: size[2],
-  }, scene);
-  mesh.position.set(...(spec.centerMetersXYZ as BabylonNativeBlockPositionMetersXYZV1));
   return Object.freeze({
     input: Object.freeze({
       id: spec.id,
@@ -78,13 +72,7 @@ function record(
       rotationQuarterTurnsY: 0 as const,
       visualGroupId: spec.visualGroupId,
     }),
-    mesh,
-    localGeometrySnapshot: Object.freeze({
-      positions: Object.freeze(Array.from(
-        mesh.getVerticesData(VertexBuffer.PositionKind)!,
-      )),
-      indices: Object.freeze(Array.from(mesh.getIndices()!)),
-    }),
+
   });
 }
 
@@ -96,7 +84,7 @@ interface FixtureV1 {
   readonly independentMesh: Mesh;
 }
 
-function createFixture(): FixtureV1 {
+function createFixture(materializeBatches = true): FixtureV1 {
   const engine = new NullEngine();
   const scene = new Scene(engine);
   const records = Object.freeze(BLOCKS.map((spec) => record(scene, spec)));
@@ -120,7 +108,7 @@ function createFixture(): FixtureV1 {
       records,
     }),
   });
-  const batches = materializeBabylonNativeBlockVisualBatchesV1({
+  const batches = materializeBatches ? materializeBabylonNativeBlockVisualBatchesV1({
     scene,
     realizationId: "capture-isolation-fixture",
     chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
@@ -139,21 +127,20 @@ function createFixture(): FixtureV1 {
       sizeMetersXYZ: block.sizeMetersXYZ,
     })),
     liveHandles: visuals.liveHandles,
-  });
+  }) : undefined;
   cleanups.push(() => {
-    batches.dispose();
+    batches?.dispose();
     visuals.dispose();
     scene.dispose();
     engine.dispose();
   });
   return Object.freeze({
     scene,
-    registry: batches.liveHandles,
-    meshByBlockId: new Map(records.map((entry) =>
-      [entry.input.id, entry.mesh] as const)),
-    batchMesh: batches.batches[0]!.mesh,
-    independentMesh: records.find(({ input }) =>
-      input.id === "wall-single")!.mesh,
+    registry: batches?.liveHandles ?? visuals.liveHandles,
+    meshByBlockId: new Map(visuals.nodes.flatMap(node => node.sourceBlockIds.map(id => [id, node.mesh] as const))),
+    batchMesh: batches?.batches[0]!.mesh ?? visuals.nodes[0]!.mesh,
+    independentMesh: batches?.batches.find(batch => batch.blockIds.includes("wall-single"))?.mesh
+      ?? visuals.nodes.find(node => node.sourceBlockIds.includes("wall-single"))!.mesh,
   });
 }
 
@@ -168,6 +155,87 @@ function instanceTranslations(mesh: Mesh): readonly number[] {
 }
 
 describe("NBR-65F formal Capture target isolation", () => {
+
+  it("isolates exact logical portions before Runtime batching and restores the initial cluster", () => {
+    const fixture = createFixture(false);
+    const priorMeshes = [...fixture.scene.meshes];
+    const observerCount = fixture.scene.onNewMeshAddedObservable.observers.length;
+    const addMeshDescriptor = Object.getOwnPropertyDescriptor(fixture.scene, "addMesh");
+    const isolation = applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-0", "route-2"],
+    });
+    expect(fixture.meshByBlockId.get("route-0")!.isVisible).toBe(false);
+    const portions = fixture.scene.meshes.filter(mesh => !priorMeshes.includes(mesh));
+    expect(portions[0]!.position.x).toBeCloseTo(0.015, 6);
+    expect(portions[1]!.position.x).toBeCloseTo(1.985, 6);
+    for (const mesh of portions) expect(mesh.scaling.x).toBeCloseTo(0.985, 6);
+    const unrelated = MeshBuilder.CreateBox("later-unrelated", {}, fixture.scene);
+    expect(fixture.scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+    expect(Object.getOwnPropertyDescriptor(fixture.scene, "addMesh")).toEqual(addMeshDescriptor);
+    isolation.restore();
+    isolation.restore();
+    expect(new Set(fixture.scene.meshes)).toEqual(new Set([...priorMeshes, unrelated]));
+    expect(priorMeshes.every(mesh => mesh.isVisible)).toBe(true);
+  });
+
+  it("releases a capture portion whose constructor registered it before throwing", () => {
+    const fixture = createFixture(false);
+    const priorMeshes = [...fixture.scene.meshes];
+    const observerCount = fixture.scene.onNewMeshAddedObservable.observers.length;
+    const addMeshDescriptor = Object.getOwnPropertyDescriptor(fixture.scene, "addMesh");
+    const createBox = MeshBuilder.CreateBox;
+    vi.spyOn(MeshBuilder, "CreateBox").mockImplementation((...args) => {
+      createBox(...args);
+      throw new Error("partial capture allocation");
+    });
+    expect(() => applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-0"],
+    })).toThrow("partial capture allocation");
+    expect(fixture.scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+    expect(Object.getOwnPropertyDescriptor(fixture.scene, "addMesh")).toEqual(addMeshDescriptor);
+    expect(fixture.scene.meshes).toEqual(priorMeshes);
+    expect(priorMeshes.every(mesh => mesh.isVisible)).toBe(true);
+  });
+
+  it("masks disjoint Block instances without shifting centers or rewriting stripe colors", () => {
+    const fixture = createFixture();
+    const priorMatrices = fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()]);
+    const priorColors = Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(3, true)!);
+    const isolation = applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-2", "route-0"],
+    });
+    expect(fixture.batchMesh.thinInstanceCount).toBe(3);
+    expect(instanceTranslations(fixture.batchMesh)).toEqual([0, 1, 2]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0, 0.985]);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(3, true)!))
+      .toEqual(priorColors);
+    isolation.restore();
+    expect(fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()])).toEqual(priorMatrices);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(3, true)!))
+      .toEqual(priorColors);
+  });
+
+  it("restores every Block instance after a partially applied capture buffer throws", () => {
+    const fixture = createFixture();
+    const priorMatrices = fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()]);
+    const priorColors = Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!);
+    const setBuffer = fixture.batchMesh.thinInstanceSetBuffer;
+    let didThrow = false;
+    vi.spyOn(fixture.batchMesh, "thinInstanceSetBuffer").mockImplementation(function (kind, buffer, stride, isStatic) {
+      setBuffer.call(fixture.batchMesh, kind, buffer, stride, isStatic);
+      if (kind === "matrix" && !didThrow) {
+        didThrow = true;
+        throw new Error("partial capture buffer failure");
+      }
+    });
+    expect(() => applyBabylonNativeBlockCaptureIsolationV1({
+      registry: fixture.registry, targetBlockIds: ["route-0", "route-2"],
+    })).toThrow("partial capture buffer failure");
+    expect(fixture.batchMesh.thinInstanceGetWorldMatrices().map(matrix => [...matrix.asArray()])).toEqual(priorMatrices);
+    expect(Array.from(fixture.batchMesh.getVertexBuffer(VertexBuffer.ColorInstanceKind)!.getFloatData(1, true)!))
+      .toEqual(priorColors);
+    expect(fixture.independentMesh.isVisible).toBe(true);
+  });
   it("isolates one batched Block without losing its batch identity", () => {
     const fixture = createFixture();
     const scaleBefore = instanceScales(fixture.batchMesh);
@@ -177,15 +245,13 @@ describe("NBR-65F formal Capture target isolation", () => {
     });
 
     expect(isolation.targetBlockIds).toEqual(["route-1"]);
-    expect(isolation.hiddenIndependentBlockIds).toEqual(["wall-single"]);
-    expect(isolation.hiddenBatchIds).toEqual([]);
+    expect(isolation.hiddenIndependentBlockIds).toEqual([]);
+    expect(isolation.hiddenBatchIds).toEqual(["thin-instance-group-0002"]);
     expect(isolation.maskedThinInstanceCount).toBe(2);
     expect(fixture.independentMesh.isVisible).toBe(false);
     expect(fixture.batchMesh.isVisible).toBe(true);
     expect(fixture.batchMesh.thinInstanceCount).toBe(3);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0, scaleBefore[1], 0]);
-    // The masked instances keep their translation, so the batch never loses a
-    // row and the surviving instance index still names one logical Block.
+    expect(instanceScales(fixture.batchMesh)).toEqual([0, 0.985, 0]);
     expect(instanceTranslations(fixture.batchMesh)).toEqual([0, 1, 2]);
 
     isolation.restore();
@@ -206,7 +272,7 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(isolation.maskedThinInstanceCount).toBe(0);
     expect(fixture.batchMesh.isVisible).toBe(false);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.96, 0.96, 0.96]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
 
     isolation.restore();
     expect(fixture.batchMesh.isVisible).toBe(true);
@@ -268,6 +334,6 @@ describe("NBR-65F formal Capture target isolation", () => {
       targetBlockIds: ["route-0", "route-0"],
     })).toThrow(/WORLDKIT_NATIVE_BLOCK_CAPTURE_ISOLATION_INVALID/);
     expect(fixture.independentMesh.isVisible).toBe(true);
-    expect(instanceScales(fixture.batchMesh)).toEqual([0.96, 0.96, 0.96]);
+    expect(instanceScales(fixture.batchMesh)).toEqual([0.985, 0.985, 0.985]);
   });
 });

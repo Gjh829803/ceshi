@@ -2,11 +2,16 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import { admitBabylonNativeSceneCandidateV1 } from "@whitebox-world/native-babylon/host";
-import { hashBabylonNativeBlockCheckedLayoutInventoryV1 } from
+import { hashBabylonNativeBlockCheckedLayoutInventoryV1, type BabylonNativeBlockFinalizedEpochV1 } from
   "@whitebox-world/native-babylon-block-profile";
 import {
   createBabylonNativeBlockMaterializerMetadataV1,
   takeBabylonNativeBlockCheckedEpochEvidenceV1,
+  BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
+  BABYLON_NATIVE_BLOCK_CHUNK_POLICY_PENDING_CASE_SLOTS_V1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
+  measureBabylonNativeBlockChunkPolicyBenchmarkV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
@@ -26,7 +31,8 @@ import { createBudgetWorkloadModule } from "./workload.js";
  * NOT a paid-generation receipt, source-admission test, or formal Case evidence. */
 export async function prepareBudgetRuntimeFixture(blockCount: number) {
   const started = performance.now();
-  const module = createBudgetWorkloadModule(blockCount);
+  let finalizedEpoch: BabylonNativeBlockFinalizedEpochV1 | undefined;
+  const module = createBudgetWorkloadModule(blockCount, (epoch) => { finalizedEpoch = epoch; });
   const base = createBabylonNativeBlockWorldPackageTestInputV1();
   // Fixture JSON is an asset served by this verifier, not a sibling app's
   // private source import. Keep the exact existing cloud-ridge bytes.
@@ -71,11 +77,13 @@ export async function prepareBudgetRuntimeFixture(blockCount: number) {
       profileInventoryHash: evidence.profileInventoryHash, contribution,
       authoringLayoutBinding: {
         kind: "native-block-authoring-layout-binding", schemaVersion: 1,
+        groundExploration: { mode: "case-defined" as const },
+        openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
         caseHash: fixtureIdentity, authoringManifestHash: fixtureIdentity,
         checkedLayoutInventoryHash, contributionHash: hashBabylonNativeSceneContributionV1(contribution),
         visualGroups: evidence.checkedLayout.checkResult.visualGroups.map((group, index) => ({
           acceptanceTargetRef: `worldkit://acceptance-target/${group.id}@1`,
-          visualGroupId: group.id, semanticClassId: `budget.${group.id}`,
+          frontDirectionWorldXZ: [0, -1] as const, visualGroupId: group.id, semanticClassId: `budget.${group.id}`,
           identityColorHex: ["#808080", "#F28E2B", "#D9A514", "#4E79A7", "#9C6ADE"][index]! as `#${string}`,
           blockIds: group.blockIds, paletteRoles: group.paletteRoles,
           minimumMetersXYZ: group.minimumMetersXYZ, maximumMetersXYZ: group.maximumMetersXYZ,
@@ -112,8 +120,25 @@ export async function prepareBudgetRuntimeFixture(blockCount: number) {
     }));
     const verified = verifyWorldPackageDirectoryV1(directory);
     if (verified.kind !== "babylon-native-scene") throw new Error("Expected Native Package");
-    return { module, verified, measurement: {
-      blockCount, admissionAndPackageMilliseconds: performance.now() - started,
+    const admissionAndPackageMilliseconds = performance.now() - started;
+    if (!finalizedEpoch || finalizedEpoch.profileInventoryHash !== evidence.profileInventoryHash) {
+      throw new Error("Chunk comparison must measure the admitted workload epoch");
+    }
+    // This is projected Native resource counting, not GPU/Havok timing, old
+    // greedy-cluster accounting or authority to replace the frozen Runtime policy.
+    // Keep its CPU cost out of the existing admission/Package timing field.
+    const chunkCandidateComparison = measureBabylonNativeBlockChunkPolicyBenchmarkV1({
+      candidatePolicies: BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
+      measuredCases: [{ caseId: `synthetic-budget-${blockCount}`, finalizedEpoch }],
+      pendingCaseSlots: BABYLON_NATIVE_BLOCK_CHUNK_POLICY_PENDING_CASE_SLOTS_V1,
+    });
+    // Runtime rebuilds the identical workload without retaining an observer of
+    // its epoch or the admission Scene. No test callback enters Runtime setup.
+    return { module: createBudgetWorkloadModule(blockCount), verified, measurement: {
+      blockCount, admissionAndPackageMilliseconds,
+      runtimeChunkPolicy: { id: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1.id,
+        hash: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1 },
+      chunkCandidateComparison,
       metrics: evidence.checkedLayout.checkResult.metrics,
       colliderCount: contribution.staticColliders.length,
       colliderVertexCount: evidence.colliderInventory.reduce((sum, row) => sum + row.vertexCount, 0),

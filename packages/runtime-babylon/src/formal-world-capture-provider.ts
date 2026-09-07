@@ -21,6 +21,7 @@ import {
   hashFormalSemanticCaptureMapV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
+  inspectWhiteboxTriviewPixelsV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalSemanticViewObservationSetV1,
@@ -63,6 +64,7 @@ import {
 import type {
   BabylonArtifactCaptureRequestV1,
   BabylonArtifactCaptureResultV1,
+  BabylonArtifactCapturedPixelsV1,
 } from "./artifact-capture.js";
 import {
   measureFormalWorldCaptureViewV1,
@@ -74,9 +76,13 @@ import {
 } from "./runtime-session-subject-support.js";
 
 export interface FormalHostedWorldCapturePayloadV1 {
+  readonly whiteboxTriviewPngs: readonly Uint8Array[];
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
   readonly worldTopDownPng: Uint8Array;
+  readonly openingIdentityMaskPng: Uint8Array;
+  readonly worldSideIdentityMaskPng: Uint8Array;
+  readonly worldTopDownIdentityMaskPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservation: FormalOpeningObservationV1;
   readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
@@ -185,6 +191,14 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
   if (batchById.size !== input.liveHandleRegistry.visualBatches.length) {
     fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
   }
+  for (const batch of batchById.values()) {
+    exactStringSet(batch.blockIds, batch.instances.map(({ blockId }) => blockId),
+      "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_COVERAGE_INVALID");
+    if (batch.mesh.thinInstanceGetWorldMatrices().some(matrix =>
+      !matrix.asArray().every(Number.isFinite))) {
+      fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
+    }
+  }
   const handleByBlockId =
     new Map<string, BabylonNativeBlockLiveVisualHandleV1>();
   const batchedBlockIds = new Set<string>();
@@ -203,9 +217,9 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
       if (
         batch === undefined ||
         batch.mesh !== live.batchMesh ||
-        batch.blockIds[live.instanceIndex] !== live.blockId ||
+        batch.instances[live.instanceIndex]?.blockId !== live.blockId ||
         !live.batchMesh.hasThinInstances ||
-        live.batchMesh.thinInstanceCount !== batch.blockIds.length
+        live.batchMesh.thinInstanceCount !== batch.instances.length
       ) fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
       batchedBlockIds.add(live.blockId);
     }
@@ -246,6 +260,60 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
   }
 }
 
+function resolveIdentityMaskColors(input: Readonly<{
+  scene: Scene;
+  metadata: BabylonNativeBlockMaterializerMetadataV1;
+  registry: BabylonNativeBlockLiveHandleRegistryV1;
+}>): ReadonlyMap<Mesh, string> {
+  const { scene, metadata, registry } = input;
+  assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata, liveHandleRegistry: registry });
+  const colorByBlockId = new Map(metadata.visualGroups.flatMap((group) =>
+    group.blockIds.map((blockId) => [blockId, group.identityColorHex] as const)));
+  const colors = new Map<Mesh, string>();
+  for (const handle of registry.blocks) {
+    const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+    const color = colorByBlockId.get(handle.blockId) ?? "#000000";
+    const prior = colors.get(mesh);
+    if (prior !== undefined && prior !== color) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_BATCH_COLOR_CONFLICT");
+    }
+    colors.set(mesh, color);
+  }
+  const blockById = new Map(metadata.blocks.map((block) => [block.blockId, block]));
+  const walkableById = new Map(metadata.colliderJoins
+    .filter(({ proxyKind }) => proxyKind === "continuous-walkable-surface")
+    .map((join) => [join.colliderId, join]));
+  const overlayTriangleCountByColliderId = new Map<string, number>();
+  for (const overlay of registry.walkableOverlays) {
+    const join = walkableById.get(overlay.logicalColliderId);
+    if (join === undefined || overlay.mesh.isDisposed() || overlay.mesh.getScene() !== scene ||
+      colors.has(overlay.mesh) || overlay.topologyHash !== join.topologyHash ||
+      overlay.sourceBlockIds.length === 0 ||
+      new Set(overlay.sourceBlockIds).size !== overlay.sourceBlockIds.length ||
+      overlay.sourceBlockIds.some((id) => !join.sourceBlockIds.includes(id) || !blockById.has(id))) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+    const groupIds = [...new Set(overlay.sourceBlockIds.flatMap((id) => {
+      const groupId = blockById.get(id)!.visualGroupId;
+      return groupId === undefined ? [] : [groupId];
+    }))];
+    exactStringSet(groupIds, overlay.visualGroupIds, "BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    const partitionColors = new Set(overlay.sourceBlockIds.map((id) => colorByBlockId.get(id) ?? "#000000"));
+    if (groupIds.length > 1 || partitionColors.size !== 1) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+    colors.set(overlay.mesh, partitionColors.values().next().value!);
+    overlayTriangleCountByColliderId.set(overlay.logicalColliderId,
+      (overlayTriangleCountByColliderId.get(overlay.logicalColliderId) ?? 0) + overlay.mesh.getTotalIndices() / 3);
+  }
+  for (const join of walkableById.values()) {
+    if (overlayTriangleCountByColliderId.get(join.colliderId) !== join.triangleCount) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+  }
+  return colors;
+}
+
 function coordinate(
   position: readonly [number, number, number],
   axis: "x" | "y" | "z",
@@ -282,11 +350,11 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
   observedAtTick: number;
 }> | undefined {
   const criterion = input.criterion;
-  if (criterion.kind === "reach-bounds") {
+  if (criterion.kind === "reach-position") {
     const margin = criterion.capsuleRadiusMeters + criterion.toleranceMeters;
     const inside = input.positionMetersXYZ.every((value, axis) =>
-      value >= criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - margin &&
-      value <= criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + margin);
+      value >= criterion.standPositionMetersXYZ[axis]! - margin &&
+      value <= criterion.standPositionMetersXYZ[axis]! + margin);
     if (inside) {
       return Object.freeze({
         checkpointId: criterion.checkpointId,
@@ -404,13 +472,26 @@ function assertSnapshot(
   ) fail("BABYLON_FORMAL_CAPTURE_RUNTIME_SNAPSHOT_INVALID");
 }
 
-async function resetAndSettle(
+async function resetForOpening(
   runtimeSessionId: string,
   ports: FormalWorldCaptureProviderPortsV1,
 ): Promise<WorldRuntimeSnapshotV4> {
   const reset = await ports.resetWithInitialControlBinding();
   assertSnapshot(reset, runtimeSessionId);
   await ports.awaitRenderReady();
+  const ready = ports.snapshot();
+  assertSnapshot(ready, runtimeSessionId, reset.worldSessionId);
+  if (ready.world.simulationTick !== reset.world.simulationTick) {
+    fail("BABYLON_FORMAL_CAPTURE_READY_SNAPSHOT_STALE");
+  }
+  return ready;
+}
+
+async function sampleSupportAfterOpening(
+  runtimeSessionId: string,
+  ports: FormalWorldCaptureProviderPortsV1,
+  reset: WorldRuntimeSnapshotV4,
+): Promise<WorldRuntimeSnapshotV4> {
   const settled = await ports.runFixedInput({ actions: [], axes: {}, ticks: 1 });
   assertSnapshot(settled, runtimeSessionId, reset.worldSessionId);
   if (settled.world.simulationTick !== reset.world.simulationTick + 1) {
@@ -423,6 +504,13 @@ async function resetAndSettle(
     fail("BABYLON_FORMAL_CAPTURE_READY_SNAPSHOT_STALE");
   }
   return ready;
+}
+
+async function resetAndSettle(
+  runtimeSessionId: string,
+  ports: FormalWorldCaptureProviderPortsV1,
+): Promise<WorldRuntimeSnapshotV4> {
+  return sampleSupportAfterOpening(runtimeSessionId, ports, await resetForOpening(runtimeSessionId, ports));
 }
 
 function openingArtifactRequest(
@@ -486,7 +574,7 @@ function worldArtifactRequest(
   } as BabylonArtifactCaptureRequestV1;
 }
 
-function pngBytes(result: BabylonArtifactCaptureResultV1): Uint8Array {
+function pngBytes(result: BabylonArtifactCapturedPixelsV1): Uint8Array {
   const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
     result.dataUrl,
   );
@@ -956,6 +1044,7 @@ async function captureTraversalChecks(
 
 async function captureTraversal(
   request: FormalWorldCaptureRequestV1,
+  captureReadySnapshot: WorldRuntimeSnapshotV4,
   runtimeSessionId: string,
   subjectEntityId: string,
   sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
@@ -967,9 +1056,9 @@ async function captureTraversal(
     subjectEntityId,
     ports,
   );
-  const identitySnapshot = checks[0]?.resetReadySnapshot ?? fail(
-    "BABYLON_FORMAL_CAPTURE_TRAVERSAL_EMPTY",
-  );
+  const identitySnapshot = request.scriptedTraversal.checks.length === 0
+    ? captureReadySnapshot
+    : checks[0]?.resetReadySnapshot ?? fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_EMPTY");
   return parseFormalScriptedTraversalObservationV1({
     kind: "formal-scripted-traversal-observation",
     schemaVersion: 1,
@@ -986,6 +1075,12 @@ async function captureTraversal(
 
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
+  resetForOpening,
+  sampleSupportAfterOpening,
+  assertTriviewTargets,
+  captureWhiteboxTriviewPngs,
+  resolveIdentityMaskColors,
+  captureTraversal,
   assertFormalSupportContactContributionIdentityV1,
   captureTraversalChecks,
   controlledSubjectProjection,
@@ -1004,18 +1099,64 @@ function captureRefBase(request: FormalWorldCaptureRequestV1): string {
   return `${request.formalRequestRef.slice(0, -suffix.length)}/capture`;
 }
 
+async function captureWhiteboxTriviewPngs(
+  request: FormalWorldCaptureRequestV1,
+  ports: Pick<FormalWorldCaptureProviderPortsV1, "captureArtifactView">,
+): Promise<readonly Uint8Array[]> {
+  const pngs: Uint8Array[] = [];
+  for (const group of request.visualCaptureGroups) {
+    let captured: BabylonArtifactCaptureResultV1 | undefined;
+    // Same outer four attempts / 50ms yields as the old Host capture callback.
+    // The shared renderer owns the eight per-panel renders inside each attempt.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (attempt > 0) await new Promise<void>(resolve => setTimeout(resolve, 50));
+      captured = ports.captureArtifactView({
+        kind: "entity-triview", widthPixels: request.views[0].widthPixels,
+        heightPixels: request.views[0].heightPixels, entityIds: group.runtimeEntityIds,
+        identityColor: group.identityColor, frontDirectionWorldXZ: group.frontDirectionWorldXZ,
+        renderStyle: "runtime-lit-review",
+      });
+      if (inspectWhiteboxTriviewPixelsV1(captured.pixelsRgba, captured.widthPixels, captured.heightPixels).isRenderable) break;
+    }
+    // Preserve the last actual bytes even when panels remain empty. The Host
+    // owns publication/failed-image retention; this is not a second quality veto.
+    pngs.push(pngBytes(captured!));
+  }
+  return Object.freeze(pngs);
+}
+
+function assertTriviewTargets(
+  groups: FormalWorldCaptureRequestV1["visualCaptureGroups"],
+  metadata: BabylonNativeBlockMaterializerMetadataV1,
+  subjectId: string,
+): void {
+  const blockByEntityId = new Map(metadata.blocks.map(block => [block.runtimeEntityId, block]));
+  for (const group of groups) {
+    if (group.role === "primary-subject") {
+      exactStringSet([subjectId], group.runtimeEntityIds, "BABYLON_FORMAL_CAPTURE_SUBJECT_TARGET_MISMATCH");
+      continue;
+    }
+    const groupIds = new Set(group.runtimeEntityIds.map(id => blockByEntityId.get(id)?.visualGroupId));
+    const metadataGroup = metadata.visualGroups.find(row => groupIds.size === 1 && groupIds.has(row.visualGroupId));
+    if (metadataGroup === undefined || group.identityColor.toUpperCase() !== metadataGroup.identityColorHex ||
+      group.semanticClassId !== metadataGroup.semanticClassId ||
+      group.frontDirectionWorldXZ.some((value, index) => value !== metadataGroup.frontDirectionWorldXZ[index])) {
+      fail("BABYLON_FORMAL_CAPTURE_TRIVIEW_TARGET_MISMATCH");
+    }
+    exactStringSet(metadata.blocks.filter(block => block.visualGroupId === metadataGroup.visualGroupId).map(block => block.runtimeEntityId),
+      group.runtimeEntityIds, "BABYLON_FORMAL_CAPTURE_TRIVIEW_TARGET_MISMATCH");
+  }
+}
+
 export async function executeFormalWorldCaptureProviderV1(
   input: ExecuteFormalWorldCaptureProviderInputV1,
 ): Promise<FormalHostedWorldCapturePayloadV1> {
   const request = parseFormalWorldCaptureRequestV1(input.request);
-  const sdkOwnerIdentities = freezeFormalWorldCaptureSdkOwnerIdentitiesV1(
-    input.sdkOwnerIdentities,
-  );
-  const metadata = assertRequestPackageIdentity(
-    request,
-    input.verifiedWorldPackage,
-  );
-  const initialReadySnapshot = await resetAndSettle(
+  const sdkOwnerIdentities = freezeFormalWorldCaptureSdkOwnerIdentitiesV1(input.sdkOwnerIdentities);
+  const metadata = assertRequestPackageIdentity(request, input.verifiedWorldPackage);
+  assertTriviewTargets(request.visualCaptureGroups, metadata,
+    input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId);
+  const initialReadySnapshot = await resetForOpening(
     input.runtimeSessionId,
     input.ports,
   );
@@ -1028,7 +1169,12 @@ export async function executeFormalWorldCaptureProviderV1(
   const openingView = request.views[0];
   const subjectEntityId =
     input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
-  const openingCapture = input.ports.captureArtifactView(openingArtifactRequest(
+  const identityMaskColorsByMesh = (scene: Scene): ReadonlyMap<Mesh, string> => {
+    const registry = peekBabylonNativeBlockLiveHandleRegistryV1(scene) ??
+      fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_REGISTRY_MISSING");
+    return resolveIdentityMaskColors({ scene, metadata, registry });
+  };
+  const openingCapture = input.ports.captureArtifactView({ ...openingArtifactRequest(
     openingView,
     subjectEntityId,
     ({ camera, engine, scene }) => {
@@ -1054,7 +1200,7 @@ export async function executeFormalWorldCaptureProviderV1(
         liveHandleRegistry: visualRegistry,
       });
     },
-  ));
+  ), identityMaskColorsByMesh });
   if (
     visualRegistry === undefined ||
     colliderRegistry === undefined ||
@@ -1079,10 +1225,10 @@ export async function executeFormalWorldCaptureProviderV1(
       liveHandleRegistry: visualRegistry!,
     });
   const worldSideCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[1], measureWorldView(request.views[1])),
+    { ...worldArtifactRequest(request.views[1], measureWorldView(request.views[1])), identityMaskColorsByMesh },
   );
   const worldTopDownCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[2], measureWorldView(request.views[2])),
+    { ...worldArtifactRequest(request.views[2], measureWorldView(request.views[2])), identityMaskColorsByMesh },
   );
   if (
     worldSideCapture.measurement === undefined ||
@@ -1121,12 +1267,22 @@ export async function executeFormalWorldCaptureProviderV1(
     sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore
   ) fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
 
+  const whiteboxTriviewPngs = await captureWhiteboxTriviewPngs(request, input.ports);
+  if (sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore) {
+    fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
+  }
+  // All image consumers use the old reset/render opening. Only now advance the
+  // existing neutral Tick for actual Physics support evidence, and retain its
+  // separate sampled Snapshot rather than attributing it to the opening state.
+  const sampledSnapshot = await sampleSupportAfterOpening(
+    input.runtimeSessionId, input.ports, initialReadySnapshot,
+  );
   const support = input.ports.readCommittedSupportEvidence(subjectEntityId) ?? fail(
     "BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_MISSING",
   );
   const supportContact = selectFormalCommittedSupportContactV1({
     evidence: support,
-    committedTick: initialReadySnapshot.world.simulationTick,
+    committedTick: sampledSnapshot.world.simulationTick,
   });
   const supportCollider = colliderRows.find(
     ({ colliderId }) => colliderId === supportContact.colliderId,
@@ -1200,6 +1356,8 @@ export async function executeFormalWorldCaptureProviderV1(
       "physics",
       "spawn-support",
     ),
+    sampledSnapshot,
+    sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot),
     spawnMarkerId: input.verifiedWorldPackage.nativeSceneContribution.spawnMarker.id,
     subjectEntityId,
     supportContact: {
@@ -1211,7 +1369,7 @@ export async function executeFormalWorldCaptureProviderV1(
     },
     capsuleFootPointMetersXYZ: foot,
     supportGapMillimeters,
-    movementMedium: movementMedium(initialReadySnapshot, subjectEntityId),
+    movementMedium: movementMedium(sampledSnapshot, subjectEntityId),
     observedTopologyRelations: measuredSupportRelations(
       request,
       subjectEntityId,
@@ -1237,6 +1395,7 @@ export async function executeFormalWorldCaptureProviderV1(
   });
   const scriptedTraversal = await captureTraversal(
     request,
+    initialReadySnapshot,
     input.runtimeSessionId,
     subjectEntityId,
     sdkOwnerIdentities,
@@ -1247,6 +1406,12 @@ export async function executeFormalWorldCaptureProviderV1(
   const worldSidePng = pngBytes(worldSideCapture);
   const worldTopDownPng = pngBytes(worldTopDownCapture);
   const colliderOverlayPng = pngBytes(colliderOverlayCapture);
+  const openingIdentityMaskPng = pngBytes(openingCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const worldSideIdentityMaskPng = pngBytes(worldSideCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const worldTopDownIdentityMaskPng = pngBytes(worldTopDownCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const identityMaskPngById = new Map([
+    ["opening", openingIdentityMaskPng], ["world-side", worldSideIdentityMaskPng], ["world-top-down", worldTopDownIdentityMaskPng],
+  ] as const);
   const captureBase = captureRefBase(request);
   const viewPngById = new Map([
     ["opening", openingPng],
@@ -1278,12 +1443,18 @@ export async function executeFormalWorldCaptureProviderV1(
             viewPngById.get(typedView.viewId)!,
           ) as Sha256HashV1,
           targets: typedMeasurement.targets,
+          identityMaskPngContentHash: sha256Bytes(identityMaskPngById.get(typedView.viewId)!) as Sha256HashV1,
         });
       }),
     });
   const receiptWithoutCleanup: Omit<FormalWorldCaptureReceiptV1, "cleanupOutcome"> =
     Object.freeze({
       kind: "formal-world-capture-receipt",
+      whiteboxTriviews: Object.freeze(request.visualCaptureGroups.map((group, index) => Object.freeze({
+        visualTargetId: group.visualTargetId,
+        pngArtifactRef: `${captureBase}/triviews/${group.visualTargetId}/whitebox-triview.png`,
+        pngContentHash: sha256Bytes(whiteboxTriviewPngs[index]!) as Sha256HashV1,
+      }))),
       schemaVersion: 1,
       id: `${request.id}.receipt`,
       formalRequestRef: request.formalRequestRef,
@@ -1326,6 +1497,8 @@ export async function executeFormalWorldCaptureProviderV1(
         request: view,
         requestHash: hashFormalArtifactViewRequestV1(view),
         pngArtifactRef: `${captureBase}/${view.viewId}.png`,
+        identityMaskPngArtifactRef: `${captureBase}/${view.viewId}-identity-mask.png`,
+        identityMaskPngContentHash: sha256Bytes(identityMaskPngById.get(view.viewId)!) as Sha256HashV1,
         pngContentHash:
           sha256Bytes(viewPngById.get(view.viewId)!) as Sha256HashV1,
       }))),
@@ -1364,8 +1537,12 @@ export async function executeFormalWorldCaptureProviderV1(
 
   return Object.freeze({
     openingPng,
+    whiteboxTriviewPngs,
     worldSidePng,
     worldTopDownPng,
+    openingIdentityMaskPng,
+    worldSideIdentityMaskPng,
+    worldTopDownIdentityMaskPng,
     colliderOverlayPng,
     openingObservation,
     semanticViewObservationSet,

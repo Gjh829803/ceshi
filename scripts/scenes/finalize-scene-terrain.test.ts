@@ -55,13 +55,16 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
     const terrainIntentPath = path.join(root, "terrain-height-intent.png");
     const outputRoot = path.join(root, "output");
     await mkdir(outputRoot, { recursive: true });
-    const [briefSource, originalAuthoringSource, mapDraftSource, terrainBytes] =
+    const [historicalBriefSource, originalAuthoringSource, mapDraftSource, terrainBytes] =
       await Promise.all([
         readFile(path.join(sourceRoot, "scene-brief.md"), "utf8"),
         readFile(path.join(sourceRoot, "authoring.json"), "utf8"),
         readFile(path.join(sourceRoot, "implementation-map.draft.json"), "utf8"),
         signedIntentPng(),
       ]);
+    // Keep the retained receipt unchanged; only this disposable copy adopts the
+    // current ordered movement-row syntax without changing its movement intent.
+    const briefSource = historicalBriefSource.replace("\n陆地骑乘：", "\n- 陆地骑乘：");
     const builderAuthoring = JSON.parse(originalAuthoringSource);
     const mapDraft = JSON.parse(mapDraftSource);
     // Copied WRC receipts still use a historical `-authoring` suffix. The
@@ -69,6 +72,8 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
     // authoringSpecId to equal the Host scene id on this working copy.
     builderAuthoring.id = SCENE_ID;
     mapDraft.authoringSpecId = SCENE_ID;
+    // Adapt only this disposable test copy; historical receipts remain untouched.
+    for (const mapping of mapDraft.visualTargetMappings) mapping.frontDirectionWorldXZ = [0, -1];
     for (const definition of builderAuthoring.resources.subjectDefinitions) {
       definition.allowedOverridePaths = [];
     }

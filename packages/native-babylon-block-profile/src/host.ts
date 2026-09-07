@@ -54,7 +54,9 @@ export type {
 } from "./capture-isolation.js";
 export {
   freezeBabylonNativeBlockLogicalGroundModelV1,
+  deriveBabylonNativeBlockSourceGroundGeometryV1,
 } from "./logical-ground-model.js";
+export { deriveBabylonNativeBlockSourceLayoutV1 } from "./layout.js";
 export {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   buildBabylonNativeBlockWalkableTopologyV1,
@@ -83,9 +85,14 @@ export type {
 } from "./walkable-topology-materializer.js";
 export {
   analyzeBabylonNativeBlockGroundV1,
+  analyzeBabylonNativeBlockSourceGroundV1,
+  evaluateBabylonNativeBlockSourceStandabilityV1,
 } from "./ground-analysis.js";
 export type {
   AnalyzeBabylonNativeBlockGroundInputV1,
+  AnalyzeBabylonNativeBlockSourceGroundInputV1,
+  BabylonNativeBlockSourceGroundAnalysisV1,
+  BabylonNativeBlockSourceStandabilityV1,
   BabylonNativeBlockGroundAnalysisBudgetV1,
   BabylonNativeBlockGroundAnalysisMetricsV1,
   BabylonNativeBlockGroundAnalysisReportV1,

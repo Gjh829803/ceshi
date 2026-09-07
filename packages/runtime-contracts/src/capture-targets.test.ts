@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  inspectWhiteboxTriviewPixelsV1,
   validateSceneBriefImplementationMapDraftV1,
   validateSceneBriefImplementationMapV1,
   validateVisualCaptureGroupsV1,
@@ -20,6 +21,7 @@ function group(
   return {
     visualTargetId,
     runtimeEntityIds,
+    frontDirectionWorldXZ: [0, -1],
     role: "primary-subject",
     semanticClassId: "visual.subject",
     identityColor: "#E85D5D",
@@ -36,13 +38,182 @@ function finalMap(): SceneBriefImplementationMapV1 {
     authoringSpecHash: hash,
     visualTargetMappings: [{
       visualTargetId: "visual-target-1",
-      runtimeEntityIds: ["player"],
+      runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
     }],
     visualCaptureGroups: [group()],
   };
 }
 
 describe("hosted visual capture contracts", () => {
+  it("carries Native Runtime identities in source-neutral capture groups and tri-view manifests", () => {
+    const nativeGroup: VisualCaptureGroupV1 = {
+      ...group("visual-target-2", ["native-block:palace-front", "native-block:palace-rear"]),
+      role: "primary-landmark", semanticClassId: "visual.palace", identityColor: "#F28E2B",
+      frontDirectionWorldXZ: [1, 0],
+    };
+    const groups = [group(), nativeGroup];
+    expect(validateVisualCaptureGroupsV1(groups)).toEqual([]);
+    const manifest: WhiteboxTriviewManifestV1 = {
+      kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1, worldBuildIdentityHash: hash,
+      whiteboxTriviews: groups.map(target => ({ ...target, views: ["front", "right", "back"],
+        imageUri: `${target.visualTargetId}/whitebox-triview.png` })),
+    };
+    expect(validateWhiteboxTriviewManifestV1(manifest)).toEqual([]);
+    expect(validateVisualCaptureGroupsV1([...groups, {
+      ...nativeGroup, visualTargetId: "visual-target-3",
+    }])).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_REUSED" }));
+    // Native identity must not be used as a filesystem target ID or fabricated
+    // into a Canonical authoring mapping just to pass its producer contract.
+    expect(validateVisualCaptureGroupsV1([{ ...group(), visualTargetId: "native-block:palace-front" }]))
+      .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_TARGET_ID_INVALID" }));
+    expect(validateSceneBriefImplementationMapDraftV1({
+      kind: "worldkit-scene-brief-implementation-map-draft", schemaVersion: 1,
+      sceneId: "paper-moon-palace", authoringSpecId: "paper-moon-palace-world",
+      visualTargetMappings: [{ visualTargetId: nativeGroup.visualTargetId,
+        runtimeEntityIds: nativeGroup.runtimeEntityIds, frontDirectionWorldXZ: [1, 0] }],
+    })).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID" }));
+  });
+
+  it.each(["native-block:", "native-block:ab", "native-block:UPPER", "native-block:a/b",
+    "native-block:../outside", "native-block:has space", "native-block:native-block:palace",
+    "other-provider:palace", `native-block:${"a".repeat(81)}`])(
+    "rejects malformed or unknown Runtime identity %s", runtimeEntityId => {
+      expect(validateVisualCaptureGroupsV1([group("visual-target-1", [runtimeEntityId])]))
+        .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID" }));
+    },
+  );
+
+  it("preserves the old declared cardinal front in mapping and capture groups", () => {
+    for (const frontDirectionWorldXZ of [[0, -1], [-1, 0], [0, 1], [1, 0]]) {
+      const map = finalMap();
+      const value = {
+        ...map,
+        visualTargetMappings: map.visualTargetMappings.map(mapping => ({ ...mapping, frontDirectionWorldXZ })),
+        visualCaptureGroups: map.visualCaptureGroups.map(group => ({ ...group, frontDirectionWorldXZ })),
+      };
+      expect(validateSceneBriefImplementationMapV1(value)).toEqual([]);
+      const mismatched = { ...value, visualCaptureGroups: value.visualCaptureGroups.map(group => ({
+        ...group, frontDirectionWorldXZ: [-frontDirectionWorldXZ[0]!, -frontDirectionWorldXZ[1]!],
+      })) };
+      expect(validateSceneBriefImplementationMapV1(mismatched)).toContainEqual(
+        expect.objectContaining({ code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH" }),
+      );
+    }
+  });
+
+  it("preserves actual Host Subject yaw without relaxing authored target declarations", () => {
+    const subject = { ...group(), frontDirectionWorldXZ: [0.6, -0.8] as const };
+    expect(validateVisualCaptureGroupsV1([subject])).toEqual([]);
+    expect(validateWhiteboxTriviewManifestV1({ kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1,
+      worldBuildIdentityHash: hash, whiteboxTriviews: [{ ...subject, views: ["front", "right", "back"],
+        imageUri: `${subject.visualTargetId}/whitebox-triview.png` }] })).toEqual([]);
+    expect(validateVisualCaptureGroupsV1([group(), { ...subject, visualTargetId: "visual-target-2",
+      runtimeEntityIds: ["native-block:palace"], role: "primary-landmark", identityColor: "#F28E2B" }]))
+      .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }));
+    const map = finalMap();
+    expect(validateSceneBriefImplementationMapV1({ ...map,
+      visualTargetMappings: map.visualTargetMappings.map(row => ({ ...row, frontDirectionWorldXZ: subject.frontDirectionWorldXZ })),
+      visualCaptureGroups: [subject] })).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }));
+  });
+
+  it.each([undefined, [0, 0], [1, 1], [NaN, 0], [Infinity, 0], [0, -1, 0]].map(frontDirectionWorldXZ => ({ frontDirectionWorldXZ })))(
+    "retains the old front declaration validation for $frontDirectionWorldXZ", ({ frontDirectionWorldXZ }) => {
+      expect(validateVisualCaptureGroupsV1([{ ...group(), frontDirectionWorldXZ }])).toContainEqual(
+        expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }),
+      );
+    },
+  );
+
+  it("measures complete tri-view foreground coverage instead of sparse color samples", () => {
+    const pixels = new Uint8ClampedArray(9 * 9 * 4);
+    for (let pixel = 0; pixel < 81; pixel += 1) {
+      const offset = pixel * 4;
+      pixels.set([232, 93, 93, 255], offset);
+    }
+
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toEqual({
+      widthPixels: 9,
+      heightPixels: 9,
+      foregroundPixelCount: 81,
+      minimumForegroundPixelCount: 81,
+      foregroundBoundsPixels: {
+        minimumPixelsXY: [0, 0],
+        maximumPixelsXY: [8, 8],
+      },
+      viewInspections: [
+        {
+          view: "front",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+        {
+          view: "right",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+        {
+          view: "back",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+      ],
+      isRenderable: true,
+    });
+
+    for (let y = 0; y < 9; y += 1) {
+      for (let x = 0; x < 3; x += 1) {
+        pixels.set([221, 232, 238, 255], (y * 9 + x) * 4);
+      }
+    }
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({
+      viewInspections: [
+        { view: "front", foregroundPixelCount: 0, isRenderable: false },
+        { view: "right", foregroundPixelCount: 27, isRenderable: true },
+        { view: "back", foregroundPixelCount: 27, isRenderable: true },
+      ],
+      isRenderable: false,
+    });
+
+    for (let pixel = 0; pixel < 81; pixel += 1) {
+      pixels[pixel * 4] = 221;
+      pixels[pixel * 4 + 1] = 232;
+      pixels[pixel * 4 + 2] = 238;
+      pixels[pixel * 4 + 3] = 255;
+    }
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({
+      foregroundPixelCount: 0,
+      foregroundBoundsPixels: null,
+      viewInspections: [
+        { view: "front", foregroundPixelCount: 0, isRenderable: false },
+        { view: "right", foregroundPixelCount: 0, isRenderable: false },
+        { view: "back", foregroundPixelCount: 0, isRenderable: false },
+      ],
+      isRenderable: false,
+    });
+    expect(() => inspectWhiteboxTriviewPixelsV1(pixels, 10, 9)).toThrow(
+      "RGBA byte length",
+    );
+    expect(() => inspectWhiteboxTriviewPixelsV1(
+      new Uint8ClampedArray(10 * 9 * 4),
+      10,
+      9,
+    )).toThrow("three equal panels");
+  });
   it("keeps draft and final implementation maps as closed distinct unions", () => {
     const draft: SceneBriefImplementationMapDraftV1 = {
       kind: "worldkit-scene-brief-implementation-map-draft",
@@ -51,7 +222,7 @@ describe("hosted visual capture contracts", () => {
       authoringSpecId: "paper-moon-palace-world",
       visualTargetMappings: [{
         visualTargetId: "visual-target-1",
-        runtimeEntityIds: ["player"],
+        runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
       }],
     };
     expect(validateSceneBriefImplementationMapDraftV1(draft)).toEqual([]);
@@ -107,15 +278,15 @@ describe("hosted visual capture contracts", () => {
     expect(validateSceneBriefImplementationMapV1(value)).toContainEqual(
       expect.objectContaining({
         code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
-        instancePath: "/visualCaptureGroups/0/runtimeEntityIds",
+        instancePath: "/visualCaptureGroups/0",
       }),
     );
 
     const reusedEntity: SceneBriefImplementationMapV1 = {
       ...finalMap(),
       visualTargetMappings: [
-        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"] },
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
       ],
     };
     expect(validateSceneBriefImplementationMapV1(reusedEntity)).toContainEqual(

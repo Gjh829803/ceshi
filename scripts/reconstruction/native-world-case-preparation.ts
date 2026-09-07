@@ -25,7 +25,7 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
   type WorldReconstructionDimensionIdV1,
 } from "@whitebox-world/validation";
-import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
+import { parseNativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import { isNil, sortBy } from "lodash-es";
 import sharp from "sharp";
 import {
@@ -36,10 +36,41 @@ import {
 
 import { analyzeNativeEntryIdentityImageV4 } from
   "../agents/agent-planner-self-check.js";
+import { measureIdentityMaskProjectionsV1 } from "../scenes/identity-mask-projection.js";
 import {
   parseVisualIdentityPaletteV1,
   type VisualIdentityPaletteTargetV1,
 } from "../scenes/visual-identity-palette.js";
+
+/** SDK-owned Builder protocol; accepted Planner inputs do not own executable instructions. */
+export const NATIVE_BLOCK_BUILDER_TASK_INSTRUCTION_V1 = [
+  "# Native Block generation request",
+  "",
+  "Read inputs/builder-skill/SKILL.md and its required inputs/builder-skill/references/native-block-output-contract.md completely before authoring. Use this frozen Skill copy as the complete Builder guide; do not search the parent checkout for another Skill.",
+  "Build the complete playable world described by the frozen Scene Brief, visual-identity-palette.json, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
+  "Implement the frozen Brief/World Plan's legacy generation intent: one continuous geographic world with an explorable top-down footprint at least four times the reference-visible area, normally about twice its visible width and twice its visible depth, including real middle, side, rear, and remote geography; empty padding does not count. Do not split it into separate scenes, panels, portals, teleports, or hidden destinations. This is not a new area or similarity gate. If that intent conflicts with frozen inputs or cannot fit the existing budget, report the conflict through the existing change-request boundary; never silently expand or rewrite the frozen Brief/World Plan. Do not add an output, model task, or repair cycle.",
+  "Before detail, follow the Skill construction-and-budget inventory: allocate the actual Request budget across complete floor/support, terrain, landmarks and real connecting courses; do not reuse a remembered 2,000-Block cap or sacrifice major geography for ornament.",
+  "The Case ground obligation is support/exploration evidence, not a world-design template or a visual identity. Author middle/remote exploration anchors and honest-width bands from the actual Brief geography; do not invent entry/remote visual groups, a second floor Collider, or a straight scripted approach. Preserve all significant reference/Brief formations, actual bridge and staircase courses, elevation changes, negative space and meaningful side/rear/remote continuation in both visual comparisons.",
+  "Write exactly scene.ts, native-block-authoring.json, and native-resources.json as the Native Source, plus the two Host-declared advisory comparison PNGs under attempts/advisory/; write no other outputs.",
+  "Select controlledSubject using the frozen Skill's old behavior-first order: match every ordered movement mode and necessary body topology, reuse the closest complete admitted registered Subject, then tune its Camera. Compose only when no registered whole represents the required locomotion/body topology, not to reproduce clothing, weapons or other appearance-only detail. Later visual generation owns likeness. Never default to a fixed Subject, claim unavailable movement or enlarge the Subject to fill the frame.",
+  "Write required openingCamera numeric intent in native-block-authoring.json using exactly mode: third-person, distanceMeters, targetHeightMeters, pitchRadians and fovDegrees. Start from the frozen Bootstrap values, tune in this same visual-feedback task within the selected Subject's third-person Profile ranges, and regenerate both comparisons after any edit. Never edit the frozen Bootstrap/WRT, select Camera resource refs or create a Camera; Host alone admits the data and binds its Package identity.",
+  "Run the frozen Builder self-check and visual-review renderer, actually open both comparison PNGs, and keep structural and visual repairs inside the one shared three-cycle Builder budget.",
+  "Before finishing, run: node inputs/builder-skill/scripts/self-check.mjs --workspace . --case context/case.json --scene-brief inputs/scene-brief.md --visual-identity-palette inputs/visual-identity-palette.json",
+  "After each passing structural check, run: node inputs/builder-skill/scripts/render-visual-review.mjs --execution-role builder-feedback --case context/case.json --workspace . --top-down-output attempts/advisory/builder-top-down-comparison.png --entry-output attempts/advisory/builder-entry-comparison.png",
+  "Open both resulting PNGs with the image-viewing tool. Planner intent is on the left and current source projection on the right. Compare full-world geography, spawn, route bends and rises, landmarks and elevation in the top-down view; compare centered rear framing, landmark position/front/scale, depth order, stair/bridge rise, thickness and occlusion in the entry view. Target presence alone is not spatial alignment.",
+  "If a comparison is materially wrong and repair budget remains, repair only the three Native Source files, rerun the structural check, regenerate both comparisons, and open both fresh images again. Fix the largest geographic mismatch before ornament: complete landmark position and front/course, footprint and scale, then depth order and occlusion.",
+  "Use at most the frozen builderSelfRepairAttemptCount combined type/structural/visual source-repair cycles; never allocate another counter or external repair task. Finish after a fresh structural check passes and both latest comparisons have been visually reviewed. Rendering success or PNG hashes do not prove visual review, and the comparison is not an automatic similarity gate. Do not withhold otherwise valid declared outputs solely because visual differences remain when the shared budget is exhausted; disclose remaining differences in the normal final response without claiming perfect alignment or writing another report file.",
+  "Derive advisory pixels only from scene.ts and frozen inputs; never author a review manifest or second geometry list.",
+  "Implement every Case visual group and every explicit required Collider contribution exactly once.",
+  "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
+  "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
+  "Keep the Spawn supported. For case-defined ground policy preserve every fixed-input pass or block check without adding undeclared input; source-authored ground policy follows the Brief's actual course, not a generic strict diagnostic template.",
+  "Read groundConnectivity.mode and the frozen requireSingleReachableComponent. For source-authored with true policy, declare groundExploration middle/remote stand anchors and an honest spawn-to-middle band in native-block-authoring.json. With false policy those ground evidence arrays may be empty; retain any Brief-required ground courses without inventing ground-only requirements for mixed/free-space movement. Any declared targets/bands still undergo the actual Host Ground checks; this does not grant unsupported motion. For case-defined, write groundExploration: { mode: 'case-defined' } and preserve the frozen metric bands. Keep all intended explicitly contributed ground Spawn-reachable when the Case requires one component. Do not invent geometry for a source-authored Case's fixed-input diagnostic template.",
+  "For each source-authored traversal band, write explicit isBidirectional: true unless the Brief calls for physically one-way traversal. False requires forward traversal, true also requires the reverse; neither value changes geometry, grants directed motion, or skips support/clearance checks. Case-defined bands retain their frozen bidirectional contract.",
+  "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
+  "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
+  "",
+].join("\n");
 
 const DIMENSION_IDS = Object.freeze([
   "collider",
@@ -61,37 +92,8 @@ const EVIDENCE_PROFILE_REF_BY_DIMENSION = Object.freeze({
   topology: "worldkit://evidence-profile/native-block-topology@1",
 } as const);
 
-const BASELINE_WORLD_BOUNDS = Object.freeze({
-  centerMetersXZ: Object.freeze([0, -32] as const),
-  sizeMetersXZ: Object.freeze([128, 128] as const),
-  heightRangeMeters: Object.freeze([-16, 64] as const),
-});
-
-const BASELINE_ENTRY_GROUND = Object.freeze({
-  acceptanceTargetRef: "worldkit://acceptance-target/entry-ground@1",
-  compositionTargetRef: "worldkit://composition-target/entry-ground@1",
-  visualGroupId: "entry-ground-group",
-  topologyNodeId: "entry-ground",
-  semanticLayerId: "foreground",
-  viewRequirements: Object.freeze([
-    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
-    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
-    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
-  ]),
-});
-
-const BASELINE_REMOTE_GROUND = Object.freeze({
-  acceptanceTargetRef: "worldkit://acceptance-target/remote-ground@1",
-  compositionTargetRef: "worldkit://composition-target/remote-ground@1",
-  visualGroupId: "remote-ground-group",
-  topologyNodeId: "remote-ground",
-  semanticLayerId: "middle",
-  viewRequirements: Object.freeze([
-    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
-    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
-    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
-  ]),
-});
+// A ground acceptance obligation is not a visual identity or a geographic partition.
+const BASELINE_GROUND_ACCEPTANCE_TARGET_REF = "worldkit://acceptance-target/ground@1";
 
 const NATIVE_PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
 const SHA256_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -174,10 +176,6 @@ const NATIVE_BLOCK_PALETTE_SEMANTICS = Object.freeze([
   "visual-target-1-subject",
 ] as const);
 
-// The Planner gives generic ground no identity mask. Keep its bindings for
-// presence/support/traversal, but never compare Host-invented screen bands as
-// if they were reference-image truth in the default report-only profile.
-const BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS = 10_000;
 // Match the historical 0.005% per-target palette presence floor. A smaller or
 // disconnected proposal is still a valid Planner success, but it is not a
 // reliable pixel baseline and is omitted instead of receiving invented bounds.
@@ -193,16 +191,6 @@ function sceneBriefSemanticHash(
     throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
   }
   return brief.sceneBriefHash as Sha256HashV1;
-}
-
-function isBaselineGroundAcceptanceTargetRef(targetRef: string): boolean {
-  return targetRef === BASELINE_ENTRY_GROUND.acceptanceTargetRef ||
-    targetRef === BASELINE_REMOTE_GROUND.acceptanceTargetRef;
-}
-
-function isBaselineGroundCompositionTargetRef(targetRef: string): boolean {
-  return targetRef === BASELINE_ENTRY_GROUND.compositionTargetRef ||
-    targetRef === BASELINE_REMOTE_GROUND.compositionTargetRef;
 }
 
 interface NativeWorldBaselineVisualTargetV1 {
@@ -301,27 +289,16 @@ async function measurePaletteTargets(
     throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
   }
   const landmarkTargets: NativeWorldBaselineVisualTargetV1[] = [];
+  const projections = measureIdentityMaskProjectionsV1({
+    widthPixels: info.width,
+    heightPixels: info.height,
+    targetCount: targets.length,
+    admittedTargetByPixel: analysis.admittedTargetByPixel,
+  });
   for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
     const target = targets[targetIndex]!;
-    let minimumX = info.width;
-    let minimumY = info.height;
-    let maximumX = -1;
-    let maximumY = -1;
-    let pixelCount = 0;
-    const admittedTarget = targetIndex + 1;
-    for (let y = 0; y < info.height; y += 1) {
-      for (let x = 0; x < info.width; x += 1) {
-        const pixelIndex = y * info.width + x;
-        if (analysis.admittedTargetByPixel[pixelIndex] !== admittedTarget) {
-          continue;
-        }
-        minimumX = Math.min(minimumX, x);
-        minimumY = Math.min(minimumY, y);
-        maximumX = Math.max(maximumX, x);
-        maximumY = Math.max(maximumY, y);
-        pixelCount += 1;
-      }
-    }
+    const projection = projections[targetIndex]!;
+    const { pixelCount } = projection;
     if (target.targetKind === "subject") {
       if (pixelCount === 0) {
         throw new TypeError(
@@ -339,7 +316,7 @@ async function measurePaletteTargets(
     );
     const measuredTarget = measuredTargets[targetIndex]!;
     if (
-      pixelCount === 0 ||
+      projection.outcome === "not-visible" ||
       measuredTarget.largestComponentPixelCount <
         minimumReliableComponentPixelCount
     ) {
@@ -358,22 +335,7 @@ async function measurePaletteTargets(
         "NATIVE_WORLD_BASELINE_PALETTE_INVALID",
       );
     }
-    const normalizedBounds = Object.freeze({
-      minXBasisPoints: Math.floor(minimumX * 10000 / info.width),
-      minYBasisPoints: Math.floor(minimumY * 10000 / info.height),
-      maxXBasisPoints: Math.ceil((maximumX + 1) * 10000 / info.width),
-      maxYBasisPoints: Math.ceil((maximumY + 1) * 10000 / info.height),
-    });
-    const normalizedCenter = Object.freeze({
-      xBasisPoints: Math.round(
-        (normalizedBounds.minXBasisPoints + normalizedBounds.maxXBasisPoints) /
-          2,
-      ),
-      yBasisPoints: Math.round(
-        (normalizedBounds.minYBasisPoints + normalizedBounds.maxYBasisPoints) /
-          2,
-      ),
-    });
+    const { normalizedBounds, normalizedCenter, coverageBasisPoints } = projection;
     landmarkTargets.push(Object.freeze({
       acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
       compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
@@ -383,10 +345,7 @@ async function measurePaletteTargets(
       viewRequirements: targetViewRequirements({
         normalizedBounds,
         normalizedCenter,
-        coverageBasisPoints: Math.max(
-          1,
-          Math.round(pixelCount * 10000 / (info.width * info.height)),
-        ),
+        coverageBasisPoints,
       }),
     }));
   }
@@ -395,32 +354,34 @@ async function measurePaletteTargets(
 
 /**
  * Derives the deliberately small report-only Case that replaces the former
- * model-authored Native Case Mapping stage. The Host owns this fixed frame;
- * the Builder still owns all scene geometry inside it.
+ * model-authored Native Case Mapping stage. The Host freezes evidence policy;
+ * the Builder owns actual geometry and exploration intent, not a template route.
  */
 export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   sceneId: string;
-  sceneBriefSemanticHash: Sha256HashV1;
+  sceneBriefBytes: Uint8Array;
   visualIdentityPalettePath: string;
   entryWhiteboxTargetPath: string;
 }>): Promise<unknown> {
+  // Parse one byte snapshot before any await. The Brief, not a Palette label or
+  // a guessed Subject shape, owns the ordered motion semantics.
+  const brief = parseSceneBriefV1(new TextDecoder().decode(input.sceneBriefBytes));
+  if (!brief.ok) throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
+  const requireSingleReachableComponent = brief.value.movementModes.every(({ mode }) =>
+    ["ground-walk", "ground-slide", "ground-ride", "ground-drive"].includes(mode));
   const palette = parseVisualIdentityPaletteV1(
     JSON.parse(await readFile(input.visualIdentityPalettePath, "utf8")),
     {
       sceneSourceKind: "babylon-native",
       sceneId: input.sceneId,
-      sceneBriefHash: input.sceneBriefSemanticHash,
+      sceneBriefHash: brief.sceneBriefHash as Sha256HashV1,
     },
   ).targets;
   const landmarkTargets = await measurePaletteTargets(
     input.entryWhiteboxTargetPath,
     palette,
   );
-  const visualTargets = sortBy([
-    BASELINE_ENTRY_GROUND,
-    BASELINE_REMOTE_GROUND,
-    ...landmarkTargets,
-  ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
+  const visualTargets = sortBy(landmarkTargets, ({ acceptanceTargetRef }) => acceptanceTargetRef);
   const openingTargets = visualTargets.flatMap((target) => {
     const requirement = target.viewRequirements[0]!;
     return requirement.mode === "reference-projection-required"
@@ -435,19 +396,12 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   const orderedTargetRefs = sortBy(openingTargets, ({ requirement }) =>
     -requirement.normalizedCenter.yBasisPoints)
     .map(({ target }) => target.compositionTargetRef);
-  const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
-  const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
-  const traversalCheckId = "entry-to-remote-ground-pass";
-  const checkpointId = "remote-ground-arrival";
+  const groundAcceptanceTargetRef = BASELINE_GROUND_ACCEPTANCE_TARGET_REF;
   const expected = Object.freeze({
     topology: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       nodeIds: sortBy(visualTargets.map(({ topologyNodeId }) => topologyNodeId)),
-      relations: Object.freeze([Object.freeze({
-        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
-        relation: "connects-to" as const,
-        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
-      })]),
+      relations: Object.freeze([]),
       layerIds: Object.freeze(semanticLayerIds),
     }),
     semanticSilhouetteTargets: Object.freeze(visualTargets.map((target) =>
@@ -457,7 +411,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         viewRequirements: target.viewRequirements,
       }))),
     openingComposition: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       targetRefs: Object.freeze(targetRefs),
       regions: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
@@ -470,7 +424,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       orderedTargetRefs: Object.freeze(orderedTargetRefs),
     }),
     spawnSupport: Object.freeze({
-      acceptanceTargetRef: entryAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       spawnMarkerId: "entry-spawn",
       supportColliderId: "collider-entry-ground",
       expectedMedium: "ground" as const,
@@ -482,16 +436,9 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     }),
     colliders: Object.freeze(sortBy([
       Object.freeze({
-        acceptanceTargetRef: entryAcceptanceTargetRef,
+        acceptanceTargetRef: groundAcceptanceTargetRef,
         contributionId: "collider-entry-ground",
         colliderId: "collider-entry-ground",
-        role: "ground" as const,
-        requiresOverlay: true,
-      }),
-      Object.freeze({
-        acceptanceTargetRef: remoteAcceptanceTargetRef,
-        contributionId: "collider-remote-ground",
-        colliderId: "collider-remote-ground",
         role: "ground" as const,
         requiresOverlay: true,
       }),
@@ -507,33 +454,13 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       }),
     ], ({ contributionId }) => contributionId)),
     groundConnectivity: Object.freeze({
-      requireSingleReachableComponent: true,
-      requiredTraversalBands: Object.freeze([Object.freeze({
-        acceptanceTargetRef: remoteAcceptanceTargetRef,
-        id: "entry-to-remote-ground-band",
-        centerlineStandPositionsXYZMeters: Object.freeze([
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: 0 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -4 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -8 }),
-          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -12 }),
-        ]),
-        halfWidthMeters: 1.5,
-      })]),
+      mode: "source-authored" as const,
+      requireSingleReachableComponent,
+      requiredTraversalBands: Object.freeze([]),
     }),
-    criticalTraversalChecks: Object.freeze([Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
-      id: traversalCheckId,
-      evidenceKind: "scripted-fixed-input" as const,
-      expectation: "pass" as const,
-      checkpointIds: Object.freeze([checkpointId]),
-      fixedInputSequence: Object.freeze([Object.freeze({
-        actions: Object.freeze(["move-forward"]),
-        axes: Object.freeze({ moveYRatio: 1 }),
-        ticks: 300,
-      })]),
-    })]),
+    criticalTraversalChecks: Object.freeze([]),
     deterministicBuild: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       requiresCandidateReplay: true as const,
       requiresWorldPackageIdentityAgreement: true as const,
       requiresBuildIdentityAgreement: true as const,
@@ -562,23 +489,10 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
           semanticLayerId: target.semanticLayerId,
           blockVisualGroupId: target.visualGroupId,
         }))),
-      topologyRelations: Object.freeze([Object.freeze({
-        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
-        relation: "connects-to" as const,
-        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
-        measurementSource: "scripted-traversal" as const,
-        traversalCheckId,
-      })]),
-      checkpointSpatialCriteria: Object.freeze([Object.freeze({
-        kind: "reach-bounds" as const,
-        checkpointId,
-        expectation: "reach" as const,
-        sourceVisualGroupId: BASELINE_REMOTE_GROUND.visualGroupId,
-        capsuleRadiusMeters: 0.35,
-        toleranceMeters: 0.05,
-      })]),
+      topologyRelations: Object.freeze([]),
+      checkpointSpatialCriteria: Object.freeze([]),
     }),
-    worldBounds: BASELINE_WORLD_BOUNDS,
+    worldBoundsPolicy: Object.freeze({ mode: "checked-block-layout" }),
   });
 }
 
@@ -951,9 +865,9 @@ export async function validateNativeWorldPlannerInputClosureV1(
   });
 }
 
-function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
+function parseNativeWorldCaseWorldBoundsPolicyV1(value: unknown) {
   try {
-    return parseWorldPackageWorldBoundsV1(value);
+    return parseNativeSceneWorldBoundsPolicyV1(value);
   } catch (error) {
     const receivedFields = isNil(value) || typeof value !== "object" ||
         Array.isArray(value) || Reflect.getPrototypeOf(value) !== Object.prototype
@@ -961,9 +875,9 @@ function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
       : sortBy(Object.keys(value as Record<string, unknown>)).join(", ") ||
         "<none>";
     throw new TypeError(
-      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly " +
-        "centerMetersXZ, sizeMetersXZ, heightRangeMeters; received " +
-        `${receivedFields}; Formal Capture AABB fields are not Package worldBounds`,
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_POLICY_INVALID: expected " +
+        "mode checked-block-layout or fixed with WorldPackage worldBounds; received " +
+        receivedFields,
       { cause: error },
     );
   }
@@ -1009,7 +923,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
   }
   const proposal = record(
     JSON.parse(await readFile(input.proposalPath, "utf8")),
-    ["kind", "schemaVersion", "sceneId", "expected", "formalCaptureIntent", "worldBounds"],
+    ["kind", "schemaVersion", "sceneId", "expected", "formalCaptureIntent", "worldBoundsPolicy"],
     "NATIVE_WORLD_CASE_PROPOSAL_INVALID",
   );
   if (proposal.kind !== "native-world-case-proposal" ||
@@ -1023,7 +937,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     `${input.sceneId}.formal-world-capture-intent`) {
     throw new TypeError("NATIVE_WORLD_CAPTURE_INTENT_IDENTITY_INVALID");
   }
-  const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
+  const worldBoundsPolicy = parseNativeWorldCaseWorldBoundsPolicyV1(proposal.worldBoundsPolicy);
   const briefBytes = await readFile(input.sceneBriefPath);
   const sceneBriefHash = sha256Bytes(briefBytes) as Sha256HashV1;
   const sceneBriefIdentityHash = sceneBriefSemanticHash(briefBytes);
@@ -1080,14 +994,14 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     semanticSilhouetteTargets?: readonly Readonly<{
       acceptanceTargetRef: string;
     }>[];
-  }).semanticSilhouetteTargets ?? [];
+  }).semanticSilhouetteTargets;
   const opening = (proposal.expected as {
     openingComposition?: Readonly<{
       regions: readonly Readonly<{ targetRef: string }>[];
       anchors: readonly Readonly<{ targetRef: string }>[];
     }>;
   }).openingComposition;
-  if (silhouetteTargets.length === 0 || opening === undefined) {
+  if (!Array.isArray(silhouetteTargets) || opening === undefined) {
     throw new TypeError("NATIVE_WORLD_CASE_PROPOSAL_INVALID");
   }
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1({
@@ -1101,33 +1015,18 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     thresholds: {
       semanticSilhouetteTargets: silhouetteTargets.map(({ acceptanceTargetRef }) => ({
         acceptanceTargetRef,
-        maximumBoundsDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1600,
-        maximumCenterDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1000,
-        maximumCoverageDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1800,
+        maximumBoundsDriftBasisPoints: 1600,
+        maximumCenterDriftBasisPoints: 1000,
+        maximumCoverageDriftBasisPoints: 1800,
       })),
       openingComposition: {
         regions: opening.regions.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints:
-            isBaselineGroundCompositionTargetRef(targetRef)
-              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-              : 1600,
+          maximumDriftBasisPoints: 1600,
         })),
         anchors: opening.anchors.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints:
-            isBaselineGroundCompositionTargetRef(targetRef)
-              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-              : 1000,
+          maximumDriftBasisPoints: 1000,
         })),
       },
       spawnSupport: {
@@ -1285,37 +1184,14 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     writeCanonicalExclusive(casePath, reconstructionCase),
     writeCanonicalExclusive(evaluationProfilePath, evaluationProfile),
     writeCanonicalExclusive(formalCaptureIntentPath, formalCaptureIntent),
-    writeCanonicalExclusive(path.join(inputRoot, "world-bounds.json"), worldBounds),
+    writeCanonicalExclusive(path.join(inputRoot, "world-bounds-policy.json"), worldBoundsPolicy),
     writeFile(path.join(inputRoot, "scene-brief.md"), briefBytes, { flag: "wx" }),
     writeFile(
       path.join(input.outputCaseRoot, "planner-self-check.json"),
       plannerSelfCheckBytes,
       { flag: "wx", mode: 0o600 },
     ),
-    writeFile(path.join(inputRoot, "task-instruction.md"), [
-      "# Native Block generation request",
-      "",
-      "Read inputs/builder-skill/SKILL.md and its required inputs/builder-skill/references/native-block-output-contract.md completely before authoring. Use this frozen Skill copy as the complete Builder guide; do not search the parent checkout for another Skill.",
-      "Build the complete playable world described by the frozen Scene Brief, visual-identity-palette.json, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
-      "Before detail, follow the Skill construction-and-budget inventory: allocate the actual Request budget across complete floor/support, terrain, landmarks and real connecting courses; do not reuse a remembered 2,000-Block cap or sacrifice major geography for ornament.",
-      "The generic Case entry/remote checks are evidence anchors, not the world design. Preserve all significant reference/Brief formations, actual bridge and staircase courses, elevation changes, negative space and meaningful side/rear/remote continuation in both visual comparisons.",
-      "Write exactly scene.ts, native-block-authoring.json, and native-resources.json as the Native Source, plus the two Host-declared advisory comparison PNGs under attempts/advisory/; write no other outputs.",
-      "Run the frozen Builder self-check and visual-review renderer, actually open both comparison PNGs, and keep structural and visual repairs inside the one shared three-cycle Builder budget.",
-      "Before finishing, run: node inputs/builder-skill/scripts/self-check.mjs --workspace . --case context/case.json --scene-brief inputs/scene-brief.md --visual-identity-palette inputs/visual-identity-palette.json",
-      "After each passing structural check, run: node inputs/builder-skill/scripts/render-visual-review.mjs --workspace . --top-down-output attempts/advisory/builder-top-down-comparison.png --entry-output attempts/advisory/builder-entry-comparison.png",
-      "Open both resulting PNGs with the image-viewing tool. Planner intent is on the left and current source projection on the right. Compare full-world geography, spawn, route bends and rises, landmarks and elevation in the top-down view; compare centered rear framing, landmark position/front/scale, depth order, stair/bridge rise, thickness and occlusion in the entry view. Target presence alone is not spatial alignment.",
-      "If a comparison is materially wrong and repair budget remains, repair only the three Native Source files, rerun the structural check, regenerate both comparisons, and open both fresh images again. Fix the largest geographic mismatch before ornament: complete landmark position and front/course, footprint and scale, then depth order and occlusion.",
-      "Use at most the frozen builderSelfRepairAttemptCount combined type/structural/visual source-repair cycles; never allocate another counter or external repair task. Finish after a fresh structural check passes and both latest comparisons have been visually reviewed. Rendering success or PNG hashes do not prove visual review, and the comparison is not an automatic similarity gate. Do not withhold otherwise valid declared outputs solely because visual differences remain when the shared budget is exhausted; disclose remaining differences in the normal final response without claiming perfect alignment or writing another report file.",
-      "Derive advisory pixels only from scene.ts and frozen inputs; never author a review manifest or second geometry list.",
-      "Implement every Case visual group and every explicit required Collider contribution exactly once.",
-      "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
-      "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
-      "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
-      "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",
-      "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
-      "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
-      "",
-    ].join("\n"), { encoding: "utf8", flag: "wx" }),
+    writeFile(path.join(inputRoot, "task-instruction.md"), NATIVE_BLOCK_BUILDER_TASK_INSTRUCTION_V1, { encoding: "utf8", flag: "wx" }),
     ...["native-scene-api.json", "native-scene-profile.json", "block-profile.json"]
       .map((fileName) => copyFile(
         path.join(frozenInputFixtureRoot, fileName),

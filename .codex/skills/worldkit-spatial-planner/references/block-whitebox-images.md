@@ -12,6 +12,14 @@ support and clearance; stairs visibly rise or fall between their endpoints.
 Keep reference-visible direction, ordering, adjacency, containment, separation,
 connection, elevation hierarchy, and occlusion.
 
+Apply the Brief's vertical relationships to both images. Terrain must have
+foreground-to-background depth and side mass; buildings need footprint and
+thickness; raised routes need real support and clearance; stairs must visibly
+rise or fall between their actual endpoint levels. Never use a flat road with
+decorative cross-bands, camera-facing mountain slabs, or shallow facade cutouts
+to imitate the reference from the entry view. Top-down block stacking must agree
+with those same levels, not just the entry footprint.
+
 ## Functional block colors
 
 | Meaning | Exact color |
@@ -73,6 +81,15 @@ to the same generation call. Produce one continuous orthographic or near-top-
 down discrete-cube map of the complete intended playable footprint. Preserve
 the entry slice without mirroring or rearrangement, then add only the Brief's
 conservative inferred continuation.
+
+Apply the Brief's complete-world generation intent: one continuous geographic world with an
+explorable top-down footprint at least four times the reference-visible area, normally about twice
+its visible width and twice its visible depth. The visible entry slice occupies at most roughly one
+quarter of the plan. Include real middle, side, rear, and remote geography; empty padding does not
+count. Never split that continuation into separate scenes, panels, portals, or hidden destinations.
+Keep the continuation explicitly inferred in the Brief, not user facts or observed evidence. This
+is not an area or similarity gate and does not change the existing image checks, resource budget,
+or shared repair budget.
 
 Show stacked block relief, visible top/side faces, and shallow inspection
 shadows where needed to retain elevation levels, bridge thickness, stair runs,

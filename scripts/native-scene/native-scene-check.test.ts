@@ -57,9 +57,7 @@ function blockSource(body: string): string {
 
 function groundGridBody(blockId = "entry-ground-x1-y0-z0"): string {
   return `
-    const session = createBabylonNativeBlockProfileSessionV1(context, {
-      maximumBlockCount: 16,
-    });
+    const session = createBabylonNativeBlockProfileSessionV1(context);
     session.createBlockGrid({
       idPrefix: "entry-ground",
       shape: "full",
@@ -154,9 +152,7 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
     [
       "occupancy overlap",
       `
-        const session = createBabylonNativeBlockProfileSessionV1(context, {
-          maximumBlockCount: 16,
-        });
+        const session = createBabylonNativeBlockProfileSessionV1(context);
         session.createBlock({
           id: "ground-a",
           shape: "full",
@@ -173,14 +169,12 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
       "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
     ],
     [
-      "off-grid step center",
+      "off-grid half center",
       `
-        const session = createBabylonNativeBlockProfileSessionV1(context, {
-          maximumBlockCount: 16,
-        });
+        const session = createBabylonNativeBlockProfileSessionV1(context);
         session.createBlock({
           id: "central-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
           visualGroupId: "central-ascent-group",
           centerMetersXYZ: [0, 0.1, 0],
@@ -211,9 +205,7 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
   it("admits route islands connected by ordinary ground without promoting Profile advice to a veto", async () => {
     const { result } = await runSource(
       blockSource(`
-        const session = createBabylonNativeBlockProfileSessionV1(context, {
-          maximumBlockCount: 3,
-        });
+        const session = createBabylonNativeBlockProfileSessionV1(context);
         session.createBlock({
           id: "west-route",
           shape: "full",

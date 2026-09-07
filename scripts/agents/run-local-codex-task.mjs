@@ -19,6 +19,7 @@ import {
 } from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
 import { inspectLocalOutput, retainLocalTaskFailure } from "./local-codex-failure-evidence.mjs";
+import { hashLocalTaskArguments, retainLocalTaskDelivery } from "./local-codex-delivery-evidence.mjs";
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -163,6 +164,12 @@ const failureEvidenceRoot = args.failureEvidenceRoot === undefined ? null :
 if (failureEvidenceRoot !== null &&
     (!relative(repoRoot, failureEvidenceRoot) || relative(repoRoot, failureEvidenceRoot).startsWith(".."))) {
   throw new Error("Failure evidence must be inside the Host run root.");
+}
+const deliveryEvidenceRoot = args.deliveryEvidenceRoot === undefined ? null :
+  resolve(await realpath(dirname(resolve(args.deliveryEvidenceRoot))), basename(args.deliveryEvidenceRoot));
+if (deliveryEvidenceRoot !== null &&
+    (!relative(repoRoot, deliveryEvidenceRoot) || relative(repoRoot, deliveryEvidenceRoot).startsWith(".."))) {
+  throw new Error("Delivery evidence must be inside the Host run root.");
 }
 await mkdir(stagingRoot, { recursive: true });
 const emitOutcome = (outcome) => {
@@ -348,9 +355,17 @@ try {
       );
     }
   }
-  for (const output of outputSpecs) {
-    await promoteFileAtomic(output.stagedPath, output.localPath);
+  if (deliveryEvidenceRoot !== null) {
+    try {
+      await retainLocalTaskDelivery({ evidenceRoot: deliveryEvidenceRoot, stagingRoot, outputs: outputSpecs,
+        requestId, taskId, childExitCode, argumentsHash: hashLocalTaskArguments(process.argv.slice(2)) });
+    } catch {
+      // Recovery evidence is not an additional production gate. Keep the old
+      // successful-child/output-promotion behavior if this optional snapshot fails.
+      process.stderr.write("WORLDKIT_LOCAL_CODEX_DELIVERY_EVIDENCE_UNAVAILABLE\n");
+    }
   }
+  for (const output of outputSpecs) await promoteFileAtomic(output.stagedPath, output.localPath);
   process.stdout.write(`WORLDKIT_LOCAL_CODEX_TASK_READY ${taskId}\n`);
   } catch (error) {
     if (failureEvidenceRoot !== null) {

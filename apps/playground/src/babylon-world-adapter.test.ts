@@ -9,7 +9,7 @@ import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
 } from "@whitebox-world/gameplay-contracts";
-import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
+import type { BabylonRuntimeProjectionV1, BabylonFixedInputFailureDiagnosticV1 } from "@whitebox-world/runtime-babylon";
 import type {
   CameraViewInputV1,
   ControlCaptureRequestV1,
@@ -104,6 +104,7 @@ const LOCKED_WORLD_RUNTIME_BOOTSTRAP =
   LOCKED_CANONICAL_WORLD.worldRuntimeBootstrap;
 
 interface RuntimeProbe {
+  consumeFixedInputFailureDiagnostic: ReturnType<typeof vi.fn<() => BabylonFixedInputFailureDiagnosticV1 | undefined>>;
   runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<BabylonRuntimeProjectionV1>>>;
   renderFrame: ReturnType<typeof vi.fn<(interpolationAlphaRatio?: number) => void>>;
   reset: ReturnType<typeof vi.fn<() => BabylonRuntimeProjectionV1>>;
@@ -318,6 +319,7 @@ function createAdapterProbe(): {
   let paused = false;
   let cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
   const runtime: RuntimeProbe = {
+    consumeFixedInputFailureDiagnostic: vi.fn(() => undefined),
     runFixedInput: vi.fn(async (input) => {
       tick += input.ticks;
       return runtimeSnapshot(tick, cameraView);
@@ -354,6 +356,9 @@ function createAdapterProbe(): {
       kind: "worldkit-runtime-artifact-capture",
       schemaVersion: 1,
       dataUrl: "data:image/png;base64,test",
+      widthPixels: 639,
+      heightPixels: 360,
+      pixelsRgba: new Uint8ClampedArray(639 * 360 * 4),
     })),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
@@ -455,6 +460,7 @@ describe("BabylonWorldAdapter frame loop", () => {
       visualTargetId: "visual-target-1",
       runtimeEntityIds: ["player"],
       role: "primary-subject",
+      frontDirectionWorldXZ: [-1, 0],
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
     } as const;
@@ -477,6 +483,11 @@ describe("BabylonWorldAdapter frame loop", () => {
       heightPixels: 360,
       entityIds: ["player"],
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [-1, 0],
+      renderStyle: "runtime-lit-review",
+    });
+    expect(adapter.captureRuntimeWhiteboxTriview(target.visualTargetId).inspection).toMatchObject({
+      widthPixels: 639, heightPixels: 360, isRenderable: false,
     });
   });
 
@@ -654,6 +665,34 @@ describe("BabylonWorldAdapter frame loop", () => {
 
     expect(runtime.runFixedInput).toHaveBeenCalledOnce();
     expect(runtime.runFixedInput).toHaveBeenCalledWith({ actions: [], ticks: 5 });
+  });
+
+  it.each([false, true])("tries exactly one neutral Tick after rolled-back invalid input (retryFails=%s)", async (retryFails) => {
+    const { adapter, runtime, setCoordinatorPaused } = createAdapterProbe();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    adapter.keyboardInput.press("KeyW");
+    adapter.cameraInput.add("cameraLeft");
+    runtime.runFixedInput.mockRejectedValueOnce(Object.assign(new Error(
+      "ADAPTER_FIXED_INPUT_FAILED: The Runtime Adapter could not prepare the fixed simulation Tick.",
+    ), { name: "WorldSessionOperationErrorV1" }));
+    runtime.consumeFixedInputFailureDiagnostic.mockReturnValueOnce({ stage: "prepare", errorCode: "3C_INPUT_INVALID" });
+    if (retryFails) runtime.runFixedInput.mockRejectedValueOnce(new Error("neutral failed"));
+    await adapter.animate(50);
+    expect(runtime.runFixedInput.mock.calls).toEqual([
+      [{ actions: ["move-forward"], ticks: 3 }], [{ actions: [], ticks: 1 }],
+    ]);
+    expect(adapter.keyboardInput.actions()).toEqual([]);
+    expect(adapter.cameraInput.size).toBe(0);
+    expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject({
+      yawRadiansPerFixedTick: 0, pitchRadiansPerFixedTick: 0, lastClearReason: "fixed-input-recovery",
+    });
+    expect(adapter.isPaused()).toBe(retryFails);
+    expect(adapter.runtimeDiagnostics()).toContainEqual(expect.objectContaining({
+      code: retryFails ? "WORLDKIT_RUNTIME_FRAME_FAILED" : "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+    }));
+    if (retryFails) expect(setCoordinatorPaused).toHaveBeenLastCalledWith(true);
+    else expect(adapter.snapshot().tick).toBe(1);
   });
 
   it("pauses and publishes a safe diagnostic when a simulation frame fails", async () => {
@@ -1213,20 +1252,20 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
   });
 });
 
-describe("PhysicalKeyboardActionTracker split-jump latch", () => {
-  it("preserves the Shift state from a Space press until the next fixed sample", () => {
+describe("PhysicalKeyboardActionTracker legacy sample timing", () => {
+  it("samples only currently held keys without retaining released Space or Shift", () => {
     const tracker = new PhysicalKeyboardActionTracker();
 
     tracker.press("ShiftLeft");
     tracker.press("Space");
     tracker.release("Space");
     tracker.release("ShiftLeft");
-    expect(tracker.actions()).toEqual(["jump", "run"]);
+    expect(tracker.actions()).toEqual([]);
     expect(tracker.actions()).toEqual([]);
 
     tracker.press("Space");
     tracker.release("Space");
-    expect(tracker.actions()).toEqual(["jump"]);
+    expect(tracker.actions()).toEqual([]);
     expect(tracker.actions()).toEqual([]);
 
     tracker.press("KeyW");
@@ -1234,7 +1273,16 @@ describe("PhysicalKeyboardActionTracker split-jump latch", () => {
     tracker.press("Space");
     tracker.release("Space");
     tracker.release("ShiftRight");
-    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
     expect(tracker.actions()).toEqual(["move-forward"]);
+    expect(tracker.actions()).toEqual(["move-forward"]);
+
+    tracker.press("Space");
+    tracker.press("ShiftRight");
+    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
+    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
+    tracker.release("Space");
+    expect(tracker.actions()).toEqual(["move-forward", "run"]);
+    tracker.clear();
+    expect(tracker.actions()).toEqual([]);
   });
 });

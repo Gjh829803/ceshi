@@ -96,6 +96,7 @@ function admit(
   }>> = {},
 ): BabylonNativeSurfaceAdmissionResultV1 {
   return admitBabylonNativeSurfacesV1({
+    spawnGeometry: { kind: "collider-surface" },
     contribution: sceneContribution,
     registryLock: overrides.registryLock ?? [PROFILE_LOCK],
     controlledSubject: overrides.controlledSubject ?? SUBJECT,

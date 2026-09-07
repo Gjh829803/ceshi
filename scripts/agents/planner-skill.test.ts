@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,7 +11,83 @@ function templateFrom(markdown: string): string {
   return brief;
 }
 
+function plannerPromptAssignments(launcher: string): string {
+  const start = launcher.indexOf("planner_prompt=");
+  const end = launcher.indexOf("\nbuilder_prompt=", start);
+  if (start < 0 || end < 0) throw new Error("Planner prompt assignment block is missing.");
+  return launcher.slice(start, end);
+}
+
 describe("Unified WorldKit Planner skill", () => {
+  it.each(["canonical", "babylon-native"])(
+    "dispatches ordered movement intent in the resolved %s prompt",
+    async (sceneSource) => {
+      const launcher = await readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8");
+      // Execute only the actual prompt assignments, never the model launcher.
+      const prompt = execFileSync("bash", ["-c", [
+        "set -euo pipefail",
+        "user_prompt=$1; scene_id=$2; scene_source=$3",
+        plannerPromptAssignments(launcher),
+        "printf '%s' \"$planner_prompt\"",
+      ].join("\n"), "planner-prompt-test", "先飞行，再步行；保留同一个完整主体。", "movement-parity", sceneSource], {
+        encoding: "utf8",
+        timeout: 5_000,
+      });
+      expect(prompt).toContain("先飞行，再步行；保留同一个完整主体。");
+      expect(prompt).toContain("1-8 ordered movement-mode bullets");
+      expect(prompt).toContain("first row is the startup/default mode");
+      expect(prompt).toContain("real alternate modes of the same controlled subject");
+      expect(prompt).toContain("Preserve all requested modes and their order");
+      expect(prompt).not.toMatch(/exactly one standard or custom movement mode/i);
+      expect(prompt).toContain(`--scene-source ${sceneSource} --scene-id 'movement-parity'`);
+      expect(prompt).toContain("Use at most three self-repair cycles");
+      expect(prompt).toContain("Host only replays the same check once after delivery");
+      expect(prompt).toContain("Planner does not select Subject Definitions");
+    },
+  );
+
+  it.each([
+    "SKILL.md",
+    "references/block-whitebox-images.md",
+  ])("delivers legacy geographic coverage intent in %s without another gate", async (relativePath) => {
+    const instruction = (await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner", relativePath,
+    ), "utf8")).replace(/\s+/g, " ");
+    // Small semantic groups protect dispatch guidance, not one paragraph's wording.
+    for (const semantic of [
+      /(?:at least|>=) (?:four|4) times .*?(?:reference-visible|visible in the .*?reference).*?area/i,
+      /(?:twice|two times).*?width.*?(?:twice|two times).*?depth/i,
+      /one continuous .*?world/i,
+      /side.*?rear.*?remote/i,
+      /empty padding.*?(?:does not|never) count/i,
+      /(?:not|never)[^.]*?(?:area|similarity)[^.]*?gate/i,
+    ]) expect(semantic.test(instruction), `${relativePath}: ${semantic}`).toBe(true);
+  });
+
+  it("keeps legacy coverage in inferred continuation, not user facts or visible evidence", async () => {
+    const template = await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md",
+    ), "utf8");
+    const parsed = parseSceneBriefV1(templateFrom(template));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.inferredContinuation).toMatch(/(?:四|4)倍/);
+    expect(parsed.value.inferredContinuation).toMatch(/宽.*?(?:两|2)倍.*?深.*?(?:两|2)倍/);
+    expect(parsed.value.userFacts).not.toMatch(/四倍|4倍|两倍|2倍/);
+    expect(parsed.value.visibleReferenceEvidence).not.toMatch(/四倍|4倍|两倍|2倍/);
+    expect(parsed.value.space).toMatch(/侧.*?后.*?远/);
+  });
+
+  it("preserves overfull non-subject priority without promoting ordinary decoration", async () => {
+    const skill = (await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner/SKILL.md",
+    ), "utf8")).replace(/\s+/g, " ");
+    expect(skill).toMatch(/more .*? than .*?four non-subject slots.*?prioritize.*?(?:person|animal).*?important object.*?primary architectural or natural landmark.*?secondary or repeated formation/i);
+    expect(skill).toMatch(/(?:fox|guardian|astronaut).*?标志物/);
+    expect(skill).toMatch(/ordinary trees.*?not targets unless/);
+    expect(skill).toMatch(/first and only .*?主体.*?counts toward five/);
+  });
+
   it("pins task context and replays the dispatched checker instead of the live checkout", async () => {
     const launcher = await readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8");
     expect(launcher).not.toContain('node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs"');
@@ -26,8 +103,8 @@ describe("Unified WorldKit Planner skill", () => {
     const parsed = parseSceneBriefV1(templateFrom(template));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.value.movement.mode).toBe("ground-walk");
-    expect(parsed.value.movement.label).toBe("陆地步行");
+    expect(parsed.value.movementModes[0]?.mode).toBe("ground-walk");
+    expect(parsed.value.movementModes[0]?.label).toBe("陆地步行");
     expect(parsed.value.visualTargets).toHaveLength(2);
     expect(parsed.value.visualTargets[0]?.kind).toBe("subject");
     expect(parsed.value.navigation).toContain("不设计道路或首选路线");
@@ -44,7 +121,7 @@ describe("Unified WorldKit Planner skill", () => {
       readFile(path.resolve("scripts/agents/run-lwdp-codex-task.mjs"), "utf8"),
       readFile(path.resolve("scripts/agents/run-local-codex-task.mjs"), "utf8"),
     ]);
-    const plannerPrompt = launcher.split("planner_prompt=")[1]?.split("builder_prompt=")[0] ?? "";
+    const plannerPrompt = plannerPromptAssignments(launcher);
     expect(plannerPrompt).toContain(".codex/skills/worldkit-spatial-planner/SKILL.md");
     expect(plannerPrompt).toContain("unified WorldKit Planner");
     expect(plannerPrompt).not.toContain("packages/authoring/src/spatial-world-plan-v1.ts");
@@ -56,6 +133,10 @@ describe("Unified WorldKit Planner skill", () => {
     expect(launcher).toContain("built-in image generation tool");
     expect(plannerPrompt).toContain("1-5 visual targets");
     expect(plannerPrompt).toContain("standard or custom movement mode");
+    expect(plannerPrompt).toContain("1-8 ordered movement-mode bullets");
+    expect(plannerPrompt).toContain("first row is the startup/default mode");
+    expect(plannerPrompt).toContain("real alternate modes of the same controlled subject");
+    expect(plannerPrompt).not.toMatch(/exactly one standard or custom movement mode/i);
     expect(plannerPrompt).toContain("four separate provenance sections required by current main");
     expect(plannerPrompt).toContain("Planner does not select Subject Definitions");
     expect(plannerPrompt).toContain("do not use a fixed play-time or perimeter target");

@@ -20,9 +20,9 @@ import {
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
-import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
+import { createValidAuthoringSpec, createValidPackageSubjectWorldV4 } from "@whitebox-world/authoring/testing";
 
-import { compileResolvedTraversalLockV1, compileCanonicalWorldV1 } from "./index";
+import { compileResolvedTraversalLockV1, compileSubjectTraversalLockV1, compileCanonicalWorldV1 } from "./index";
 
 const RUNTIME_IDENTITY: TraversalRuntimeImplementationIdentityV1 = {
   runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
@@ -102,12 +102,12 @@ function routeWorld(): AuthoringSpecV4 {
   };
 }
 
-function compileFixture(): {
+function compileFixture(world = routeWorld()): {
   normalizedWorldIr: NormalizedWorldIRV4;
   canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
   worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 } {
-  const normalized = normalizeAuthoringSpecV4(routeWorld());
+  const normalized = normalizeAuthoringSpecV4(world);
   if (!normalized.ok || normalized.value === undefined ||
     normalized.normalizedWorldIrHash === undefined) {
     throw new Error("Route fixture normalization failed.");
@@ -147,6 +147,48 @@ function relinkScenePlan(
 }
 
 describe("compileResolvedTraversalLockV1", () => {
+  it("uses the same source-neutral lock compiler for named and derived Subject colliders", () => {
+    for (const [world, entityId, kind] of [
+      [routeWorld(), "player", "profile"],
+      [createValidPackageSubjectWorldV4(), "pack-animal-a", "derive"],
+    ] as const) {
+      const fixture = compileFixture(world);
+      const receipt = compileResolvedTraversalLockV1({ ...fixture,
+        traversingEntityId: entityId, runtimeImplementationIdentity: RUNTIME_IDENTITY });
+      const sharedInput = { resources: fixture.normalizedWorldIr.resources,
+        worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
+        traversingEntityId: entityId, runtimeImplementationIdentity: RUNTIME_IDENTITY };
+      expect(compileSubjectTraversalLockV1(sharedInput)).toEqual(receipt);
+      expect(receipt.lock.colliderSource.kind).toBe(kind);
+      const subject = fixture.worldRuntimeBootstrap.subjectRuntimeDescriptors.find((row) => row.entityId === entityId)!;
+      expect(receipt.lock).toMatchObject({ capsuleRadiusMeters: subject.collider.radiusMeters,
+        capsuleHeightMeters: subject.collider.heightMeters, maxSlopeDegrees: subject.collider.maxSlopeDegrees,
+        maxStepHeightMeters: subject.collider.maxStepHeightMeters });
+      const staleRuntime: WorldRuntimeBootstrapV1 = {
+        ...sharedInput.worldRuntimeBootstrap,
+        subjectRuntimeDescriptors: sharedInput.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+          (row) => row.entityId === entityId
+            ? { ...row, locomotionCapabilityHash: `sha256:${"e".repeat(64)}` }
+            : row,
+        ),
+      };
+      expect(() => compileSubjectTraversalLockV1({ ...sharedInput,
+        worldRuntimeBootstrap: recreateRuntimeBootstrap(staleRuntime),
+      })).toThrow();
+      if (receipt.lock.colliderSource.kind === "derive") {
+        const ref = receipt.lock.colliderSource.colliderDerivationProfileRef;
+        expect(() => compileSubjectTraversalLockV1({ ...sharedInput, resources: {
+          ...sharedInput.resources,
+          resourceLock: sharedInput.resources.resourceLock.filter((row) => row.resourceRef !== ref),
+        } })).toThrow(/missing collider-derivation-profile/);
+        const stale = structuredClone(sharedInput.resources);
+        stale.subjectDefinitions.find((row) => row.subjectDefinitionRef === subject.subjectDefinitionRef)!.collider.radiusMeters += 0.1;
+        expect(() => compileSubjectTraversalLockV1({ ...sharedInput, resources: stale }))
+          .toThrow(/compiled Subject collider does not match/);
+      }
+    }
+  });
+
   it("preserves the Traversal Surface Profile row byte-identically", () => {
     const fixture = compileFixture();
     const normalizedRow = fixture.normalizedWorldIr.resources.resourceLock.find(
@@ -220,7 +262,7 @@ describe("compileResolvedTraversalLockV1", () => {
     expect(receipt.lock).toMatchObject({
       subjectEntityId: "player",
       subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
-      colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
+      colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1" },
       physicsBodyProfileRef:
         "worldkit://physics-body-profile/character.capability-medium@1",
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",

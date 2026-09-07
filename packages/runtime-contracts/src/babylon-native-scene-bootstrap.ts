@@ -2,6 +2,8 @@ import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
+import { validateCameraTuningV1 } from "./camera-parameter-contract.js";
+import type { WorldRuntimeBootstrapV1 } from "./world-runtime-bootstrap.js";
 
 export interface BabylonNativeInitialCameraV1 {
   readonly mode: "third-person";
@@ -189,8 +191,8 @@ function gravityTuple(input: unknown): readonly [number, number, number] {
   ] as const);
 }
 
-function initialCamera(input: unknown): BabylonNativeInitialCameraV1 {
-  const record = exactRecord(input, INITIAL_CAMERA_FIELDS);
+export function parseBabylonNativeInitialCameraV1(input: unknown): BabylonNativeInitialCameraV1 {
+  const record = exactRecord(snapshotCanonicalData(input), INITIAL_CAMERA_FIELDS);
   if (record.mode !== "third-person") return invalidBootstrap();
   const fovDegrees = finiteNumber(record.fovDegrees);
   if (fovDegrees <= 0 || fovDegrees >= 180) return invalidBootstrap();
@@ -201,6 +203,35 @@ function initialCamera(input: unknown): BabylonNativeInitialCameraV1 {
     fovDegrees,
     targetHeightMeters: finiteNumber(record.targetHeightMeters),
   });
+}
+
+export function admitBabylonNativeOpeningCameraV1(
+  input: unknown,
+  runtime: WorldRuntimeBootstrapV1,
+): BabylonNativeInitialCameraV1 {
+  const camera = parseBabylonNativeInitialCameraV1(input);
+  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
+    entityId === runtime.initialControlledEntityId
+  );
+  if (subjects.length !== 1) return invalidBootstrap();
+  const profiles = subjects[0]!.capabilityAssembly.cameraContext.cameraRigProfiles
+    .filter(({ algorithmRef }) => !algorithmRef.endsWith("/socket-first-person@1"));
+  if (profiles.length === 0) return invalidBootstrap();
+  const tuning = {
+    distanceMeters: camera.distanceMeters,
+    targetHeightMeters: camera.targetHeightMeters,
+    pitchRadians: camera.pitchRadians,
+    baseFovDegrees: camera.fovDegrees,
+  };
+  for (const profile of profiles) {
+    const result = validateCameraTuningV1(profile, tuning);
+    if (!result.ok) {
+      throw new TypeError(
+        `WORLDKIT_RUNTIME_CAMERA_OPENING_TUNING_INVALID: ${result.message}`,
+      );
+    }
+  }
+  return camera;
 }
 
 export function parseBabylonNativeSceneBootstrapV1(
@@ -237,7 +268,7 @@ export function parseBabylonNativeSceneBootstrapV1(
     gravityMetersPerSecondSquaredXYZ: gravityTuple(
       record.gravityMetersPerSecondSquaredXYZ,
     ),
-    initialCamera: initialCamera(record.initialCamera),
+    initialCamera: parseBabylonNativeInitialCameraV1(record.initialCamera),
     seed: unsigned32BitInteger(record.seed),
     spawnMarkerId: nonEmptyIdentity(record.spawnMarkerId),
   });

@@ -8,6 +8,7 @@ import type {
   BabylonNativeIsolatedRuntimeEntryV1,
 } from "@whitebox-world/runtime-babylon";
 import { isNil } from "lodash-es";
+import { attachHostedRecordingServer } from "./hosted-recording.js";
 
 const PORT_TRANSFER_FIELDS = Object.freeze([
   "kind",
@@ -24,6 +25,8 @@ export interface StartHostedRuntimeFrameInputV1 {
   readonly runtimeSessionId: string;
   readonly sessionNonce: string;
   readonly protocolBudget: NativeEffectiveExecutionBudgetV1["protocol"];
+  readonly createRecorder?: Parameters<typeof attachHostedRecordingServer>[1];
+  readonly onBeforeReset?: () => void;
 }
 
 export interface HostedRuntimeFrameV1 {
@@ -75,6 +78,7 @@ export function startHostedRuntimeFrameV1(
   ) throw new Error("WORLDKIT_HOSTED_RUNTIME_FRAME_IDENTITY_MISMATCH");
 
   let port: MessagePort | undefined;
+  let recording: ReturnType<typeof attachHostedRecordingServer> | undefined;
   let disposed = false;
   let nextInboundSequence = 1;
   let nextOutboundSequence = 2;
@@ -85,6 +89,7 @@ export function startHostedRuntimeFrameV1(
     disposed = true;
     window.removeEventListener("message", onTransfer);
     port?.close();
+    recording?.dispose();
     await input.entry.dispose().catch(() => undefined);
   };
 
@@ -114,6 +119,7 @@ export function startHostedRuntimeFrameV1(
     nextInboundSequence += 1;
     tail = tail.then(async () => {
       if (disposed || isNil(port)) return;
+      if (request.type === "session.reset") input.onBeforeReset?.();
       const receipt = await input.entry.submit(request);
       const outgoing = parseNativeIsolationTransportEnvelopeV1({
         kind: "native-isolation-transport-envelope",
@@ -141,7 +147,7 @@ export function startHostedRuntimeFrameV1(
       !isNil(port) ||
       event.origin !== input.shellOrigin ||
       event.source !== window.parent ||
-      event.ports.length !== 1 ||
+      event.ports.length !== (input.createRecorder === undefined ? 1 : 2) ||
       !hasExactTransferShape(event.data)
     ) {
       void terminate();
@@ -164,6 +170,9 @@ export function startHostedRuntimeFrameV1(
       return;
     }
     port = transferredPort;
+    if (input.createRecorder !== undefined) {
+      recording = attachHostedRecordingServer(event.ports[1]!, input.createRecorder);
+    }
     window.removeEventListener("message", onTransfer);
     transferredPort.addEventListener("message", onPortMessage);
     transferredPort.start();

@@ -1,0 +1,433 @@
+# CF-20 Native Check capacity repair
+
+## Frozen real-Case evidence
+
+- Candidate: `f72a4931ca341abed39ec62d1a3115859247b982`, branch
+  `codex/cf-production-effect-closure`; pinned legacy reference remains
+  `9e35ab53c634acaef8c53a33082fff77653f7bbb`.
+- Scene: `paper-moon-054-cf-f72a493-0906`.
+- Run: `run-20260906140808-99613`, attempt `0`.
+- Planner execution: `planner-20260906-135631-99626`; self-check passed,
+  Host promotion completed and the launcher reached `plan-ready`.
+- Local formal Builder (`gpt-5.6-sol`, `xhigh`) completed with exit 0 after
+  1,218,491 ms. Generation receipt says `completed`, cleanup `completed`,
+  no diagnostic codes; `builder-self-check.host.json` has `ok: true`.
+- Delivered `scene.ts`: 25,315 bytes,
+  `sha256:41f226b6ded49074e31936bad34d8e93704f3f6564e98538353e8471552bdb20`.
+- Host Native Check started Babylon NullEngine, then exhausted the roughly
+  4 GiB V8 heap. Terminal error:
+  `FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory`.
+  Launcher returned `native-world-agent-result` with exit code `134`.
+  Final GC output was around 1,633,868 ms in the Host process. Native Check
+  did not produce a result; Ground, Runtime Capture and publication were not reached.
+
+After the original process terminated, the exact frozen portable renderer replayed
+the unchanged delivered source into `/tmp/cf20-mem3-capture.rpXWEo/`, exit 0.
+It measured **158,100 Blocks**: background-mass 109,546; water-like-visual 30,165;
+ground 7,889; structure 7,581; route 2,919. Shapes: full 151,511, half 5,239,
+step 1,350. Captured identity:
+`sha256:466ee4d22b40ce3cb6f0df116ee09941a7d57e521e6135be4359cdf0f1518d1d`.
+This is lightweight VM/geometry-projection evidence, not successful Babylon
+allocation, Native admission, Runtime capture or a repaired production outcome.
+It replaces speculation about the actual source size; it does not yet identify
+the exact OOM phase inside Native replay.
+
+The run and declared source remain under `artifacts/scenes/<scene>/runs/<run>/`.
+No source or historical receipt was repaired in place. Four earlier failed Cases
+and their planning directories were moved to the user's Trash on explicit request;
+this new failed run was not removed.
+
+The two delivered advisory comparisons were actually viewed. The entry projection
+has insufficient palace elevation and valley depth relative to the planning target;
+top-down geography is also substantially simplified. This is separate CF-11/19/21
+effect evidence, not a new ordinary-production veto. Builder exit 0 does not prove
+scene-effect parity. This candidate is not eligible for main integration yet.
+
+## Bounded next work
+
+All tasks are **main-agent-only**, sequential; no development subagents or new
+Planner/Builder stages. Preserve the original failed run and use private diagnostic
+outputs. Do not add a Block count gate, lower the intended world, raise the heap to
+claim a fix, bypass admission, or replace Runtime/Physics owners.
+
+| Task | Depends on / exclusive owner | Input and output contract | Required evidence |
+|---|---|---|---|
+| CF-20/MEM3-A | Existing Profile Session, Native Host replay and allocation/audit owners; read-only diagnosis first | Exact delivered source and current Host path -> measured Block count, phase/resource measurements and a bounded failing reproducer identifying retained objects or superlinear work | Distinguish allocation, authority instrumentation, layout/topology and finalization; compare unbundled Profile and real Host execution, not only a small Session fixture |
+| CF-20/MEM3-B | MEM3-A; only the proven existing owner | Preserve source, metric layout, logical IDs, rollback, cleanup and authority auditing while removing the proven avoidable allocation/retention cost | RED/GREEN, partial allocation and throwing cleanup, prior object preservation, focused direct consumers, typecheck and affected generated-tool drift |
+| CF-20/MEM3-C | MEM3-B; existing Host production/resume owner | Replay unchanged paid source only through supported exact-input recovery, or a separately labeled diagnostic when identities invalidate formal resume | Complete Native/Ground/Package/Capture evidence, original failure unchanged; new production success must have its own valid provenance; final effect inspection remains separate |
+
+One suspect is `Session.allocate()` copying all current Scene meshes into a Set
+for every Block. This is visibly quadratic traversal, but the OOM stack's SetGrow
+alone does not identify the retained owner. The earlier MEM1 regression covered
+direct Session snapshot lifetime, not this exact large Host run. Babylon 9.23.0
+`Scene.addMesh` sends `onNewMeshAddedObservable` through `TimingTools.SetImmediate`;
+an asynchronous observer is not an equivalent synchronous partial-failure cleanup.
+Do not substitute that observer without proving the lifecycle contract.
+
+## MEM3-B1/B2 authority-audit lifetime slice
+
+An isolated diagnostic uses the first 8,000 exact captured Blocks, real Babylon
+Mesh allocation, and optionally the actual Host authority probe, without finalizing
+a world. Outputs/script: `/tmp/cf20-mem3-allocation.LhZy4G/`. Its Set instrumentation
+counts all allocations but takes WeakRefs only for the first 64 tiny snapshots:
+taking a WeakRef to every Set would artificially pin all Sets until the JavaScript
+job ends and is not a valid peak-memory measurement.
+
+- Bare Session after explicit GC: 204,147,816 heap bytes. Audited allocation:
+  618,856,608 heap bytes. Both traverse 31,996,000 prior Mesh entries for 8,000
+  snapshot copies; sampled snapshots are collectible after the job completes.
+- Before B1, the subsequent `probe.audit()` itself exhausted the diagnostic's
+  fixed 1 GiB heap. It reads every never-used lazy Observable, creating Babylon
+  objects and installing per-method guards just to inspect them.
+- **MEM3-B1 implemented:** retain the installed getter identity and leave an
+  unaccessed, intact guard lazy. A removed/replaced unused accessor is still
+  rejected; an accessed Observable follows the exact existing identity/observer
+  checks. Later callback injection remains guarded. Preserve the historical
+  acceptance of an already-initialized Observable replaced with identical identity;
+  this is not a stricter descriptor-admission gate.
+- **MEM3-B2 implemented:** after successful `restore()`, release the restorer,
+  created-object and StandardMaterial-transition arrays. Previously a still-live,
+  restored probe retained 16/16 disposed Meshes in the isolated GC reproducer;
+  it now retains zero. Idempotent restore remains supported.
+- Same 8,000-Block diagnostic now completes allocation, audit and disposal under
+  the unchanged 1 GiB limit. Live post-GC allocation is still 624,613,464 bytes;
+  post-disposal heap is 40,944,208 bytes, compared with 438,796,984 bytes after B1
+  alone. No callback or authority diagnostic is bypassed.
+
+Evidence: two initial RED reproductions; five focused behavior/GC tests; final
+three complete authority-audit/Candidate admission/Runtime replay files **290/290**;
+typecheck and two focused renderer rebuild/frozen-copy drift tests passed (bundle
+bytes unchanged). Timings from runs concurrent with tests are not a performance
+speedup claim. This slice does **not** make 158,100 Blocks fit the production heap:
+per-Block live instrumentation/geometry cost and quadratic allocation traversal
+remain, as do layout/finalization measurements and unchanged-source Host replay.
+No root full CI, independent review, new production pass or main merge is claimed.
+
+## MEM3-B3 raw authoring geometry reuse
+
+Main-agent-only, sequential after B1/B2. Exclusive owner: Profile Session's raw
+Block allocation and rollback. Input remains the same parsed Block intent; output
+remains one real Mesh per logical Block and the same checked metric layout.
+Use a Session-local fixed-shape Geometry pool and immutable shape snapshots;
+do not share Geometry across visual thin-instance batches or across Sessions.
+No admission rule, source count limit, gameplay owner or Builder input changes.
+
+Installed Babylon 9.23.0 `Geometry.applyToMesh` attaches one Geometry to multiple
+Meshes; `releaseForMesh(mesh, true)` disposes only at the last reference. Pool
+lifetime must account for failed grids and disposal. An invalid source mutation
+must still fail the existing geometry check, never become the new snapshot.
+Required evidence: a RED allocation-count test, all fixed shapes, cross-Session
+isolation, last-reference rollback/retry, partial construction/throwing cleanup,
+unchanged checked layout, and raw-versus-display Geometry separation. Then repeat
+the unchanged 8,000-Block allocation/audit diagnostic and affected owner tests and
+typecheck. This is not the final full-gate checkpoint or a complete Case pass.
+
+Implemented in the repair worktree on `codex/cf-production-effect-closure`;
+separate Case worktrees are execution-only, not development owners. The pool is
+cleared on Session failure/disposal; a fully rolled-back grid's disposed Geometry
+is replaced on the next allocation. Shared snapshots remain the original immutable
+values even if source code mutates a buffer before allocating another Block.
+
+Evidence: three focused tests first failed on the old allocation path. Four new
+tests cover all five shapes and cross-Session isolation, disposal of one member,
+unchanged layout with unique versus shared raw Geometry, independent display-batch
+Geometry, geometry mutation rejection, and attachment failure preserving a prior
+Block followed by retry. Existing full Session tests also cover grid rollback to
+zero and retry, constructor failure after Scene insertion, and throwing disposers.
+Seven complete directly affected Session/layout/visual batching/Capture/settlement/
+Candidate admission/Runtime replay files passed **153/153**; typecheck passed.
+The final failure-path pool-clear addition was covered by the complete Session
+file again (**46/46**, included in that 153-test inventory). The two focused
+renderer rebuild/frozen-copy drift tests also passed; generated bytes unchanged.
+
+The same audited 8,000-Block diagnostic completed with no audit diagnostics under
+the unchanged 1 GiB diagnostic heap. Geometry count fell from 8,000 to **2** (the
+sample's actual distinct shapes); post-GC live heap was **577,032,528 bytes** versus
+624,613,464 after B1/B2. Post-disposal heap: 40,350,328 bytes; Mesh/Geometry counts:
+zero. All 31,996,000 prior-Mesh snapshot visits remain. Geometry's installed
+reference-release implementation also searches its member array; this change is
+not evidence of linear-time disposal or overall speedup. The larger 158,100-Block
+capacity problem, finalization measurements and full production replay remain open.
+
+## MEM3-B4 repeated insertion audit ownership
+
+Main-agent-only, sequential; existing Native authority-audit owner. Babylon 9.23.0
+`Geometry.applyToMesh` invokes `Scene.pushGeometry` even for a registered Geometry;
+`pushGeometry` then returns false without a new registration. The audit wrapper
+currently re-instruments before that call, stacking disposal wrappers, callback
+guards and retained records on the same object for every attachment. B3's geometry
+reuse exposes this repeatedly; it also exists for explicit repeated insertion.
+
+Input: same Candidate object and same runtime-kind surface. Output: one installed
+guard set and original audit baseline per object/kind for the active probe. Do not
+skip a different kind, remove prior records, reset mutation diagnostics or alter
+Scene insertion results. Track completed installation weakly so a closed probe
+cannot retain scene objects. Required evidence: RED repeated-insertion identity
+and disposal-stack tests, remove/reinsert callback mutation rejection, existing
+authority/Candidate/Runtime tests, GC ownership regression, and the same isolated
+8,000-Block diagnostic. Not a new gate or final full-production acceptance.
+
+Implemented with probe-local WeakSets keyed by runtime kind, marking only completed
+instrumentation. Original records remain active across remove/reinsert, and a
+different runtime kind still has its own instrumentation path. No Scene insertion
+return value or argument is changed. Weak ownership preserves the existing restored
+probe GC contract.
+
+RED evidence: repeated insertion changed the guarded function/descriptor identity;
+32,768 repeats then Mesh disposal threw `RangeError: Maximum call stack size
+exceeded`. (The smaller 8,192-repeat sample did not overflow.) Both regressions
+now pass, as does callback mutation rejection after remove/reinsert. Four complete
+authority-audit/Candidate admission/Runtime replay/Session files passed **339/339**,
+including the disposed-Mesh GC reproducer; typecheck passed.
+
+The unchanged audited 8,000-Block diagnostic again completed under its fixed 1 GiB
+limit with no audit diagnostics and no retained sampled Scene snapshots. Live
+post-GC heap: **556,598,744 bytes**, down from 577,032,528 after B3. Post-disposal:
+40,618,080 bytes with zero Meshes/Geometries. This repairs a real large shared-
+Geometry cleanup failure, but per-Mesh cost and the 31,996,000 snapshot visits
+remain. No full 158,100-Block Host replay or scene-effect acceptance is claimed.
+
+## MEM3-B5 production-loader guard allocation
+
+Main-agent-only; existing authority-audit method guard factory. Two real V8 heap
+snapshots of the same first 1,000 captured Blocks (private diagnostics at
+`/tmp/cf20-mem3-heap.9LNvuw/`) show live post-GC heaps of 54,077,696 bytes without
+audit and 104,619,200 with audit. These are equivalent inputs in separate processes,
+not a claim of deterministic total heap size. Snapshot self-size deltas include
+26,153,600 bytes of property arrays, 7,355,880 bytes of anonymous closures,
+6,620,040 bytes of closure contexts, and 2,861,120 bytes of named method guards.
+Tracing property-array ownership attributes 11,444,480 bytes to 44,705 guarded
+method functions alone, versus 6,208,000 bytes on the 1,000 Mesh objects.
+
+Installed `tsx` sets esbuild `keepNames: true`. An isolated transform verifies
+that named function expressions receive `Object.defineProperty(fn, 'name', ...)`
+on every factory invocation; an anonymous function returned directly from a
+factory does not. Keep the same bound permission predicate, dynamic receiver,
+original provider call, mutation latch, constructibility and restoration behavior;
+only remove hot-path name decoration. Do not change global loader settings or
+the classification of Babylon runtime constructors. Required evidence: RED
+production-loader decoration test, complete authority/Candidate/Runtime/Session
+tests, typecheck and the same 8,000-Block allocation diagnostic.
+
+The old pinned compiler calls `createBlockWorldRuntimeClustersV2` before compiling
+Canonical world nodes (`packages/block-world-compiler/src/compile.ts`, lines 520-521
+and 394). Native currently allocates raw Meshes before later batching. This remains
+a known representation/capacity difference; a small memory improvement alone does
+not demonstrate that the old full-world capacity has been restored.
+
+Implemented by extracting the existing method guard expression into one private
+factory that returns it anonymously. The factory captures only the permission
+predicate, original method and violation latch; descriptor restoration still
+belongs to the original installation scope. No global tsx configuration or public
+Runtime constructor naming changed.
+
+The isolated regression patches `Object.defineProperty` **before** dynamically
+importing the audited module, because tsx captures that function in its naming
+helper at module initialization. An initial instrumentation placed after import
+missed the writes and was not valid RED evidence. The corrected reproducer saw
+all six sampled guards decorated before the fix, and zero afterward. Four complete
+authority/Candidate/Runtime/Session files passed **340/340**; typecheck passed.
+The unchanged audited 8,000-Block diagnostic completed with no diagnostics under
+its unchanged 1 GiB limit: post-GC live heap **474,001,776 bytes**, compared with
+556,598,744 before B5. Disposal left 40,664,832 bytes and zero Meshes/Geometries.
+The original full Case still has no Native Check success; aggregate CI, rendered
+acceptance and main merge remain open. This measurement does not justify raising
+the production heap or reducing the generated world.
+
+## MEM3-B6 immutable audit surface and reader allocation
+
+Main-agent-only; existing authority-audit owner. Cache the immutable inherited
+surface arrays by the closed runtime-kind union, and move the per-accessor
+provider-value reader to a single module function with explicit current state.
+Inputs and outputs of the reader stay identical, including own descriptor versus
+inherited getter precedence and one-time Mesh provider assignment. Keep baselines,
+mutation predicates and restored descriptors instance-local. The cache may contain
+only frozen string arrays, never Candidate objects or closures capturing a Scene.
+Required evidence: RED per-Mesh surface-allocation count across two probes, current
+authority/Candidate/Runtime/Session files, typecheck and unchanged allocation probe.
+
+Read-only investigation of Scene allocation rollback found no indexed Mesh
+membership API in installed Babylon 9.23.0 (`addMesh` appends; `removeMesh` uses
+`indexOf`; new-Mesh notifications are deferred). Replacing the snapshot by only
+the prior array length would not preserve cleanup if construction mutates the
+prior collection. Keep that contract and track its quadratic traversal as open;
+do not silently substitute a weaker tail-slice cleanup.
+
+Implemented. The isolated production-loader regression observed four identical
+Mesh surface arrays for four Meshes across two probes before the change; afterward
+it observes one. Four complete authority/Candidate/Runtime/Session files passed
+**341/341** (including lazy accessors, provider assignment, mutation rejection,
+repeated insertion, original descriptor restoration and closed-probe GC tests);
+typecheck passed. The unchanged audited 8,000-Block diagnostic completed with no
+diagnostics at the same 1 GiB limit. Post-GC live heap: **425,161,992 bytes**, down
+from 474,001,776 after B5. Post-disposal: 40,663,224 bytes and zero Meshes/Geometries.
+Snapshot traversal is unchanged at 31,996,000 entries; no timing speedup is claimed.
+This still does not prove that the 158,100-Block world fits production capacity.
+
+## MEM4 representation decision — approved direction and initial checkpoint
+
+On 2026-09-07 the user explicitly approved following the old branch's pre-allocation
+clustering: “那就按照老分支来做呗”. This supersedes the pending-confirmation state.
+Development remains on `codex/cf-production-effect-closure`, main-agent-only and
+sequential. Approval covers replacing the immediate-Mesh Profile contract and its
+consumers, not a second Source, hidden foundation, new ordinary-production gate,
+reduced scene geography or a change of Runtime owners. At this historical decision
+checkpoint MEM4-A was in progress and MEM4-B/C had not been implemented or verified;
+the implementation and evidence below supersede that checkpoint.
+
+Read-only boundary inspection at `042ef1db50c8fc86fe10c74a250059ec209a5859`
+confirms a frozen-contract conflict, not merely an implementation allocation bug:
+
+- Pinned old `9e35ab53` compiler clusters the Block data before generating Canonical
+  nodes (`packages/block-world-compiler/src/compile.ts:520-521`, `:394`).
+- Current drawing API design, sections 4 and 6, explicitly returns `Mesh` /
+  `readonly Mesh[]` immediately and requires Finalize to inspect each live Profile
+  Mesh. Source: `2026-09-02-agent-friendly-babylon-native-block-drawing-api-design.md`.
+- `2026-09-04-block-world-production-outcome-parity-design.md` section 1 keeps the
+  current Native architecture while aligning non-architectural production behavior.
+- Current `session.ts` allocates each Mesh before Finalize; `layout.ts` validates
+  geometry/transform against it; `profile-settlement.ts` joins records by Block ID
+  to actual Mesh settlement targets. `live-handle-registry.ts` begins with the
+  `authoring-unbatched` realization before Host batching. These consumers cannot
+  be fixed by only deleting allocation or changing the API's return annotation.
+
+Moving to intent-first, pre-allocation clustering would be a public current-only
+contract change. It may preserve the Native Source and all sole Runtime owners,
+but must update the frozen design and the complete producer/consumer closure, not
+introduce a second authoring path or silently substitute fake Mesh handles. The
+direction is now authorized, but the exact replacement return type and settlement
+representation must be specified before switching the public API. Existing focused
+measurements do not establish full-world capacity for the new representation.
+
+Approved main-agent-only tasks are sequential:
+
+| Task | Dependency / owner | Contract and integration evidence |
+|---|---|---|
+| CF-20/MEM4-A | User decision; main architecture owner | Freeze one Native intent/visual materialization contract; enumerate all Schema/API, Skill/type context, layout/settlement/hash, package/replay and Capture consumers; no new gate, source-count cap or alternate lane |
+| CF-20/MEM4-B | MEM4-A; Profile and Host owners | Implement one current-only path preserving exact Block IDs, shape/metric layout, explicit collider intent, old clustering and display scale, rollback and one authoritative settlement; adversarial contract tests and consumer closure |
+| CF-20/MEM4-C | MEM4-B; real Host replay and final integration | Same unchanged paid source where the new source contract permits it, correctly versioned new provenance, full Native/Ground/Package/Capture and rendered inspection; fresh production Case before main integration |
+
+### Consumer closure and first full Case
+
+The public switch must include Session/input atomicity, intent-derived checked
+Layout and Profile inventory, visual materialization and live handles, Profile/Host
+settlement, Package/replay, Runtime realization, Capture isolation, Builder Skill,
+output contract, generated type/checker context, frozen copies and active fixtures.
+Do not merely defer the same per-Block Mesh allocation to Finalize or retain hidden
+authoring Meshes to satisfy the current `authoring-unbatched` prerequisite.
+
+Geometry/lifetime validation moves to the actual materialized visuals; it must not
+be dropped with `records[].mesh`. Cluster-to-Block identity and partial Capture
+portions remain exact. Explicit Collider joins must neither duplicate nor disappear
+when multiple logical Blocks share a visual allocation. Preserve independent batch
+Geometry ownership, complete-world visibility and failed-build cleanup.
+
+These are MEM4 implementation dependencies, not extra production gates. Once the
+consumer switch and affected focused/type/build/Skill checks close, freeze the
+candidate and run the ordinary full local Case. Completing every CF parent task is
+not a prerequisite to that trial. Native Check -> Ground -> Package -> Capture ->
+ordinary publication remains the required real closure; a small fixture is not it.
+
+Source-budget correspondence remains separate CF-20 work. Palace elevation, valley
+depth and complete-geography defects remain CF-11/19/21 rendered-effect work, not
+automatically fixed by clustering. Attribute any trial failure to its actual stage
+and repair under the old policy, without adding a retry, count cap or quality veto.
+Full-CI/review and main-integration evidence remain separate from a Case pass.
+
+That earlier decision-only checkpoint updated the consumer census and execution ordering.
+At that point no public API or frozen Skill had changed and no new Case, test worktree,
+full CI or main merge had run. The original failed run remains intact, and changed
+implementation must acquire correctly bound new provenance rather than rewriting
+that failed Run as successful.
+
+## MEM4 implementation and pre-Case parity checkpoint — 2026-09-07
+
+The user subsequently requested implementation, then a final comparison against
+the pinned old branch **before** starting a new Case. All work remains sequential,
+main-agent-only in the repair worktree on `codex/cf-production-effect-closure`,
+based on `df1d83508e8513399f5abb1b84816392912a73c8`.
+
+- Session returns deeply frozen canonical intent, with no per-Block Mesh allocation.
+  Finalize materializes the existing old-equivalent 32m/X-Z-Y visual clusters.
+  Logical IDs, metric layout, explicit Collider joins and Capture portions survive.
+- The original 158,100-Block source exposed a Node call-stack overflow in Layout's
+  spread-based minimum. Array reductions now use existing lodash extrema in Layout
+  and its unbounded group/manifest/capture consumers, without a new source-count cap.
+- The next unchanged-source diagnostic reached an existing Collider vertex limit:
+  79,430 / 65,536. Non-walkable exact-solid-union geometry now coalesces coplanar
+  exposed cells within one Collider/plane/normal, preserving holes, winding and
+  full source-cell identity. Walkable smoothing, explicit physics ownership and
+  production budgets are unchanged. Dense 512-cell cuboid RED: 386 vertices/768
+  triangles; GREEN: 8/12 with the same outer surface. Sixteen negative-coordinate,
+  perforated, partitioned fixtures prove exact exposed-face coverage and order.
+- Host collision binding is the current-only nonempty sorted `static-colliders`
+  array, allowing multiple explicit Colliders on one actual cluster target.
+  Package metadata carries the same Host `settledVisualTargetCount`; both build
+  and directory membership compare it to the bound Contribution instead of
+  incorrectly assuming target count equals logical Block count.
+- API, live/frozen Builder Skill and output contract, portable renderer/checker
+  context, Profile, Host, Package, replay and Capture consumers are changed together.
+  No fake Mesh handles, parallel authoring source or hidden raw per-Block Mesh set.
+
+Unchanged-source diagnostic (not a resumed Run and not a full Case): source SHA-256
+`41f226b6ded49074e31936bad34d8e93704f3f6564e98538353e8471552bdb20`;
+Node 23.11.0, Babylon 9.23.0, original Bootstrap and 256/65,536/131,072 Collider
+count/vertex/triangle budgets, default Node heap. Actual
+`admitBabylonNativeSceneCandidateV1` passed with zero diagnostics, 6,556 settled
+targets / 6,560 Scene Meshes, 66.85 seconds and peak RSS 2,718,992 KiB. Original
+failed artifacts were not edited. This does not establish Ground, Package, Capture,
+published output or equal visual effect for that full scene.
+
+### Final comparison scope (change review, not independent review)
+
+Pinned comparator: `codex/block-world-main-integration@9e35ab53c634acaef8c53a33082fff77653f7bbb`.
+Current comparison covers the modified representation and directly invoked Scene
+production chain; it is not a claim that every CF/Cloud/Episode task is complete.
+
+| ID / boundary | Old source / behavior | Current source / result |
+|---|---|---|
+| CF-10 planning order | `run-spatial-world-agent.sh:128-134`: Brief, accepted entry, dependent whole-world plan; same-task repair | Current Planner Skill and Native launcher retain the order and exact image handoff; no policy edits in MEM4 |
+| CF-19 Builder feedback | Old Builder Skill: structural check, open entry/top comparisons, combined three-cycle repair | `native-world-case-preparation.ts:1175-1180`: exact isolated commands, same shared cycles, actual inspection, no automatic similarity veto |
+| CF-20 allocation/display | Old `clusters.ts` grows X/Z/Y in center-owned 32m chunks before `compile.ts` nodes | Same existing cluster owner now precedes Native allocation; 0.985 whole-cluster scaling and all logical memberships retained |
+| CF-20 solid geometry | Old compiled solid clusters use cuboid resources, not micro-cell surface subdivisions | Native explicit union retains its boundary owner but removes redundant coplanar subdivisions; exact coverage and real unchanged-source Host admission verified |
+| CF-09/31 handoff | One completed planning task feeds world generation | Exclusive directory reservation copies absent children; EEXIST handoff repair retained; no repeated paid task or rewritten prior Run |
+| CF-26 endings | Combined in-task budget distinct from bounded provider retries; no extra automatic ordinary source repair | `run.ts:1284` restricts external source repair to explicit strict acceptance; ordinary quality findings remain advisory, required artifact failures remain real failures |
+| CF-26 provider | Three terminal attempts, timeout at most two, 30s/120s default backoff | `lwdp-codex-task-retry.mjs` retains those values and same-request reconciliation; Cloud execution itself is not retested by the planned local Case |
+| Native ownership adapter | Old Canonical compiler/physics representation is historical, not a merge target | Native Source, Host Candidate/settlement and SDK Havok/Camera/Input/Reset remain sole owners; no hidden foundation or copied old Runtime state machine |
+
+Final affected tests passed: 44 files / 685 tests; typecheck and build exited 0.
+The final `pnpm check:native-block-builder-skill` passed 106/106 in 299.11 seconds.
+Live/frozen Skill, contract and both generated tools compare byte-for-byte; diff
+check passed. New Case has not started; equal geography/composition remains unverified.
+The subsequent [parameter audit](../../reviews/2026-09-07-cf-scene-parameter-parity-audit.md)
+found an actual old/current Camera occlusion-policy difference. The representation
+fix is ready for its own commit, not a claim of complete parameter parity.
+Do not report focused/Havok or unchanged-source diagnostic evidence as final full
+CI, independent exact-SHA review, parent CF completion or authorization to merge main.
+
+## CF-20/BUDGET-ORACLE — independent of MEM4 approval
+
+Main-agent-only, bounded module ownership cleanup. Read-only reference search at
+`737338f1` confirmed `evaluateBlockSourceResourceBudgetV1` was called only by tests,
+not any production stage. Keeping that unconnected historical oracle exported by
+the actual production budget module creates an ambiguous owner and an unnecessary
+compiler import; it does not provide production source-budget parity evidence.
+
+Move the unchanged formula to `native-block-source-budget.test-support.ts` and
+update its two test consumers. Keep every old boundary/ordering/Subject-cost test,
+including the heavy Subject case; do not delete the historical evidence or wire
+an unproven production gate. The production module continues to own exactly the
+same formal limits and Planner budget context. Add a direct regression that the
+test oracle is no longer a production-module export. This is no alternative Scene
+Source, authoring API change or reset of the pending MEM4 decision.
+
+The full production source-budget correspondence (actual cluster/Subject domains)
+remains open. Separating a test oracle must not be reported as closing that work.
+
+Implemented with all prior tests preserved. Four full budget/generation-request/
+Planner-execution/workload files passed **104/104**; the subsequently added export
+boundary test passed **1/1**, for 105 unique affected tests. Final typecheck passed.
+An AST printer comparison against `737338f1` (comments removed) confirmed the oracle
+function is unchanged beyond comments and file location. A production-source
+reference search finds no imports or calls of the test helper. No new production
+Case, memory measurement, full CI or main merge is claimed for this cleanup.

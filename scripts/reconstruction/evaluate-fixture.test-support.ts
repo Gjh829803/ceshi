@@ -1,7 +1,9 @@
 import {
+  sha256Bytes,
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import { PNG } from "pngjs";
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
@@ -27,6 +29,7 @@ import {
   parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
   type FormalWorldCaptureIntentV1,
+  type VisualCaptureGroupV1,
   type FormalOpeningObservationV1,
   type FormalSemanticViewObservationSetV1,
   type FormalWorldCaptureReceiptV1,
@@ -93,6 +96,7 @@ export function createSemanticViewObservationSetFixtureV1(
       viewId: view.viewId,
       viewRequestHash: view.requestHash,
       pngContentHash: view.pngContentHash,
+      identityMaskPngContentHash: view.identityMaskPngContentHash,
       targets: openingObservation.formalRequest.semanticCaptureMap.bindings.map(
         (binding) => {
           const group = openingGroupByTargetRef.get(binding.acceptanceTargetRef);
@@ -123,6 +127,8 @@ export function createSemanticViewObservationSetFixtureV1(
 }
 
 export interface EvidenceSetFixtureOptionsV1 {
+  readonly includeWhiteboxTriviews?: boolean;
+  readonly withoutScriptedTraversal?: boolean;
   readonly allDimensionsPass?: boolean;
   readonly allOpeningNotRequired?: boolean;
   readonly attemptIdentity?: Readonly<{
@@ -155,9 +161,8 @@ const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
 function authoredCheckpointCriterion(
   criterion: FormalTraversalCheckpointSpatialCriterionV1,
 ): FormalTraversalCheckpointIntentCriterionV1 {
-  if (criterion.kind === "reach-bounds") {
-    const { sourceBoundsMeters: _resolvedBounds, ...authored } = criterion;
-    return authored;
+  if (criterion.kind === "reach-position") {
+    return criterion;
   }
   const {
     sourceBoundsMeters: _resolvedBounds,
@@ -287,8 +292,10 @@ export function createEvidenceSetFixtureInputV1(
   options: EvidenceSetFixtureOptionsV1 = {},
 ): BuildWorldReconstructionEvidenceSetInputV1 & Readonly<{
   formalCaptureIntent: FormalWorldCaptureIntentV1;
+  whiteboxTriviewPngs: readonly Uint8Array[];
 }> {
   const allDimensionsPass = options.allDimensionsPass === true;
+  const withoutScriptedTraversal = options.withoutScriptedTraversal === true;
   const allOpeningNotRequired = options.allOpeningNotRequired === true;
   const paletteTraversalDisagreement =
     options.includePaletteTraversalDisagreement === true;
@@ -296,26 +303,20 @@ export function createEvidenceSetFixtureInputV1(
   const needsBlockerCollider = paletteTraversalDisagreement ||
     traversalCheckExpectation === "block";
   const traversalCheckpointCriteria = options.traversalCheckpointCriteria ?? [{
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "ground",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-5, -1, -5] as const,
-      maximumMetersXYZ: [5, 0, 5] as const,
-    },
+    standPositionMetersXYZ: [0, 0, -1] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }];
   const supportTraversalCheckpointCriteria = [{
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "support-ground",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-5, -1, -5] as const,
-      maximumMetersXYZ: [5, 0, 5] as const,
-    },
+    standPositionMetersXYZ: [0, 0, -1] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }];
@@ -407,14 +408,14 @@ export function createEvidenceSetFixtureInputV1(
       semanticLayerId: "ground",
       blockVisualGroupId: "upper-group",
     }],
-    topologyRelations: [{
+    topologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to",
       toNodeId: "upper",
       measurementSource: "scripted-traversal",
       traversalCheckId: "reach-ground",
     }],
-    checkpointSpatialCriteria: traversalCheckpointCriteria.map(
+    checkpointSpatialCriteria: withoutScriptedTraversal ? [] : traversalCheckpointCriteria.map(
       authoredCheckpointCriterion,
     ),
   });
@@ -440,7 +441,7 @@ export function createEvidenceSetFixtureInputV1(
       topology: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         nodeIds: ["ground", "upper"],
-        relations: [{
+        relations: withoutScriptedTraversal ? [] : [{
           fromNodeId: "ground",
           relation: "connects-to",
           toNodeId: "upper",
@@ -463,7 +464,7 @@ export function createEvidenceSetFixtureInputV1(
                   maxYBasisPoints: 800,
                 },
                 normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
-                coverageBasisPoints: 4_800,
+                coverageBasisPoints: 46,
               },
         }, {
           viewId: "world-side",
@@ -488,7 +489,7 @@ export function createEvidenceSetFixtureInputV1(
                   maxYBasisPoints: 300,
                 },
                 normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
-                coverageBasisPoints: 400,
+                coverageBasisPoints: 4,
               },
         }, {
           viewId: "world-side" as const,
@@ -555,7 +556,9 @@ export function createEvidenceSetFixtureInputV1(
           requiresOverlay: false,
         }]
         : []],
-      groundConnectivity: {
+      groundConnectivity: withoutScriptedTraversal
+        ? { mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [] }
+        : { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
@@ -567,7 +570,7 @@ export function createEvidenceSetFixtureInputV1(
           halfWidthMeters: 1,
         }],
       },
-      criticalTraversalChecks: [{
+      criticalTraversalChecks: withoutScriptedTraversal ? [] : [{
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         id: "reach-ground",
         evidenceKind: "scripted-fixed-input",
@@ -598,16 +601,27 @@ export function createEvidenceSetFixtureInputV1(
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
   const authoringManifest = parseNativeBlockAuthoringManifestV1({
     kind: "native-block-authoring",
+    controlledSubject: { visualTargetId: "visual-target-1", design: { kind: "registered" as const, subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2" } },
+    groundExploration: withoutScriptedTraversal ? {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, -1] },
+        { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, -2] },
+      ],
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 0], [0, 0, -1]] }],
+    } : { mode: "case-defined" as const },
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
     visualGroups: [{
-      visualGroupId: "ground-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ground-group",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       semanticClassId: "ground.fixture",
       identityColorHex: "#AA0001",
     }, {
-      visualGroupId: "upper-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-group",
       acceptanceTargetRef: UPPER_TARGET_REF,
       semanticClassId: "upper.fixture",
       identityColorHex: "#AA0002",
@@ -651,7 +665,7 @@ export function createEvidenceSetFixtureInputV1(
       blockId: "step-shaped-ground-block",
       runtimeEntityId: "native-block:step-shaped-ground-block",
       semanticCaptureClassId: "worldkit.native-block.group.ground-group",
-      shape: "step" as const,
+      shape: "full" as const,
       paletteRole: "ground" as const,
       visualGroupId: "ground-group",
       centerMetersXYZ: [2, -0.5, 2] as const,
@@ -726,6 +740,7 @@ export function createEvidenceSetFixtureInputV1(
     caseHash,
     authoringManifestHash,
     contributionHash: hashBabylonNativeSceneContributionV1(nativeSceneContribution),
+    settledVisualTargetCount: nativeSceneContribution.profileSettlement.targetCount,
     blocks: [
       ...baseMetadata.blocks,
       ...extraBlocks,
@@ -752,7 +767,7 @@ export function createEvidenceSetFixtureInputV1(
           }
           : group),
       {
-        visualGroupId: "upper-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-group",
         acceptanceTargetRef: UPPER_TARGET_REF,
         semanticClassId: "upper.fixture",
         identityColorHex: "#AA0002",
@@ -848,7 +863,7 @@ export function createEvidenceSetFixtureInputV1(
       layoutInventoryHash: metadata.checkedLayoutInventoryHash,
       contributionHash: metadata.contributionHash,
     }],
-    topologyRelations: [{
+    topologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to" as const,
       toNodeId: "upper",
@@ -856,7 +871,7 @@ export function createEvidenceSetFixtureInputV1(
       fromVisualGroupId: "ground-group",
       toVisualGroupId: "upper-group",
     }],
-    traversalCheckBindings: [{
+    traversalCheckBindings: withoutScriptedTraversal ? [] : [{
       traversalCheckId: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
@@ -905,7 +920,7 @@ export function createEvidenceSetFixtureInputV1(
     cameraPositionMetersXYZ: [0, 80, 0] as const,
   };
   const fixedInputSequence = [{ actions: ["move-forward"], ticks: 1 }] as const;
-  const checkpointCriteria = semanticCaptureMap.traversalCheckBindings[0]!.checkpointCriteria;
+  const checkpointCriteria = withoutScriptedTraversal ? [] : semanticCaptureMap.traversalCheckBindings[0]!.checkpointCriteria;
   const colliderOverlay = {
     kind: "formal-collider-overlay-request" as const,
     schemaVersion: 1 as const,
@@ -915,7 +930,7 @@ export function createEvidenceSetFixtureInputV1(
   const scriptedTraversal = {
     kind: "formal-scripted-traversal-request" as const,
     schemaVersion: 1 as const,
-    checks: [{
+    checks: withoutScriptedTraversal ? [] : [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
@@ -937,6 +952,14 @@ export function createEvidenceSetFixtureInputV1(
     `artifact://case/package-fixture/attempts/${attemptIndex}/formal-world-capture-request.json`;
   const formalRequest = {
     kind: "formal-world-capture-request" as const,
+    visualCaptureGroups: (options.includeWhiteboxTriviews ? [{
+      visualTargetId: "visual-target-1", runtimeEntityIds: [verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId],
+      frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D",
+    }, ...metadata.visualGroups.map((group, index) => ({
+      visualTargetId: `visual-target-${index + 2}`, runtimeEntityIds: metadata.blocks.filter(block => group.blockIds.includes(block.blockId)).map(block => block.runtimeEntityId),
+      frontDirectionWorldXZ: group.frontDirectionWorldXZ, role: "primary-landmark",
+      semanticClassId: group.semanticClassId, identityColor: group.identityColorHex,
+    }))] : []) as readonly VisualCaptureGroupV1[],
     schemaVersion: 1 as const,
     id: "package-fixture.formal-capture-request",
     formalRequestRef,
@@ -1077,14 +1100,22 @@ export function createEvidenceSetFixtureInputV1(
       cameraDepthMeters: 8,
       depthOrder: 1,
     }],
-    observedTopologyRelations: [{
+    observedTopologyRelations: withoutScriptedTraversal ? [] : [{
       fromNodeId: "ground",
       relation: "connects-to",
       toNodeId: "upper",
     }],
   });
+  const sampledSnapshot = parseWorldRuntimeSnapshotV4({
+    ...snapshot,
+    world: { ...snapshot.world, simulationTick: snapshot.world.simulationTick + 1,
+      gameplayInspection: { ...snapshot.world.gameplayInspection,
+        simulationTick: snapshot.world.simulationTick + 1 } },
+  });
   const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
     ...observationIdentity("formal-spawn-support-observation", "physics"),
+    sampledSnapshot,
+    sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot),
     spawnMarkerId: "player-spawn",
     subjectEntityId: "player",
     supportContact: {
@@ -1119,9 +1150,10 @@ export function createEvidenceSetFixtureInputV1(
   });
   const scriptedTraversalObservation = parseFormalScriptedTraversalObservationV1({
     ...observationIdentity("formal-scripted-traversal-observation", "input"),
-    resetReadySnapshot: traversalResetSnapshot,
-    resetReadySnapshotHash: sha256CanonicalJson(traversalResetSnapshot),
-    checks: [{
+    id: `${formalRequest.id}.scripted-traversal`,
+    resetReadySnapshot: withoutScriptedTraversal ? snapshot : traversalResetSnapshot,
+    resetReadySnapshotHash: sha256CanonicalJson(withoutScriptedTraversal ? snapshot : traversalResetSnapshot),
+    checks: withoutScriptedTraversal ? [] : [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
@@ -1169,14 +1201,47 @@ export function createEvidenceSetFixtureInputV1(
     requestHash: hashFormalArtifactViewRequestV1(request),
     pngArtifactRef: `artifact://case/package-fixture/capture/${request.viewId}.png`,
     pngContentHash: H(String(index + 6)),
+    identityMaskPngArtifactRef: `artifact://case/package-fixture/capture/${request.viewId}-identity-mask.png`,
+    identityMaskPngContentHash: H("9"),
   }));
+  // Explicit synthetic pixels, not AABB-area evidence: upper overlaps part of ground.
+  const identityMaskPngs = viewRecords.map((view) => {
+    const image = new PNG({ width: view.request.widthPixels, height: view.request.heightPixels });
+    for (let offset = 3; offset < image.data.length; offset += 4) image.data[offset] = 255;
+    for (const group of openingObservation.visualGroups) {
+      const binding = semanticCaptureMap.bindings.find((row) => row.acceptanceTargetRef === group.acceptanceTargetRef)!;
+      const color = Number.parseInt(binding.identityColor.slice(1), 16);
+      const b = group.normalizedBounds;
+      for (let y = Math.round(b.minYBasisPoints * image.height / 10000); y < Math.round(b.maxYBasisPoints * image.height / 10000); y += 1) {
+        for (let x = Math.round(b.minXBasisPoints * image.width / 10000); x < Math.round(b.maxXBasisPoints * image.width / 10000); x += 1) {
+          const offset = (y * image.width + x) * 4;
+          image.data[offset] = color >>> 16;
+          image.data[offset + 1] = color >>> 8 & 255;
+          image.data[offset + 2] = color & 255;
+        }
+      }
+    }
+    const bytes = PNG.sync.write(image);
+    view.identityMaskPngContentHash = sha256Bytes(bytes) as Sha256HashV1;
+    return { viewId: view.viewId, bytes };
+  });
   const semanticViewObservationSet =
     createSemanticViewObservationSetFixtureV1(
       openingObservation,
       viewRecords,
     );
+  const whiteboxTriviewPngs = formalRequest.visualCaptureGroups.map(() => {
+    const image = new PNG({ width: Math.floor(formalRequest.views[0]!.widthPixels / 3) * 3, height: formalRequest.views[0]!.heightPixels });
+    image.data.fill(255);
+    return PNG.sync.write(image);
+  });
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: formalRequest.visualCaptureGroups.map((group, index) => ({
+      visualTargetId: group.visualTargetId,
+      pngArtifactRef: `${formalRequestRef.replace(/formal-world-capture-request.json$/, "capture")}/triviews/${group.visualTargetId}/whitebox-triview.png`,
+      pngContentHash: sha256Bytes(whiteboxTriviewPngs[index]!),
+    })),
     schemaVersion: 1,
     id: "package-fixture.formal-capture",
     formalRequestRef,
@@ -1241,6 +1306,7 @@ export function createEvidenceSetFixtureInputV1(
   });
   return {
     id: `package-fixture.attempt-${attemptIndex}.evidence`,
+    whiteboxTriviewPngs,
     caseRef: CASE_REF,
     reconstructionCase,
     formalCaptureIntent,
@@ -1253,6 +1319,7 @@ export function createEvidenceSetFixtureInputV1(
     captureReceipt,
     openingObservation,
     semanticViewObservationSet,
+    identityMaskPngs,
     spawnSupportObservation,
     colliderOverlayObservation,
     scriptedTraversalObservation,

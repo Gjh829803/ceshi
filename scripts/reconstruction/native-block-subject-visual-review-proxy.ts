@@ -3,6 +3,222 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { isEqual } from "lodash-es";
+import type { SubjectResourceRegistryV3 } from "@whitebox-world/subject-registry";
+import type { RuntimeSubjectVisualPartV1, WorldRuntimeBootstrapV1 } from "@whitebox-world/runtime-contracts";
+import { compileNativeSubjectProjectionV1 } from "./native-subject-host-closure.js";
+
+function codePointCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function subjectVisualPartBoundsV1(
+  part: RuntimeSubjectVisualPartV1,
+  registry: SubjectResourceRegistryV3,
+): Readonly<{
+  minimumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
+  maximumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
+  scaleXYZ: NativeBlockSubjectVisualReviewVec3V1;
+}> {
+  if (part.kind === "asset") {
+    const assetManifest = registry.resolveSubjectAsset(
+      part.subjectAssetRef,
+    );
+    if (assetManifest === undefined) {
+      throw new TypeError(
+        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: unresolved Subject Asset '${part.subjectAssetRef}'.`,
+      );
+    }
+    return Object.freeze({
+      minimumMetersXYZ: assetManifest.bounds.minimumMetersXYZ,
+      maximumMetersXYZ: assetManifest.bounds.maximumMetersXYZ,
+      scaleXYZ: part.localTransform.scaleXYZ,
+    });
+  }
+  const shape = part.shape;
+  const sizeMetersXYZ: NativeBlockSubjectVisualReviewVec3V1 =
+    shape.kind === "box"
+      ? shape.sizeMetersXYZ
+      : shape.kind === "sphere"
+        ? [
+            shape.radiusMeters * 2,
+            shape.radiusMeters * 2,
+            shape.radiusMeters * 2,
+          ]
+        : [
+            shape.radiusMeters * 2,
+            shape.heightMeters,
+            shape.radiusMeters * 2,
+          ];
+  return Object.freeze({
+    minimumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
+      -value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
+    maximumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
+      value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
+    scaleXYZ: Object.freeze([1, 1, 1]) as NativeBlockSubjectVisualReviewVec3V1,
+  });
+}
+
+function transformedSubjectVisualPartBoundsV1(
+  part: RuntimeSubjectVisualPartV1,
+  registry: SubjectResourceRegistryV3,
+  isRegisteredSubject: boolean,
+): NativeBlockSubjectVisualReviewProxyCuboidV1 {
+  const bounds = subjectVisualPartBoundsV1(part, registry);
+  const transform = Matrix.Compose(
+    new Vector3(...bounds.scaleXYZ),
+    Quaternion.FromEulerAngles(...part.localTransform.rotationEulerRadiansXYZ),
+    new Vector3(...part.localTransform.positionMetersXYZ),
+  );
+  const transformedCorners: Vector3[] = [];
+  const sourceCenter = Vector3.Center(new Vector3(...bounds.minimumMetersXYZ), new Vector3(...bounds.maximumMetersXYZ));
+  const registeredCenter = sourceCenter.multiply(new Vector3(...bounds.scaleXYZ))
+    .add(new Vector3(...part.localTransform.positionMetersXYZ));
+  // Pinned old visualProxy is an advisory approximation: rotate the centered
+  // extents in XYZ order, but only scale/translate the source bounds' center.
+  // Do not turn this into the actual Runtime visual-part transform (YXZ).
+  const [rotationX, rotationY, rotationZ] = part.localTransform.rotationEulerRadiansXYZ;
+  const registeredRotations = isRegisteredSubject ? [
+    Quaternion.RotationAxis(Vector3.Right(), rotationX),
+    Quaternion.RotationAxis(Vector3.Up(), rotationY),
+    Quaternion.RotationAxis(new Vector3(0, 0, 1), rotationZ),
+  ] : [];
+  for (const x of [bounds.minimumMetersXYZ[0], bounds.maximumMetersXYZ[0]]) {
+    for (const y of [bounds.minimumMetersXYZ[1], bounds.maximumMetersXYZ[1]]) {
+      for (const z of [bounds.minimumMetersXYZ[2], bounds.maximumMetersXYZ[2]]) {
+        if (isRegisteredSubject) {
+          const offset = new Vector3(x, y, z).subtract(sourceCenter).multiply(new Vector3(...bounds.scaleXYZ));
+          for (const rotation of registeredRotations) offset.applyRotationQuaternionInPlace(rotation);
+          transformedCorners.push(offset.add(registeredCenter));
+        } else {
+          transformedCorners.push(Vector3.TransformCoordinates(new Vector3(x, y, z), transform));
+        }
+      }
+    }
+  }
+  const finiteCoordinate = (value: number): number => {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(
+        "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: transformed Subject bounds are not finite.",
+      );
+    }
+    return Object.is(value, -0) ? 0 : value;
+  };
+  return Object.freeze({
+    id: part.id,
+    minimumMetersXYZ: Object.freeze([
+      finiteCoordinate(Math.min(...transformedCorners.map(({ x }) => x))),
+      finiteCoordinate(Math.min(...transformedCorners.map(({ y }) => y))),
+      finiteCoordinate(Math.min(...transformedCorners.map(({ z }) => z))),
+    ]) as NativeBlockSubjectVisualReviewVec3V1,
+    maximumMetersXYZ: Object.freeze([
+      finiteCoordinate(Math.max(...transformedCorners.map(({ x }) => x))),
+      finiteCoordinate(Math.max(...transformedCorners.map(({ y }) => y))),
+      finiteCoordinate(Math.max(...transformedCorners.map(({ z }) => z))),
+    ]) as NativeBlockSubjectVisualReviewVec3V1,
+  });
+}
+
+export function deriveNativeBlockSubjectVisualReviewProxyV1(input: Readonly<{
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  worldRuntimeBootstrapRef: string;
+  worldRuntimeBootstrapBytesHash: Sha256HashV1;
+}>, registry: SubjectResourceRegistryV3): NativeBlockSubjectVisualReviewProxyV1 {
+  const runtime = input.worldRuntimeBootstrap;
+  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
+    entityId === runtime.initialControlledEntityId
+  );
+  if (subjects.length !== 1 || subjects[0]!.visualParts.length === 0) {
+    throw new TypeError(
+      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: controlled Subject visual descriptor is missing.",
+    );
+  }
+  const subject = subjects[0]!;
+  const definitionLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
+    entry.resourceKind === "subject-definition" &&
+    entry.resourceRef === subject.subjectDefinitionRef
+  );
+  const isPackageDefinition = /^package:\/\/subject-definition\/[a-z0-9][a-z0-9.-]*@[1-9][0-9]*$/.test(subject.subjectDefinitionRef);
+  let definitionMatches = false;
+  if (definitionLocks.length === 1 && isPackageDefinition) {
+    // Package Definitions are normalized and compiled by the Host, not global
+    // Registry entries. Their lock binds the normalized Definition hash; the
+    // parsed WRT and frozen Request bind the exact compiled visual descriptor.
+    definitionMatches = definitionLocks[0]!.contentHash === subject.subjectDefinitionHash;
+  } else if (definitionLocks.length === 1) {
+    const registered = compileNativeSubjectProjectionV1({
+      controlledEntityId: subject.entityId,
+      subject: { source: "registry", subjectDefinitionRef: subject.subjectDefinitionRef },
+    }, registry);
+    if (registered.ok) {
+      const expectedLock = registered.resources.resourceLock.find((entry) =>
+        entry.resourceKind === "subject-definition" && entry.resourceRef === subject.subjectDefinitionRef);
+      const expectedSubject = registered.projection.subjects[0]!;
+      definitionMatches = expectedLock?.contentHash === definitionLocks[0]!.contentHash &&
+        isEqual(expectedSubject.visualParts, subject.visualParts);
+    }
+  }
+  if (!definitionMatches) {
+    throw new TypeError(
+      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject definition Registry closure failed.",
+    );
+  }
+  for (const part of subject.visualParts) {
+    if (part.kind !== "asset") continue;
+    const assetManifest = registry.resolveSubjectAsset(
+      part.subjectAssetRef,
+    );
+    const runtimeAssets = runtime.subjectAssets.filter(({ subjectAssetRef }) =>
+      subjectAssetRef === part.subjectAssetRef
+    );
+    const assetLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
+      entry.resourceKind === "subject-asset" &&
+      entry.resourceRef === part.subjectAssetRef
+    );
+    const runtimeAsset = runtimeAssets[0];
+    if (
+      assetManifest === undefined ||
+      runtimeAssets.length !== 1 ||
+      runtimeAsset === undefined ||
+      assetLocks.length !== 1 ||
+      assetLocks[0]!.contentHash !== assetManifest.contentHash ||
+      runtimeAsset.artifactContentHash !== assetManifest.artifact.contentHash ||
+      runtimeAsset.byteLength !== assetManifest.artifact.byteLength ||
+      runtimeAsset.mediaType !== assetManifest.artifact.mediaType ||
+      runtimeAsset.format !== assetManifest.format ||
+      runtimeAsset.inventory.meshCount !== assetManifest.inventory.meshCount ||
+      runtimeAsset.inventory.vertexCount !== assetManifest.inventory.vertexCount ||
+      runtimeAsset.inventory.triangleCount !== assetManifest.inventory.triangleCount ||
+      runtimeAsset.inventory.skeletonCount !== assetManifest.inventory.skeletonCount ||
+      runtimeAsset.inventory.boneCount !== assetManifest.inventory.boneCount ||
+      !isEqual(
+        runtimeAsset.inventory.animationClipNames,
+        assetManifest.inventory.animationClipNames,
+      )
+    ) {
+      throw new TypeError(
+        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject Asset Registry closure failed for '${part.subjectAssetRef}'.`,
+      );
+    }
+  }
+  const cuboids = subject.visualParts
+    .map((part) => transformedSubjectVisualPartBoundsV1(part, registry, !isPackageDefinition))
+    .sort((left, right) => codePointCompare(left.id, right.id));
+  return createNativeBlockSubjectVisualReviewProxyV1({
+    initialControlledEntityId: runtime.initialControlledEntityId,
+    subjectDefinitionRef: subject.subjectDefinitionRef,
+    subjectDefinitionHash: subject.subjectDefinitionHash,
+    subjectRuntimeDescriptorHash:
+      sha256CanonicalJson(subject) as Sha256HashV1,
+    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
+    worldRuntimeBootstrapContentHash: runtime.contentHash,
+    worldRuntimeBootstrapBytesHash: input.worldRuntimeBootstrapBytesHash,
+    cuboids,
+  });
+}
+
+
 export type NativeBlockSubjectVisualReviewVec3V1 = readonly [
   x: number,
   y: number,

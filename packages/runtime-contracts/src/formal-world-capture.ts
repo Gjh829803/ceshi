@@ -8,6 +8,7 @@ import {
   type WorldReconstructionCaseArtifactRefV1,
 } from "@whitebox-world/world-identity";
 import { isEmpty, isNil } from "lodash-es";
+import { validateVisualCaptureGroupsV1, type VisualCaptureGroupV1, type WhiteboxTriviewManifestV1 } from "./capture-targets.js";
 
 import { parseWorldRuntimeSnapshotV4 } from "./runtime-session-protocol.js";
 import {
@@ -54,10 +55,11 @@ export interface FormalWorldBoundsMetersV1 {
 
 export type FormalTraversalCheckpointIntentCriterionV1 =
   | Readonly<{
-      kind: "reach-bounds";
+      kind: "reach-position";
       checkpointId: string;
       expectation: "reach";
       sourceVisualGroupId: string;
+      standPositionMetersXYZ: readonly [number, number, number];
       capsuleRadiusMeters: number;
       toleranceMeters: number;
     }>
@@ -87,11 +89,11 @@ export type FormalTraversalCheckpointIntentCriterionV1 =
 
 export type FormalTraversalCheckpointSpatialCriterionV1 =
   | Readonly<{
-      kind: "reach-bounds";
+      kind: "reach-position";
       checkpointId: string;
       expectation: "reach";
       sourceVisualGroupId: string;
-      sourceBoundsMeters: FormalWorldBoundsMetersV1;
+      standPositionMetersXYZ: readonly [number, number, number];
       capsuleRadiusMeters: number;
       toleranceMeters: number;
     }>
@@ -291,6 +293,8 @@ export interface FormalScriptedTraversalRequestV1 {
 }
 
 export interface FormalWorldCaptureRequestV1 {
+  /** Empty only when this capture scope does not request object tri-views. */
+  readonly visualCaptureGroups: readonly VisualCaptureGroupV1[];
   readonly kind: "formal-world-capture-request";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -337,6 +341,8 @@ export interface FormalWorldCaptureViewRecordV1 {
   readonly requestHash: Sha256HashV1;
   readonly pngArtifactRef: string;
   readonly pngContentHash: Sha256HashV1;
+  readonly identityMaskPngArtifactRef: string;
+  readonly identityMaskPngContentHash: Sha256HashV1;
 }
 
 export interface FormalMeasuredObservationIdentityV1 {
@@ -422,6 +428,7 @@ export interface FormalSemanticViewObservationV1 {
   readonly viewId: FormalWorldCaptureViewIdV1;
   readonly viewRequestHash: Sha256HashV1;
   readonly pngContentHash: Sha256HashV1;
+  readonly identityMaskPngContentHash: Sha256HashV1;
   readonly targets: readonly FormalSemanticTargetViewObservationV1[];
 }
 
@@ -436,6 +443,9 @@ export interface FormalSpawnSupportObservationV1
   extends FormalMeasuredObservationIdentityV1 {
   readonly kind: "formal-spawn-support-observation";
   readonly schemaVersion: 1;
+  /** Actual committed support sample, one neutral Tick after the captured reset state. */
+  readonly sampledSnapshot: WorldRuntimeSnapshotV4;
+  readonly sampledSnapshotHash: Sha256HashV1;
   readonly spawnMarkerId: string;
   readonly subjectEntityId: string;
   readonly supportContact: Readonly<{
@@ -499,6 +509,7 @@ export interface FormalScriptedTraversalObservationV1
 }
 
 export interface FormalWorldCaptureReceiptV1 {
+  readonly whiteboxTriviews: readonly FormalWhiteboxTriviewRecordV1[];
   readonly kind: "formal-world-capture-receipt";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -552,14 +563,20 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly cleanupOutcome: "completed";
 }
 
+export interface FormalWhiteboxTriviewRecordV1 {
+  readonly visualTargetId: string;
+  readonly pngArtifactRef: string;
+  readonly pngContentHash: Sha256HashV1;
+}
+
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const WORLD_PACKAGE_REF_PATTERN =
   /^package:\/\/world-package\/sha256\/([a-f0-9]{64})$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const MAXIMUM_CAPTURE_DIMENSION_PIXELS = 16_384;
-const MINIMUM_WORLD_SPAN_XZ_METERS = 8;
-const MINIMUM_WORLD_SPAN_Y_METERS = 4;
+export const FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1 =
+  Object.freeze([8, 4, 8] as const);
 const LOOK_AXIS_EPSILON = 1e-9;
 
 const OPENING_REQUEST_FIELDS = [
@@ -662,17 +679,21 @@ const TRAVERSAL_BINDING_FIELDS = [
   "fixedInputSequenceHash",
   "checkpointCriteria",
 ] as const;
-const REACH_CRITERION_FIELDS = [
+const CHECKPOINT_CRITERION_FIELDS = [
   "kind",
   "checkpointId",
   "expectation",
   "sourceVisualGroupId",
-  "sourceBoundsMeters",
   "capsuleRadiusMeters",
   "toleranceMeters",
 ] as const;
+const REACH_CRITERION_FIELDS = [
+  ...CHECKPOINT_CRITERION_FIELDS,
+  "standPositionMetersXYZ",
+] as const;
 const PASS_PLANE_CRITERION_FIELDS = [
-  ...REACH_CRITERION_FIELDS,
+  ...CHECKPOINT_CRITERION_FIELDS,
+  "sourceBoundsMeters",
   "axis",
   "sourceFace",
   "planeMeters",
@@ -682,16 +703,9 @@ const BLOCK_PLANE_CRITERION_FIELDS = [
   ...PASS_PLANE_CRITERION_FIELDS,
   "colliderId",
 ] as const;
-const INTENT_REACH_CRITERION_FIELDS = [
-  "kind",
-  "checkpointId",
-  "expectation",
-  "sourceVisualGroupId",
-  "capsuleRadiusMeters",
-  "toleranceMeters",
-] as const;
+const INTENT_REACH_CRITERION_FIELDS = REACH_CRITERION_FIELDS;
 const INTENT_PASS_PLANE_CRITERION_FIELDS = [
-  ...INTENT_REACH_CRITERION_FIELDS,
+  ...CHECKPOINT_CRITERION_FIELDS,
   "axis",
   "sourceFace",
   "expectedCenterSide",
@@ -701,6 +715,7 @@ const INTENT_BLOCK_PLANE_CRITERION_FIELDS = [
   "colliderId",
 ] as const;
 const FORMAL_REQUEST_FIELDS = [
+  "visualCaptureGroups",
   "kind",
   "schemaVersion",
   "id",
@@ -750,6 +765,7 @@ const SCRIPTED_TRAVERSAL_CHECK_FIELDS = [
   "checkpointCriteria",
 ] as const;
 const RECEIPT_FIELDS = [
+  "whiteboxTriviews",
   "kind",
   "schemaVersion",
   "id",
@@ -808,6 +824,8 @@ const VIEW_RECORD_FIELDS = [
   "requestHash",
   "pngArtifactRef",
   "pngContentHash",
+  "identityMaskPngArtifactRef",
+  "identityMaskPngContentHash",
 ] as const;
 const SDK_OWNER_FIELDS = [
   "ownerId",
@@ -839,7 +857,7 @@ const SEMANTIC_VIEW_OBSERVATION_SET_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "views",
 ] as const;
 const SEMANTIC_VIEW_OBSERVATION_FIELDS = [
-  "viewId", "viewRequestHash", "pngContentHash", "targets",
+  "viewId", "viewRequestHash", "pngContentHash", "identityMaskPngContentHash", "targets",
 ] as const;
 const SEMANTIC_TARGET_VIEW_OBSERVATION_FIELDS = [
   "acceptanceTargetRef", "blockVisualGroupId", "mode", "sourceBoundsMeters",
@@ -857,7 +875,7 @@ const NORMALIZED_CENTER_FIELDS = ["xBasisPoints", "yBasisPoints"] as const;
 const SPAWN_SUPPORT_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "spawnMarkerId", "subjectEntityId",
   "supportContact", "capsuleFootPointMetersXYZ", "supportGapMillimeters",
-  "movementMedium", "observedTopologyRelations",
+  "movementMedium", "observedTopologyRelations", "sampledSnapshot", "sampledSnapshotHash",
 ] as const;
 const SUPPORT_CONTACT_FIELDS = [
   "colliderId", "sourceBlockId", "surfaceEntityId", "logicalSubshapeId",
@@ -1129,9 +1147,9 @@ function parseWorldBounds(
   const spanY = parsed.maximumMetersXYZ[1] - parsed.minimumMetersXYZ[1];
   const spanZ = parsed.maximumMetersXYZ[2] - parsed.minimumMetersXYZ[2];
   if (
-    spanX < MINIMUM_WORLD_SPAN_XZ_METERS ||
-    spanZ < MINIMUM_WORLD_SPAN_XZ_METERS ||
-    spanY < MINIMUM_WORLD_SPAN_Y_METERS
+    spanX < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[0] ||
+    spanZ < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[2] ||
+    spanY < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[1]
   ) {
     fail(contract, path, "world-side and world-top-down require world-scale bounds");
   }
@@ -1357,15 +1375,18 @@ function parseTraversalCheckpointIntentCriterion(
   assertAccessorFree(value, contract, path);
   const source = object(value, contract, path);
   const kind = source.kind;
-  if (kind === "reach-bounds") {
+  if (kind === "reach-position") {
     exactFields(source, INTENT_REACH_CRITERION_FIELDS, contract, path);
     if (source.expectation !== "reach") {
-      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+      fail(contract, `${path}/expectation`, "reach-position must expect reach");
     }
     return freeze({
       kind,
       checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
       expectation: "reach" as const,
+      standPositionMetersXYZ: metersXYZ(
+        source.standPositionMetersXYZ, contract, `${path}/standPositionMetersXYZ`,
+      ),
       sourceVisualGroupId: text(
         source.sourceVisualGroupId,
         contract,
@@ -1375,7 +1396,7 @@ function parseTraversalCheckpointIntentCriterion(
     });
   }
   if (kind !== "pass-plane" && kind !== "block-plane") {
-    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+    fail(contract, `${path}/kind`, "expected reach-position, pass-plane, or block-plane");
   }
   exactFields(
     source,
@@ -1429,10 +1450,10 @@ function parseTraversalCheckpointSpatialCriterion(
   assertAccessorFree(value, contract, path);
   const source = object(value, contract, path);
   const kind = source.kind;
-  if (kind === "reach-bounds") {
+  if (kind === "reach-position") {
     exactFields(source, REACH_CRITERION_FIELDS, contract, path);
     if (source.expectation !== "reach") {
-      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+      fail(contract, `${path}/expectation`, "reach-position must expect reach");
     }
     return freeze({
       kind,
@@ -1443,16 +1464,16 @@ function parseTraversalCheckpointSpatialCriterion(
         contract,
         `${path}/sourceVisualGroupId`,
       ),
-      sourceBoundsMeters: parseSpatialBounds(
-        source.sourceBoundsMeters,
+      standPositionMetersXYZ: metersXYZ(
+        source.standPositionMetersXYZ,
         contract,
-        `${path}/sourceBoundsMeters`,
+        `${path}/standPositionMetersXYZ`,
       ),
       ...parseCapsuleTolerance(source, contract, path),
     });
   }
   if (kind !== "pass-plane" && kind !== "block-plane") {
-    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+    fail(contract, `${path}/kind`, "expected reach-position, pass-plane, or block-plane");
   }
   exactFields(
     source,
@@ -1556,9 +1577,6 @@ function parseIntentCheckpointCriteria(
 ): readonly FormalTraversalCheckpointIntentCriterionV1[] {
   const criteria = array(value, contract, path).map((entry, index) =>
     parseTraversalCheckpointIntentCriterion(entry, contract, `${path}/${index}`));
-  if (isEmpty(criteria)) {
-    fail(contract, path, "must contain one authored criterion per checkpoint");
-  }
   if (criteria.some((criterion, index) =>
     index > 0 && criteria[index - 1]!.checkpointId >= criterion.checkpointId)) {
     fail(contract, path, "checkpoint criteria must be unique and sorted by checkpointId");
@@ -1840,10 +1858,9 @@ function parseTopologyRelationBindings(
   const keys = rows.map(({ fromNodeId, relation, toNodeId }) =>
     `${fromNodeId}\0${relation}\0${toNodeId}`);
   if (
-    isEmpty(rows) ||
     keys.some((key, index) => index > 0 && keys[index - 1]! >= key)
   ) {
-    fail(contract, path, "must be non-empty, unique, and strictly sorted");
+    fail(contract, path, "must be unique and strictly sorted");
   }
   return Object.freeze(rows);
 }
@@ -1929,14 +1946,13 @@ export function parseFormalWorldCaptureIntentV1(
     ({ acceptanceTargetRef }) => acceptanceTargetRef,
   );
   if (
-    isEmpty(semanticCaptureTargetBindings) ||
     acceptanceTargetRefs.some((entry, index) =>
       index > 0 && acceptanceTargetRefs[index - 1]! >= entry)
   ) {
     fail(
       contract,
       "semanticCaptureTargetBindings",
-      "must be non-empty, unique, and sorted by acceptanceTargetRef",
+      "must be unique and sorted by acceptanceTargetRef",
     );
   }
   const compositionTargetRefs = semanticCaptureTargetBindings.map(
@@ -2052,7 +2068,6 @@ export function parseFormalSemanticCaptureMapV1(
       contributionHash,
     }),
   );
-  if (isEmpty(bindings)) fail(contract, "bindings", "must not be empty");
   const targetRefs = bindings.map((row) => row.acceptanceTargetRef);
   const compositionTargetRefs = bindings.map((row) => row.compositionTargetRef);
   const topologyNodeIds = bindings.map((row) => row.topologyNodeId);
@@ -2093,7 +2108,6 @@ export function parseFormalSemanticCaptureMapV1(
     `traversalCheckBindings/${index}`,
   ));
   if (
-    isEmpty(traversalCheckBindings) ||
     traversalCheckBindings.some((binding, index) =>
       index > 0 &&
       traversalCheckBindings[index - 1]!.traversalCheckId >= binding.traversalCheckId)
@@ -2101,7 +2115,7 @@ export function parseFormalSemanticCaptureMapV1(
     fail(
       contract,
       "traversalCheckBindings",
-      "must be non-empty, unique, and sorted by traversalCheckId",
+      "must be unique and sorted by traversalCheckId",
     );
   }
   const boundGroupIds = new Set(groupIds);
@@ -2337,10 +2351,9 @@ export function parseFormalScriptedTraversalRequestV1(
   const checks = rawChecks.map((entry, index) =>
     parseScriptedTraversalCheck(entry, contract, `checks/${index}`));
   if (
-    isEmpty(checks) ||
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id)
   ) {
-    fail(contract, "checks", "must be non-empty, unique, and sorted by id");
+    fail(contract, "checks", "must be unique and sorted by id");
   }
   const totalTickCount = checks.reduce(
     (total, check) => total + check.fixedInputSequence.reduce(
@@ -2405,6 +2418,10 @@ export function parseFormalWorldCaptureRequestV1(
 ): FormalWorldCaptureRequestV1 {
   const contract = "FORMAL_WORLD_CAPTURE_REQUEST_INVALID";
   const source = begin(value, contract, FORMAL_REQUEST_FIELDS);
+  const visualCaptureGroups = array(source.visualCaptureGroups, contract, "visualCaptureGroups");
+  if (visualCaptureGroups.length > 0 && validateVisualCaptureGroupsV1(visualCaptureGroups).length > 0) {
+    fail(contract, "visualCaptureGroups", "must use the closed source-neutral visual capture group contract");
+  }
   if (source.kind !== "formal-world-capture-request" || source.schemaVersion !== 1) {
     fail(contract, "", "unexpected kind or schemaVersion");
   }
@@ -2582,6 +2599,7 @@ export function parseFormalWorldCaptureRequestV1(
       contract,
       "nativeBlockMaterializerMetadataHash",
     ),
+    visualCaptureGroups: structuredClone(visualCaptureGroups) as unknown as readonly VisualCaptureGroupV1[],
     views: parseFormalRequestViews(source.views, contract),
     colliderOverlay,
     scriptedTraversal,
@@ -3216,6 +3234,8 @@ export function parseFormalSemanticViewObservationSetV1(
         `${viewPath}/pngContentHash`,
       ),
       targets: Object.freeze(targets),
+      identityMaskPngContentHash: hash(viewSource.identityMaskPngContentHash, contract,
+        `${viewPath}/identityMaskPngContentHash`),
     });
   });
   return freeze({
@@ -3244,16 +3264,24 @@ export function parseFormalSpawnSupportObservationV1(
     source.schemaVersion !== 1
   ) fail(contract, "", "unexpected kind or schemaVersion");
   const identity = parseObservationIdentity(source, contract, "physics");
+  const sampledSnapshotHash = hash(source.sampledSnapshotHash, contract, "sampledSnapshotHash");
+  const sampledSnapshot = parseObservationSnapshot(
+    source.sampledSnapshot, identity.runtimeSessionId, sampledSnapshotHash, contract, "sampledSnapshot",
+  );
+  if (sampledSnapshot.worldSessionId !== identity.resetReadySnapshot.worldSessionId ||
+      sampledSnapshot.world.simulationTick !== identity.resetReadySnapshot.world.simulationTick + 1) {
+    fail(contract, "sampledSnapshot", "must identify the same world's one neutral Tick after opening Reset");
+  }
   const subjectEntityId = text(
     source.subjectEntityId,
     contract,
     "subjectEntityId",
   );
-  const subjectState = identity.resetReadySnapshot.world.subjectStatesByEntityId[
+  const subjectState = sampledSnapshot.world.subjectStatesByEntityId[
     subjectEntityId
   ];
-  if (isNil(subjectState)) {
-    fail(contract, "subjectEntityId", "must name the reset-ready controlled Subject");
+  if (isNil(subjectState) || isNil(identity.resetReadySnapshot.world.subjectStatesByEntityId[subjectEntityId])) {
+    fail(contract, "subjectEntityId", "must name the captured and sampled controlled Subject");
   }
   const movementMedium = enumValue(
     source.movementMedium,
@@ -3269,7 +3297,7 @@ export function parseFormalSpawnSupportObservationV1(
     locomotionState.locomotion.status !== "active" ||
     locomotionState.locomotion.movementMedium !== movementMedium
   ) {
-    fail(contract, "movementMedium", "must match committed reset-ready Subject state");
+    fail(contract, "movementMedium", "must match committed sampled Subject state");
   }
   const contact = object(source.supportContact, contract, "supportContact");
   exactFields(contact, SUPPORT_CONTACT_FIELDS, contract, "supportContact");
@@ -3277,6 +3305,8 @@ export function parseFormalSpawnSupportObservationV1(
     kind: "formal-spawn-support-observation",
     schemaVersion: 1,
     ...identity,
+    sampledSnapshot,
+    sampledSnapshotHash,
     spawnMarkerId: text(source.spawnMarkerId, contract, "spawnMarkerId"),
     subjectEntityId,
     supportContact: Object.freeze({
@@ -3616,11 +3646,10 @@ export function parseFormalScriptedTraversalObservationV1(
     });
   });
   if (
-    isEmpty(checks) ||
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id) ||
     new Set(checks.map(({ resetReadySnapshot }) => resetReadySnapshot.worldSessionId))
       .size !== checks.length
-  ) fail(contract, "checks", "must be non-empty, id-sorted, and independently reset");
+  ) fail(contract, "checks", "must be id-sorted and independently reset");
   const measuredCheckIdentity = checks.map(({ id, acceptanceTargetRef, checkExpectation }) => ({
     id,
     acceptanceTargetRef,
@@ -3700,6 +3729,8 @@ function parseViewRecord(
       `${path}/pngArtifactRef`,
     ),
     pngContentHash: hash(source.pngContentHash, contract, `${path}/pngContentHash`),
+    identityMaskPngArtifactRef: text(source.identityMaskPngArtifactRef, contract, `${path}/identityMaskPngArtifactRef`),
+    identityMaskPngContentHash: hash(source.identityMaskPngContentHash, contract, `${path}/identityMaskPngContentHash`),
   });
 }
 
@@ -3918,6 +3949,7 @@ export function parseFormalWorldCaptureReceiptV1(
   };
   const artifactRefs = [
     ...parsedViews.map(({ pngArtifactRef }) => pngArtifactRef),
+    ...parsedViews.map(({ identityMaskPngArtifactRef }) => identityMaskPngArtifactRef),
     artifactBindings.openingObservationArtifactRef,
     artifactBindings.semanticViewObservationSetArtifactRef,
     artifactBindings.spawnSupportObservationArtifactRef,
@@ -3968,8 +4000,22 @@ export function parseFormalWorldCaptureReceiptV1(
   for (const [actual, expected, path] of repeatedIdentityJoins) {
     if (actual !== expected) fail(contract, path, "must match the embedded formal Request");
   }
+  const whiteboxTriviews = array(source.whiteboxTriviews, contract, "whiteboxTriviews");
+  if (whiteboxTriviews.length !== formalRequest.visualCaptureGroups.length) {
+    fail(contract, "whiteboxTriviews", "must contain exactly the requested tri-views in order");
+  }
+  const parsedTriviews = whiteboxTriviews.map((value, index) => {
+    const row = begin(value, contract, ["visualTargetId", "pngArtifactRef", "pngContentHash"]);
+    const visualTargetId = formalRequest.visualCaptureGroups[index]!.visualTargetId;
+    const pngArtifactRef = `${formalRequestRef.slice(0, -"formal-world-capture-request.json".length)}capture/triviews/${visualTargetId}/whitebox-triview.png`;
+    if (row.visualTargetId !== visualTargetId || row.pngArtifactRef !== pngArtifactRef) {
+      fail(contract, `whiteboxTriviews/${index}`, "must bind the requested target and its exact artifact path");
+    }
+    return { visualTargetId, pngArtifactRef, pngContentHash: hash(row.pngContentHash, contract, `whiteboxTriviews/${index}/pngContentHash`) };
+  });
   return freeze({
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: parsedTriviews,
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
     formalRequestRef,
@@ -4020,6 +4066,21 @@ export function formalWorldCaptureReceiptCanonicalBytesV1(
 
 export function hashFormalWorldCaptureReceiptV1(value: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseFormalWorldCaptureReceiptV1(value)) as Sha256HashV1;
+}
+
+/** Projection of the parsed receipt, never an independent target authority. */
+export function deriveFormalWhiteboxTriviewManifestV1(
+  receipt: FormalWorldCaptureReceiptV1,
+): WhiteboxTriviewManifestV1 | undefined {
+  if (receipt.formalRequest.visualCaptureGroups.length === 0) return undefined;
+  return freeze({
+    kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1,
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
+    whiteboxTriviews: receipt.formalRequest.visualCaptureGroups.map(group => ({ ...group,
+      views: ["front", "right", "back"] as const,
+      imageUri: `${group.visualTargetId}/whitebox-triview.png`,
+    })),
+  });
 }
 
 export function assertFormalSemanticViewObservationSetMatchesReceiptV1(
@@ -4081,7 +4142,8 @@ export function assertFormalSemanticViewObservationSetMatchesReceiptV1(
     if (
       view.viewId !== receiptView.viewId ||
       view.viewRequestHash !== receiptView.requestHash ||
-      view.pngContentHash !== receiptView.pngContentHash
+      view.pngContentHash !== receiptView.pngContentHash ||
+      view.identityMaskPngContentHash !== receiptView.identityMaskPngContentHash
     ) fail(contract, `views/${index}`, "must bind the exact Receipt view and PNG");
   });
   const openingView = observationSet.views[0]!;

@@ -4895,7 +4895,9 @@ function emptyActionProjection(simulationTick: number) {
         .toMatchObject({
           mode: "tracking",
           targetEntityId: runtimeProjection.camera.targetEntityId,
+          authoredOpeningProfileRef: runtimeProjection.camera.authoredOpeningProfileRef,
         });
+      expect(runtimeProjection.camera.authoredOpeningProfileRef).toBeDefined();
       if (name === "target identity") {
         const distinctTargetEntityId = "camera-target-distinct";
         const coherentDistinctTarget = {

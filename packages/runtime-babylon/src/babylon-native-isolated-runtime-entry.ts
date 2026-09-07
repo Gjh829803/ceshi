@@ -29,6 +29,7 @@ import {
   type RuntimeSessionRequestV1,
   type RenderReadyReceiptV1,
   type WorldRuntimeSnapshotV4,
+  type CameraViewInputV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   RuntimeHost,
@@ -42,9 +43,11 @@ import type {
   VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
+import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 import {
   BabylonWorldRuntime,
+  isRecoverablePreparedFixedInputFailure,
   type BabylonWorldRuntimeInitializationStageV1,
 } from "./babylon-world-runtime";
 import {
@@ -120,7 +123,13 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   readonly runtimeSessionId: string;
   initialSnapshot(): WorldRuntimeSnapshotV4;
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
-  renderFrame(): RenderReadyReceiptV1;
+  renderFrame(interpolationAlphaRatio?: number): RenderReadyReceiptV1;
+  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4>;
+  physicalInputContext(): Readonly<{
+    worldSessionId: string;
+    possessionTarget: BabylonRuntimeProjectionV1["possessionTarget"];
+    motionKernelRef?: string;
+  }>;
   resize(): void;
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
@@ -347,12 +356,36 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     return observeRuntimeUsage(handle.runtime.snapshot(), handle.engine);
   }
 
-  renderFrame(): RenderReadyReceiptV1 {
-    return this.activeHandle().runtime.renderFrame();
+  physicalInputContext(): ReturnType<BabylonNativeIsolatedRuntimeEntryV1["physicalInputContext"]> {
+    const projection = this.activeHandle().runtime.snapshot();
+    const target = projection.possessionTarget;
+    const subject = target.mode === "possessed"
+      ? projection.subjectStatesByEntityId[target.controlledEntityId] : undefined;
+    return Object.freeze({
+      worldSessionId: this.host.currentWorldSessionId,
+      possessionTarget: target,
+      ...(subject?.movementOwner === "specialized-motion"
+        ? { motionKernelRef: subject.activeMotionKernelRef } : {}),
+    });
+  }
+
+  renderFrame(interpolationAlphaRatio = 1): RenderReadyReceiptV1 {
+    return this.activeHandle().runtime.renderFrame(interpolationAlphaRatio);
   }
 
   resize(): void {
     this.activeHandle().runtime.resize();
+  }
+
+  adjustCameraView(input: CameraViewInputV1): Promise<WorldRuntimeSnapshotV4> {
+    const deltas = Object.freeze({ ...input });
+    const operation = this.#tail.then(() => {
+      if (!this.#isActive) throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
+      this.activeHandle().runtime.adjustCameraView(deltas);
+      return this.initialSnapshot();
+    });
+    this.#tail = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   executeFormalCapture(
@@ -477,10 +510,20 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     }
 
     let receipt: RuntimeSessionReceiptV1;
+    const inputRuntime = request.type === "fixed-input.run" ? this.activeHandle().runtime : undefined;
     try {
       receipt = await this.invoke(request);
-    } catch {
+    } catch (error) {
       const failureWorldSessionId = this.host.currentWorldSessionId;
+      const failure = inputRuntime?.consumeFixedInputFailureDiagnostic();
+      if (isRecoverablePreparedFixedInputFailure(error, failure)) {
+        receipt = rejectedReceipt(request, failureWorldSessionId, {
+          code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED",
+          message: "The invalid fixed input was rolled back; the Session remains active.",
+        });
+        this.#receiptsByRequestId.set(request.id, Object.freeze({ requestHash, receipt }));
+        return receipt;
+      }
       this.#isActive = false;
       await this.host.dispose().catch(() => undefined);
       receipt = rejectedReceipt(request, failureWorldSessionId, {

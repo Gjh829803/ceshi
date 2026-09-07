@@ -100,6 +100,14 @@ describe("createBabylonNativeWorldPackageV1", () => {
     })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
   });
 
+  it("rejects metadata whose materialized target count differs from the Host receipt", () => {
+    const input = createBabylonNativeBlockWorldPackageTestInputV1();
+    expect(() => createBabylonNativeWorldPackageV1({ ...input,
+      nativeBlockMaterializerMetadata: { ...input.nativeBlockMaterializerMetadata!,
+        settledVisualTargetCount: input.nativeBlockMaterializerMetadata!.settledVisualTargetCount + 1 },
+    })).toThrow("Native Block metadata inventory count does not match settlement");
+  });
+
   it("changes Root and Receipt identity for any accepted materializer metadata change", () => {
     const input = createBabylonNativeBlockWorldPackageTestInputV1();
     const first = createBabylonNativeWorldPackageV1(input);
@@ -120,6 +128,20 @@ describe("createBabylonNativeWorldPackageV1", () => {
     expect(changed.receipt.worldBuildIdentityHash).not.toBe(
       first.receipt.worldBuildIdentityHash,
     );
+    const retuned = createBabylonNativeWorldPackageV1({
+      ...input,
+      nativeBlockMaterializerMetadata: { ...metadata,
+        openingCamera: { ...metadata.openingCamera, distanceMeters: 5.5, fovDegrees: 54 } },
+    });
+    expect(retuned.receipt.worldPackageRootHash).not.toBe(first.receipt.worldPackageRootHash);
+    const verifiedRetuned = verifyWorldPackageDirectoryV1(retuned);
+    expect(verifiedRetuned.kind).toBe("babylon-native-scene");
+    if (verifiedRetuned.kind !== "babylon-native-scene") throw new Error("unreachable");
+    expect(verifiedRetuned.bootstrap).toEqual(input.nativeSceneBootstrap);
+    expect(verifiedRetuned.worldRuntimeBootstrap).toEqual(input.worldRuntimeBootstrap);
+    expect(verifiedRetuned.nativeBlockMaterializerMetadata?.openingCamera).toMatchObject({
+      distanceMeters: 5.5, fovDegrees: 54,
+    });
   });
 
   it("closes the Bootstrap, Bundle, and Contribution Profile identity", () => {

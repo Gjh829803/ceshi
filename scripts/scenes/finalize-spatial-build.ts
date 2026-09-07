@@ -43,6 +43,7 @@ export function deriveVisualCaptureGroups(options: {
       : [{
           visualTargetId: target.visualTargetId,
           runtimeEntityIds: [...mapping.runtimeEntityIds],
+          frontDirectionWorldXZ: [...mapping.frontDirectionWorldXZ] as readonly [number, number],
           role: target.role,
           semanticClassId: target.semanticClassId,
           identityColor: target.identityColor,

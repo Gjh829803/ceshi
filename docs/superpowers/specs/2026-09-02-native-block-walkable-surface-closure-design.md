@@ -9,6 +9,57 @@
 
 ## Implementation revision record
 
+- **2026-09-07 — CF-04/G2 Host consumer correction:** the production Host must
+  not compare the Profile's 1m auto-smoothing span to the Character's discrete
+  step height, or reject the whole scene because any generated triangle exceeds
+  the Character slope setting. Pinned `9e35ab53` builds ramps and admits source
+  joins within its 1m band; neither global veto exists there. Remove these two
+  checks, retaining topology identity/index/winding integrity and the existing
+  actual Spawn, clearance and required-route owners. Update the capability
+  verifier's evidence row accordingly; this does not claim its aggregate run passed.
+
+- **2026-09-07 — CF-04/G2 four-shape closure:** pinned `9e35ab53` owns the
+  current `full/half/quarter/small` shape set, uniform 0.5m XYZ occupancy and
+  0.25m XYZ center lattice. Delete the additional quarter-height `step` shape,
+  including its parser/type/metadata and Builder/frozen examples. Collider roles
+  are `ground` from explicit admitted static-surface intent and `blocker` from
+  not-traversable intent; shape does not create a third acceptance role. Update
+  the active representative Case, not historical run receipts. This supersedes
+  the anisotropic/step contracts in the August 31 settlement design. G1 smoothing
+  and current Capsule resources remain unchanged; no new gate or repair budget.
+
+- **2026-09-07 — CF-04/G1 pinned production geometry correction (in progress):**
+  the user's explicit parity requirement supersedes the September 3 decision to
+  replace one-meter smoothing with quarter-meter authored stairs. Smoothing is
+  geometry construction, not the Character's discrete step limit. Pinned
+  `9e35ab53` retains each fully exposed source Block top as one rectangle and
+  averages shared corners within 1m. Splitting a 1m Block into 0.5m tiles before
+  averaging can double its resulting slope; changing only the threshold is not
+  parity. Restore source-top rectangles, partial-exposure microtiles, global
+  corner averaging, the 1m threshold and old diagonal choice behind the existing
+  Native topology owner. Preserve explicit Collider/visual provenance, holes,
+  deterministic hashes, current ground-boundary realization and the single
+  Runtime support owner. Do not change the Subject's step/slope resources to make
+  a topology test pass. This is implementation authority, not completed evidence;
+  pinned `check.ts:1024-1037` also connects source tops inside that smoothing
+  band without reapplying raw-height Character step/slope vetoes. Its source-top
+  stand-position checks do not impose exact post-smoothing Y equality. Remove
+  those two added production restrictions; retain footprint/clearance, missing
+  final-geometry integrity checks and actual Runtime support/settlement evidence.
+  The current lattice/shape, Ground Analysis, final Havok traversal and Builder
+  guidance must close together before the final generated Case.
+  The G1 real-Havok reproducer also requires the existing Character Movement
+  owner to lift supported planar velocity onto the current admitted uphill
+  tangent only. Pinned `preservePlanarTranslationOnWalkableSupport` leaves
+  downward motion to Body snap-down; do not inject a downward tangent at a
+  ledge and turn supported departure into sliding. Jump keeps precedence, and
+  the BodyPort must not classify uphill tangent displacement as takeoff. Keep
+  its single support query and transactional departure state. Discount frozen
+  support/recovery translation only on actually applied components, without
+  broadening step height or solver-correction bounds. Stable slope traversal is
+  proven separately from changing-manifold transients; no cached Block grounding
+  or second sampler is restored.
+
 - **2026-09-04 — historical production-outcome parity correction:** ordinary production now uses the exact
   successful `codex/block-world-main-integration` requested-scope success/failure rules. Seven-dimension
   Evaluation and NBR-70 remain executable strict diagnostics but no longer own ordinary publication.
@@ -263,12 +314,13 @@ The Host ports the v2 algorithms behind current types and owners:
 - exact Spawn and required target samples come from the registered Spawn contribution and explicit
   ground-band endpoints; the Host never snaps them to a nearby support sample or visual-group center;
 - after raw occupancy standability succeeds, exact Spawn, required-target and band-waypoint XZ
-  positions must resolve to the final walkable collision triangles at the frozen Y; missing topology
-  support or smoothing-induced height drift is a blocking, actionable failure;
+  positions must resolve to final walkable collision triangles; missing topology
+  support is an integrity failure. Authored Y remains source-top intent, not a
+  new exact-height post-smoothing gate. Actual settlement/support is Runtime evidence;
 - the complete vertical Capsule clearance volume must be free of selected solid occupancy;
 - source Blocks whose exposed top cells share a horizontal edge connect through their actual
-  surface-center samples using the current Runtime's symmetric `maxStepHeightMeters` and
-  `maxSlopeDegrees` policy;
+  surface-center samples inside the same pinned 1m auto-smoothing span. This is
+  structural connectivity, not proof that every current Subject can execute every slope;
 - the registered Spawn Marker and every Case-required ground pass target must bind to accepted stand
   samples, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`;
 - the public `WorldReconstructionCaseV1` parser is the sole semantic owner of traversal-to-Collider
@@ -291,11 +343,11 @@ Capability Envelope remains ground-only; this result proves neither flight nor w
 cannot be used as their admission evidence.
 
 The v2 checker exposed separate `maximumStepUpMeters` and `maximumStepDownMeters`. The current SDK
-Physics Body and Traversal Capability Envelope deliberately expose one `maxStepHeightMeters`; Ground
-Analysis therefore uses the same symmetric value in both directions and retains directional failure
-evidence. Reintroducing independent up/down thresholds here would create a second movement policy
-that Runtime does not own, so that v2 field split is an explicit non-migration rather than a silent
-semantic claim.
+Physics Body and Traversal Capability Envelope deliberately expose one `maxStepHeightMeters`;
+Runtime retains that symmetric value. Source-top connectivity uses the pinned
+auto-smoothing span instead of pretending that a raw-height gap remains after
+topology construction. Directional frontier diagnostics name that span, not a
+second Character movement limit. No separate up/down Runtime authority is added.
 
 The v2 profile also exposed a fixed `maximumAdjacentWalkableHeightDeltaMeters` and reported
 `smoothedWalkableEdgeCount`. Neither value enters the current admission contract. A global adjacent
@@ -316,12 +368,14 @@ This graph is admission/evaluation evidence only. Runtime ground state remains t
 The Host derives one global walkable topology before Chunk partitioning so a Chunk seam or Collider
 Group boundary cannot become a false cliff.
 
-- Exposed support rectangles are split on the Profile micro-grid.
+- Fully exposed source Block tops remain their complete source rectangles;
+  partially occluded tops alone split on the Profile micro-grid, as in pinned
+  `9e35ab53`. Occupied microcells retain logical support/provenance ownership.
 - Shared corners may be joined only when their height span is within the resolved auto-smooth limit.
-- The current Profile limit is constrained by the controlled Subject's 0.3m
-  `maxStepHeightMeters`; with the 0.25m occupancy-height lattice, one admitted
-  neighboring top increment is 0.25m. The v2/supplemental fixed 1m smoothing
-  value is not a compatible policy and must not be copied.
+- The topology auto-smooth span is 1m, as in pinned production. It does not
+  authorize stepping over a raw 1m wall: the resulting continuous triangles still
+  pass through current Ground Analysis and the actual Runtime support owner.
+  Final geometry, not the unsmoothed source height difference, determines slope.
 - A discontinuity outside that limit keeps separate vertices and remains a cliff.
 - Non-coplanar quads choose the deterministic lower-discontinuity diagonal.
 - Internal and downward faces are omitted; required vertical blocker/cliff volume remains in explicit

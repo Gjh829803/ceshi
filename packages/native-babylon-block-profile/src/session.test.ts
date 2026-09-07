@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
@@ -13,6 +15,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { takeBabylonNativeBlockCheckedEpochEvidenceV1 } from
   "./host-evidence.js";
+import { peekBabylonNativeBlockLiveHandleRegistryV1 } from "./live-handle-registry.js";
+import { materializeBabylonNativeBlockVisualBatchesV1 } from "./visual-batch-materializer.js";
+import { BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1 } from "./chunk-policy.js";
 
 const commitProfileSettlement = vi.hoisted(() => vi.fn());
 vi.mock("@whitebox-world/native-babylon/host", () => ({
@@ -30,76 +35,7 @@ beforeEach(() => {
   commitProfileSettlement.mockImplementation(() => {});
 });
 
-interface SessionModule {
-  createBabylonNativeBlockProfileSessionV1(
-    context: BabylonNativeSceneBuildContextV1,
-    budget: Readonly<{ maximumBlockCount: number }>,
-  ): {
-    createBlock(input: Readonly<{
-      id: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
-      paletteRole:
-        | "ground"
-        | "route"
-        | "structure"
-        | "hazard"
-        | "water-like-visual"
-        | "background-mass";
-      centerMetersXYZ: readonly [number, number, number];
-      rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
-      visualGroupId?: string;
-      colliderGroupId?: string;
-    }>): Mesh;
-    createBlockGrid(input: Readonly<{
-      idPrefix: string;
-      shape: "full" | "half" | "quarter" | "small" | "step";
-      paletteRole:
-        | "ground"
-        | "route"
-        | "structure"
-        | "hazard"
-        | "water-like-visual"
-        | "background-mass";
-      minimumCenterMetersXYZ: readonly [number, number, number];
-      repeatCountXYZ: readonly [number, number, number];
-      rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
-      visualGroupId?: string;
-      colliderGroupId?: string;
-    }>): readonly Mesh[];
-    finalize(input: Readonly<{
-      displayGapMeters?: number;
-      staticColliders: readonly Readonly<{
-        id: string;
-        colliderGeometrySource:
-          | Readonly<{ kind: "block"; blockId: string }>
-          | Readonly<{ kind: "block-group"; colliderGroupId: string }>;
-        traversalBinding:
-          | Readonly<{ kind: "not-traversable" }>
-          | Readonly<{
-              kind: "static-surface";
-              surfaceEntityId: string;
-              logicalSubshapeId: string;
-              traversalSurfaceProfileRef: string;
-            }>;
-        exposedEdgePolicy: "none" | "protect-ground-subject";
-      }>[];
-    }>): Readonly<{
-      kind: "babylon-native-block-finalized-epoch";
-      schemaVersion: 1;
-      checkedLayout: Readonly<{
-        layout: Readonly<{
-          blocks: readonly Readonly<{ colliderGroupId?: string }>[];
-        }>;
-        checkResult: Readonly<{
-          kind: "babylon-native-block-profile-check-result";
-          schemaVersion: 1;
-          outcome: "passed" | "rejected";
-        }>;
-      }>;
-    }>;
-    dispose(): void;
-  };
-}
+type SessionModule = typeof import("./session.js");
 
 async function loadSession(): Promise<SessionModule> {
   const modulePath = ["./", "session.js"].join("");
@@ -172,50 +108,92 @@ function hostPublishableFailure(run: () => void): string {
 }
 
 describe("Babylon Native block profile session", () => {
-  it("creates one real Babylon Mesh with the exact fixed shape", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
+  it("CF-20/MEM4 records immutable intent without allocating per-Block Meshes", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await import("./session.js");
     withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 4 },
-      );
-      const mesh = session.createBlock({
-        id: "ridge-edge",
-        shape: "quarter",
-        paletteRole: "structure",
-        visualGroupId: "ridge",
-        centerMetersXYZ: [0.25, 0.25, 0],
-      });
-
-      expect(mesh).toBeInstanceOf(Mesh);
-      expect(mesh.getScene()).toBe(scene);
-      expect(mesh.name).toBe("ridge-edge");
-      expect(mesh.id).toBe("ridge-edge");
-      const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
-      expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
-        .toEqual([0.5, 0.5, 1]);
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const allocations = vi.spyOn(MeshBuilder, "CreateBox");
+      try {
+        const blocks = session.createBlockGrid({ idPrefix: "intent", shape: "full",
+          paletteRole: "background-mass", minimumCenterMetersXYZ: [0, -0.5, 0],
+          repeatCountXYZ: [30, 3, 90] });
+        expect(blocks).toHaveLength(8100);
+        expect(scene.meshes).toHaveLength(0);
+        expect(allocations).not.toHaveBeenCalled();
+        expect(Object.isFrozen(blocks)).toBe(true);
+        expect(Object.isFrozen(blocks[0])).toBe(true);
+      } finally {
+        allocations.mockRestore();
+        session.dispose();
+      }
     });
   });
 
-  it("creates the quarter-meter step as one exact fixed Babylon Mesh", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
+  it("CF-20/MEM4 materializes one legacy cluster while preserving every logical Block", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await import("./session.js");
     withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 1 },
-      );
-      const mesh = session.createBlock({
-        id: "route-step",
-        shape: "step",
-        paletteRole: "route",
-        centerMetersXYZ: [0, 0.125, 0],
-      });
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      session.createBlockGrid({ idPrefix: "cluster", shape: "full",
+        paletteRole: "background-mass", minimumCenterMetersXYZ: [0, -0.5, 0],
+        repeatCountXYZ: [8, 1, 1] });
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.layout.blocks).toHaveLength(8);
+      expect(scene.meshes).toHaveLength(1);
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)?.blocks).toHaveLength(8);
+      session.dispose();
+      expect(scene.meshes).toHaveLength(0);
+    });
+  });
 
-      const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
-      expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
-        .toEqual([1, 0.25, 1]);
+  it.each([
+    ["full", [0, 0.5, 0], [1, 1, 1]],
+    ["half", [0, 0.25, 0], [1, 0.5, 1]],
+    ["quarter", [0.25, 0.25, 0], [0.5, 0.5, 1]],
+    ["small", [0.25, 0.25, 0.25], [0.5, 0.5, 0.5]],
+  ] as const)("materializes exact %s metric intent with the fixed display scale", async (shape, center, size) => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const block = session.createBlock({ id: "shape-block", shape,
+        paletteRole: "ground", centerMetersXYZ: center });
+      expect(block).not.toBeInstanceOf(Mesh);
+      expect(Object.isFrozen(block.centerMetersXYZ)).toBe(true);
+      expect(scene.meshes).toHaveLength(0);
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.layout.blocks[0]!.sizeMetersXYZ).toEqual(size);
+      const mesh = scene.meshes[0]!;
+      expect(mesh.position.asArray()).toEqual(center);
+      expect(mesh.scaling.asArray()).toEqual(size.map(value => value * 0.985));
+      session.dispose();
+      expect(scene.meshes).toHaveLength(0);
+    });
+  });
+
+  it("keeps independently owned cluster and Runtime batch geometries across scenes", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 40, 42]) session.createBlock({ id: `block-${x}`,
+        shape: "full", paletteRole: "background-mass", centerMetersXYZ: [x, 0.5, 0] });
+      const epoch = session.finalize({ staticColliders: [] });
+      const originals = [...scene.meshes] as Mesh[];
+      const batches = materializeBabylonNativeBlockVisualBatchesV1({
+        scene, realizationId: "ownership-test",
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+        liveHandles: peekBabylonNativeBlockLiveHandleRegistryV1(scene)!,
+        placements: epoch.checkedLayout.layout.blocks.map(block => ({
+          ...block, blockId: block.id, runtimeEntityId: `native-block:${block.id}`,
+          semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
+        })),
+      });
+      expect(batches.batches).toHaveLength(2);
+      const displays = batches.batches.map(batch => batch.mesh);
+      expect(new Set(displays.map(mesh => mesh.geometry)).size).toBe(2);
+      for (const mesh of displays) for (const raw of originals) expect(mesh.geometry).not.toBe(raw.geometry);
+      batches.dispose();
+      expect(originals.every(mesh => mesh.isVisible)).toBe(true);
+      session.dispose();
+      expect(scene.meshes).toHaveLength(0);
     });
   });
 
@@ -225,7 +203,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
 
       const unrotated = session.createBlock({
@@ -244,10 +221,10 @@ describe("Babylon Native block profile session", () => {
         rotationQuarterTurnsY: 1,
       });
 
-      expect(unrotated.position.asArray()).toEqual([-0.25, 0.25, 0]);
-      expect(unrotated.rotation.y).toBe(0);
-      expect(rotated.position.asArray()).toEqual([0.5, 0.25, 0.25]);
-      expect(rotated.rotation.y).toBeCloseTo(Math.PI / 2, 12);
+      expect(unrotated.centerMetersXYZ).toEqual([-0.25, 0.25, 0]);
+      expect((unrotated.rotationQuarterTurnsY ?? 0) * Math.PI / 2).toBe(0);
+      expect(rotated.centerMetersXYZ).toEqual([0.5, 0.25, 0.25]);
+      expect((rotated.rotationQuarterTurnsY ?? 0) * Math.PI / 2).toBeCloseTo(Math.PI / 2, 12);
 
       const epoch = session.finalize({ staticColliders: [] });
       expect(epoch.checkedLayout.layout.blocks).toEqual([
@@ -273,7 +250,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const mesh = session.createBlock({
         id: "near-lattice-block",
@@ -282,7 +258,7 @@ describe("Babylon Native block profile session", () => {
         centerMetersXYZ: [0.5000000001, 0.5, 0.5],
       });
 
-      expect(mesh.position.asArray()).toEqual([0.5, 0.5, 0.5]);
+      expect(mesh.centerMetersXYZ).toEqual([0.5, 0.5, 0.5]);
       expect(session.finalize({ staticColliders: [] })
         .checkedLayout.layout.blocks[0]).toEqual(expect.objectContaining({
         id: "near-lattice-block",
@@ -297,7 +273,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       const initialMeshCount = scene.meshes.length;
       const sparseCenter = [0, 0.5] as unknown[];
@@ -347,7 +322,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       session.createBlock({
         id: "ground-block",
@@ -374,39 +348,40 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("allows Babylon-native composition before requiring an ordinary unparented final Mesh", async () => {
+  it("returns closed immutable intent, not a mutable Babylon placement dialect", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 4 },
-      );
-      // An identity root keeps the declared placement intact so this case
-      // isolates the unparented-final-Mesh rule from transform drift.
-      const root = new TransformNode("ridge-root", scene);
-      const material = new StandardMaterial("ridge-material", scene);
-      const mesh = session.createBlock({
-        id: "ridge-core",
-        shape: "full",
-        paletteRole: "structure",
-        visualGroupId: "ridge",
-        centerMetersXYZ: [0, 0.5, 1],
-      });
-
-      mesh.parent = root;
-      mesh.material = material;
-
-      expect(mesh.parent).toBe(root);
-      expect(mesh.material).toBe(material);
-
-      expect(() => session.finalize({ staticColliders: [] })).toThrow(
-        /WORLDKIT_NATIVE_BLOCK_VISUAL_RECORD_MISMATCH/,
-      );
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const center: [number, number, number] = [0, 0.5, 0];
+      const source = { id: "immutable", shape: "full" as const, paletteRole: "ground" as const,
+        centerMetersXYZ: center };
+      const intent = session.createBlock(source);
+      center[0] = 20;
+      source.id = "changed";
+      expect(() => Reflect.set(intent, "position", {})).not.toThrow();
+      expect(Reflect.set(intent, "id", "changed")).toBe(false);
+      expect(intent).not.toHaveProperty("position");
+      expect(session.finalize({ staticColliders: [] }).checkedLayout.layout.blocks[0])
+        .toMatchObject({ id: "immutable", centerMetersXYZ: [0, 0.5, 0] });
     });
   });
 
-  it("enforces the selected Profile and an exact caller budget", async () => {
+  it("creates more than the retired production cap without a caller budget", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      try {
+        const meshes = session.createBlockGrid({
+          idPrefix: "complete-world", shape: "full", paletteRole: "ground",
+          minimumCenterMetersXYZ: [0, -0.5, 0], repeatCountXYZ: [81, 1, 100],
+        });
+        expect(meshes).toHaveLength(8_100);
+        expect(new Set(meshes.map((mesh) => mesh.id)).size).toBe(8_100);
+      } finally { session.dispose(); }
+    });
+  });
+
+  it("enforces the selected Profile", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -420,31 +395,7 @@ describe("Babylon Native block profile session", () => {
               "worldkit://native-scene-profile/something-else@1",
           }),
         }),
-        { maximumBlockCount: 1 },
       )).toThrow(/WORLDKIT_NATIVE_BLOCK_PROFILE_MISMATCH/);
-      for (const budget of [
-        { maximumBlockCount: -1 },
-        { maximumBlockCount: 1.5 },
-        { maximumBlockCount: 1, legacyMaximum: 2 },
-      ]) {
-        expect(() => createBabylonNativeBlockProfileSessionV1(
-          context,
-          budget as never,
-        )).toThrow(/WORLDKIT_NATIVE_BLOCK_BUDGET_INVALID/);
-      }
-
-      const initialMeshCount = scene.meshes.length;
-      const session = createBabylonNativeBlockProfileSessionV1(
-        context,
-        { maximumBlockCount: 0 },
-      );
-      expect(() => session.createBlock({
-        id: "over-budget",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED/);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
     });
   });
 
@@ -454,7 +405,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       const centerMetersXYZ = [0, 0.5, 0] as const;
       const invalid = [
@@ -497,7 +447,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       session.createBlock({
         id: "ground-block",
@@ -536,48 +485,23 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("disposes Profile-owned Meshes in reverse creation order after finalization", async () => {
+  it("disposes materialized clusters in reverse order exactly once", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 3 },
-      );
-      const disposalOrder: string[] = [];
-      for (const [index, id] of [
-        "first-block",
-        "second-block",
-        "third-block",
-      ].entries()) {
-        const mesh = session.createBlock({
-          id,
-          shape: "small",
-          paletteRole: "ground",
-          centerMetersXYZ: [index / 2 + 0.25, 0.25, 0.25],
-        });
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          disposalOrder.push(id);
-          return dispose(...arguments_);
-        };
-      }
-
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 4]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
       session.finalize({ staticColliders: [] });
+      const meshes = [...scene.meshes];
+      const order: string[] = [];
+      for (const mesh of meshes) {
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...args) => { order.push(mesh.name); dispose(...args); };
+      }
       session.dispose();
       session.dispose();
-
-      expect(disposalOrder).toEqual([
-        "third-block",
-        "second-block",
-        "first-block",
-      ]);
-      expect(() => session.createBlock({
-        id: "late-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [8, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+      expect(order).toEqual(meshes.map(mesh => mesh.name).reverse());
+      expect(scene.meshes).toHaveLength(0);
     });
   });
 
@@ -588,11 +512,9 @@ describe("Babylon Native block profile session", () => {
       const context = createContext(scene);
       const first = createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       );
       const second = createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       );
 
       first.createBlock({
@@ -621,7 +543,6 @@ describe("Babylon Native block profile session", () => {
     try {
       expect(() => createBabylonNativeBlockProfileSessionV1(
         context,
-        { maximumBlockCount: 1 },
       )).toThrow(/WORLDKIT_NATIVE_BLOCK_SCENE_INVALID/);
     } finally {
       engine.dispose();
@@ -634,7 +555,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       session.dispose();
       let wasRead = false;
@@ -652,7 +572,22 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("validates display gap against the actual Layout before any side effect", async () => {
+  it("rejects the removed quarter-height step shape before creating geometry", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      expect(() => session.createBlock({
+        id: "removed-step",
+        // @ts-expect-error Deliberately exercise untrusted removed input.
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [0, 0.125, 0],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID/);
+      expect(scene.meshes).toHaveLength(0);
+    });
+  });
+
+  it("rejects the removed display-gap override before any side effect", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -666,13 +601,12 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "route-step",
-        shape: "step",
+        shape: "half",
         paletteRole: "route",
-        centerMetersXYZ: [0, 0.125, 0],
+        centerMetersXYZ: [0, 0.25, 0],
       });
 
       expect(() => session.finalize(Object.freeze({
@@ -690,13 +624,12 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("allows a display gap larger than the step height when the Layout uses only full blocks", async () => {
+  it("rejects per-scene scale overrides instead of silently changing the fixed display", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       const full = session.createBlock({
         id: "full-block",
@@ -706,11 +639,12 @@ describe("Babylon Native block profile session", () => {
       });
 
       expect(() => session.finalize(Object.freeze({
-        displayGapMeters: 0.6,
+        displayScaleRatio: 0.4,
         staticColliders: Object.freeze([]),
-      }))).not.toThrow();
-      expect(full.scaling.asArray()).toEqual([0.4, 0.4, 0.4]);
-      expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
+      }))).toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
+      expect(full).not.toHaveProperty("scaling");
+      expect(scene.meshes).toHaveLength(0);
+      expect(commitProfileSettlement).not.toHaveBeenCalled();
     });
   });
 
@@ -720,12 +654,11 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       expect(hostPublishableFailure(() => {
         session.createBlock({
           id: "central-step",
-          shape: "step",
+          shape: "half",
           paletteRole: "route",
           centerMetersXYZ: [0, 0.1, 0],
         });
@@ -735,7 +668,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       session.createBlock({
         id: "ground-a",
@@ -760,7 +692,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 3 },
       );
       session.createBlock({
         id: "west-route",
@@ -785,31 +716,17 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("rejects post-creation placement mutation instead of accepting a second dialect", async () => {
+  it("freezes returned intent placement and preserves its canonical layout", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    for (const tamper of [
-      (mesh: Mesh) => mesh.position.set(2, 0.5, 0),
-      (mesh: Mesh) => { mesh.rotation.y = Math.PI / 2; },
-    ]) {
-      withScene((scene) => {
-        const session = createBabylonNativeBlockProfileSessionV1(
-          createContext(scene),
-          { maximumBlockCount: 1 },
-        );
-        const mesh = session.createBlock({
-          id: "ground-block",
-          shape: "quarter",
-          paletteRole: "ground",
-          centerMetersXYZ: [0.25, 0.5, 0],
-        });
-
-        tamper(mesh);
-
-        expect(() => session.finalize({ staticColliders: [] }))
-          .toThrow(/WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED/);
-      });
-    }
+    withScene(scene => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      const intent = session.createBlock({ id: "ground-block", shape: "quarter",
+        paletteRole: "ground", centerMetersXYZ: [0.25, 0.25, 0] });
+      expect(Reflect.set(intent.centerMetersXYZ, "0", 3)).toBe(false);
+      expect(Reflect.set(intent, "rotationQuarterTurnsY", 1)).toBe(false);
+      expect(session.finalize({ staticColliders: [] }).checkedLayout.layout.blocks[0])
+        .toMatchObject({ centerMetersXYZ: [0.25, 0.25, 0], rotationQuarterTurnsY: 0 });
+    });
   });
 
   it("derives grid IDs, spacing, and Y/Z/X order from the selected shape", async () => {
@@ -818,7 +735,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
 
       const meshes = session.createBlockGrid({
@@ -841,7 +757,7 @@ describe("Babylon Native block profile session", () => {
         "entry-ground-x0-y1-z1",
         "entry-ground-x1-y1-z1",
       ]);
-      expect(meshes.map((mesh) => mesh.position.asArray())).toEqual([
+      expect(meshes.map((mesh) => mesh.centerMetersXYZ)).toEqual([
         [0, 0.5, 0], [1, 0.5, 0], [0, 0.5, 1], [1, 0.5, 1],
         [0, 1.5, 0], [1, 1.5, 0], [0, 1.5, 1], [1, 1.5, 1],
       ]);
@@ -857,7 +773,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
       );
       const initialMeshCount = scene.meshes.length;
       expect(() => session.createBlock({
@@ -917,7 +832,6 @@ describe("Babylon Native block profile session", () => {
               registeredColliders.push(collider);
             },
           })),
-          { maximumBlockCount: 1 },
         );
         session.createBlock({
           id: "ground-block",
@@ -949,7 +863,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ground-block",
@@ -994,7 +907,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ledge-block",
@@ -1041,7 +953,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 1 },
       );
       session.createBlock({
         id: "ground-block",
@@ -1087,7 +998,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
 
       const unrotated = session.createBlockGrid({
@@ -1106,11 +1016,11 @@ describe("Babylon Native block profile session", () => {
         rotationQuarterTurnsY: 1,
       });
 
-      expect(unrotated.map((mesh) => mesh.position.asArray()))
+      expect(unrotated.map((mesh) => mesh.centerMetersXYZ))
         .toEqual([[-4.25, 0.25, 0], [-3.75, 0.25, 0]]);
-      expect(rotated.map((mesh) => mesh.position.asArray()))
+      expect(rotated.map((mesh) => mesh.centerMetersXYZ))
         .toEqual([[0.5, 0.25, 0.25], [1.5, 0.25, 0.25]]);
-      expect(rotated.every((mesh) => Math.abs(mesh.rotation.y - Math.PI / 2) < 1e-12))
+      expect(rotated.every((mesh) => Math.abs((mesh.rotationQuarterTurnsY ?? 0) * Math.PI / 2 - Math.PI / 2) < 1e-12))
         .toBe(true);
     });
   });
@@ -1121,7 +1031,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 4 },
       );
       const base = Object.freeze({
         idPrefix: "entry-ground",
@@ -1146,8 +1055,6 @@ describe("Babylon Native block profile session", () => {
         { minimumCenterMetersXYZ: [0, Number.NaN, 0] },
         { rotationQuarterTurnsY: 4 },
         { unknownField: true },
-        // The whole batch exceeds the Session budget.
-        { repeatCountXYZ: [5, 1, 1] },
       ]) {
         expect(() => session.createBlockGrid({
           ...base,
@@ -1182,7 +1089,6 @@ describe("Babylon Native block profile session", () => {
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 8 },
       );
       session.createBlock({
         id: "entry-ground-x0-y0-z0",
@@ -1212,174 +1118,48 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("disposes a partially built grid in reverse and leaves the Session reusable", async () => {
+  it.each([false, true])("rolls back partial clustered allocation and retains its primary error (throwing cleanup: %s)", async (throwsOnCleanup) => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 8 },
-      );
-      const initialMeshCount = scene.meshes.length;
-      const disposalOrder: string[] = [];
-      let createdCount = 0;
-      // Scene-scoped seam: this Session owns the Scene, so the injected
-      // failure cannot leak into another Session or test.
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        createdCount += 1;
-        if (createdCount === 3) {
-          mesh.getVerticesData = () => null;
-        } else {
-          const dispose = mesh.dispose.bind(mesh);
-          mesh.dispose = (...arguments_) => {
-            disposalOrder.push(mesh.name);
-            return dispose(...arguments_);
-          };
-        }
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlockGrid({
-        idPrefix: "entry-ground",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [4, 1, 1],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-
-      expect(disposalOrder).toEqual([
-        "entry-ground-x1-y0-z0",
-        "entry-ground-x0-y0-z0",
-      ]);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.createBlockGrid({
-        idPrefix: "entry-ground",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [2, 1, 1],
-      })).not.toThrow();
-    });
-  });
-
-  it("fails the Session when disposal of the newly failing Mesh throws", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 2 },
-      );
-      const initialMeshCount = scene.meshes.length;
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        mesh.getVerticesData = () => null;
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          dispose(...arguments_);
-          throw new Error("new Mesh cleanup failed");
-        };
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlock({
-        id: "failing-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [0, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.createBlock({
-        id: "late-block",
-        shape: "full",
-        paletteRole: "ground",
-        centerMetersXYZ: [2, 0.5, 0],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
-    });
-  });
-
-  it("removes a Mesh when Babylon construction throws after Scene registration", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 2 },
-      );
-      const initialMeshCount = scene.meshes.length;
+    withScene(scene => {
+      const prior = MeshBuilder.CreateBox("prior", {}, scene);
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene));
+      for (const x of [0, 2, 4]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "background-mass", centerMetersXYZ: [x, 0.5, 0] });
       const createBox = MeshBuilder.CreateBox;
-      const createBoxSpy = vi.spyOn(MeshBuilder, "CreateBox")
-        .mockImplementationOnce((...arguments_) => {
-          createBox(...arguments_);
-          throw new Error("construction failed after Scene registration");
-        });
-
-      try {
-        expect(() => session.createBlock({
-          id: "registered-then-failed",
-          shape: "full",
-          paletteRole: "ground",
-          centerMetersXYZ: [0, 0.5, 0],
-        })).toThrow(/construction failed after Scene registration/);
-        expect(scene.meshes).toHaveLength(initialMeshCount);
-        expect(() => session.createBlock({
-          id: "retry-after-cleanup",
-          shape: "full",
-          paletteRole: "ground",
-          centerMetersXYZ: [2, 0.5, 0],
-        })).not.toThrow();
-      } finally {
-        createBoxSpy.mockRestore();
-        for (const mesh of [...scene.meshes]) {
-          if (mesh.name === "registered-then-failed") mesh.dispose();
-        }
-      }
-    });
-  });
-
-  it("continues reverse rollback after one committed Mesh disposer throws", async () => {
-    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const session = createBabylonNativeBlockProfileSessionV1(
-        createContext(scene),
-        { maximumBlockCount: 4 },
-      );
-      const initialMeshCount = scene.meshes.length;
-      const disposalOrder: string[] = [];
-      let createdCount = 0;
-      const addMesh = scene.addMesh.bind(scene);
-      scene.addMesh = (mesh, recursive) => {
-        createdCount += 1;
-        if (createdCount === 3) mesh.getVerticesData = () => null;
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          disposalOrder.push(mesh.name);
-          dispose(...arguments_);
-          if (mesh.name === "rollback-grid-x2-y0-z0" ||
-              mesh.name === "rollback-grid-x1-y0-z0") {
-            throw new Error("committed Mesh cleanup failed");
-          }
+      let count = 0;
+      const cleanup: string[] = [];
+      let unrelated: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
+      const observerCount = scene.onNewMeshAddedObservable.observers.length;
+      if (throwsOnCleanup) Object.defineProperty(scene, "addMesh", {
+        value: scene.addMesh.bind(scene), configurable: true, writable: true, enumerable: true,
+      });
+      const addMeshDescriptor = Object.getOwnPropertyDescriptor(scene, "addMesh");
+      const spy = vi.spyOn(MeshBuilder, "CreateBox").mockImplementation((...args) => {
+        const mesh = createBox(...args);
+        const getVerticesData = mesh.getVerticesData.bind(mesh);
+        mesh.getVerticesData = (...readArgs) => {
+          // A caller side effect after allocation is not owned by the adapter.
+          unrelated ??= createBox("unrelated-after-allocation", {}, scene);
+          return getVerticesData(...readArgs);
         };
-        return addMesh(mesh, recursive);
-      };
-
-      expect(() => session.createBlockGrid({
-        idPrefix: "rollback-grid",
-        shape: "full",
-        paletteRole: "ground",
-        minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [3, 1, 1],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
-      expect(disposalOrder).toEqual([
-        "rollback-grid-x2-y0-z0",
-        "rollback-grid-x1-y0-z0",
-        "rollback-grid-x0-y0-z0",
-      ]);
-      expect(scene.meshes).toHaveLength(initialMeshCount);
-      expect(() => session.finalize({ staticColliders: [] }))
-        .toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...disposeArgs) => {
+          cleanup.push(mesh.name); dispose(...disposeArgs);
+          if (throwsOnCleanup) throw new Error("secondary cleanup error");
+        };
+        if (++count === 3) throw new Error("primary allocation error");
+        return mesh;
+      });
+      try {
+        expect(() => session.finalize({ staticColliders: [] })).toThrow("primary allocation error");
+        expect(scene.meshes).toHaveLength(2);
+        expect(scene.meshes[0] === prior).toBe(true);
+        expect(scene.meshes[1] === unrelated).toBe(true);
+        expect(scene.onNewMeshAddedObservable.observers).toHaveLength(observerCount);
+        expect(Object.getOwnPropertyDescriptor(scene, "addMesh")).toEqual(addMeshDescriptor);
+        expect(cleanup).toEqual(["block-cluster-000003", "block-cluster-000002", "block-cluster-000001"]);
+        expect(() => session.finalize({ staticColliders: [] })).toThrow("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED");
+      } finally { spy.mockRestore(); }
     });
   });
 
@@ -1395,13 +1175,12 @@ describe("Babylon Native block profile session", () => {
       withScene((scene) => {
         const session = createBabylonNativeBlockProfileSessionV1(
           createContext(scene),
-          { maximumBlockCount: 1 },
         );
         build(session);
         blocks = session.finalize({ staticColliders: [] })
           .checkedLayout.layout.blocks
           .map((block) => ({
-            ...(block as Record<string, unknown>),
+            ...block,
             id: "normalized-id",
           }));
       });
@@ -1447,7 +1226,6 @@ describe("Babylon Native block profile session", () => {
             registeredColliders.push(collider);
           },
         })),
-        { maximumBlockCount: 4 },
       );
 
       session.createBlockGrid({
@@ -1463,83 +1241,30 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("preserves a late commit error while visual, proxy, and source cleanup continues in reverse order", async () => {
+  it("preserves a late Host commit failure while cleaning clusters, proxies and materials", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
-
-    withScene((scene) => {
-      const cleanupOrder: string[] = [];
-      const context = createContext(scene, Object.freeze({
-        registerSpawnMarker(): void {},
-        registerStaticCollider(
-          collider: Readonly<BabylonNativeStaticColliderV1>,
-        ): void {
+    withScene(scene => {
+      const cleaned: string[] = [];
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene, {
+        registerSpawnMarker() {},
+        registerStaticCollider(collider) {
           const dispose = collider.mesh.dispose.bind(collider.mesh);
-          collider.mesh.dispose = (
-            ...arguments_: Parameters<Mesh["dispose"]>
-          ) => {
-            cleanupOrder.push(`proxy:${collider.id}`);
-            dispose(...arguments_);
-            if (collider.id === "second-collider") {
-              throw new Error("proxy cleanup failed");
-            }
+          collider.mesh.dispose = (...args) => {
+            cleaned.push(collider.id); dispose(...args); throw new Error("secondary proxy cleanup");
           };
         },
       }));
-      const session = createBabylonNativeBlockProfileSessionV1(
-        context,
-        { maximumBlockCount: 2 },
-      );
-      for (const [index, id] of ["first-block", "second-block"].entries()) {
-        const mesh = session.createBlock({
-          id,
-          shape: "full",
-          paletteRole: "route",
-          centerMetersXYZ: [index, 0.5, 0],
-        });
-        let assignedMaterial = mesh.material;
-        Object.defineProperty(mesh, "material", {
-          configurable: true,
-          get: () => assignedMaterial,
-          set: (value) => {
-            assignedMaterial = value;
-            if (value === null) cleanupOrder.push(`visual:${id}`);
-          },
-        });
-        const dispose = mesh.dispose.bind(mesh);
-        mesh.dispose = (...arguments_) => {
-          cleanupOrder.push(`source:${id}`);
-          dispose(...arguments_);
-          if (id === "second-block") throw new Error("source cleanup failed");
-        };
-      }
-      commitProfileSettlement.mockImplementationOnce(() => {
-        throw new Error("late Host commit failed");
-      });
-
-      expect(() => session.finalize(Object.freeze({
-        staticColliders: Object.freeze([
-          Object.freeze({
-            id: "first-collider",
-            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "first-block" }),
-            traversalBinding: Object.freeze({ kind: "not-traversable" }),
-            exposedEdgePolicy: "none" as const,
-          }),
-          Object.freeze({
-            id: "second-collider",
-            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "second-block" }),
-            traversalBinding: Object.freeze({ kind: "not-traversable" }),
-            exposedEdgePolicy: "none" as const,
-          }),
-        ]),
-      }))).toThrow(/late Host commit failed/);
-      expect(cleanupOrder).toEqual([
-        "proxy:second-collider",
-        "proxy:first-collider",
-        "visual:second-block",
-        "visual:first-block",
-        "source:second-block",
-        "source:first-block",
-      ]);
+      for (const x of [0, 1]) session.createBlock({ id: `block-${x}`, shape: "full",
+        paletteRole: "ground", centerMetersXYZ: [x, 0.5, 0] });
+      commitProfileSettlement.mockImplementationOnce(() => { throw new Error("late Host commit failed"); });
+      expect(() => session.finalize({ staticColliders: [0, 1].map(x => ({
+        id: `collider-${x}`, colliderGeometrySource: { kind: "block" as const, blockId: `block-${x}` },
+        traversalBinding: { kind: "not-traversable" as const }, exposedEdgePolicy: "none" as const,
+      })) })).toThrow("late Host commit failed");
+      expect(cleaned).toEqual(["collider-1", "collider-0"]);
+      expect(scene.meshes).toHaveLength(0);
+      expect(scene.materials).toHaveLength(0);
     });
   });
+
 });

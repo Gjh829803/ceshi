@@ -8,11 +8,13 @@ import vm from "node:vm";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import ts from "typescript";
+import { isEqual } from "lodash-es";
+import { createBabylonNativeBlockInputParsersV1 } from "@whitebox-world/native-babylon-block-profile";
+import { parseBabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 as SHAPE_SIZE_BY_KIND,
-  babylonNativeBlockCenterAlignsToGridV1,
+  BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
-  effectiveBabylonNativeBlockSizeMetersXYZV1 as effectiveSize,
 } from "@whitebox-world/native-babylon-block-profile/shapes";
 import {
   sha256CanonicalJson,
@@ -20,17 +22,20 @@ import {
 } from "@whitebox-world/protocol";
 
 import {
-  parseNativeBlockSubjectVisualReviewProxyV1,
   type NativeBlockSubjectVisualReviewProxyV1,
 } from "../../../../scripts/reconstruction/native-block-subject-visual-review-proxy.js";
+import { resolveNativeSubjectAuthoringClosureV1 } from "../../../../scripts/reconstruction/native-subject-host-context.js";
+import { createBabylonNativeBlockVisualClustersV1 } from "@whitebox-world/native-babylon-block-profile";
+import type { BabylonNativeBlockStaticColliderSelectionV1, NativeBlockAuthoringManifestV1 } from "@whitebox-world/native-babylon-block-profile";
+import type { WorldReconstructionCaseV1 } from "@whitebox-world/validation";
+import { checkNativeBlockGroundFeedbackV1 } from "../../../../scripts/reconstruction/native-block-ground-feedback.js";
 
 const WIDTH_TOP = 768;
 const WIDTH_ENTRY = 960;
 const HEIGHT_ENTRY = 540;
 const COMPARISON_SEPARATOR = 8;
-const MAXIMUM_CAPTURED_BLOCK_COUNT = 100_000;
+const MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT = 32;
 const BUILD_TIMEOUT_MILLISECONDS = 10_000;
-const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 const MAXIMUM_PLANNING_PNG_ENCODED_BYTES = 16 * 1024 * 1024;
 const MAXIMUM_PLANNING_PNG_DIMENSION_PIXELS = 8_192;
 const MAXIMUM_PLANNING_PNG_PIXEL_COUNT = 16_777_216;
@@ -112,7 +117,7 @@ interface CapturedLayoutIdentity {
   readonly kind: "native-block-builder-captured-layout-identity";
   readonly schemaVersion: 1;
   readonly blocks: readonly CapturedBlock[];
-  readonly displayGapMeters: number;
+  readonly displayScaleRatio: number;
   readonly spawn: Readonly<{
     readonly id: string;
     readonly positionMetersXYZ: Vec3;
@@ -344,12 +349,6 @@ function vec3(value: unknown, fieldName: string): Vec3 {
   return Object.freeze([value[0], value[1], value[2]]) as Vec3;
 }
 
-function positiveSafeInteger(value: unknown, fieldName: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
-    return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `${fieldName} must be a positive safe integer`);
-  }
-  return value as number;
-}
 
 function text(value: unknown, fieldName: string): string {
   if (typeof value !== "string" || value.length === 0) {
@@ -394,8 +393,9 @@ function captureSource(
   bootstrap: Record<string, unknown>,
 ): Readonly<{
   blocks: readonly CapturedBlock[];
-  displayGapMeters: number;
+  displayScaleRatio: number;
   spawn: Readonly<{ id: string; positionMetersXYZ: Vec3; facingRadians: number }>;
+  selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }> {
   validateSourceForAdvisoryCapture(sourceText, sourcePath);
   const transpiled = ts.transpileModule(sourceText, {
@@ -419,10 +419,46 @@ function captureSource(
 
   const blocks: CapturedBlock[] = [];
   const blockIds = new Set<string>();
-  let maximumBlockCount: number | undefined;
-  const blockIdByMicroCellKey = new Map<string, string>();
-  let displayGapMeters = DEFAULT_DISPLAY_GAP_METERS;
+  // Match the old checker: retain the first occupant as the cell's witness.
+  // Keeping every coincident occupant makes a complete scan quadratic.
+  const blockIndexByMicroCellKey = new Map<string, number>();
+  const overlapDiagnostics: string[] = [];
+  let hasOmittedOverlapPairs = false;
+  let isCompleteOverlapScan = false;
+  let conflictingBlockCount = 0;
+  type OverlapFamily = {
+    paletteRoles: readonly string[];
+    witnessPairCount: number;
+    firstWitnessBlockIds: readonly string[];
+    lastWitnessBlockIds: readonly string[];
+    minimumMicroCellXYZ: number[];
+    maximumMicroCellXYZ: number[];
+  };
+  // Six closed visual roles bound this map to 21 unordered families. These
+  // labels summarize diagnostics only; they never infer Collider membership.
+  const overlapFamilies = new Map<string, OverlapFamily>();
+  const diagnosticBlockId = (id: string): string => {
+    const label = id.length <= 80 ? id : `${id.slice(0, 80)}...[${hash(id)}]`;
+    return JSON.stringify(label).slice(1, -1).replace(
+      /['\u007f-\u009f\u2028\u2029]/g,
+      (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
+  };
+  const rejectOverlaps = (hasOmittedPairs: boolean): never => fail(
+    "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+    [...overlapDiagnostics, ...(hasOmittedPairs
+      ? [`additional overlapping Block pairs omitted (limit ${MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT})`]
+      : []), `overlap scan summary: ${JSON.stringify({
+        isComplete: isCompleteOverlapScan,
+        scannedBlockCount: blocks.length,
+        conflictingBlockCount,
+        families: [...overlapFamilies.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([, family]) => family),
+      })}`].join("; "),
+  );
   let finalized = false;
+  let inputParsers: ReturnType<typeof createBabylonNativeBlockInputParsersV1>;
+  let finalizedInput: ReturnType<typeof inputParsers.parseFinalizeInput> | undefined;
+  const finalizedResult = Object.freeze({});
   let sessionCreated = false;
   let spawn: Readonly<{
     id: string;
@@ -430,52 +466,59 @@ function captureSource(
     facingRadians: number;
   }> | undefined;
 
-  const addBlock = (input: unknown): Readonly<Record<string, never>> => {
-    if (finalized || input === null || typeof input !== "object" || Array.isArray(input)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "createBlock input is invalid");
+  const addBlock = (input: unknown): ReturnType<typeof inputParsers.parseCreateInput> => {
+    if (finalized) {
+      return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+        "createBlock is unavailable after finalization begins");
     }
-    const row = input as Record<string, unknown>;
-    const id = text(row.id, "block.id");
+    const row = inputParsers.parseCreateInput(input);
+    const { id, shape, paletteRole, centerMetersXYZ, visualGroupId, colliderGroupId } = row;
+    const rotation = row.rotationQuarterTurnsY!;
     if (blockIds.has(id)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `duplicate Block id '${id}'`);
+      return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE", `duplicate Block id '${id}'`);
     }
-    const shape = text(row.shape, "block.shape") as keyof typeof SHAPE_SIZE_BY_KIND;
-    const paletteRole = text(row.paletteRole, "block.paletteRole") as keyof typeof COLOR_BY_PALETTE_ROLE;
-    if (!Object.hasOwn(SHAPE_SIZE_BY_KIND, shape) || !Object.hasOwn(COLOR_BY_PALETTE_ROLE, paletteRole)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Block '${id}' uses an unknown shape or palette role`);
-    }
-    const rotation = row.rotationQuarterTurnsY ?? 0;
-    if (![0, 1, 2, 3].includes(rotation as number)) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Block '${id}' rotation is invalid`);
-    }
-    if (
-      maximumBlockCount === undefined ||
-      blocks.length >= maximumBlockCount ||
-      blocks.length >= MAXIMUM_CAPTURED_BLOCK_COUNT
-    ) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "captured Block count exceeds its hard cap");
-    }
-    const visualGroupId = row.visualGroupId === undefined
-      ? undefined
-      : text(row.visualGroupId, "block.visualGroupId");
-    const colliderGroupId = row.colliderGroupId === undefined
-      ? undefined
-      : text(row.colliderGroupId, "block.colliderGroupId");
-    const centerMetersXYZ = vec3(row.centerMetersXYZ, "block.centerMetersXYZ");
-    const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation as number };
-    if (!babylonNativeBlockCenterAlignsToGridV1(placement)) {
-      return fail("WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID", `Block '${id}' is off its shape-specific grid`);
-    }
+    const placement = { shape, centerMetersXYZ, rotationQuarterTurnsY: rotation };
     // Disposable feedback only. Use the Profile's exact occupied cells, not a
     // second bounds/intersection approximation or a Runtime collision inference.
     const keys = babylonNativeBlockOccupiedMicroCellKeysV1(placement);
+    const conflictCellsByOccupant = new Map<number, string[]>();
     for (const key of keys) {
-      const occupant = blockIdByMicroCellKey.get(key);
-      if (occupant !== undefined) {
-        return fail("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP", `block '${id}' overlaps '${occupant}' at cell ${key}`);
+      const occupantIndex = blockIndexByMicroCellKey.get(key);
+      if (occupantIndex !== undefined) {
+        const cells = conflictCellsByOccupant.get(occupantIndex) ?? [];
+        cells.push(key);
+        conflictCellsByOccupant.set(occupantIndex, cells);
       }
     }
-    for (const key of keys) blockIdByMicroCellKey.set(key, id);
+    if (conflictCellsByOccupant.size > 0) conflictingBlockCount += 1;
+    for (const [occupantIndex, cells] of conflictCellsByOccupant) {
+      const occupant = blocks[occupantIndex]!;
+      if (overlapDiagnostics.length < MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT) {
+        overlapDiagnostics.push(`block '${diagnosticBlockId(id)}' overlaps '${diagnosticBlockId(occupant.id)}' at cell ${cells[0]!}`);
+      } else hasOmittedOverlapPairs = true;
+      const paletteRoles = [paletteRole, occupant.paletteRole].sort(stableCompare);
+      const familyKey = paletteRoles.join(":");
+      const witness = [diagnosticBlockId(id), diagnosticBlockId(occupant.id)];
+      let family = overlapFamilies.get(familyKey);
+      if (family === undefined) {
+        const coordinates = cells[0]!.split(",").map(Number);
+        family = { paletteRoles, witnessPairCount: 0,
+          firstWitnessBlockIds: witness, lastWitnessBlockIds: witness,
+          minimumMicroCellXYZ: [...coordinates], maximumMicroCellXYZ: [...coordinates] };
+        overlapFamilies.set(familyKey, family);
+      }
+      family.witnessPairCount += 1;
+      family.lastWitnessBlockIds = witness;
+      for (const key of cells) {
+        key.split(",").map(Number).forEach((coordinate, axis) => {
+          family.minimumMicroCellXYZ[axis] = Math.min(family.minimumMicroCellXYZ[axis]!, coordinate);
+          family.maximumMicroCellXYZ[axis] = Math.max(family.maximumMicroCellXYZ[axis]!, coordinate);
+        });
+      }
+    }
+    for (const key of keys) {
+      if (!blockIndexByMicroCellKey.has(key)) blockIndexByMicroCellKey.set(key, blocks.length);
+    }
     blockIds.add(id);
     blocks.push(Object.freeze({
       id,
@@ -486,77 +529,41 @@ function captureSource(
       centerMetersXYZ,
       rotationQuarterTurnsY: rotation as 0 | 1 | 2 | 3,
     }));
-    return Object.freeze({});
+    return row;
   };
 
-  const createSession = (_context: unknown, budgetInput: unknown) => {
-    if (sessionCreated || budgetInput === null || typeof budgetInput !== "object") {
+  const createSession = (_context: unknown) => {
+    if (sessionCreated) {
       return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "exactly one Block Profile session is required");
     }
     sessionCreated = true;
-    maximumBlockCount = positiveSafeInteger(
-      (budgetInput as Record<string, unknown>).maximumBlockCount,
-      "maximumBlockCount",
-    );
-    if (maximumBlockCount > MAXIMUM_CAPTURED_BLOCK_COUNT) {
-      return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "maximumBlockCount exceeds advisory capture limit");
-    }
     return Object.freeze({
       createBlock: addBlock,
       createBlockGrid(input: unknown) {
-        if (input === null || typeof input !== "object" || Array.isArray(input)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "createBlockGrid input is invalid");
+        if (finalized) {
+          return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+            "createBlockGrid is unavailable after finalization begins");
         }
-        const row = input as Record<string, unknown>;
-        const idPrefix = text(row.idPrefix, "grid.idPrefix");
-        const shape = text(row.shape, "grid.shape") as keyof typeof SHAPE_SIZE_BY_KIND;
-        if (!Object.hasOwn(SHAPE_SIZE_BY_KIND, shape)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Grid '${idPrefix}' shape is invalid`);
-        }
-        const rotation = row.rotationQuarterTurnsY ?? 0;
-        if (![0, 1, 2, 3].includes(rotation as number)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", `Grid '${idPrefix}' rotation is invalid`);
-        }
-        const minimum = vec3(row.minimumCenterMetersXYZ, "grid.minimumCenterMetersXYZ");
-        const counts = vec3(row.repeatCountXYZ, "grid.repeatCountXYZ");
-        const countX = positiveSafeInteger(counts[0], "grid.repeatCountXYZ[0]");
-        const countY = positiveSafeInteger(counts[1], "grid.repeatCountXYZ[1]");
-        const countZ = positiveSafeInteger(counts[2], "grid.repeatCountXYZ[2]");
-        const spacing = effectiveSize(shape, rotation as number);
-        const created: Readonly<Record<string, never>>[] = [];
-        for (let y = 0; y < countY; y += 1) {
-          for (let z = 0; z < countZ; z += 1) {
-            for (let x = 0; x < countX; x += 1) {
-              created.push(addBlock({
-                id: `${idPrefix}-x${x}-y${y}-z${z}`,
-                shape,
-                paletteRole: row.paletteRole,
-                centerMetersXYZ: [
-                  minimum[0] + x * spacing[0],
-                  minimum[1] + y * spacing[1],
-                  minimum[2] + z * spacing[2],
-                ],
-                rotationQuarterTurnsY: rotation,
-                ...(row.visualGroupId === undefined ? {} : { visualGroupId: row.visualGroupId }),
-                ...(row.colliderGroupId === undefined ? {} : { colliderGroupId: row.colliderGroupId }),
-              }));
-            }
+        const rows = inputParsers.parseGridCreateInput(input);
+        // Match Host batch preflight: an ID collision must not leave a partial grid.
+        for (const row of rows) {
+          if (blockIds.has(row.id)) {
+            return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE",
+              `block id '${row.id}' is already used in this session`);
           }
         }
-        return Object.freeze(created);
+        return Object.freeze(rows.map(addBlock));
       },
       finalize(input: unknown) {
-        if (finalized || input === null || typeof input !== "object" || Array.isArray(input)) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "session.finalize input is invalid");
+        const parsedInput = inputParsers.parseFinalizeInput(input);
+        if (finalized) {
+          if (isEqual(parsedInput, finalizedInput)) return finalizedResult;
+          return fail("WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_MISMATCH",
+            "repeated finalize must use the exact same canonical input");
         }
+        finalizedInput = parsedInput;
         finalized = true;
-        const gap = (input as Record<string, unknown>).displayGapMeters ??
-          DEFAULT_DISPLAY_GAP_METERS;
-        if (typeof gap !== "number" || !Number.isFinite(gap) || gap < 0 || gap >= 0.25) {
-          return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "displayGapMeters is invalid");
-        }
-        displayGapMeters = gap;
-        return Object.freeze({});
+        return finalizedResult;
       },
       dispose() {
         return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "Builder may not dispose the advisory session");
@@ -590,6 +597,15 @@ function captureSource(
     codeGeneration: { strings: false, wasm: false },
     name: "worldkit-native-block-advisory-capture",
   });
+  const inputRealm = new vm.Script(
+    "({ objectPrototype: Object.prototype, arrayPrototype: Array.prototype })",
+  ).runInContext(context, { timeout: BUILD_TIMEOUT_MILLISECONDS }) as {
+    objectPrototype: object; arrayPrototype: object;
+  };
+  inputParsers = createBabylonNativeBlockInputParsersV1(
+    (code, detail) => { throw new TypeError(`${code}: ${detail}`); },
+    inputRealm,
+  );
   const script = new vm.Script(`"use strict";\n${transpiled.outputText}`, {
     filename: sourcePath,
   });
@@ -642,9 +658,16 @@ function captureSource(
     "module.exports.default.build(__worldkitBuildContext)",
     { filename: `${sourcePath}#build` },
   );
-  const buildResult = buildScript.runInContext(context, {
-    timeout: BUILD_TIMEOUT_MILLISECONDS,
-  });
+  let buildResult: unknown;
+  try {
+    buildResult = buildScript.runInContext(context, {
+      timeout: BUILD_TIMEOUT_MILLISECONDS,
+    });
+    isCompleteOverlapScan = true;
+  } finally {
+    // A later malformed call or a source catch cannot hide known overlaps.
+    if (overlapDiagnostics.length > 0) rejectOverlaps(hasOmittedOverlapPairs);
+  }
   if (buildResult !== undefined) {
     return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "Native build must complete synchronously without a return value");
   }
@@ -656,8 +679,9 @@ function captureSource(
   }
   return Object.freeze({
     blocks: Object.freeze([...blocks].sort((left, right) => stableCompare(left.id, right.id))),
-    displayGapMeters,
+    displayScaleRatio: BABYLON_NATIVE_BLOCK_DISPLAY_SCALE_RATIO_V1,
     spawn,
+    selections: finalizedInput!.staticColliders,
   });
 }
 
@@ -737,10 +761,11 @@ function pngChunk(type: string, data: Uint8Array): Buffer {
 
 function encodePng(raster: Raster): Buffer {
   const scanlines = Buffer.alloc((raster.width * 4 + 1) * raster.height);
+  const pixels = Buffer.from(raster.pixels);
   for (let y = 0; y < raster.height; y += 1) {
     const rowOffset = y * (raster.width * 4 + 1);
     scanlines[rowOffset] = 0;
-    Buffer.from(raster.pixels).copy(
+    pixels.copy(
       scanlines,
       rowOffset + 1,
       y * raster.width * 4,
@@ -1000,19 +1025,14 @@ function shade(color: Rgb, ratio: number): Rgb {
 
 function cuboids(
   blocks: readonly CapturedBlock[],
-  displayGapMeters: number,
   colorsByVisualGroupId: ReadonlyMap<string, Rgb>,
 ): readonly Cuboid[] {
-  return blocks.map((block) => {
-    const size = effectiveSize(block.shape, block.rotationQuarterTurnsY).map((value) =>
-      Math.max(0.01, value - displayGapMeters)) as [number, number, number];
-    const half = size.map((value) => value / 2);
+  return createBabylonNativeBlockVisualClustersV1(blocks).map((cluster) => {
+    const block = cluster.source;
     return Object.freeze({
       id: block.id,
-      minimum: Object.freeze(block.centerMetersXYZ.map((value, axis) =>
-        value - half[axis]!) as [number, number, number]),
-      maximum: Object.freeze(block.centerMetersXYZ.map((value, axis) =>
-        value + half[axis]!) as [number, number, number]),
+      minimum: cluster.minimumMetersXYZ,
+      maximum: cluster.maximumMetersXYZ,
       color: block.visualGroupId === undefined
         ? rgb(COLOR_BY_PALETTE_ROLE[block.paletteRole])
         : colorsByVisualGroupId.get(block.visualGroupId)!,
@@ -1042,11 +1062,13 @@ function drawTopDown(cuboidRows: readonly Cuboid[], spawn: Vec3): Raster {
     const [left, top] = project(cuboid.minimum[0], cuboid.minimum[2]);
     const [right, bottom] = project(cuboid.maximum[0], cuboid.maximum[2]);
     fillRect(raster, left, top, right, bottom, cuboid.color);
-    const edge = shade(cuboid.color, 0.7);
-    drawLine(raster, [left, top], [right, top], edge);
-    drawLine(raster, [right, top], [right, bottom], edge);
-    drawLine(raster, [right, bottom], [left, bottom], edge);
-    drawLine(raster, [left, bottom], [left, top], edge);
+    if (right - left >= 4 && bottom - top >= 4) {
+      const edge = shade(cuboid.color, 0.72);
+      drawLine(raster, [left, top], [right, top], edge);
+      drawLine(raster, [right, top], [right, bottom], edge);
+      drawLine(raster, [right, bottom], [left, bottom], edge);
+      drawLine(raster, [left, bottom], [left, top], edge);
+    }
   }
   const [spawnX, spawnY] = project(spawn[0], spawn[2]);
   drawCircle(raster, spawnX, spawnY, 7, [232, 93, 93]);
@@ -1281,10 +1303,13 @@ async function writeAtomic(filePath: string, bytes: Uint8Array): Promise<void> {
 }
 
 export async function renderNativeBlockVisualReview(options: Readonly<{
+  execution:
+    | Readonly<{ role: "host-replay" }>
+    | Readonly<{ role: "builder-feedback"; casePath: string }>;
   sourcePath: string;
   authoringPath: string;
   bootstrapPath: string;
-  subjectVisualReviewProxyPath: string;
+  subjectHostContextPath: string;
   worldPlanPath: string;
   entryTargetPath: string;
   topDownOutputPath: string;
@@ -1295,14 +1320,14 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     sourceText,
     authoring,
     bootstrap,
-    subjectVisualReviewProxyInput,
+    subjectHostContext,
     worldPlanBytes,
     entryTargetBytes,
   ] = await Promise.all([
     readFile(options.sourcePath, "utf8"),
     readJson(options.authoringPath),
     readJson(options.bootstrapPath),
-    readJson(options.subjectVisualReviewProxyPath),
+    readJson(options.subjectHostContextPath),
     readFile(options.worldPlanPath),
     readFile(options.entryTargetPath),
   ]);
@@ -1311,7 +1336,7 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     kind: "native-block-builder-captured-layout-identity",
     schemaVersion: 1,
     blocks: captured.blocks,
-    displayGapMeters: captured.displayGapMeters,
+    displayScaleRatio: captured.displayScaleRatio,
     spawn: captured.spawn,
   });
   const capturedLayoutIdentityHash = sha256CanonicalJson(
@@ -1320,13 +1345,32 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
   const colorsByVisualGroupId = validateAuthoringGroups(authoring, captured.blocks);
   const geometry = cuboids(
     captured.blocks,
-    captured.displayGapMeters,
     colorsByVisualGroupId,
   );
   const topDown = drawTopDown(geometry, captured.spawn.positionMetersXYZ);
-  const subjectVisualReviewProxy = parseNativeBlockSubjectVisualReviewProxyV1(
-    subjectVisualReviewProxyInput,
-  );
+  const { subjectVisualReviewProxy, subjectVisualReviewProxyBytes, worldRuntimeBootstrap } = resolveNativeSubjectAuthoringClosureV1({
+    context: subjectHostContext, bootstrap, authoring,
+  });
+  // The delivery checker remains non-executing. Source geometry runs here in
+  // the existing isolated Builder tool; Host replay still follows Native Check
+  // and leaves authoritative Ground admission to its existing Package stage.
+  let groundFeedback: ReturnType<typeof checkNativeBlockGroundFeedbackV1> | undefined;
+  let groundCaseHash: string | undefined;
+  if (options.execution.role === "builder-feedback") {
+    const caseBytes = await readFile(options.execution.casePath);
+    groundCaseHash = hash(caseBytes);
+    groundFeedback = checkNativeBlockGroundFeedbackV1({
+      reconstructionCase: JSON.parse(caseBytes.toString("utf8")) as WorldReconstructionCaseV1,
+      contribution: { spawnMarker: captured.spawn },
+      groundExploration: (authoring as unknown as NativeBlockAuthoringManifestV1).groundExploration,
+      openingCamera: parseBabylonNativeInitialCameraV1(authoring.openingCamera),
+      groundModelEvidenceRef: `artifact://native-block-source/${hash(sourceText)}/scene.ts`,
+      blocks: captured.blocks, selections: captured.selections, worldRuntimeBootstrap,
+    });
+    if (groundFeedback.outcome !== "passed") {
+      return fail("NATIVE_BLOCK_BUILDER_GROUND_INVALID", JSON.stringify(groundFeedback));
+    }
+  }
   if (
     subjectVisualReviewProxy.initialControlledEntityId !==
       bootstrap.initialControlledEntityId
@@ -1344,7 +1388,7 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     geometry,
     subjectCuboids,
     captured.spawn,
-    bootstrap.initialCamera,
+    parseBabylonNativeInitialCameraV1(authoring.openingCamera),
   );
   const topDownComparison = comparison(
     decodePng(worldPlanBytes),
@@ -1377,14 +1421,15 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     kind: "native-block-builder-visual-review",
     schemaVersion: 1,
     status: "passed",
+    executionRole: options.execution.role,
+    ...(groundFeedback === undefined ? {} : { groundFeedback, groundCaseHash }),
     blockCount: captured.blocks.length,
     capturedLayoutIdentityHash,
     sourceHash: hash(sourceText),
     authoringHash: hash(await readFile(options.authoringPath)),
     bootstrapHash: hash(await readFile(options.bootstrapPath)),
-    subjectVisualReviewProxyHash: hash(
-      await readFile(options.subjectVisualReviewProxyPath),
-    ),
+    subjectHostContextHash: hash(await readFile(options.subjectHostContextPath)),
+    subjectVisualReviewProxyHash: hash(subjectVisualReviewProxyBytes),
     worldPlanHash: hash(worldPlanBytes),
     entryTargetHash: hash(entryTargetBytes),
     topDownComparisonHash: hash(topDownComparison),
@@ -1396,13 +1441,20 @@ export async function main(arguments_ = process.argv.slice(2)): Promise<void> {
   const workspace = path.resolve(option(arguments_, "--workspace") ?? ".");
   const resolveFromWorkspace = (name: string, fallback: string): string =>
     path.resolve(workspace, option(arguments_, name) ?? fallback);
+  const role = option(arguments_, "--execution-role");
+  if (role !== "builder-feedback" && role !== "host-replay") {
+    return fail("NATIVE_BLOCK_VISUAL_REVIEW_INPUT_INVALID", "--execution-role must be builder-feedback or host-replay");
+  }
   const result = await renderNativeBlockVisualReview({
+    execution: role === "host-replay" ? { role } : {
+      role, casePath: resolveFromWorkspace("--case", "context/case.json"),
+    },
     sourcePath: resolveFromWorkspace("--source", "scene.ts"),
     authoringPath: resolveFromWorkspace("--authoring", "native-block-authoring.json"),
     bootstrapPath: resolveFromWorkspace("--bootstrap", "inputs/native-scene.bootstrap.json"),
-    subjectVisualReviewProxyPath: resolveFromWorkspace(
-      "--subject-visual-review-proxy",
-      "inputs/subject-visual-review-proxy.json",
+    subjectHostContextPath: resolveFromWorkspace(
+      "--subject-host-context",
+      "inputs/subject-host-context.json",
     ),
     worldPlanPath: resolveFromWorkspace("--world-plan", "inputs/world-plan.png"),
     entryTargetPath: resolveFromWorkspace("--entry-target", "inputs/entry-whitebox-target.png"),

@@ -35,7 +35,7 @@ const brief = `# WorldKit Scene Brief
 草地纹理、塔楼材质和天空颜色只属于渲染层。
 
 ## 运动模式
-陆地步行：主体自然行走和奔跑。
+- 陆地步行：主体自然行走和奔跑。
 
 ## 空间
 前景草地向远景塔楼展开，侧后方保持完整可探索空间。
@@ -80,8 +80,8 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   const result = await finalizeSceneBuild(files);
@@ -90,13 +90,13 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
   expect(result.visualCaptureGroups).toEqual([
     expect.objectContaining({
       visualTargetId: "visual-target-1",
-      runtimeEntityIds: ["player"],
+      runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
       role: "primary-subject",
       identityColor: "#E85D5D",
     }),
     expect.objectContaining({
       visualTargetId: "visual-target-2",
-      runtimeEntityIds: ["tower"],
+      runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1],
       role: "primary-landmark",
       identityColor: "#F28E2B",
     }),
@@ -111,8 +111,8 @@ it("rejects missing visual targets, extra mappings, and invented runtime ids", a
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["invented-player"] },
-      { visualTargetId: "visual-target-3", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["invented-player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-3", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   await expect(finalizeSceneBuild(files)).rejects.toThrow(/Unknown runtime entity 'invented-player'/);
@@ -130,14 +130,14 @@ it("keeps identical complete instances in one repeated visual target", () => {
   const groups = deriveVisualCaptureGroups({
     brief: parsed.value,
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower-east", "tower-west"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower-east", "tower-west"], frontDirectionWorldXZ: [0, -1] },
     ],
   });
   expect(groups).toHaveLength(2);
   expect(groups[1]).toMatchObject({
     visualTargetId: "visual-target-2",
-    runtimeEntityIds: ["tower-east", "tower-west"],
+    runtimeEntityIds: ["tower-east", "tower-west"], frontDirectionWorldXZ: [0, -1],
   });
   expect(deriveVisualIdentityPalette(parsed.value, "canonical")).toHaveLength(2);
 });
@@ -166,8 +166,8 @@ it("rejects the retired final-kind draft and mappings field", async () => {
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     mappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   await expect(finalizeSceneBuild(files)).rejects.toThrow(
@@ -175,8 +175,10 @@ it("rejects the retired final-kind draft and mappings field", async () => {
   );
 });
 
-it("writes movement mode and complete target descriptions into the trusted palette", async () => {
+it("writes every ordered movement mode and complete target description into the trusted palette", async () => {
   const files = await fixture();
+  await writeFile(files.briefPath, brief.replace(/(## 运动模式\n[^\n]+)/,
+    "$1\n- 空中飞行（滑翔翼）：从高台滑翔。"));
   const outputPath = path.join(files.directory, "visual-identity-palette.json");
   await writeVisualIdentityPalette({
     sceneId: files.sceneId,
@@ -187,8 +189,8 @@ it("writes movement mode and complete target descriptions into the trusted palet
   const palette = JSON.parse(await readFile(outputPath, "utf8"));
   expect(palette).toMatchObject({
     sceneId: files.sceneId,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk", "flight"],
+    movementModeLabels: ["陆地步行", "空中飞行（滑翔翼）"],
     targets: [
       { id: "visual-target-1", targetKind: "subject", name: "旅人" },
       { id: "visual-target-2", targetKind: "landmark", name: "塔楼" },

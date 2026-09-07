@@ -47,6 +47,12 @@
         aria-label="暂停"
       >Ⅱ</button>
       <div class="error-panel" data-error hidden></div>
+      <aside class="recording-panel glass-panel" data-recording-panel data-worldkit-shell-chrome hidden>
+        <button type="button" data-record aria-pressed="false">录制画面</button>
+        <time data-recording-time>00:00</time>
+        <span data-recording-status role="status">停止后下载本地白膜录屏</span>
+      </aside>
+      <aside class="native-recording-workbench glass-panel" data-recording-workbench data-worldkit-shell-chrome hidden></aside>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

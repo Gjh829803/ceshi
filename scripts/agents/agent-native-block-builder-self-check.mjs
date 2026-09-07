@@ -4,7 +4,10 @@ import { createHash } from "node:crypto";
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { parseSceneBriefV1, validateSubjectDesignV1 } from "@whitebox-world/authoring";
+import { checkNativeSubjectHostedSelectionV1, resolveNativeSubjectAuthoringClosureV1 } from "../reconstruction/native-subject-host-context.ts";
+import { isValidVisualTargetFrontDirectionWorldXZV1 } from "@whitebox-world/runtime-contracts";
+import { admitBabylonNativeOpeningCameraV1, parseBabylonNativeInitialCameraV1, parseNativeBlockGroundExplorationV1, admitNativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { parseVisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.ts";
 import { typecheckNativeBuilderSource } from "./native-builder-typecheck.mjs";
 
@@ -144,7 +147,7 @@ function validateResourceRefs(value, diagnosticCodes) {
 
 function validateAuthoring(value, diagnosticCodes) {
   if (!hasExactKeys(value, [
-    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups",
+    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups", "controlledSubject", "openingCamera", "groundExploration",
   ]) ||
       value.kind !== "native-block-authoring" || value.schemaVersion !== 1 ||
       value.entryModulePath !== "scene.ts" ||
@@ -153,15 +156,25 @@ function validateAuthoring(value, diagnosticCodes) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
     return;
   }
+  try { parseBabylonNativeInitialCameraV1(value.openingCamera); }
+  catch { diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"); }
+  try { parseNativeBlockGroundExplorationV1(value.groundExploration); }
+  catch { diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"); }
+  if (!hasExactKeys(value.controlledSubject, ["visualTargetId", "design"]) ||
+    !/^visual-target-[1-5]$/.test(value.controlledSubject.visualTargetId) ||
+    !validateSubjectDesignV1(value.controlledSubject.design).ok) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+  }
   let rowsAreValid = true;
   let hasSubjectVisualGroup = false;
   for (const visualGroup of value.visualGroups) {
     if (!hasExactKeys(visualGroup, [
-      "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex",
+      "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex", "frontDirectionWorldXZ",
     ]) || !STABLE_ID.test(visualGroup.visualGroupId) ||
         !STABLE_REF.test(visualGroup.acceptanceTargetRef) ||
         !SEMANTIC_CLASS_ID.test(visualGroup.semanticClassId) ||
-        !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex)) {
+        !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex) ||
+        !isValidVisualTargetFrontDirectionWorldXZV1(visualGroup.frontDirectionWorldXZ)) {
       rowsAreValid = false;
     }
     if (typeof visualGroup.semanticClassId === "string" &&
@@ -242,6 +255,10 @@ function validateVisualIdentityBinding(
     return;
   }
   const paletteById = new Map(palette.targets.map((target) => [target.id, target]));
+  if (!palette.targets.some((target) => target.role === "primary-subject" &&
+    target.visualTargetId === authoringValue.controlledSubject?.visualTargetId)) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+  }
   const caseTargetRefs = targets.map((target) => target?.acceptanceTargetRef);
   const caseGroupIds = targets.map((target) => target?.visualGroupId);
   const manifestTargetRefs = authoringValue.visualGroups.map((group) =>
@@ -356,7 +373,10 @@ export async function selfCheckNativeBlockBuilderWorkspace(
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);
       if (value !== undefined) {
-        if (hasForbiddenAuthorityField(value)) {
+        const authorityValue = outputPath === "native-block-authoring.json"
+          ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "openingCamera" && key !== "controlledSubject"))
+          : value;
+        if (hasForbiddenAuthorityField(authorityValue)) {
           diagnosticCodes.add("NATIVE_BLOCK_BUILDER_JSON_AUTHORITY_FIELD_FORBIDDEN");
         }
         if (outputPath === "native-resources.json") {
@@ -369,6 +389,25 @@ export async function selfCheckNativeBlockBuilderWorkspace(
     }
   }
 
+  let subjectClosure;
+  let subjectSelectionDiagnostics = [];
+  if (authoringValue !== undefined) {
+    try {
+      // The explicit palette path selects the Host-frozen input bundle. After
+      // delivery, workspace contains only Source outputs, not task inputs.
+      // Never fall back to candidate-local context during Host replay.
+      const frozenInputDirectory = path.dirname(visualIdentityInputs.visualIdentityPalettePath);
+      const [context, bootstrap] = await Promise.all([
+        readFrozenJson(path.join(frozenInputDirectory, "subject-host-context.json"), diagnosticCodes),
+        readFrozenJson(path.join(frozenInputDirectory, "native-scene.bootstrap.json"), diagnosticCodes),
+      ]);
+      const closure = resolveNativeSubjectAuthoringClosureV1({ context, bootstrap, authoring: authoringValue });
+      subjectClosure = closure;
+      admitBabylonNativeOpeningCameraV1(authoringValue.openingCamera, closure.worldRuntimeBootstrap);
+    } catch {
+      diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+    }
+  }
   if (visualIdentityInputs === undefined) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_INPUT_INVALID");
   } else {
@@ -396,6 +435,15 @@ export async function selfCheckNativeBlockBuilderWorkspace(
       sceneBriefBytes !== undefined &&
       authoringValue !== undefined
     ) {
+      try {
+        const spawn = caseValue.expected.spawnSupport.expectedPositionXYZMeters;
+        admitNativeBlockGroundExplorationV1(authoringValue.groundExploration,
+          caseValue.expected.groundConnectivity.mode,
+          [spawn.xMeters, spawn.yMeters, spawn.zMeters],
+          caseValue.expected.groundConnectivity.requireSingleReachableComponent);
+      } catch {
+        diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+      }
       validateVisualIdentityBinding(
         caseValue,
         paletteValue,
@@ -403,6 +451,13 @@ export async function selfCheckNativeBlockBuilderWorkspace(
         sceneBriefBytes,
         diagnosticCodes,
       );
+      if (subjectClosure !== undefined && sha256(sceneBriefBytes) === caseValue.sceneBriefHash) {
+        const brief = parseSceneBriefV1(sceneBriefBytes.toString("utf8"));
+        if (brief.ok) {
+          subjectSelectionDiagnostics = checkNativeSubjectHostedSelectionV1(subjectClosure, brief.value.movementModes.map(({ mode }) => mode));
+          for (const diagnostic of subjectSelectionDiagnostics) diagnosticCodes.add(diagnostic.code);
+        }
+      }
     }
   }
 
@@ -416,6 +471,7 @@ export async function selfCheckNativeBlockBuilderWorkspace(
       stableCompare(left.path, right.path))),
     diagnosticCodes: codes,
     typecheckDiagnostics,
+    subjectSelectionDiagnostics,
   });
 }
 

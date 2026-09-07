@@ -143,11 +143,9 @@ async function start(): Promise<void> {
       build(context): void {
         session = createBabylonNativeBlockProfileSessionV1(
           context,
-          { maximumBlockCount: 32 },
         );
         buildFixture(session);
         finalizedEpoch = session.finalize(Object.freeze({
-          displayGapMeters: 0.035,
           staticColliders: Object.freeze([]),
         }));
         context.registration.registerSpawnMarker(Object.freeze({

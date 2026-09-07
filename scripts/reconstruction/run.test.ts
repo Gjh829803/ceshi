@@ -49,9 +49,8 @@ const CASE_REF = "artifact://world-reconstruction-case/cloud-temple-t-gate-nativ
 const OWNER = Object.freeze({
   caseHash: hashWorldReconstructionCaseV1(reconstructionCase()),
   evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile()),
-  gameplayBootstrapHash: H("3"),
-  worldRuntimeBootstrapHash: H("4"),
-  worldBoundsHash: H("5"),
+  subjectHostContextHash: H("3"),
+  worldBoundsPolicyHash: H("5"),
   bootstrapInputHash: H("6"),
 });
 
@@ -246,7 +245,7 @@ function reconstructionCase() {
           requiresOverlay: true,
         },
       ],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef:
@@ -391,7 +390,7 @@ function openingCompositionDiagnostic(): WorldReconstructionDiagnosticV1 {
       kind: "revise-native-source",
       targetKind: "composition-target",
       targetId: "mountain-spire",
-      operation: "resize",
+      operation: "adjust-geometry",
       instruction:
         "Decrease the minimum X bound of the mountain-spire Blocks toward 2000.",
     },
@@ -1335,17 +1334,13 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.evaluate).toEqual([0]);
   });
 
-  it("fails closed on stale Case/Profile/Gameplay/World Runtime/Bounds/Bootstrap before submission", async () => {
+  it("fails closed on stale Case/Profile/Subject resources/Bounds/Bootstrap before submission", async () => {
     const outputDirectoryPath = await outputRoot();
     const fields = [
       ["caseHash", "WORLD_RECONSTRUCTION_STALE_CASE"],
       ["evaluationProfileHash", "WORLD_RECONSTRUCTION_STALE_PROFILE"],
-      ["gameplayBootstrapHash", "WORLD_RECONSTRUCTION_STALE_GAMEPLAY_BOOTSTRAP"],
-      [
-        "worldRuntimeBootstrapHash",
-        "WORLD_RECONSTRUCTION_STALE_WORLD_RUNTIME_BOOTSTRAP",
-      ],
-      ["worldBoundsHash", "WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS"],
+      ["subjectHostContextHash", "WORLD_RECONSTRUCTION_STALE_BOOTSTRAP"],
+      ["worldBoundsPolicyHash", "WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS_POLICY"],
       ["bootstrapInputHash", "WORLD_RECONSTRUCTION_STALE_BOOTSTRAP"],
     ] as const;
     for (const [field, code] of fields) {
@@ -1400,6 +1395,8 @@ describe("runWorldReconstructionV1", () => {
     ["task-timeout"],
     ["self-check-failed"],
     ["WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED"],
+    ["NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED"],
+    ["NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED"],
   ] as const)(
     "preserves the allowlisted generation diagnostic %s",
     async (diagnosticCode) => {
@@ -1494,6 +1491,10 @@ describe("runWorldReconstructionV1", () => {
   });
 
   it.each([
+    "native-block-opening-camera-invalid",
+    "NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED",
+    "NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED",
+    "native-block-ground-exploration-invalid",
     "native-block-subject-visual-review-proxy-stale",
     "native-block-visual-identity-palette-input-invalid",
     "native-block-visual-review-input-stale",

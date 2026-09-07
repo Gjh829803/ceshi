@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { parseWorldReconstructionCaseV1 } from "@whitebox-world/validation";
 import {
   sha256Bytes,
   stringifyCanonicalJson,
@@ -313,9 +314,8 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         artifactRoot,
         "visual-identity-palette.json",
       );
-      const sceneBrief = parseSceneBriefV1(
-        await readFile(briefPath, "utf8"),
-      );
+      const sceneBriefBytes = await readFile(briefPath);
+      const sceneBrief = parseSceneBriefV1(sceneBriefBytes.toString("utf8"));
       if (!sceneBrief.ok) {
         throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
       }
@@ -324,8 +324,7 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         proposalPath,
         stringifyCanonicalJson(await deriveNativeWorldBaselineProposalV1({
           sceneId: request.sceneId,
-          sceneBriefSemanticHash:
-            sceneBrief.sceneBriefHash as Sha256HashV1,
+          sceneBriefBytes,
           visualIdentityPalettePath,
           entryWhiteboxTargetPath: entryTargetPath,
         })),
@@ -350,14 +349,24 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         plannerSelfCheckPath,
         outputCaseRoot: stagedCaseRoot,
       });
-      await copyAcceptedPlannerExecutionV1({
-        artifactRoot,
-        destinationArtifactRoot: stagedCaseRoot,
-        sceneId: request.sceneId,
-        sceneSourceKind: "babylon-native",
-        sourcePlannerSelfCheckPath: plannerSelfCheckPath,
-        destinationPlannerSelfCheckPath: path.join(stagedCaseRoot, "inputs/planner-self-check.json"),
-      });
+      try {
+        await copyAcceptedPlannerExecutionV1({
+          artifactRoot,
+          destinationArtifactRoot: stagedCaseRoot,
+          sceneId: request.sceneId,
+          sceneSourceKind: "babylon-native",
+          sourcePlannerSelfCheckPath: plannerSelfCheckPath,
+          destinationPlannerSelfCheckPath: path.join(stagedCaseRoot, "inputs/planner-self-check.json"),
+        });
+      } catch (cause) {
+        // Planning and its checker already passed. Expose the Host phase and
+        // bounded system code, never arbitrary paths or subprocess text. Keep
+        // the original exception for in-process diagnosis; do not resubmit.
+        const code = !isNil(cause) && typeof cause === "object" && "code" in cause &&
+          typeof cause.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(cause.code)
+          ? cause.code : "UNKNOWN";
+        throw new Error(`NATIVE_WORLD_PLANNER_HANDOFF_FAILED:${code}`, { cause });
+      }
       for (const fileName of [
         "scene-brief.md",
         "visual-identity-palette.json",
@@ -385,8 +394,9 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
       plannerSelfCheckPath: path.join(artifactRoot, "inputs/planner-self-check.json"),
       requiredNativeProductionContext: NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1,
     });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(await readFile(casePath, "utf8")));
     await validateNativeWorldPlannerInputClosureV1({
-      reconstructionCase: JSON.parse(await readFile(casePath, "utf8")),
+      reconstructionCase,
       inputDirectoryPath: path.join(artifactRoot, "inputs"),
     });
 
@@ -400,7 +410,7 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
 
     const runId = `run-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${process.pid}`;
     const outputDirectoryPath = path.join(artifactRoot, "runs", runId);
-    const exitCode = await runProcess(
+    let exitCode = await runProcess(
       "pnpm",
       [
         "worldkit",
@@ -411,10 +421,26 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         outputDirectoryPath,
         "--backend",
         backend,
+        "--visual-capture-scope",
+        "complete-targets",
         "--json",
       ],
       repositoryRoot,
     );
+    const primaryReference = reconstructionCase.referenceInputs.find(input =>
+      /^reference-0\.(png|jpg|webp)$/.test(input.inputRef));
+    if (exitCode === 0 && primaryReference !== undefined) {
+      // Like the old scene chain, styling follows accepted whitebox capture only
+      // when a user appearance reference exists. Build-only uses frozen Case bytes.
+      process.stdout.write("WORLDKIT_STAGE visual-imagegen\n");
+      exitCode = await runProcess("bash", [
+        path.join(repositoryRoot, "scripts/visual/run-styled-opening-frame-agent.sh"),
+        "--scene-source", "babylon-native", "--scene-id", request.sceneId,
+        "--user-frame", path.join(artifactRoot, "inputs", primaryReference.inputRef),
+        "--backend", backend,
+      ], repositoryRoot);
+    }
+    if (exitCode === 0) process.stdout.write("WORLDKIT_STAGE ready\n");
     return Object.freeze({
       kind: "native-world-agent-result",
       schemaVersion: 1,

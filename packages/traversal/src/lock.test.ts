@@ -22,8 +22,7 @@ function validLockInput(
     resourceLockHash: HASH_A,
     subjectDefinitionRef: "worldkit://subject-definition/player@1",
     subjectDefinitionHash: HASH_A,
-    colliderProfileRef: "worldkit://collider-profile/humanoid@1",
-    colliderProfileHash: HASH_A,
+    colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid@1", colliderProfileHash: HASH_A },
     physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
     physicsBodyProfileHash: HASH_A,
     locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
@@ -56,6 +55,28 @@ function validLockInput(
 }
 
 describe("resolveTraversalLockV1", () => {
+  it("locks derived collider provenance without inventing a named Collider Profile", () => {
+    const input = { ...validLockInput() } as Record<string, unknown>;
+    input.colliderSource = {
+      kind: "derive",
+      colliderDerivationProfileRef: "worldkit://collider-derivation-profile/capsule@1",
+      colliderDerivationProfileHash: HASH_A,
+    };
+    const receipt = resolveTraversalLockV1(input);
+    expect(receipt.lock).toMatchObject({
+      colliderSource: input.colliderSource,
+      capsuleRadiusMeters: 0.35,
+      capsuleHeightMeters: 1.8,
+      maxSlopeDegrees: 42,
+      maxStepHeightMeters: 0.3,
+    });
+    expect(Object.isFrozen(receipt.lock.colliderSource)).toBe(true);
+    expect(receipt.lock).not.toHaveProperty("colliderProfileRef");
+    expect(() => resolveTraversalLockV1({ ...input, colliderSource: {
+      ...(input.colliderSource as object), colliderProfileRef: "fabricated",
+    } })).toThrow("TRAVERSAL_LOCK_INVALID");
+  });
+
   it("hashes the closed lock including capability and adapter identities", () => {
     const lockInput = validLockInput();
     expect(resolveTraversalLockV1(lockInput)).toMatchObject({
@@ -88,7 +109,7 @@ describe("resolveTraversalLockV1", () => {
       { runtimeBackendResolvedVersion: "2" },
       { runtimeAdapterRef: "worldkit://runtime-adapter/other-runtime@1" },
       { runtimeAdapterHash: HASH_B },
-      { colliderProfileHash: HASH_B },
+      { colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid@1", colliderProfileHash: HASH_B } },
       { physicsBodyProfileHash: HASH_B },
     ];
 
@@ -100,6 +121,15 @@ describe("resolveTraversalLockV1", () => {
   });
 
   it("rejects unknown fields and missing capability or adapter identities", () => {
+    for (const colliderSource of [
+      { kind: "derive" },
+      { kind: "derive", colliderDerivationProfileRef: "profile", colliderDerivationProfileHash: "bad" },
+      { kind: "profile", colliderProfileRef: "", colliderProfileHash: HASH_A },
+      { kind: "guessed", colliderProfileRef: "profile", colliderProfileHash: HASH_A },
+      { kind: "derive", colliderProfileRef: "profile", colliderProfileHash: HASH_A },
+    ]) expect(() => resolveTraversalLockV1({ ...validLockInput(), colliderSource })).toThrow("TRAVERSAL_LOCK_INVALID");
+    expect(() => resolveTraversalLockV1({ ...validLockInput(), colliderProfileRef: "legacy" }))
+      .toThrow("TRAVERSAL_LOCK_INVALID");
     expect(() =>
       resolveTraversalLockV1({
         ...validLockInput(),

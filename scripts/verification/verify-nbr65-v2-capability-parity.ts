@@ -142,7 +142,7 @@ const PASSED_CAPABILITIES = Object.freeze([
   },
   {
     capabilityId: "subject-bound-topology-policy",
-    disposition: "Native-owned Profile identity plus final topology identity, smoothing, exact support height and triangle slope fail closed against the resolved controlled Subject",
+    disposition: "Native-owned Profile/topology integrity with legacy one-meter smoothing; existing Spawn and required-route owners check actual support without a global step/slope veto",
     owner: "native-profile-production-host",
     evidence: {
       "packages/traversal/src/profile-registry.test.ts": [
@@ -150,15 +150,15 @@ const PASSED_CAPABILITIES = Object.freeze([
       ],
       "packages/native-babylon-block-profile/src/ground-analysis.test.ts": [
         "rejects a final topology bound to a different logical Ground Model",
-        "rejects an exact Spawn height that differs from the final smoothed topology",
+        "CF-04/G1 does not apply raw-height step/slope vetoes to an old automatically smoothed join",
       ],
       "scripts/reconstruction/native-ground-analysis-admission.ts": [
-        "assertProductionNativeBlockGroundTopologyCompatibleV1",
-        "maximumAutoSmoothHeightDeltaMeters",
-        "maxSlopeDegrees",
+        "assertProductionNativeBlockGroundTopologyIntegrityV1",
+        "topologyPolicyHash",
+        "downward-facing triangle",
       ],
       "scripts/reconstruction/native-package.test.ts": [
-        "fails closed when the Profile topology exceeds the controlled Subject envelope",
+        "accepts legacy one-meter smoothing and steep terrain while rejecting corrupt topology",
       ],
     },
   },

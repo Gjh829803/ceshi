@@ -1,6 +1,11 @@
 # Babylon Block Settlement 与真实台阶闭环设计
 
 - 状态：Accepted implementation design
+- 当前修订（2026-09-07）：CF-04/G1/G2 已取代本文 §9/§10 中 anisotropic grid、
+  quarter-height `step` 和逐 Block solid-box 步行面的决定。当前四形状/统一网格及
+  1m source-top smoothing 以 [Native Walkable Surface 修订](./2026-09-02-native-block-walkable-surface-closure-design.md#implementation-revision-record)
+  为准；下文保留历史设计上下文，不可用来恢复已删除方言。真实 Fixture 现在验证
+  0.5m 平滑上升、显式不可行走的 0.5m 高差阻挡及同样的 Reset/ledge/cleanup。
 - 日期：2026-08-31
 - 上位设计：[Babylon Native Block Whitebox 创作 Profile](./2026-08-28-babylon-native-block-whitebox-profile-design.md)
 - Native 权威：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
@@ -127,8 +132,8 @@ interface BabylonNativeProfileSettlementTargetV1 {
   readonly collisionBinding:
     | Readonly<{ kind: "none" }>
     | Readonly<{
-        kind: "static-collider";
-        colliderId: string;
+        kind: "static-colliders";
+        colliderIds: readonly [string, ...string[]];
       }>;
 }
 
@@ -173,7 +178,7 @@ interface BabylonNativeBlockFinalizedEpochV1 {
 }
 
 interface BabylonNativeBlockProfileSessionV1 {
-  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
+  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Readonly<BabylonNativeBlockCreateInputV1>;
   finalize(
     input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
   ): BabylonNativeBlockFinalizedEpochV1;
@@ -224,8 +229,13 @@ sorted collider joins:
   blockId, colliderId
 ```
 
-targets 的 `elementId` 集合必须 exact equal 全部 Layout block IDs，包括未分组 ground/route。missing、extra、
-duplicate、Profile mismatch、Collider join mismatch 均拒绝。
+2026-09-07 用户批准的 CF-20/MEM4 修订：创建阶段只记录不可变 Block intent，Finalize 在分配前完成
+旧分支等价 clustering。targets 的 `elementId` 对应实际 cluster Mesh（以及显式 walkable overlay），
+不再假设每个逻辑 Block 有一个 Mesh。Profile 验证 cluster 的 `sourceBlockIds` exact-cover 全部 Layout
+Block IDs，包括未分组 ground/route；全部逻辑身份与显式 Collider joins 仍进入 profileInventoryHash。
+每个 target 的 `static-colliders.colliderIds` 为非空、唯一、字典序数组；每个 Collider 仍只 join 一个
+target，且保持独立不可见 proxy。missing、extra、duplicate、Profile mismatch、Collider join mismatch
+仍拒绝。这是原 settlement 的 current-only 表示调整，不增加生产 gate 或第二 Source。
 
 这仍不足以发现 Module 直接调用 Babylon API 创建的额外 Mesh。因此 `whitebox.blocks@1` 在 build settle 后
 执行 identity-only Scene census：
@@ -246,6 +256,17 @@ Profile 若允许 asset visual，必须先增加 closed target kind，不能用 
 
 ## 7. 单一 finalize 与原子顺序
 
+CF-20/MEM4 的 Package materializer metadata 必须携带 Host receipt 的
+`settledVisualTargetCount`，生产者直接复制同一次 Host settlement 的 `targetCount`。
+Package build 与 directory/membership validation 都按该值和 Contribution exact-match，
+不得从逻辑 Block 数或 Collider 数重建视觉 census。完整 Block coverage 由 Profile 的同一次
+settlement 和 profileInventoryHash 绑定；物化 target 的 geometry/lifetime 由 Host 快照绑定。
+
+同一修订合并不可行走 `exact-solid-union` Collider 的共面外表面微格：只有同一 Collider、
+同一平面、同一法向且完整占用的矩形才能合并，不能跨孔洞或 Collider 身份边界。保留每个
+source cell 和 Block join；不改变外轮廓、绕序、摩擦、可行走/平滑规则或预算。三角化及其
+geometry/topology/Contribution/Package Hash 使用新源码重新生成，不改写历史失败产物。
+
 ```text
 module.build(context)
   -> session.createBlock(...)
@@ -253,10 +274,10 @@ module.build(context)
        1. open -> finalizing; snapshot inputs/selections
        2. derive Layout exactly once; Check exactly once
        3. validate complete inventory and every display gap before allocation
-       4. create/register independent no-gap proxies from same CheckedLayout
-       5. exact pre-style recheck every source Mesh
-       6. apply visual gap/materials
-       7. compute profileInventoryHash
+       4. compute profileInventoryHash from immutable logical intent/explicit joins
+       5. cluster before allocation; create and validate fixed cluster geometry/materials
+       6. create/register independent no-gap proxies from same CheckedLayout
+       7. apply walkable display; retain exact logical handles over cluster visuals
        8. commit one Host-private complete target batch
        9. freeze finalized epoch; release mutable Maps
   -> register exact Spawn

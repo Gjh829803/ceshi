@@ -14,6 +14,7 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
+  deriveFormalWhiteboxTriviewManifestV1,
   assertFormalSemanticViewObservationSetMatchesReceiptV1,
   hashFormalArtifactViewRequestV1,
   hashFormalColliderOverlayRequestV1,
@@ -209,11 +210,11 @@ const MINIMAL_FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(
 function resolvedTraversalCheckpointCriteria() {
   return [
     {
-      kind: "reach-bounds",
+      kind: "reach-position",
       checkpointId: "junction",
       expectation: "reach",
       sourceVisualGroupId: "upper-t-junction-group",
-      sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS,
+      standPositionMetersXYZ: [0, 1, -2],
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
     },
@@ -236,10 +237,11 @@ function resolvedTraversalCheckpointCriteria() {
 function authoredTraversalCheckpointCriteria() {
   return [
     {
-      kind: "reach-bounds",
+      kind: "reach-position",
       checkpointId: "junction",
       expectation: "reach",
       sourceVisualGroupId: "upper-t-junction-group",
+      standPositionMetersXYZ: [0, 1, -2],
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
     },
@@ -315,6 +317,8 @@ function viewRecord(
     requestHash: hashFormalArtifactViewRequestV1(request),
     pngArtifactRef: `artifact://case/cloud-temple/capture/${request.viewId}.png`,
     pngContentHash: Hx(pngByte),
+    identityMaskPngArtifactRef: `artifact://case/cloud-temple/capture/${request.viewId}-identity-mask.png`,
+    identityMaskPngContentHash: Hx(pngByte),
   };
 }
 
@@ -494,6 +498,7 @@ function formalRequestValue() {
   } as const;
   return {
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture-request",
     formalRequestRef:
@@ -542,11 +547,11 @@ function minimalScriptedTraversalRequest(checkCount: number) {
       fixedInputSequence: MINIMAL_FIXED_INPUT_SEQUENCE,
       fixedInputSequenceHash: MINIMAL_FIXED_INPUT_SEQUENCE_HASH,
       checkpointCriteria: [{
-        kind: "reach-bounds",
+        kind: "reach-position",
         checkpointId: "checkpoint",
         expectation: "reach",
         sourceVisualGroupId: "central-ascent-group",
-        sourceBoundsMeters: CENTRAL_ASCENT_BOUNDS,
+        standPositionMetersXYZ: [0, 0, 0],
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       }],
@@ -559,6 +564,7 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
   const formalRequest = formalRequestValue();
   return {
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: [],
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture",
     formalRequestRef:
@@ -627,6 +633,30 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 }
 
 describe("FormalWorldCaptureIntentV1", () => {
+  it("requires and hashes a local stand endpoint without a group-bounds compatibility path", () => {
+    const original = formalCaptureIntentValue();
+    const reach = original.checkpointSpatialCriteria[0]!;
+    const changed = {
+      ...original,
+      checkpointSpatialCriteria: [{ ...reach, standPositionMetersXYZ: [8, 1.25, -30] },
+        ...original.checkpointSpatialCriteria.slice(1)],
+    };
+    expect(hashFormalWorldCaptureIntentV1(parseFormalWorldCaptureIntentV1(changed)))
+      .not.toBe(hashFormalWorldCaptureIntentV1(parseFormalWorldCaptureIntentV1(original)));
+    for (const override of [
+      { standPositionMetersXYZ: undefined },
+      { standPositionMetersXYZ: [0, 1] },
+      { standPositionMetersXYZ: [0, Number.NaN, 1] },
+      { kind: "reach-bounds", sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS },
+    ]) {
+      expect(() => parseFormalWorldCaptureIntentV1({
+        ...original,
+        checkpointSpatialCriteria: [{ ...reach, ...override },
+          ...original.checkpointSpatialCriteria.slice(1)],
+      })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    }
+  });
+
   it("parses, freezes, canonicalizes, and hashes one closed Scheme A intent", () => {
     const intent = parseFormalWorldCaptureIntentV1(formalCaptureIntentValue());
 
@@ -707,7 +737,16 @@ describe("FormalWorldCaptureIntentV1", () => {
     })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
   });
 
-  it("requires non-empty, unique, canonical collection order", () => {
+  it("accepts no identity targets only when their dependent criteria are also empty", () => {
+    const intent = formalCaptureIntentValue();
+    expect(parseFormalWorldCaptureIntentV1({ ...intent, semanticCaptureTargetBindings: [],
+      topologyRelations: [], checkpointSpatialCriteria: [],
+    }).semanticCaptureTargetBindings).toEqual([]);
+    expect(() => parseFormalWorldCaptureIntentV1({ ...intent, semanticCaptureTargetBindings: [],
+    })).toThrow();
+  });
+
+  it("requires target identities and unique canonical collection order", () => {
     const intent = formalCaptureIntentValue();
     for (const invalid of [{
       ...intent,
@@ -725,13 +764,7 @@ describe("FormalWorldCaptureIntentV1", () => {
       ),
     }, {
       ...intent,
-      topologyRelations: [],
-    }, {
-      ...intent,
       topologyRelations: [...intent.topologyRelations].reverse(),
-    }, {
-      ...intent,
-      checkpointSpatialCriteria: [],
     }, {
       ...intent,
       checkpointSpatialCriteria: [...intent.checkpointSpatialCriteria].reverse(),
@@ -739,6 +772,12 @@ describe("FormalWorldCaptureIntentV1", () => {
       expect(() => parseFormalWorldCaptureIntentV1(invalid))
         .toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
     }
+  });
+
+  it("admits explicit empty topology and checkpoint sets without inventing a script", () => {
+    const value = { ...formalCaptureIntentValue(), topologyRelations: [], checkpointSpatialCriteria: [] };
+    expect(parseFormalWorldCaptureIntentV1(value)).toMatchObject({ topologyRelations: [], checkpointSpatialCriteria: [] });
+    expect(hashFormalWorldCaptureIntentV1(value)).not.toBe(hashFormalWorldCaptureIntentV1(formalCaptureIntentValue()));
   });
 
   it("rejects relation and checkpoint proof identities outside bound targets", () => {
@@ -762,6 +801,15 @@ describe("FormalWorldCaptureIntentV1", () => {
 });
 
 describe("FormalWorldCaptureRequestV1", () => {
+  it("binds the requested source-neutral tri-view groups into the request hash", () => {
+    const groups = [{ visualTargetId: "visual-target-1", runtimeEntityIds: ["player"],
+      frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D" }];
+    const value = { ...formalRequestValue(), visualCaptureGroups: groups };
+    const parsed = parseFormalWorldCaptureRequestV1(value);
+    expect(parsed).toMatchObject({ visualCaptureGroups: groups });
+    expect(hashFormalWorldCaptureRequestV1(value)).not.toBe(hashFormalWorldCaptureRequestV1({ ...value, visualCaptureGroups: [] }));
+    expect(Object.isFrozen(Reflect.get(parsed, "visualCaptureGroups"))).toBe(true);
+  });
   it("rejects old Case Ref dialects", () => {
     for (const caseRef of [
       "artifact://case/cloud-temple.case/case.json",
@@ -1221,6 +1269,7 @@ function semanticViewObservationSetValue() {
       viewId: view.viewId,
       viewRequestHash: view.requestHash,
       pngContentHash: view.pngContentHash,
+      identityMaskPngContentHash: view.identityMaskPngContentHash,
       targets: identity.formalRequest.semanticCaptureMap.bindings.map(
         (binding, targetIndex) => {
           const group = openingGroups[targetIndex]!;
@@ -1357,6 +1406,35 @@ describe("formal measured observation documents", () => {
     })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
   });
 
+  it("requires identity-mask references and hashes without a display-image fallback", () => {
+    for (const field of ["identityMaskPngArtifactRef", "identityMaskPngContentHash"] as const) {
+      const value = structuredClone(receiptValue());
+      Reflect.deleteProperty(value.views[0]!, field);
+      expect(() => parseFormalWorldCaptureReceiptV1(value)).toThrow();
+    }
+    const value = structuredClone(receiptValue());
+    value.views[0]!.identityMaskPngArtifactRef = value.views[0]!.pngArtifactRef;
+    expect(() => parseFormalWorldCaptureReceiptV1(value)).toThrow();
+    const observation = structuredClone(semanticViewObservationSetValue());
+    Reflect.deleteProperty(observation.views[0]!, "identityMaskPngContentHash");
+    expect(() => parseFormalSemanticViewObservationSetV1(observation)).toThrow();
+  });
+
+  it("rejects a rehashed semantic view set bound to a different identity mask", () => {
+    const openingObservation = parseFormalOpeningObservationV1(openingObservationValue());
+    const value = structuredClone(semanticViewObservationSetValue());
+    value.views[1]!.identityMaskPngContentHash = H("9");
+    const observationSet = parseFormalSemanticViewObservationSetV1(value);
+    const receipt = parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      openingObservationContentHash: hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(observationSet),
+    });
+    expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+      observationSet, receipt, openingObservation,
+    })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
+  });
+
   it("rejects a rehashed semantic view set with a forged camera owner identity", () => {
     const openingObservation = parseFormalOpeningObservationV1(
       openingObservationValue(),
@@ -1388,9 +1466,24 @@ describe("formal measured observation documents", () => {
     }
   });
 
+  function supportSampleFixture() {
+    const resetSnapshot = snapshotFixture();
+    const sampledSnapshot = {
+      ...resetSnapshot,
+      world: { ...resetSnapshot.world, simulationTick: resetSnapshot.world.simulationTick + 1,
+        gameplayInspection: { ...resetSnapshot.world.gameplayInspection,
+          simulationTick: resetSnapshot.world.simulationTick + 1 } },
+    };
+    return { sampledSnapshot, sampledSnapshotHash: sha256CanonicalJson(sampledSnapshot) };
+  }
+
   it("parses measured support and rejects a stale reset Snapshot join", () => {
+    const resetSnapshot = snapshotFixture();
+    const { sampledSnapshot, sampledSnapshotHash } = supportSampleFixture();
     const value = {
       ...observationIdentity("formal-spawn-support-observation", "physics"),
+      sampledSnapshot,
+      sampledSnapshotHash,
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {
@@ -1407,11 +1500,28 @@ describe("formal measured observation documents", () => {
     };
     const parsed = parseFormalSpawnSupportObservationV1(value);
     expect(parsed.supportContact.colliderId).toBe("spawn-ground");
+    expect(parsed.resetReadySnapshot.world.simulationTick).toBe(4);
+    expect(parsed.sampledSnapshot.world.simulationTick).toBe(5);
     expect(hashFormalSpawnSupportObservationV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(() => parseFormalSpawnSupportObservationV1({
       ...value,
       resetReadySnapshotHash: H("9"),
     })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    for (const badSample of [resetSnapshot,
+      { ...sampledSnapshot, worldSessionId: "another-world" },
+      { ...sampledSnapshot, runtimeSessionId: "another-runtime" },
+      { ...sampledSnapshot, world: { ...sampledSnapshot.world, simulationTick: 6,
+        gameplayInspection: { ...sampledSnapshot.world.gameplayInspection, simulationTick: 6 } } },
+    ]) {
+      expect(() => parseFormalSpawnSupportObservationV1({ ...value,
+        sampledSnapshot: badSample, sampledSnapshotHash: sha256CanonicalJson(badSample),
+      })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    }
+    expect(() => parseFormalSpawnSupportObservationV1({ ...value, sampledSnapshotHash: H("9") }))
+      .toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+    const { sampledSnapshot: _sample, sampledSnapshotHash: _hash, ...removedShape } = value;
+    expect(() => parseFormalSpawnSupportObservationV1(removedShape))
+      .toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
   });
 
   it("rejects legacy flat locomotion support state even when the medium agrees", () => {
@@ -1422,6 +1532,7 @@ describe("formal measured observation documents", () => {
         "physics",
         resetReadySnapshot,
       ),
+      ...supportSampleFixture(),
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {
@@ -1441,6 +1552,7 @@ describe("formal measured observation documents", () => {
   it("rejects support evidence that disagrees with nested committed movement medium", () => {
     expect(() => parseFormalSpawnSupportObservationV1({
       ...observationIdentity("formal-spawn-support-observation", "physics"),
+      ...supportSampleFixture(),
       spawnMarkerId: "player-spawn",
       subjectEntityId: "player",
       supportContact: {
@@ -1573,6 +1685,39 @@ describe("formal measured observation documents", () => {
 });
 
 describe("FormalWorldCaptureReceiptV1", () => {
+  it("binds tri-view count, order, exact paths and hashes to the request without a second manifest authority", () => {
+    const base = receiptValue();
+    const formalRequest = parseFormalWorldCaptureRequestV1({ ...base.formalRequest,
+      visualCaptureGroups: [
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"],
+          frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D" },
+        { visualTargetId: "visual-target-2", runtimeEntityIds: ["native-block:tower"],
+          frontDirectionWorldXZ: [1, 0], role: "primary-landmark", semanticClassId: "landmark.tower", identityColor: "#F28E2B" },
+      ],
+    });
+    const whiteboxTriviews = formalRequest.visualCaptureGroups.map(group => ({
+      visualTargetId: group.visualTargetId,
+      pngArtifactRef: `artifact://case/cloud-temple/attempts/0/capture/triviews/${group.visualTargetId}/whitebox-triview.png`,
+      pngContentHash: H("a"),
+    }));
+    const value = { ...base, formalRequest, formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest), whiteboxTriviews };
+    const receipt = parseFormalWorldCaptureReceiptV1(value);
+    const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt)!;
+    expect(manifest.whiteboxTriviews).toEqual(formalRequest.visualCaptureGroups.map(group => ({
+      ...group, views: ["front", "right", "back"], imageUri: `${group.visualTargetId}/whitebox-triview.png`,
+    })));
+    expect(Object.isFrozen(manifest.whiteboxTriviews[1]!.runtimeEntityIds)).toBe(true);
+    expect(deriveFormalWhiteboxTriviewManifestV1(parseFormalWorldCaptureReceiptV1(base))).toBeUndefined();
+    for (const rows of [undefined, [], whiteboxTriviews.slice(0, 1), [...whiteboxTriviews, whiteboxTriviews[0]],
+      [...whiteboxTriviews].reverse(),
+      [{ ...whiteboxTriviews[0], pngArtifactRef: "artifact://case/other/triview.png" }, whiteboxTriviews[1]],
+      [{ ...whiteboxTriviews[0], pngContentHash: "not-a-hash" }, whiteboxTriviews[1]],
+    ]) {
+      expect(() => parseFormalWorldCaptureReceiptV1({ ...value, whiteboxTriviews: rows }))
+        .toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
+    }
+  });
+
   it("requires Package, Attempt, Runtime, and SDK owner identities with the three formal views", () => {
     const runtimeSnapshot = snapshotFixture();
     const receipt = parseFormalWorldCaptureReceiptV1(receiptValue(runtimeSnapshot));
@@ -1751,6 +1896,8 @@ describe("FormalWorldCaptureReceiptV1", () => {
       requestHash: H("q"),
       pngArtifactRef: "artifact://case/cloud-temple/capture/right.png",
       pngContentHash: H("q"),
+      identityMaskPngArtifactRef: "artifact://case/cloud-temple/capture/right-identity-mask.png",
+      identityMaskPngContentHash: H("q"),
     };
     expect(() => parseFormalWorldCaptureReceiptV1(receipt)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",

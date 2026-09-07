@@ -7,6 +7,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge";
+import { attachHostedRecordingServer } from "./hosted-recording.js";
 
 const runtimeOrigin = "http://127.0.0.1:5175";
 const runtimeSessionId = "runtime.hosted.browser.001";
@@ -48,6 +49,7 @@ function readyEvent(): RuntimeSessionEventV1 {
 
 function harness(options: Readonly<{
   credentiallessSupported?: boolean;
+  recordingEnabled?: boolean;
   protocolBudget?: NativeEffectiveExecutionBudgetV1["protocol"];
 }> = {}) {
   const shellWindow = new EventTarget();
@@ -82,6 +84,7 @@ function harness(options: Readonly<{
     runtimeSessionId,
     sessionNonce,
     protocolBudget: options.protocolBudget ?? protocolBudget,
+    recordingEnabled: options.recordingEnabled ?? false,
   });
   const messageEvent = (
     origin: string,
@@ -122,6 +125,43 @@ function harness(options: Readonly<{
 }
 
 describe("Hosted Runtime browser bridge", () => {
+  it("binds recording to the same origin/session handshake and closes it on navigation", async () => {
+    const { bridge, bootstrap, postMessage, frame } = harness({ recordingEnabled: true });
+    expect(() => bridge.recording()).toThrow("RECORDING_NOT_READY");
+    bootstrap();
+    const [runtimePort, mediaPort] = postMessage.mock.calls[0]?.[2] as MessagePort[];
+    expect(postMessage.mock.calls[0]?.[1]).toBe(runtimeOrigin);
+    expect(postMessage.mock.calls[0]?.[2]).toHaveLength(2);
+    const recorder = { start: vi.fn(), dispose: vi.fn(), stop: vi.fn(async () => ({
+      blob: new Blob(["original-canvas-video"], { type: "video/webm" }), durationMs: 800,
+      extension: "webm" as const, mimeType: "video/webm",
+    })) };
+    const server = attachHostedRecordingServer(mediaPort!, () => recorder);
+    try {
+      runtimePort!.postMessage({ kind: "native-isolation-transport-envelope", schemaVersion: 1,
+        runtimeSessionId, sessionNonce, messageSequence: 2, payload: readyEvent() });
+      await bridge.waitUntilReady();
+      const recording = bridge.recording();
+      await recording.start();
+      await expect(bridge.submit({ kind: "worldkit-runtime-session-request", schemaVersion: 1,
+        id: "reset-during-recording", runtimeSessionId, type: "session.reset" })).rejects.toThrow("RECORDING_RESET_CONFLICT");
+      expect(await (await recording.stop()).blob.text()).toBe("original-canvas-video");
+      await recording.start();
+      frame.dispatchEvent(new Event("load")); frame.dispatchEvent(new Event("load"));
+      expect(recording.state).toBe("disposed");
+      await vi.waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
+      expect(bridge.phase()).toBe("terminated");
+    } finally { bridge.dispose(); server.dispose(); runtimePort!.close(); }
+  });
+
+  it("never transfers a media port for a rejected identity", () => {
+    const { bridge, bootstrap, postMessage } = harness({ recordingEnabled: true });
+    bootstrap({ sessionNonce: "wrong" });
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(() => bridge.recording()).toThrow("RECORDING_NOT_READY");
+    bridge.dispose();
+  });
+
   it("rejects a browser without native credentialless iframe support", () => {
     expect(() => harness({ credentiallessSupported: false })).toThrow(
       "WORLDKIT_HOSTED_RUNTIME_CREDENTIALLESS_UNSUPPORTED",

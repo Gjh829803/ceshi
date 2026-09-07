@@ -17,14 +17,11 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
   const fixedInputSequence = [{ actions: [], ticks: 1 }] as const;
   const fixedInputSequenceHash = sha256CanonicalJson(fixedInputSequence);
   const checkpointCriteria = [{
-    kind: "reach-bounds",
+    kind: "reach-position",
     checkpointId: "fixture-checkpoint",
     expectation: "reach",
     sourceVisualGroupId: "fixture-group",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-2, 0, -2],
-      maximumMetersXYZ: [2, 2, 2],
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   }] as const;
@@ -98,6 +95,7 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
   } as const;
   return parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "fixture.formal-capture-request",
     formalRequestRef:
@@ -190,8 +188,12 @@ export function formalHostedPayloadFixtureV1(input: Readonly<{
   const png = () => new Uint8Array(input.pngBytes ?? 8);
   return {
     openingPng: png(),
+    whiteboxTriviewPngs: input.request.visualCaptureGroups.map(() => png()),
     worldSidePng: png(),
     worldTopDownPng: png(),
+    openingIdentityMaskPng: png(),
+    worldSideIdentityMaskPng: png(),
+    worldTopDownIdentityMaskPng: png(),
     colliderOverlayPng: png(),
     openingObservation: { ...identity },
     semanticViewObservationSet: { ...identity },

@@ -42,6 +42,44 @@ function solve(
 }
 
 describe("CameraHardDecolliderV1", () => {
+  it("prepares final spatial clamp without advancing time or trusting the unvalidated candidate", () => {
+    const decollider = new CameraHardDecolliderV1();
+    solve(decollider, 1, hit(2));
+    const before = decollider.captureTransactionState();
+    decollider.prepareFinalClamp(1, [3, 0, 4], [1, 0, 0]);
+    const prepared = decollider.captureTransactionState();
+    expect(prepared.constrainedArmLengthMeters).toBeCloseTo(Math.sqrt(20), 10);
+    expect(prepared.lastSafePositionMetersXYZ).toEqual(before.lastSafePositionMetersXYZ);
+    expect(prepared.lastSafeTargetPositionMetersXYZ).toEqual([1, 0, 0]);
+    expect(prepared.authorityTick).toBe(before.authorityTick);
+    expect(prepared.clearHoldRemainingSeconds).toBe(before.clearHoldRemainingSeconds);
+    expect(() => decollider.prepareFinalClamp(2, [3, 0, 4], [1, 0, 0]))
+      .toThrow("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    expect(() => decollider.prepareFinalClamp(1, [Number.NaN, 0, 4], [1, 0, 0]))
+      .toThrow("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    expect(decollider.captureTransactionState()).toEqual(prepared);
+    decollider.restoreTransactionState(before);
+    expect(decollider.captureTransactionState()).toEqual(before);
+  });
+
+  it("records a validated final pose without replacing nominal arm recovery or advancing time", () => {
+    const decollider = new CameraHardDecolliderV1();
+    solve(decollider, 1);
+    const before = decollider.captureTransactionState();
+    decollider.commitValidatedPose(1, [1, 0, 3], [0, 0, 0]);
+    expect(decollider.captureTransactionState()).toEqual({
+      ...before, lastSafePositionMetersXYZ: [1, 0, 3], lastSafeTargetPositionMetersXYZ: [0, 0, 0],
+    });
+    const committed = decollider.captureTransactionState();
+    expect(() => decollider.commitValidatedPose(2, [1, 0, 4], [0, 0, 0]))
+      .toThrow("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    expect(() => decollider.commitValidatedPose(1, [Number.NaN, 0, 4], [0, 0, 0]))
+      .toThrow("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
+    expect(decollider.captureTransactionState()).toEqual(committed);
+    decollider.restoreTransactionState(before);
+    expect(decollider.captureTransactionState()).toEqual(before);
+  });
+
   it("immediately clamps inward but never exceeds the geometry-safe arm", () => {
     const decollider = new CameraHardDecolliderV1();
 

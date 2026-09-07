@@ -54,7 +54,7 @@ const VALID_SCENE_BRIEF = `# WorldKit Scene Brief
 材质、纹理与光照只属于后续渲染层。
 
 ## 运动模式
-陆地步行：主体自然行走和奔跑。
+- 陆地步行：主体自然行走和奔跑。
 
 ## 空间
 前景地面连接中段与远端目的地。
@@ -80,8 +80,8 @@ function nativeVisualIdentityPaletteText(input: Readonly<{
     schemaVersion: 1,
     sceneId: input.sceneId,
     sceneBriefHash: input.sceneBriefHash,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["陆地步行"],
     targets: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.slice(0, targetCount).map(
       (identityColor, index) => ({
         id: `visual-target-${index + 1}`,
@@ -297,8 +297,8 @@ describe("trusted Native world Case preparation", () => {
         schemaVersion: 1,
         sceneId: "baseline-native-world",
         sceneBriefHash: sceneBriefSemanticHashValue,
-        movementMode: "ground-walk",
-        movementModeLabel: "陆地步行",
+        movementModes: ["ground-walk"],
+        movementModeLabels: ["陆地步行"],
         targets: [{
           id: "visual-target-1",
           visualTargetId: "visual-target-1",
@@ -353,19 +353,20 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "baseline-native-world",
-      sceneBriefSemanticHash: sceneBriefSemanticHashValue,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
       expected: {
         topology: {
           layerIds: readonly string[];
+          relations: readonly unknown[];
         };
         colliders: readonly {
           acceptanceTargetRef: string;
           contributionId: string;
           colliderId: string;
-          role: "ground" | "blocker" | "step";
+          role: "ground" | "blocker";
           requiresOverlay: boolean;
         }[];
         semanticSilhouetteTargets: readonly {
@@ -380,18 +381,21 @@ describe("trusted Native world Case preparation", () => {
         criticalTraversalChecks: readonly { id: string }[];
       };
       formalCaptureIntent: {
+        topologyRelations: readonly unknown[];
+        checkpointSpatialCriteria: readonly {
+          kind: string;
+          standPositionMetersXYZ: readonly [number, number, number];
+        }[];
         semanticCaptureTargetBindings: readonly {
           acceptanceTargetRef: string;
           semanticLayerId: string;
         }[];
       };
-      worldBounds: unknown;
+      worldBoundsPolicy: unknown;
     };
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     )).toEqual([
-      "worldkit://acceptance-target/entry-ground@1",
-      "worldkit://acceptance-target/remote-ground@1",
       "worldkit://acceptance-target/visual-target-2@1",
     ]);
     expect(proposal.expected.semanticSilhouetteTargets.find(
@@ -403,22 +407,16 @@ describe("trusted Native world Case preparation", () => {
       maxXBasisPoints: 6000,
       maxYBasisPoints: 6000,
     });
-    expect(proposal.expected.criticalTraversalChecks).toEqual([
-      expect.objectContaining({ id: "entry-to-remote-ground-pass" }),
-    ]);
+    expect(proposal.expected.criticalTraversalChecks).toEqual([]);
+    expect(proposal.formalCaptureIntent.checkpointSpatialCriteria).toEqual([]);
+    expect(proposal.expected.topology.relations).toEqual([]);
+    expect(proposal.formalCaptureIntent.topologyRelations).toEqual([]);
     expect(proposal.expected.colliders).toEqual([
       expect.objectContaining({
         acceptanceTargetRef:
-          "worldkit://acceptance-target/entry-ground@1",
+          "worldkit://acceptance-target/ground@1",
         contributionId: "collider-entry-ground",
         colliderId: "collider-entry-ground",
-        role: "ground",
-      }),
-      expect.objectContaining({
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/remote-ground@1",
-        contributionId: "collider-remote-ground",
-        colliderId: "collider-remote-ground",
         role: "ground",
       }),
       {
@@ -431,19 +429,16 @@ describe("trusted Native world Case preparation", () => {
       },
     ]);
     expect(proposal.formalCaptureIntent.semanticCaptureTargetBindings)
-      .toHaveLength(3);
+      .toHaveLength(1);
     expect(proposal.expected.topology.layerIds).toEqual([
-      "foreground",
       "middle",
     ]);
     expect(proposal.expected.topology.layerIds).toEqual(
       [...new Set(proposal.formalCaptureIntent.semanticCaptureTargetBindings
         .map(({ semanticLayerId }) => semanticLayerId))].sort(),
     );
-    expect(proposal.worldBounds).toEqual({
-      centerMetersXZ: [0, -32],
-      sizeMetersXZ: [128, 128],
-      heightRangeMeters: [-16, 64],
+    expect(proposal.worldBoundsPolicy).toEqual({
+      mode: "checked-block-layout",
     });
 
     const proposalPath = path.join(root, "host-derived-baseline-case.json");
@@ -472,26 +467,12 @@ describe("trusted Native world Case preparation", () => {
     const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
       JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")),
     );
-    expect(reconstructionCase.expected.criticalTraversalChecks[0]?.id)
-      .toBe("entry-to-remote-ground-pass");
-    expect(reconstructionCase.expected.groundConnectivity
-      .requiredTraversalBands[0]?.centerlineStandPositionsXYZMeters.at(-1))
-      .toEqual({ xMeters: 0, yMeters: 0, zMeters: -12 });
+    expect(reconstructionCase.expected.criticalTraversalChecks).toEqual([]);
+    expect(reconstructionCase.expected.groundConnectivity).toEqual({
+      mode: "source-authored", requireSingleReachableComponent: true,
+      requiredTraversalBands: [],
+    });
     expect(evaluationProfile.thresholds.semanticSilhouetteTargets).toEqual([
-      {
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/entry-ground@1",
-        maximumBoundsDriftBasisPoints: 10_000,
-        maximumCenterDriftBasisPoints: 10_000,
-        maximumCoverageDriftBasisPoints: 10_000,
-      },
-      {
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/remote-ground@1",
-        maximumBoundsDriftBasisPoints: 10_000,
-        maximumCenterDriftBasisPoints: 10_000,
-        maximumCoverageDriftBasisPoints: 10_000,
-      },
       {
         acceptanceTargetRef:
           "worldkit://acceptance-target/visual-target-2@1",
@@ -569,6 +550,76 @@ describe("trusted Native world Case preparation", () => {
     })).rejects.toThrow("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
   });
 
+  it("derives connected ground only when every ordered movement mode is ground-based", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-ground-policy-"));
+    temporaryRoots.push(root);
+    const sceneId = "ground-policy-parity";
+    const palettePath = path.join(root, "palette.json");
+    const imagePath = path.join(root, "entry.png");
+    const sceneBriefHash = sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF));
+    const basePalette = JSON.parse(nativeVisualIdentityPaletteText({ sceneId, sceneBriefHash, targetCount: 1 }));
+    await sharp({ create: { width: 100, height: 100, channels: 4, background: "#E85D5D" } }).png().toFile(imagePath);
+    const scenarios = [
+      ["ground-walk"], ["ground-slide"], ["ground-ride"], ["ground-drive"],
+      ["water-surface"], ["underwater"], ["flight"], ["custom"],
+      ["ground-drive", "ground-walk"], ["ground-walk", "flight"], ["flight", "ground-walk"],
+    ];
+    for (const movementModes of scenarios) {
+      const labels = new Map([
+        ["ground-walk", "陆地步行"], ["ground-slide", "陆地滑行"], ["ground-ride", "陆地骑乘"],
+        ["ground-drive", "陆地驾驶"], ["water-surface", "水面航行"], ["underwater", "水下游动"],
+        ["flight", "空中飞行"], ["custom", "自定义墙面行走"],
+      ]);
+      const sceneBriefBytes = new TextEncoder().encode(VALID_SCENE_BRIEF.replace(
+        "- 陆地步行：主体自然行走和奔跑。",
+        movementModes.map(mode => `- ${labels.get(mode)}：按参考移动。`).join("\n"),
+      ));
+      // The intentionally unchanged ground-only Palette labels cannot override
+      // the real Brief's mixed/free-space policy.
+      await writeFile(palettePath, JSON.stringify({ ...basePalette, sceneBriefHash: sceneBriefSemanticHash(sceneBriefBytes) }));
+      const proposal = await deriveNativeWorldBaselineProposalV1({ sceneId, sceneBriefBytes,
+        visualIdentityPalettePath: palettePath, entryWhiteboxTargetPath: imagePath }) as {
+          expected: { groundConnectivity: { requireSingleReachableComponent: boolean; requiredTraversalBands: unknown[] } };
+        };
+      expect(proposal.expected.groundConnectivity, movementModes.join(",")).toEqual({
+        mode: "source-authored",
+        requireSingleReachableComponent: movementModes.every(mode => ["ground-walk", "ground-slide", "ground-ride", "ground-drive"].includes(mode)),
+        requiredTraversalBands: [],
+      });
+    }
+  });
+
+  it("prepares a Subject-only palette without inventing ground visual targets or a remote Collider", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-subject-only-"));
+    temporaryRoots.push(root);
+    const sceneId = "subject-only-ground";
+    const briefPath = path.join(root, "scene-brief.md");
+    const palettePath = path.join(root, "palette.json");
+    const imagePath = path.join(root, "entry.png");
+    await writeFile(briefPath, VALID_SCENE_BRIEF);
+    await writeFile(palettePath, nativeVisualIdentityPaletteText({ sceneId,
+      sceneBriefHash: sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF)), targetCount: 1 }));
+    await sharp({ create: { width: 100, height: 100, channels: 4, background: "#E85D5D" } }).png().toFile(imagePath);
+    const proposal = await deriveNativeWorldBaselineProposalV1({ sceneId,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
+      visualIdentityPalettePath: palettePath, entryWhiteboxTargetPath: imagePath });
+    const proposalPath = path.join(root, "proposal.json");
+    await writeFile(proposalPath, JSON.stringify(proposal));
+    const prepared = await prepareWithPassedPlannerReceipt({ repositoryRoot: process.cwd(), sceneId,
+      proposalPath, sceneBriefPath: briefPath, referenceImagePaths: [imagePath],
+      planningImagePaths: { worldPlanPath: imagePath, entryWhiteboxTargetPath: imagePath },
+      visualIdentityPalettePath: palettePath, outputCaseRoot: path.join(root, "prepared") });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(await readFile(prepared.casePath, "utf8")));
+    const profile = parseWorldReconstructionEvaluationProfileV1(JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")));
+    expect(reconstructionCase.expected.semanticSilhouetteTargets).toEqual([]);
+    expect(reconstructionCase.expected.topology.nodeIds).toEqual([]);
+    expect(reconstructionCase.expected.colliders.map(row => row.colliderId)).toEqual(["collider-entry-ground"]);
+    expect(reconstructionCase.acceptanceTargetRefs).toEqual(["worldkit://acceptance-target/ground@1"]);
+    expect(profile.thresholds.semanticSilhouetteTargets).toEqual([]);
+    expect(reconstructionCase.expected.groundConnectivity).toEqual({ mode: "source-authored",
+      requireSingleReachableComponent: true, requiredTraversalBands: [] });
+  });
+
   it("rejects a pass check whose acceptance target is only a blocker", async () => {
     const root = await mkdtemp(path.join(
       os.tmpdir(),
@@ -579,10 +630,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.criticalTraversalChecks[0].acceptanceTargetRef =
       "worldkit://acceptance-target/mountain-cliff-layers@1";
@@ -598,7 +649,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-pass-target.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -626,10 +677,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.groundConnectivity.requiredTraversalBands[0]
       .centerlineStandPositionsXYZMeters[0].zMeters = 17;
@@ -653,7 +704,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-ground-connectivity.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -694,7 +745,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-world-bounds.formal-world-capture-intent",
         },
-        worldBounds: {
+        worldBoundsPolicy: {
           minimumMetersXYZ: [-20, -2, -30],
           maximumMetersXYZ: [20, 24, 30],
         },
@@ -713,7 +764,7 @@ describe("trusted Native world Case preparation", () => {
       },
       outputCaseRoot,
     })).rejects.toThrow(
-      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly centerMetersXZ, sizeMetersXZ, heightRangeMeters; received maximumMetersXYZ, minimumMetersXYZ; Formal Capture AABB fields are not Package worldBounds",
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_POLICY_INVALID: expected mode checked-block-layout or fixed with WorldPackage worldBounds; received maximumMetersXYZ, minimumMetersXYZ",
     );
   });
 
@@ -727,10 +778,10 @@ describe("trusted Native world Case preparation", () => {
     const briefPath = path.join(root, "scene-brief.md");
     const referencePath = path.join(root, "reference.png");
     const outputCaseRoot = path.join(root, "prepared-case");
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     fixtureCase.expected.colliders[0].contributionId =
       "collider-central-steps-parallel";
@@ -746,7 +797,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "invalid-native-collider-identity.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -777,10 +828,10 @@ describe("trusted Native world Case preparation", () => {
     const uploadedReferencePath = path.join(root, `upload.${format}`);
     const uploadedReferenceBytes = format === "png" ? REFERENCE_PNG : await sharp(REFERENCE_PNG).webp().toBuffer();
     const uploadedReferenceRef = `reference-0.${format}`;
-    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+    const [fixtureCase, formalCaptureIntent, worldBoundsPolicy] = await Promise.all([
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
-      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds-policy.json", "utf8").then(JSON.parse),
     ]);
     await Promise.all([
       writeFile(briefPath, VALID_SCENE_BRIEF),
@@ -795,7 +846,7 @@ describe("trusted Native world Case preparation", () => {
           ...formalCaptureIntent,
           id: "prepared-native-world.formal-world-capture-intent",
         },
-        worldBounds,
+        worldBoundsPolicy,
       })),
     ]);
 
@@ -900,7 +951,28 @@ describe("trusted Native world Case preparation", () => {
       "inputs",
       "task-instruction.md",
     ), "utf8");
+    const preparedSkill = await readFile(path.join(
+      outputCaseRoot, "inputs", "builder-skill", "SKILL.md",
+    ), "utf8");
+    expect(preparedSkill).toBe(await readFile(path.resolve(
+      ".codex/skills/worldkit-native-block-builder/SKILL.md",
+    ), "utf8"));
+    for (const [name, text] of [["frozen Skill", preparedSkill], ["task instruction", taskInstruction]] as const) {
+      const instruction = text.replace(/\s+/g, " ");
+      for (const semantic of [
+        /at least (?:four|4) times .*?reference-visible area/i,
+        /twice.*?width.*?twice.*?depth/i,
+        /one continuous .*?world/i,
+        /side.*?rear.*?remote/i,
+        /empty padding.*?(?:does not|never) count/i,
+        /(?:not|never)[^.]*?(?:area|similarity)[^.]*?gate/i,
+        /conflict[^.]*?change.request/i,
+        /(?:never|do not)[^.]*?silently[^.]*?(?:expand|rewrite|extend)[^.]*?frozen/i,
+      ]) expect(semantic.test(instruction), `${name}: ${semantic}`).toBe(true);
+    }
     expect(taskInstruction).toContain("two Host-declared advisory comparison PNGs");
+    expect(taskInstruction).toContain("Author middle/remote exploration anchors and honest-width bands from the actual Brief geography");
+    expect(taskInstruction).not.toContain("generic Case entry/remote checks");
     expect(taskInstruction).toContain("actually open both comparison PNGs");
     expect(taskInstruction).toContain("inputs/builder-skill/SKILL.md");
     expect(taskInstruction).toContain("inputs/builder-skill/references/native-block-output-contract.md");
@@ -952,8 +1024,8 @@ describe("trusted Native world Case preparation", () => {
         schemaVersion: 1,
         sceneId: "missing-native-mask",
         sceneBriefHash,
-        movementMode: "ground-walk",
-        movementModeLabel: "陆地步行",
+        movementModes: ["ground-walk"],
+        movementModeLabels: ["陆地步行"],
         targets: [{
           id: "visual-target-1",
           visualTargetId: "visual-target-1",
@@ -998,7 +1070,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "missing-native-mask",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -1018,13 +1090,11 @@ describe("trusted Native world Case preparation", () => {
         }[];
       };
       formalCaptureIntent: unknown;
-      worldBounds: unknown;
+      worldBoundsPolicy: unknown;
     };
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     )).toEqual([
-      "worldkit://acceptance-target/entry-ground@1",
-      "worldkit://acceptance-target/remote-ground@1",
       "worldkit://acceptance-target/visual-target-2@1",
     ]);
     expect(proposal.expected.semanticSilhouetteTargets.find(
@@ -1075,9 +1145,7 @@ describe("trusted Native world Case preparation", () => {
   it("accepts historical Native target-3 yellow and rejects the Canonical target-3 purple", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-palette-profile-"));
     temporaryRoots.push(root);
-    const sceneBriefHash = sha256Bytes(
-      Buffer.from("native-palette-profile-brief"),
-    ) as Sha256HashV1;
+    const sceneBriefHash = sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF));
     const palettePath = path.join(root, "visual-identity-palette.json");
     const entryPath = path.join(root, "entry-whitebox-target.png");
     const palette = {
@@ -1085,8 +1153,8 @@ describe("trusted Native world Case preparation", () => {
       schemaVersion: 1,
       sceneId: "native-palette-profile",
       sceneBriefHash,
-      movementMode: "ground-walk",
-      movementModeLabel: "陆地步行",
+      movementModes: ["ground-walk"],
+      movementModeLabels: ["陆地步行"],
       targets: [{
         id: "visual-target-1",
         visualTargetId: "visual-target-1",
@@ -1157,7 +1225,7 @@ describe("trusted Native world Case preparation", () => {
 
     const nativeProposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as { expected: { semanticSilhouetteTargets: readonly {
@@ -1171,7 +1239,7 @@ describe("trusted Native world Case preparation", () => {
     await writeFile(palettePath, JSON.stringify(palette));
     await expect(deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefSemanticHash: sceneBriefHash,
+      sceneBriefBytes: new TextEncoder().encode(VALID_SCENE_BRIEF),
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     })).rejects.toThrow("WORLDKIT_VISUAL_IDENTITY_PALETTE_INVALID");

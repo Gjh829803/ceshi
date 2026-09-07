@@ -1,15 +1,178 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
+  parseNativeBlockGroundExplorationV1,
+  admitNativeBlockGroundExplorationV1,
 } from "./native-block-materializer-metadata.js";
+
+function explorationValue() {
+  return {
+    mode: "source-authored" as const,
+    requiredTargets: [
+      { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
+      { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 1, -5] },
+    ],
+    requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1, isBidirectional: true,
+      centerlineStandPositionsMetersXYZ: [[0, 0, 0], [4, 0, 0], [4, 0, -3]] }],
+  };
+}
+
+describe("Native ground exploration intent", () => {
+  it.each(["requiredTargets", "requiredTraversalBands"] as const)("preserves authored %s order instead of imposing an alphabetical gate", (list) => {
+    const original = explorationValue();
+    original.requiredTraversalBands.push({
+      id: "middle-garden", halfWidthMeters: 1, isBidirectional: false,
+      centerlineStandPositionsMetersXYZ: [[4, 0, -3], [8, 1, -5]],
+    });
+    const value = structuredClone(original);
+    value[list].reverse();
+    const before = structuredClone(value);
+    const parsed = admitNativeBlockGroundExplorationV1(value, "source-authored", [0, 0, 0], true);
+    expect(parsed).toEqual(before);
+    expect(value).toEqual(before);
+    if (parsed.mode !== "source-authored") throw new Error("expected source-authored intent");
+    expect(Object.isFrozen(parsed[list])).toBe(true);
+    const metadata = { ...metadataValue(), groundExploration: parsed };
+    expect(parseBabylonNativeBlockMaterializerMetadataV1(metadata).groundExploration).toEqual(before);
+    expect(hashBabylonNativeBlockMaterializerMetadataV1(metadata)).not.toBe(
+      hashBabylonNativeBlockMaterializerMetadataV1({ ...metadataValue(), groundExploration: original }),
+    );
+    value[list].reverse();
+    expect(parsed).toEqual(before);
+  });
+  it.each(["requiredTargets", "requiredTraversalBands"] as const)("rejects duplicate %s IDs without requiring sorted order", (list) => {
+    const value = explorationValue();
+    value.requiredTraversalBands.push({
+      id: "middle-garden", halfWidthMeters: 1, isBidirectional: false,
+      centerlineStandPositionsMetersXYZ: [[4, 0, -3], [8, 1, -5]],
+    });
+    value[list][1]!.id = value[list][0]!.id;
+    expect(() => parseNativeBlockGroundExplorationV1(value)).toThrow();
+  });
+  it.each([true, false])("preserves the old authored band direction requirement=%s", (isBidirectional) => {
+    const original = explorationValue();
+    const value = { ...original, requiredTraversalBands: original.requiredTraversalBands.map(band => ({ ...band, isBidirectional })) };
+    const parsed = admitNativeBlockGroundExplorationV1(value, "source-authored", [0, 0, 0], true);
+    expect(parsed).toEqual(value);
+    expect(hashBabylonNativeBlockMaterializerMetadataV1({ ...metadataValue(), groundExploration: parsed }))
+      .not.toBe(hashBabylonNativeBlockMaterializerMetadataV1({ ...metadataValue(), groundExploration: {
+        ...value, requiredTraversalBands: value.requiredTraversalBands.map(band => ({ ...band, isBidirectional: !isBidirectional })),
+      } }));
+  });
+  it("rejects a missing, nonboolean or accessor band direction without coercion", () => {
+    for (const isBidirectional of [undefined, null, 0, 1, "false"]) {
+      const value = explorationValue();
+      Object.assign(value.requiredTraversalBands[0]!, { isBidirectional });
+      expect(() => parseNativeBlockGroundExplorationV1(value)).toThrow();
+    }
+    const missing = explorationValue();
+    Reflect.deleteProperty(missing.requiredTraversalBands[0]!, "isBidirectional");
+    expect(() => parseNativeBlockGroundExplorationV1(missing)).toThrow();
+    const getter = vi.fn(() => false);
+    const accessor = explorationValue();
+    Object.defineProperty(accessor.requiredTraversalBands[0]!, "isBidirectional", { get: getter });
+    expect(() => parseNativeBlockGroundExplorationV1(accessor)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it("does not confuse the old per-band waypoint limit with the number of exploration anchors", () => {
+    const requiredTargets = Array.from({ length: 257 }, (_, index) => ({
+      id: `target-${String(index).padStart(3, "0")}`,
+      region: index === 0 ? "middle" as const : "remote" as const,
+      standPositionMetersXYZ: [index + 1, 0, 0],
+    }));
+    const value = { mode: "source-authored", requiredTargets, requiredTraversalBands: [{
+      id: "entry", halfWidthMeters: 1, isBidirectional: true, centerlineStandPositionsMetersXYZ: [[0, 0, 0], [1, 0, 0]],
+    }] };
+    expect(admitNativeBlockGroundExplorationV1(value, "source-authored", [0, 0, 0], true)).toEqual(value);
+    const tooManyWaypoints = { ...value, requiredTraversalBands: [{
+      ...value.requiredTraversalBands[0]!,
+      centerlineStandPositionsMetersXYZ: Array.from({ length: 257 }, (_, index) => [index, 0, 0]),
+    }] };
+    expect(() => parseNativeBlockGroundExplorationV1(tooManyWaypoints)).toThrow("2-256");
+  });
+  it("parses optional ground evidence without inventing a connected-ground policy", () => {
+    const empty = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    expect(parseNativeBlockGroundExplorationV1(empty)).toEqual(empty);
+  });
+  it("does not require ground-only anchors and entry bands under the frozen mixed-motion policy", () => {
+    const empty = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    expect(admitNativeBlockGroundExplorationV1(empty, "source-authored", [0, 0, 0], false)).toEqual(empty);
+    const optional = explorationValue();
+    optional.requiredTargets.pop();
+    optional.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ = [[2, 0, -3], [4, 0, -3]];
+    expect(admitNativeBlockGroundExplorationV1(optional, "source-authored", [0, 0, 0], false)).toEqual(optional);
+  });
+  it("preserves curved coordinates and joins the exact spawn-to-middle course", () => {
+    const value = explorationValue();
+    const parsed = admitNativeBlockGroundExplorationV1(value, "source-authored", [0, 0, 0], true);
+    expect(parsed).toEqual(value);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    const baseline = metadataValue();
+    const authored = { ...baseline, groundExploration: parsed };
+    expect(parseBabylonNativeBlockMaterializerMetadataV1(authored).groundExploration).toEqual(value);
+    const moved = explorationValue(); moved.requiredTargets[1]!.standPositionMetersXYZ[0] = 9;
+    expect(hashBabylonNativeBlockMaterializerMetadataV1({ ...baseline, groundExploration: moved }))
+      .not.toBe(hashBabylonNativeBlockMaterializerMetadataV1(authored));
+    expect(() => admitNativeBlockGroundExplorationV1(value, "case-defined", [0, 0, 0], true)).toThrow();
+    expect(() => admitNativeBlockGroundExplorationV1({ mode: "case-defined" }, "source-authored", [0, 0, 0], true)).toThrow();
+  });
+  it("rejects missing, duplicate, or spawn anchors and an entry band to the wrong endpoint", () => {
+    const missing = explorationValue(); missing.requiredTargets.pop();
+    expect(() => admitNativeBlockGroundExplorationV1(missing, "source-authored", [0, 0, 0], true)).toThrow();
+    const duplicate = explorationValue();
+    duplicate.requiredTargets[1]!.standPositionMetersXYZ = [4, 0, -3];
+    expect(() => parseNativeBlockGroundExplorationV1(duplicate)).toThrow();
+    const spawn = explorationValue(); spawn.requiredTargets[1]!.standPositionMetersXYZ = [0, 0, 0];
+    expect(() => admitNativeBlockGroundExplorationV1(spawn, "source-authored", [0, 0, 0], true)).toThrow();
+    expect(() => admitNativeBlockGroundExplorationV1(explorationValue(), "source-authored", [1, 0, 0], true)).toThrow();
+    const endpoint = explorationValue(); endpoint.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ[2] = [8, 1, -5];
+    expect(() => admitNativeBlockGroundExplorationV1(endpoint, "source-authored", [0, 0, 0], true)).toThrow();
+    const empty = { mode: "source-authored", requiredTargets: [], requiredTraversalBands: [] };
+    expect(() => admitNativeBlockGroundExplorationV1(empty, "source-authored", [0, 0, 0], true)).toThrow();
+    const noBand = { ...explorationValue(), requiredTraversalBands: [] };
+    expect(() => admitNativeBlockGroundExplorationV1(noBand, "source-authored", [0, 0, 0], true)).toThrow();
+  });
+  it("has no missing-mode fallback, authority extras, accessor reads or geometric minima", () => {
+    expect(() => parseNativeBlockGroundExplorationV1(undefined)).toThrow();
+    expect(() => parseNativeBlockGroundExplorationV1({ mode: "case-defined", requiredTargets: [] })).toThrow();
+    const value = explorationValue();
+    const getter = vi.fn(() => "source-authored");
+    Object.defineProperty(value, "mode", { get: getter });
+    expect(() => parseNativeBlockGroundExplorationV1(value)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+    const small = explorationValue();
+    small.requiredTargets[0]!.standPositionMetersXYZ = [0.5, 0, 0];
+    small.requiredTargets[1]!.standPositionMetersXYZ = [1, 0, 0];
+    small.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ = [[0, 0, 0], [0.5, 0, 0]];
+    expect(() => admitNativeBlockGroundExplorationV1(small, "source-authored", [0, 0, 0], true)).not.toThrow();
+    small.requiredTraversalBands[0]!.id = small.requiredTargets[0]!.id;
+    expect(() => admitNativeBlockGroundExplorationV1(small, "source-authored", [0, 0, 0], true)).not.toThrow();
+    expect(() => admitNativeBlockGroundExplorationV1(small, "source-authored", [0, 0, 0], undefined as never)).toThrow();
+  });
+  it.each([true, false])("retains declared-row validity with connected-ground=%s", (policy) => {
+    const duplicate = explorationValue();
+    duplicate.requiredTargets[1]!.standPositionMetersXYZ = [4, 0, -3];
+    const atSpawn = explorationValue();
+    atSpawn.requiredTargets[1]!.standPositionMetersXYZ = [0, 0, 0];
+    const badBand = explorationValue();
+    badBand.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ = [[0, 0, 0], [0, 0, 0]];
+    const badWidth = explorationValue(); badWidth.requiredTraversalBands[0]!.halfWidthMeters = 0;
+    for (const invalid of [duplicate, atSpawn, badBand, badWidth]) {
+      expect(() => admitNativeBlockGroundExplorationV1(invalid, "source-authored", [0, 0, 0], policy)).toThrow();
+    }
+  });
+});
 
 const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 
 function metadataValue() {
   return {
     kind: "babylon-native-block-materializer-metadata",
+    settledVisualTargetCount: 2,
+    groundExploration: { mode: "case-defined" as const },
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     nativeSceneProfileRef:
       "worldkit://native-scene-profile/whitebox.blocks@1",
@@ -49,6 +212,7 @@ function metadataValue() {
         acceptanceTargetRef: "worldkit://acceptance-target/route@1",
         semanticClassId: "route.primary",
         identityColorHex: "#AA0001",
+        frontDirectionWorldXZ: [1, 0] as const,
         blockIds: ["bridge"],
         paletteRoles: ["route"],
         minimumMetersXYZ: [-1, -0.5, -1],
@@ -59,6 +223,7 @@ function metadataValue() {
         acceptanceTargetRef: "worldkit://acceptance-target/wall@1",
         semanticClassId: "structure.wall",
         identityColorHex: "#AA0002",
+        frontDirectionWorldXZ: [0, -1] as const,
         blockIds: ["wall"],
         paletteRoles: ["structure"],
         minimumMetersXYZ: [1.5, -0.5, -1],
@@ -93,6 +258,20 @@ function metadataValue() {
 }
 
 describe("BabylonNativeBlockMaterializerMetadataV1", () => {
+  it.each([undefined, -1, -0, 1.5, Infinity, "2"])("rejects invalid Host visual target count %s", value => {
+    expect(() => parseBabylonNativeBlockMaterializerMetadataV1({
+      ...metadataValue(), settledVisualTargetCount: value,
+    })).toThrow();
+  });
+
+  it("preserves declared semantic front in immutable Package identity", () => {
+    const value = metadataValue();
+    const parsed = parseBabylonNativeBlockMaterializerMetadataV1(value);
+    expect(parsed.visualGroups[0]).toMatchObject({ frontDirectionWorldXZ: [1, 0] });
+    expect(Object.isFrozen(Reflect.get(parsed.visualGroups[0]!, "frontDirectionWorldXZ"))).toBe(true);
+    const turned = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: [-1, 0] })) };
+    expect(hashBabylonNativeBlockMaterializerMetadataV1(turned)).not.toBe(hashBabylonNativeBlockMaterializerMetadataV1(value));
+  });
   it("parses, freezes and hashes the complete trusted materializer inventory", () => {
     const parsed = parseBabylonNativeBlockMaterializerMetadataV1(
       metadataValue(),
@@ -106,6 +285,12 @@ describe("BabylonNativeBlockMaterializerMetadataV1", () => {
   });
 
   it.each([
+    ["removed quarter-meter step shape", () => ({
+      ...metadataValue(),
+      blocks: metadataValue().blocks.map((block, index) => index === 0
+        ? { ...block, shape: "step" }
+        : block),
+    })],
     ["unsorted blocks", () => ({
       ...metadataValue(),
       blocks: [...metadataValue().blocks].reverse(),

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -18,12 +18,13 @@ import {
 } from "./recording-workbench.mjs";
 
 const temporaryRoots = [];
+const nativePackageRootHash = `sha256:${"a".repeat(64)}`;
 
 test.afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function makeFixture() {
+async function makeFixture(sceneSourceKind = "canonical") {
   const root = await mkdtemp(path.join(tmpdir(), "recording-workbench-test-"));
   temporaryRoots.push(root);
   const repoRoot = path.join(root, "repo");
@@ -47,23 +48,35 @@ async function makeFixture() {
         visualTargetId: "hero",
         role: "primary-subject",
         semanticClassId: "complete-hero",
+        whiteboxTriview: { path: `${sceneSourceKind === "babylon-native" ? "final/capture/" : ""}triviews/hero/whitebox-triview.png` },
         styledTriview: { path: "triviews/hero/styled-triview.png" },
       },
       {
         visualTargetId: "tower",
         role: "primary-landmark",
         semanticClassId: "complete-tower",
+        whiteboxTriview: { path: `${sceneSourceKind === "babylon-native" ? "final/capture/" : ""}triviews/tower/whitebox-triview.png` },
         styledTriview: { path: "triviews/tower/styled-triview.png" },
       },
     ],
   }));
+  if (sceneSourceKind === "babylon-native") {
+    await rm(path.join(artifactRoot, "authoring.json"));
+    await mkdir(path.join(artifactRoot, "inputs"), { recursive: true });
+    await writeFile(path.join(artifactRoot, "inputs/world-plan.png"), "frozen-native-world-plan");
+    for (const target of ["hero", "tower"]) {
+      await mkdir(path.join(artifactRoot, "final/capture/triviews", target), { recursive: true });
+      await rename(path.join(artifactRoot, "triviews", target, "whitebox-triview.png"),
+        path.join(artifactRoot, "final/capture/triviews", target, "whitebox-triview.png"));
+    }
+  }
   return { repoRoot, dataRoot, sceneId };
 }
 
-async function listen(service) {
+async function listen(service, recordingContext) {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
-    void service.handleApi(request, response, url).then((handled) => {
+    void service.handleApi(request, response, url, recordingContext).then((handled) => {
       if (!handled && !response.headersSent) {
         response.writeHead(404);
         response.end();
@@ -100,6 +113,85 @@ async function uploadRecording(origin, sceneId) {
   });
   if (response.status !== 201) assert.fail(await response.text());
   return (await response.json()).recording;
+}
+
+test("Native recordings retain their exact Package and cannot generate or bundle with its replacement", async () => {
+  const fixture = await makeFixture("babylon-native");
+  let worldPackageRootHash = nativePackageRootHash;
+  let dispatched = 0;
+  const service = createRecordingWorkbenchService({ ...fixture,
+    sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+    transcodeRecording: fakeRecordingTranscode,
+    generationRunner: async () => { dispatched++; },
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const record = await uploadRecording(http.origin, fixture.sceneId);
+    assert.equal(record.source.worldPackageRootHash, nativePackageRootHash);
+    worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+    const base = `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${record.id}`;
+    assert.equal((await fetch(`${base}/generate`, { method: "POST" })).status, 409);
+    assert.equal((await fetch(`${base}/bundle`)).status, 409);
+    assert.equal((await fetch(`${base}/source`)).status, 200);
+    assert.equal(dispatched, 0);
+  } finally { await service.shutdown(); await http.close(); }
+});
+
+test("Native generation rechecks Package when queued work actually starts", async () => {
+  const fixture = await makeFixture("babylon-native");
+  let worldPackageRootHash = nativePackageRootHash;
+  let release;
+  let started;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const entered = new Promise(resolve => { started = resolve; });
+  const dispatched = [];
+  const service = createRecordingWorkbenchService({ ...fixture, maxConcurrentJobs: 1,
+    sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+    transcodeRecording: fakeRecordingTranscode,
+    generationRunner: async ({ recordingId }) => { dispatched.push(recordingId); started(); await barrier; },
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const first = await uploadRecording(http.origin, fixture.sceneId);
+    const generate = record => fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${record.id}/generate`, { method: "POST" });
+    assert.equal((await generate(first)).status, 202);
+    await entered;
+    const second = await uploadRecording(http.origin, fixture.sceneId);
+    assert.equal((await generate(second)).status, 202);
+    worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+    release();
+    const failed = await waitForRecording(http.origin, fixture.sceneId,
+      record => record.id === second.id && record.video.status === "failed");
+    assert.match(failed.error, /Native Package 已变化/);
+    assert.deepEqual(dispatched, [first.id]);
+  } finally { release(); await service.shutdown(); await http.close(); }
+});
+
+for (const race of ["before-upload", "during-transcode"]) {
+  test(`Native recording rejects changed Package ${race}`, async () => {
+    const fixture = await makeFixture("babylon-native");
+    let worldPackageRootHash = race === "before-upload" ? `sha256:${"b".repeat(64)}` : nativePackageRootHash;
+    const service = createRecordingWorkbenchService({ ...fixture,
+      sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+      transcodeRecording: async input => {
+        worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+        return fakeRecordingTranscode(input);
+      },
+    });
+    await service.initialize();
+    const http = await listen(service, { sceneId: fixture.sceneId, worldPackageRootHash: nativePackageRootHash });
+    try {
+      const response = await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`, {
+        method: "POST", headers: { "content-type": "video/mp4", "x-worldkit-recording-duration-ms": "9000" },
+        body: Buffer.concat([Buffer.from("0000001866747970", "hex"), Buffer.from("recording-body")]),
+      });
+      assert.equal(response.status, race === "before-upload" ? 409 : 400);
+      const list = await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`);
+      assert.equal((await list.json()).recordings.length, 0);
+    } finally { await service.shutdown(); await http.close(); }
+  });
 }
 
 async function fakeRecordingTranscode({ sourcePath, destinationPath, durationSeconds }) {
@@ -279,8 +371,9 @@ test("routes legacy recording prompt metadata through the default cloud Codex ba
   }
 });
 
-test("freezes a local Codex backend at enqueue and stores only its local task marker", async () => {
-  const fixture = await makeFixture();
+for (const sceneSourceKind of ["canonical", "babylon-native"]) {
+test(`${sceneSourceKind} freezes a local Codex backend at enqueue and stores only its local task marker`, async () => {
+  const fixture = await makeFixture(sceneSourceKind);
   let releaseCodex;
   const codexBarrier = new Promise((resolve) => { releaseCodex = resolve; });
   const fake = createGenerationSpawn({ holdCodex: codexBarrier });
@@ -291,6 +384,7 @@ test("freezes a local Codex backend at enqueue and stores only its local task ma
     dataRoot: fixture.dataRoot,
     spawnImplementation: fake.spawnImplementation,
     transcodeRecording: fakeRecordingTranscode,
+    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind, worldPackageRootHash: nativePackageRootHash }) } : {}),
     codexBackendProvider: () => {
       providerCalls += 1;
       return selectedBackend;
@@ -347,6 +441,7 @@ test("freezes a local Codex backend at enqueue and stores only its local task ma
     await http.close();
   }
 });
+}
 
 test("rewrites an existing Seedance prompt when the selected Codex backend changes", async () => {
   const fixture = await makeFixture();
@@ -484,11 +579,48 @@ test("normalizes both tri-view panels before composing one fixed-size comparison
   assert.equal(args.at(-1), "comparison.png");
 });
 
-test("persists browser recordings, lists them, generates independently, and serves a ZIP bundle", async () => {
-  const fixture = await makeFixture();
+for (const mutation of ["unavailable", "unknown-source", "missing-whitebox-ref", "escaping-whitebox-ref", "canonical-alias", "wrong-target"]) {
+  test(`Native Recording ${mutation} cannot fall back to Canonical aliases`, async () => {
+    const fixture = await makeFixture("babylon-native");
+    const root = path.join(fixture.repoRoot, "artifacts/scenes", fixture.sceneId);
+    await writeFile(path.join(root, "authoring.json"), "Canonical decoy");
+    await writeFile(path.join(root, "triviews/hero/whitebox-triview.png"), "Canonical decoy");
+    const manifestPath = path.join(root, "styled-triviews-manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (mutation === "missing-whitebox-ref") delete manifest.targets[0].whiteboxTriview;
+    if (mutation === "escaping-whitebox-ref") manifest.targets[0].whiteboxTriview.path = "../outside.png";
+    if (mutation === "canonical-alias") manifest.targets[0].whiteboxTriview.path = "triviews/hero/whitebox-triview.png";
+    if (mutation === "wrong-target") manifest.targets[0].whiteboxTriview.path = "final/capture/triviews/tower/whitebox-triview.png";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    let dispatchCount = 0;
+    const service = createRecordingWorkbenchService({ ...fixture, transcodeRecording: fakeRecordingTranscode,
+      sceneContextProvider: async () => mutation === "unavailable" ? null : {
+        sceneSourceKind: mutation === "unknown-source" ? "other" : "babylon-native", worldPackageRootHash: nativePackageRootHash },
+      generationRunner: async () => { dispatchCount++; },
+    });
+    await service.initialize();
+    const http = await listen(service);
+    try {
+      if (["unavailable", "unknown-source"].includes(mutation)) {
+        assert.equal((await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`)).status, 404);
+      } else {
+        const recording = await uploadRecording(http.origin, fixture.sceneId);
+        assert.equal(recording.assets.ready, false);
+        assert.equal(recording.assets.bundleReady, false);
+        assert.equal((await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${recording.id}/generate`, { method: "POST" })).status, 409);
+      }
+      assert.equal(dispatchCount, 0);
+    } finally { await service.shutdown(); await http.close(); }
+  });
+}
+
+for (const sceneSourceKind of ["canonical", "babylon-native"]) {
+test(`${sceneSourceKind} persists browser recordings, lists them, generates independently, and serves a ZIP bundle`, async () => {
+  const fixture = await makeFixture(sceneSourceKind);
   const service = createRecordingWorkbenchService({
     repoRoot: fixture.repoRoot,
     dataRoot: fixture.dataRoot,
+    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind, worldPackageRootHash: nativePackageRootHash }) } : {}),
     transcodeRecording: fakeRecordingTranscode,
     composeTriviewComparison: async ({ whiteboxPath, styledPath, destinationPath }) => {
       await writeFile(
@@ -569,6 +701,9 @@ test("persists browser recordings, lists them, generates independently, and serv
     });
     assert.equal(zipEntries.status, 0, zipEntries.stderr);
     const prefix = `${fixture.sceneId}-${ready.id}/`;
+    assert.equal(spawnSync("/usr/bin/unzip", ["-p", bundlePath, `${prefix}world-plan.png`], { encoding: "utf8" }).stdout,
+      sceneSourceKind === "babylon-native" ? "frozen-native-world-plan" : "world-plan");
+    assert.equal(spawnSync("/usr/bin/unzip", ["-p", bundlePath, `${prefix}triview-01-whitebox.png`], { encoding: "utf8" }).stdout, "hero-whitebox");
     for (const name of [
       "world-plan.png",
       "triview-01-whitebox.png",
@@ -648,3 +783,4 @@ test("persists browser recordings, lists them, generates independently, and serv
     await http.close();
   }
 });
+}

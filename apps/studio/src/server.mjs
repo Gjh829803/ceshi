@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
+import { createNativeRecordingPreviews } from "./native-recording-preview.mjs";
 import {
   StudioPreviewBootstrapError,
   assembleStudioPreviewBootstrapV1,
@@ -46,6 +47,7 @@ const {
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  deriveFormalWhiteboxTriviewManifestV1,
 } = await tsImport(
   "@whitebox-world/runtime-contracts",
   { parentURL: import.meta.url },
@@ -59,6 +61,9 @@ const {
 const { readWorldPackageDirectoryV1 } = await tsImport(
   "../../../scripts/lib/file-world-package.ts",
   { parentURL: import.meta.url },
+);
+const { visualCapturePaths } = await tsImport(
+  "../../../scripts/visual/visual-capture-paths.ts", { parentURL: import.meta.url },
 );
 const {
   hashEntryThirdPersonValidationResultV1,
@@ -164,15 +169,15 @@ const workflowStageDefinitions = [
   {
     id: "visual-prompt-synthesis",
     title: "视觉提示词合成",
-    owner: "Configured Visual Prompt Provider",
-    description: "可选：读取用户参考、真实 Babylon 白模捕获和三视图，生成共享视觉约束与逐目标提示词。",
+    owner: "Codex Visual Reconstructor",
+    description: "可选视觉任务内固化提示词：真实白模约束空间，用户参考约束外观；不单独派发提示词任务。",
     required: ["visual-generation-prompts"],
   },
   {
     id: "visual-imagegen",
     title: "可选视觉生成",
-    owner: "Configured Image Provider",
-    description: "可选：根据提示词和真实白模结构生成新首帧与样式三视图。该结果不改变几何、碰撞或 Canonical World State。",
+    owner: "Codex Visual Reconstructor",
+    description: "一个任务先生成并检查新首帧，再以该图为外观锚生成和检查全部三视图；返回后由 Host 校验文件与引用，不改变几何、碰撞或 World State。",
     required: ["styled-opening-frame", "styled-triviews-manifest"],
   },
 ];
@@ -182,10 +187,12 @@ const runtimeStageAliases = new Map([
   ["route-validation", "canonical-build"],
   ["change-requested", "coding-agent"],
   ["visual-imagegen-ready", "visual-imagegen"],
+  // Display projection only; the router retains the legacy retry-policy stage.
+  ["visual-reconstruction", "visual-imagegen"],
 ]);
 
 const agentTokenStageIds = new Set([
-  "planner", "coding-agent",
+  "planner", "coding-agent", "visual-imagegen",
 ]);
 const workflowStageIds = new Set(
   workflowStageDefinitions.map(({ id }) => id),
@@ -673,6 +680,16 @@ export function createStudio(options = {}) {
     throw new Error("Studio readiness nonce must contain 32 to 128 lowercase hexadecimal characters.");
   }
   const autoRunJobs = options.autoRunJobs ?? true;
+  const autoRecoverVisualDeliveries = options.autoRecoverVisualDeliveries ?? autoRunJobs;
+  const configuredVisualRecoveryIntervalMs = Number(options.visualRecoveryIntervalMs ??
+    process.env.WORLDKIT_STUDIO_VISUAL_RECOVERY_INTERVAL_MS ?? 60_000);
+  const visualRecoveryIntervalMs = Number.isSafeInteger(configuredVisualRecoveryIntervalMs) &&
+    configuredVisualRecoveryIntervalMs >= 1_000 ? configuredVisualRecoveryIntervalMs : 60_000;
+  const visualRecoveryTimers = options.visualRecoveryTimers ?? { setInterval, clearInterval };
+  let visualRecoveryTimer = null;
+  let visualRecoveryPromise = null;
+  const visualRecoveryController = new AbortController();
+  const visualRecoveryLogKeys = new Map();
   const configuredConcurrency = Number(
     options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 4,
   );
@@ -784,6 +801,7 @@ export function createStudio(options = {}) {
     });
   }
 
+  const nativeRecordingRequestContexts = new WeakMap();
   const recordingWorkbench = createRecordingWorkbenchService({
     repoRoot,
     dataRoot,
@@ -792,6 +810,34 @@ export function createStudio(options = {}) {
     generationRunner: options.recordingGenerationRunner,
     spawnImplementation: options.recordingSpawnImplementation,
     codexBackendProvider: () => selectedCodexBackend,
+    sceneContextProvider: async sceneId => {
+      const record = await readRecord(sceneId);
+      if (record && effectiveSceneSourceKind(record) === "babylon-native") {
+        return record.productionOutcome === "passed" && record.publicationOutcome === "published" &&
+          record.nativeProductionClosure?.caseId === sceneId && await hasNativeLaunchEvidence(record)
+          ? { sceneSourceKind: "babylon-native", worldPackageRootHash: record.nativeProductionClosure.worldPackageRootHash } : null;
+      }
+      return await fileExists(path.join(repoRoot, "artifacts/scenes", sceneId, "authoring.json"))
+        ? { sceneSourceKind: "canonical" } : null;
+    },
+  });
+
+  const nativeRecordingPreviews = createNativeRecordingPreviews({
+    startServer: options.nativeRecordingStartServer,
+    copyPackage: options.nativeRecordingCopyPackage,
+    studioOrigin: () => {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("NATIVE_RECORDING_STUDIO_NOT_LISTENING");
+      return `http://127.0.0.1:${address.port}`;
+    },
+    resolveWorld: async sceneId => {
+      const record = await readRecord(sceneId);
+      if (!record || effectiveSceneSourceKind(record) !== "babylon-native" ||
+          record.productionOutcome !== "passed" || record.publicationOutcome !== "published" ||
+          record.nativeProductionClosure?.caseId !== sceneId || !await hasNativeLaunchEvidence(record)) return null;
+      return { worldPackageRootHash: record.nativeProductionClosure.worldPackageRootHash,
+        packageDirectoryPath: nativeClosureArtifactPath(record, "worldPackageRelativePath") };
+    },
   });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");
@@ -1043,10 +1089,12 @@ export function createStudio(options = {}) {
     ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
   }
 
-  async function requireNativeCaptureInventory(captureRoot, viewIds) {
+  async function requireNativeCaptureInventory(captureRoot, receipt) {
     await requireNativeDirectory(captureRoot);
+    const viewIds = receipt.views.map(row => row.viewId);
     const expectedNames = [
       ...viewIds.map((viewId) => `${viewId}.png`),
+      ...viewIds.map((viewId) => `${viewId}-identity-mask.png`),
       "collider-overlay.png",
       "opening-observation.json",
       "semantic-view-observation-set.json",
@@ -1054,6 +1102,7 @@ export function createStudio(options = {}) {
       "collider-overlay-observation.json",
       "scripted-traversal.json",
       "formal-world-capture-receipt.json",
+      ...(receipt.whiteboxTriviews.length ? ["triviews"] : []),
     ].sort();
     let entries;
     try {
@@ -1063,10 +1112,36 @@ export function createStudio(options = {}) {
     }
     const actualNames = entries.map(({ name }) => name).sort();
     if (
-      entries.some((entry) => !entry.isFile() || entry.isSymbolicLink()) ||
+      entries.some((entry) => entry.isSymbolicLink() ||
+        (entry.name === "triviews" ? !entry.isDirectory() : !entry.isFile())) ||
       actualNames.length !== expectedNames.length ||
       actualNames.some((name, index) => name !== expectedNames[index])
     ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+    if (receipt.whiteboxTriviews.length) {
+      const root = path.join(captureRoot, "triviews");
+      await requireNativeDirectory(root);
+      const targetIds = receipt.whiteboxTriviews.map(row => row.visualTargetId);
+      const entries = await readdir(root, { withFileTypes: true });
+      if (canonicalJson(entries.map(row => row.name).sort()) !== canonicalJson([
+        ...targetIds, "whitebox-triview-manifest.json",
+      ].sort()) || entries.some(row => row.isSymbolicLink() ||
+        (row.name === "whitebox-triview-manifest.json" ? !row.isFile() : !row.isDirectory()))) {
+        nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+      }
+      const manifest = await readNativeJsonArtifact(path.join(root, "whitebox-triview-manifest.json"));
+      if (canonicalJson(manifest) !== canonicalJson(deriveFormalWhiteboxTriviewManifestV1(receipt))) {
+        nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+      }
+      for (const row of receipt.whiteboxTriviews) {
+        const targetRoot = path.join(root, row.visualTargetId);
+        await requireNativeDirectory(targetRoot);
+        const files = await readdir(targetRoot);
+        if (canonicalJson(files) !== canonicalJson(["whitebox-triview.png"])) {
+          nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+        }
+        requireNativePngHash(await readNativeBytesArtifact(path.join(targetRoot, "whitebox-triview.png")), row.pngContentHash);
+      }
+    }
   }
 
   function validateNativeObservationIdentity(observation, captureReceipt) {
@@ -1083,8 +1158,7 @@ export function createStudio(options = {}) {
     if (observation.kind === "formal-scripted-traversal-observation") {
       const firstCheck = observation.checks[0];
       if (
-        firstCheck === undefined ||
-        observation.resetReadySnapshotHash !== firstCheck.resetReadySnapshotHash
+        observation.resetReadySnapshotHash !== (firstCheck?.resetReadySnapshotHash ?? captureReceipt.readySnapshotHash)
       ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     } else if (
       observation.resetReadySnapshotHash !== captureReceipt.readySnapshotHash
@@ -1126,7 +1200,7 @@ export function createStudio(options = {}) {
     ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     await requireNativeCaptureInventory(
       captureRoot,
-      captureReceipt.views.map(({ viewId }) => viewId),
+      captureReceipt,
     );
 
     let openingPngBytes;
@@ -1136,6 +1210,8 @@ export function createStudio(options = {}) {
         `${view.viewId}.png`,
       ));
       requireNativePngHash(bytes, view.pngContentHash);
+      requireNativePngHash(await readNativeBytesArtifact(path.join(captureRoot,
+        `${view.viewId}-identity-mask.png`)), view.identityMaskPngContentHash);
       if (view.viewId === "opening") openingPngBytes = bytes;
     }
     if (openingPngBytes === undefined) {
@@ -1510,6 +1586,40 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function prepareNativeVisualResume(record) {
+    if (effectiveSceneSourceKind(record) !== "babylon-native" || record.referenceImage === null ||
+        (record.nativeProductionClosure == null && record.whiteboxOutcome !== "passed")) return null;
+    const closure = record.nativeProductionClosure;
+    if (record.workflowPolicyVersion !== workflowPolicyVersion ||
+        closure?.kind !== "studio-native-production-closure" || closure.schemaVersion !== 1 ||
+        closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
+        closure.publicationOutcome !== "published" || !await hasNativeLaunchEvidence(record)) {
+      throw new Error("STUDIO_NATIVE_VISUAL_RESUME_WHITEBOX_INVALID");
+    }
+    const root = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const reconstructionCase = await readNativeJsonArtifact(path.join(root, "case.json"));
+    const references = reconstructionCase.referenceInputs?.filter(row => /^reference-0\.(png|jpg|webp)$/.test(row.inputRef)) ?? [];
+    if (references.length !== 1) throw new Error("STUDIO_NATIVE_VISUAL_RESUME_REFERENCE_INVALID");
+    const userFramePath = path.join(root, "inputs", references[0].inputRef);
+    await requireNativeDirectory(path.dirname(userFramePath));
+    const hash = `sha256:${createHash("sha256").update(await readNativeBytesArtifact(userFramePath)).digest("hex")}`;
+    if (hash !== references[0].contentHash || hash !== `sha256:${record.referenceImage.contentSha256}`) {
+      throw new Error("STUDIO_NATIVE_VISUAL_RESUME_REFERENCE_INVALID");
+    }
+    return { closure, userFramePath };
+  }
+
+  function retainedNativeWhiteboxState(closure) {
+    return {
+      captureRequired: false, captureStatus: "passed", whiteboxOutcome: "passed",
+      productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+      evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+      strictDiagnosticCodes: closure.strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+      nativeProductionClosure: closure, nativeLaunch: closure.launch,
+    };
+  }
+
   function deliverableCandidates(record, id) {
     const sceneId = record.sceneId;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
@@ -1554,7 +1664,7 @@ export function createStudio(options = {}) {
         nativeClosureArtifactPath(record, "launchEntryRelativePath"),
       ].filter(Boolean),
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
-      "whitebox-triview-manifest": [path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")],
+      "whitebox-triview-manifest": [path.join(artifactRoot, visualCapturePaths(effectiveSceneSourceKind(record)).manifest)],
       "entry-third-person-validation": effectiveSceneSourceKind(record) === "babylon-native"
         ? [nativeClosureArtifactPath(record, "entryValidationRelativePath")].filter(Boolean)
         : [path.join(artifactRoot, "entry-third-person-validation.json")],
@@ -1819,6 +1929,55 @@ export function createStudio(options = {}) {
     } catch {
       return null;
     }
+  }
+
+  // Read the same Host file/hash closure delivered by the visual task. No second
+  // image reviewer, quality score or whitebox production decision lives here.
+  async function hasNativeStyledArtifacts(record, freshnessFloor) {
+    const root = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const paths = visualCapturePaths("babylon-native");
+    try {
+      const receipt = parseFormalWorldCaptureReceiptV1(await readNativeJsonArtifact(path.join(root, paths.receipt)));
+      const capture = deriveFormalWhiteboxTriviewManifestV1(receipt);
+      if (!capture) return false;
+      const [opening, openingReport, tri, triReport] = await Promise.all([
+        "styled-opening-frame-manifest.json", "styled-opening-frame-report.json",
+        "styled-triviews-manifest.json", "styled-triviews-report.json",
+      ].map(file => readJsonIfPresent(path.join(root, file))));
+      if (opening?.kind !== "worldkit-styled-opening-frame-manifest" ||
+          tri?.kind !== "worldkit-styled-triview-manifest" ||
+          openingReport?.kind !== "worldkit-styled-opening-frame-report" ||
+          triReport?.kind !== "worldkit-styled-triview-report" ||
+          [opening, openingReport, tri, triReport].some(row => row.schemaVersion !== 1 ||
+            row.sceneId !== record.sceneId || row.status !== "passed") ||
+          openingReport.manifestHash !== hashCanonicalJson(opening) ||
+          triReport.manifestHash !== hashCanonicalJson(tri) ||
+          opening.whiteboxOpeningFrame?.contentHash !== receipt.views.find(row => row.viewId === "opening").pngContentHash ||
+          opening.promptBundle?.contentHash !== await sourceHash(path.join(root, "visual-generation-prompts.json")) ||
+          opening.userFirstFrame?.contentHash !== `sha256:${record.referenceImage.contentSha256}` ||
+          !/^user-first-frame\.(png|jpg|webp)$/.test(opening.userFirstFrame?.path ?? "") ||
+          opening.userFirstFrame.contentHash !== await sourceHash(path.join(root, opening.userFirstFrame.path)) ||
+          opening.styledOpeningFrame?.contentHash !== await sourceHash(path.join(root, "styled-opening-frame.png")) ||
+          tri.appearanceSource?.contentHash !== opening.styledOpeningFrame.contentHash ||
+          !Array.isArray(tri.targets) || tri.targets.length !== capture.whiteboxTriviews.length ||
+          !Array.isArray(opening.supplementalTriviews) || opening.supplementalTriviews.length !== tri.targets.length ||
+          !await pngArtifact(path.join(root, "styled-opening-frame.png"), freshnessFloor)) return false;
+      for (const [index, target] of capture.whiteboxTriviews.entries()) {
+        const styled = tri.targets[index];
+        const whiteboxPath = `${paths.triviewRoot}/${target.imageUri}`;
+        const styledPath = `triviews/${target.visualTargetId}/styled-triview.png`;
+        if (styled?.visualTargetId !== target.visualTargetId ||
+            canonicalJson(styled.runtimeEntityIds) !== canonicalJson(target.runtimeEntityIds) ||
+            canonicalJson(styled.views) !== canonicalJson(target.views) ||
+            styled.whiteboxTriview?.path !== whiteboxPath || styled.styledTriview?.path !== styledPath ||
+            styled.whiteboxTriview?.contentHash !== receipt.whiteboxTriviews[index].pngContentHash ||
+            opening.supplementalTriviews[index]?.visualTargetId !== target.visualTargetId ||
+            opening.supplementalTriviews[index]?.contentHash !== receipt.whiteboxTriviews[index].pngContentHash ||
+            styled.styledTriview.contentHash !== await sourceHash(path.join(root, styledPath)) ||
+            !await pngArtifact(path.join(root, styledPath), freshnessFloor)) return false;
+      }
+      return true;
+    } catch { return false; }
   }
 
   function canonicalJson(value) {
@@ -2493,7 +2652,8 @@ export function createStudio(options = {}) {
       },
     ];
     const definitions = effectiveSceneSourceKind(record) === "babylon-native"
-      ? nativeDefinitions
+      ? [...nativeDefinitions, ...canonicalDefinitions.filter(row =>
+        row.id === "whitebox-triview-manifest" || row.id === "visual-generation-prompts" || row.id.startsWith("styled-"))]
       : canonicalDefinitions;
     const deliverables = [];
     if (record.referenceImage) {
@@ -2536,9 +2696,10 @@ export function createStudio(options = {}) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
     const sceneSourceKind = effectiveSceneSourceKind(record);
+    const capturePaths = visualCapturePaths(sceneSourceKind);
     const [sceneBrief, captureManifest] = await Promise.all([
       readFile(path.join(artifactRoot, "scene-brief.md"), "utf8").catch(() => null),
-      readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
+      readJsonIfPresent(path.join(artifactRoot, capturePaths.manifest)),
     ]);
     const planning = [];
     if (record.referenceImage) {
@@ -2584,7 +2745,7 @@ export function createStudio(options = {}) {
     const prototypes = [];
     for (const target of captureManifest?.whiteboxTriviews ?? []) {
       if (!idPattern.test(target?.visualTargetId)) continue;
-      const imagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "whitebox-triview.png");
+      const imagePath = path.join(artifactRoot, capturePaths.triviewRoot, target.visualTargetId, "whitebox-triview.png");
       const styledImagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png");
       const available = await fileExists(imagePath);
       const styledAvailable = await fileExists(styledImagePath);
@@ -2705,6 +2866,14 @@ export function createStudio(options = {}) {
     if (source !== "stdout" || typeof state.nativeProductionResults === "undefined") {
       return;
     }
+    if (line.trim() === "WORLDKIT_STAGE visual-imagegen") {
+      state.nativeVisualStarted = true;
+      // Keep the accepted whitebox independently of a later interrupted image
+      // task. This is a Studio projection of the existing publisher evidence.
+      if (state.persistNativeWhitebox && !state.nativeWhiteboxCheckpointPromise) {
+        state.nativeWhiteboxCheckpointPromise = Promise.resolve().then(state.persistNativeWhitebox);
+      }
+    }
     try {
       const value = JSON.parse(line.trim());
       if (
@@ -2742,36 +2911,6 @@ export function createStudio(options = {}) {
         }
         continue;
       }
-      const promptBundle = /^WORLDKIT_GEMINI_PROMPTS_READY ([a-z0-9.-]+)$/.exec(line.trim());
-      if (promptBundle) {
-        runBackgroundTask(id, "append-prompt-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-prompt-synthesis",
-          `视觉提示词提供方已生成共享视觉约束、新首帧提示词和全部三视图提示词：${promptBundle[1]}。`,
-          { kind: "completed" },
-        ));
-        continue;
-      }
-      const directImage = /^WORLDKIT_DIRECT_IMAGEGEN_IMAGE (.+)$/.exec(line.trim());
-      if (directImage) {
-        runBackgroundTask(id, "append-image-progress", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片提供方已完成 ${directImage[1]}。`,
-          { kind: "progress" },
-        ));
-        continue;
-      }
-      const directImageReady = /^WORLDKIT_DIRECT_IMAGEGEN_READY count=([0-9]+)$/.exec(line.trim());
-      if (directImageReady) {
-        runBackgroundTask(id, "append-image-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片生成任务已完成，共 ${directImageReady[1]} 张图片。`,
-          { kind: "completed", itemCount: Number(directImageReady[1]) },
-        ));
-        continue;
-      }
       const usage = /^WORLDKIT_STAGE_USAGE ([a-z-]+) ([0-9]+)$/.exec(line.trim());
       if (usage) {
         const tokenCount = Number(usage[2]);
@@ -2783,7 +2922,7 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
-      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)$/.exec(line.trim());
+      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)(?:\s+.*)?$/.exec(line.trim());
       if (cloudCodexJob) {
         runBackgroundTask(id, "append-codex-job", () => appendTrajectoryEvent(
           id,
@@ -2856,17 +2995,16 @@ export function createStudio(options = {}) {
     if (!record || shuttingDown || stoppingJobs.has(id)) return;
     const codexBackend = effectiveCodexBackend(record);
     const sceneSourceKind = effectiveSceneSourceKind(record);
+    const visualResume = await prepareNativeVisualResume(record);
     const attempt = (record.attempt ?? 0) + 1;
-    const styledOpeningFrameRequired = sceneSourceKind === "canonical" &&
-      record.referenceImage !== null;
-    const styledTriviewsRequired = sceneSourceKind === "canonical" &&
-      record.referenceImage !== null;
+    const styledOpeningFrameRequired = record.referenceImage !== null;
+    const styledTriviewsRequired = record.referenceImage !== null;
     await writeFile(logPath(id), `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\n\n`, "utf8");
     if (shuttingDown || stoppingJobs.has(id)) return;
     const startedAt = new Date().toISOString();
     await updateRecord(id, {
       status: "running",
-      stage: "preparing",
+      stage: visualResume ? "visual-imagegen" : "preparing",
       codexBackend,
       workflowPolicyVersion,
       attempt,
@@ -2890,11 +3028,13 @@ export function createStudio(options = {}) {
       styledOpeningFrameStatus: styledOpeningFrameRequired ? "pending" : "not-required",
       styledTriviewsRequired,
       styledTriviewsStatus: styledTriviewsRequired ? "pending" : "not-required",
+      ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
     });
     await appendTrajectoryEvent(
       id,
-      "preparing",
-      `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
+      visualResume ? "visual-imagegen" : "preparing",
+      visualResume ? `第 ${attempt} 次执行恢复原视觉任务；已发布白膜不重新生成。`
+        : `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
       { kind: "started", codexBackend },
     );
 
@@ -2939,6 +3079,7 @@ export function createStudio(options = {}) {
       workflowPolicyVersion,
       sourceRevision,
       attempt,
+      executionMode: visualResume ? "visual-resume" : "full",
       origin: record.origin,
       testSetId: record.testSetId ?? null,
       testSetImageId: record.testSetImageId ?? null,
@@ -2946,14 +3087,17 @@ export function createStudio(options = {}) {
       codexBackend,
       startedAt,
     };
-    if (sceneSourceKind === "canonical") {
+    if (sceneSourceKind === "canonical" || visualResume) {
       await writeJsonAtomic(
         path.join(artifactRoot, "evaluation-run.json"),
         evaluationRun,
       );
     }
 
-    const args = [
+    const args = visualResume ? [
+      "agent:world:first-frame", "--", "--scene-source", "babylon-native", "--scene-id", record.sceneId,
+      "--user-frame", visualResume.userFramePath, "--backend", codexBackend, "--resume",
+    ] : [
       "agent:world",
       "--",
       "--scene-source",
@@ -2961,15 +3105,19 @@ export function createStudio(options = {}) {
       "--scene-id",
       record.sceneId,
     ];
-    if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
-    args.push(record.prompt);
+    if (!visualResume) {
+      if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
+      args.push(record.prompt);
+    }
 
     await appendJobLog(
       id,
-      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex through ${sceneSourceKind === "babylon-native" ? "Babylon Native Block" : "explicit Canonical Heightfield"} authoring; the trusted Host owns admission, Package, Runtime, Capture, and evidence.\n`,
+      visualResume ? "Resuming the original visual task; Planner, Builder and published whitebox are unchanged.\n"
+        : `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex through ${sceneSourceKind === "babylon-native" ? "Babylon Native Block" : "explicit Canonical Heightfield"} authoring; the trusted Host owns admission, Package, Runtime, Capture, and evidence.\n`,
     );
     await beforeWorldSpawn(id);
     if (shuttingDown || stoppingJobs.has(id)) return;
+    if (visualResume) await prepareNativeVisualResume(record);
     const child = worldSpawnImplementation("pnpm", args, {
       cwd: repoRoot,
       env: {
@@ -2987,7 +3135,37 @@ export function createStudio(options = {}) {
       buffer: "",
       nativeProductionResults: [],
       nativeCommandFailures: [],
+      nativeVisualStarted: visualResume !== null,
     };
+    if (sceneSourceKind === "babylon-native" && styledOpeningFrameRequired && !visualResume) {
+      stdout.persistNativeWhitebox = async () => {
+        try {
+          if (stdout.nativeProductionResults.length !== 1 || stdout.nativeCommandFailures.length !== 0) return;
+          const result = parseWorldReconstructionProductionResultV1(stdout.nativeProductionResults[0]);
+          if (result.productionOutcome !== "passed") return;
+          const closure = await validateNativeProductionResult(record, result);
+          await runRecordMutation(id, async () => {
+            const current = await readRecord(id);
+            if (current?.attempt !== attempt || current.startedAt !== startedAt ||
+                !["running", "interrupted"].includes(current.status) ||
+                stdout.nativeProductionResults.length !== 1 || stdout.nativeCommandFailures.length !== 0) return;
+            await writeJsonAtomic(path.join(artifactRoot, "evaluation-run.json"), evaluationRun);
+            await writeRecordUnlocked({ ...current,
+              productionOutcome: closure.productionOutcome,
+              publicationOutcome: closure.publicationOutcome,
+              evaluationOutcome: closure.evaluationOutcome,
+              strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+              strictDiagnosticCodes: closure.strictDiagnosticCodes,
+              strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+              nativeProductionClosure: closure, nativeLaunch: closure.launch,
+              whiteboxOutcome: "passed", captureStatus: "passed", captureRequired: false,
+            });
+          });
+        } catch (error) {
+          await appendJobLog(id, `\nNative whitebox checkpoint unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      };
+    }
     const stderr = { buffer: "" };
     child.stdout.on("data", (chunk) => consumeOutput(id, "stdout", chunk, stdout));
     child.stderr.on("data", (chunk) => consumeOutput(id, "stderr", chunk, stderr));
@@ -3000,6 +3178,7 @@ export function createStudio(options = {}) {
     if (stdout.buffer) captureNativeProductionMessage("stdout", stdout.buffer, stdout);
     if (stdout.buffer) await appendJobLog(id, `[stdout] ${stdout.buffer}\n`);
     if (stderr.buffer) await appendJobLog(id, `[stderr] ${stderr.buffer}\n`);
+    await stdout.nativeWhiteboxCheckpointPromise;
 
     if (stoppingJobs.has(id)) return;
 
@@ -3008,10 +3187,10 @@ export function createStudio(options = {}) {
       await updateRecord(id, {
         status: "interrupted",
         stage: "interrupted",
-        failedStage: latestRecord?.stage ?? "preparing",
+        failedStage: latestRecord?.failedStage ?? latestRecord?.stage ?? "preparing",
         finishedAt: new Date().toISOString(),
         error: "Creator Studio stopped while this world was being generated.",
-        captureStatus: "not-run",
+        captureStatus: latestRecord?.whiteboxOutcome === "passed" ? "passed" : "not-run",
         outcome: "failed",
       });
       await appendTrajectoryEvent(id, "interrupted", "Creator Studio 停止，运行中的任务被标记为中断。", { kind: "failed" });
@@ -3029,7 +3208,23 @@ export function createStudio(options = {}) {
       let nativeFailure = null;
       let nativeFailureResult = null;
       let nativeCommandDiagnosticCodes = [];
-      if (stdout.nativeProductionResults.length !== 1) {
+      let visualProtocolError = null;
+      if (visualResume) {
+        try {
+          closure = (await prepareNativeVisualResume(record)).closure;
+          // The visual child cannot replace or manufacture the original Native result.
+          if (stdout.nativeProductionResults.length || stdout.nativeCommandFailures.length) {
+            visualProtocolError = "STUDIO_NATIVE_VISUAL_RESULT_UNEXPECTED";
+          }
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          if (await hasNativeLaunchEvidence(record)) {
+            // Appearance input failure cannot revoke the still-valid original whitebox.
+            closure = visualResume.closure;
+            visualProtocolError = reason;
+          } else nativeFailure = reason;
+        }
+      } else if (stdout.nativeProductionResults.length !== 1) {
         if (
           stdout.nativeProductionResults.length === 0 &&
           stdout.nativeCommandFailures.length === 1
@@ -3052,7 +3247,7 @@ export function createStudio(options = {}) {
             stdout.nativeProductionResults[0],
           );
           if (productionResult.productionOutcome === "passed") {
-            if (exit.code !== 0) {
+            if (exit.code !== 0 && !(styledOpeningFrameRequired && stdout.nativeVisualStarted)) {
               nativeFailure =
                 `STUDIO_NATIVE_PRODUCTION_EXIT_NONZERO: child exited with code ${exit.code}`;
             } else {
@@ -3068,14 +3263,22 @@ export function createStudio(options = {}) {
       }
 
       if (closure !== null) {
+        // --resume revalidates the original request/delivery hashes. Reused pixels
+        // need not have been generated during this new Studio queue attempt.
+        const visualPassed = !styledOpeningFrameRequired || (exit.code === 0 && !visualProtocolError &&
+          await hasNativeStyledArtifacts(record, visualResume ? 0 : Date.parse(startedAt) - 1_000));
+        const visualError = visualPassed ? null : visualProtocolError ?? (exit.code !== 0
+          ? `STUDIO_NATIVE_VISUAL_FAILED: child exited with code ${exit.code}`
+          : "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE");
         await updateRecord(id, {
-          status: "ready",
-          stage: "ready",
+          status: visualPassed ? "ready" : "failed",
+          stage: visualPassed ? "ready" : "failed",
+          failedStage: visualPassed ? null : "visual-imagegen",
           captureRequired: false,
           runtimeCaptureAttempts: 0,
           captureError: null,
           captureStatus: "passed",
-          outcome: "passed",
+          outcome: visualPassed ? "passed" : "failed",
           productionOutcome: closure.productionOutcome,
           publicationOutcome: closure.publicationOutcome,
           evaluationOutcome: closure.evaluationOutcome,
@@ -3085,10 +3288,10 @@ export function createStudio(options = {}) {
           nativeProductionClosure: closure,
           nativeLaunch: closure.launch,
           whiteboxOutcome: "passed",
-          styledOpeningFrameStatus: "not-required",
-          styledTriviewsStatus: "not-required",
+          styledOpeningFrameStatus: !styledOpeningFrameRequired ? "not-required" : visualPassed ? "passed" : "failed",
+          styledTriviewsStatus: !styledTriviewsRequired ? "not-required" : visualPassed ? "passed" : "failed",
           finishedAt,
-          error: null,
+          error: visualError,
         });
         await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
           kind: "worldkit-evaluation-report",
@@ -3098,7 +3301,8 @@ export function createStudio(options = {}) {
           workflowPolicyVersion,
           attempt,
           codexBackend,
-          outcome: "passed",
+          outcome: visualPassed ? "passed" : "failed",
+          error: visualError,
           productionOutcome: closure.productionOutcome,
           publicationOutcome: closure.publicationOutcome,
           evaluationOutcome: closure.evaluationOutcome,
@@ -3117,12 +3321,14 @@ export function createStudio(options = {}) {
         });
         await appendJobLog(
           id,
-          "\nNative production completed with an identity-bound published result.\n",
+          visualResume ? "\nOriginal identity-bound Native publication reused; no whitebox generation was run.\n"
+            : "\nNative production completed with an identity-bound published result.\n",
         );
         await appendTrajectoryEvent(
           id,
           "runtime-capture",
-          closure.strictDiagnosticOutcome === "passed"
+          visualResume ? "复用原 Native Package、Capture 与 final 发布证据；原严格诊断保持不变。"
+            : closure.strictDiagnosticOutcome === "passed"
             ? "Native Package、Capture、评测、严格诊断与 final 发布证据已绑定。"
             : "Native Package、Capture、评测与 final 发布证据已绑定；严格诊断单独记录。",
           {
@@ -3132,6 +3338,10 @@ export function createStudio(options = {}) {
             strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
           },
         );
+        if (!visualPassed) {
+          await appendJobLog(id, `\n${visualError}; published whitebox remains available.\n`);
+          await appendTrajectoryEvent(id, "visual-imagegen", visualError, { kind: "failed" });
+        }
         return;
       }
 
@@ -3148,6 +3358,7 @@ export function createStudio(options = {}) {
         finishedAt,
         error: nativeFailure,
         captureStatus: "failed",
+        whiteboxOutcome: "failed",
         outcome: "failed",
         productionOutcome: nativeFailureResult?.productionOutcome ?? "failed",
         publicationOutcome:
@@ -3290,10 +3501,10 @@ export function createStudio(options = {}) {
       await appendTrajectoryEvent(id, "runtime-capture", "进入首帧、运行快照与实体白膜三视图均已生成。", { kind: "completed" });
       await appendTrajectoryEvent(id, "entry-alignment-validation", "真实首帧与 Runtime Snapshot V4 的第三人称进入构图校验已通过。", { kind: "completed" });
       if (styledOpeningFrameRequired) {
-        await appendTrajectoryEvent(id, "visual-prompt-synthesis", "视觉提示词提供方已依据用户首帧、真实白模首帧和白模三视图固化共享视觉约束。", { kind: "completed" });
+        await appendTrajectoryEvent(id, "visual-prompt-synthesis", "同一 Codex 视觉重建任务已固化首帧和逐目标提示词，Host 已校验引用角色。", { kind: "completed" });
       }
       if (styledTriviewsRequired) {
-        await appendTrajectoryEvent(id, "visual-imagegen", "图片提供方已生成新首帧和全部视觉组的渲染后三视图。", { kind: "completed" });
+        await appendTrajectoryEvent(id, "visual-imagegen", "Codex 视觉重建任务已交付新首帧和全部目标三视图，Host 已校验文件、哈希与引用。", { kind: "completed" });
       }
       return;
     }
@@ -3411,7 +3622,7 @@ export function createStudio(options = {}) {
               failedStage: latest?.stage ?? "preparing",
               finishedAt,
               error: error instanceof Error ? error.message : String(error),
-              captureStatus: "failed",
+              captureStatus: latest?.whiteboxOutcome === "passed" && await hasNativeLaunchEvidence(latest) ? "passed" : "failed",
               outcome: "failed",
             });
           }
@@ -3505,10 +3716,10 @@ export function createStudio(options = {}) {
       captureRequired: true,
       captureStatus: "pending",
       outcome: null,
-      styledOpeningFrameRequired: sceneSourceKind === "canonical" && referenceImage !== null,
-      styledOpeningFrameStatus: sceneSourceKind !== "canonical" || referenceImage === null ? "not-required" : "pending",
-      styledTriviewsRequired: sceneSourceKind === "canonical" && referenceImage !== null,
-      styledTriviewsStatus: sceneSourceKind !== "canonical" || referenceImage === null ? "not-required" : "pending",
+      styledOpeningFrameRequired: referenceImage !== null,
+      styledOpeningFrameStatus: referenceImage === null ? "not-required" : "pending",
+      styledTriviewsRequired: referenceImage !== null,
+      styledTriviewsStatus: referenceImage === null ? "not-required" : "pending",
       workflowPolicyVersion,
     };
     await writeRecord(record);
@@ -3522,17 +3733,108 @@ export function createStudio(options = {}) {
   }
 
   async function recoverGeneratedStyledOutputs(record) {
+    return runRecordMutation(record.id, async () => {
+      const current = await readRecord(record.id);
+      if (!current || shuttingDown || activeJobs.has(record.id) ||
+          queue.some(item => parseQueueItem(item)?.id === record.id) ||
+          current.attempt !== record.attempt || current.startedAt !== record.startedAt) return false;
+      const recovered = await recoverGeneratedStyledOutputsUnlocked(current);
+      if (recovered) visualRecoveryLogKeys.delete(current.id);
+      return recovered;
+    });
+  }
+
+  async function recoverGeneratedStyledOutputsUnlocked(record) {
+    const native = effectiveSceneSourceKind(record) === "babylon-native";
+    const recoverableNativeFailure = native && record.status === "failed" &&
+      (/^STUDIO_NATIVE_VISUAL_FAILED: child exited with code (?:-1|1)$/.test(record.error ?? "") ||
+       record.error === "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE");
     if (
       record.workflowPolicyVersion !== workflowPolicyVersion ||
-      !["interrupted", "running"].includes(record.status) ||
+      record.outcome === "cancelled" ||
+      (!["interrupted", "running"].includes(record.status) && !recoverableNativeFailure) ||
       /alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(record.error ?? "") ||
       ![record.failedStage, record.stage].some((stage) =>
         ["visual-prompt-synthesis", "visual-imagegen"].includes(stage))
     ) return false;
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    if (/alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(rawLog)) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const startedAtMs = Date.parse(record.startedAt ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
     const freshnessFloor = startedAtMs - 1_000;
+    const evaluationRun = await readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json"));
+    if (
+      evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
+      evaluationRun.caseId !== record.id || evaluationRun.sceneId !== record.sceneId ||
+      evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
+      evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
+    ) return false;
+    if (native) {
+      const closure = record.nativeProductionClosure;
+      if (record.referenceImage === null || closure?.kind !== "studio-native-production-closure" ||
+          closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
+          closure.publicationOutcome !== "published" ||
+          !await hasNativeLaunchEvidence(record)) return false;
+      if (!await hasNativeStyledArtifacts(record, freshnessFloor)) {
+        // Old Cloud recovery also retrieves late delivery after a full run is
+        // interrupted, not only after an explicit visual retry. Old pixels
+        // still require original request/delivery replay; never waive freshness
+        // without that owner, and never submit a replacement model task.
+        const recoverableInterruptedCloud = autoRecoverVisualDeliveries &&
+          effectiveCodexBackend(record) === "cloud" && ["interrupted", "running"].includes(record.status);
+        if (evaluationRun.executionMode !== "visual-resume" && !recoverableNativeFailure &&
+            !recoverableInterruptedCloud) return false;
+        try {
+          const resume = await prepareNativeVisualResume(record);
+          if (!resume) return false;
+          const replay = options.nativeVisualRecoveryImplementation ??
+            (await tsImport("../../../scripts/visual/run-styled-visual-agent.ts", { parentURL: import.meta.url })).replayDeliveredStyledVisualAgent;
+          await replay({ repoRoot, sceneId: record.sceneId, sceneSource: "babylon-native",
+            userFramePath: resume.userFramePath, backend: effectiveCodexBackend(record), scope: "all",
+            signal: visualRecoveryController.signal }, autoRecoverVisualDeliveries ? undefined : async () => {
+              throw new Error("VISUAL_TASK_NOT_DELIVERED: remote delivery recovery is disabled.");
+            });
+          if (!await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, 0)) return false;
+        } catch (error) {
+          if (shuttingDown) return false;
+          const message = error instanceof Error ? error.message : String(error);
+          const key = `${record.attempt}:${record.startedAt}:${message}`;
+          if (visualRecoveryLogKeys.get(record.id) !== key) {
+            await appendJobLog(record.id, `\nNative visual delivery replay remains interrupted: ${message}\n`);
+            visualRecoveryLogKeys.set(record.id, key);
+          }
+          return false;
+        }
+      }
+      const finishedAt = new Date().toISOString();
+      if (shuttingDown) return false;
+      await writeRecordUnlocked({ ...record,
+        status: "ready", stage: "ready", failedStage: null, finishedAt, error: null,
+        outcome: "passed", whiteboxOutcome: "passed", captureStatus: "passed", captureRequired: false,
+        productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+        evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+        strictDiagnosticCodes: closure.strictDiagnosticCodes,
+        strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+        nativeLaunch: closure.launch, styledOpeningFrameStatus: "passed", styledTriviewsStatus: "passed",
+      });
+      await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
+        kind: "worldkit-evaluation-report", schemaVersion: 1, caseId: record.id,
+        caseHash: evaluationRun.caseHash, workflowPolicyVersion, attempt: record.attempt,
+        codexBackend: effectiveCodexBackend(record), outcome: "passed", whiteboxOutcome: "passed",
+        productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+        evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+        strictDiagnosticCodes: closure.strictDiagnosticCodes,
+        strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+        nativeProduction: { caseId: closure.caseId, runId: closure.runId,
+          strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+          strictDiagnosticCodes: closure.strictDiagnosticCodes, strictDiagnosticHash: closure.strictDiagnosticHash },
+        finishedAt,
+      });
+      await appendTrajectoryEvent(record.id, "visual-imagegen",
+        "已恢复 Native 已发布白膜与完整视觉产物；未重新提交模型任务。", { kind: "completed" });
+      return true;
+    }
     if (!await hasTrustedWhiteboxArtifacts(artifactRoot, record.sceneId, freshnessFloor)) return false;
     const required = [
       "visual-generation-prompts.json",
@@ -3560,18 +3862,11 @@ export function createStudio(options = {}) {
     ])));
     if (!Object.values(gates).every(Boolean)) return false;
     if (!await pngArtifact(path.join(artifactRoot, "styled-opening-frame.png"), freshnessFloor)) return false;
-    const [evaluationRun, openingReport, triViewReport, captureManifest] = await Promise.all([
-      readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json")),
+    const [openingReport, triViewReport, captureManifest] = await Promise.all([
       readJsonIfPresent(path.join(artifactRoot, "styled-opening-frame-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-triviews-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
     ]);
-    if (
-      evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
-      evaluationRun.caseId !== record.id || evaluationRun.sceneId !== record.sceneId ||
-      evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
-      evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
-    ) return false;
     if (record.referenceImage !== null) {
       if (
         openingReport?.kind !== "worldkit-styled-opening-frame-report" || openingReport.schemaVersion !== 1 ||
@@ -3587,7 +3882,8 @@ export function createStudio(options = {}) {
       }
     }
     const finishedAt = new Date().toISOString();
-    await updateRecord(record.id, {
+    if (shuttingDown) return false;
+    await writeRecordUnlocked({ ...record,
       status: "ready",
       stage: "ready",
       failedStage: null,
@@ -3625,6 +3921,22 @@ export function createStudio(options = {}) {
     return true;
   }
 
+  function reconcileVisualDeliveries() {
+    if (shuttingDown || !autoRecoverVisualDeliveries) return Promise.resolve();
+    if (visualRecoveryPromise) return visualRecoveryPromise;
+    const operation = (async () => {
+      for (const record of await listRecords()) {
+        if (shuttingDown) break;
+        if (["failed", "interrupted"].includes(record.status) && record.outcome !== "cancelled")
+          await recoverGeneratedStyledOutputs(record);
+      }
+    })();
+    visualRecoveryPromise = operation;
+    const clear = () => { if (visualRecoveryPromise === operation) visualRecoveryPromise = null; };
+    void operation.then(clear, clear);
+    return operation;
+  }
+
   async function initialize() {
     await Promise.all([
       mkdir(worldsRoot, { recursive: true }),
@@ -3659,10 +3971,17 @@ export function createStudio(options = {}) {
       }
     }
     pumpQueue();
+    if (autoRecoverVisualDeliveries && visualRecoveryTimer === null) {
+      visualRecoveryTimer = visualRecoveryTimers.setInterval(() => {
+        runBackgroundTask("visual-recovery", "reconcile-delivered-visuals", reconcileVisualDeliveries);
+      }, visualRecoveryIntervalMs);
+      visualRecoveryTimer.unref?.();
+      runBackgroundTask("visual-recovery", "initial-reconcile-delivered-visuals", reconcileVisualDeliveries);
+    }
   }
 
   async function handleApi(request, response, url) {
-    if (await recordingWorkbench.handleApi(request, response, url)) return true;
+    if (await recordingWorkbench.handleApi(request, response, url, nativeRecordingRequestContexts.get(request))) return true;
 
     if (request.method === "PUT" && url.pathname === "/api/settings/codex-backend") {
       const body = await readJsonBody(request);
@@ -4016,7 +4335,7 @@ export function createStudio(options = {}) {
         repoRoot,
         "artifacts/scenes",
         record.sceneId,
-        "triviews",
+        visualCapturePaths(effectiveSceneSourceKind(record)).triviewRoot,
         triviewMatch[2],
         "whitebox-triview.png",
       );
@@ -4051,6 +4370,13 @@ export function createStudio(options = {}) {
       return true;
     }
 
+    const nativeRecordingMatch = /^\/api\/worlds\/([a-z0-9][a-z0-9-]{2,79})\/recording-preview$/.exec(url.pathname);
+    if (request.method === "POST" && nativeRecordingMatch) {
+      if (shuttingDown) { sendError(response, 503, "Studio 正在关闭。"); return true; }
+      sendJson(response, 200, await nativeRecordingPreviews.open(nativeRecordingMatch[1]));
+      return true;
+    }
+
     const nativeLaunchMatch = /^\/api\/worlds\/([a-z0-9-]+)\/native-launch$/.exec(
       url.pathname,
     );
@@ -4061,7 +4387,7 @@ export function createStudio(options = {}) {
       if (
         record === null ||
         effectiveSceneSourceKind(record) !== "babylon-native" ||
-        record.status !== "ready" ||
+        record.productionOutcome !== "passed" || record.publicationOutcome !== "published" ||
         launch?.kind !== "studio-native-launch" ||
         launch.schemaVersion !== 1 ||
         closure?.caseId !== record.sceneId ||
@@ -4209,43 +4535,52 @@ export function createStudio(options = {}) {
 
     const retryMatch = /^\/api\/worlds\/([a-z0-9-]+)\/retry$/.exec(url.pathname);
     if (request.method === "POST" && retryMatch) {
-      const record = await readRecord(retryMatch[1]);
-      if (!record) {
-        sendError(response, 404, "没有找到这个世界。");
+      return runRecordMutation(retryMatch[1], async () => {
+        const record = await readRecord(retryMatch[1]);
+        if (!record) {
+          sendError(response, 404, "没有找到这个世界。");
+          return true;
+        }
+        if (!["failed", "interrupted"].includes(record.status)) {
+          sendError(response, 409, "只有失败或中断的任务可以重试。");
+          return true;
+        }
+        const styledOutputsRequired = record.referenceImage !== null;
+        let visualResume;
+        try { visualResume = await prepareNativeVisualResume(record); }
+        catch (error) {
+          sendError(response, 409, error instanceof Error ? error.message : String(error));
+          return true;
+        }
+        await writeRecordUnlocked({ ...record,
+          status: "queued",
+          stage: "queued",
+          failedStage: null,
+          error: null,
+          captureRequired: true,
+          captureStatus: "pending",
+          outcome: null,
+          productionOutcome: null,
+          publicationOutcome: null,
+          evaluationOutcome: null,
+          strictDiagnosticOutcome: null,
+          strictDiagnosticCodes: [],
+          strictDiagnosticCleanupOutcome: null,
+          nativeProductionClosure: null,
+          nativeLaunch: null,
+          styledOpeningFrameRequired: styledOutputsRequired,
+          styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
+          styledTriviewsRequired: styledOutputsRequired,
+          styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
+          ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
+        });
+        await appendTrajectoryEvent(record.id, "queued", visualResume
+          ? "用户发起视觉恢复：复用原请求与已发布白膜，不重新运行 Planner 或 Builder。"
+          : "用户发起重试，任务重新进入队列。", { kind: "queued" });
+        enqueue(record.id, effectiveCodexBackend(record));
+        sendJson(response, 202, { ok: true });
         return true;
-      }
-      if (!["failed", "interrupted"].includes(record.status)) {
-        sendError(response, 409, "只有失败或中断的任务可以重试。");
-        return true;
-      }
-      const sceneSourceKind = effectiveSceneSourceKind(record);
-      const styledOutputsRequired = sceneSourceKind === "canonical" &&
-        record.referenceImage !== null;
-      await updateRecord(record.id, {
-        status: "queued",
-        stage: "queued",
-        failedStage: null,
-        error: null,
-        captureRequired: true,
-        captureStatus: "pending",
-        outcome: null,
-        productionOutcome: null,
-        publicationOutcome: null,
-        evaluationOutcome: null,
-        strictDiagnosticOutcome: null,
-        strictDiagnosticCodes: [],
-        strictDiagnosticCleanupOutcome: null,
-        nativeProductionClosure: null,
-        nativeLaunch: null,
-        styledOpeningFrameRequired: styledOutputsRequired,
-        styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
-        styledTriviewsRequired: styledOutputsRequired,
-        styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
       });
-      await appendTrajectoryEvent(record.id, "queued", "用户发起重试，任务重新进入队列。", { kind: "queued" });
-      enqueue(record.id, effectiveCodexBackend(record));
-      sendJson(response, 202, { ok: true });
-      return true;
     }
 
     const referenceMatch = /^\/api\/worlds\/([a-z0-9-]+)\/reference$/.exec(url.pathname);
@@ -4351,7 +4686,15 @@ export function createStudio(options = {}) {
         return;
       }
 
-      if (!isAuthorizedHeader(request.headers.authorization, accessKey)) {
+      const recordingCapability = request.headers["x-worldkit-native-recording-capability"];
+      const recordingContext = recordingCapability === undefined ? null :
+        await nativeRecordingPreviews.authorize(recordingCapability, request.method, url.pathname);
+      if (recordingCapability !== undefined && !recordingContext) {
+        sendError(response, 403, "这个录制页面的世界绑定已失效或请求不在授权范围内。");
+        return;
+      }
+      if (recordingContext) nativeRecordingRequestContexts.set(request, recordingContext);
+      if (recordingCapability === undefined && !isAuthorizedHeader(request.headers.authorization, accessKey)) {
         response.writeHead(401, {
           "content-type": "text/plain; charset=utf-8",
           "cache-control": "no-store",
@@ -4414,17 +4757,25 @@ export function createStudio(options = {}) {
 
   async function shutdown() {
     shuttingDown = true;
+    visualRecoveryController.abort();
+    if (visualRecoveryTimer !== null) {
+      visualRecoveryTimers.clearInterval(visualRecoveryTimer);
+      visualRecoveryTimer = null;
+    }
     for (const child of activeChildren.values()) {
       terminateChild(child);
     }
     await Promise.all([
+      visualRecoveryPromise?.catch(() => {}),
       recordingWorkbench.shutdown(),
-      ...[...activeJobs].map((id) => updateRecord(id, {
-          status: "interrupted",
-          stage: "interrupted",
-          finishedAt: new Date().toISOString(),
-          error: "Creator Studio stopped while this world was being generated.",
-        })),
+      nativeRecordingPreviews.shutdown(),
+      ...[...activeJobs].map((id) => runRecordMutation(id, async () => {
+        const record = await readRecord(id);
+        if (!record) return;
+        await writeRecordUnlocked({ ...record, status: "interrupted", stage: "interrupted",
+          failedStage: record.failedStage ?? record.stage, finishedAt: new Date().toISOString(),
+          error: "Creator Studio stopped while this world was being generated." });
+      })),
     ]);
     await new Promise((resolve) => server.close(resolve));
   }
@@ -4433,6 +4784,7 @@ export function createStudio(options = {}) {
     server,
     initialize,
     shutdown,
+    reconcileVisualDeliveries,
     get activeJob() { return activeJobs.values().next().value ?? null; },
     get activeJobs() { return [...activeJobs]; },
   };

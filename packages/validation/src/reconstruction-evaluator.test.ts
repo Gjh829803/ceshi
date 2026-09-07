@@ -96,7 +96,7 @@ const caseValue = () => ({
       { acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF, contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground" as const, requiresOverlay: true },
       { acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF, contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker" as const, requiresOverlay: true },
     ],
-    groundConnectivity: {
+    groundConnectivity: { mode: "case-defined" as const,
       requireSingleReachableComponent: true,
       requiredTraversalBands: [{
         acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
@@ -240,8 +240,8 @@ const evidenceValue = () => ({
           targets: [{
             acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
             visualGroupId: "central-ascent-group",
-            structuralProjection: {
-              outcome: "projected" as const,
+            visiblePixelProjection: {
+              outcome: "visible" as const,
               normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
               normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
               coverageBasisPoints: 2_400,
@@ -422,6 +422,41 @@ describe("evaluateWorldReconstructionV1", () => {
     );
   });
 
+  it("does not claim complete semantic or topology evidence when no targets are declared", () => {
+    const result = evaluateBound({
+      case: draft => {
+        draft.expected.semanticSilhouetteTargets = [];
+        draft.expected.topology.nodeIds = [];
+        draft.expected.topology.layerIds = [];
+        draft.expected.topology.relations = [];
+      },
+      profile: draft => { draft.thresholds.semanticSilhouetteTargets = []; },
+    });
+    expect(result.dimensions.find(row => row.dimensionId === "semantic-silhouette")?.status).toBe("incomplete");
+    expect(result.dimensions.find(row => row.dimensionId === "topology")?.status).toBe("incomplete");
+  });
+
+  it("reports undeclared traversal as incomplete instead of a vacuous strict pass", () => {
+    const result = evaluateBound({
+      case(draft) {
+        draft.expected.criticalTraversalChecks = [];
+        Object.assign(draft.expected.groundConnectivity, {
+          mode: "source-authored", requiredTraversalBands: [],
+        });
+      },
+      evidence(draft) {
+        const row = observedRow(draft, "critical-traversal");
+        if (row.observed.kind !== "critical-traversal-observed") throw new Error("wrong fixture kind");
+        row.observed.checks = [];
+      },
+    });
+    expect(dimension(result, "critical-traversal").status).toBe("incomplete");
+    expect(result.outcome).toBe("incomplete");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING", dimensionId: "critical-traversal",
+    }));
+  });
+
   it("accepts an outside-viewport structural row for a presence-required view", () => {
     const result = evaluateBound({
       evidence: (draft) => {
@@ -431,8 +466,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[1]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -483,8 +518,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[0]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -503,8 +538,8 @@ describe("evaluateWorldReconstructionV1", () => {
         }
         Reflect.set(
           silhouette.observed.views[0]!.targets[0]!,
-          "structuralProjection",
-          { outcome: "outside-viewport" },
+          "visiblePixelProjection",
+          { outcome: "not-visible" },
         );
       },
     });
@@ -587,7 +622,7 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .normalizedCenter = { xBasisPoints: 500, yBasisPoints: 500 };
       },
     });
@@ -605,14 +640,19 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .coverageBasisPoints = 2_700;
       },
     });
     expectIndependentFailure(result, "semantic-silhouette");
     expect(result.diagnostics[0]).toMatchObject({
       code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+      repairAction: {
+        operation: "adjust-geometry",
+        instruction: expect.stringContaining("occlusion"),
+      },
     });
+    expect(Reflect.get(result.diagnostics[0]!, "repairAction").instruction).not.toMatch(/Enlarge|Shrink/);
   });
 
   it("preserves each failed semantic submetric with executable correction data", () => {
@@ -622,12 +662,12 @@ describe("evaluateWorldReconstructionV1", () => {
         if (silhouette.observed.kind !== "semantic-silhouette-observed") {
           throw new Error("silhouette observed");
         }
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .normalizedCenter = {
           xBasisPoints: 500,
           yBasisPoints: 250,
         };
-        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+        silhouette.observed.views[0]!.targets[0]!.visiblePixelProjection
           .coverageBasisPoints = 2_700;
       },
     });
@@ -656,7 +696,8 @@ describe("evaluateWorldReconstructionV1", () => {
         kind: "revise-native-source",
         targetKind: "visual-group",
         targetId: "central-ascent-group",
-        operation: "move",
+        operation: "adjust-geometry",
+        instruction: expect.stringContaining("occlusion"),
       }),
     }));
   });

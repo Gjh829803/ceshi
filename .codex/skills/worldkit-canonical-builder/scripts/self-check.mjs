@@ -1678,51 +1678,6 @@ function baseUniq(array2, iteratee, comparator) {
 function uniq(array2) {
   return array2 && array2.length ? baseUniq(array2) : [];
 }
-function invalidContractDataV1(code2) {
-  throw new TypeError(code2);
-}
-function snapshotContractDataV1(input, code2) {
-  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
-    return input;
-  }
-  if (typeof input === "number") {
-    if (!Number.isFinite(input) || Object.is(input, -0)) {
-      return invalidContractDataV1(code2);
-    }
-    return input;
-  }
-  if (Array.isArray(input)) {
-    try {
-      if (Reflect.getPrototypeOf(input) !== Array.prototype || Reflect.ownKeys(input).some((key) => typeof key === "symbol") || Object.getOwnPropertyNames(input).length !== input.length + 1) return invalidContractDataV1(code2);
-      const snapshot = [];
-      for (let index = 0; index < input.length; index += 1) {
-        const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
-        if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
-        snapshot.push(snapshotContractDataV1(descriptor.value, code2));
-      }
-      return snapshot;
-    } catch {
-      return invalidContractDataV1(code2);
-    }
-  }
-  if (typeof input !== "object" || isNil(input)) {
-    return invalidContractDataV1(code2);
-  }
-  try {
-    if (Reflect.getPrototypeOf(input) !== Object.prototype) {
-      return invalidContractDataV1(code2);
-    }
-    const snapshot = {};
-    for (const key of Reflect.ownKeys(input)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
-      snapshot[key] = snapshotContractDataV1(descriptor.value, code2);
-    }
-    return snapshot;
-  } catch {
-    return invalidContractDataV1(code2);
-  }
-}
 function invalid$5(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
@@ -2651,31 +2606,6 @@ function parseCameraContextRuleValueV2(input, schemaName) {
 function parseCameraContextRuleV2(input) {
   return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
 }
-const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
-  "gameplay-command.execute",
-  "fixed-input.run",
-  "snapshot.get",
-  "events.get",
-  "session.reset",
-  "subject-support.get",
-  "session.close"
-]);
-new Set(
-  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
-);
-new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
-  "kind",
-  "schemaVersion",
-  "id",
-  "resourceRef",
-  "trustMode",
-  "requiredIsolationCapabilityIds"
-]);
-Object.freeze([
-  ...TRUST_PROFILE_BODY_FIELDS,
-  "contentHash"
-]);
 const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
   "distanceMeters",
   "targetHeightMeters",
@@ -2759,6 +2689,76 @@ function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides)
   }
   return applied;
 }
+function invalidContractDataV1(code2) {
+  throw new TypeError(code2);
+}
+function snapshotContractDataV1(input, code2) {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
+    return input;
+  }
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || Object.is(input, -0)) {
+      return invalidContractDataV1(code2);
+    }
+    return input;
+  }
+  if (Array.isArray(input)) {
+    try {
+      if (Reflect.getPrototypeOf(input) !== Array.prototype || Reflect.ownKeys(input).some((key) => typeof key === "symbol") || Object.getOwnPropertyNames(input).length !== input.length + 1) return invalidContractDataV1(code2);
+      const snapshot = [];
+      for (let index = 0; index < input.length; index += 1) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
+        if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+        snapshot.push(snapshotContractDataV1(descriptor.value, code2));
+      }
+      return snapshot;
+    } catch {
+      return invalidContractDataV1(code2);
+    }
+  }
+  if (typeof input !== "object" || isNil(input)) {
+    return invalidContractDataV1(code2);
+  }
+  try {
+    if (Reflect.getPrototypeOf(input) !== Object.prototype) {
+      return invalidContractDataV1(code2);
+    }
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(input)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+      snapshot[key] = snapshotContractDataV1(descriptor.value, code2);
+    }
+    return snapshot;
+  } catch {
+    return invalidContractDataV1(code2);
+  }
+}
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.reset",
+  "subject-support.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
+  "kind",
+  "schemaVersion",
+  "id",
+  "resourceRef",
+  "trustMode",
+  "requiredIsolationCapabilityIds"
+]);
+Object.freeze([
+  ...TRUST_PROFILE_BODY_FIELDS,
+  "contentHash"
+]);
 const ROOT_MOTION_RESOURCE_REF_PATTERN_V1 = /^worldkit:\/\/root-motion\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
 function invalid$3(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
@@ -5238,8 +5238,14 @@ function exactKeys(value, allowedKeys, instancePath) {
     `Unknown Hosted visual contract field '${key}'.`
   ));
 }
-function validIdArray(value) {
-  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID.test(item)) && new Set(value).size === value.length;
+function validIdArray(value, isNativeCaptureAllowed = false) {
+  const nativePrefix = "native-block:";
+  return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && (ID.test(item) || isNativeCaptureAllowed && item.startsWith(nativePrefix) && ID.test(item.slice(nativePrefix.length)))) && new Set(value).size === value.length;
+}
+function isValidVisualTargetFrontDirectionWorldXZV1(value) {
+  return Array.isArray(value) && value.length === 2 && [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+    ([x, z]) => value[0] === x && value[1] === z
+  );
 }
 function validateVisualTargetMappings(value, instancePath) {
   if (!Array.isArray(value)) {
@@ -5270,7 +5276,7 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
       return;
     }
-    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path2));
+    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds", "frontDirectionWorldXZ"], path2));
     if (typeof mapping.visualTargetId !== "string" || !ID.test(mapping.visualTargetId)) {
       diagnostics.push(diagnostic$1(
         "HOSTED_VISUAL_TARGET_ID_INVALID",
@@ -5288,6 +5294,13 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ)) {
+      diagnostics.push(diagnostic$1(
+        "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+        `${path2}/frontDirectionWorldXZ`,
+        "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates."
+      ));
     }
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -18103,7 +18116,7 @@ function search(input, profile, constraints, domains, stopAtFirst) {
   let bestPreferenceCostRatio;
   let bestLocalCostRatio;
   let bestSignature;
-  const compareAndStore = (assignment, evaluations) => {
+  const compareAndStore = (assignment2, evaluations) => {
     if (evaluations.some(
       (evaluation) => evaluation.requirement === "required" && !evaluation.satisfied
     )) return;
@@ -18119,52 +18132,57 @@ function search(input, profile, constraints, domains, stopAtFirst) {
       profile.quantization.scoreStep
     );
     const localCost = quantizeFinite(
-      Object.values(assignment).reduce((sum2, candidate) => sum2 + candidate.localCostRatio, 0),
+      Object.values(assignment2).reduce((sum2, candidate) => sum2 + candidate.localCostRatio, 0),
       profile.quantization.scoreStep
     );
     const signature = JSON.stringify(
-      Object.fromEntries(Object.keys(assignment).sort().map((id2) => [id2, assignment[id2].id]))
+      Object.fromEntries(Object.keys(assignment2).sort().map((id2) => [id2, assignment2[id2].id]))
     );
     if (bestAssignment === void 0 || preferenceCost < bestPreferenceCostRatio || preferenceCost === bestPreferenceCostRatio && localCost < bestLocalCostRatio || preferenceCost === bestPreferenceCostRatio && localCost === bestLocalCostRatio && signature.localeCompare(bestSignature) < 0) {
-      bestAssignment = { ...assignment };
+      bestAssignment = { ...assignment2 };
       bestEvaluations = evaluations;
       bestPreferenceCostRatio = preferenceCost;
       bestLocalCostRatio = localCost;
       bestSignature = signature;
     }
   };
-  const visit2 = (index, assignment) => {
-    if (budgetExceeded || stopAtFirst && bestAssignment !== void 0) return;
-    if (index === variables.length) {
-      const evaluations = constraints.map(
-        (constraint) => evaluatePlacementConstraintV1(context, constraint, assignment)
-      );
-      compareAndStore(assignment, evaluations);
-      return;
-    }
-    const variable = variables[index];
-    for (const candidate of domains.get(variable.id) ?? []) {
-      searchNodeCount += 1;
-      if (searchNodeCount > profile.budgets.maximumSearchNodes) {
-        budgetExceeded = true;
-        return;
-      }
-      assignment[variable.id] = candidate;
-      const readyRequired = constraints.filter(
-        (constraint) => constraint.requirement === "required" && constraintEntityIds$1(constraint, input).every((id2) => assignment[id2] !== void 0)
-      );
-      const hasViolation = readyRequired.some(
-        (constraint) => !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
-      );
-      if (!hasViolation) visit2(index + 1, assignment);
-      delete assignment[variable.id];
-      if (budgetExceeded || stopAtFirst && bestAssignment !== void 0) return;
-    }
-  };
   if ([...domains.values()].some((candidates) => candidates.length === 0)) {
     return { budgetExceeded: false, searchNodeCount: 0 };
   }
-  visit2(0, {});
+  const assignment = {};
+  const nextCandidateIndices = [0];
+  while (nextCandidateIndices.length > 0 && !(stopAtFirst && bestAssignment !== void 0)) {
+    const index = nextCandidateIndices.length - 1;
+    const variable = variables[index];
+    const candidates = index === variables.length ? [] : domains.get(variable.id) ?? [];
+    if (index === variables.length || nextCandidateIndices[index] >= candidates.length) {
+      if (index === variables.length) {
+        const evaluations = constraints.map(
+          (constraint) => evaluatePlacementConstraintV1(context, constraint, assignment)
+        );
+        compareAndStore(assignment, evaluations);
+      }
+      nextCandidateIndices.pop();
+      if (index > 0) delete assignment[variables[index - 1].id];
+      continue;
+    }
+    const candidate = candidates[nextCandidateIndices[index]];
+    nextCandidateIndices[index] += 1;
+    searchNodeCount += 1;
+    if (searchNodeCount > profile.budgets.maximumSearchNodes) {
+      budgetExceeded = true;
+      break;
+    }
+    assignment[variable.id] = candidate;
+    const readyRequired = constraints.filter(
+      (constraint) => constraint.requirement === "required" && constraintEntityIds$1(constraint, input).every((id2) => assignment[id2] !== void 0)
+    );
+    const hasViolation = readyRequired.some(
+      (constraint) => !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
+    );
+    if (hasViolation) delete assignment[variable.id];
+    else nextCandidateIndices.push(0);
+  }
   return {
     ...bestAssignment === void 0 ? {} : { bestAssignment },
     ...bestEvaluations === void 0 ? {} : { bestEvaluations },
@@ -30834,7 +30852,7 @@ function requireFormats() {
   return formats;
 }
 var limit = {};
-var ajv$2 = { exports: {} };
+var ajv$1 = { exports: {} };
 var draft7 = {};
 var hasRequiredDraft7;
 function requireDraft7() {
@@ -30874,7 +30892,7 @@ const require$$3 = {
 };
 var hasRequiredAjv;
 function requireAjv() {
-  if (hasRequiredAjv) return ajv$2.exports;
+  if (hasRequiredAjv) return ajv$1.exports;
   hasRequiredAjv = 1;
   (function(module2, exports2) {
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -30940,8 +30958,8 @@ function requireAjv() {
     Object.defineProperty(exports2, "MissingRefError", { enumerable: true, get: function() {
       return ref_error_1.default;
     } });
-  })(ajv$2, ajv$2.exports);
-  return ajv$2.exports;
+  })(ajv$1, ajv$1.exports);
+  return ajv$1.exports;
 }
 var hasRequiredLimit;
 function requireLimit() {
@@ -31095,62 +31113,62 @@ const subjectDefinitionV1Schema = {
   allOf,
   $defs
 };
-const ajv$1 = new Ajv2020({
+const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
   validateFormats: true
 });
-addFormats(ajv$1);
-ajv$1.addFormat("worldkit-resource-ref", {
+addFormats(ajv);
+ajv.addFormat("worldkit-resource-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
 });
-ajv$1.addFormat("subject-definition-ref", {
+ajv.addFormat("subject-definition-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("capability-ref", {
+ajv.addFormat("capability-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("physics-body-profile-ref", {
+ajv.addFormat("physics-body-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("locomotion-profile-ref", {
+ajv.addFormat("locomotion-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("collider-derivation-profile-ref", {
+ajv.addFormat("collider-derivation-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("package-prototype-ref", {
+ajv.addFormat("package-prototype-ref", {
   type: "string",
   validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("layout-solver-profile-ref", {
+ajv.addFormat("layout-solver-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/layout-solver-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("traversal-surface-profile-ref", {
+ajv.addFormat("traversal-surface-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/traversal-surface-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addSchema(subjectDefinitionV1Schema);
-const validateCanonicalAuthoringSpecV4 = ajv$1.compile(
+ajv.addSchema(subjectDefinitionV1Schema);
+const validateCanonicalAuthoringSpecV4 = ajv.compile(
   authoringSpecV4Schema
 );
 function canonicalJsonAdmissionResult(value) {
@@ -33686,6 +33704,15 @@ const MOVEMENT_LABELS = /* @__PURE__ */ new Map([
   ["水下游动", "underwater"],
   ["空中飞行", "flight"]
 ]);
+function movementModeForLabel(label) {
+  const exact2 = MOVEMENT_LABELS.get(label);
+  if (exact2 !== void 0) return exact2;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (label.startsWith(standardLabel) && (suffix.startsWith("（") && suffix.endsWith("）") || suffix.startsWith("(") && suffix.endsWith(")")) && suffix.length >= 3 && suffix.length <= 26) return mode;
+  }
+  return "custom";
+}
 const TARGET_KIND_LABELS = /* @__PURE__ */ new Map([
   ["主体", "subject"],
   ["标志物", "landmark"],
@@ -33728,20 +33755,25 @@ function splitSections(source) {
   }
   return new Map([...sections].map(([key, value]) => [key, value[0]]));
 }
-function parseMovement(value) {
-  const match = /^([^：:\n]+)[：:]\s*([^\n]+)$/.exec(value.trim());
-  if (match === null) {
-    return fail("SCENE_BRIEF_MOVEMENT_INVALID: use '<运动模式>：<一句自然语言说明>'.");
+function parseMovementModes(value) {
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 1 || lines.length > 8) {
+    return fail("SCENE_BRIEF_MOVEMENT_COUNT: movement modes must contain 1-8 entries.");
   }
-  const label = match[1].trim();
-  if (label.length > 48) {
-    return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+  const labels = /* @__PURE__ */ new Set();
+  const movementModes = [];
+  for (const [index, line] of lines.entries()) {
+    const match = /^-\s*([^：:\n]+)[：:]\s*([^\n]+)$/.exec(line);
+    if (match === null) return fail(
+      `SCENE_BRIEF_MOVEMENT_INVALID: entry ${index + 1} must use '- <运动模式>：<一句自然语言说明>'.`
+    );
+    const label = match[1].trim();
+    if (label.length > 48) return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+    if (labels.has(label)) return fail(`SCENE_BRIEF_MOVEMENT_DUPLICATE: '${label}'.`);
+    labels.add(label);
+    movementModes.push({ mode: movementModeForLabel(label), label, description: match[2].trim() });
   }
-  return {
-    mode: MOVEMENT_LABELS.get(label) ?? "custom",
-    label,
-    description: match[2].trim()
-  };
+  return Object.freeze(movementModes);
 }
 function parseVisualTargets(value) {
   const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -33781,8 +33813,8 @@ function parseVisualTargets(value) {
 function parseSceneBriefV1(source) {
   const sections = splitSections(source);
   if ("ok" in sections) return sections;
-  const movement = parseMovement(sections.get("运动模式"));
-  if ("ok" in movement) return movement;
+  const movementModes = parseMovementModes(sections.get("运动模式"));
+  if ("ok" in movementModes) return movementModes;
   const visualTargets = parseVisualTargets(sections.get("视觉目标"));
   if ("ok" in visualTargets) return visualTargets;
   const value = {
@@ -33794,7 +33826,7 @@ function parseSceneBriefV1(source) {
     visibleReferenceEvidence: sections.get("可见参考证据"),
     inferredContinuation: sections.get("推断的世界延伸"),
     renderLayerIdeas: sections.get("仅视觉层设想"),
-    movement,
+    movementModes,
     space: sections.get("空间"),
     navigation: sections.get("通行"),
     openingShot: sections.get("首帧"),
@@ -33807,56 +33839,8 @@ function parseSceneBriefV1(source) {
     diagnostics: []
   };
 }
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: true,
-  validateFormats: true
-});
-addFormats(ajv);
-ajv.addFormat("worldkit-resource-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
-});
-ajv.addFormat("subject-definition-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("capability-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("physics-body-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("locomotion-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("collider-derivation-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("package-prototype-ref", {
-  type: "string",
-  validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addSchema(subjectDefinitionV1Schema);
-(() => {
-  const registeredValidator = ajv.getSchema(
-    "worldkit://schema/subject-definition@1"
-  );
-  if (registeredValidator === void 0) {
-    throw new Error("SUBJECT_DEFINITION_SCHEMA_NOT_REGISTERED");
-  }
-  return registeredValidator;
-})();
+typeof func2Module === "function" ? func2Module : func2Module.default;
+typeof func0Module === "function" ? func0Module : func0Module.default;
 function lattice(seed, x, z) {
   let value = seed ^ Math.imul(x, 521288629) ^ Math.imul(z, 1597334677);
   value = Math.imul(value ^ value >>> 16, 73244475);
@@ -33904,292 +33888,6 @@ function rejectPublishedWaterMediumProfile(mediumProfile) {
   if (forged.water !== void 0 || forged.supportedMediums?.includes("water")) {
     assertPublishedMovementMediumSupported();
   }
-}
-class CompilerInputAccessorErrorV1 extends Error {
-}
-function assertCompilerInputAccessorFreeV1(value, visited = /* @__PURE__ */ new WeakSet()) {
-  if (isNil(value) || typeof value !== "object" || visited.has(value)) return;
-  visited.add(value);
-  if (Object.getOwnPropertySymbols(value).length > 0) {
-    throw new CompilerInputAccessorErrorV1();
-  }
-  for (const descriptor of Object.values(
-    Object.getOwnPropertyDescriptors(value)
-  )) {
-    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
-      throw new CompilerInputAccessorErrorV1();
-    }
-    if (Object.hasOwn(descriptor, "value")) {
-      assertCompilerInputAccessorFreeV1(descriptor.value, visited);
-    }
-  }
-}
-function snapshotCompileCanonicalWorldInputV1(input) {
-  assertCompilerInputAccessorFreeV1(input);
-  return structuredClone(input);
-}
-function sampleTerrainHeight(terrain, pointMetersXZ) {
-  const [columns, rows] = terrain.resolutionCellsXZ;
-  const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
-  const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
-  const maximumX = minimumX + terrain.sizeMetersXZ[0];
-  const maximumZ = minimumZ + terrain.sizeMetersXZ[1];
-  return sampleTriangleHeightfieldSurface(
-    {
-      centerMetersXZ: terrain.centerMetersXZ,
-      sizeMetersXZ: terrain.sizeMetersXZ,
-      resolutionVerticesXZ: terrain.resolutionCellsXZ,
-      heightSamplesMeters: terrain.heightSamplesMeters
-    },
-    [
-      Math.max(minimumX, Math.min(maximumX, pointMetersXZ[0])),
-      Math.max(minimumZ, Math.min(maximumZ, pointMetersXZ[1]))
-    ]
-  ).heightMeters;
-}
-function findOnlyNodeV4(nodes, kind) {
-  const node = nodes.find(
-    (candidate) => candidate.kind === kind
-  );
-  if (node === void 0) {
-    throw new Error(`NormalizedWorldIR invariant violated: missing '${kind}' node.`);
-  }
-  return node;
-}
-function compileTerrainV3(world) {
-  const node = findOnlyNodeV4(world.nodes, "terrain");
-  const terrain = node.components.terrain;
-  const source = terrain.source;
-  const [columns, rows] = terrain.grid.resolutionCellsXZ;
-  const [centerX, centerZ] = terrain.grid.centerMetersXZ;
-  const [sizeX, sizeZ] = terrain.grid.sizeMetersXZ;
-  const minimumX = centerX - sizeX / 2;
-  const minimumZ = centerZ - sizeZ / 2;
-  const sampledHeights = terrain.grid.heightSamplesMeters;
-  const heights = [];
-  if (!isNil(sampledHeights)) {
-    if (sampledHeights.length !== columns * rows) {
-      throw new Error(
-        "NormalizedWorldIR invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product."
-      );
-    }
-    for (const height of sampledHeights) {
-      heights.push(height);
-    }
-  } else {
-    for (let zIndex = 0; zIndex < rows; zIndex += 1) {
-      const z = minimumZ + zIndex / (rows - 1) * sizeZ;
-      for (let xIndex = 0; xIndex < columns; xIndex += 1) {
-        const x = minimumX + xIndex / (columns - 1) * sizeX;
-        const noise = source.amplitudeMeters === 0 ? 0 : sampleFractalNoise(
-          world.seed,
-          x * source.frequencyPerMeter,
-          z * source.frequencyPerMeter,
-          source.octaves,
-          source.lacunarityRatio,
-          source.persistenceRatio
-        );
-        heights.push(source.baseHeightMeters + noise * source.amplitudeMeters);
-      }
-    }
-  }
-  let minimumHeightMeters = Number.POSITIVE_INFINITY;
-  let maximumHeightMeters = Number.NEGATIVE_INFINITY;
-  for (const height of heights) {
-    minimumHeightMeters = Math.min(minimumHeightMeters, height);
-    maximumHeightMeters = Math.max(maximumHeightMeters, height);
-  }
-  return {
-    entityId: node.id,
-    centerMetersXZ: [...terrain.grid.centerMetersXZ],
-    sizeMetersXZ: [...terrain.grid.sizeMetersXZ],
-    resolutionCellsXZ: [...terrain.grid.resolutionCellsXZ],
-    heightSamplesMeters: heights,
-    heightSamplesHash: sha256CanonicalJson(heights),
-    minimumHeightMeters,
-    maximumHeightMeters,
-    semanticClassId: terrain.semantic?.classId ?? "terrain.ground"
-  };
-}
-function boundaryCenterV3(boundary) {
-  if (boundary.kind !== "polygon") return boundary.centerMetersXZ;
-  const total = boundary.pointsMetersXZ.reduce(
-    (sum2, point) => [sum2[0] + point[0], sum2[1] + point[1]],
-    [0, 0]
-  );
-  return [
-    total[0] / boundary.pointsMetersXZ.length,
-    total[1] / boundary.pointsMetersXZ.length
-  ];
-}
-function compileWatersV3(world, terrain) {
-  return world.nodes.filter(
-    (node) => node.kind === "water"
-  ).map((node) => {
-    const water = node.components.water;
-    const boundary = structuredClone(water.boundary);
-    return {
-      entityId: node.id,
-      terrainEntityId: water.terrainEntityId,
-      boundary,
-      depthMeters: water.depthMeters,
-      shoreWidthMeters: water.shoreWidthMeters,
-      waterLevelMeters: water.waterLevelMeters ?? sampleTerrainHeight(terrain, boundaryCenterV3(boundary)),
-      traversalMode: water.traversalMode,
-      semanticClassId: water.semantic?.classId ?? "water.surface"
-    };
-  }).sort((left, right) => left.entityId.localeCompare(right.entityId));
-}
-function resolvePrimitiveV3(prototype) {
-  switch (prototype.primitive) {
-    case "box":
-      return { kind: "box", sizeMetersXYZ: [...prototype.sizeMetersXYZ] };
-    case "sphere":
-      return { kind: "sphere", radiusMeters: prototype.radiusMeters };
-    case "cylinder":
-    case "cone":
-      return {
-        kind: prototype.primitive,
-        radiusMeters: prototype.radiusMeters,
-        heightMeters: prototype.heightMeters
-      };
-  }
-}
-function compileObjectsV3(world) {
-  const prototypes = new Map(
-    world.resources.prototypes.map((prototype) => [
-      `${prototype.id}@${prototype.version}`,
-      prototype
-    ])
-  );
-  return world.nodes.filter(
-    (node) => node.kind === "object"
-  ).map((node) => {
-    const prototypeIdentity = node.prototypeRef.slice(
-      "package://prototype/".length
-    );
-    const prototype = prototypes.get(prototypeIdentity);
-    if (prototype === void 0) {
-      throw new Error(
-        `NormalizedWorldIR invariant violated: missing Prototype '${prototypeIdentity}'.`
-      );
-    }
-    return {
-      entityId: node.id,
-      prototypeId: prototype.id,
-      primitive: resolvePrimitiveV3(prototype),
-      transform: structuredClone(node.transform),
-      collisionEnabled: prototype.collisionEnabled,
-      semanticClassId: prototype.semantic?.classId ?? `object.${prototype.primitive}`
-    };
-  }).sort((left, right) => left.entityId.localeCompare(right.entityId));
-}
-function staticObjectFootprintV3(object) {
-  const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
-  if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return void 0;
-  const [scaleX, scaleY, scaleZ] = object.transform.scaleXYZ.map(Math.abs);
-  const [centerX, centerY, centerZ] = object.transform.positionMetersXYZ;
-  let footprint;
-  let halfHeightMeters;
-  if (object.primitive.kind === "box") {
-    const halfX = object.primitive.sizeMetersXYZ[0] * scaleX / 2;
-    const halfZ = object.primitive.sizeMetersXYZ[2] * scaleZ / 2;
-    const cosine = Math.cos(rotationY);
-    const sine = Math.sin(rotationY);
-    footprint = {
-      kind: "polygon",
-      pointsMetersXZ: [
-        [-halfX, -halfZ],
-        [halfX, -halfZ],
-        [halfX, halfZ],
-        [-halfX, halfZ]
-      ].map(([x, z]) => [
-        centerX + x * cosine - z * sine,
-        centerZ + x * sine + z * cosine
-      ])
-    };
-    halfHeightMeters = object.primitive.sizeMetersXYZ[1] * scaleY / 2;
-  } else {
-    const radiusMeters = object.primitive.radiusMeters * Math.max(scaleX, scaleZ);
-    footprint = {
-      kind: "circle",
-      centerMetersXZ: [centerX, centerZ],
-      radiusMeters
-    };
-    halfHeightMeters = object.primitive.kind === "sphere" ? object.primitive.radiusMeters * scaleY : object.primitive.heightMeters * scaleY / 2;
-  }
-  return {
-    entityId: object.entityId,
-    footprint,
-    heightRangeMeters: [centerY - halfHeightMeters, centerY + halfHeightMeters]
-  };
-}
-function validateCompiledSpawnFootprintsV3(subjects, waters, objects) {
-  const diagnostics = [];
-  const blockers = objects.filter((object) => object.collisionEnabled).flatMap((object) => {
-    const blocker = staticObjectFootprintV3(object);
-    return blocker === void 0 ? [] : [blocker];
-  });
-  for (const subject of subjects) {
-    const spawnCapsuleFeetPositionMetersXYZ = [
-      subject.spawnSubjectOriginPositionMetersXYZ[0] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
-      subject.spawnSubjectOriginPositionMetersXYZ[1] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1] - subject.collider.heightMeters / 2,
-      subject.spawnSubjectOriginPositionMetersXYZ[2] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[2]
-    ];
-    for (const water of waters) {
-      const result2 = validateSpawnSafety({
-        entityId: subject.entityId,
-        position: spawnCapsuleFeetPositionMetersXYZ,
-        capsule: {
-          radius: subject.collider.radiusMeters,
-          height: subject.collider.heightMeters
-        },
-        waterSurfaces: [{
-          entityId: water.entityId,
-          boundary: water.boundary,
-          waterLevelMeters: water.waterLevelMeters,
-          depthMeters: water.depthMeters,
-          traversalMode: water.traversalMode
-        }]
-      });
-      if (result2.some((diagnostic2) => diagnostic2.code === "SPAWN_IN_BLOCKED_WATER")) {
-        diagnostics.push({
-          severity: "error",
-          code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
-          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
-          message: `Subject '${subject.entityId}' spawn is inside blocked water '${water.entityId}'.`,
-          details: {
-            subjectEntityId: subject.entityId,
-            waterEntityId: water.entityId
-          }
-        });
-      }
-    }
-    for (const blocker of blockers) {
-      const result2 = validateSpawnSafety({
-        entityId: subject.entityId,
-        position: spawnCapsuleFeetPositionMetersXYZ,
-        capsule: {
-          radius: subject.collider.radiusMeters,
-          height: subject.collider.heightMeters
-        },
-        staticBlockingObjects: [blocker]
-      });
-      if (result2.some((diagnostic2) => diagnostic2.code === "SPAWN_INSIDE_STATIC_BLOCKER")) {
-        diagnostics.push({
-          severity: "error",
-          code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
-          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
-          message: `Subject '${subject.entityId}' spawn is inside static blocking object '${blocker.entityId}'.`,
-          details: {
-            subjectEntityId: subject.entityId,
-            objectEntityId: blocker.entityId
-          }
-        });
-      }
-    }
-  }
-  return diagnostics;
 }
 function indexNormalizedResourceRowsV3(rows, resourceRef, label) {
   const rowsByRef = /* @__PURE__ */ new Map();
@@ -34487,7 +34185,7 @@ function colliderProfileMatchesDefinitionV3(profile, definitionCollider) {
     (component, index) => component === definitionCollider.centerOffsetFromSubjectOriginMetersXYZ[index]
   );
 }
-function compileSubjectsV3(world) {
+function compileNormalizedSubjectResourcesV1(world) {
   const definitionsByRef = new Map(
     world.resources.subjectDefinitions.map((definition) => [
       definition.subjectDefinitionRef,
@@ -34768,6 +34466,292 @@ function compileSubjectsV3(world) {
     resourceCost
   };
 }
+class CompilerInputAccessorErrorV1 extends Error {
+}
+function assertCompilerInputAccessorFreeV1(value, visited = /* @__PURE__ */ new WeakSet()) {
+  if (isNil(value) || typeof value !== "object" || visited.has(value)) return;
+  visited.add(value);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new CompilerInputAccessorErrorV1();
+  }
+  for (const descriptor of Object.values(
+    Object.getOwnPropertyDescriptors(value)
+  )) {
+    if (!isNil(descriptor.get) || !isNil(descriptor.set)) {
+      throw new CompilerInputAccessorErrorV1();
+    }
+    if (Object.hasOwn(descriptor, "value")) {
+      assertCompilerInputAccessorFreeV1(descriptor.value, visited);
+    }
+  }
+}
+function snapshotCompileCanonicalWorldInputV1(input) {
+  assertCompilerInputAccessorFreeV1(input);
+  return structuredClone(input);
+}
+function sampleTerrainHeight(terrain, pointMetersXZ) {
+  const [columns, rows] = terrain.resolutionCellsXZ;
+  const minimumX = terrain.centerMetersXZ[0] - terrain.sizeMetersXZ[0] / 2;
+  const minimumZ = terrain.centerMetersXZ[1] - terrain.sizeMetersXZ[1] / 2;
+  const maximumX = minimumX + terrain.sizeMetersXZ[0];
+  const maximumZ = minimumZ + terrain.sizeMetersXZ[1];
+  return sampleTriangleHeightfieldSurface(
+    {
+      centerMetersXZ: terrain.centerMetersXZ,
+      sizeMetersXZ: terrain.sizeMetersXZ,
+      resolutionVerticesXZ: terrain.resolutionCellsXZ,
+      heightSamplesMeters: terrain.heightSamplesMeters
+    },
+    [
+      Math.max(minimumX, Math.min(maximumX, pointMetersXZ[0])),
+      Math.max(minimumZ, Math.min(maximumZ, pointMetersXZ[1]))
+    ]
+  ).heightMeters;
+}
+function findOnlyNodeV4(nodes, kind) {
+  const node = nodes.find(
+    (candidate) => candidate.kind === kind
+  );
+  if (node === void 0) {
+    throw new Error(`NormalizedWorldIR invariant violated: missing '${kind}' node.`);
+  }
+  return node;
+}
+function compileTerrainV3(world) {
+  const node = findOnlyNodeV4(world.nodes, "terrain");
+  const terrain = node.components.terrain;
+  const source = terrain.source;
+  const [columns, rows] = terrain.grid.resolutionCellsXZ;
+  const [centerX, centerZ] = terrain.grid.centerMetersXZ;
+  const [sizeX, sizeZ] = terrain.grid.sizeMetersXZ;
+  const minimumX = centerX - sizeX / 2;
+  const minimumZ = centerZ - sizeZ / 2;
+  const sampledHeights = terrain.grid.heightSamplesMeters;
+  const heights = [];
+  if (!isNil(sampledHeights)) {
+    if (sampledHeights.length !== columns * rows) {
+      throw new Error(
+        "NormalizedWorldIR invariant violated: terrain grid heightSamplesMeters length must equal resolutionCellsXZ product."
+      );
+    }
+    for (const height of sampledHeights) {
+      heights.push(height);
+    }
+  } else {
+    for (let zIndex = 0; zIndex < rows; zIndex += 1) {
+      const z = minimumZ + zIndex / (rows - 1) * sizeZ;
+      for (let xIndex = 0; xIndex < columns; xIndex += 1) {
+        const x = minimumX + xIndex / (columns - 1) * sizeX;
+        const noise = source.amplitudeMeters === 0 ? 0 : sampleFractalNoise(
+          world.seed,
+          x * source.frequencyPerMeter,
+          z * source.frequencyPerMeter,
+          source.octaves,
+          source.lacunarityRatio,
+          source.persistenceRatio
+        );
+        heights.push(source.baseHeightMeters + noise * source.amplitudeMeters);
+      }
+    }
+  }
+  let minimumHeightMeters = Number.POSITIVE_INFINITY;
+  let maximumHeightMeters = Number.NEGATIVE_INFINITY;
+  for (const height of heights) {
+    minimumHeightMeters = Math.min(minimumHeightMeters, height);
+    maximumHeightMeters = Math.max(maximumHeightMeters, height);
+  }
+  return {
+    entityId: node.id,
+    centerMetersXZ: [...terrain.grid.centerMetersXZ],
+    sizeMetersXZ: [...terrain.grid.sizeMetersXZ],
+    resolutionCellsXZ: [...terrain.grid.resolutionCellsXZ],
+    heightSamplesMeters: heights,
+    heightSamplesHash: sha256CanonicalJson(heights),
+    minimumHeightMeters,
+    maximumHeightMeters,
+    semanticClassId: terrain.semantic?.classId ?? "terrain.ground"
+  };
+}
+function boundaryCenterV3(boundary) {
+  if (boundary.kind !== "polygon") return boundary.centerMetersXZ;
+  const total = boundary.pointsMetersXZ.reduce(
+    (sum2, point) => [sum2[0] + point[0], sum2[1] + point[1]],
+    [0, 0]
+  );
+  return [
+    total[0] / boundary.pointsMetersXZ.length,
+    total[1] / boundary.pointsMetersXZ.length
+  ];
+}
+function compileWatersV3(world, terrain) {
+  return world.nodes.filter(
+    (node) => node.kind === "water"
+  ).map((node) => {
+    const water = node.components.water;
+    const boundary = structuredClone(water.boundary);
+    return {
+      entityId: node.id,
+      terrainEntityId: water.terrainEntityId,
+      boundary,
+      depthMeters: water.depthMeters,
+      shoreWidthMeters: water.shoreWidthMeters,
+      waterLevelMeters: water.waterLevelMeters ?? sampleTerrainHeight(terrain, boundaryCenterV3(boundary)),
+      traversalMode: water.traversalMode,
+      semanticClassId: water.semantic?.classId ?? "water.surface"
+    };
+  }).sort((left, right) => left.entityId.localeCompare(right.entityId));
+}
+function resolvePrimitiveV3(prototype) {
+  switch (prototype.primitive) {
+    case "box":
+      return { kind: "box", sizeMetersXYZ: [...prototype.sizeMetersXYZ] };
+    case "sphere":
+      return { kind: "sphere", radiusMeters: prototype.radiusMeters };
+    case "cylinder":
+    case "cone":
+      return {
+        kind: prototype.primitive,
+        radiusMeters: prototype.radiusMeters,
+        heightMeters: prototype.heightMeters
+      };
+  }
+}
+function compileObjectsV3(world) {
+  const prototypes = new Map(
+    world.resources.prototypes.map((prototype) => [
+      `${prototype.id}@${prototype.version}`,
+      prototype
+    ])
+  );
+  return world.nodes.filter(
+    (node) => node.kind === "object"
+  ).map((node) => {
+    const prototypeIdentity = node.prototypeRef.slice(
+      "package://prototype/".length
+    );
+    const prototype = prototypes.get(prototypeIdentity);
+    if (prototype === void 0) {
+      throw new Error(
+        `NormalizedWorldIR invariant violated: missing Prototype '${prototypeIdentity}'.`
+      );
+    }
+    return {
+      entityId: node.id,
+      prototypeId: prototype.id,
+      primitive: resolvePrimitiveV3(prototype),
+      transform: structuredClone(node.transform),
+      collisionEnabled: prototype.collisionEnabled,
+      semanticClassId: prototype.semantic?.classId ?? `object.${prototype.primitive}`
+    };
+  }).sort((left, right) => left.entityId.localeCompare(right.entityId));
+}
+function staticObjectFootprintV3(object) {
+  const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
+  if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return void 0;
+  const [scaleX, scaleY, scaleZ] = object.transform.scaleXYZ.map(Math.abs);
+  const [centerX, centerY, centerZ] = object.transform.positionMetersXYZ;
+  let footprint;
+  let halfHeightMeters;
+  if (object.primitive.kind === "box") {
+    const halfX = object.primitive.sizeMetersXYZ[0] * scaleX / 2;
+    const halfZ = object.primitive.sizeMetersXYZ[2] * scaleZ / 2;
+    const cosine = Math.cos(rotationY);
+    const sine = Math.sin(rotationY);
+    footprint = {
+      kind: "polygon",
+      pointsMetersXZ: [
+        [-halfX, -halfZ],
+        [halfX, -halfZ],
+        [halfX, halfZ],
+        [-halfX, halfZ]
+      ].map(([x, z]) => [
+        centerX + x * cosine - z * sine,
+        centerZ + x * sine + z * cosine
+      ])
+    };
+    halfHeightMeters = object.primitive.sizeMetersXYZ[1] * scaleY / 2;
+  } else {
+    const radiusMeters = object.primitive.radiusMeters * Math.max(scaleX, scaleZ);
+    footprint = {
+      kind: "circle",
+      centerMetersXZ: [centerX, centerZ],
+      radiusMeters
+    };
+    halfHeightMeters = object.primitive.kind === "sphere" ? object.primitive.radiusMeters * scaleY : object.primitive.heightMeters * scaleY / 2;
+  }
+  return {
+    entityId: object.entityId,
+    footprint,
+    heightRangeMeters: [centerY - halfHeightMeters, centerY + halfHeightMeters]
+  };
+}
+function validateCompiledSpawnFootprintsV3(subjects, waters, objects) {
+  const diagnostics = [];
+  const blockers = objects.filter((object) => object.collisionEnabled).flatMap((object) => {
+    const blocker = staticObjectFootprintV3(object);
+    return blocker === void 0 ? [] : [blocker];
+  });
+  for (const subject of subjects) {
+    const spawnCapsuleFeetPositionMetersXYZ = [
+      subject.spawnSubjectOriginPositionMetersXYZ[0] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[0],
+      subject.spawnSubjectOriginPositionMetersXYZ[1] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1] - subject.collider.heightMeters / 2,
+      subject.spawnSubjectOriginPositionMetersXYZ[2] + subject.collider.centerOffsetFromSubjectOriginMetersXYZ[2]
+    ];
+    for (const water of waters) {
+      const result2 = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters
+        },
+        waterSurfaces: [{
+          entityId: water.entityId,
+          boundary: water.boundary,
+          waterLevelMeters: water.waterLevelMeters,
+          depthMeters: water.depthMeters,
+          traversalMode: water.traversalMode
+        }]
+      });
+      if (result2.some((diagnostic2) => diagnostic2.code === "SPAWN_IN_BLOCKED_WATER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside blocked water '${water.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            waterEntityId: water.entityId
+          }
+        });
+      }
+    }
+    for (const blocker of blockers) {
+      const result2 = validateSpawnSafety({
+        entityId: subject.entityId,
+        position: spawnCapsuleFeetPositionMetersXYZ,
+        capsule: {
+          radius: subject.collider.radiusMeters,
+          height: subject.collider.heightMeters
+        },
+        staticBlockingObjects: [blocker]
+      });
+      if (result2.some((diagnostic2) => diagnostic2.code === "SPAWN_INSIDE_STATIC_BLOCKER")) {
+        diagnostics.push({
+          severity: "error",
+          code: "COMPILER_SPAWN_INSIDE_STATIC_BLOCKER",
+          instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
+          message: `Subject '${subject.entityId}' spawn is inside static blocking object '${blocker.entityId}'.`,
+          details: {
+            subjectEntityId: subject.entityId,
+            objectEntityId: blocker.entityId
+          }
+        });
+      }
+    }
+  }
+  return diagnostics;
+}
 function primitiveResourceCostV3(primitive) {
   switch (primitive.kind) {
     case "box":
@@ -34794,6 +34778,13 @@ function pushBudgetDiagnosticV3(diagnostics, field, actual, maximum) {
     details: { actual, maximum }
   });
 }
+function evaluateCompiledWorldResourceBudgetV1(input) {
+  const diagnostics = [];
+  pushBudgetDiagnosticV3(diagnostics, "maxVertices", input.usage.vertices, input.budget.maxVertices);
+  pushBudgetDiagnosticV3(diagnostics, "maxTriangles", input.usage.triangles, input.budget.maxTriangles);
+  pushBudgetDiagnosticV3(diagnostics, "maxColliders", input.usage.colliders, input.budget.maxColliders);
+  return diagnostics;
+}
 function compileWorldCore(input) {
   const world = input.normalizedWorldIr;
   try {
@@ -34807,7 +34798,10 @@ function compileWorldCore(input) {
       animationSets,
       colliderProfiles,
       resourceCost: subjectResourceCost
-    } = compileSubjectsV3(world);
+    } = compileNormalizedSubjectResourcesV1({
+      resources: world.resources,
+      nodes: world.nodes.filter((node) => node.kind === "subject" || node.kind === "anchor")
+    });
     const spawnDiagnostics = validateCompiledSpawnFootprintsV3(
       subjects,
       waters,
@@ -34834,26 +34828,10 @@ function compileWorldCore(input) {
       ),
       colliders: 1 + subjectResourceCost.colliders + objects.filter((object) => object.collisionEnabled).length
     };
-    const diagnostics = [];
-    const budget = world.world.resourceBudget;
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxVertices",
-      usage.vertices,
-      budget.maxVertices
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxTriangles",
-      usage.triangles,
-      budget.maxTriangles
-    );
-    pushBudgetDiagnosticV3(
-      diagnostics,
-      "maxColliders",
-      usage.colliders,
-      budget.maxColliders
-    );
+    const diagnostics = evaluateCompiledWorldResourceBudgetV1({
+      usage,
+      budget: world.world.resourceBudget
+    });
     if (diagnostics.length > 0) return { ok: false, diagnostics };
     const rig = cameraNode.components.cameraRig;
     const components = {
@@ -35585,13 +35563,16 @@ function createCoreControlFeatureFactoryV1() {
     })
   });
 }
+function coreGameplayBootstrapResourceRefV1(input) {
+  return `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`;
+}
 function createCoreGameplayBootstrapV1(input) {
   const coreControlManifest = createCoreControlFeatureFactoryV1().manifest;
   return createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: `${input.worldId}.gameplay`,
     version: 1,
-    resourceRef: `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`,
+    resourceRef: coreGameplayBootstrapResourceRefV1(input),
     semanticFactProjectorProfileResource: RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: input.entityDescriptors,
     featureResourceLocks: [{

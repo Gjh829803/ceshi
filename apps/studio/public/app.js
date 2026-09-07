@@ -1,3 +1,5 @@
+import { canOpenNativeRecording, wireNativeRecordingAction } from "./native-recording-action.js";
+
 const state = {
   worlds: [],
   filter: "all",
@@ -37,8 +39,8 @@ const stageLabels = {
   "change-requested": "Agent 请求修改冻结计划",
   "runtime-capture": "捕获真实白膜运行结果",
   "entry-alignment-validation": "校验第三人称进入构图",
-  "visual-prompt-synthesis": "可配置视觉提供方合成首帧与三视图提示词",
-  "visual-imagegen": "可配置图片提供方生成可选视觉结果",
+  "visual-prompt-synthesis": "同一视觉重建任务内固化提示词",
+  "visual-imagegen": "先检查首帧，再以该图为外观锚重建三视图",
 };
 const statusLabels = {
   queued: "QUEUED",
@@ -875,7 +877,7 @@ const phaseTitles = {
   evaluation: "重建评测",
   "entry-alignment-validation": "进入构图校验",
   "visual-prompt-synthesis": "视觉提示词合成",
-  "visual-imagegen": "并发视觉生成",
+  "visual-imagegen": "视觉重建",
 };
 
 const trajectoryStatusLabels = {
@@ -1301,6 +1303,7 @@ function renderDialogActions(world) {
   const canRetry = ["failed", "interrupted"].includes(world.status);
   const canStop = ["queued", "running", "visual-queued", "visual-running"].includes(world.status);
   return `${world.previewUrl ? `<a href="${escapeHtml(world.previewUrl)}" target="_blank" rel="noreferrer">进入白膜世界 ↗</a>` : ""}
+    ${canOpenNativeRecording(world) ? '<button type="button" data-native-recording>准备录制页</button>' : ""}
     ${canStop ? `<button type="button" class="stop-world">停止任务</button>` : ""}
     ${canRetry ? `<button type="button" id="retry-world">重新生成</button>` : ""}`;
 }
@@ -1352,11 +1355,13 @@ function wireRetryAction(id) {
 
 function patchWorldActions(world) {
   const actions = dialogContent.querySelector("[data-live-actions]");
-  if (!actions || actions.dataset.status === world.status) return;
-  actions.dataset.status = world.status;
+  const signature = JSON.stringify([world.status, world.previewUrl, canOpenNativeRecording(world), world.nativeLaunch]);
+  if (!actions || actions.dataset.status === signature) return;
+  actions.dataset.status = signature;
   actions.innerHTML = renderDialogActions(world);
   wireRetryAction(world.id);
   wireStopAction(world.id);
+  wireNativeRecordingAction(dialogContent, world.id);
 }
 
 function patchDetailCounts(world, media) {
@@ -1509,6 +1514,7 @@ async function refreshDialog(id, suppliedPayload = null) {
   });
   wireRetryAction(id);
   wireStopAction(id);
+  wireNativeRecordingAction(dialogContent, id);
   const pre = dialogContent.querySelector(".runtime-log pre");
   if (pre) pre.scrollTop = pre.scrollHeight;
   if (previousScrollTop > 0) {

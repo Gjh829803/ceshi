@@ -1,3 +1,4 @@
+import type { Matrix } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
@@ -15,7 +16,7 @@ export interface BabylonNativeBlockWalkableOverlayHandleV1 {
 
 /**
  * One closed row per logical Block. A Block is realized either as its own Mesh
- * or as one instance inside a Chunk-local Thin Instance batch; both branches
+ * or as one independently scaled Thin Instance; both branches
  * keep the logical Block ID, runtime Entity ID and semantic Capture class, so
  * Capture selection, tinting, hiding and diagnostics never lose identity.
  */
@@ -26,6 +27,15 @@ export type BabylonNativeBlockLiveVisualHandleV1 =
       runtimeEntityId: string;
       semanticCaptureClassId: string;
       mesh: Mesh;
+    }>
+  | Readonly<{
+      kind: "cluster-mesh";
+      blockId: string;
+      runtimeEntityId: string;
+      semanticCaptureClassId: string;
+      clusterId: string;
+      mesh: Mesh;
+      sourceWorldMatrix: Matrix;
     }>
   | Readonly<{
       kind: "thin-instance";
@@ -39,12 +49,14 @@ export type BabylonNativeBlockLiveVisualHandleV1 =
 
 export interface BabylonNativeBlockLiveVisualBatchV1 {
   readonly batchId: string;
-  readonly residencyGroupId: string;
+  readonly visualChunkIndexXZ: readonly [number, number];
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly semanticCaptureClassId: string;
-  /** Ordered by Thin Instance index. */
+  /** Complete logical inventory, one Block per instance. */
   readonly blockIds: readonly string[];
+  /** Ordered by normal Thin Instance index, as in the old Block renderer. */
+  readonly instances: readonly Readonly<{ blockId: string }>[];
   readonly mesh: Mesh;
 }
 
@@ -54,12 +66,12 @@ export interface BabylonNativeBlockLiveVisualGroupHandleV1 {
 }
 
 /**
- * Authoring materialization publishes one Mesh per Block. The trusted Host
+ * Authoring materialization clusters intent before allocating one Mesh per cluster. The trusted Host
  * Chunk realization replaces that registry after Candidate admission, so the
  * discriminator names which realization the live rows describe.
  */
 export type BabylonNativeBlockLiveVisualRealizationV1 =
-  | Readonly<{ kind: "authoring-unbatched" }>
+  | Readonly<{ kind: "authoring-clustered" }>
   | Readonly<{
       kind: "host-chunk-batched";
       chunkPolicyHash: Sha256HashV1;
@@ -80,7 +92,7 @@ export interface BabylonNativeBlockLiveHandleRegistryV1 {
 export function babylonNativeBlockLiveVisualHandleMeshV1(
   handle: BabylonNativeBlockLiveVisualHandleV1,
 ): Mesh {
-  return handle.kind === "independent-mesh" ? handle.mesh : handle.batchMesh;
+  return handle.kind === "thin-instance" ? handle.batchMesh : handle.mesh;
 }
 
 const REGISTRY_BY_SCENE = new WeakMap<

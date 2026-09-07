@@ -92,12 +92,12 @@ describe("single-job Planner and Builder self-check bundles", () => {
 
       expect(buildBundle.status, buildBundle.stderr || buildBundle.stdout).toBe(0);
       for (const { id, relativePath } of bundles) {
-        expect(await readFile(path.join(root, relativePath))).toEqual(
-          trackedBytesBefore.get(id),
-        );
-        expect(await readFile(path.join(".codex/skills", relativePath))).toEqual(
-          trackedBytesBefore.get(id),
-        );
+        // Compare exact bytes without asking the reporter to expand multi-MB
+        // Buffer diffs on drift; that can exhaust memory before showing a result.
+        expect((await readFile(path.join(root, relativePath)))
+          .equals(trackedBytesBefore.get(id)!), relativePath).toBe(true);
+        expect((await readFile(path.join(".codex/skills", relativePath)))
+          .equals(trackedBytesBefore.get(id)!), `tracked ${relativePath}`).toBe(true);
       }
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -153,8 +153,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
           sceneId: "self-check-scene",
           authoringSpecId: "self-check-scene",
           visualTargetMappings: [
-            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
           ],
         })),
       ]);
@@ -218,8 +218,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
           sceneId: "self-check-scene",
           authoringSpecId: "self-check-scene-authoring",
           visualTargetMappings: [
-            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
           ],
         })),
       ]);
@@ -250,8 +250,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         sceneId: "self-check-scene",
         authoringSpecId: "self-check-scene",
         mappings: [
-          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
         ],
       }));
       const legacyReport = path.join(root, "builder-legacy-map.json");
@@ -270,8 +270,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         sceneId: "self-check-scene",
         authoringSpecId: "self-check-scene",
         visualTargetMappings: [
-          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
         ],
       }));
 

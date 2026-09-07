@@ -4,7 +4,7 @@ import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-import { spawnOwnedProcess } from "./owned-process.mjs";
+import { spawnOwnedProcess } from "../../../scripts/lib/owned-process.mjs";
 import { createStudioPublicProxy } from "./public-proxy.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));

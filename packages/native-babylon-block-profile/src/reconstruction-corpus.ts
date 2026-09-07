@@ -28,7 +28,6 @@ export const BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1 =
     "limited-interior",
     "route-islands-on-ground",
     "overlap-occupancy",
-    "out-of-budget",
     "invalid-traversal-binding",
     "unsupported-spawn",
     "cleanup-throw-partial",
@@ -121,9 +120,7 @@ interface CorpusRecordV1 {
   readonly seed: number;
   readonly polarity: BabylonNativeBlockReconstructionCorpusPolarityV1;
   readonly family: BabylonNativeBlockReconstructionCorpusFamilyV1;
-  readonly maximumBlockCount: number;
   readonly blocks: readonly CorpusBlockSpecV1[];
-  readonly extraBlock?: CorpusBlockSpecV1;
   readonly notTraversableBlockIds: readonly string[];
   readonly colliderMode: ColliderModeV1;
   readonly spawn: BabylonNativeBlockReconstructionCorpusSpawnV1;
@@ -172,7 +169,6 @@ function record(input: CorpusRecordV1): CorpusRecordV1 {
     notTraversableBlockIds: Object.freeze([...input.notTraversableBlockIds]),
     spawn: Object.freeze(input.spawn),
     opening: Object.freeze(input.opening),
-    ...(isNil(input.extraBlock) ? {} : { extraBlock: input.extraBlock }),
     ...(isNil(input.expectedFailureCode)
       ? {}
       : { expectedFailureCode: input.expectedFailureCode }),
@@ -184,18 +180,17 @@ const ORDINARY_AND_BLOCKED_STEPS = record({
   seed: 202608313,
   polarity: "positive",
   family: "steps",
-  maximumBlockCount: 6,
   colliderMode: "layout",
-  notTraversableBlockIds: Object.freeze([]),
+  notTraversableBlockIds: Object.freeze(["half-meter-blocker"]),
   spawn: SUPPORTED_SPAWN,
   opening: DEFAULT_OPENING,
   blocks: Object.freeze([
     block("ground-positive-one", "full", "ground", [0, -0.5, 1]),
     block("ground-zero", "full", "ground", [0, -0.5, 0]),
     block("ground-negative-one", "full", "ground", [0, -0.5, -1]),
-    block("quarter-meter-rise", "step", "ground", [0, 0.125, -2]),
-    block("elevated-tread", "step", "ground", [0, 0.125, -3]),
-    block("half-meter-blocker", "half", "ground", [0, 0.5, -4]),
+    block("half-meter-rise", "half", "ground", [0, 0.25, -2]),
+    block("elevated-tread", "half", "ground", [0, 0.25, -3]),
+    block("half-meter-blocker", "full", "ground", [0, 0.5, -4]),
   ]),
 });
 
@@ -204,7 +199,6 @@ const T_SHAPED_TRAVERSAL = record({
   seed: 202608312,
   polarity: "positive",
   family: "t-shaped",
-  maximumBlockCount: 12,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([
     "t-west-foundation",
@@ -239,7 +233,6 @@ const MOUNTAIN_CLIFF = record({
   seed: 202608311,
   polarity: "positive",
   family: "mountain",
-  maximumBlockCount: 12,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([
     "m-cliff-base-s",
@@ -259,9 +252,9 @@ const MOUNTAIN_CLIFF = record({
     block("m-route-south", "full", "route", [0, -0.5, 1], "m-route"),
     block("m-route-spawn", "full", "route", [0, -0.5, 0], "m-route"),
     block("m-route-north", "full", "route", [0, -0.5, -1], "m-route"),
-    block("m-step-rise", "step", "route", [0, 0.125, -2], "m-route"),
-    block("m-step-tread", "step", "route", [0, 0.125, -3], "m-route"),
-    block("m-overlook", "step", "route", [0, 0.125, -4], "m-route"),
+    block("m-step-rise", "half", "route", [0, 0.25, -2], "m-route"),
+    block("m-step-tread", "half", "route", [0, 0.25, -3], "m-route"),
+    block("m-overlook", "half", "route", [0, 0.25, -4], "m-route"),
     block("m-cliff-base-s", "full", "background-mass", [-1, -0.5, 0], "m-cliff"),
     block("m-cliff-base-m", "full", "background-mass", [-1, -0.5, -1], "m-cliff"),
     block("m-cliff-base-n", "full", "background-mass", [-1, -0.5, -2], "m-cliff"),
@@ -276,7 +269,6 @@ const BUILDING_EXTERIOR = record({
   seed: 202608314,
   polarity: "positive",
   family: "building",
-  maximumBlockCount: 8,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([
     "b-wall-west",
@@ -293,8 +285,8 @@ const BUILDING_EXTERIOR = record({
     block("b-pad-south", "full", "ground", [0, -0.5, 1]),
     block("b-pad-spawn", "full", "ground", [0, -0.5, 0]),
     block("b-pad-mid", "full", "ground", [0, -0.5, -1]),
-    block("b-threshold", "step", "ground", [0, 0.125, -2]),
-    block("b-door-sill", "step", "ground", [0, 0.125, -3]),
+    block("b-threshold", "half", "ground", [0, 0.25, -2]),
+    block("b-door-sill", "half", "ground", [0, 0.25, -3]),
     block("b-wall-west", "full", "structure", [-1, 0.5, -3], "building-shell"),
     block("b-wall-east", "full", "structure", [1, 0.5, -3], "building-shell"),
     block("b-wall-back", "full", "structure", [0, 0.5, -4], "building-shell"),
@@ -306,7 +298,6 @@ const LIMITED_INTERIOR = record({
   seed: 202608315,
   polarity: "positive",
   family: "limited-interior",
-  maximumBlockCount: 10,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([
     "i-wall-west",
@@ -342,7 +333,6 @@ const OVERLAP_OCCUPANCY = record({
   seed: 202608321,
   polarity: "negative",
   family: "negative",
-  maximumBlockCount: 2,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
   expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
@@ -354,29 +344,11 @@ const OVERLAP_OCCUPANCY = record({
   ]),
 });
 
-const OUT_OF_BUDGET = record({
-  id: "out-of-budget",
-  seed: 202608322,
-  polarity: "negative",
-  family: "negative",
-  maximumBlockCount: 1,
-  colliderMode: "layout",
-  notTraversableBlockIds: Object.freeze([]),
-  expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
-  spawn: SUPPORTED_SPAWN,
-  opening: DEFAULT_OPENING,
-  blocks: Object.freeze([
-    block("budget-only", "full", "ground", [0, -0.5, 0]),
-  ]),
-  extraBlock: block("budget-two", "full", "ground", [1, -0.5, 0]),
-});
-
 const INVALID_TRAVERSAL_BINDING = record({
   id: "invalid-traversal-binding",
   seed: 202608323,
   polarity: "negative",
   family: "negative",
-  maximumBlockCount: 1,
   colliderMode: "invalid-binding",
   notTraversableBlockIds: Object.freeze([]),
   expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
@@ -392,7 +364,6 @@ const UNSUPPORTED_SPAWN = record({
   seed: 202608324,
   polarity: "negative",
   family: "negative",
-  maximumBlockCount: 1,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
   spawn: Object.freeze({
@@ -410,7 +381,6 @@ const ROUTE_ISLANDS_ON_GROUND = record({
   seed: 202608325,
   polarity: "positive",
   family: "route-islands",
-  maximumBlockCount: 5,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
   spawn: SUPPORTED_SPAWN,
@@ -429,7 +399,6 @@ const CLEANUP_THROW_PARTIAL = record({
   seed: 202608326,
   polarity: "negative",
   family: "negative",
-  maximumBlockCount: 2,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
   expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
@@ -449,7 +418,6 @@ const RECORDS = Object.freeze([
   LIMITED_INTERIOR,
   ROUTE_ISLANDS_ON_GROUND,
   OVERLAP_OCCUPANCY,
-  OUT_OF_BUDGET,
   INVALID_TRAVERSAL_BINDING,
   UNSUPPORTED_SPAWN,
   CLEANUP_THROW_PARTIAL,
@@ -583,15 +551,10 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
   caseId: BabylonNativeBlockReconstructionCorpusCaseIdV1,
 ): BabylonNativeBlockReconstructionCorpusMaterializationV1 {
   const recordValue = requireRecord(caseId);
-  const session = createBabylonNativeBlockProfileSessionV1(context, {
-    maximumBlockCount: recordValue.maximumBlockCount,
-  });
+  const session = createBabylonNativeBlockProfileSessionV1(context);
   try {
     for (const spec of recordValue.blocks) {
       createCorpusBlock(session, recordValue, spec);
-    }
-    if (!isNil(recordValue.extraBlock)) {
-      createCorpusBlock(session, recordValue, recordValue.extraBlock);
     }
     const epoch = recordValue.colliderMode === "invalid-binding"
       ? session.finalize(Object.freeze({
@@ -605,7 +568,6 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
         })]),
       }))
       : session.finalize(Object.freeze({
-        displayGapMeters: 0.04,
         staticColliders: layoutSelections(recordValue),
       }));
     context.registration.registerSpawnMarker(Object.freeze({

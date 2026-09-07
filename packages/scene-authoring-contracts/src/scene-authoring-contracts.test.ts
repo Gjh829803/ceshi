@@ -288,7 +288,6 @@ function generationRequest(): NativeBlockGenerationRequestV1 {
     bootstrapInputHash: HASH_D,
     seed: 202608311,
     budgets: {
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
@@ -349,6 +348,14 @@ function generationReceipt(
 }
 
 describe("Native Block generation identity", () => {
+  it("rejects the retired source-count field instead of retaining an ignored alias", () => {
+    const request = generationRequest();
+    expect(() => parseNativeBlockGenerationRequestV1({
+      ...request, budgets: { ...request.budgets, maximumBlockCount: 8_000 },
+    })).toThrow();
+    expect(parseNativeBlockGenerationRequestV1(request).budgets)
+      .not.toHaveProperty("maximumBlockCount");
+  });
   it("parses, freezes, canonicalizes, and hashes the closed Request and Receipt", () => {
     const request = parseNativeBlockGenerationRequestV1(generationRequest());
     const receipt = parseNativeBlockGenerationReceiptV1(generationReceipt(request));

@@ -1,6 +1,9 @@
 export type WhiteboxCaptureViewV1 = "front" | "right" | "back";
 
 export const MAXIMUM_VISUAL_CAPTURE_GROUPS_V1 = 5 as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1 = "#DDE8EE" as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1 = [221, 232, 238] as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1 = 12 as const;
 
 export type VisualCaptureGroupRoleV1 =
   | "primary-subject"
@@ -12,6 +15,7 @@ export type VisualCaptureGroupRoleV1 =
 export interface VisualTargetMappingV1 {
   readonly visualTargetId: string;
   readonly runtimeEntityIds: readonly string[];
+  readonly frontDirectionWorldXZ: readonly [number, number];
 }
 
 export interface VisualCaptureGroupV1 extends VisualTargetMappingV1 {
@@ -46,6 +50,133 @@ export interface WhiteboxTriviewCaptureV1 {
   readonly runtimeEntityIds: readonly string[];
   readonly views: readonly ["front", "right", "back"];
   readonly imageDataUri: string;
+  readonly inspection: WhiteboxTriviewInspectionV1;
+}
+
+export interface WhiteboxTriviewInspectionV1 {
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly viewInspections: readonly [
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+  ];
+  readonly isRenderable: boolean;
+}
+
+export interface WhiteboxTriviewViewInspectionV1 {
+  readonly view: WhiteboxCaptureViewV1;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly isRenderable: boolean;
+}
+
+/**
+ * Measures actual target coverage against the fixed review background instead
+ * of sampling a few RGB values. The fixed tolerance excludes antialiasing noise
+ * and the effectively invisible dependency meshes retained by the Babylon
+ * tri-view renderer.
+ */
+export function inspectWhiteboxTriviewPixelsV1(
+  pixelsRgba: Uint8ClampedArray,
+  widthPixels: number,
+  heightPixels: number,
+): WhiteboxTriviewInspectionV1 {
+  if (!Number.isSafeInteger(widthPixels) || widthPixels < 1 ||
+      !Number.isSafeInteger(heightPixels) || heightPixels < 1) {
+    throw new RangeError("Whitebox tri-view dimensions must be positive safe integers.");
+  }
+  const totalPixelCount = widthPixels * heightPixels;
+  if (pixelsRgba.length !== totalPixelCount * 4) {
+    throw new RangeError("Whitebox tri-view RGBA byte length does not match its dimensions.");
+  }
+  if (widthPixels % 3 !== 0) {
+    throw new RangeError("Whitebox tri-view width must contain three equal panels.");
+  }
+  const panelWidthPixels = widthPixels / 3;
+  const panelPixelCount = panelWidthPixels * heightPixels;
+  const minimumPanelForegroundPixelCount = Math.min(
+    panelPixelCount,
+    Math.max(64, Math.ceil(panelPixelCount * 0.0001)),
+  );
+  const panelForegroundPixelCounts = [0, 0, 0];
+  const panelMinimumX = [panelWidthPixels, panelWidthPixels, panelWidthPixels];
+  const panelMinimumY = [heightPixels, heightPixels, heightPixels];
+  const panelMaximumX = [-1, -1, -1];
+  const panelMaximumY = [-1, -1, -1];
+  let foregroundPixelCount = 0;
+  let minimumX = widthPixels;
+  let minimumY = heightPixels;
+  let maximumX = -1;
+  let maximumY = -1;
+  for (let pixel = 0; pixel < totalPixelCount; pixel += 1) {
+    const offset = pixel * 4;
+    if (pixelsRgba[offset + 3]! < 128) continue;
+    const differsFromBackground = Math.max(
+      Math.abs(pixelsRgba[offset]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[0]),
+      Math.abs(pixelsRgba[offset + 1]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[1]),
+      Math.abs(pixelsRgba[offset + 2]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[2]),
+    ) >= WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1;
+    if (!differsFromBackground) continue;
+    foregroundPixelCount += 1;
+    const x = pixel % widthPixels;
+    const y = Math.floor(pixel / widthPixels);
+    const panelIndex = Math.min(2, Math.floor(x / panelWidthPixels));
+    const panelX = x - panelIndex * panelWidthPixels;
+    panelForegroundPixelCounts[panelIndex]! += 1;
+    panelMinimumX[panelIndex] = Math.min(panelMinimumX[panelIndex]!, panelX);
+    panelMinimumY[panelIndex] = Math.min(panelMinimumY[panelIndex]!, y);
+    panelMaximumX[panelIndex] = Math.max(panelMaximumX[panelIndex]!, panelX);
+    panelMaximumY[panelIndex] = Math.max(panelMaximumY[panelIndex]!, y);
+    minimumX = Math.min(minimumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumX = Math.max(maximumX, x);
+    maximumY = Math.max(maximumY, y);
+  }
+  const inspectPanel = (
+    view: WhiteboxCaptureViewV1,
+    panelIndex: number,
+  ): WhiteboxTriviewViewInspectionV1 => ({
+    view,
+    foregroundPixelCount: panelForegroundPixelCounts[panelIndex]!,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount,
+    foregroundBoundsPixels: panelForegroundPixelCounts[panelIndex] === 0
+      ? null
+      : {
+          minimumPixelsXY: [panelMinimumX[panelIndex]!, panelMinimumY[panelIndex]!],
+          maximumPixelsXY: [panelMaximumX[panelIndex]!, panelMaximumY[panelIndex]!],
+        },
+    isRenderable: panelForegroundPixelCounts[panelIndex]! >= minimumPanelForegroundPixelCount,
+  });
+  const viewInspections = [
+    inspectPanel("front", 0),
+    inspectPanel("right", 1),
+    inspectPanel("back", 2),
+  ] as const;
+  return {
+    widthPixels,
+    heightPixels,
+    foregroundPixelCount,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount * 3,
+    foregroundBoundsPixels: foregroundPixelCount === 0
+      ? null
+      : {
+          minimumPixelsXY: [minimumX, minimumY],
+          maximumPixelsXY: [maximumX, maximumY],
+        },
+    viewInspections,
+    isRenderable: viewInspections.every(({ isRenderable }) => isRenderable),
+  };
 }
 
 export const WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_VERSION = 1 as const;
@@ -120,10 +251,23 @@ function exactKeys(
     ));
 }
 
-function validIdArray(value: unknown): value is readonly string[] {
+function validIdArray(value: unknown, isNativeCaptureAllowed = false): value is readonly string[] {
+  // Native materializer metadata publishes this exact namespace over the same
+  // stable Block ID grammar. Capture carries those identities unchanged; it
+  // does not rename Blocks to Canonical authoring entities. Live membership is
+  // still checked by the owning Host/Runtime, not inferred from this spelling.
+  const nativePrefix = "native-block:";
   return Array.isArray(value) && value.length > 0 &&
-    value.every((item) => typeof item === "string" && ID.test(item)) &&
+    value.every((item) => typeof item === "string" && (ID.test(item) ||
+      (isNativeCaptureAllowed && item.startsWith(nativePrefix) && ID.test(item.slice(nativePrefix.length))))) &&
     new Set(value).size === value.length;
+}
+
+export function isValidVisualTargetFrontDirectionWorldXZV1(value: unknown): value is readonly [number, number] {
+  return Array.isArray(value) && value.length === 2 &&
+    [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+      ([x, z]) => value[0] === x && value[1] === z,
+    );
 }
 
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
@@ -165,7 +309,7 @@ function validateVisualTargetMappings(
       ));
       return;
     }
-    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path));
+    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds", "frontDirectionWorldXZ"], path));
     if (typeof mapping.visualTargetId !== "string" || !ID.test(mapping.visualTargetId)) {
       diagnostics.push(diagnostic(
         "HOSTED_VISUAL_TARGET_ID_INVALID",
@@ -183,6 +327,13 @@ function validateVisualTargetMappings(
       ));
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ)) {
+      diagnostics.push(diagnostic(
+        "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+        `${path}/frontDirectionWorldXZ`,
+        "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates.",
+      ));
     }
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -221,6 +372,7 @@ function validateVisualCaptureGroup(
     "role",
     "semanticClassId",
     "identityColor",
+    "frontDirectionWorldXZ",
     ...allowedExtraKeys,
   ], instancePath);
   if (typeof group.visualTargetId !== "string" || !ID.test(group.visualTargetId)) {
@@ -230,7 +382,7 @@ function validateVisualCaptureGroup(
       "visualTargetId is invalid.",
     ));
   }
-  if (!validIdArray(group.runtimeEntityIds)) {
+  if (!validIdArray(group.runtimeEntityIds, true)) {
     diagnostics.push(diagnostic(
       "HOSTED_VISUAL_RUNTIME_ENTITY_IDS_INVALID",
       `${instancePath}/runtimeEntityIds`,
@@ -257,6 +409,19 @@ function validateVisualCaptureGroup(
       "HOSTED_VISUAL_IDENTITY_COLOR_INVALID",
       `${instancePath}/identityColor`,
       "identityColor must be a six-digit hex color.",
+    ));
+  }
+  // Native Subjects are Host-owned and may spawn at arbitrary yaw. Authored
+  // object fronts and Canonical implementation maps retain cardinal declarations.
+  const front = group.frontDirectionWorldXZ;
+  const isSubjectUnitFront = group.role === "primary-subject" && Array.isArray(front) &&
+    front.length === 2 && front.every(value => typeof value === "number" && Number.isFinite(value)) &&
+    Math.abs(front[0] * front[0] + front[1] * front[1] - 1) <= 1e-9;
+  if (!isSubjectUnitFront && !isValidVisualTargetFrontDirectionWorldXZV1(front)) {
+    diagnostics.push(diagnostic(
+      "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+      `${instancePath}/frontDirectionWorldXZ`,
+      "frontDirectionWorldXZ must be cardinal for authored objects, or the Host Subject's unit world XZ direction.",
     ));
   }
   return diagnostics;
@@ -289,7 +454,7 @@ export function validateVisualCaptureGroupsV1(
     if (typeof source?.visualTargetId === "string" && ID.test(source.visualTargetId)) {
       visualTargetIds.push(source.visualTargetId);
     }
-    if (validIdArray(source?.runtimeEntityIds)) runtimeEntityIds.push(...source.runtimeEntityIds);
+    if (validIdArray(source?.runtimeEntityIds, true)) runtimeEntityIds.push(...source.runtimeEntityIds);
     if (source?.role === "primary-subject") primarySubjectCount += 1;
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -457,15 +622,19 @@ export function validateSceneBriefImplementationMapV1(
           !validIdArray(mapping.runtimeEntityIds)) return;
       const group = groupsByVisualTargetId.get(mapping.visualTargetId);
       if (group === undefined || !validIdArray(group.runtimeEntityIds) ||
-          !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds)) {
+          !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds) ||
+          !isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ) ||
+          !isValidVisualTargetFrontDirectionWorldXZV1(group.frontDirectionWorldXZ) ||
+          mapping.frontDirectionWorldXZ[0] !== group.frontDirectionWorldXZ[0] ||
+          mapping.frontDirectionWorldXZ[1] !== group.frontDirectionWorldXZ[1]) {
         const groupIndex = groups.findIndex((candidate) =>
           candidate.visualTargetId === mapping.visualTargetId);
         diagnostics.push(diagnostic(
           "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
           groupIndex < 0
             ? `/visualTargetMappings/${index}/visualTargetId`
-            : `/visualCaptureGroups/${groupIndex}/runtimeEntityIds`,
-          `Visual target '${mapping.visualTargetId}' mapping and capture group must contain the same runtime entities.`,
+            : `/visualCaptureGroups/${groupIndex}`,
+          `Visual target '${mapping.visualTargetId}' mapping and capture group must contain the same runtime entities and front direction.`,
         ));
       }
     });

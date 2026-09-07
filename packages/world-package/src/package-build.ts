@@ -688,11 +688,11 @@ function createBabylonNativeWorldPackageV1Internal(
         contribution.profileSettlement.settledVisualHash ||
       blockMetadata.contributionHash !== contributionHash
     ) invalid("closure", "Native Block metadata identity does not match the Contribution");
-    const expectedSettlementTargetCount = blockMetadata.blocks.length +
-      blockMetadata.colliderJoins.filter(({ proxyKind }) =>
-        proxyKind === "continuous-walkable-surface").length;
+    // Profile owns exact logical coverage; Host owns materialized target census.
+    // Several Blocks share a cluster and one walkable Collider may have several
+    // semantic overlays. Do not reconstruct a second census from logical counts.
     if (
-      expectedSettlementTargetCount !==
+      blockMetadata.settledVisualTargetCount !==
         contribution.profileSettlement.targetCount
     ) invalid("closure", "Native Block metadata inventory count does not match settlement");
     if (!isEqual(

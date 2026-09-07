@@ -355,7 +355,9 @@ function primaryAcceptanceTargetRef(
 ): string {
   if (dimensionId === "collider") return reconstructionCase.expected.colliders[0]!.acceptanceTargetRef;
   if (dimensionId === "critical-traversal") {
-    return reconstructionCase.expected.criticalTraversalChecks[0]!.acceptanceTargetRef;
+    const checks = reconstructionCase.expected.criticalTraversalChecks;
+    return checks.length === 0 ? reconstructionCase.expected.spawnSupport.acceptanceTargetRef
+      : checks[0]!.acceptanceTargetRef;
   }
   if (dimensionId === "deterministic-build") {
     return reconstructionCase.expected.deterministicBuild.acceptanceTargetRef;
@@ -364,7 +366,8 @@ function primaryAcceptanceTargetRef(
     return reconstructionCase.expected.openingComposition.acceptanceTargetRef;
   }
   if (dimensionId === "semantic-silhouette") {
-    return reconstructionCase.expected.semanticSilhouetteTargets[0]!.acceptanceTargetRef;
+    return reconstructionCase.expected.semanticSilhouetteTargets[0]?.acceptanceTargetRef
+      ?? reconstructionCase.expected.spawnSupport.acceptanceTargetRef;
   }
   if (dimensionId === "spawn-support") return reconstructionCase.expected.spawnSupport.acceptanceTargetRef;
   return reconstructionCase.expected.topology.acceptanceTargetRef;
@@ -388,6 +391,9 @@ function evaluateTopology(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.topology;
+  if (expected.nodeIds.length === 0) {
+    return missingEvidenceDraft("topology", expected.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "topology-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft("topology", expected.acceptanceTargetRef, row.evidenceRefs);
@@ -466,6 +472,10 @@ function evaluateSemanticSilhouette(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expectedTargets = reconstructionCase.expected.semanticSilhouetteTargets;
+  if (expectedTargets.length === 0) {
+    return missingEvidenceDraft("semantic-silhouette",
+      reconstructionCase.expected.spawnSupport.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "semantic-silhouette-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft(
@@ -519,8 +529,8 @@ function evaluateSemanticSilhouette(
         continue;
       }
       if (requirement.mode !== "reference-projection-required") continue;
-      const projection = observedTarget.structuralProjection;
-      if (projection.outcome !== "projected") {
+      const projection = observedTarget.visiblePixelProjection;
+      if (projection.outcome !== "visible") {
         hasRequiredProjectionMissing = true;
         diagnostics.push({
           code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
@@ -528,14 +538,14 @@ function evaluateSemanticSilhouette(
           targetRef: expected.acceptanceTargetRef,
           targetId: expected.visualGroupId,
           metricId: `${requirement.viewId}-reference-projection`,
-          details: stateMismatchDetails("projected", projection.outcome),
+          details: stateMismatchDetails("visible", projection.outcome),
           evidenceRefs: row.evidenceRefs,
-          message: `Visual group ${expected.visualGroupId} has no structural projection in required view ${requirement.viewId}.`,
+          message: `Visual group ${expected.visualGroupId} has no admitted identity pixels in required view ${requirement.viewId}; check presence, framing and occlusion.`,
           repairAction: sourceRepairAction(
             "visual-group",
             expected.visualGroupId,
-            "move",
-            `Move visual group ${expected.visualGroupId} into the ${requirement.viewId} reference projection without editing the Case or thresholds.`,
+            "adjust-geometry",
+            `Inspect ${requirement.viewId} identity pixels and display capture for presence, framing and occlusion before changing ${expected.visualGroupId}; no pixels alone do not prove missing geometry. Preserve intended holes and do not edit the Case or thresholds.`,
           ),
         });
         continue;
@@ -573,7 +583,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. Visible bounds can change through occlusion or clipping without a size change; preserve correct holes and geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       const centerMetrics = [
@@ -593,7 +603,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "move", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. A visible center can shift through occlusion or clipping without target movement; preserve correct geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {
@@ -608,7 +618,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} coverage is ${projection.coverageBasisPoints} basis points; target ${requirement.coverageBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Enlarge" : "Shrink"} visual group ${expected.visualGroupId} toward ${requirement.coverageBasisPoints} coverage basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference before revising ${expected.visualGroupId}. Coverage alone does not distinguish size, intended holes, separated instances or occlusion; preserve correct openings and geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
     }
@@ -673,8 +683,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           region.targetRef,
-          "add",
-          `Add or restore the Native visual group bound to opening region ${region.targetRef}; do not edit the Case or thresholds.`,
+          "adjust-geometry",
+          `Inspect reference, identity and display pixels for opening region ${region.targetRef}; no pixels alone do not prove missing geometry. Check framing and occlusion, preserve intended holes and separation, and do not edit the Case or thresholds.`,
         ),
       });
       continue;
@@ -706,8 +716,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           region.targetRef,
-          "resize",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening region ${region.targetRef} at its ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+          "adjust-geometry",
+          `Compare reference, identity and display pixels for opening region ${region.targetRef} before adjusting geometry: ${label} is ${actualValue}, expected ${expectedValue} basis points. Preserve intended holes, separation and occlusion; pixel bounds alone do not imply resizing. Do not edit thresholds.`,
         ),
       });
     }
@@ -733,8 +743,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           anchor.targetRef,
-          "add",
-          `Add or restore the Native visual group bound to opening anchor ${anchor.targetRef}; do not edit the Case or thresholds.`,
+          "adjust-geometry",
+          `Inspect reference, identity and display pixels for opening anchor ${anchor.targetRef}; no pixels alone do not prove missing geometry. Check framing and occlusion, preserve intended holes and separation, and do not edit the Case or thresholds.`,
         ),
       });
       continue;
@@ -764,8 +774,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           anchor.targetRef,
-          "move",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening anchor ${anchor.targetRef} ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+          "adjust-geometry",
+          `Compare reference, identity and display pixels for opening anchor ${anchor.targetRef} before adjusting geometry: ${label} is ${actualValue}, expected ${expectedValue} basis points. Preserve intended holes, separation and occlusion; a pixel center alone does not imply moving the group. Do not edit thresholds.`,
         ),
       });
     }
@@ -1059,9 +1069,7 @@ function evaluateCollider(
       hasRoleMismatch = true;
       const instruction = expected.role === "blocker"
         ? `Set static collider ${expected.colliderId} traversalBinding.kind to "not-traversable" so the Host derives role blocker. Changing logicalSubshapeId, name, tag, material, paletteRole, or shape does not change the Host-derived blocker role.`
-        : expected.role === "step"
-          ? `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and author its source block with shape.kind "step" so the Host derives role step.`
-          : `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and use a non-step source block shape so the Host derives role ground.`;
+        : `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" so the Host derives role ground. The source Block shape does not define a separate collider role.`;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -1099,6 +1107,10 @@ function evaluateCriticalTraversal(
   reconstructionCase: WorldReconstructionCaseV1,
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
+  if (reconstructionCase.expected.criticalTraversalChecks.length === 0) {
+    return missingEvidenceDraft("critical-traversal",
+      reconstructionCase.expected.spawnSupport.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "critical-traversal-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft(

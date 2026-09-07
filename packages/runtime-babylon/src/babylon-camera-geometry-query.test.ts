@@ -234,11 +234,13 @@ describe("BabylonHavokCameraGeometryQueryV2", () => {
           committedTick: frame,
           excludedEntityIds: [],
           desiredTarget: Vector3.Zero(),
+          resolvedTarget: Vector3.Zero(),
           desiredPosition: new Vector3(
             alternatingOffset,
             -alternatingOffset,
             10,
           ),
+          unconstrainedPosition: new Vector3(alternatingOffset, -alternatingOffset, 10),
           currentCommittedPosition: committedPosition,
           parameters: cameraParameters(),
           deltaSeconds,

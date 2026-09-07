@@ -42,9 +42,13 @@ export const HOSTED_FORMAL_CAPTURE_FAILURE_FIELDS_V1 = Object.freeze([
 ] as const);
 
 const PAYLOAD_FIELDS = Object.freeze([
+  "whiteboxTriviewPngs",
   "openingPng",
   "worldSidePng",
   "worldTopDownPng",
+  "openingIdentityMaskPng",
+  "worldSideIdentityMaskPng",
+  "worldTopDownIdentityMaskPng",
   "colliderOverlayPng",
   "openingObservation",
   "semanticViewObservationSet",
@@ -58,6 +62,9 @@ const PNG_FIELDS = Object.freeze([
   "openingPng",
   "worldSidePng",
   "worldTopDownPng",
+  "openingIdentityMaskPng",
+  "worldSideIdentityMaskPng",
+  "worldTopDownIdentityMaskPng",
   "colliderOverlayPng",
 ] as const);
 
@@ -198,8 +205,10 @@ export function parseHostedFormalCapturePayloadV1(input: Readonly<{
     PAYLOAD_FIELDS,
     "PAYLOAD_SHAPE_INVALID",
   );
-  for (const field of PNG_FIELDS) {
-    const png = payload[field];
+  if (!Array.isArray(payload.whiteboxTriviewPngs) || payload.whiteboxTriviewPngs.length !== input.request.visualCaptureGroups.length) {
+    throw hostedFormalCaptureErrorV1("TRIVIEW_TARGET_COUNT_MISMATCH");
+  }
+  for (const png of [...PNG_FIELDS.map(field => payload[field]), ...payload.whiteboxTriviewPngs]) {
     if (!(png instanceof Uint8Array)) {
       throw hostedFormalCaptureErrorV1("PNG_BYTES_INVALID");
     }

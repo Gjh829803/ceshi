@@ -19,6 +19,7 @@
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/authoring-edit": "workspace:*",
     "@whitebox-world/authoring-host": "workspace:*",
+    "@whitebox-world/browser-recording": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/contracts": "workspace:*",
     "@whitebox-world/gameplay": "workspace:*",

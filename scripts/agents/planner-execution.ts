@@ -310,11 +310,17 @@ export async function copyAcceptedPlannerExecutionV1(input: PlannerIdentity & Re
   const source = executionPaths({ ...input, taskId: receipt.taskId });
   const destination = executionPaths({ ...input, artifactRoot: input.destinationArtifactRoot, taskId: receipt.taskId });
   await mkdir(path.dirname(destination.executionDirectoryPath), { recursive: true, mode: 0o700 });
-  // Reserve the destination exclusively before cp: cp alone may merge directories.
+  // Reserve the task root exclusively, then copy only its absent children.
+  // Node 25 cp rejects an existing directory with errorOnExist && !force;
+  // copying the root itself would reject our own reservation. Older Node cp
+  // may merge directories, so dropping that reservation is not equivalent.
   await mkdir(destination.executionDirectoryPath, { mode: 0o700 });
-  await cp(source.executionDirectoryPath, destination.executionDirectoryPath, {
-    recursive: true, force: false, errorOnExist: true, dereference: false,
-  });
+  for (const entry of (await readdir(source.executionDirectoryPath)).sort()) {
+    await cp(path.join(source.executionDirectoryPath, entry),
+      path.join(destination.executionDirectoryPath, entry), {
+        recursive: true, force: false, errorOnExist: true, dereference: false,
+      });
+  }
   await copyFile(path.join(input.artifactRoot, "planner-execution.json"),
     path.join(input.destinationArtifactRoot, "planner-execution.json"), constants.COPYFILE_EXCL);
   await verifyAcceptedPlannerExecutionV1({ ...input, artifactRoot: input.destinationArtifactRoot,

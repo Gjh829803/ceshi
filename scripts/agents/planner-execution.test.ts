@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -27,13 +27,19 @@ const report = { status: 'passed', checker: 'original', brief: readFileSync(args
 writeFileSync(args['--report'], JSON.stringify(report));
 `;
 
-async function fixture(sceneSourceKind: "canonical" | "babylon-native" = "babylon-native") {
+async function fixture(
+  sceneSourceKind: "canonical" | "babylon-native" = "babylon-native",
+  liveGuidanceRefs: readonly string[] = [],
+) {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "worldkit-planner-execution-")));
   roots.push(root);
   await mkdir(path.join(root, SKILL, "scripts"), { recursive: true });
   await mkdir(path.join(root, SKILL, "references"));
   await writeFile(path.join(root, SKILL, "SKILL.md"), "Original Planner Skill");
   await writeFile(path.join(root, SKILL, "references/contract.md"), "Original contract");
+  for (const ref of liveGuidanceRefs) {
+    await writeFile(path.join(root, SKILL, ref), await readFile(path.resolve(SKILL, ref)));
+  }
   await writeFile(path.join(root, CHECKER), checker);
   await mkdir(path.join(root, "assets/terrain-height-intent"), { recursive: true });
   await writeFile(path.join(root, "assets/terrain-height-intent/exemplar.json"), "{}");
@@ -60,14 +66,40 @@ afterEach(async () => {
 });
 
 describe("Planner execution identity", () => {
+  it("dispatches the complete live planning guidance as immutable hash-bound context", async () => {
+    const refs = ["SKILL.md", "references/scene-brief-template.md", "references/block-whitebox-images.md"];
+    // Exercise the real snapshot producer with the shipped prose, not a test
+    // copy or selected sentences. The checker remains synthetic; no model runs.
+    const { root, input, prepared } = await fixture("babylon-native", refs);
+    const request = JSON.parse(await readFile(prepared.requestPath, "utf8"));
+    for (const ref of refs) {
+      const bytes = await readFile(path.resolve(SKILL, ref));
+      const frozenPath = path.join(prepared.workspaceContextRoot, SKILL, ref);
+      expect(await readFile(frozenPath)).toEqual(bytes);
+      expect(request.contextFiles).toContainEqual({
+        inputRef: `${SKILL}/${ref}`, contentHash: sha256Bytes(bytes),
+      });
+      // A later edit to a mutable checkout cannot replace the dispatched
+      // spatial decisions or reference instructions inside this logical task.
+      await writeFile(path.join(root, SKILL, ref), "Replaced after dispatch");
+      expect(await readFile(frozenPath)).toEqual(bytes);
+    }
+    await replayPlannerExecutionV1({ ...input, requestHash: prepared.requestHash });
+    await expect(verifyAcceptedPlannerExecutionV1({
+      ...input, plannerSelfCheckPath: path.join(input.artifactRoot, "planner-self-check.json"),
+    })).resolves.toMatchObject({ requestHash: prepared.requestHash });
+  });
+
   it("freezes the actual Native production representation budget before planning", async () => {
     const native = await fixture();
     const ref = "context/native-block-production-budget.json";
     const bytes = await readFile(path.join(native.prepared.workspaceContextRoot, ref));
     const context = JSON.parse(bytes.toString("utf8"));
     expect(context.budgets).toEqual(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1);
-    expect(context.blockSizeMetersXYZByShape.full).toEqual([1, 1, 1]);
-    expect(context.blockSizeMetersXYZByShape.step).toEqual([1, 0.25, 1]);
+    expect(context.blockSizeMetersXYZByShape).toEqual({
+      full: [1, 1, 1], half: [1, 0.5, 1],
+      quarter: [0.5, 0.5, 1], small: [0.5, 0.5, 0.5],
+    });
     const request = JSON.parse(await readFile(native.prepared.requestPath, "utf8"));
     expect(request.contextFiles).toContainEqual({ inputRef: ref, contentHash: sha256Bytes(bytes) });
     const canonical = await fixture("canonical");
@@ -81,7 +113,7 @@ describe("Planner execution identity", () => {
     await expect(verifyAcceptedPlannerExecutionV1({ ...native.input,
       plannerSelfCheckPath: path.join(native.input.artifactRoot, "planner-self-check.json"),
       requiredNativeProductionContext: { ...NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1,
-        budgets: { ...NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1, maximumBlockCount: 2_000 } },
+        budgets: { ...NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1, maximumOutputBytes: 2_000_000 } },
     })).rejects.toThrow("PLANNER_EXECUTION_PRODUCTION_BUDGET_MISMATCH");
     await chmod(path.join(native.prepared.workspaceContextRoot, ref), 0o600);
     await writeFile(path.join(native.prepared.workspaceContextRoot, ref), "{}");
@@ -196,6 +228,41 @@ describe("Planner execution identity", () => {
       destinationArtifactRoot, sourcePlannerSelfCheckPath: destinationPlannerSelfCheckPath,
       destinationPlannerSelfCheckPath })).rejects.toMatchObject({ code: "EEXIST" });
   });
+
+  it.each(["empty", "occupied", "symlink"] as const)(
+    "never merges accepted planning into an existing %s task destination",
+    async (kind) => {
+      const { root, input, prepared } = await fixture();
+      await replayPlannerExecutionV1({ ...input, requestHash: prepared.requestHash });
+      const destinationArtifactRoot = path.join(root, "staged-case");
+      const destination = path.join(destinationArtifactRoot, "planner-executions", input.taskId);
+      const destinationPlannerSelfCheckPath = path.join(destinationArtifactRoot, "planner-self-check.json");
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destinationPlannerSelfCheckPath,
+        await readFile(path.join(input.artifactRoot, "planner-self-check.json")));
+      if (kind === "symlink") {
+        const otherTask = path.join(root, "other-task");
+        await mkdir(otherTask);
+        await writeFile(path.join(otherTask, "owner.txt"), "Other task data");
+        await symlink(otherTask, destination);
+      } else {
+        await mkdir(destination);
+        if (kind === "occupied") await writeFile(path.join(destination, "owner.txt"), "Other task data");
+      }
+      const before = await readdir(destination);
+      await expect(copyAcceptedPlannerExecutionV1({ ...input, destinationArtifactRoot,
+        sourcePlannerSelfCheckPath: path.join(input.artifactRoot, "planner-self-check.json"),
+        destinationPlannerSelfCheckPath })).rejects.toMatchObject({ code: "EEXIST" });
+      expect(await readdir(destination)).toEqual(before);
+      if (kind !== "empty") expect(await readFile(path.join(destination, "owner.txt"), "utf8"))
+        .toBe("Other task data");
+      await expect(readFile(path.join(destinationArtifactRoot, "planner-execution.json")))
+        .rejects.toMatchObject({ code: "ENOENT" });
+      await expect(verifyAcceptedPlannerExecutionV1({ ...input,
+        plannerSelfCheckPath: path.join(input.artifactRoot, "planner-self-check.json"),
+      })).resolves.toMatchObject({ requestHash: prepared.requestHash });
+    },
+  );
 
   it("delivers the frozen context through the real local task router before Host replay", async () => {
     const { root, input, prepared } = await fixture();

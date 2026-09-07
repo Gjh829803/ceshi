@@ -127,7 +127,7 @@ const caseValue = () => ({
       { acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground", requiresOverlay: true },
       { acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", contributionId: "upper-ground-contribution", colliderId: "upper-ground", role: "ground", requiresOverlay: true },
     ],
-    groundConnectivity: {
+    groundConnectivity: { mode: "case-defined" as const,
       requireSingleReachableComponent: true,
       requiredTraversalBands: [{
         acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
@@ -209,8 +209,8 @@ const evidenceValue = () => ({
           targets: [{
             acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
             visualGroupId: "central-ascent-group",
-            structuralProjection: {
-              outcome: "projected",
+            visiblePixelProjection: {
+              outcome: "visible",
               normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
               normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
               coverageBasisPoints: 2_400,
@@ -285,6 +285,19 @@ describe("world reconstruction contracts", () => {
         "WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID",
       );
     }
+  });
+
+  it("rejects the removed shape-derived step Collider role in Case and Evidence", () => {
+    const sourceCase = caseValue();
+    sourceCase.expected.colliders[0]!.role = "step";
+    expect(() => parseWorldReconstructionCaseV1(sourceCase))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+    const sourceEvidence = evidenceValue();
+    const colliderEvidence = sourceEvidence.observedDimensions.find(({ dimensionId }) => dimensionId === "collider")!;
+    const observed = colliderEvidence.observed as { contributions: Array<{ role: string }> };
+    observed.contributions[0]!.role = "step";
+    expect(() => parseWorldReconstructionEvidenceSetV1(sourceEvidence))
+      .toThrowError("WORLD_RECONSTRUCTION_EVIDENCE_SET_INVALID");
   });
 
   it.each([
@@ -564,6 +577,31 @@ describe("world reconstruction contracts", () => {
     })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
+  it("binds source-authored ground policy without inventing metric bands or ignoring optional ground", () => {
+    const value = caseValue();
+    const expected = { ...value.expected, groundConnectivity: {
+      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+    } };
+    const parsed = parseWorldReconstructionCaseV1({ ...value, expected });
+    expect(parsed.expected.groundConnectivity).toEqual(expected.groundConnectivity);
+    expect(hashWorldReconstructionCaseV1(parsed)).not.toBe(hashWorldReconstructionCaseV1(value));
+    for (const groundConnectivity of [
+      { ...expected.groundConnectivity, mode: undefined },
+      { ...expected.groundConnectivity, requiredTraversalBands: value.expected.groundConnectivity.requiredTraversalBands },
+    ]) expect(() => parseWorldReconstructionCaseV1({ ...value, expected: { ...expected, groundConnectivity } })).toThrow();
+    const optional = parseWorldReconstructionCaseV1({ ...value, expected: { ...expected,
+      groundConnectivity: { ...expected.groundConnectivity, requireSingleReachableComponent: false },
+    } });
+    expect(optional.expected.groundConnectivity.requireSingleReachableComponent).toBe(false);
+    expect(hashWorldReconstructionCaseV1(optional)).not.toBe(hashWorldReconstructionCaseV1(parsed));
+    expect(parseWorldReconstructionCaseV1({ ...optional, expected: { ...optional.expected,
+      spawnSupport: { ...optional.expected.spawnSupport, expectedMedium: "air" },
+    } }).expected.groundConnectivity.requireSingleReachableComponent).toBe(false);
+    expect(() => parseWorldReconstructionCaseV1({ ...value, expected: {
+      ...expected, spawnSupport: { ...expected.spawnSupport, expectedMedium: "air" },
+    } })).toThrow();
+  });
+
   it("keeps ground connectivity exact, positive, ordered and identity-bound", () => {
     const parsed = parseWorldReconstructionCaseV1(caseValue());
     expect(Object.isFrozen(parsed.expected.groundConnectivity)).toBe(true);
@@ -674,7 +712,7 @@ describe("world reconstruction contracts", () => {
 
     const validAirCase = caseValue();
     validAirCase.expected.spawnSupport.expectedMedium = "air";
-    validAirCase.expected.groundConnectivity = {
+    validAirCase.expected.groundConnectivity = { mode: "case-defined" as const,
       requireSingleReachableComponent: false,
       requiredTraversalBands: [],
     };
@@ -1535,18 +1573,33 @@ describe("world reconstruction contracts", () => {
         correctionDirection: "decrease",
       },
       evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
-      message: "Move the central ascent left in the opening frame.",
+      message: "Inspect the central ascent's visible center drift in the opening frame.",
       repairAction: {
         kind: "revise-native-source",
         targetKind: "visual-group",
         targetId: "central-ascent-group",
-        operation: "move",
-        instruction: "Decrease the central ascent screen X center toward 300 basis points.",
+        operation: "adjust-geometry",
+        instruction: "Compare the reference and capture for occlusion before revising the central ascent geometry.",
       },
     } as const;
     expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
       "opening-semantic-center-x-basis-points",
     );
+    for (const [metricId, retiredOperation] of [
+      ["opening-region-min-x-basis-points", "resize"],
+      ["opening-anchor-x-basis-points", "move"],
+    ] as const) {
+      const openingDiagnostic = {
+        ...semanticCenterDiagnostic, metricId,
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        dimensionId: "opening-composition",
+        repairAction: { ...semanticCenterDiagnostic.repairAction, targetKind: "composition-target" },
+      };
+      expect(parseWorldReconstructionDiagnosticV1(openingDiagnostic).metricId).toBe(metricId);
+      expect(() => parseWorldReconstructionDiagnosticV1({ ...openingDiagnostic,
+        repairAction: { ...openingDiagnostic.repairAction, operation: retiredOperation },
+      })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+    }
     expect(() => parseWorldReconstructionDiagnosticV1({
       ...semanticCenterDiagnostic,
       details: { ...semanticCenterDiagnostic.details, exceededByBasisPoints: 99 },

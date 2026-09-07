@@ -1,6 +1,7 @@
 import { sha256CanonicalJson, type Sha256HashV1 } from
   "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 
 import type {
   BabylonNativeBlockLogicalColliderGroupV1,
@@ -10,6 +11,7 @@ import type {
 } from "./logical-ground-model.js";
 import {
   buildBabylonNativeBlockWalkableTopologyV1,
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   type BabylonNativeBlockWalkableTopologyPolicyV1,
 } from "./walkable-topology.js";
 
@@ -25,7 +27,7 @@ const NOT_TRAVERSABLE = Object.freeze({ kind: "not-traversable" as const });
 const POLICY: BabylonNativeBlockWalkableTopologyPolicyV1 = Object.freeze({
   kind: "babylon-native-block-walkable-topology-policy",
   schemaVersion: 1,
-  maximumAutoSmoothHeightDeltaMeters: 0.3,
+  maximumAutoSmoothHeightDeltaMeters: 1,
   visualOverlayOffsetMeters: 0.004,
   maximumLogicalColliderCount: 32,
   maximumColliderVertexCount: 10_000,
@@ -38,9 +40,20 @@ interface GroupFixture {
   readonly traversal: "surface" | "solid";
   readonly sourceBlockIds?: readonly string[];
   readonly visualGroupIds?: readonly string[];
+  readonly visualGroupBySourceBlockId?: Readonly<Record<string, string | undefined>>;
   readonly surfaceEntityId?: string;
   readonly logicalSubshapeId?: string;
   readonly traversalSurfaceProfileRef?: string;
+}
+
+function sourceIdentity(fixture: GroupFixture, index: number) {
+  const sourceBlockId = (fixture.sourceBlockIds ?? [
+    `${fixture.colliderId}-block`,
+  ])[index % (fixture.sourceBlockIds?.length ?? 1)]!;
+  const visualGroupId = fixture.visualGroupBySourceBlockId === undefined
+    ? (fixture.visualGroupIds ?? [`${fixture.colliderId}-visual`])[0]
+    : fixture.visualGroupBySourceBlockId[sourceBlockId];
+  return { sourceBlockId, ...(visualGroupId === undefined ? {} : { visualGroupId }) };
 }
 
 function surfaceBinding(fixture: GroupFixture) {
@@ -90,13 +103,8 @@ BabylonNativeBlockLogicalGroundModelV1 {
       Object.freeze({
         cellKey,
         colliderId: fixture.colliderId,
-        sourceBlockId: (fixture.sourceBlockIds ?? [
-          `${fixture.colliderId}-block`,
-        ])[index % (fixture.sourceBlockIds?.length ?? 1)]!,
+        ...sourceIdentity(fixture, index),
         colliderGroupId: `${fixture.colliderId}-source`,
-        visualGroupId: (fixture.visualGroupIds ?? [
-          `${fixture.colliderId}-visual`,
-        ])[0]!,
         traversalBinding: fixture.traversal === "surface"
           ? surfaceBinding(fixture)
           : NOT_TRAVERSABLE,
@@ -114,13 +122,8 @@ BabylonNativeBlockLogicalGroundModelV1 {
           topCellKey,
           sourceOccupiedCellKey,
           colliderId: fixture.colliderId,
-          sourceBlockId: (fixture.sourceBlockIds ?? [
-            `${fixture.colliderId}-block`,
-          ])[index % (fixture.sourceBlockIds?.length ?? 1)]!,
+          ...sourceIdentity(fixture, index),
           colliderGroupId: `${fixture.colliderId}-source`,
-          visualGroupId: (fixture.visualGroupIds ?? [
-            `${fixture.colliderId}-visual`,
-          ])[0]!,
           traversalBinding: surfaceBinding(fixture),
         })];
       });
@@ -172,6 +175,149 @@ function verticesAtX(
 }
 
 describe("Babylon Native Block walkable topology", () => {
+  it("CF-04/G1 smooths a one-meter rise across full source-Block tops, not half-meter microcell ramps", () => {
+    // Two actual 1x1x1 Blocks, lower top at 1m and higher top at 2m.
+    // Uniform 0.5m occupancy; each top contains four microcells.
+    const lower: string[] = [];
+    const higher: string[] = [];
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) {
+      for (let y = 0; y < 2; y++) lower.push(`${x},${y},${z}`);
+      for (let y = 2; y < 4; y++) higher.push(`${x + 2},${y},${z}`);
+    }
+    const result = topology(model([
+      { colliderId: "lower", cells: lower, traversal: "surface" },
+      { colliderId: "higher", cells: higher, traversal: "surface" },
+    ]), BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1);
+    const low = result.walkableGeometries.find(row => row.logicalColliderId === "lower")!;
+    const high = result.walkableGeometries.find(row => row.logicalColliderId === "higher")!;
+    // Old 9e35ab53 averages the shared 1m/2m corners to 1.5m; each
+    // intact Block remains one 1m-wide quad, giving a 0.5/1 slope.
+    expect(verticesAtX(low.collisionPositionsMetersXYZ, 1)).toEqual([[1, 1.5, 0], [1, 1.5, 1]]);
+    expect(verticesAtX(high.collisionPositionsMetersXYZ, 1)).toEqual([[1, 1.5, 0], [1, 1.5, 1]]);
+    expect(verticesAtX(low.collisionPositionsMetersXYZ, 0)).toEqual([[0, 1, 0], [0, 1, 1]]);
+    expect(verticesAtX(high.collisionPositionsMetersXYZ, 2)).toEqual([[2, 2, 0], [2, 2, 1]]);
+    expect(low).toMatchObject({ vertexCount: 4, triangleCount: 2, sourceCellCount: 4 });
+    expect(high).toMatchObject({ vertexCount: 4, triangleCount: 2, sourceCellCount: 4 });
+  });
+
+  it("CF-20/MEM4 preserves exact exposed faces, winding, holes and Collider partitions", () => {
+    const grid = [0.5, 0.5, 0.5];
+    for (let variant = 0; variant < 16; variant++) {
+      const cells: string[] = [];
+      for (let x = -2; x <= 2; x++) for (let y = -1; y <= 1; y++) for (let z = -2; z <= 2; z++) {
+        if ((x === 0 && z === 0) || ((x * x + y * y + z * z + variant) % 5 === 0)) continue;
+        cells.push(`${x},${y},${z}`);
+      }
+      const fixtures = [0, 1].map(partition => ({
+        colliderId: `solid-${partition}`, traversal: "solid" as const,
+        cells: cells.filter(key => (Number(key.split(",")[0]) < 0) === (partition === 0)),
+      }));
+      const result = topology(model(fixtures));
+      const occupied = new Set(cells);
+      for (const geometry of result.solidGeometries) {
+        const expected = new Set<string>();
+        for (const key of fixtures.find(row => row.colliderId === geometry.logicalColliderId)!.cells) {
+          const cell = coordinates(key);
+          for (const axis of [0, 1, 2]) for (const delta of [-1, 1]) {
+            const neighbor = [...cell]; neighbor[axis] = neighbor[axis]! + delta;
+            if (occupied.has(neighbor.join(","))) continue;
+            const tangent = [0, 1, 2].filter(value => value !== axis);
+            expected.add([axis, -delta, cell[axis]! + Math.max(0, delta), cell[tangent[0]!]!, cell[tangent[1]!]!].join(":"));
+          }
+        }
+        const actual = new Set<string>();
+        for (let offset = 0; offset < geometry.triangleIndices.length; offset += 6) {
+          const vertices = geometry.triangleIndices.slice(offset, offset + 6).map(index =>
+            Vector3.FromArray(geometry.collisionPositionsMetersXYZ, index * 3));
+          const normal = Vector3.Cross(vertices[1]!.subtract(vertices[0]!), vertices[2]!.subtract(vertices[0]!)).normalize().asArray();
+          const axis = normal.findIndex(value => Math.abs(value) > 0.5);
+          const tangent = [0, 1, 2].filter(value => value !== axis);
+          const coordinatesByAxis = vertices.map(vertex => vertex.asArray().map((value, index) => value / grid[index]!));
+          const minimum = [0, 1, 2].map(index => Math.min(...coordinatesByAxis.map(row => row[index]!)));
+          const maximum = [0, 1, 2].map(index => Math.max(...coordinatesByAxis.map(row => row[index]!)));
+          for (let u = minimum[tangent[0]!]!; u < maximum[tangent[0]!]!; u++) {
+            for (let v = minimum[tangent[1]!]!; v < maximum[tangent[1]!]!; v++) {
+              const key = [axis, Math.round(normal[axis]!), minimum[axis], u, v].join(":");
+              expect(actual.has(key)).toBe(false);
+              actual.add(key);
+            }
+          }
+        }
+        expect(actual).toEqual(expected);
+      }
+      const reversed = topology(model(fixtures.map(row => ({ ...row, cells: [...row.cells].reverse() })).reverse()));
+      expect(reversed.topologyHash).toBe(result.topologyHash);
+    }
+  });
+  it("CF-20/MEM4 keeps a dense solid cuboid at eight vertices and twelve triangles", () => {
+    const cells: string[] = [];
+    for (let y = 0; y < 8; y++) for (let z = 0; z < 8; z++) for (let x = 0; x < 8; x++) cells.push(`${x},${y},${z}`);
+    const groundModel = model([{ colliderId: "solid-collider", traversal: "solid", cells }]);
+    const result = buildBabylonNativeBlockWalkableTopologyV1({ groundModel,
+      policy: { ...POLICY, maximumColliderVertexCount: 8, maximumColliderTriangleCount: 12 } });
+    expect(result.solidGeometries[0]).toMatchObject({ vertexCount: 8, triangleCount: 12, sourceCellCount: 512,
+      minimumMetersXYZ: [0, 0, 0], maximumMetersXYZ: [4, 4, 4] });
+  });
+  it("partitions mixed-group and ungrouped top quads without changing collision geometry", () => {
+    const groundModel = model([{
+      colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,1,0", "2,0,0", "3,0,0"],
+      sourceBlockIds: ["block-a", "block-b", "block-none", "block-a-two"],
+      visualGroupIds: ["group-a", "group-b"],
+      visualGroupBySourceBlockId: {
+        "block-a": "group-a", "block-b": "group-b", "block-a-two": "group-a",
+      },
+    }]);
+    const result = topology(groundModel);
+    const geometry = result.walkableGeometries[0]!;
+    const ungrouped = topology(model([{
+      colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,1,0", "2,0,0", "3,0,0"],
+      sourceBlockIds: ["block-a", "block-b", "block-none", "block-a-two"],
+    }])).walkableGeometries[0]!;
+    expect(geometry.collisionPositionsMetersXYZ).toEqual(ungrouped.collisionPositionsMetersXYZ);
+    expect(geometry.overlayPositionsMetersXYZ).toEqual(ungrouped.overlayPositionsMetersXYZ);
+    expect(geometry.triangleIndices).toEqual(ungrouped.triangleIndices);
+    expect(geometry.overlayPartitions).toEqual([
+      { sourceBlockIds: ["block-none"], visualGroupIds: [], triangleIndices: geometry.triangleIndices.slice(12, 18) },
+      { sourceBlockIds: ["block-a", "block-a-two"], visualGroupIds: ["group-a"],
+        triangleIndices: [...geometry.triangleIndices.slice(0, 6), ...geometry.triangleIndices.slice(18, 24)] },
+      { sourceBlockIds: ["block-b"], visualGroupIds: ["group-b"], triangleIndices: geometry.triangleIndices.slice(6, 12) },
+    ]);
+    const { logicalGroundModelHash: _hash, ...body } = groundModel;
+    const reversed = {
+      ...body, exposedSupportTopCells: [...body.exposedSupportTopCells].reverse(),
+      solidOccupancyCells: [...body.solidOccupancyCells].reverse(),
+    };
+    const reordered = topology({ ...reversed, logicalGroundModelHash: sha256CanonicalJson(reversed) as Sha256HashV1 });
+    expect(reordered.walkableGeometries).toEqual(result.walkableGeometries);
+    const { geometryHash, ...geometryBody } = geometry;
+    expect(geometryHash).toBe(sha256CanonicalJson(geometryBody));
+    expect(sha256CanonicalJson({ ...geometryBody, overlayPartitions: [] })).not.toBe(geometryHash);
+    expect(Object.isFrozen(geometry.overlayPartitions[0]?.triangleIndices)).toBe(true);
+  });
+
+  it.each([{ visualGroupIds: [] }, { visualGroupIds: ["floor-visual"] }])("retains zero or one semantic group for a complete surface: $visualGroupIds", ({ visualGroupIds }) => {
+    const result = topology(model([{ colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,0,0"], visualGroupIds }]));
+    const geometry = result.walkableGeometries[0]!;
+    expect(geometry.overlayPartitions).toEqual([{ sourceBlockIds: ["floor-collider-block"],
+      visualGroupIds, triangleIndices: geometry.triangleIndices }]);
+  });
+
+  it("attributes only exposed source Blocks to overlay partitions", () => {
+    const result = topology(model([{
+      colliderId: "stack-collider", traversal: "surface", cells: ["0,0,0", "0,1,0"],
+      sourceBlockIds: ["buried-block", "top-block"], visualGroupIds: ["buried-group", "top-group"],
+      visualGroupBySourceBlockId: { "buried-block": "buried-group", "top-block": "top-group" },
+    }]));
+    const geometry = result.walkableGeometries[0]!;
+    expect(geometry.sourceBlockIds).toEqual(["buried-block", "top-block"]);
+    expect(geometry.overlayPartitions).toEqual([{
+      sourceBlockIds: ["top-block"], visualGroupIds: ["top-group"],
+      triangleIndices: geometry.triangleIndices,
+    }]);
+  });
   it("derives one continuous topology globally before splitting Collider groups", () => {
     const result = topology(model([
       {
@@ -195,8 +341,8 @@ describe("Babylon Native Block walkable topology", () => {
       0,
     )).toEqual(verticesAtX(west!.collisionPositionsMetersXYZ, 0));
     expect(verticesAtX(east!.collisionPositionsMetersXYZ, 0)).toEqual([
-      [0, 0.375, 0],
-      [0, 0.375, 0.5],
+      [0, 0.75, 0],
+      [0, 0.75, 0.5],
     ]);
   });
 
@@ -275,8 +421,9 @@ describe("Babylon Native Block walkable topology", () => {
     const wall = result.solidGeometries[0]!;
 
     expect(wall.proxyKind).toBe("exact-solid-union");
+    expect(wall.overlayPartitions).toEqual([]);
     expect(wall.sourceCellCount).toBe(2);
-    expect(wall.triangleCount).toBe(18);
+    expect(wall.triangleCount).toBe(10);
     expect(result.removedInternalFaceCount).toBe(2);
   });
 

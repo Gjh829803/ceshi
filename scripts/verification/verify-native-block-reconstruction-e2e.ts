@@ -22,6 +22,7 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
+  deriveFormalWhiteboxTriviewManifestV1,
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
@@ -333,6 +334,20 @@ function json(bytes: Uint8Array): unknown {
   }
 }
 
+async function verifyCaptureTriviewArtifacts(
+  captureRoot: string,
+  receipt: ReturnType<typeof parseFormalWorldCaptureReceiptV1>,
+): Promise<void> {
+  for (const row of receipt.whiteboxTriviews) {
+    requirePng(await requiredFile(captureRoot, `triviews/${row.visualTargetId}/whitebox-triview.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"), row.pngContentHash);
+  }
+  const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt);
+  if (manifest !== undefined) {
+    exact(sha256CanonicalJson(json(await requiredFile(captureRoot, "triviews/whitebox-triview-manifest.json", "NBR70_CAPTURE_ARTIFACT_MISSING"))),
+      sha256CanonicalJson(manifest));
+  }
+}
+
 function requirePng(bytes: Uint8Array, expectedHash: Sha256HashV1): void {
   const signature = [137, 80, 78, 71, 13, 10, 26, 10];
   if (
@@ -436,7 +451,8 @@ function assertObservationMatchesCapture(
   exact(observation.formalRequestHash, captureReceipt.formalRequestHash);
   exact(observation.semanticCaptureMapHash, captureReceipt.semanticCaptureMapHash);
   exact(observation.runtimeSessionId, captureReceipt.runtimeSessionId);
-  if (observation.kind === "formal-scripted-traversal-observation") {
+  if (observation.kind === "formal-scripted-traversal-observation" &&
+      captureReceipt.formalRequest.scriptedTraversal.checks.length > 0) {
     const firstCheck = observation.checks[0];
     if (firstCheck === undefined) fail("NBR70_IDENTITY_MISMATCH");
     exact(observation.resetReadySnapshotHash, firstCheck.resetReadySnapshotHash);
@@ -480,17 +496,27 @@ function exactStringSet(
   ) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
 }
 
+type CaseBlockerIdentity = Pick<
+  ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["colliders"][number],
+  "acceptanceTargetRef" | "contributionId" | "colliderId"
+>;
+
 function verifyBlockerEvidenceClosure(input: Readonly<{
-  caseBlockerColliderIds: readonly string[];
+  caseBlockers: readonly CaseBlockerIdentity[];
   formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   contribution: BabylonNativeSceneContributionV1;
   materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
 }>): readonly string[] {
-  const caseBlockers = uniqueSortedExactSet(input.caseBlockerColliderIds);
+  const caseBlockers = uniqueSortedExactSet(input.caseBlockers.map(({ colliderId }) => colliderId));
+  const caseBlockerByColliderId = new Map(input.caseBlockers.map((blocker) => [blocker.colliderId, blocker]));
+  if (input.caseBlockers.some(({ contributionId, colliderId }) => contributionId !== colliderId)) {
+    fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  }
   const blockCriteria = input.formalChecks.flatMap((check) =>
-    check.checkpointCriteria.filter((criterion) => criterion.kind === "block-plane"));
+    check.checkpointCriteria.filter((criterion) => criterion.kind === "block-plane")
+      .map((criterion) => ({ criterion, acceptanceTargetRef: check.acceptanceTargetRef })));
   const formalBlockers = uniqueSortedExactSet(
-    blockCriteria.map(({ colliderId }) => colliderId),
+    blockCriteria.map(({ criterion }) => criterion.colliderId),
   );
   const contributionBlockers = uniqueSortedExactSet(
     input.contribution.staticColliders
@@ -512,10 +538,15 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
       ),
     );
   }
-  for (const criterion of blockCriteria) {
+  for (const { criterion, acceptanceTargetRef } of blockCriteria) {
     const joins = joinsByColliderId.get(criterion.colliderId);
     if (joins?.length !== 1) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
-    if (!joins[0]!.visualGroupIds.includes(criterion.sourceVisualGroupId)) {
+    // Case traversal acceptance joins its Collider obligation. The visual
+    // group names source geometry, not necessarily that same acceptance target.
+    // Keep both joins without inventing a visual identity for collider-only goals.
+    if (!joins[0]!.visualGroupIds.includes(criterion.sourceVisualGroupId) ||
+        acceptanceTargetRef !==
+          caseBlockerByColliderId.get(criterion.colliderId)!.acceptanceTargetRef) {
       fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
     }
   }
@@ -523,7 +554,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
 }
 
 function verifyBlockerEvidenceClosureForContext(input: Readonly<{
-  caseBlockerColliderIds: readonly string[];
+  caseBlockers: readonly CaseBlockerIdentity[];
   formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   contribution: BabylonNativeSceneContributionV1;
   materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
@@ -916,6 +947,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       captureReceipt.cameraRollbackOutcome !== "completed" ||
       captureReceipt.resetOutcome !== "completed"
     ) fail("NBR70_CLEANUP_INCOMPLETE");
+    await verifyCaptureTriviewArtifacts(captureRoot, captureReceipt);
     for (const view of captureReceipt.views) {
       requirePng(
         await requiredFile(
@@ -925,6 +957,8 @@ async function verifyAllRunAttempts(input: Readonly<{
         ),
         view.pngContentHash,
       );
+      requirePng(await requiredFile(captureRoot, `${view.viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+        view.identityMaskPngContentHash);
     }
     requirePng(
       await requiredFile(
@@ -966,9 +1000,8 @@ async function verifyAllRunAttempts(input: Readonly<{
     }
     assertObservationMatchesCapture(scripted, captureReceipt);
     const { blockerColliderIds } = verifyBlockerEvidenceClosureForContext({
-      caseBlockerColliderIds: input.reconstructionCase.expected.colliders
-        .filter(({ role }) => role === "blocker")
-        .map(({ colliderId }) => colliderId),
+      caseBlockers: input.reconstructionCase.expected.colliders
+        .filter(({ role }) => role === "blocker"),
       formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
       materializerMetadata: verified.nativeBlockMaterializerMetadata,
@@ -1004,6 +1037,9 @@ async function verifyAllRunAttempts(input: Readonly<{
       captureReceipt,
       openingObservation: opening,
       semanticViewObservationSet,
+      identityMaskPngs: await Promise.all(captureReceipt.views.map(async ({ viewId }) => ({
+        viewId, bytes: await requiredFile(captureRoot, `${viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+      }))),
       spawnSupportObservation: spawn,
       colliderOverlayObservation: overlay,
       scriptedTraversalObservation: scripted,
@@ -1484,14 +1520,17 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   if (runReceipt.cleanupOutcome !== "completed") {
     fail("NBR70_CLEANUP_INCOMPLETE");
   }
-  if (mode === "strict-acceptance" && runReceipt.outcome !== "passed") {
-    fail("NBR70_CLEANUP_INCOMPLETE");
-  }
   const reconstructionCase = parseWorldReconstructionCaseV1(json(await requiredFile(
     runRoot,
     "inputs/case.json",
     "NBR70_REQUIRED_ARTIFACT_MISSING",
   )));
+  if (mode === "strict-acceptance" && reconstructionCase.expected.criticalTraversalChecks.length === 0) {
+    fail("NBR70_SCRIPTED_TRAVERSAL_REQUIRED");
+  }
+  if (mode === "strict-acceptance" && runReceipt.outcome !== "passed") {
+    fail("NBR70_CLEANUP_INCOMPLETE");
+  }
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(json(
     await requiredFile(
       runRoot,
@@ -1653,9 +1692,8 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
   const blockerClosure = verifyBlockerEvidenceClosureForContext({
-    caseBlockerColliderIds: reconstructionCase.expected.colliders
-      .filter(({ role }) => role === "blocker")
-      .map(({ colliderId }) => colliderId),
+    caseBlockers: reconstructionCase.expected.colliders
+      .filter(({ role }) => role === "blocker"),
     formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
     contribution: verified.nativeSceneContribution,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,
@@ -1702,6 +1740,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     captureReceipt.cameraRollbackOutcome !== "completed" ||
     captureReceipt.resetOutcome !== "completed"
   ) fail("NBR70_CLEANUP_INCOMPLETE");
+  await verifyCaptureTriviewArtifacts(captureRoot, captureReceipt);
   for (const view of captureReceipt.views) {
     const bytes = await requiredFile(
       captureRoot,
@@ -1709,6 +1748,8 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
       "NBR70_CAPTURE_ARTIFACT_MISSING",
     );
     requirePng(bytes, view.pngContentHash);
+    requirePng(await requiredFile(captureRoot, `${view.viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+      view.identityMaskPngContentHash);
   }
   requirePng(
     await requiredFile(

@@ -46,10 +46,10 @@ describe("route R0 contract verifier", () => {
       resourceLockHash:
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       resolvedTraversalLockHash:
-        "sha256:8bb93add235d04fa2e2c31b25c42456da450a09f3c2b09e0dffb90a69dc98d5f",
+        "sha256:e8edb7907ca8c218ae79f9b21aeb98ceadd5bbd321a3e283552ab4c70efc1f72",
     });
     expect(frozenContract.traversalGraphHash).toBe(
-      "sha256:dada70388e0436f84feccd17d5fbe1b9135fc4bc6eb25ef3c7ea1c1f26b5f1d9",
+      "sha256:af15ea5a27e59f52caa55263c16eba6b39aa7bff0a4da939f1f4b5b59d2a6df7",
     );
   });
 });

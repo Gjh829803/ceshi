@@ -19,47 +19,7 @@ import type {
   BabylonNativeBlockSessionRecordV1,
 } from "./session.js";
 
-interface VisualAdapterModule {
-  createBabylonNativeBlockVisualsV1(input: Readonly<{
-    scene: Scene;
-    buildEpochId: string;
-    checkedLayout: BabylonNativeBlockCheckedLayoutV1;
-    displayGapMeters?: number;
-  }>): Readonly<{
-    kind: "babylon-native-block-visuals";
-    schemaVersion: 1;
-    buildEpochId: string;
-    nodes: readonly Readonly<{
-      blockId: string;
-      paletteRole: string;
-      visualGroupId?: string;
-      mesh: Mesh;
-    }>[];
-    visualGroups: readonly Readonly<{
-      id: string;
-      blockIds: readonly string[];
-      paletteRoles: readonly string[];
-      minimumMetersXYZ: readonly [number, number, number];
-      maximumMetersXYZ: readonly [number, number, number];
-    }>[];
-    liveHandles: Readonly<{
-      realization: Readonly<{ kind: string }>;
-      blocks: readonly Readonly<{
-        kind: "independent-mesh";
-        blockId: string;
-        runtimeEntityId: string;
-        semanticCaptureClassId: string;
-        mesh: Mesh;
-      }>[];
-      visualBatches: readonly unknown[];
-      visualGroups: readonly Readonly<{
-        visualGroupId: string;
-        blockHandles: readonly Readonly<{ blockId: string; mesh: Mesh }>[];
-      }>[];
-    }>;
-    dispose(): void;
-  }>;
-}
+type VisualAdapterModule = typeof import("./babylon-visual-adapter.js");
 
 async function loadVisualAdapter(): Promise<VisualAdapterModule> {
   const modulePath = ["./", "babylon-visual-adapter.js"].join("");
@@ -166,22 +126,6 @@ function recordsFixture(
 ): readonly BabylonNativeBlockSessionRecordV1[] {
   const layout = layoutFixture();
   const records = layout.blocks.map((block) => {
-    const localSize = ({
-      full: [1, 1, 1],
-      half: [1, 0.5, 1],
-      quarter: [0.5, 0.5, 1],
-      small: [0.5, 0.5, 0.5],
-      step: [1, 0.25, 1],
-    } satisfies Record<typeof block.shape, readonly [number, number, number]>)[
-      block.shape
-    ];
-    const mesh = MeshBuilder.CreateBox(block.id, {
-      width: localSize[0],
-      height: localSize[1],
-      depth: localSize[2],
-    }, scene);
-    mesh.position.set(...block.centerMetersXYZ);
-    mesh.rotation.y = block.rotationQuarterTurnsY * Math.PI / 2;
     return Object.freeze({
       input: Object.freeze({
         id: block.id,
@@ -193,13 +137,7 @@ function recordsFixture(
           ? {}
           : { visualGroupId: block.visualGroupId }),
       }),
-      mesh,
-      localGeometrySnapshot: Object.freeze({
-        positions: Object.freeze(Array.from(
-          mesh.getVerticesData(VertexBuffer.PositionKind)!,
-        )),
-        indices: Object.freeze(Array.from(mesh.getIndices()!)),
-      }),
+
     });
   });
   return Object.freeze(reverse ? [...records].reverse() : records);
@@ -241,7 +179,6 @@ describe("Babylon Native block visual adapter", () => {
         scene,
         buildEpochId: "candidate-epoch-001",
         checkedLayout,
-        displayGapMeters: 0.04,
       });
 
       expect(visuals).toMatchObject({
@@ -249,29 +186,27 @@ describe("Babylon Native block visual adapter", () => {
         schemaVersion: 1,
         buildEpochId: "candidate-epoch-001",
       });
-      expect(visuals.nodes.map(({ blockId }) => blockId)).toEqual([
+      expect(visuals.nodes.flatMap(({ sourceBlockIds }) => sourceBlockIds).sort()).toEqual([
         "gate-cap",
         "gate-quarter",
         "route-block",
       ]);
       expect(visuals.visualGroups).toEqual(visualGroups);
-      const meshByBlockId = new Map(checkedLayout.records.map(({ input, mesh }) =>
-        [input.id, mesh] as const));
-      expect(visuals.nodes.every(({ blockId, mesh }) =>
-        meshByBlockId.get(blockId) === mesh,
-      )).toBe(true);
+      const meshByBlockId = new Map(visuals.nodes.flatMap(node =>
+        node.sourceBlockIds.map(id => [id, node.mesh] as const)));
+      expect(new Set(visuals.nodes.map(node => node.mesh)).size).toBe(3);
 
-      const quarter = visuals.nodes.find(({ blockId }) =>
-        blockId === "gate-quarter")!;
+      const quarter = visuals.nodes.find(({ sourceBlockIds }) =>
+        sourceBlockIds.includes("gate-quarter"))!;
       expect(quarter.mesh.position.asArray()).toEqual([1.25, 0.25, 0]);
-      expect(quarter.mesh.rotation.y).toBeCloseTo(Math.PI / 2, 12);
+      expect(quarter.mesh.rotation.y).toBe(0); // Rotation is baked into the axis-aligned cluster size.
       quarter.mesh.computeWorldMatrix(true);
       const halfExtents = quarter.mesh.getBoundingInfo()
         .boundingBox.extendSizeWorld.asArray().sort((left, right) =>
           left - right);
-      expect(halfExtents[0]).toBeCloseTo(0.23, 5);
-      expect(halfExtents[1]).toBeCloseTo(0.23, 5);
-      expect(halfExtents[2]).toBeCloseTo(0.48, 5);
+      expect(halfExtents[0]).toBeCloseTo(0.24625, 5);
+      expect(halfExtents[1]).toBeCloseTo(0.24625, 5);
+      expect(halfExtents[2]).toBeCloseTo(0.4925, 5);
       const quarterMaterial = quarter.mesh.material;
       expect(quarterMaterial?.name).toBe(
         "candidate-epoch-001.palette.structure",
@@ -314,11 +249,11 @@ describe("Babylon Native block visual adapter", () => {
         semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
       }]);
       expect(visuals.liveHandles.realization).toEqual({
-        kind: "authoring-unbatched",
+        kind: "authoring-clustered",
       });
       expect(visuals.liveHandles.visualBatches).toEqual([]);
       expect(visuals.liveHandles.visualGroups[0]?.blockHandles.map(
-        ({ blockId, mesh }) => [blockId, mesh],
+        (handle) => [handle.blockId, handle.kind === "thin-instance" ? handle.batchMesh : handle.mesh],
       )).toEqual([
         ["gate-cap", meshByBlockId.get("gate-cap")],
         ["gate-quarter", meshByBlockId.get("gate-quarter")],
@@ -327,7 +262,7 @@ describe("Babylon Native block visual adapter", () => {
     });
   });
 
-  it("keeps Candidate instances isolated and leaves Profile Mesh disposal to the session", async () => {
+  it("keeps Candidate instances isolated and disposes owned cluster Meshes", async () => {
     const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
     const firstEngine = new NullEngine();
     const secondEngine = new NullEngine();
@@ -359,7 +294,7 @@ describe("Babylon Native block visual adapter", () => {
       expect(peekBabylonNativeBlockLiveHandleRegistryV1(firstScene))
         .toBeUndefined();
 
-      expect(first.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);
+      expect(first.nodes.every(({ mesh }) => mesh.isDisposed())).toBe(true);
       expect(first.nodes.every(({ mesh }) => mesh.material === null)).toBe(true);
       expect(firstScene.materials).not.toContain(firstMaterial);
       expect(second.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);

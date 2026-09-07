@@ -3507,31 +3507,6 @@ function parseCameraContextRuleValueV2(input, schemaName) {
 function parseCameraContextRuleV2(input) {
   return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
 }
-const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
-  "gameplay-command.execute",
-  "fixed-input.run",
-  "snapshot.get",
-  "events.get",
-  "session.reset",
-  "subject-support.get",
-  "session.close"
-]);
-new Set(
-  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
-);
-new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
-  "kind",
-  "schemaVersion",
-  "id",
-  "resourceRef",
-  "trustMode",
-  "requiredIsolationCapabilityIds"
-]);
-Object.freeze([
-  ...TRUST_PROFILE_BODY_FIELDS,
-  "contentHash"
-]);
 const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
   "distanceMeters",
   "targetHeightMeters",
@@ -3615,6 +3590,31 @@ function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides)
   }
   return applied;
 }
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.reset",
+  "subject-support.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+const TRUST_PROFILE_BODY_FIELDS = Object.freeze([
+  "kind",
+  "schemaVersion",
+  "id",
+  "resourceRef",
+  "trustMode",
+  "requiredIsolationCapabilityIds"
+]);
+Object.freeze([
+  ...TRUST_PROFILE_BODY_FIELDS,
+  "contentHash"
+]);
 function invalid(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
@@ -14904,7 +14904,7 @@ function requireFormats() {
   return formats;
 }
 var limit = {};
-var ajv$2 = { exports: {} };
+var ajv$1 = { exports: {} };
 var draft7 = {};
 var hasRequiredDraft7;
 function requireDraft7() {
@@ -14944,7 +14944,7 @@ const require$$3 = {
 };
 var hasRequiredAjv;
 function requireAjv() {
-  if (hasRequiredAjv) return ajv$2.exports;
+  if (hasRequiredAjv) return ajv$1.exports;
   hasRequiredAjv = 1;
   (function(module2, exports2) {
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -15010,8 +15010,8 @@ function requireAjv() {
     Object.defineProperty(exports2, "MissingRefError", { enumerable: true, get: function() {
       return ref_error_1.default;
     } });
-  })(ajv$2, ajv$2.exports);
-  return ajv$2.exports;
+  })(ajv$1, ajv$1.exports);
+  return ajv$1.exports;
 }
 var hasRequiredLimit;
 function requireLimit() {
@@ -15165,62 +15165,62 @@ const subjectDefinitionV1Schema = {
   allOf,
   $defs
 };
-const ajv$1 = new Ajv2020({
+const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
   validateFormats: true
 });
-addFormats(ajv$1);
-ajv$1.addFormat("worldkit-resource-ref", {
+addFormats(ajv);
+ajv.addFormat("worldkit-resource-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
 });
-ajv$1.addFormat("subject-definition-ref", {
+ajv.addFormat("subject-definition-ref", {
   type: "string",
   validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("capability-ref", {
+ajv.addFormat("capability-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("physics-body-profile-ref", {
+ajv.addFormat("physics-body-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("locomotion-profile-ref", {
+ajv.addFormat("locomotion-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("collider-derivation-profile-ref", {
+ajv.addFormat("collider-derivation-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("package-prototype-ref", {
+ajv.addFormat("package-prototype-ref", {
   type: "string",
   validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
 });
-ajv$1.addFormat("layout-solver-profile-ref", {
+ajv.addFormat("layout-solver-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/layout-solver-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addFormat("traversal-surface-profile-ref", {
+ajv.addFormat("traversal-surface-profile-ref", {
   type: "string",
   validate: (value) => /^worldkit:\/\/traversal-surface-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
     value
   )
 });
-ajv$1.addSchema(subjectDefinitionV1Schema);
-ajv$1.compile(
+ajv.addSchema(subjectDefinitionV1Schema);
+ajv.compile(
   authoringSpecV4Schema
 );
 var CharacterCodes;
@@ -15411,6 +15411,15 @@ const MOVEMENT_LABELS = /* @__PURE__ */ new Map([
   ["水下游动", "underwater"],
   ["空中飞行", "flight"]
 ]);
+function movementModeForLabel(label) {
+  const exact2 = MOVEMENT_LABELS.get(label);
+  if (exact2 !== void 0) return exact2;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (label.startsWith(standardLabel) && (suffix.startsWith("（") && suffix.endsWith("）") || suffix.startsWith("(") && suffix.endsWith(")")) && suffix.length >= 3 && suffix.length <= 26) return mode;
+  }
+  return "custom";
+}
 const TARGET_KIND_LABELS = /* @__PURE__ */ new Map([
   ["主体", "subject"],
   ["标志物", "landmark"],
@@ -15453,20 +15462,25 @@ function splitSections(source) {
   }
   return new Map([...sections].map(([key, value]) => [key, value[0]]));
 }
-function parseMovement(value) {
-  const match = /^([^：:\n]+)[：:]\s*([^\n]+)$/.exec(value.trim());
-  if (match === null) {
-    return fail("SCENE_BRIEF_MOVEMENT_INVALID: use '<运动模式>：<一句自然语言说明>'.");
+function parseMovementModes(value) {
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 1 || lines.length > 8) {
+    return fail("SCENE_BRIEF_MOVEMENT_COUNT: movement modes must contain 1-8 entries.");
   }
-  const label = match[1].trim();
-  if (label.length > 48) {
-    return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+  const labels = /* @__PURE__ */ new Set();
+  const movementModes = [];
+  for (const [index, line] of lines.entries()) {
+    const match = /^-\s*([^：:\n]+)[：:]\s*([^\n]+)$/.exec(line);
+    if (match === null) return fail(
+      `SCENE_BRIEF_MOVEMENT_INVALID: entry ${index + 1} must use '- <运动模式>：<一句自然语言说明>'.`
+    );
+    const label = match[1].trim();
+    if (label.length > 48) return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+    if (labels.has(label)) return fail(`SCENE_BRIEF_MOVEMENT_DUPLICATE: '${label}'.`);
+    labels.add(label);
+    movementModes.push({ mode: movementModeForLabel(label), label, description: match[2].trim() });
   }
-  return {
-    mode: MOVEMENT_LABELS.get(label) ?? "custom",
-    label,
-    description: match[2].trim()
-  };
+  return Object.freeze(movementModes);
 }
 function parseVisualTargets(value) {
   const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -15506,8 +15520,8 @@ function parseVisualTargets(value) {
 function parseSceneBriefV1(source) {
   const sections = splitSections(source);
   if ("ok" in sections) return sections;
-  const movement = parseMovement(sections.get("运动模式"));
-  if ("ok" in movement) return movement;
+  const movementModes = parseMovementModes(sections.get("运动模式"));
+  if ("ok" in movementModes) return movementModes;
   const visualTargets = parseVisualTargets(sections.get("视觉目标"));
   if ("ok" in visualTargets) return visualTargets;
   const value = {
@@ -15519,7 +15533,7 @@ function parseSceneBriefV1(source) {
     visibleReferenceEvidence: sections.get("可见参考证据"),
     inferredContinuation: sections.get("推断的世界延伸"),
     renderLayerIdeas: sections.get("仅视觉层设想"),
-    movement,
+    movementModes,
     space: sections.get("空间"),
     navigation: sections.get("通行"),
     openingShot: sections.get("首帧"),
@@ -15532,56 +15546,8 @@ function parseSceneBriefV1(source) {
     diagnostics: []
   };
 }
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: true,
-  validateFormats: true
-});
-addFormats(ajv);
-ajv.addFormat("worldkit-resource-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package|asset):\/\/[a-z0-9][a-z0-9./_-]*(?:@[1-9][0-9]*)?$/.test(value)
-});
-ajv.addFormat("subject-definition-ref", {
-  type: "string",
-  validate: (value) => /^(?:worldkit|package):\/\/subject-definition\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("capability-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/capability\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("physics-body-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/physics-body-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("locomotion-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/locomotion-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addFormat("collider-derivation-profile-ref", {
-  type: "string",
-  validate: (value) => /^worldkit:\/\/collider-derivation-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
-    value
-  )
-});
-ajv.addFormat("package-prototype-ref", {
-  type: "string",
-  validate: (value) => /^package:\/\/prototype\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(value)
-});
-ajv.addSchema(subjectDefinitionV1Schema);
-(() => {
-  const registeredValidator = ajv.getSchema(
-    "worldkit://schema/subject-definition@1"
-  );
-  if (registeredValidator === void 0) {
-    throw new Error("SUBJECT_DEFINITION_SCHEMA_NOT_REGISTERED");
-  }
-  return registeredValidator;
-})();
+typeof func2Module === "function" ? func2Module : func2Module.default;
+typeof func0Module === "function" ? func0Module : func0Module.default;
 const BABYLON_NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
   "#E85D5D",
   "#F28E2B",
@@ -15807,7 +15773,7 @@ function nativePlannerBlockPaletteDiagnostics(input) {
       message: `${input.label} matches Block World colors on only ${input.measurement.blockPaletteCoverageRatio.toFixed(4)} of pixels; required at least ${input.minimumCoverageRatio.toFixed(4)}. Regenerate it as a discrete-cube block-whitebox render using the fixed palette.`
     });
   }
-  if (input.movementMode?.startsWith("ground-") === true && input.measurement.traversablePixelCount === 0) {
+  if (input.movementModes?.some((mode) => mode.startsWith("ground-")) === true && input.measurement.traversablePixelCount === 0) {
     diagnostics.push({
       code: `${input.label}_TRAVERSABLE_COLOR_MISSING`,
       message: `${input.label} does not contain a ground-traversable or cloud-support color even though the Scene Brief declares ground movement.`
@@ -16132,14 +16098,14 @@ async function runPlannerSelfCheck(options) {
         worldPlan: worldPlanPalette,
         entryWhiteboxTarget: entryPalette
       });
-      const movementMode = brief.ok ? brief.value.movement.mode : void 0;
+      const movementModes = brief.ok ? brief.value.movementModes.map(({ mode }) => mode) : void 0;
       const requiredVisualTargetCount = brief.ok ? brief.value.visualTargets.length : 1;
       diagnostics.push(
         ...nativePlannerBlockPaletteDiagnostics({
           label: "WORLD_PLAN",
           measurement: worldPlanPalette,
           minimumCoverageRatio: MINIMUM_WORLD_PLAN_BLOCK_PALETTE_COVERAGE_RATIO,
-          movementMode,
+          movementModes,
           requiredVisualTargetCount,
           requireAllVisualTargets: true
         }),
@@ -16147,7 +16113,7 @@ async function runPlannerSelfCheck(options) {
           label: "ENTRY_WHITEBOX_TARGET",
           measurement: entryPalette,
           minimumCoverageRatio: MINIMUM_ENTRY_BLOCK_PALETTE_COVERAGE_RATIO,
-          movementMode,
+          movementModes,
           requiredVisualTargetCount,
           requireAllVisualTargets: false
         }),

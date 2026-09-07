@@ -1,575 +1,29 @@
-import { execFile } from "node:child_process";
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
-import { parseSceneBriefV1 } from "@whitebox-world/authoring";
-import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
-import {
-  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
-  createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
-} from "@whitebox-world/native-babylon-block-profile/host";
-import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1 } from "@whitebox-world/runtime-contracts";
-import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
-import {
-  hashWorldReconstructionEvaluationProfileV1,
-  parseWorldReconstructionCaseV1,
-  parseWorldReconstructionEvaluationProfileV1,
-} from "@whitebox-world/validation";
-import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
+import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1, createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1 } from "@whitebox-world/native-babylon-block-profile/host";
+import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1, type NativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
-import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
-import { runNativeBlockGenerationV1 } from "./generation-runner.js";
+import * as nativePackageInput from "../native-scene/native-package-input.js";
 import { createProductionWorldReconstructionRunPortsV1, type ProductionWorldReconstructionRunPortOwnersV1 } from "./production-run-ports.js";
-import {
-  assertProductionNativeBlockGroundTopologyCompatibleV1,
-} from
-  "./native-ground-analysis-admission.js";
-import {
-  assertNativeBlockProductionSourceImportsV1,
-  NativeBlockPackageErrorV1,
-  packageNativeBlockAttemptV1,
-} from "./native-package.js";
+import { assertProductionNativeBlockGroundTopologyIntegrityV1 } from "./native-ground-analysis-admission.js";
+import { assertNativeBlockProductionSourceImportsV1, NativeBlockPackageErrorV1, packageNativeBlockAttemptV1 } from "./native-package.js";
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
-const CASE_SOURCE = path.join(
-  REPOSITORY_ROOT,
-  "artifacts/scenes/cloud-temple-t-gate-native-block",
-);
-const HOST_CLOSURE_ROOT = path.join(
-  REPOSITORY_ROOT,
-  "apps/playground/public/world-packages/cloud-ridge",
-);
+import { createNativeBlockPackageAttemptFixtureV1, REPOSITORY_ROOT, HOST_CLOSURE_ROOT, SCENE_SOURCE, REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE, REGENERATED_GRID_SCENE_SOURCE, MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE, REMOVED_DISPLAY_GAP_SCENE_SOURCE, MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE, MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE, MISSING_GRID_CHILD_SCENE_SOURCE, NARROW_SPAWN_GROUND_SCENE_SOURCE, SPAWN_CAPSULE_OBSTRUCTION_SCENE_SOURCE, EXTRA_VISUAL_GROUP_SCENE_SOURCE, EXTRA_VISUAL_GROUP_AUTHORING } from "./native-package.test-support.js";
 const temporaryRoots: string[] = [];
-const execFileAsync = promisify(execFile);
-
-function plannerPaletteMeasurement(
-  visualTargetPixelCounts: readonly number[],
-): unknown {
-  return {
-    widthPixels: 1600,
-    heightPixels: 900,
-    aspectRatio: 16 / 9,
-    matchedBlockPixelCount: 72_000,
-    blockPaletteCoverageRatio: 72_000 / (1600 * 900),
-    traversablePixelCount: 64_000,
-    interactivePixelCount: 0,
-    blockPixelCountsBySemantic: {
-      walkable: 64_000,
-      obstacle: 0,
-      "interactive-solid": 0,
-      "interactive-trigger": 0,
-      water: 0,
-      "cloud-walkable": 0,
-      "cloud-passable": 0,
-      "visual-only": 0,
-      "landmark-red": 0,
-      "visual-target-2": 4_000,
-      "visual-target-3": 4_000,
-      "visual-target-4": 0,
-      "visual-target-5": 0,
-      "landmark-pink": 0,
-      "visual-target-1-subject": 32_000,
-    },
-    visualTargetPixelCounts,
-  };
-}
-
-function nativePlannerReceiptText(input: Readonly<{
-  sceneId: string;
-  sceneBriefHash: Sha256HashV1;
-  entryWhiteboxTargetHash: Sha256HashV1;
-  worldPlanHash: Sha256HashV1;
-}>): string {
-  return stringifyCanonicalJson({
-    kind: "worldkit-planner-self-check",
-    schemaVersion: 1,
-    validatorVersion: "worldkit-planner-self-check-v4",
-    sceneId: input.sceneId,
-    sceneSourceKind: "babylon-native",
-    status: "passed",
-    inputs: {
-      sceneBriefHash: input.sceneBriefHash,
-      worldPlanHash: input.worldPlanHash,
-      entryWhiteboxTargetHash: input.entryWhiteboxTargetHash,
-    },
-    imageMeasurements: {
-      widthPixels: 1600,
-      heightPixels: 900,
-      subjectMaskPixelCount: 32_000,
-      subjectCenterXRatio: 0.5,
-      subjectCenterErrorRatio: 0,
-      maximumCenterErrorRatio: 0.015,
-    },
-    nativeBlockPaletteMeasurements: {
-      worldPlan: plannerPaletteMeasurement([64, 64, 64, 0, 0]),
-      entryWhiteboxTarget: plannerPaletteMeasurement([32_000, 0, 0, 0, 0]),
-    },
-    nativeEntryIdentityMeasurements: {
-      widthPixels: 1600,
-      heightPixels: 900,
-      aspectRatio: 16 / 9,
-      aspectErrorRatio: 0,
-      requiredAspectRatio: 16 / 9,
-      maximumAspectErrorRatio: 0.02,
-      maximumIdentityRgbDistance: 40,
-      minimumIdentitySeparationRgbUnits: 12,
-      ambiguousIdentityPixelCount: 0,
-      candidateIdentityPixelCount: 32_000,
-      ambiguousIdentityRatio: 0,
-      maximumAmbiguousIdentityRatio: 0.05,
-      targets: [{
-        visualTargetId: "visual-target-1",
-        identityColorHex: "#E85D5D",
-        exclusivelyAdmittedPixelCount: 32_000,
-        imageCoverageRatio: 32_000 / (1600 * 900),
-        componentCount: 1,
-        coherentComponentCount: 1,
-        coherentPixelCount: 32_000,
-        coherentPixelRatio: 1,
-        largestComponentPixelCount: 32_000,
-        largestComponentImageCoverageRatio: 32_000 / (1600 * 900),
-        largestComponentBoundingBoxWidthPixels: 160,
-        largestComponentBoundingBoxHeightPixels: 320,
-        largestComponentBoundingBoxWidthRatio: 0.1,
-        largestComponentBoundingBoxHeightRatio: 320 / 900,
-        minimumPixelCount: 360,
-        minimumCoherentComponentPixelCount: 36,
-        minimumCoherentPixelRatio: 0.75,
-        minimumLargestComponentPixelCount: 1440,
-        minimumLargestComponentImageCoverageRatio: 0.001,
-        minimumLargestComponentBoundingBoxWidthRatio: 0.02,
-        minimumLargestComponentBoundingBoxHeightRatio: 0.04,
-      }],
-    },
-    diagnostics: [],
-  });
-}
-
-const SCENE_SOURCE = `import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
-import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
-
-export default defineBabylonNativeScene({
-  kind: "babylon-native-scene-module",
-  id: "cloud-temple-test",
-  build(context) {
-    const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 64 });
-    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8] });
-    session.createBlockGrid({idPrefix: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7] });
-    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });
-    session.createBlock({id: "mountain", shape: "full", paletteRole: "background-mass", visualGroupId: "mountain-cliff-layers-group", centerMetersXYZ: [-4, -0.5, 2] });
-    session.createBlockGrid({idPrefix: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 1], repeatCountXYZ: [3, 1, 3] });
-    session.finalize({ staticColliders: [
-      { id: "collider-central-steps", colliderGeometrySource: { kind: "block-group", colliderGroupId: "central-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
-      { id: "collider-cliff-blockers", colliderGeometrySource: { kind: "block", blockId: "mountain" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
-      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block-group", colliderGroupId: "foreground-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "protect-ground-subject" },
-      { id: "collider-upper-ground", colliderGeometrySource: { kind: "block-group", colliderGroupId: "upper-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "upper-surface", logicalSubshapeId: "upper-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
-      { id: "collider-gate-walls", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
-    ] });
-    context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });
-  },
-});
-`;
-
-const AUTHORING = {
-  kind: "native-block-authoring",
-  schemaVersion: 1,
-  entryModulePath: "scene.ts",
-  blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
-  visualGroups: [
-    { visualGroupId: "central-ascent-group", acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", semanticClassId: "route.central-ascent", identityColorHex: "#AA0001" },
-    { visualGroupId: "foreground-platform-group", acceptanceTargetRef: "worldkit://acceptance-target/foreground-platform@1", semanticClassId: "ground.foreground-platform", identityColorHex: "#AA0002" },
-    { visualGroupId: "gate-mass-group", acceptanceTargetRef: "worldkit://acceptance-target/gate-mass@1", semanticClassId: "structure.gate-mass", identityColorHex: "#AA0003" },
-    { visualGroupId: "mountain-cliff-layers-group", acceptanceTargetRef: "worldkit://acceptance-target/mountain-cliff-layers@1", semanticClassId: "terrain.mountain-cliff", identityColorHex: "#AA0004" },
-    { visualGroupId: "upper-t-junction-group", acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", semanticClassId: "structure.upper-t", identityColorHex: "#AA0005" },
-  ],
-} as const;
-
-const REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-  `    const gate = session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group" });
-    gate.position.set(4, -0.5, 2);`,
-);
-
-const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
-  .replace(
-    `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-    `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [5, -0.5, 2] });`,
-  );
-
-const MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-  `    const capturedContext = context;
-    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [capturedContext.scene === undefined ? 4 : 5, -0.5, 2] });`,
-);
-
-const MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.finalize({ staticColliders: [`,
-  `    const capturedContext = context;
-    session.finalize({ displayGapMeters: capturedContext.scene === undefined ? 0.04 : 0.08, staticColliders: [`,
-);
-
-const MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });`,
-  `    const spawnContext = context;
-    context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, spawnContext.scene === undefined ? 18 : 17], facingRadians: 0 });`,
-);
-
-const MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-  `    session.createBlock({id: "isolated-route", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [20, -0.5, 20] });
-    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-);
-
-const MISSING_GRID_CHILD_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `{ kind: "block-group", colliderGroupId: "foreground-ground-group" }`,
-  `{ kind: "block", blockId: "foreground" }`,
-);
-
-const NARROW_SPAWN_GROUND_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8]`,
-  `shape: "small", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [0.25, -0.25, 11.25], repeatCountXYZ: [1, 1, 14]`,
-);
-
-const SPAWN_ADJACENT_STEP_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-  `    session.createBlockGrid({idPrefix: "spawn-step-left", shape: "step", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, 0.125, 11], repeatCountXYZ: [1, 1, 8] });
-    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
-);
-
-const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlockGrid({idPrefix: "upper",`,
-  `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
-    session.createBlockGrid({idPrefix: "upper",`,
-);
-
-const EXTRA_VISUAL_GROUP_AUTHORING = {
-  ...AUTHORING,
-  visualGroups: [
-    ...AUTHORING.visualGroups.slice(0, 4),
-    { visualGroupId: "supported-spawn-group", acceptanceTargetRef: "worldkit://acceptance-target/supported-spawn@1", semanticClassId: "ground.supported-spawn", identityColorHex: "#AA0006" },
-    AUTHORING.visualGroups[4]!,
-  ],
-} as const;
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) =>
     rm(root, { recursive: true, force: true })));
 });
 
-async function completedAttempt(options: Readonly<{
-  sceneSource?: string;
-  authoring?: typeof AUTHORING | typeof EXTRA_VISUAL_GROUP_AUTHORING;
-  omitAdvisory?: boolean;
-  target3IdentityColorHex?: string;
-}> = {}) {
-  const sceneSource = options.sceneSource ?? SCENE_SOURCE;
-  const authoring = options.authoring ?? AUTHORING;
-  const root = await realpath(await mkdtemp(
-    path.join(os.tmpdir(), "worldkit-native-package-"),
-  ));
-  temporaryRoots.push(root);
-  const caseRoot = path.join(root, "case");
-  await cp(CASE_SOURCE, caseRoot, { recursive: true });
-  const casePath = path.join(caseRoot, "case.json");
-  const inputDirectoryPath = path.join(caseRoot, "inputs");
-  const [caseValue, profileValue, boundsValue] = await Promise.all([
-    readFile(casePath, "utf8").then(JSON.parse),
-    readFile(path.join(caseRoot, "evaluation-profile.json"), "utf8").then(JSON.parse),
-    readFile(path.join(inputDirectoryPath, "world-bounds.json"), "utf8").then(JSON.parse),
-  ]);
-  const sceneBrief = parseSceneBriefV1(await readFile(
-    path.join(inputDirectoryPath, caseValue.sceneBriefRef),
-    "utf8",
-  ));
-  if (!sceneBrief.ok) throw new TypeError("TEST_SCENE_BRIEF_INVALID");
-  // This package-owner fixture intentionally builds a compact straight route.
-  // Keep its trusted Ground Analysis band local to that geometry instead of
-  // inheriting the production Case's gate-detour samples whenever the real
-  // acceptance corpus evolves.
-  caseValue.expected.groundConnectivity.requiredTraversalBands[0]
-    .centerlineStandPositionsXYZMeters = [
-      { xMeters: 0, yMeters: 0, zMeters: 18 },
-      { xMeters: 0, yMeters: 0, zMeters: 10 },
-      { xMeters: 0, yMeters: 0, zMeters: 3 },
-    ];
-  const nativeTarget3Ref =
-    "worldkit://acceptance-target/visual-target-3@1";
-  const gateTargetRef = "worldkit://acceptance-target/gate-mass@1";
-  if (options.target3IdentityColorHex !== undefined) {
-    caseValue.acceptanceTargetRefs = caseValue.acceptanceTargetRefs
-      .map((targetRef: string) =>
-        targetRef === gateTargetRef ? nativeTarget3Ref : targetRef)
-      .sort();
-    caseValue.expected.semanticSilhouetteTargets =
-      caseValue.expected.semanticSilhouetteTargets
-        .map((target: { acceptanceTargetRef: string }) => ({
-          ...target,
-          acceptanceTargetRef: target.acceptanceTargetRef === gateTargetRef
-            ? nativeTarget3Ref
-            : target.acceptanceTargetRef,
-        }))
-        .sort((left: { acceptanceTargetRef: string }, right: {
-          acceptanceTargetRef: string;
-        }) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
-    for (const target of [
-      ...caseValue.expected.colliders,
-      ...caseValue.expected.criticalTraversalChecks,
-    ]) {
-      if (target.acceptanceTargetRef === gateTargetRef) {
-        target.acceptanceTargetRef = nativeTarget3Ref;
-      }
-    }
-    profileValue.thresholds.semanticSilhouetteTargets =
-      profileValue.thresholds.semanticSilhouetteTargets
-        .map((target: { acceptanceTargetRef: string }) => ({
-          ...target,
-          acceptanceTargetRef: target.acceptanceTargetRef === gateTargetRef
-            ? nativeTarget3Ref
-            : target.acceptanceTargetRef,
-        }))
-        .sort((left: { acceptanceTargetRef: string }, right: {
-          acceptanceTargetRef: string;
-        }) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
-    caseValue.evaluationProfileHash =
-      hashWorldReconstructionEvaluationProfileV1(
-        parseWorldReconstructionEvaluationProfileV1(profileValue),
-      );
-  }
-  const visualReviewInputBytes = await readFile(path.join(
-    inputDirectoryPath,
-    "reference-0.png",
-  ));
-  const entryWhiteboxTargetHash = sha256Bytes(
-    visualReviewInputBytes,
-  ) as Sha256HashV1;
-  const worldPlanHash = sha256Bytes(visualReviewInputBytes) as Sha256HashV1;
-  const visualIdentityPaletteBytes = new TextEncoder().encode(
-    stringifyCanonicalJson({
-      kind: "worldkit-visual-identity-palette",
-      schemaVersion: 1,
-      sceneId: caseValue.id,
-      sceneBriefHash: sceneBrief.sceneBriefHash,
-      movementMode: "ground-walk",
-      movementModeLabel: "Ground walk",
-      targets: [
-        { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
-        ...(options.target3IdentityColorHex === undefined ? [] : [
-          { id: "visual-target-2", visualTargetId: "visual-target-2", targetKind: "landmark", name: "Gate", description: "primary gate", role: "primary-landmark", semanticClassId: "visual.gate", identityColor: "#F28E2B" },
-          { id: "visual-target-3", visualTargetId: "visual-target-3", targetKind: "landmark", name: "Moon", description: "remote moon", role: "secondary-landmark", semanticClassId: "visual.moon", identityColor: "#D9A514" },
-        ]),
-      ],
-    }),
-  );
-  const plannerReceiptBytes = new TextEncoder().encode(
-    nativePlannerReceiptText({
-      sceneId: caseValue.id,
-      sceneBriefHash: caseValue.sceneBriefHash as Sha256HashV1,
-      entryWhiteboxTargetHash,
-      worldPlanHash,
-    }),
-  );
-  await Promise.all([
-    writeFile(
-      path.join(inputDirectoryPath, "entry-whitebox-target.png"),
-      visualReviewInputBytes,
-      { flag: "wx" },
-    ),
-    writeFile(
-      path.join(inputDirectoryPath, "world-plan.png"),
-      visualReviewInputBytes,
-      { flag: "wx" },
-    ),
-    writeFile(
-      path.join(inputDirectoryPath, "planner-self-check.json"),
-      plannerReceiptBytes,
-      { flag: "wx" },
-    ),
-    writeFile(
-      path.join(inputDirectoryPath, "visual-identity-palette.json"),
-      visualIdentityPaletteBytes,
-      { flag: "wx" },
-    ),
-  ]);
-  caseValue.referenceInputs = [
-    ...caseValue.referenceInputs,
-    {
-      inputRef: "entry-whitebox-target.png",
-      contentHash: entryWhiteboxTargetHash,
-      mediaType: "image/png",
-    },
-    {
-      inputRef: "planner-self-check.json",
-      contentHash: sha256Bytes(plannerReceiptBytes),
-      mediaType: "application/json",
-    },
-    {
-      inputRef: "visual-identity-palette.json",
-      contentHash: sha256Bytes(visualIdentityPaletteBytes),
-      mediaType: "application/json",
-    },
-    {
-      inputRef: "world-plan.png",
-      contentHash: worldPlanHash,
-      mediaType: "image/png",
-    },
-  ].sort((left, right) => left.inputRef.localeCompare(right.inputRef));
-  await Promise.all([
-    writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`),
-    writeFile(
-      path.join(caseRoot, "evaluation-profile.json"),
-      `${stringifyCanonicalJson(profileValue)}\n`,
-    ),
-  ]);
-  const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
-  const profile = parseWorldReconstructionEvaluationProfileV1(profileValue);
-  const routeDecision = decideSceneAuthoringRouteV1({
-    id: `${reconstructionCase.id}-route`,
-    sceneBriefRef: reconstructionCase.sceneBriefRef,
-    sceneBriefHash: reconstructionCase.sceneBriefHash,
-    trustProfileRef: "worldkit://trust-profile/trusted-local@1",
-    trustProfileHash: sha256CanonicalJson({ id: "trusted-local", version: 1 }) as Sha256HashV1,
-    requiredCapabilityRefs: [],
-    requestedSourceKind: "babylon-native",
-    nativeTrustAdmitted: true,
-    referenceDrivenDistinctiveSilhouette: true,
-  });
-  const runDirectoryPath = path.join(caseRoot, "runs", "test");
-  await mkdir(path.dirname(runDirectoryPath), { recursive: true });
-  const generationInput = {
-    case: reconstructionCase,
-    profile,
-    routeDecision,
-    runId: "test",
-    attemptIndex: 0,
-    backend: "local",
-    runDirectoryPath,
-    inputDirectoryPath,
-    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"),
-    builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
-    nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"),
-    nativeSceneProfilePath: path.join(inputDirectoryPath, "native-scene-profile.json"),
-    blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"),
-    hostClosureRootPath: HOST_CLOSURE_ROOT,
-    gameplayBootstrapPath: path.join(HOST_CLOSURE_ROOT, "gameplay/bootstrap.json"),
-    worldRuntimeBootstrapPath: path.join(HOST_CLOSURE_ROOT, "runtime/world-runtime-bootstrap.json"),
-    worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
-    worldBoundsPath: path.join(inputDirectoryPath, "world-bounds.json"),
-    worldBounds: parseWorldPackageWorldBoundsV1(boundsValue),
-    bootstrapId: `${reconstructionCase.id}-native`,
-    sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
-    seed: 19,
-    budgets: {
-      maximumBlockCount: 64,
-      maximumStaticColliderCount: 8,
-      maximumStaticColliderVertexCount: 1024,
-      maximumStaticColliderTriangleCount: 1024,
-      maximumOutputBytes: 4_000_000,
-      timeoutSeconds: 30,
-    },
-  } satisfies Parameters<typeof prepareNativeBlockGenerationTaskV1>[0];
-  const prepared = await prepareNativeBlockGenerationTaskV1(generationInput);
-  await Promise.all([
-    writeFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), sceneSource),
-    writeFile(
-      path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"),
-      stringifyCanonicalJson(options.target3IdentityColorHex === undefined
-        ? authoring
-        : {
-            ...authoring,
-            visualGroups: authoring.visualGroups.map((group) =>
-              group.acceptanceTargetRef !== gateTargetRef
-                ? group
-                : {
-                    ...group,
-                    acceptanceTargetRef: nativeTarget3Ref,
-                    semanticClassId: "visual.moon",
-                    identityColorHex: options.target3IdentityColorHex,
-                  }),
-          }),
-    ),
-    writeFile(path.join(prepared.stagingDirectoryPath, "native-resources.json"), stringifyCanonicalJson({ kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: [] })),
-  ]);
-  if (options.omitAdvisory !== true) {
-    const attemptDirectoryPath = path.dirname(prepared.stagingDirectoryPath);
-    const advisoryDirectoryPath = path.join(attemptDirectoryPath, "advisory");
-    await mkdir(advisoryDirectoryPath, { recursive: true });
-    await execFileAsync(process.execPath, [
-      path.join(
-        prepared.taskWorkspacePath,
-        "inputs/builder-skill/scripts/render-visual-review.mjs",
-      ),
-      "--workspace",
-      prepared.taskWorkspacePath,
-      "--source",
-      path.join(prepared.stagingDirectoryPath, "scene.ts"),
-      "--authoring",
-      path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"),
-      "--bootstrap",
-      path.join(prepared.taskWorkspacePath, "inputs/native-scene.bootstrap.json"),
-      "--subject-visual-review-proxy",
-      path.join(
-        prepared.taskWorkspacePath,
-        "inputs/subject-visual-review-proxy.json",
-      ),
-      "--world-plan",
-      path.join(prepared.taskWorkspacePath, "inputs/world-plan.png"),
-      "--entry-target",
-      path.join(prepared.taskWorkspacePath, "inputs/entry-whitebox-target.png"),
-      "--top-down-output",
-      path.join(advisoryDirectoryPath, "builder-top-down-comparison.png"),
-      "--entry-output",
-      path.join(advisoryDirectoryPath, "builder-entry-comparison.png"),
-    ], {
-      cwd: prepared.taskWorkspacePath,
-      encoding: "utf8",
-      maxBuffer: 1_000_000,
-      shell: false,
-      timeout: 30_000,
-    });
-  }
-  const generated = await runNativeBlockGenerationV1(prepared, {
-    process: {
-      async run() {
-        return {
-          exitCode: 0,
-          stdout: `WORLDKIT_LOCAL_CODEX_JOB coding-agent ${prepared.routerRequestId} pid=123 profile=formal model=gpt-5.6-sol reasoning=xhigh\n`,
-          stderr: "",
-          taskOutcome: {
-            kind: "worldkit-codex-task-outcome" as const,
-            schemaVersion: 1 as const,
-            requestId: prepared.routerRequestId,
-            outcome: "completed" as const,
-          },
-        };
-      },
-    },
-    selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
-    reconcile: async () => ({ outcome: "missing" }),
-    cleanup: async () => ({ outcome: "completed" }),
-  });
-  expect(
-    generated.receipt.outcome,
-    JSON.stringify(generated.receipt),
-  ).toBe("completed");
-  const attemptDirectoryPath = path.dirname(generated.sourceDirectoryPath!);
-  await writeFile(
-    path.join(attemptDirectoryPath, "generation-receipt.json"),
-    `${stringifyCanonicalJson(generated.receipt)}\n`,
-  );
-  return {
-    root,
-    casePath,
-    generationInput,
-    prepared,
-    reconstructionCase,
-    profile,
-    attemptDirectoryPath,
-    outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
-  };
+async function completedAttempt(options: Parameters<typeof createNativeBlockPackageAttemptFixtureV1>[0] = {}) {
+  const fixture = await createNativeBlockPackageAttemptFixtureV1(options);
+  temporaryRoots.push(fixture.root);
+  return fixture;
 }
 
 async function expectVisualReviewRejectedBeforeGround(
@@ -599,12 +53,95 @@ async function expectVisualReviewRejectedBeforeGround(
 }
 
 describe("packageNativeBlockAttemptV1", () => {
+  it("rejects the SDK humanoid proxy under the old Hosted policy without changing Registry compilation", async () => {
+    const fixture = await completedAttempt({ subjectDesign: {
+      kind: "registered", subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+    } });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["NATIVE_BLOCK_BUILDER_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED"] });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
+  it("replays the old complete movement check on frozen Brief inputs before admitting a Package", async () => {
+    const fixture = await completedAttempt({ movementModeRows: [
+      "- 陆地步行：沿路行走。", "- 空中飞行（滑翔翼）：飞越峡谷。",
+    ] });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["NATIVE_BLOCK_BUILDER_SUBJECT_MOVEMENT_UNSATISFIED"] });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
+  it("publishes the authored composed Subject, not a fixed G Bot, through real Host Package closure", async () => {
+    const fixture = await completedAttempt({ subjectDesign: {
+      kind: "composed", definition: {
+        id: "cf12-authored-traveler", category: "human", bodyTopology: "biped",
+        semanticClassId: "subject.traveler", displayName: "Authored traveler",
+        description: "Deterministic primitive Subject for Native Host integration.",
+        visualParts: [{
+          id: "body-main", kind: "primitive", shape: { kind: "box", sizeMetersXYZ: [0.5, 1.8, 0.4] },
+          localTransform: { positionMetersXYZ: [0, 0.9, 0] },
+          colliderContribution: "include", semanticTags: ["body"],
+        }],
+        visualBinding: { mode: "static" },
+      },
+    } });
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    const runtime = packaged.verifiedWorldPackage.worldRuntimeBootstrap;
+    const subject = runtime.subjectRuntimeDescriptors[0]!;
+    expect(subject.subjectDefinitionRef).toBe("package://subject-definition/cf12-authored-traveler@1");
+    expect(subject.visualParts.map(({ id }) => id)).toEqual(["body-main"]);
+    expect(runtime.subjectAssets).toEqual([]);
+    expect(packaged.verifiedWorldPackage.gameplayBootstrap.entityDescriptors[0]!.entityDefinitionRef)
+      .toBe(subject.subjectDefinitionRef);
+    expect(packaged.verifiedWorldPackage.receipt.manifest.worldRuntimeBootstrapHash).toBe(runtime.contentHash);
+    expect(packaged.checkResult.outcome).toBe("passed");
+  }, 120_000);
+
+  it.each([false, true])("freezes a no-script fixture with empty semantic targets=%s before generation", async (withoutSemanticTargets) => {
+    const groundExploration: NativeBlockGroundExplorationV1 = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle", region: "middle", standPositionMetersXYZ: [0, 0, 10] },
+        { id: "remote", region: "remote", standPositionMetersXYZ: [0, 0, 3] },
+      ],
+      requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
+    };
+    const fixture = await completedAttempt({ withoutScriptedTraversal: true, withoutSemanticTargets, groundExploration });
+    const request = JSON.parse(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"), "utf8"));
+    expect(request.budgets).not.toHaveProperty("maximumBlockCount");
+    expect(fixture.reconstructionCase.expected.criticalTraversalChecks).toEqual([]);
+    expect(fixture.reconstructionCase.expected.topology.relations).toEqual([]);
+    const intent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
+      path.dirname(fixture.casePath), fixture.reconstructionCase.formalCaptureIntentRef,
+    ), "utf8")));
+    expect(intent.checkpointSpatialCriteria).toEqual([]);
+    expect(intent.topologyRelations).toEqual([]);
+    const authoring = JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath, "source/native-block-authoring.json",
+    ), "utf8"));
+    expect(authoring.groundExploration).toEqual(groundExploration);
+    if (withoutSemanticTargets) {
+      expect(authoring.visualGroups).toEqual([]);
+      expect(intent.semanticCaptureTargetBindings).toEqual([]);
+      expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"), "utf8"))
+        .not.toContain("visualGroupId:");
+    }
+  }, 30_000);
+
   it("exposes the single materialized Profile identity authority through the Host entrypoint", () => {
     expect(typeof createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1)
       .toBe("function");
   });
 
-  it("fails closed when the Profile topology exceeds the controlled Subject envelope", () => {
+  it("accepts legacy one-meter smoothing and steep terrain while rejecting corrupt topology", () => {
     const evidence = (options: Readonly<{
       riseMeters?: number;
       reverseWinding?: boolean;
@@ -643,31 +180,20 @@ describe("packageNativeBlockAttemptV1", () => {
         },
       } as never;
     };
-    const envelope = (maxStepHeightMeters: number, maxSlopeDegrees: number) => ({
-      envelope: { maxStepHeightMeters, maxSlopeDegrees },
-    }) as never;
-
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence(),
-      envelope(0.3, 42),
     )).not.toThrow();
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
-      evidence(),
-      envelope(0.2, 42),
-    )).toThrow(
-      "WORLDKIT_NATIVE_BLOCK_GROUND_ADMISSION_INPUT_INVALID: Block Profile auto-smooth limit 0.3m exceeds controlled Subject maxStepHeightMeters 0.2m",
-    );
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
-      evidence({ riseMeters: 0.5 }),
-      envelope(0.3, 20),
-    )).toThrow(/slope .* exceeds controlled Subject maxSlopeDegrees 20deg/);
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
+      evidence({ riseMeters: 1 }),
+    )).not.toThrow();
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
+      evidence({ riseMeters: 2 }),
+    )).not.toThrow();
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence({ reverseWinding: true }),
-      envelope(0.3, 42),
     )).toThrow(/downward-facing triangle/);
-    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+    expect(() => assertProductionNativeBlockGroundTopologyIntegrityV1(
       evidence({ topologyPolicyHash: `sha256:${"0".repeat(64)}` }),
-      envelope(0.3, 42),
     )).toThrow(/topology identity or Profile policy is stale/);
   });
 
@@ -709,7 +235,7 @@ describe("packageNativeBlockAttemptV1", () => {
     };
     const formalCaptureIntent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
       path.dirname(fixture.casePath), "inputs/formal-world-capture-intent.json"), "utf8")));
-    const input = { executionPurpose: "production" as const, hostRecoveryIndex: 1,
+    const input = { executionPurpose: "production" as const, visualCaptureScope: "world-only" as const, hostRecoveryIndex: 1,
       repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
       caseRef: `artifact://world-reconstruction-case/${fixture.reconstructionCase.id}/case.json`,
       evaluationProfilePath: path.join(path.dirname(fixture.casePath), "evaluation-profile.json"),
@@ -757,6 +283,137 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"))).toEqual(originalReceipt);
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"))).toEqual(originalSource);
   }, 60_000);
+
+  it("derives real Package bounds from all checked Blocks and keeps frozen policy bytes through Ground", async () => {
+    const sceneSource = SCENE_SOURCE.replace('    session.finalize({',
+      '    session.createBlock({ id: "off-camera-background", shape: "full", paletteRole: "background-mass", centerMetersXYZ: [200, -0.5, 10] });\n    session.finalize({');
+    const fixture = await completedAttempt({ sceneSource, worldBoundsPolicy: { mode: "checked-block-layout" } });
+    const policyPath = path.join(fixture.attemptDirectoryPath, "inputs/world-bounds-policy.json");
+    const originalPolicy = await readFile(policyPath);
+    const originalRequest = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
+    const packaged = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: fixture.casePath, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      outputDirectoryPath: fixture.outputDirectoryPath });
+    expect(packaged.groundAnalysisReport.admissionOutcome).toBe("passed");
+    const bounds = packaged.verifiedWorldPackage.manifest.worldBounds;
+    expect(bounds.centerMetersXZ[0] + bounds.sizeMetersXZ[0] / 2).toBe(205);
+    expect(bounds.sizeMetersXZ[0]).toBeGreaterThan(200);
+    for (const collider of packaged.verifiedWorldPackage.nativeSceneContribution.staticColliders) {
+      const xCoordinates = collider.worldPositionsMetersXYZ.filter((_, index) => index % 3 === 0);
+      expect(Math.max(...xCoordinates)).toBeLessThan(100);
+    }
+    expect(await readFile(policyPath)).toEqual(originalPolicy);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
+  }, 60_000);
+
+  it("preserves optional ground evidence through real Package and Ground without changing Case bytes", async () => {
+    const groundExploration = { mode: "source-authored" as const, requiredTargets: [], requiredTraversalBands: [] };
+    const fixture = await completedAttempt({ groundExploration, requireSingleReachableComponent: false });
+    const originalCase = await readFile(fixture.casePath);
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
+      attemptDirectoryPath: fixture.attemptDirectoryPath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.outcome).toBe("completed");
+    expect(packaged.groundAnalysisReport).toMatchObject({ admissionOutcome: "passed",
+      metrics: { requiredTargetCount: 0, requiredTraversalBandCount: 0 } });
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.groundExploration).toEqual(groundExploration);
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    const unsupported = await completedAttempt({
+      groundExploration, requireSingleReachableComponent: false, sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,
+    });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: unsupported.casePath,
+      attemptDirectoryPath: unsupported.attemptDirectoryPath, outputDirectoryPath: unsupported.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: expect.arrayContaining(["native-ground-analysis-rejected"]) });
+  }, 120_000);
+
+  it("admits an optional disconnected ground target through Host without pretending it is reachable", async () => {
+    const groundExploration: NativeBlockGroundExplorationV1 = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] },
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [0, 0, 7] },
+      ],
+      requiredTraversalBands: [],
+    };
+    const fixture = await completedAttempt({
+      groundExploration, requireSingleReachableComponent: false, sceneSource: SCENE_SOURCE
+        .replace('    session.finalize({',
+          '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
+    });
+    const originalCase = await readFile(fixture.casePath);
+    const requestPath = path.join(fixture.attemptDirectoryPath, "generation-request.json");
+    const originalRequest = await readFile(requestPath);
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
+      attemptDirectoryPath: fixture.attemptDirectoryPath, outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.groundAnalysisReport).toMatchObject({
+      analysisOutcome: "passed", admissionOutcome: "passed", failureFacts: [],
+      metrics: { requiredTargetCount: 2, reachableRequiredTargetCount: 1, requiredTraversalBandCount: 0 },
+    });
+    expect(packaged.groundAnalysisReport.metrics.disconnectedStandablePositionCount).toBeGreaterThan(0);
+    expect(packaged.groundAnalysisReport.standableNodes).toContainEqual(expect.objectContaining({
+      positionMetersXYZ: [30, 0, 2], isReachableFromSpawn: false,
+    }));
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.groundExploration).toEqual(groundExploration);
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    expect(await readFile(requestPath)).toEqual(originalRequest);
+  }, 60_000);
+
+  it("admits source-authored curved exploration and rejects unsupported or disconnected remote anchors", async () => {
+    const groundExploration: NativeBlockGroundExplorationV1 = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [6, 0, 7] },
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [6, 0, 2] },
+      ],
+      requiredTraversalBands: [{ id: "middle-garden", halfWidthMeters: 1, isBidirectional: false,
+        centerlineStandPositionsMetersXYZ: [[6, 0, 7], [6, 0, 2]] },
+      { id: "entry-court", halfWidthMeters: 1, isBidirectional: true,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 11], [6, 0, 11], [6, 0, 7]] }],
+    };
+    const curvedSource = SCENE_SOURCE
+      .replace('minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7]',
+        'minimumCenterMetersXYZ: [5, -0.5, 4], repeatCountXYZ: [3, 1, 6]')
+      .replace('minimumCenterMetersXYZ: [-1, -0.5, 1], repeatCountXYZ: [3, 1, 3]',
+        'minimumCenterMetersXYZ: [5, -0.5, 1], repeatCountXYZ: [3, 1, 3]')
+      .replace('    session.finalize({',
+        '    session.createBlockGrid({idPrefix: "bend", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [2, -0.5, 10], repeatCountXYZ: [6, 1, 3] });\n    session.finalize({');
+    const fixture = await completedAttempt({ sceneSource: curvedSource, groundExploration });
+    const originalCase = await readFile(fixture.casePath);
+    const originalRequest = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
+    const packaged = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: fixture.casePath, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(fixture.attemptDirectoryPath, "world-package") });
+    expect(packaged.groundAnalysisReport).toMatchObject({ admissionOutcome: "passed",
+      metrics: { requiredTargetCount: 2, reachableRequiredTargetCount: 2,
+        requiredTraversalBandCount: 2, reachableRequiredTraversalBandCount: 2 } });
+    expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata!.groundExploration).toEqual(groundExploration);
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
+    const failedFixture = await completedAttempt({ sceneSource: curvedSource, groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });
+    await expect(packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: failedFixture.casePath, attemptDirectoryPath: failedFixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(failedFixture.attemptDirectoryPath, "world-package") })).rejects.toThrow();
+    const failure = JSON.parse(await readFile(path.join(failedFixture.attemptDirectoryPath, "ground-analysis-report.json"), "utf8"));
+    expect(failure.admissionOutcome).toBe("failed");
+    expect(failure.identity.worldPackageRootHash).not.toBe(packaged.worldPackageRootHash);
+    expect(failure.failureFacts).toContainEqual(expect.objectContaining({ targetId: "remote-garden" }));
+    const islandFixture = await completedAttempt({ sceneSource: curvedSource.replace('    session.finalize({',
+        '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
+      groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });
+    await expect(packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: islandFixture.casePath, attemptDirectoryPath: islandFixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(islandFixture.attemptDirectoryPath, "world-package") })).rejects.toThrow();
+    const disconnected = JSON.parse(await readFile(path.join(islandFixture.attemptDirectoryPath, "ground-analysis-report.json"), "utf8"));
+    expect(disconnected.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "remote-garden", metricId: "ground-target-reachability",
+    }));
+  }, 120_000);
 
   it("checks and binds the generated Layout before atomically publishing one verified Package", async () => {
     const fixture = await completedAttempt();
@@ -943,6 +600,73 @@ describe("packageNativeBlockAttemptV1", () => {
     ), "utf8")).toBe("outcome: passed\n");
   }, 60_000);
 
+  it("publishes real Ground and Package despite global-root support warnings from lower decoration", async () => {
+    // An unrelated low visual changes the structural metric's global root but
+    // neither the contributed playable floor nor its actual Capsule support.
+    const fixture = await completedAttempt({
+      sceneSource: SCENE_SOURCE.replace(
+        "    session.finalize({ staticColliders: [",
+        '    session.createBlock({ id: "low-decoration", shape: "full", paletteRole: "background-mass", centerMetersXYZ: [12, -8.5, 12] });\n    session.finalize({ staticColliders: [',
+      ),
+    });
+    const prepare = nativePackageInput.prepareFrozenBabylonNativeWorldPackageBuildInputV1;
+    const preparedInputs: Awaited<ReturnType<typeof prepare>>[] = [];
+    // Observe the actual checked epoch consumed by Ground. The generic Native
+    // Check receipt does not expose Block Profile metrics; no result is faked.
+    const observer = vi.spyOn(nativePackageInput, "prepareFrozenBabylonNativeWorldPackageBuildInputV1")
+      .mockImplementation(async (...args) => {
+        const prepared = await prepare(...args);
+        preparedInputs.push(prepared);
+        return prepared;
+      });
+    try {
+      const packaged = await packageNativeBlockAttemptV1({
+        repositoryRoot: REPOSITORY_ROOT,
+        attemptDirectoryPath: fixture.attemptDirectoryPath,
+        casePath: fixture.casePath,
+        outputDirectoryPath: fixture.outputDirectoryPath,
+      });
+      expect(packaged.outcome).toBe("completed");
+      expect(packaged.checkResult.outcome).toBe("passed");
+      expect(preparedInputs).toHaveLength(1);
+      const profileCheck = preparedInputs[0]?.nativeBlockCheckedEpochEvidence?.checkedLayout.checkResult;
+      expect(profileCheck).toBeDefined();
+      if (profileCheck === undefined) throw new Error("real checked epoch evidence missing");
+      expect(profileCheck.outcome).toBe("passed");
+      expect(profileCheck.metrics.unsupportedBlockCount).toBe(profileCheck.metrics.blockCount - 1);
+      expect(profileCheck.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+            severity: "warning",
+            location: { kind: "block", blockId: "gate" },
+          }),
+          expect.objectContaining({
+            code: "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+            severity: "warning",
+            location: { kind: "block", blockId: "foreground-x1-y0-z7" },
+          }),
+        ]),
+      );
+      expect(packaged.groundAnalysisReport.admissionOutcome).toBe("passed");
+      expect(packaged.groundAnalysisReport.standableNodes).toEqual(
+        expect.arrayContaining([expect.objectContaining({
+          positionMetersXYZ: [0, 0, 18], isReachableFromSpawn: true,
+        })]),
+      );
+      expect(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.blocks).toEqual(
+        expect.arrayContaining([expect.objectContaining({
+          blockId: "low-decoration", centerMetersXYZ: [12, -8.5, 12],
+        })]),
+      );
+      expect(packaged.worldPackageRef).toBe(
+        packaged.verifiedWorldPackage.receipt.worldPackageRef,
+      );
+    } finally {
+      observer.mockRestore();
+    }
+  }, 60_000);
+
   it("fails closed after Native Check when one Builder advisory output is missing", async () => {
     const fixture = await completedAttempt();
     await rm(path.join(
@@ -988,15 +712,10 @@ describe("packageNativeBlockAttemptV1", () => {
     );
   }, 60_000);
 
-  it("joins captured displayGap through the checked Profile inventory identity", async () => {
-    const fixture = await completedAttempt({
-      sceneSource: MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE,
-    });
-
-    await expectVisualReviewRejectedBeforeGround(
-      fixture,
-      "native-block-visual-review-layout-mismatch",
-    );
+  it("rejects the removed display-gap override before producing advisory artifacts", async () => {
+    await expect(completedAttempt({
+      sceneSource: REMOVED_DISPLAY_GAP_SCENE_SOURCE,
+    })).rejects.toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
   }, 60_000);
 
   it("joins captured Spawn exactly to the checked Native contribution", async () => {
@@ -1078,21 +797,23 @@ describe("packageNativeBlockAttemptV1", () => {
     );
   }, 60_000);
 
-  it("fails closed when the Host-owned Subject visual proxy bytes drift", async () => {
+  it("fails closed when frozen Subject resource context bytes drift", async () => {
     const fixture = await completedAttempt();
     const proxyPath = path.join(
       fixture.attemptDirectoryPath,
-      "inputs/subject-visual-review-proxy.json",
+      "inputs/subject-host-context.json",
     );
     await writeFile(
       proxyPath,
       Buffer.concat([await readFile(proxyPath), Buffer.from("\n")]),
     );
 
-    await expectVisualReviewRejectedBeforeGround(
-      fixture,
-      "native-block-subject-visual-review-proxy-stale",
-    );
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath, outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["host-identity-closure-mismatch"] });
+    await expect(lstat(path.join(fixture.attemptDirectoryPath, "native-check-result.json")))
+      .rejects.toMatchObject({ code: "ENOENT" });
   }, 60_000);
 
   it("fails closed when a durable planning image no longer closes Case and Request identity", async () => {
@@ -1123,6 +844,28 @@ describe("packageNativeBlockAttemptV1", () => {
       diagnostics: ["WORLDKIT_NATIVE_BLOCK_VISUAL_IDENTITY_BINDING_INVALID"],
     });
   }, 60_000);
+
+  it("publishes the legacy source Spawn below the smoothed top without changing frozen inputs", async () => {
+    const sceneSource = SCENE_SOURCE.replace(
+      '    session.finalize({ staticColliders: [',
+      '    session.createBlockGrid({idPrefix: "spawn-adjacent-half", shape: "half", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, 0.25, 11], repeatCountXYZ: [1, 1, 8] });\n    session.finalize({ staticColliders: [',
+    );
+    const fixture = await completedAttempt({ sceneSource });
+    const originalCase = await readFile(fixture.casePath, "utf8");
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+    expect(packaged.verifiedWorldPackage.nativeSceneContribution.spawnMarker.positionMetersXYZ).toEqual([0, 0, 18]);
+    expect(await readFile(fixture.casePath, "utf8")).toBe(originalCase);
+    const report = JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath, "ground-analysis-report.json",
+    ), "utf8"));
+    expect(report).toMatchObject({ admissionOutcome: "passed" });
+    expect(report.failureFacts).toEqual([]);
+  }, 120_000);
 
   it("fails closed before Package publication when the Spawn Capsule footprint is not fully supported", async () => {
     const fixture = await completedAttempt({
@@ -1182,7 +925,9 @@ describe("packageNativeBlockAttemptV1", () => {
 
   it("reuses Runtime surface admission before Package publication when final topology obstructs the Spawn Capsule", async () => {
     const fixture = await completedAttempt({
-      sceneSource: SPAWN_ADJACENT_STEP_SCENE_SOURCE,
+      // Legacy smoothing changes the adjacent-step center height; use a flat
+      // supported floor and an explicit head obstruction for this rejection.
+      sceneSource: SPAWN_CAPSULE_OBSTRUCTION_SCENE_SOURCE,
     });
 
     const rejected = await packageNativeBlockAttemptV1({

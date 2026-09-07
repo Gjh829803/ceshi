@@ -1,15 +1,19 @@
-import { canonicalJsonBytes } from "@whitebox-world/protocol";
+import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
+  hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
+  parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
 } from "@whitebox-world/runtime-contracts";
 import { evaluateWorldReconstructionV1 } from "@whitebox-world/validation";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 } from "@whitebox-world/runtime-babylon/testing";
 
 import {
   assertColliderOverlaySourceJoinClosureV1,
@@ -18,19 +22,16 @@ import {
   projectColliderEvidenceRoleV1,
   projectMeasuredTraversalCheck,
 } from "./evaluate-evidence-set.js";
-import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
+import { createEvidenceSetFixtureInputV1, createSemanticViewObservationSetFixtureV1 } from "./evaluate-fixture.test-support.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
 
 const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
-  kind: "reach-bounds" as const,
+  kind: "reach-position" as const,
   checkpointId: "approach",
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
-  sourceBoundsMeters: {
-    minimumMetersXYZ: [-5, -1, -5] as const,
-    maximumMetersXYZ: [5, 0, 5] as const,
-  },
+  standPositionMetersXYZ: [0, 0, 0] as const,
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
 }, {
@@ -97,6 +98,78 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("keeps Opening pixel evidence unchanged when structural projection shifts but bound pixels do not", () => {
+    const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
+    const before = buildWorldReconstructionEvidenceSetV1(fixture);
+    const openingObservation = parseFormalOpeningObservationV1({
+      ...fixture.openingObservation,
+      visualGroups: fixture.openingObservation.visualGroups.map((group) => ({
+        ...group,
+        normalizedBounds: { ...group.normalizedBounds,
+          minXBasisPoints: group.normalizedBounds.minXBasisPoints + 1000,
+          maxXBasisPoints: group.normalizedBounds.maxXBasisPoints + 1000 },
+        normalizedCenter: { ...group.normalizedCenter, xBasisPoints: group.normalizedCenter.xBasisPoints + 1000 },
+      })),
+    });
+    const semanticViewObservationSet = createSemanticViewObservationSetFixtureV1(openingObservation, fixture.captureReceipt.views);
+    const captureReceipt = parseFormalWorldCaptureReceiptV1({ ...fixture.captureReceipt,
+      openingObservationContentHash: hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
+    });
+    const after = buildWorldReconstructionEvidenceSetV1({ ...fixture, openingObservation, semanticViewObservationSet, captureReceipt });
+    const beforeOpening = before.observedDimensions.find((row) => row.dimensionId === "opening-composition")!;
+    const afterOpening = after.observedDimensions.find((row) => row.dimensionId === "opening-composition")!;
+    expect(afterOpening.observed).toEqual(beforeOpening.observed);
+    expect(afterOpening.evidenceRefs).toContain(fixture.captureReceipt.views[0]!.identityMaskPngArtifactRef);
+    const result = evaluateWorldReconstructionV1({ case: fixture.reconstructionCase, profile: fixture.evaluationProfile, evidence: after });
+    expect(result.dimensions.find((row) => row.dimensionId === "opening-composition")?.status).toBe("passed");
+  });
+
+  it("binds a no-script Capture to its ready Snapshot and reports traversal incomplete", async () => {
+    const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true, withoutScriptedTraversal: true });
+    const ports = {
+      resetWithInitialControlBinding: vi.fn(async () => { throw new Error("unexpected route reset"); }),
+      awaitRenderReady: vi.fn(async () => { throw new Error("unexpected route render"); }),
+      runFixedInput: vi.fn(async () => { throw new Error("unexpected route input"); }),
+      snapshot: vi.fn(() => { throw new Error("unexpected Snapshot read"); }),
+      captureArtifactView: vi.fn(() => { throw new Error("unexpected route capture"); }),
+      readCommittedSupportEvidence: vi.fn(() => { throw new Error("unexpected route support query"); }),
+    };
+    const traversal = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversal(
+      fixture.captureReceipt.formalRequest, fixture.openingObservation.resetReadySnapshot,
+      fixture.captureReceipt.runtimeSessionId, "player", fixture.captureReceipt.sdkOwnerIdentities, ports,
+    );
+    expect(traversal.checks).toEqual([]);
+    expect(traversal).toEqual(fixture.scriptedTraversalObservation);
+    expect(traversal.resetReadySnapshotHash).toBe(fixture.captureReceipt.readySnapshotHash);
+    expect(fixture.spawnSupportObservation.resetReadySnapshotHash).toBe(fixture.captureReceipt.readySnapshotHash);
+    expect(fixture.spawnSupportObservation.sampledSnapshot.world.simulationTick)
+      .toBe(fixture.captureReceipt.readySnapshot.world.simulationTick + 1);
+    for (const port of Object.values(ports)) expect(port).not.toHaveBeenCalled();
+    // The fixture receipt is bound to the same exact empty observation bytes.
+    const evidence = buildWorldReconstructionEvidenceSetV1({ ...fixture, scriptedTraversalObservation: traversal });
+    const result = evaluateWorldReconstructionV1({ case: fixture.reconstructionCase,
+      profile: fixture.evaluationProfile, evidence });
+    expect(result.dimensions.find(({ dimensionId }) => dimensionId === "critical-traversal")?.status).toBe("incomplete");
+    expect(result.outcome).toBe("incomplete");
+    // A rehashed valid support sample cannot silently replace the one whose
+    // bytes were accepted in the Capture receipt.
+    const sample = fixture.spawnSupportObservation.sampledSnapshot;
+    const changedSample = { ...sample, world: { ...sample.world, worldStateHash: H("8") } };
+    const changedSupport = parseFormalSpawnSupportObservationV1({ ...fixture.spawnSupportObservation,
+      sampledSnapshot: changedSample, sampledSnapshotHash: sha256CanonicalJson(changedSample) });
+    expect(hashFormalSpawnSupportObservationV1(changedSupport))
+      .not.toBe(fixture.captureReceipt.spawnSupportObservationContentHash);
+    expect(() => buildWorldReconstructionEvidenceSetV1({ ...fixture, spawnSupportObservation: changedSupport }))
+      .toThrow("spawn observation content hash does not match Capture Receipt");
+    expect(() => parseFormalScriptedTraversalObservationV1({
+      ...createEvidenceSetFixtureInputV1().scriptedTraversalObservation, checks: [],
+    })).toThrow();
+    expect(() => parseFormalScriptedTraversalObservationV1({
+      ...traversal, checks: createEvidenceSetFixtureInputV1().scriptedTraversalObservation.checks,
+    })).toThrow();
+  });
+
   it("keeps an all-not-required Opening subset empty through ordinary evaluation", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,
@@ -133,8 +206,8 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       "world-top-down",
     ]);
     expect(silhouette.observed.views[0]!.targets.map(
-      ({ structuralProjection }) => structuralProjection.outcome,
-    )).toEqual(["outside-viewport", "outside-viewport"]);
+      ({ visiblePixelProjection }) => visiblePixelProjection.outcome,
+    )).toEqual(["not-visible", "not-visible"]);
 
     const result = evaluateWorldReconstructionV1({
       case: fixture.reconstructionCase,
@@ -196,7 +269,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     );
   });
 
-  it("derives step evidence from the selected trusted Block shape", () => {
+  it("derives ground evidence solely from the explicit static-surface binding", () => {
     expect(projectColliderEvidenceRoleV1({
       kind: "static-surface",
       surfaceEntityId: "step-surface",
@@ -204,7 +277,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:step-surface:step-top",
-    }, ["step"])).toBe("step");
+    })).toBe("ground");
     expect(projectColliderEvidenceRoleV1({
       kind: "static-surface",
       surfaceEntityId: "group-surface",
@@ -212,7 +285,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:group-surface:group-top",
-    }, ["step", "full"])).toBe("ground");
+    })).toBe("ground");
   });
 
   it("canonicalizes adjacent opening distance pairs independently of depth order", () => {
@@ -298,8 +371,8 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       { dimensionId: "opening-composition", observed: { orderedTargetRefs: ["worldkit://composition-target/package-fixture-opening@1", "worldkit://composition-target/package-fixture-upper@1"], distances: [{ distanceBasisPoints: 300 }] } },
       { dimensionId: "semantic-silhouette", observed: { views: [
         { viewId: "opening", targets: [
-          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", structuralProjection: { outcome: "projected" } },
-          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", structuralProjection: { outcome: "projected" } },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", visiblePixelProjection: { outcome: "visible" } },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", visiblePixelProjection: { outcome: "visible" } },
         ] },
         { viewId: "world-side", targets: [
           { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group" },

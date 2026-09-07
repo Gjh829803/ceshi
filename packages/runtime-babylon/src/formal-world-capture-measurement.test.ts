@@ -43,7 +43,7 @@ const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 
 const alphaGroup = Object.freeze({
-  visualGroupId: "alpha-group",
+  frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "alpha-group",
   acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
   semanticClassId: "worldkit.native-block.group.alpha-group",
   identityColorHex: "#112233",
@@ -54,7 +54,7 @@ const alphaGroup = Object.freeze({
 } satisfies BabylonNativeBlockMaterializerVisualGroupV1);
 
 const zetaGroup = Object.freeze({
-  visualGroupId: "zeta-group",
+  frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "zeta-group",
   acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
   semanticClassId: "worldkit.native-block.group.zeta-group",
   identityColorHex: "#445566",
@@ -983,8 +983,8 @@ describe("formal world capture projection measurement", () => {
       });
   });
 
-  it("rejects an empty visual inventory", () => {
-    // An empty Package/semantic/live join used to measure as an empty success.
+  it("measures an exact empty semantic join without scanning ordinary world meshes", () => {
+    // The scene still contains real meshes; none acquires a semantic identity by scanning.
     const fixture = createFixture();
     fixture.input = {
       ...fixture.input,
@@ -1000,8 +1000,7 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
-      .toThrow(/VISUAL_INVENTORY/);
+    expect(measureFormalWorldCaptureViewV1(fixture.input).targets).toEqual([]);
   });
 
   it.each([

@@ -8,6 +8,9 @@ import {
   validateWhiteboxTriviewManifestV1,
   type WhiteboxTriviewManifestV1,
 } from "@whitebox-world/runtime-contracts";
+import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
+import { visualCapturePaths } from "./visual-capture-paths.js";
+import type { WorldGenerationSceneSourceKindV1 } from "@whitebox-world/scene-authoring-contracts";
 
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
@@ -44,11 +47,13 @@ async function writeAtomic(filePath: string, content: string): Promise<void> {
 export async function finalizeStyledTriviews(options: {
   sceneId: string;
   sceneRoot: string;
+  sceneSource?: WorldGenerationSceneSourceKindV1;
 }): Promise<void> {
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(options.sceneId)) throw new Error("scene-id is invalid.");
   const sceneRoot = await realpath(path.resolve(options.sceneRoot));
   const styledOpeningFramePath = path.join(sceneRoot, "styled-opening-frame.png");
-  const captureManifestPath = path.join(sceneRoot, "triviews", "whitebox-triview-manifest.json");
+  const capturePaths = visualCapturePaths(options.sceneSource);
+  const captureManifestPath = path.join(sceneRoot, capturePaths.manifest);
   await assertPng(styledOpeningFramePath);
   const captureManifest = JSON.parse(
     await readFile(captureManifestPath, "utf8"),
@@ -58,10 +63,16 @@ export async function finalizeStyledTriviews(options: {
     throw new Error(captureErrors.map(({ code, instancePath, message }) =>
       `${code} ${instancePath}: ${message}`).join("\n"));
   }
+  parseVisualGenerationPromptsV2(JSON.parse(await readFile(
+    path.join(sceneRoot, "visual-generation-prompts.json"), "utf8",
+  )), {
+    sceneId: options.sceneId,
+    visualTargetIds: captureManifest.whiteboxTriviews.map(({ visualTargetId }) => visualTargetId),
+  });
 
   const targets = [];
   for (const target of captureManifest.whiteboxTriviews) {
-    const whiteboxPath = path.join(sceneRoot, "triviews", target.imageUri);
+    const whiteboxPath = path.join(sceneRoot, capturePaths.triviewRoot, target.imageUri);
     const styledPath = path.join(sceneRoot, "triviews", target.visualTargetId, "styled-triview.png");
     await Promise.all([assertPng(whiteboxPath), assertPng(styledPath)]);
     targets.push({
@@ -69,6 +80,7 @@ export async function finalizeStyledTriviews(options: {
       runtimeEntityIds: [...target.runtimeEntityIds],
       role: target.role,
       semanticClassId: target.semanticClassId,
+      views: [...target.views],
       whiteboxTriview: {
         path: canonicalRelativePath(sceneRoot, whiteboxPath),
         contentHash: await hash(whiteboxPath),
@@ -113,6 +125,8 @@ export async function main(arguments_: readonly string[] = process.argv.slice(2)
   await finalizeStyledTriviews({
     sceneId: option(arguments_, "--scene-id"),
     sceneRoot: option(arguments_, "--scene-root"),
+    sceneSource: visualCapturePaths(arguments_.includes("--scene-source")
+      ? option(arguments_, "--scene-source") : undefined).source,
   });
   process.stdout.write("ok\n");
 }

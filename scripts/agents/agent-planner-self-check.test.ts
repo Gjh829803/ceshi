@@ -204,7 +204,7 @@ const VALID_BRIEF = `# WorldKit Scene Brief
 月光、衣物纹理和屋顶材质只属于后续渲染层，不进入碰撞几何。
 
 ## 运动模式
-陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
+- 陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
 
 ## 空间
 前景桥梁，中景山谷与瀑布，远景月宫和群山。
@@ -235,6 +235,12 @@ interface PlannerScenario {
 }
 
 const SCENARIOS: readonly PlannerScenario[] = [
+  {
+    name: "ordered multi-mode equipment intent",
+    brief: VALID_BRIEF.replace(/## 运动模式\n[\s\S]*?\n\n## 空间/,
+      "## 运动模式\n- 空中飞行（滑翔翼）：飞行。\n- 陆地步行：步行。\n- 磁力吸附：沿墙面移动。\n\n## 空间"),
+    expectedStatus: "passed", expectedExitCode: 0, expectedDiagnostics: [],
+  },
   {
     name: "valid Scene Brief",
     brief: VALID_BRIEF,
@@ -409,6 +415,21 @@ function nativePlannerArguments(
 }
 
 describe("source-generated Planner self-check parity", { timeout: 30_000 }, () => {
+  it.each([false, true])("preserves old support-color behavior with ground-after-flight=%s", async withGround => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-mixed-movement-"));
+    try {
+      const brief = VALID_BRIEF.replace(/## 运动模式\n[\s\S]*?\n\n## 空间/,
+        `## 运动模式\n- 空中飞行：进入空中。${withGround ? "\n- 陆地步行：落地探索。" : ""}\n\n## 空间`);
+      const inputs = await writePlannerInputs(root, brief);
+      await writeFile(inputs.worldPlanPath, await nativeWorldPlanPng({ includeTraversable: false }));
+      await writeFile(inputs.entryPath, await nativeEntryPng());
+      const result = await runPlannerSelfCheck({ sceneSourceKind: "babylon-native", sceneId: "mixed-movement",
+        briefPath: inputs.briefPath, worldPlanPath: inputs.worldPlanPath, entryPath: inputs.entryPath,
+        reportPath: path.join(root, "report.json") });
+      expect(result.status).toBe(withGround ? "failed" : "passed");
+      expect(result.diagnostics.map(row => row.code)).toEqual(withGround ? ["WORLD_PLAN_TRAVERSABLE_COLOR_MISSING"] : []);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
   it("validates the Native closed profile without Height Intent inputs", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-parity-"));
     try {
@@ -1021,6 +1042,6 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
       } finally {
         await rm(root, { recursive: true, force: true });
       }
-    }, 30_000);
+    }, 180_000); // Rebuilds the frozen SDK type graph, like agent-self-check.test.ts.
   }
 });

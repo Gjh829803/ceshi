@@ -51,8 +51,7 @@ const RESOURCE_BUDGET = Object.freeze({
 
 const CORPUS_COLLIDER_RESOLUTION = Object.freeze({
   "collider-half-meter-blocker": Object.freeze({
-    id: "collider-corpus-ordinary-and-blocked-steps-ground-main",
-    includeVertex: (_x: number, y: number, z: number) => y >= 0.2 && z <= -3.2,
+    id: "collider-corpus-ordinary-and-blocked-steps-solid-half-meter-blocker",
   }),
   "collider-t-north-wall": Object.freeze({
     id: "collider-corpus-t-shaped-traversal-solid-t-north-wall",
@@ -179,6 +178,8 @@ function verifiedPackage(
     createBabylonNativeBlockMaterializerMetadataV1({
       authoringLayoutBinding: Object.freeze({
         kind: "native-block-authoring-layout-binding",
+        groundExploration: { mode: "case-defined" as const },
+        openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
         schemaVersion: 1,
         caseHash: templateMetadata.caseHash,
         authoringManifestHash: templateMetadata.authoringManifestHash,
@@ -191,7 +192,7 @@ function verifiedPackage(
             (group, index) => Object.freeze({
               acceptanceTargetRef:
                 `worldkit://acceptance-target/bwb5-${group.id}@1`,
-              visualGroupId: group.id,
+              frontDirectionWorldXZ: [0, -1] as const, visualGroupId: group.id,
               semanticClassId: `worldkit.native-block.group.${group.id}`,
               identityColorHex:
                 `#${(index + 1).toString(16).padStart(6, "0").toUpperCase()}` as `#${string}`,
@@ -372,7 +373,7 @@ function expectBlockedAtCenterLimit(
 }
 
 describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
-  it("keeps 0.25m pass, 0.5m block, reset hash, and ledge air on ordinary-and-blocked-steps", async () => {
+  it("keeps smoothed 0.5m pass, explicit 0.5m block, reset hash, and ledge air on ordinary-and-blocked-steps", async () => {
     const { runtime, verified } = await createRuntime(
       "ordinary-and-blocked-steps",
     );
@@ -405,8 +406,8 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       const crossedSubject = subjectOf(crossed, entityId);
       expect(crossedSubject.positionMetersXYZ[2]).toBeLessThan(-1.5);
       expect(crossedSubject.positionMetersXYZ[2]).toBeGreaterThan(-2.5);
-      expect(crossedSubject.positionMetersXYZ[1]).toBeGreaterThan(0.24);
-      expect(crossedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(crossedSubject.positionMetersXYZ[1]).toBeGreaterThan(0.4);
+      expect(crossedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.56);
       expect(crossedSubject.movementMedium).toBe("ground");
       const elevated = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -415,8 +416,8 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       const elevatedSubject = subjectOf(elevated, entityId);
       expect(elevatedSubject.positionMetersXYZ[2]).toBeLessThan(-2.5);
       expect(elevatedSubject.positionMetersXYZ[2]).toBeGreaterThan(-3.5);
-      expect(elevatedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
-      expect(elevatedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(elevatedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.5);
+      expect(elevatedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.56);
       expect(elevatedSubject.movementMedium).toBe("ground");
       const blocked = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -432,8 +433,8 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         blockedSubject.positionMetersXYZ[2],
         blockerCenterLimitMetersZ,
       );
-      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
-      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.5);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.56);
       expect(blockedSubject.movementMedium).toBe("ground");
       const hash = sha256CanonicalJson(blocked);
       await resetAndBind(runtime, entityId);
@@ -606,7 +607,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       const overlookSubject = subjectOf(overlook, mountainEntity);
       expect(overlookSubject.positionMetersXYZ[2]).toBeLessThan(-3.5);
       expect(overlookSubject.positionMetersXYZ[2]).toBeGreaterThan(-4.5);
-      expect(overlookSubject.positionMetersXYZ[1]).toBeGreaterThan(0.24);
+      expect(overlookSubject.positionMetersXYZ[1]).toBeGreaterThan(0.4);
       expect(overlookSubject.movementMedium).toBe("ground");
       const departedOverlook = await mountainRuntime.runFixedInput({
         actions: ["move-right"],

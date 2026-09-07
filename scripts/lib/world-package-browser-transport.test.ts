@@ -18,7 +18,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   readWorldPackageDirectoryV1,
@@ -70,6 +70,61 @@ afterEach(async () => {
 });
 
 describe("WorldPackage browser transport", () => {
+  it("performs only the reader's admission work during startup and each fresh read", async () => {
+    const contributionText = await readFile(path.join(packageDirectoryPath,
+      "native/contribution.json"), "utf8");
+    // Observe actual JSON parsing; do not replace any validation result. A
+    // second complete admission doubles this work even on a tiny fixture.
+    const parse = vi.spyOn(JSON, "parse");
+    const countContributionParses = () => parse.mock.calls.filter(
+      args => args[0] === contributionText,
+    ).length;
+    let transport: Awaited<ReturnType<typeof createWorldPackageBrowserTransportV1>> | undefined;
+    try {
+      await readWorldPackageDirectoryV1({ packageDirectoryPath, ...READ_LIMITS });
+      const oneAdmissionCount = countContributionParses();
+      expect(oneAdmissionCount).toBeGreaterThan(0);
+      parse.mockClear();
+      transport = await createWorldPackageBrowserTransportV1({ packageDirectoryPath });
+      expect(transport.worldPackageRootHash).toBe(packageDirectory.receipt.worldPackageRootHash);
+      expect(countContributionParses()).toBe(oneAdmissionCount);
+      parse.mockClear();
+      await expect(transport.readReceipt()).resolves.toEqual(canonicalJsonBytes(packageDirectory.receipt));
+      expect(countContributionParses()).toBe(oneAdmissionCount);
+      parse.mockClear();
+      const expectedFile = packageDirectory.files.find(file => file.path === "native/scene.mjs")!;
+      await expect(transport.read(expectedFile.path)).resolves.toEqual(expectedFile.bytes);
+      expect(countContributionParses()).toBe(oneAdmissionCount);
+    } finally {
+      transport?.dispose();
+      parse.mockRestore();
+    }
+  });
+
+  it("reads startup bytes from the admitted snapshot without weakening later freshness checks", async () => {
+    let readCount = 0;
+    const transport = await createWorldPackageBrowserTransportV1({ packageDirectoryPath }, {
+      readDirectory: async input => { readCount += 1; return readWorldPackageDirectoryV1(input); },
+    });
+    const expectedBytes = packageDirectory.files.find(file => file.path === "native/scene.mjs")!.bytes;
+    const snapshot = transport.readStartupSnapshot("native/scene.mjs");
+    expect(snapshot.fileBytes).toEqual(expectedBytes);
+    expect(snapshot.receiptBytes).toEqual(canonicalJsonBytes(packageDirectory.receipt));
+    snapshot.fileBytes[0] = snapshot.fileBytes[0]! ^ 1;
+    snapshot.receiptBytes[0] = snapshot.receiptBytes[0]! ^ 1;
+    expect(transport.readStartupSnapshot("native/scene.mjs").fileBytes).toEqual(expectedBytes);
+    expect(readCount).toBe(1);
+    expect(() => transport.readStartupSnapshot("../scene.mjs")).toThrow("WORLD_PACKAGE_BROWSER_PATH_UNADMITTED");
+    await replaceBytes("native/scene.mjs", bytes => { bytes[0] = bytes[0]! ^ 1; return bytes; });
+    // A startup snapshot makes no freshness claim. Browser requests still fail
+    // closed on on-disk drift instead of falling back to these earlier bytes.
+    expect(transport.readStartupSnapshot("native/scene.mjs").fileBytes).toEqual(expectedBytes);
+    await expect(transport.read("native/scene.mjs")).rejects.toThrow("WORLD_PACKAGE_BROWSER_PACKAGE_DRIFTED");
+    await expect(transport.readReceipt()).rejects.toThrow("WORLD_PACKAGE_BROWSER_PACKAGE_DRIFTED");
+    transport.dispose();
+    expect(() => transport.readStartupSnapshot("native/scene.mjs")).toThrow("WORLD_PACKAGE_BROWSER_TRANSPORT_DISPOSED");
+  });
+
   it("coalesces overlapping Package freshness verification", async () => {
     let readCount = 0;
     let signalVerificationStarted!: () => void;

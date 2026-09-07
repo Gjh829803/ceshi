@@ -35,6 +35,7 @@ import type {
   MountedOnRelationshipStateV1,
   SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
+import { admitBabylonNativeOpeningCameraV1 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldAdapterDescriptorV1 } from
   "@whitebox-world/runtime-host";
 import type {
@@ -99,6 +100,7 @@ import { admitBabylonNativeSurfacesV1 } from
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
 import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
 import { CameraComponentV1 } from "./camera-component";
+import { NativeBlockSubjectOcclusionFadeV1, nativeBlockOcclusionBatchesFromLiveHandlesV1 } from "./native-block-subject-occlusion.js";
 import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
@@ -152,6 +154,7 @@ import { GoldenHumanoidPresentationContextProjectionV1 } from
   "./golden-humanoid-presentation-context";
 import {
   captureBabylonArtifactViewV1,
+  prepareBabylonArtifactIdentityCaptureV1,
   type BabylonArtifactCaptureRequestV1,
   type BabylonArtifactCaptureResultV1,
 } from "./artifact-capture";
@@ -184,6 +187,7 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
   materializeBabylonNativeBlockVisualBatchesV1,
   peekBabylonNativeBlockLiveHandleRegistryV1,
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 
 function residencyEvidence(
@@ -279,6 +283,36 @@ function cameraContextWithLockedLocalSocketsV1(
       ),
     },
   });
+}
+
+/** Observational failure evidence only; committed state belongs to the transaction. */
+export interface BabylonFixedInputFailureDiagnosticV1 {
+  readonly stage: "prepare" | "rollback";
+  readonly errorCode: string;
+}
+
+function fixedInputFailureCode(error: unknown): string {
+  if (!(error instanceof Error)) return "WORLDKIT_RUNTIME_INTERNAL_FAILURE";
+  const code = /^([A-Z0-9][A-Z0-9_]+):\s*.+$/s.exec(error.message)?.[1];
+  if (code !== undefined) return code;
+  if (error instanceof AggregateError) {
+    for (const cause of error.errors) {
+      const nested = fixedInputFailureCode(cause);
+      if (nested !== "WORLDKIT_RUNTIME_INTERNAL_FAILURE") return nested;
+    }
+  }
+  return "WORLDKIT_RUNTIME_INTERNAL_FAILURE";
+}
+
+export function isRecoverablePreparedFixedInputFailure(
+  error: unknown,
+  diagnostic: BabylonFixedInputFailureDiagnosticV1 | undefined,
+): boolean {
+  return diagnostic?.stage === "prepare" &&
+    diagnostic.errorCode === "3C_INPUT_INVALID" &&
+    error instanceof Error && error.name === "WorldSessionOperationErrorV1" &&
+    error.message.startsWith("ADAPTER_FIXED_INPUT_FAILED:") &&
+    error.message.includes("The Runtime Adapter could not prepare the fixed simulation Tick.");
 }
 
 export type BabylonWorldRuntimeInitializationStageV1 =
@@ -950,6 +984,7 @@ export class BabylonWorldRuntime {
   private fixedInputReplayHistory: readonly FixedInputReplayHistoryEntryV1[] = [];
   private fixedInputReplayBaseline: FixedInputReplayBaselineCheckpointV1 | undefined;
   private isReplayingFixedInputHistory = false;
+  private latestFixedInputFailureDiagnostic: BabylonFixedInputFailureDiagnosticV1 | undefined;
   private preparedFixedInput: Readonly<{
     beforeRuntimeProjection: BabylonRuntimeProjectionV1;
     beforeWorldProjection: ReturnType<
@@ -1107,6 +1142,7 @@ export class BabylonWorldRuntime {
         options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ;
       let effectiveCamera = options.worldRuntimeBootstrap.initialCamera;
       let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
+      let nativeSubjectOcclusion: NativeBlockSubjectOcclusionFadeV1 | undefined;
       if (!isNil(nativeScene) && !isNil(preparedNativeScene)) {
         options.onInitializationStage?.("native-scene");
         const nativeResult = await admitBabylonNativeSceneCandidateV1({
@@ -1175,6 +1211,11 @@ export class BabylonWorldRuntime {
           );
         }
         const admittedNativeContribution = nativeContribution;
+        const blockMetadata = preparedNativeScene.verifiedWorldPackage.nativeBlockMaterializerMetadata;
+        if (!isNil(blockMetadata)) {
+          effectiveCamera = { ...effectiveCamera,
+            ...admitBabylonNativeOpeningCameraV1(blockMetadata.openingCamera, options.worldRuntimeBootstrap) };
+        }
         runtimeSubjects = resolveBabylonNativeRuntimeSubjectsV1(
           options.worldRuntimeBootstrap,
           admittedNativeContribution.spawnMarker,
@@ -1189,7 +1230,17 @@ export class BabylonWorldRuntime {
             "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTROLLED_SUBJECT_MISSING: Native Runtime Bootstrap has no controlled Subject descriptor.",
           );
         }
+        const checkedBlockEpochs = isNil(blockMetadata)
+          ? [] : takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
+        const checkedBlockEpoch = checkedBlockEpochs[0];
+        if (!isNil(blockMetadata) && (checkedBlockEpochs.length !== 1 ||
+          checkedBlockEpoch?.profileInventoryHash !== blockMetadata.profileInventoryHash)) {
+          throw new Error("WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH: Source ground evidence does not match the verified Block Profile.");
+        }
         const surfaceAdmission = admitBabylonNativeSurfacesV1({
+          spawnGeometry: checkedBlockEpoch === undefined
+            ? { kind: "collider-surface" }
+            : { kind: "native-block-source", groundModel: checkedBlockEpoch.logicalGroundModel },
           contribution: admittedNativeContribution,
           registryLock: preparedNativeScene.verifiedWorldPackage.registryLock,
           controlledSubject,
@@ -1373,6 +1424,11 @@ export class BabylonWorldRuntime {
               liveHandles: visualRegistry,
             });
           ownedDisposers.push(() => visualBatches.dispose());
+          nativeSubjectOcclusion = new NativeBlockSubjectOcclusionFadeV1(
+            nativeBlockOcclusionBatchesFromLiveHandlesV1(visualBatches.batches),
+          );
+          const occlusion = nativeSubjectOcclusion;
+          ownedDisposers.push(() => occlusion.dispose());
         }
       }
 
@@ -1391,6 +1447,10 @@ export class BabylonWorldRuntime {
         camera,
         scene,
         cameraGeometryQuery,
+        nativeSubjectOcclusion === undefined ? undefined : {
+          fade: nativeSubjectOcclusion,
+          colliderBySubjectEntityId: new Map(effectiveRuntimeSubjects.map((subject) => [subject.entityId, subject.collider])),
+        },
       ));
       options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
@@ -1752,6 +1812,12 @@ export class BabylonWorldRuntime {
       this.commitFixedTick({ cameraMode: "controlled-entity" });
     }
     return this.snapshot();
+  }
+
+  consumeFixedInputFailureDiagnostic(): BabylonFixedInputFailureDiagnosticV1 | undefined {
+    const diagnostic = this.latestFixedInputFailureDiagnostic;
+    this.latestFixedInputFailureDiagnostic = undefined;
+    return diagnostic;
   }
 
   [BABYLON_TRAVERSAL_RUNTIME_INTERNAL](): BabylonTraversalRuntimeInternalV1 {
@@ -2612,6 +2678,7 @@ export class BabylonWorldRuntime {
       BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]
     >>>
   >> {
+    this.latestFixedInputFailureDiagnostic = undefined;
     this.assertUsable();
     if ([...this.characterEntitiesByEntityId.values()].some(
       (character) => !isCharacterMovementControllerV1(character.movement),
@@ -2712,11 +2779,17 @@ export class BabylonWorldRuntime {
       try {
         await this.restorePreparedFixedInput();
       } catch (rollbackError) {
+        this.latestFixedInputFailureDiagnostic = Object.freeze({
+          stage: "rollback", errorCode: fixedInputFailureCode(rollbackError),
+        });
         throw new AggregateError(
           [error, rollbackError],
           "Transactional Runtime Tick prepare failed and its checkpoint could not be restored.",
         );
       }
+      this.latestFixedInputFailureDiagnostic = Object.freeze({
+        stage: "prepare", errorCode: fixedInputFailureCode(error),
+      });
       throw error;
     }
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
@@ -3389,6 +3462,12 @@ export class BabylonWorldRuntime {
           ...publishedCameraProjection.positionMetersXYZ,
         ]),
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
+        ...(cameraDirectorSnapshot.subjectOcclusion === undefined ? {} : {
+          subjectOcclusion: cameraDirectorSnapshot.subjectOcclusion,
+        }),
+        ...(cameraDirectorSnapshot.authoredOpeningProfileRef === undefined ? {} : {
+          authoredOpeningProfileRef: cameraDirectorSnapshot.authoredOpeningProfileRef,
+        }),
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
         activeCameraModifierRefs: cameraDirectorSnapshot.activeCameraModifierRefs,
         safeFallbackActive: cameraDirectorSnapshot.fallbackActive,
@@ -3727,7 +3806,7 @@ export class BabylonWorldRuntime {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
-    this.scene.render();
+    this.cameraComponent.render(interpolationAlphaRatio, () => this.scene.render());
     const receipt: RenderReadyReceiptV1 = {
       kind: "worldkit-render-ready-receipt",
       schemaVersion: 1,
@@ -3804,17 +3883,21 @@ export class BabylonWorldRuntime {
   ): BabylonArtifactCaptureResultV1 {
     this.assertUsable();
     this.assertCommittedCameraViewEpoch();
-    return captureBabylonArtifactViewV1({
+    const capture = () => captureBabylonArtifactViewV1({
       scene: this.scene,
       engine: this.engine,
       camera: this.camera,
       request,
     });
+    return request.kind === "opening-frame"
+      ? capture()
+      : this.cameraComponent.withSubjectOcclusionSuspended(capture);
   }
 
   async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {
     this.assertUsable();
     await this.scene.whenReadyAsync();
+    await prepareBabylonArtifactIdentityCaptureV1(this.scene);
     return this.renderFrame();
   }
 
@@ -4026,7 +4109,10 @@ export class BabylonWorldRuntime {
             this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
           ).map((projection) => projection.relationship),
         });
-        context = parseCameraContextSampleV2({
+        // Rebind/initial view reads the same body-center Snapshot as the fixed
+        // transaction. Reuse its subject-origin projection before the Director
+        // consumes it; otherwise the first pose includes the capsule offset.
+        context = cameraContextWithLockedLocalSocketsV1(subject, parseCameraContextSampleV2({
           schemaVersion: 2,
           semanticAuthorityStatus: "available",
           committedTick: committed.tick,
@@ -4045,14 +4131,10 @@ export class BabylonWorldRuntime {
           environment: {
             relationshipContexts:
               cameraViewTargetContext.relationshipContexts,
-            socketPositionsMetersXYZById: projectLockedLocalCameraSocketsV1(
-              subject,
-              committed.positionMetersXYZ,
-              committed.facingYawRadians,
-            ),
+            socketPositionsMetersXYZById: {},
             cameraContextTags: [],
           },
-        });
+        }));
         this.latestGoldenCameraContextsByEntityId.set(subject.entityId, context);
       }
       const locomotion = context.locomotion;

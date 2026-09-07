@@ -309,7 +309,7 @@ describe("traversal graph builder profile registry", () => {
         BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
       resolvedVersion: "1",
       contentHash: sha256CanonicalJson(resolved.profile),
-      profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+      profile: { ...CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE, clearanceMarginMeters: 0 },
     });
     expect(resolved.resourceRef).not.toBe(heightfield.resourceRef);
     expect(resolved.profile).not.toBe(heightfield.profile);
@@ -548,8 +548,7 @@ describe("traversal contract type exports", () => {
       resourceLockHash: identity.resourceHash,
       subjectDefinitionRef: "worldkit://subject-definition/player@1",
       subjectDefinitionHash: identity.resourceHash,
-      colliderProfileRef: "worldkit://collider-profile/humanoid@1",
-      colliderProfileHash: identity.resourceHash,
+      colliderSource: { kind: "profile", colliderProfileRef: "worldkit://collider-profile/humanoid@1", colliderProfileHash: identity.resourceHash },
       physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
       physicsBodyProfileHash: identity.resourceHash,
       locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",

@@ -94,6 +94,8 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
     .sort((left, right) => stableCompare(left.colliderId, right.colliderId));
   return parseBabylonNativeBlockMaterializerMetadataV1({
     kind: "babylon-native-block-materializer-metadata",
+    openingCamera: input.authoringLayoutBinding.openingCamera,
+    groundExploration: input.authoringLayoutBinding.groundExploration,
     schemaVersion: 1,
     nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: input.authoringLayoutBinding.caseHash,
@@ -104,6 +106,7 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
     contributionHash,
     profileInventoryHash: input.profileInventoryHash,
     settledVisualHash: contribution.profileSettlement.settledVisualHash,
+    settledVisualTargetCount: contribution.profileSettlement.targetCount,
     blocks,
     visualGroups: input.authoringLayoutBinding.visualGroups,
     colliderJoins,

@@ -124,9 +124,9 @@ Pure RGB drift does not need another image-generation call. These edits stay ins
 three self-repair cycles; they do not grant more retries. Never edit the frozen Host palette, alter
 checker thresholds, or use this operation on Canonical Height Intent.
 
-### Movement mode
+### Movement modes
 
-Name exactly one movement mode and explain it in one sentence. These common modes are references, not a closed list:
+List 1-8 movement modes in user-requested order, one `- 模式：说明` row per mode. The first row is the initial mode; retain later transitions or combined capabilities rather than collapsing them into one label. Explain each in one sentence. These common modes are references, not a closed list:
 
 - `陆地步行` — walking/running humanoids or animals whose support changes through ordinary steps;
 - `陆地滑行` — skateboards, snowboards, skis, sleds, hoverboards, or another inertia-led ground glide;
@@ -136,15 +136,52 @@ Name exactly one movement mode and explain it in one sentence. These common mode
 - `水下游动` — free motion through an underwater volume;
 - `空中飞行` — free motion through an air volume.
 
-When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
+When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Standard labels may name equipment in parentheses, such as `陆地滑行（滑板）` or `空中飞行(滑翔翼)`; keep different requested descriptions and their order. Do not repeat an identical label or coerce a user-specified custom mode into the nearest reference mode.
+
+For Canonical Source, Builder may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. For Babylon Native Source, Host alone selects and creates the controlled Subject and its movement capabilities; Native Builder authors environment geometry, never Subject/Physics/Camera. A missing named preset is not a reason for Planner to revise or reject user intent, and listing modes does not claim Runtime support. Neither Planner nor per-scene Builder adds SDK motion bases.
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
+
+### Babylon Native three-dimensional spatial form
+
+Plan a volume, not a camera-facing picture. For every major terrain mass,
+constructed platform, bridge, stair, and landmark, reason about its footprint,
+longitudinal elevation profile, cross-section, thickness, and position in depth.
+Use perspective scale, overlap, vanishing lines, visible top/side faces, horizon
+placement, and occlusion as evidence. The opening image's two-dimensional
+silhouette is only one consequence of that volume and is never sufficient by
+itself.
+
+Record the visible vertical relationships in concise Brief prose without
+coordinates or engineering tables: which area is lower or higher, where an
+ascent begins and ends, what it passes above or below, and which upper/lower
+spaces it connects. Preserve the number and order of clearly visible elevation
+levels. Where the single view leaves depth ambiguous, choose the simplest
+volume that satisfies all visible evidence; do not collapse it to a thin
+backdrop wall or invent dramatic unseen relief.
+
+For a visible staircase, identify its lower start, upper destination, travel and
+rise direction, approximate width relative to the Subject, straight/curved/
+switchback form, major landings, side enclosure or drop, and the supporting
+terrain/structure. The planned stair must physically arrive at the visibly
+higher or lower destination. Horizontal strips painted across a flat path are
+not a staircase.
 
 ### Navigation intent
 
 Describe navigation in prose, not a graph.
 
-The opening composition is only the world's entry slice, never the map boundary. Extend the reference-consistent world through an entry area, at least one middle area, and meaningful off-camera exploration areas or remote destinations appropriate to the request. Do not infer quality from a fixed duration or perimeter and do not satisfy completeness with empty padding.
+The opening composition is only the world's entry slice, never the map boundary. Plan one continuous
+geographic world whose complete explorable top-down footprint covers at least four times the
+reference-visible area, normally about twice its visible width and twice its visible depth. The
+reference-visible slice occupies at most roughly one quarter of `world-plan.png`. Extend through an
+entry area, a middle area, meaningful side and rear off-camera exploration areas, and a remote area or destination. Continue
+visible geography conservatively without rotating or contradicting its ordering; empty padding does
+not count toward the four-times area. Do not split the world into panels, separate scenes, portals,
+teleports, or hidden destination spaces. Describe unseen continuation in `推断的世界延伸`, not as
+`用户事实` or `可见参考证据`. This is generation intent, not an area or similarity admission gate.
+Do not infer quality from a fixed duration or perimeter. Keep the existing resource budget and repair
+budget; simplify ornament before reducing meaningful geography.
 
 - Ordinary land scenes are open by default: the whole collision-free playable ground is traversable. Do not invent a road or preferred route.
 - Flying and underwater scenes use the whole bounded free volume outside solid collisions. Do not invent rails or waypoint tunnels.
@@ -170,10 +207,20 @@ generic filler into a target just to reach five entries.
 
 Use `标志物` for one distinctive whole. Use `重复标志物` when several complete instances intentionally share the same appearance; define the identical set once, not one target per instance. Repeated generic decoration, ordinary trees, rocks, walls, terrain patches, background mountains, and construction pieces are not targets unless the complete repeated formation is itself a defining visual landmark.
 
+When more identity-critical wholes are visible than the four non-subject slots, prioritize: a
+scene-defining non-controlled person/animal/creature or other important object; the primary
+architectural or natural landmark; then a secondary or repeated formation. Do not spend a slot on a
+generic background building while omitting the signature person, animal, vehicle, or object.
+Background crowds, herds, flocks, traffic, and ordinary props remain unselected unless their shared
+formation is itself distinctive and important. Selection does not make another controllable or
+animated Runtime Subject.
+
 Examples:
 
 - one palace complex with a unified identity → one `标志物`;
 - two matching gate towers → one `重复标志物`;
+- one prominent non-controlled fox, guardian, astronaut, boat, or signature machine → one `标志物`;
+- several identical important animals or guards forming one recognizable set → one `重复标志物`;
 - twelve identical ordinary lamps → normally no visual target;
 - palace roof, columns, stairs, and foundation → parts of the palace, never four targets;
 - no distinctive landmark → output only the subject target.
@@ -322,5 +369,10 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
 ```
 
 If it fails, read the JSON diagnostics, repair the selected profile's outputs, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes every semantic output in the selected closed profile, so any edit after a passing check requires another check. For Babylon Native, a changed entry always invalidates and requires regeneration of the dependent World Plan before this check. Inspect the exact delivered pair again after repair. The primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+
+For Babylon Native, semantic colors cannot prove correct geography or
+continuous-world coherence by themselves. Human review owns top-down geography,
+inferred continuation, four-times-area coverage, spawn-token meaning, and visual
+quality; do not invent pixel-area, marker-shape, or image-recognition rules.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

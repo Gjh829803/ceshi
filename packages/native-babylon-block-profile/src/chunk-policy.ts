@@ -66,6 +66,9 @@ export const BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1 = Object.freeze([
   policy("chunk-xz-4m", 4),
   policy("chunk-xz-8m", 8),
   policy("chunk-xz-16m", 16),
+  // CF-20: measure the pinned old edge size with Native extent ownership.
+  // This is not the old center-based/greedy cluster partition or a new default.
+  policy("chunk-xz-32m", 32),
 ] as const);
 
 export type BabylonNativeBlockChunkPolicyIdV1 =

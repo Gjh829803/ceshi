@@ -277,7 +277,6 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
     bootstrapInputHash,
     seed: nativeSceneBootstrap.seed,
     budgets: Object.freeze({
-      maximumBlockCount: 2_000,
       maximumStaticColliderCount: 500,
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
@@ -380,6 +379,9 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
   const nativeBlockMaterializerMetadata = profileKind === "blocks"
     ? parseBabylonNativeBlockMaterializerMetadataV1({
       kind: "babylon-native-block-materializer-metadata",
+      settledVisualTargetCount: 2,
+      groundExploration: { mode: "case-defined" as const },
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       nativeSceneProfileRef:
         "worldkit://native-scene-profile/whitebox.blocks@1",
@@ -409,7 +411,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
         sizeMetersXYZ: [10, 1, 10],
       }],
       visualGroups: [{
-        visualGroupId: "ground-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ground-group",
         acceptanceTargetRef:
           "worldkit://acceptance-target/package-fixture-opening@1",
         semanticClassId: "ground.fixture",

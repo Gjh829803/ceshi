@@ -1,4 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { Matrix } from "@babylonjs/core/Maths/math.vector.js";
+import type { BabylonNativeBlockLiveHandleRegistryV1 } from "@whitebox-world/native-babylon-block-profile/host";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
@@ -15,6 +17,80 @@ import {
   selectFormalCommittedSupportContactV1,
   type FormalWorldCaptureProviderPortsV1,
 } from "./formal-world-capture-provider.js";
+
+
+it("preserves exact one-to-one logical coverage for Block instances", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  try {
+    const mesh = MeshBuilder.CreateBox("cluster", {}, scene);
+    mesh.thinInstanceSetBuffer("matrix", new Float32Array([
+      ...Matrix.Translation(-0.5, 0, 0).asArray(), ...Matrix.Translation(0.5, 0, 0).asArray(),
+    ]), 16, true);
+    const metadata = {
+      blocks: ["west", "east"].map(blockId => ({ blockId, runtimeEntityId: "native-block:" + blockId,
+        semanticCaptureClassId: "worldkit.native-block.group.mass", visualGroupId: "mass" })),
+      visualGroups: [{ visualGroupId: "mass", blockIds: ["west", "east"] }],
+    };
+    const blocks = metadata.blocks.map((row, index) => ({ ...row, kind: "thin-instance" as const,
+      batchId: "cluster-batch", batchMesh: mesh, instanceIndex: index }));
+    const registry: BabylonNativeBlockLiveHandleRegistryV1 = {
+      kind: "babylon-native-block-live-handle-registry", schemaVersion: 1,
+      realization: { kind: "host-chunk-batched", chunkPolicyHash: "sha256:" + "a".repeat(64) as never,
+        batchPlanHash: "sha256:" + "b".repeat(64) as never },
+      blocks, visualGroups: [{ visualGroupId: "mass", blockHandles: blocks }],
+      visualBatches: [{ batchId: "cluster-batch", visualChunkIndexXZ: [0, 0], shape: "full",
+        paletteRole: "structure", semanticCaptureClassId: "worldkit.native-block.group.mass",
+        blockIds: ["west", "east"], instances: [{ blockId: "west" }, { blockId: "east" }], mesh }],
+      walkableOverlays: [],
+    };
+    expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
+      liveHandleRegistry: registry })).not.toThrow();
+    for (const sourceBlockIds of [["west"], ["west", "west"], ["west", "east", "extra"], []]) {
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
+        liveHandleRegistry: { ...registry, visualBatches: [{ ...registry.visualBatches[0]!,
+          instances: sourceBlockIds.map(blockId => ({ blockId })) }] } })).toThrow(/LIVE_VISUAL_BATCH_COVERAGE_INVALID/);
+    }
+    expect(() => assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata,
+      liveHandleRegistry: { ...registry, blocks: [{ ...blocks[0]!, instanceIndex: 1 }, blocks[1]!] } }))
+      .toThrow(/LIVE_VISUAL_BATCH_IDENTITY_INVALID/);
+  } finally { scene.dispose(); engine.dispose(); }
+});
+it.each([1, 3, Infinity])("uses legacy tri-view retry/yield timing and preserves final pixels (ready at %s)", async readyAt => {
+  vi.useFakeTimers();
+  try {
+    const groups = ["player", "native-block:palace"].map((id, index) => ({
+      visualTargetId: `visual-target-${index + 1}`, runtimeEntityIds: [id],
+      frontDirectionWorldXZ: [1, 0], identityColor: "#E85D5D", role: index === 0 ? "primary-subject" : "primary-landmark",
+      semanticClassId: "fixture",
+    }));
+    const calls = [0, 0];
+    const started = Date.now();
+    const elapsed: number[] = [];
+    const captureArtifactView = vi.fn((request) => {
+      elapsed.push(Date.now() - started);
+      const index = request.entityIds[0] === "player" ? 0 : 1;
+      calls[index]! += 1;
+      const rgba = calls[index]! >= readyAt ? [255, 255, 255, 255] : [221, 232, 238, 255];
+      return { dataUrl: `data:image/png;base64,${Buffer.from([index, calls[index]!]).toString("base64")}`,
+        widthPixels: 3, heightPixels: 1, pixelsRgba: new Uint8ClampedArray([...rgba, ...rgba, ...rgba]),
+        projectedBoundsByEntityId: {} };
+    });
+    const promise = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureWhiteboxTriviewPngs({
+      visualCaptureGroups: groups, views: [{ widthPixels: 3, heightPixels: 1 }],
+    } as unknown as FormalWorldCaptureRequestV1, { captureArtifactView });
+    await vi.runAllTimersAsync();
+    const actual = await promise;
+    expect(calls).toEqual([Math.min(readyAt, 4), Math.min(readyAt, 4)]);
+    const attempts = Math.min(readyAt, 4);
+    expect(elapsed).toEqual([0, 1].flatMap(target => Array.from({ length: attempts }, (_, attempt) =>
+      (target * (attempts - 1) + attempt) * 50)));
+    expect(actual.map(bytes => [...bytes])).toEqual([[0, calls[0]], [1, calls[1]]]);
+    expect(captureArtifactView).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "entity-triview", frontDirectionWorldXZ: [1, 0], renderStyle: "runtime-lit-review",
+    }));
+  } finally { vi.useRealTimers(); }
+});
 
 function traversalSnapshot(
   runtimeSessionId: string,
@@ -47,16 +123,38 @@ function traversalSnapshot(
   } as unknown as WorldRuntimeSnapshotV4;
 }
 
+it("joins complete tri-view groups to checked Native metadata and the real controlled Subject", () => {
+  const metadata = { blocks: ["first", "second"].map(blockId => ({
+    blockId, runtimeEntityId: `native-block:${blockId}`, visualGroupId: "palace",
+  })), visualGroups: [{ visualGroupId: "palace", blockIds: ["first", "second"], identityColorHex: "#F28E2B",
+    semanticClassId: "visual.palace", frontDirectionWorldXZ: [1, 0] }],
+  } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+  const groups: FormalWorldCaptureRequestV1["visualCaptureGroups"] = [{
+    visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], role: "primary-subject",
+    identityColor: "#E85D5D", semanticClassId: "visual.subject", frontDirectionWorldXZ: [0, -1],
+  }, { visualTargetId: "visual-target-2", runtimeEntityIds: ["native-block:first", "native-block:second"],
+    role: "primary-landmark", identityColor: "#F28E2B", semanticClassId: "visual.palace", frontDirectionWorldXZ: [1, 0],
+  }];
+  const check = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.assertTriviewTargets;
+  expect(() => check(groups, metadata, "player")).not.toThrow();
+  expect(() => check([], metadata, "player")).not.toThrow();
+  expect(() => check(groups, metadata, "another-subject")).toThrow("SUBJECT_TARGET_MISMATCH");
+  for (const change of [{ runtimeEntityIds: ["native-block:first"] },
+    { runtimeEntityIds: ["native-block:first", "native-block:foreign"] },
+    { identityColor: "#AABBCC" as const }, { semanticClassId: "foreign" },
+    { frontDirectionWorldXZ: [0, -1] as const }]) {
+    expect(() => check([groups[0]!, { ...groups[1]!, ...change }], metadata, "player"))
+      .toThrow("TRIVIEW_TARGET_MISMATCH");
+  }
+});
+
 function traversalRequestFixture() {
   const criterion = {
-    kind: "reach-bounds" as const,
+    kind: "reach-position" as const,
     checkpointId: "spawn",
     expectation: "reach" as const,
     sourceVisualGroupId: "ground",
-    sourceBoundsMeters: {
-      minimumMetersXYZ: [-1, 0, -1] as const,
-      maximumMetersXYZ: [1, 2, 1] as const,
-    },
+    standPositionMetersXYZ: [0, 1, 0] as const,
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
   };
@@ -110,6 +208,72 @@ function traversalPorts(
 }
 
 describe("formal world capture provider", () => {
+  it("prepares the old reset opening without a neutral gameplay Tick", async () => {
+    const { ports } = traversalPorts("runtime.opening");
+    const snapshot = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resetForOpening(
+      "runtime.opening", ports,
+    );
+    expect(snapshot.world.simulationTick).toBe(0);
+    expect(ports.runFixedInput).not.toHaveBeenCalled();
+    expect(ports.awaitRenderReady).toHaveBeenCalledOnce();
+    const sampled = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.sampleSupportAfterOpening(
+      "runtime.opening", ports, snapshot,
+    );
+    expect(sampled.world.simulationTick).toBe(1);
+    expect(ports.runFixedInput).toHaveBeenCalledExactlyOnceWith({ actions: [], axes: {}, ticks: 1 });
+    expect(snapshot.world.simulationTick).toBe(0);
+  });
+  it("colors explicit top-overlay partitions without losing mixed-group or ungrouped surfaces", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const groups = ["red", "green", undefined] as const;
+      const blocks = groups.map((visualGroupId, index) => ({ blockId: `block-${index}`,
+        runtimeEntityId: `native-block:${index}`, semanticCaptureClassId: `class-${index}`,
+        ...(visualGroupId === undefined ? {} : { visualGroupId }) }));
+      const handles = blocks.map((block) => ({ kind: "independent-mesh" as const, ...block,
+        mesh: MeshBuilder.CreateBox(block.blockId, {}, scene) }));
+      const topologyHash = `sha256:${"a".repeat(64)}` as const;
+      const overlays = blocks.map((block) => ({ logicalColliderId: "shared-ground",
+        sourceBlockIds: [block.blockId] as [string],
+        visualGroupIds: block.visualGroupId === undefined ? [] : [block.visualGroupId],
+        topologyHash, mesh: MeshBuilder.CreateBox(`top-${block.blockId}`, {}, scene) }));
+      const metadata = { blocks,
+        visualGroups: [{ visualGroupId: "red", blockIds: [blocks[0]!.blockId], identityColorHex: "#FF0000" },
+          { visualGroupId: "green", blockIds: [blocks[1]!.blockId], identityColorHex: "#00FF00" }],
+        colliderJoins: [{ colliderId: "shared-ground", sourceBlockIds: blocks.map(({ blockId }) => blockId),
+          visualGroupIds: ["green", "red"], topologyHash, proxyKind: "continuous-walkable-surface",
+          triangleCount: overlays.reduce((sum, { mesh }) => sum + mesh.getTotalIndices() / 3, 0) }],
+      } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+      const registry = { kind: "babylon-native-block-live-handle-registry" as const, schemaVersion: 1 as const,
+        realization: { kind: "authoring-clustered" as const }, blocks: handles, visualBatches: [],
+        visualGroups: metadata.visualGroups.map(({ visualGroupId }) => ({ visualGroupId,
+          blockHandles: handles.filter((handle) => handle.visualGroupId === visualGroupId) })),
+        walkableOverlays: overlays };
+      const colors = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({ scene, metadata, registry });
+      expect(overlays.map(({ mesh }) => colors.get(mesh))).toEqual(["#FF0000", "#00FF00", "#000000"]);
+      for (const mutation of ["missing", "duplicate", "topology", "source", "group", "mixed"] as const) {
+        const first = overlays[0]!;
+        const invalid = mutation === "missing" ? overlays.slice(1)
+          : mutation === "duplicate" ? [...overlays, first]
+          : [{ ...first,
+            ...(mutation === "topology" ? { topologyHash: `sha256:${"b".repeat(64)}` as const } : {}),
+            ...(mutation === "source" ? { sourceBlockIds: ["foreign-block"] as [string] } : {}),
+            ...(mutation === "group" ? { visualGroupIds: ["green"] } : {}),
+            ...(mutation === "mixed" ? { sourceBlockIds: [blocks[0]!.blockId, blocks[2]!.blockId] as [string, string] } : {}),
+          }, ...overlays.slice(1)];
+        expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({
+          scene, metadata, registry: { ...registry, walkableOverlays: invalid },
+        }), mutation).toThrow("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+      }
+      overlays[0]!.mesh.dispose();
+      expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({ scene, metadata, registry }))
+        .toThrow("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    } finally {
+      scene.dispose(); engine.dispose();
+    }
+  });
+
   it("fails closed on missing, extra, foreign, or disposed visual handles without reading Mesh metadata", () => {
     // This catches a fallback to Scene/Mesh name, tag, or metadata inference
     // when the trusted profile registry is incomplete.
@@ -149,7 +313,7 @@ describe("formal world capture provider", () => {
     const valid = {
       kind: "babylon-native-block-live-handle-registry",
       schemaVersion: 1,
-      realization: { kind: "authoring-unbatched" },
+      realization: { kind: "authoring-clustered" },
       blocks: [
         {
           kind: "independent-mesh",
@@ -241,6 +405,34 @@ describe("formal world capture provider", () => {
     }
   });
 
+  it("does not count the start of a cross-region ground group as arrival at its frozen endpoint", () => {
+    const criterion = {
+      kind: "reach-position" as const,
+      checkpointId: "remote-arrival",
+      expectation: "reach" as const,
+      sourceVisualGroupId: "long-ground",
+      standPositionMetersXYZ: [8, 1.25, -30] as const,
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    };
+    const measure = (positionMetersXYZ: readonly [number, number, number]) =>
+      measureFormalTraversalCheckpointV1({
+        criterion,
+        startPositionMetersXYZ: [0, 0, 0],
+        positionMetersXYZ,
+        tick: 7,
+        isFinalTick: false,
+      });
+    expect(measure([0, 0, 0])).toBeUndefined();
+    expect(measure([8, 0, -30])).toBeUndefined();
+    expect(measure([8, 1.25, -29])).toBeUndefined();
+    expect(measure([8.2, 1.25, -30])).toEqual({
+      checkpointId: "remote-arrival", outcome: "reached", observedAtTick: 7,
+    });
+    expect(measure([8.4, 1.25, -30])?.outcome).toBe("reached");
+    expect(measure([8.4001, 1.25, -30])).toBeUndefined();
+  });
+
   it("derives asymmetric pass and block checkpoints only from frozen spatial criteria", () => {
     // This catches treating one sign convention as symmetric or copying a
     // Case expectation into the observed outcome.
@@ -292,14 +484,11 @@ describe("formal world capture provider", () => {
 
     expect(measureFormalTraversalCheckpointV1({
       criterion: {
-        kind: "reach-bounds",
+        kind: "reach-position",
         checkpointId: "blocked-platform",
         expectation: "reach",
         sourceVisualGroupId: "platform",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: [-1, 0, -4],
-          maximumMetersXYZ: [1, 2, -2],
-        },
+        standPositionMetersXYZ: [0, 1, -3] as const,
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       },
@@ -734,6 +923,19 @@ describe("formal world capture provider", () => {
     expect(ports.awaitRenderReady).toHaveBeenCalledTimes(4);
   });
 
+  it("runs no route reset or input when Capture requests no scripted checks", async () => {
+    const runtimeSessionId = "no-script-runtime";
+    const { ports } = traversalPorts(runtimeSessionId);
+    const request = traversalRequestFixture();
+    const checks = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversalChecks({
+      ...request, scriptedTraversal: { ...request.scriptedTraversal, checks: [] },
+    }, runtimeSessionId, "player", ports);
+    expect(checks).toEqual([]);
+    expect(ports.resetWithInitialControlBinding).not.toHaveBeenCalled();
+    expect(ports.runFixedInput).not.toHaveBeenCalled();
+    expect(ports.awaitRenderReady).not.toHaveBeenCalled();
+  });
+
   it("accepts a mixed block check only when every frozen criterion has its own outcome", async () => {
     const runtimeSessionId = "runtime.formal.provider-mixed-block";
     const { ports } = traversalPorts(runtimeSessionId, false, [0, 1, 0.65]);
@@ -752,14 +954,11 @@ describe("formal world capture provider", () => {
           checkExpectation: "block" as const,
           fixedInputSequence: [{ actions: ["move-forward" as const], ticks: 1 }],
           checkpointCriteria: [{
-            kind: "reach-bounds" as const,
+            kind: "reach-position" as const,
             checkpointId: "approach",
             expectation: "reach" as const,
             sourceVisualGroupId: "route",
-            sourceBoundsMeters: {
-              minimumMetersXYZ: [-1, 0, -1] as const,
-              maximumMetersXYZ: [1, 2, 1] as const,
-            },
+            standPositionMetersXYZ: [0, 1, 0.65] as const,
             capsuleRadiusMeters: 0.35,
             toleranceMeters: 0.05,
           }, {

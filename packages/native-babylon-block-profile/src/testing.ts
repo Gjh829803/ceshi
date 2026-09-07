@@ -9,6 +9,9 @@ import {
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,
 } from "./reconstruction-corpus.js";
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
+export { createBabylonNativeBlockProfileCheckResultV1 } from "./check.js";
+export { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+export type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 
 export {
   babylonNativeBlockCenterAlignsToGridV1,
@@ -31,9 +34,9 @@ const RUNTIME_FIXTURE_BLOCKS = Object.freeze([
   Object.freeze({ id: "ground-positive-one", shape: "full" as const, center: [0, -0.5, 1] as const }),
   Object.freeze({ id: "ground-zero", shape: "full" as const, center: [0, -0.5, 0] as const }),
   Object.freeze({ id: "ground-negative-one", shape: "full" as const, center: [0, -0.5, -1] as const }),
-  Object.freeze({ id: "quarter-meter-rise", shape: "step" as const, center: [0, 0.125, -2] as const }),
-  Object.freeze({ id: "elevated-tread", shape: "step" as const, center: [0, 0.125, -3] as const }),
-  Object.freeze({ id: "half-meter-blocker", shape: "half" as const, center: [0, 0.5, -4] as const }),
+  Object.freeze({ id: "half-meter-rise", shape: "half" as const, center: [0, 0.25, -2] as const }),
+  Object.freeze({ id: "elevated-tread", shape: "half" as const, center: [0, 0.25, -3] as const }),
+  Object.freeze({ id: "half-meter-blocker", shape: "full" as const, center: [0, 0.5, -4] as const }),
 ]);
 
 /** Test-only exact Module for real BWB-4 Package/Havok evidence. */
@@ -46,9 +49,7 @@ BabylonNativeSceneModuleV1 {
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
-      const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: RUNTIME_FIXTURE_BLOCKS.length,
-      });
+      const session = createBabylonNativeBlockProfileSessionV1(context);
       for (const block of RUNTIME_FIXTURE_BLOCKS) {
         session.createBlock({
           id: block.id,
@@ -63,12 +64,13 @@ BabylonNativeSceneModuleV1 {
       const traversalSurfaceProfileRef =
         "worldkit://traversal-surface-profile/ground.static@1";
       session.finalize(Object.freeze({
-        displayGapMeters: 0.04,
         staticColliders: Object.freeze(RUNTIME_FIXTURE_BLOCKS.map((block) =>
           Object.freeze({
             id: `collider-${block.id}`,
             colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: block.id }),
-            traversalBinding: Object.freeze({
+            traversalBinding: block.id === "half-meter-blocker"
+              ? Object.freeze({ kind: "not-traversable" as const })
+              : Object.freeze({
               kind: "static-surface" as const,
               surfaceEntityId: `surface-${block.id}`,
               logicalSubshapeId: "top",

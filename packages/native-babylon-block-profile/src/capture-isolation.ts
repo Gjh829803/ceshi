@@ -2,6 +2,9 @@ import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
+import type { Scene } from "@babylonjs/core/scene.js";
+import { createOwnedNativeBlockBoxV1 } from "./owned-box-allocation.js";
 import "@babylonjs/core/Meshes/thinInstanceMesh.js";
 import { isNil } from "lodash-es";
 
@@ -47,8 +50,8 @@ function stableCompare(left: string, right: string): number {
 /**
  * Isolate exactly the requested logical Blocks for one formal Capture view.
  * Independent Meshes hide directly; batched Blocks keep their batch resident
- * and mask only the non-target Thin Instances, so a batch never loses or gains
- * Capture identity. Every mutation is reversed by `restore()` exactly once.
+ * and mask non-target clusters or temporarily fragment partially selected ones.
+ * The shared logical-member transforms preserve exact Capture identity. Every mutation is reversed by `restore()` exactly once.
  */
 export function applyBabylonNativeBlockCaptureIsolationV1(
   input: ApplyBabylonNativeBlockCaptureIsolationInputV1,
@@ -126,6 +129,46 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
   };
 
   try {
+    const captureScenes = new Map<Scene, Set<AbstractMesh>>();
+    const clusters = new Map<Mesh, Extract<typeof registry.blocks[number], { kind: "cluster-mesh" }>[]>();
+    for (const handle of registry.blocks) {
+      if (handle.kind !== "cluster-mesh") continue;
+      const members = clusters.get(handle.mesh) ?? [];
+      members.push(handle);
+      clusters.set(handle.mesh, members);
+    }
+    for (const [mesh, members] of clusters) {
+      const selected = members.filter(handle => targets.has(handle.blockId));
+      if (selected.length === members.length) {
+        applyTint(mesh);
+        continue;
+      }
+      hide(mesh);
+      hiddenIndependentBlockIds.push(...members.filter(handle => !targets.has(handle.blockId)).map(handle => handle.blockId));
+      const scene = mesh.getScene();
+      if (selected.length > 0 && !captureScenes.has(scene)) {
+        const owned = new Set<AbstractMesh>();
+        captureScenes.set(scene, owned);
+        restoreSteps.push(() => {
+          let firstError: unknown;
+          let didFail = false;
+          for (const portion of [...owned].reverse()) {
+            try { portion.dispose(); } catch (error) {
+              if (!didFail) { didFail = true; firstError = error; }
+            }
+          }
+          if (didFail) throw firstError;
+        });
+      }
+      for (const handle of selected) {
+        const owned = captureScenes.get(scene)!;
+        const portion = createOwnedNativeBlockBoxV1(scene, `capture-portion-${handle.blockId}`, owned);
+        handle.sourceWorldMatrix.decompose(portion.scaling, undefined, portion.position);
+        portion.material = mesh.material;
+        portion.isPickable = false;
+        applyTint(portion);
+      }
+    }
     for (const handle of registry.blocks) {
       if (handle.kind !== "independent-mesh") continue;
       if (!targets.has(handle.blockId)) {
@@ -136,57 +179,35 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
       applyTint(handle.mesh);
     }
     for (const batch of registry.visualBatches) {
-      const maskedIndexes = batch.blockIds
-        .map((blockId, instanceIndex) =>
-          targets.has(blockId) ? -1 : instanceIndex)
-        .filter((instanceIndex) => instanceIndex !== -1);
-      if (maskedIndexes.length === batch.blockIds.length) {
+      const selectedByInstance = batch.instances.map(({ blockId }) => targets.has(blockId));
+      if (selectedByInstance.every(selected => !selected)) {
         hide(batch.mesh);
         hiddenBatchIds.push(batch.batchId);
         continue;
       }
-      if (maskedIndexes.length > 0) {
+      if (selectedByInstance.some(selected => !selected)) {
         const current = batch.mesh.thinInstanceGetWorldMatrices();
-        if (current.length !== batch.blockIds.length) {
-          return fail(
-            CODE,
-            `Batch '${batch.batchId}' Thin Instance count does not match its Block rows.`,
-          );
+        if (current.length !== batch.instances.length) {
+          return fail(CODE, `Batch '${batch.batchId}' instance count does not match its Block rows.`);
         }
-        const priorMatrices = new Float32Array(
-          batch.blockIds.length * THIN_INSTANCE_MATRIX_STRIDE,
-        );
-        current.forEach((matrix, instanceIndex) =>
-          matrix.copyToArray(
-            priorMatrices,
-            instanceIndex * THIN_INSTANCE_MATRIX_STRIDE,
-          ));
-        const maskedMatrices = new Float32Array(priorMatrices);
-        for (const instanceIndex of maskedIndexes) {
-          for (const offset of LINEAR_MATRIX_OFFSETS) {
-            maskedMatrices[
-              instanceIndex * THIN_INSTANCE_MATRIX_STRIDE + offset
-            ] = 0;
+        const priorMatrices = new Float32Array(current.length * THIN_INSTANCE_MATRIX_STRIDE);
+        current.forEach((matrix, index) => matrix.copyToArray(priorMatrices, index * THIN_INSTANCE_MATRIX_STRIDE));
+        const nextMatrices = new Float32Array(priorMatrices);
+        selectedByInstance.forEach((selected, index) => {
+          if (!selected) {
+            for (const offset of LINEAR_MATRIX_OFFSETS) {
+              nextMatrices[index * THIN_INSTANCE_MATRIX_STRIDE + offset] = 0;
+            }
+            maskedThinInstanceCount++;
           }
-        }
+        });
         const mesh = batch.mesh;
         restoreSteps.push(() => {
-          mesh.thinInstanceSetBuffer(
-            "matrix",
-            new Float32Array(priorMatrices),
-            THIN_INSTANCE_MATRIX_STRIDE,
-            true,
-          );
+          mesh.thinInstanceSetBuffer("matrix", new Float32Array(priorMatrices), THIN_INSTANCE_MATRIX_STRIDE, true);
           mesh.thinInstanceRefreshBoundingInfo(true);
         });
-        mesh.thinInstanceSetBuffer(
-          "matrix",
-          maskedMatrices,
-          THIN_INSTANCE_MATRIX_STRIDE,
-          true,
-        );
+        mesh.thinInstanceSetBuffer("matrix", nextMatrices, THIN_INSTANCE_MATRIX_STRIDE, true);
         mesh.thinInstanceRefreshBoundingInfo(true);
-        maskedThinInstanceCount += maskedIndexes.length;
       }
       applyTint(batch.mesh);
     }

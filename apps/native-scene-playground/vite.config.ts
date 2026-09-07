@@ -16,6 +16,8 @@ import type {
 
 import { createWorldPackageBrowserTransportV1 } from
   "../../scripts/lib/world-package-browser-transport.js";
+import { parseNativeRecordingBinding } from "../../scripts/lib/native-recording-binding.js";
+import { createNativeRecordingProxy } from "../../scripts/lib/native-recording-proxy.js";
 
 const NATIVE_MODULE_ID = "virtual:worldkit-native-scene";
 const NATIVE_MODULE_SOURCE_ID = `${NATIVE_MODULE_ID}/source`;
@@ -28,6 +30,10 @@ const NATIVE_SCENE_MODULE_PATH = "native/scene.mjs";
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
 const HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS = Object.freeze([
   "@babylonjs/core/Maths/math.viewport.js",
+  // Native source is reached through the admitted virtual module. Include its
+  // intent-first geometry dependency before navigation, so Vite cannot discover
+  // it late and reload an already-bound isolated Runtime frame.
+  "@babylonjs/core/Meshes/Builders/boxBuilder.js",
   "@babylonjs/core/scene.js",
 ] as const);
 
@@ -267,7 +273,7 @@ function installHostedBrowserHeaders(
   const hostedContentSecurityPolicy =
     "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'none'; media-src 'none'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
   const hostedShellContentSecurityPolicy =
-    `${hostedContentSecurityPolicy}; frame-src ${input.hostedRuntimeOrigin}; frame-ancestors 'none'`;
+    `default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src ${input.hostedRuntimeOrigin}; frame-ancestors 'none'`;
   const hostedRuntimeContentSecurityPolicy =
     `${hostedContentSecurityPolicy}; frame-src 'none'; frame-ancestors ${input.hostedShellOrigin}`;
   const lockedContentSecurityPolicy =
@@ -459,7 +465,15 @@ export async function createNativeScenePlaygroundViteConfigV1(
         "WORLDKIT_NATIVE_PACKAGE_SOURCE_KIND_REQUIRED: the Native Harness accepts only babylon-native-scene Packages",
       );
     }
-    const receiptBytes = await transport.readReceipt();
+    const recordingBinding = environment.WORLDKIT_STUDIO_RECORDING_BINDING === undefined ? undefined
+      : parseNativeRecordingBinding(JSON.parse(environment.WORLDKIT_STUDIO_RECORDING_BINDING));
+    if (recordingBinding !== undefined && (serverRole !== "shell" ||
+        recordingBinding.worldPackageRootHash !== transport.worldPackageRootHash)) {
+      throw new Error("NATIVE_RECORDING_BINDING_SOURCE_MISMATCH");
+    }
+    const recordingProxy = recordingBinding === undefined ? undefined : createNativeRecordingProxy({
+      binding: recordingBinding, shellOrigin: hostedShellOrigin,
+    });
     const packageEntryByPath = new Map(
       transport.fileIntegrityEntries.map((entry) => [entry.path, Object.freeze({
         contentHash: entry.contentHash,
@@ -470,33 +484,34 @@ export async function createNativeScenePlaygroundViteConfigV1(
     if (sceneModuleEntry === undefined) {
       throw new Error("WORLDKIT_NATIVE_PACKAGE_SCENE_MODULE_MISSING");
     }
-    const nativeModuleBytes = await transport.read(NATIVE_SCENE_MODULE_PATH);
+    // Config construction needs one coherent, already-verified startup snapshot.
+    // Re-reading the full Package twice here can exceed the unchanged readiness
+    // deadline. Request handlers below still perform their fresh disk checks.
+    const { receiptBytes, fileBytes: nativeModuleBytes } =
+      transport.readStartupSnapshot(NATIVE_SCENE_MODULE_PATH);
     const nativeModuleSource = Buffer.from(nativeModuleBytes).toString("utf8");
     const nativeModuleBundleContentHash = sceneModuleEntry.contentHash;
     const receiptContentHash =
       `sha256:${createHash("sha256").update(receiptBytes).digest("hex")}` as const;
 
-    const gBotAssetContentHash =
-      "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f" as const;
-    const gBotAssetBytes = new Uint8Array(readFileSync(new URL(
-      "subject-assets/humanoid/g-bot/v2/g-bot.glb",
-      playgroundPublicRoot,
-    )));
-    if (
-      `sha256:${createHash("sha256").update(gBotAssetBytes).digest("hex")}` !==
-        gBotAssetContentHash
-    ) {
-      throw new Error("WORLDKIT_HOSTED_RUNTIME_SUBJECT_ASSET_INTEGRITY_FAILED");
+    const exactAssetByPath = new Map<string, ExactRuntimeAssetV1>();
+    // Both existing humanoid assets may be selected by the trusted Host. Keep
+    // the original exact-byte/query admission; do not substitute a different rig.
+    for (const [assetPath, contentHash] of [
+      ["subject-assets/humanoid/g-bot/v2/g-bot.glb",
+        "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f"],
+      ["subject-assets/humanoid/golden/v2/golden-humanoid.glb",
+        "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8"],
+    ] as const) {
+      const bytes = new Uint8Array(readFileSync(new URL(assetPath, playgroundPublicRoot)));
+      if (`sha256:${createHash("sha256").update(bytes).digest("hex")}` !== contentHash) {
+        throw new Error("WORLDKIT_HOSTED_RUNTIME_SUBJECT_ASSET_INTEGRITY_FAILED");
+      }
+      exactAssetByPath.set(`/${assetPath}`, Object.freeze({
+        bytes, contentHash, mediaType: "model/gltf-binary",
+        requiredContentHashQuery: contentHash,
+      }));
     }
-    const exactAssetByPath = new Map<string, ExactRuntimeAssetV1>([[
-      "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
-      Object.freeze({
-        bytes: gBotAssetBytes,
-        contentHash: gBotAssetContentHash,
-        mediaType: "model/gltf-binary",
-        requiredContentHashQuery: gBotAssetContentHash,
-      }),
-    ]]);
 
     const hostedBrowserRunnerSourcePaths = Object.freeze([
       "src/main.ts",
@@ -505,11 +520,17 @@ export async function createNativeScenePlaygroundViteConfigV1(
       "src/hosted-formal-capture-route.ts",
       "src/hosted-runtime-bridge.ts",
       "src/hosted-runtime-frame.ts",
+      "src/hosted-recording.ts",
+      "src/hosted-recording-controls.ts",
+      "src/hosted-recording-workbench.ts",
       "src/native-runtime-host.ts",
       "src/world-package-loader.ts",
       "package.json",
       "vite.config.ts",
       "../../packages/runtime-babylon/src/hosted-formal-capture-protocol.ts",
+      "../../packages/browser-recording/src/canvas-recorder.ts",
+      "../../packages/browser-recording/src/download-recording.ts",
+      "../../packages/browser-recording/src/recording-workbench.ts",
     ] as const);
     const hostedBrowserRunnerDigest = `sha256:${hostedBrowserRunnerSourcePaths
       .reduce((hash, relativePath) => {
@@ -587,11 +608,13 @@ export async function createNativeScenePlaygroundViteConfigV1(
       configureServer(server) {
         bindTransportDisposal(server, () => transport.dispose());
         server.middlewares.use(headerMiddleware);
+        if (recordingProxy !== undefined) server.middlewares.use(recordingProxy);
         server.middlewares.use(assetMiddleware);
       },
       configurePreviewServer(server) {
         bindTransportDisposal(server, () => transport.dispose());
         server.middlewares.use(headerMiddleware);
+        if (recordingProxy !== undefined) server.middlewares.use(recordingProxy);
         server.middlewares.use(assetMiddleware);
       },
       closeBundle() {
@@ -609,6 +632,9 @@ export async function createNativeScenePlaygroundViteConfigV1(
         serverRole,
       ),
       define: {
+        __WORLDKIT_RECORDING_CONTEXT__: JSON.stringify(recordingBinding === undefined ? null : {
+          sceneId: recordingBinding.sceneId, worldPackageRootHash: recordingBinding.worldPackageRootHash,
+        }),
         __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
           formalCaptureSdkOwnerIdentities,
         __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: JSON.stringify(

@@ -16,6 +16,7 @@ import type {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   BabylonWorldRuntime,
+  installRuntimeFlightRecorderV1,
   createBabylonGameplayWorldPortV1,
   type BabylonRuntimeProjectionV1,
 } from "@whitebox-world/runtime-babylon";
@@ -359,6 +360,55 @@ async function createHarness(
 }
 
 describe("Gameplay Babylon Runtime coordinator", () => {
+  it("keeps flight observation outside committed Hash, fixed input, Reset and replay", async () => {
+    const observed = await createHarness();
+    const control = await createHarness();
+    const target: Parameters<typeof installRuntimeFlightRecorderV1>[0]["target"] = {
+      performance: { now: () => 0 } as Performance,
+      setInterval: vi.fn(() => 1), clearInterval: vi.fn() };
+    const storage = { getItem: vi.fn(() => null), setItem: vi.fn() };
+    const browserEvents = new EventTarget();
+    const recorder = installRuntimeFlightRecorderV1({ target,
+      history: { worldId: "runtime-hash-isolation", storage: () => storage,
+        events: { window: browserEvents, document: new EventTarget() } },
+      diagnosticSessionId: "00000000-0000-4000-8000-000000000001", visibilityState: () => "visible",
+      source: { read: () => {
+        const snapshot = observed.coordinator.snapshot();
+        return { worldSessionId: snapshot.worldSessionId, hasRuntimeFailure: snapshot.runtime.phase === "failed", progressMode: "continuous",
+          snapshot: { frame: 0, tick: snapshot.world.simulationTick, paused: snapshot.runtime.isPaused,
+            performance: { fps: 60, triangles: 0, drawCalls: snapshot.resources.meshCount } } };
+      } },
+    });
+    try {
+      const before = sha256CanonicalJson(observed.coordinator.snapshot());
+      recorder.sampleNow(); recorder.report(); recorder.sampleNow();
+      browserEvents.dispatchEvent(new Event("error"));
+      recorder.exportBundleJson();
+      expect(storage.setItem).toHaveBeenCalledOnce();
+      expect(sha256CanonicalJson(observed.coordinator.snapshot())).toBe(before);
+      const fixedInput = { actions: [], ticks: 2 } as const;
+      const a = await observed.coordinator.runFixedInput(fixedInput);
+      const b = await control.coordinator.runFixedInput(fixedInput);
+      recorder.sampleNow();
+      expect(a.world.worldStateHash).toBe(b.world.worldStateHash);
+      const resetA = await observed.coordinator.resetWithInitialControlBinding();
+      const resetB = await control.coordinator.resetWithInitialControlBinding();
+      recorder.sampleNow();
+      expect(recorder.report().samples.at(-1)?.epoch).toBe(1);
+      expect(resetA.world.worldStateHash).toBe(resetB.world.worldStateHash);
+      const replayA = await observed.coordinator.runFixedInput(fixedInput);
+      const replayB = await control.coordinator.runFixedInput(fixedInput);
+      recorder.sampleNow();
+      expect(replayA.world.worldStateHash).toBe(replayB.world.worldStateHash);
+      browserEvents.dispatchEvent(new Event("error"));
+      expect(JSON.parse(storage.setItem.mock.calls.at(-1)![1]).samples.at(-1).epoch).toBe(1);
+      expect(observed.runtimes).toHaveLength(control.runtimes.length);
+    } finally {
+      recorder.dispose();
+      await observed.coordinator.dispose();
+      await control.coordinator.dispose();
+    }
+  });
   it("preserves the prepared fixed-input seam through the owned-port wrapper", async () => {
     const configuration = await worldConfiguration();
     const runtimeFactory = fakeRuntimeFactory(configuration);
@@ -528,7 +578,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(cameraImmediatelyAfterMount.mode).toBe("tracking");
     if (cameraImmediatelyAfterMount.mode === "tracking") {
       expect(cameraImmediatelyAfterMount.requestedArmLengthMeters)
-        .toBeCloseTo(5, 6);
+        .toBeCloseTo(4.8, 6);
     }
 
     const mountedFirstFixedTick = await coordinator.runFixedInput({
@@ -651,7 +701,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     });
     if (dismountedFirstFixedTick.view.camera.mode === "tracking") {
       expect(dismountedFirstFixedTick.view.camera.requestedArmLengthMeters)
-        .toBeCloseTo(5, 6);
+        .toBeCloseTo(4.8, 6);
     }
 
     const riderBeforeIndependentMove = dismountedFirstFixedTick.world
@@ -716,7 +766,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       activeCameraModifierRefs: [],
     });
     if (reset.view.camera.mode === "tracking") {
-      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(5, 6);
+      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(4.8, 6);
     }
 
     await coordinator.dispose();

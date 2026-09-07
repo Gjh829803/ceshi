@@ -3,6 +3,8 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
+import { isValidVisualTargetFrontDirectionWorldXZV1 } from "./capture-targets.js";
+import { parseBabylonNativeInitialCameraV1, type BabylonNativeInitialCameraV1 } from "./babylon-native-scene-bootstrap.js";
 
 import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from
   "./native-scene-contribution.js";
@@ -14,8 +16,7 @@ export type BabylonNativeBlockMaterializerShapeV1 =
   | "full"
   | "half"
   | "quarter"
-  | "small"
-  | "step";
+  | "small";
 
 export type BabylonNativeBlockMaterializerPaletteRoleV1 =
   | "ground"
@@ -43,6 +44,7 @@ export interface BabylonNativeBlockMaterializerVisualGroupV1 {
   readonly acceptanceTargetRef: string;
   readonly semanticClassId: string;
   readonly identityColorHex: `#${string}`;
+  readonly frontDirectionWorldXZ: readonly [number, number];
   readonly blockIds: readonly string[];
   readonly paletteRoles:
     readonly BabylonNativeBlockMaterializerPaletteRoleV1[];
@@ -63,6 +65,8 @@ export interface BabylonNativeBlockMaterializerColliderJoinV1 {
 }
 
 export interface BabylonNativeBlockMaterializerMetadataV1 {
+  readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
   readonly kind: "babylon-native-block-materializer-metadata";
   readonly schemaVersion: 1;
   readonly nativeSceneProfileRef:
@@ -73,11 +77,110 @@ export interface BabylonNativeBlockMaterializerMetadataV1 {
   readonly contributionHash: Sha256HashV1;
   readonly profileInventoryHash: Sha256HashV1;
   readonly settledVisualHash: Sha256HashV1;
+  /** Actual Host settlement targets, not the number of logical Blocks. */
+  readonly settledVisualTargetCount: number;
   readonly blocks: readonly BabylonNativeBlockMaterializerBlockV1[];
   readonly visualGroups:
     readonly BabylonNativeBlockMaterializerVisualGroupV1[];
   readonly colliderJoins:
     readonly BabylonNativeBlockMaterializerColliderJoinV1[];
+}
+
+/** Authoring intent only; the Host Ground analyzer proves actual connectivity. */
+export type NativeBlockGroundExplorationV1 =
+  | Readonly<{ mode: "case-defined" }>
+  | Readonly<{
+      mode: "source-authored";
+      requiredTargets: readonly Readonly<{
+        id: string;
+        region: "middle" | "remote";
+        standPositionMetersXYZ: readonly [number, number, number];
+      }>[];
+      requiredTraversalBands: readonly Readonly<{
+        id: string;
+        centerlineStandPositionsMetersXYZ: readonly (readonly [number, number, number])[];
+        halfWidthMeters: number;
+        isBidirectional: boolean;
+      }>[];
+    }>;
+
+export function parseNativeBlockGroundExplorationV1(input: unknown): NativeBlockGroundExplorationV1 {
+  assertAccessorFree(input);
+  const probe = exactRecord(input, ["mode"], ["requiredTargets", "requiredTraversalBands"], "groundExploration");
+  if (probe.mode === "case-defined") {
+    exactRecord(input, ["mode"], [], "groundExploration");
+    return Object.freeze({ mode: "case-defined" });
+  }
+  if (probe.mode !== "source-authored") fail("groundExploration/mode", "must select case-defined or source-authored");
+  exactRecord(input, ["mode", "requiredTargets", "requiredTraversalBands"], [], "groundExploration");
+  const requiredTargets = exactArray(probe.requiredTargets, "requiredTargets").map((entry, index) => {
+    const itemPath = `requiredTargets/${index}`;
+    const row = exactRecord(entry, ["id", "region", "standPositionMetersXYZ"], [], itemPath);
+    if (row.region !== "middle" && row.region !== "remote") fail(itemPath, "region must be middle or remote");
+    return Object.freeze({
+      id: stableId(row.id, `${itemPath}/id`),
+      region: row.region as "middle" | "remote",
+      standPositionMetersXYZ: tuple3(row.standPositionMetersXYZ, `${itemPath}/standPositionMetersXYZ`),
+    });
+  });
+  if (new Set(requiredTargets.map(({ id }) => id)).size !== requiredTargets.length) {
+    fail("requiredTargets/id", "must contain unique IDs");
+  }
+  if (new Set(requiredTargets.map(({ standPositionMetersXYZ }) => JSON.stringify(standPositionMetersXYZ))).size !== requiredTargets.length) {
+    fail("requiredTargets", "must contain distinct positions");
+  }
+  const requiredTraversalBands = exactArray(probe.requiredTraversalBands, "requiredTraversalBands").map((entry, index) => {
+    const itemPath = `requiredTraversalBands/${index}`;
+    const row = exactRecord(entry, ["id", "centerlineStandPositionsMetersXYZ", "halfWidthMeters", "isBidirectional"], [], itemPath);
+    const points = exactArray(row.centerlineStandPositionsMetersXYZ, `${itemPath}/centerlineStandPositionsMetersXYZ`)
+      .map((point, pointIndex) => tuple3(point, `${itemPath}/centerlineStandPositionsMetersXYZ/${pointIndex}`));
+    if (points.length < 2 || points.length > 256 || points.some((point, pointIndex) => pointIndex > 0 && isEqual(point, points[pointIndex - 1]))) {
+      fail(itemPath, "must contain 2-256 distinct consecutive waypoints");
+    }
+    if (typeof row.halfWidthMeters !== "number" || !Number.isFinite(row.halfWidthMeters) || row.halfWidthMeters <= 0) fail(itemPath, "halfWidthMeters must be positive and finite");
+    if (typeof row.isBidirectional !== "boolean") fail(itemPath, "isBidirectional must be an explicit boolean");
+    return Object.freeze({
+      id: stableId(row.id, `${itemPath}/id`),
+      centerlineStandPositionsMetersXYZ: Object.freeze(points),
+      halfWidthMeters: row.halfWidthMeters as number,
+      isBidirectional: row.isBidirectional as boolean,
+    });
+  });
+  if (new Set(requiredTraversalBands.map(({ id }) => id)).size !== requiredTraversalBands.length) {
+    fail("requiredTraversalBands/id", "must contain unique IDs");
+  }
+  return Object.freeze({ mode: "source-authored", requiredTargets: Object.freeze(requiredTargets), requiredTraversalBands: Object.freeze(requiredTraversalBands) });
+}
+
+export function admitNativeBlockGroundExplorationV1(
+  input: unknown,
+  mode: NativeBlockGroundExplorationV1["mode"],
+  spawnPositionMetersXYZ: readonly [number, number, number],
+  requireSingleReachableComponent: boolean,
+): NativeBlockGroundExplorationV1 {
+  if (typeof requireSingleReachableComponent !== "boolean") {
+    fail("groundExploration", "requires the explicit frozen Case connectivity policy");
+  }
+  const intent = parseNativeBlockGroundExplorationV1(input);
+  if (intent.mode !== mode) fail("groundExploration/mode", "must match the frozen Case policy");
+  if (intent.mode === "case-defined") return intent;
+  if (intent.requiredTargets.some(({ standPositionMetersXYZ }) => isEqual(standPositionMetersXYZ, spawnPositionMetersXYZ))) {
+    fail("requiredTargets", "exploration anchors must not duplicate Spawn");
+  }
+  // Pinned old Builder requires the region/entry minima only for ground-only
+  // intent. Optional declared rows remain valid evidence under either policy.
+  if (!requireSingleReachableComponent) return intent;
+  if (!intent.requiredTargets.some(({ region }) => region === "middle") ||
+      !intent.requiredTargets.some(({ region }) => region === "remote")) {
+    fail("requiredTargets", "connected ground requires both middle and remote anchors");
+  }
+  if (!intent.requiredTraversalBands.some((band) =>
+    isEqual(band.centerlineStandPositionsMetersXYZ[0], spawnPositionMetersXYZ) &&
+    intent.requiredTargets.some((target) => target.region === "middle" &&
+      isEqual(target.standPositionMetersXYZ, band.centerlineStandPositionsMetersXYZ.at(-1))))) {
+    fail("requiredTraversalBands", "at least one band must start at exact Spawn and end at a middle anchor");
+  }
+  return intent;
 }
 
 const ERROR = "BABYLON_NATIVE_BLOCK_MATERIALIZER_METADATA_INVALID";
@@ -87,7 +190,7 @@ const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const SEMANTIC_CLASS = /^[a-z][a-z0-9.-]{2,127}$/;
 const IDENTITY_COLOR = /^#[0-9A-F]{6}$/;
 const SHAPES = new Set<BabylonNativeBlockMaterializerShapeV1>([
-  "full", "half", "quarter", "small", "step",
+  "full", "half", "quarter", "small",
 ]);
 const PALETTE_ROLES = new Set<BabylonNativeBlockMaterializerPaletteRoleV1>([
   "ground", "route", "structure", "hazard", "water-like-visual",
@@ -263,7 +366,7 @@ function parseVisualGroup(
   const path = `visualGroups/${index}`;
   const row = exactRecord(value, [
     "visualGroupId", "acceptanceTargetRef", "semanticClassId",
-    "identityColorHex", "blockIds", "paletteRoles", "minimumMetersXYZ",
+    "identityColorHex", "frontDirectionWorldXZ", "blockIds", "paletteRoles", "minimumMetersXYZ",
     "maximumMetersXYZ",
   ], [], path);
   const blockIds = exactArray(row.blockIds, `${path}/blockIds`).map(
@@ -304,11 +407,15 @@ function parseVisualGroup(
   if (!IDENTITY_COLOR.test(identityColorHex)) {
     fail(`${path}/identityColorHex`, "must be one uppercase identity color");
   }
+  if (!isValidVisualTargetFrontDirectionWorldXZV1(row.frontDirectionWorldXZ)) {
+    fail(`${path}/frontDirectionWorldXZ`, "must be one cardinal unit direction in world XZ coordinates");
+  }
   return Object.freeze({
     visualGroupId: stableId(row.visualGroupId, `${path}/visualGroupId`),
     acceptanceTargetRef,
     semanticClassId,
     identityColorHex: identityColorHex as `#${string}`,
+    frontDirectionWorldXZ: Object.freeze([...row.frontDirectionWorldXZ]) as readonly [number, number],
     blockIds: Object.freeze(blockIds),
     paletteRoles: Object.freeze(paletteRoles),
     minimumMetersXYZ: tuple3(
@@ -390,7 +497,10 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     "kind", "schemaVersion", "nativeSceneProfileRef", "caseHash",
     "authoringManifestHash", "checkedLayoutInventoryHash",
     "contributionHash", "profileInventoryHash", "settledVisualHash",
+    "settledVisualTargetCount",
     "blocks", "visualGroups", "colliderJoins",
+    "openingCamera",
+    "groundExploration",
   ], [], "value");
   if (
     source.kind !== "babylon-native-block-materializer-metadata" ||
@@ -410,6 +520,10 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     typeof source.settledVisualHash !== "string" ||
     !HASH.test(source.settledVisualHash)
   ) fail("value", "profile fingerprints must be SHA-256 hashes");
+  if (!Number.isSafeInteger(source.settledVisualTargetCount) || Object.is(source.settledVisualTargetCount, -0) ||
+      (source.settledVisualTargetCount as number) < 0) {
+    fail("settledVisualTargetCount", "must be the non-negative integer Host target count");
+  }
   const blocks = exactArray(source.blocks, "blocks").map(parseBlock);
   const visualGroups = exactArray(
     source.visualGroups,
@@ -482,6 +596,8 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
   ) fail("colliderJoins", "must partition known source Blocks and visual groups");
   return Object.freeze({
     kind: "babylon-native-block-materializer-metadata",
+    openingCamera: parseBabylonNativeInitialCameraV1(source.openingCamera),
+    groundExploration: parseNativeBlockGroundExplorationV1(source.groundExploration),
     schemaVersion: 1,
     nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: source.caseHash as Sha256HashV1,
@@ -491,6 +607,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     contributionHash: source.contributionHash as Sha256HashV1,
     profileInventoryHash: source.profileInventoryHash as Sha256HashV1,
     settledVisualHash: source.settledVisualHash as Sha256HashV1,
+    settledVisualTargetCount: source.settledVisualTargetCount as number,
     blocks: Object.freeze(blocks),
     visualGroups: Object.freeze(visualGroups),
     colliderJoins: Object.freeze(colliderJoins),

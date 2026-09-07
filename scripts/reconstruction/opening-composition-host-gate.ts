@@ -10,6 +10,7 @@ import type {
 } from "@whitebox-world/validation";
 import { parseWorldReconstructionDiagnosticV1 } from "@whitebox-world/validation";
 import { isNil } from "lodash-es";
+import type { projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 
 export const OPENING_COMPOSITION_HOST_GATE_DIAGNOSTIC_CODES_V1 = Object.freeze([
   "WORLDKIT_OPENING_GATE_CAMERA_UNBOUND",
@@ -288,6 +289,7 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
   reconstructionCase: WorldReconstructionCaseV1;
   evaluationProfile: WorldReconstructionEvaluationProfileV1;
   openingObservation: FormalOpeningObservationV1;
+  openingPixelComposition: ReturnType<typeof projectOpeningCompositionPixelsV1>;
   expectedCamera: Readonly<{
     distanceMeters: number;
     pitchRadians: number;
@@ -301,15 +303,10 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
   diagnostics.push(...controlledSubjectDiagnostics(input.openingObservation));
   const expected = input.reconstructionCase.expected.openingComposition;
   const expectedTargetRefs = new Set(expected.targetRefs);
-  const observedByTargetRef = new Map(
-    input.openingObservation.visualGroups
-      .filter(({ compositionTargetRef }) =>
-        expectedTargetRefs.has(compositionTargetRef))
-      .map((group) =>
-      [group.compositionTargetRef, group] as const),
-  );
+  const regionsByTargetRef = new Map(input.openingPixelComposition.regions.map((region) => [region.targetRef, region]));
+  const anchorsByTargetRef = new Map(input.openingPixelComposition.anchors.map((anchor) => [anchor.targetRef, anchor]));
   for (const region of expected.regions) {
-    const observed = observedByTargetRef.get(region.targetRef);
+    const observed = regionsByTargetRef.get(region.targetRef);
     const threshold = input.evaluationProfile.thresholds.openingComposition
       .regions.find(({ targetRef }) => targetRef === region.targetRef);
     if (isNil(observed) || isNil(threshold)) {
@@ -339,7 +336,7 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
     }
   }
   for (const anchor of expected.anchors) {
-    const observed = observedByTargetRef.get(anchor.targetRef);
+    const observed = anchorsByTargetRef.get(anchor.targetRef);
     const threshold = input.evaluationProfile.thresholds.openingComposition
       .anchors.find(({ targetRef }) => targetRef === anchor.targetRef);
     if (isNil(observed) || isNil(threshold)) {
@@ -497,8 +494,8 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
           kind: "revise-native-source",
           targetKind: "composition-target",
           targetId: binding.blockVisualGroupId,
-          operation: "add",
-          instruction: `Add visible Blocks to visual group ${binding.blockVisualGroupId} so ${binding.compositionTargetRef} appears in the opening view; do not edit thresholds or substitute metadata.`,
+          operation: "adjust-geometry",
+          instruction: `Inspect the frozen reference, rejected opening identity PNG and display for ${binding.blockVisualGroupId}; no visible pixels alone do not prove missing geometry. Check framing and occlusion, preserving intended holes and separation; do not edit thresholds or substitute metadata.`,
         },
       }));
       continue;
@@ -525,12 +522,10 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
     ) return Object.freeze([]);
     const isRegionDrift = diagnostic.code ===
       "WORLDKIT_OPENING_GATE_REGION_DRIFT";
-    const operation = isRegionDrift
-      ? "resize" as const
-      : "move" as const;
+    const operation = "adjust-geometry" as const;
     const jointConstraintInstruction = isRegionDrift
-      ? `Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from ${openingObservationInputPath}; satisfy all four region edges and the anchor jointly, including axes that currently pass. If a projected edge is clipped at 0 or 10000, adjust near-camera footprint/depth and height together instead of trading one screen edge or center for another.`
-      : `Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from ${openingObservationInputPath}; satisfy the anchor and all four region edges jointly, including axes that currently pass. Do not move the center by pushing any screen edge outside its allowed envelope.`;
+      ? `Read the complete expected region bounds and anchor from context/case.json; satisfy all four region edges and the anchor jointly, including axes that currently pass.`
+      : `Read the complete expected region bounds and anchor from context/case.json; satisfy the anchor and all four region edges jointly, including axes that currently pass.`;
     converted.push(parseWorldReconstructionDiagnosticV1({
       kind: "world-reconstruction-diagnostic",
       schemaVersion: 1,
@@ -556,7 +551,7 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
         targetKind: "composition-target",
         targetId: binding.blockVisualGroupId,
         operation,
-        instruction: `${diagnostic.correctionDirection === "increase" ? "Increase" : "Decrease"} ${metricId} for the actual Blocks in visual group ${binding.blockVisualGroupId} toward ${diagnostic.expectedValue}; keep drift within ${diagnostic.allowedDeviation}. ${jointConstraintInstruction} Do not relabel unchanged geometry, change the frozen Camera, or edit thresholds.`,
+        instruction: `Compare the frozen reference with rejected opening-identity-mask.png, opening.png and semantic-view-observation-set.json before adjusting ${binding.blockVisualGroupId}; the observed ${metricId} is ${diagnostic.actualValue}, expected ${diagnostic.expectedValue} within ${diagnostic.allowedDeviation}. ${jointConstraintInstruction} Preserve intended holes, separation and occlusion; a pixel-bound or center drift alone does not imply resize or move. ${openingObservationInputPath} contains structural spatial evidence, not visible pixel bounds. Do not relabel unchanged geometry, change the frozen Camera, or edit thresholds.`,
       },
     }));
   }

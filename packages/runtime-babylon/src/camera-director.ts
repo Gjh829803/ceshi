@@ -41,6 +41,8 @@ import { SpringArmComponentV1 } from "./spring-arm-component";
 
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
+  authoredOpeningProfileRef?: string;
+  subjectOcclusion?: import("@whitebox-world/runtime-contracts").CameraSubjectOcclusionStateV1;
   activeCameraRigRef: string;
   activeCameraModifierRefs: readonly string[];
   fallbackActive: boolean;
@@ -83,6 +85,7 @@ export interface CameraDirectorTransactionStateV1 {
     initialized: boolean;
     cameraViewPreference: CameraViewPreferenceV1;
     activeProfileRef: string;
+    authoredOpeningProfileRef: string | undefined;
     activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
     activeReverseHeadingPolicy:
       | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
@@ -474,6 +477,7 @@ export class CameraDirectorV1 {
   private initialized = false;
   private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
+  private authoredOpeningProfileRef: string | undefined;
   private activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
   private activeReverseHeadingPolicy:
     | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
@@ -525,6 +529,7 @@ export class CameraDirectorV1 {
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
     private readonly cameraGeometryQuery: CameraGeometryQueryPortV2,
+    private readonly usesSubjectOcclusionFade = false,
   ) {
     this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
@@ -561,6 +566,7 @@ export class CameraDirectorV1 {
         initialized: this.initialized,
         cameraViewPreference: this.cameraViewPreference,
         activeProfileRef: this.activeProfileRef,
+        authoredOpeningProfileRef: this.authoredOpeningProfileRef,
         activeHeadingSource: this.activeHeadingSource,
         activeReverseHeadingPolicy: this.activeReverseHeadingPolicy,
         activeRigRef: this.activeRigRef,
@@ -815,7 +821,7 @@ export class CameraDirectorV1 {
     deltaSeconds: number,
     cameraContextSample: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
-  ): void {
+  ): "unchanged" | "committed" | "reset" {
     if (this.disposed) {
       throw new Error("3C_RUNTIME_DISPOSED: CameraDirector is disposed.");
     }
@@ -841,8 +847,8 @@ export class CameraDirectorV1 {
         );
       }
       // Profile, preview, and Orbit mutations are staged in Director state.
-      // A committed Tick owns at most one collision query and one pose commit.
-      return;
+      // A committed Tick owns at most one collision query batch and pose commit.
+      return "unchanged";
     }
     this.latestCommittedTick = committedContext.committedTick;
     this.latestCommittedContextIdentity = committedContextIdentity;
@@ -850,6 +856,7 @@ export class CameraDirectorV1 {
     const beforeTransaction = this.captureTransactionState();
     const beforeSpringArmTransaction = springArm.captureTransactionState();
     try {
+    let didResetPose = !this.initialized;
     const sample = viewTargetFromCommittedCameraContextV2(
       viewTargetSample,
       committedContext,
@@ -882,10 +889,45 @@ export class CameraDirectorV1 {
       baseProfile,
     );
     const lockedParameters = profile.parameters;
+    // The first selected third-person Profile owns the authored opening, just
+    // as in the frozen Block baseline. Do not spread these values to every
+    // subsequent Context/Profile, or put authored data in the Preview channel.
+    if (this.authoredOpeningProfileRef === undefined &&
+      !profile.algorithmRef.endsWith("/socket-first-person@1")) {
+      this.authoredOpeningProfileRef = profile.resourceRef;
+    }
+    const openingTuning = this.authoredOpeningProfileRef === profile.resourceRef
+      ? {
+          distanceMeters: this.initialCamera.distanceMeters,
+          targetHeightMeters: this.initialCamera.targetHeightMeters,
+          pitchRadians: this.initialCamera.pitchRadians,
+          baseFovDegrees: this.initialCamera.fovDegrees,
+        }
+      : {};
+    const openingValidation = validateCameraTuningV1(
+      { algorithmRef: baseProfile.algorithmRef, parameters: baseProfile.parameters },
+      openingTuning,
+    );
+    if (!openingValidation.ok) {
+      throw new Error(
+        "WORLDKIT_RUNTIME_CAMERA_OPENING_TUNING_INVALID: " + openingValidation.message,
+      );
+    }
+    const authoredBaseParameters = applyCameraRigParameterOverridesV1(
+      baseProfile.algorithmRef, baseProfile.parameters, openingValidation.tuning,
+    );
+    // Preserve the old precedence: Profile < opening < Context modifiers <
+    // explicit Preview. Locked movement heading remains independent of Preview.
+    const authoredParameters = selected.modifiers.reduce(
+      (current, modifier) => applyCameraRigParameterOverridesV1(
+        baseProfile.algorithmRef, current, modifier.parameterOverrides,
+      ),
+      authoredBaseParameters,
+    );
     const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
     const parameters = applyCameraRigParameterOverridesV1(
       profile.algorithmRef,
-      lockedParameters,
+      authoredParameters,
       tuning,
     );
     if (
@@ -904,6 +946,7 @@ export class CameraDirectorV1 {
     const targetIdentityChanged = this.initialized &&
       this.activeTargetEntityId !== undefined &&
       this.activeTargetEntityId !== sample.entityId;
+    if (targetIdentityChanged) didResetPose = true;
     const selectionChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
@@ -959,6 +1002,7 @@ export class CameraDirectorV1 {
       this.initialized = false;
       springArm.reset();
       this.transitionDurationSeconds = 0;
+      didResetPose = true;
     }
     this.lastBaseTarget = baseTarget.clone();
     if (
@@ -1083,10 +1127,7 @@ export class CameraDirectorV1 {
           this.smoothedTarget.z +
             (view.desiredTarget.z - this.smoothedTarget.z) * yawAlpha,
         );
-    const targetDelta = resolvedTarget.subtract(view.desiredTarget);
-    const idealPosition = firstPerson
-      ? view.desiredPosition
-      : view.desiredPosition.add(targetDelta);
+    const idealPosition = view.desiredPosition;
     const requestedArmLengthMeters = view.requestedArmLengthMeters;
     let dampedPosition = new Vector3(
       this.camera.position.x +
@@ -1144,16 +1185,6 @@ export class CameraDirectorV1 {
         (nextFov - this.transitionStartFovRadians) * transitionAlpha;
     }
     if (targetIdentityChanged) proposedTarget = resolvedTarget;
-    if (!firstPerson && requestedArmLengthMeters !== undefined &&
-      profileTransitionProgressRatio >= 1) {
-      const proposedArm = proposedPosition.subtract(proposedTarget);
-      if (proposedArm.lengthSquared() >
-        requestedArmLengthMeters * requestedArmLengthMeters) {
-        proposedPosition = proposedTarget.add(
-          proposedArm.normalize().scale(requestedArmLengthMeters),
-        );
-      }
-    }
 
     let finalPosition = proposedPosition;
     let finalTarget = proposedTarget;
@@ -1167,14 +1198,16 @@ export class CameraDirectorV1 {
     let startedOverlapping: boolean | undefined;
     let penetrationDepthMeters: number | undefined;
     let clearHoldRemainingSeconds: number | undefined;
-    if (!firstPerson) {
+    if (!firstPerson && !this.usesSubjectOcclusionFade) {
       let collision: ReturnType<SpringArmComponentV1["solve"]>;
       try {
         collision = springArm.solve({
           committedTick: committedContext.committedTick,
           excludedEntityIds: [sample.entityId],
-          desiredTarget: proposedTarget,
-          desiredPosition: proposedPosition,
+          desiredTarget: view.desiredTarget,
+          resolvedTarget: proposedTarget,
+          desiredPosition: idealPosition,
+          unconstrainedPosition: proposedPosition,
           // Before the Director has published a pose, Babylon's FreeCamera is
           // still at its construction origin. Treat the proposed first pose as
           // the emergency candidate and let SpringArm's second geometry query
@@ -1273,6 +1306,7 @@ export class CameraDirectorV1 {
       ),
     };
     this.latestUpdateFailed = false;
+    return didResetPose ? "reset" : "committed";
     } catch (error) {
       this.restoreTransactionState(beforeTransaction);
       springArm.restoreTransactionState(beforeSpringArmTransaction);
@@ -1280,9 +1314,49 @@ export class CameraDirectorV1 {
     }
   }
 
+  /** Read-only validation of a display-only sample; never advances Camera state. */
+  isRenderPoseSafe(
+    previousPosition: RuntimeVec3V1,
+    currentPosition: RuntimeVec3V1,
+    sampledPosition: Vector3,
+    sampledTarget: Vector3,
+  ): boolean {
+    if (!this.initialized || this.latestUpdateFailed || this.latestCommittedTick === undefined ||
+      this.activeTargetEntityId === undefined || this.activeParameters === undefined) return false;
+    if (this.usesSubjectOcclusionFade) return true;
+    const committedTick = this.latestCommittedTick;
+    const radiusMeters = this.activeParameters.collisionRadiusMeters;
+    const excludedEntityIds = Object.freeze([this.activeTargetEntityId]);
+    const queryIsClear = (start: RuntimeVec3V1, end: RuntimeVec3V1): boolean => {
+      const hit = this.cameraGeometryQuery.query({
+        schemaVersion: 2,
+        committedTick,
+        startPositionMetersXYZ: start,
+        endPositionMetersXYZ: end,
+        radiusMeters,
+        collisionMask: "camera-hard",
+        excludedEntityIds,
+        maximumHitCount: 1,
+      });
+      return hit === undefined || (!hit.startedOverlapping &&
+        hit.travelDistanceMeters >= Vector3.Distance(new Vector3(...start), new Vector3(...end)) - 1e-5);
+    };
+    try {
+      // Safe endpoints do not prove a safe interpolation segment across a corner.
+      if (!new Vector3(...previousPosition).equals(new Vector3(...currentPosition)) &&
+        !queryIsClear(previousPosition, currentPosition)) return false;
+      return queryIsClear(freezeVec3(sampledTarget), freezeVec3(sampledPosition));
+    } catch {
+      // A rendering sample cannot fail ordinary production or create a repair;
+      // retain the already committed pose when interpolation cannot be verified.
+      return false;
+    }
+  }
+
   reset(): void {
     this.assertUsable();
     this.initialized = false;
+    this.authoredOpeningProfileRef = undefined;
     this.cameraViewPreference = Object.freeze({ mode: "auto" });
     this.activeHeadingSource = undefined;
     this.activeReverseHeadingPolicy = undefined;
@@ -1337,6 +1411,9 @@ export class CameraDirectorV1 {
     // Read-only evidence remains available after dispose for audit/teardown.
     return Object.freeze({
       activeCameraProfileRef: this.activeProfileRef,
+      ...(this.authoredOpeningProfileRef === undefined ? {} : {
+        authoredOpeningProfileRef: this.authoredOpeningProfileRef,
+      }),
       activeCameraRigRef: this.activeRigRef,
       activeCameraModifierRefs: Object.freeze([...this.activeModifierRefs]),
       fallbackActive: this.fallbackActive,

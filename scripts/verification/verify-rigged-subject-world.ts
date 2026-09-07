@@ -573,6 +573,7 @@ async function verifyBrowser(
       return api.configureVisualCaptureGroups([{
         visualTargetId: "pose-primary-subject",
         runtimeEntityIds: [runtimeEntityId],
+        frontDirectionWorldXZ: [0, -1],
         role: "primary-subject",
         semanticClassId: "subject.humanoid.rigged",
         identityColor: "#E85D5D",

@@ -15,6 +15,7 @@ import type { BabylonNativeBlockLogicalGroundModelV1 } from
   "./logical-ground-model.js";
 import { buildBabylonNativeBlockWalkableTopologyV1 } from
   "./walkable-topology.js";
+import { BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1 } from "./shapes.js";
 
 const HASH = (digit: string) => `sha256:${digit.repeat(64)}` as Sha256HashV1;
 const DECK_CELL_COUNT = 20;
@@ -28,10 +29,14 @@ const STATIC_SURFACE = Object.freeze({
 
 /**
  * One 10 m long, half-meter wide deck on the fixed occupancy lattice. It spans
- * three 4 m Chunk columns, so the partition must cross two seams.
+ * three 4 m Chunk columns, so the partition must cross two seams. Each small
+ * cube retains its own source identity; the deck is not one impossible 10m Block.
  */
 function deckGroundModel(): BabylonNativeBlockLogicalGroundModelV1 {
   const cells = Array.from({ length: DECK_CELL_COUNT }, (_value, i) => i);
+  const occupiedCells = cells.flatMap(i => Array.from({
+    length: 0.5 / BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[1],
+  }, (_value, layer) => ({ i, key: `${i},${-layer - 1},0` })));
   const body = Object.freeze({
     kind: "babylon-native-block-logical-ground-model" as const,
     schemaVersion: 1 as const,
@@ -50,18 +55,18 @@ function deckGroundModel(): BabylonNativeBlockLogicalGroundModelV1 {
         kind: "block-group" as const,
         colliderGroupId: "deck-source",
       }),
-      sourceBlockIds: Object.freeze(["deck-block"]),
+      sourceBlockIds: Object.freeze(cells.map(i => `deck-block-${i}`).sort()),
       visualGroupIds: Object.freeze(["deck-visual"]),
       traversalBinding: STATIC_SURFACE,
       exposedEdgePolicy: "none" as const,
       occupiedMicroCellKeys: Object.freeze(
-        cells.map((i) => `${i},-1,0`).sort(),
+        occupiedCells.map(({ key }) => key).sort(),
       ),
     })]),
-    solidOccupancyCells: Object.freeze(cells.map((i) => Object.freeze({
-      cellKey: `${i},-1,0`,
+    solidOccupancyCells: Object.freeze(occupiedCells.map(({ i, key }) => Object.freeze({
+      cellKey: key,
       colliderId: "deck-collider",
-      sourceBlockId: "deck-block",
+      sourceBlockId: `deck-block-${i}`,
       colliderGroupId: "deck-source",
       visualGroupId: "deck-visual",
       traversalBinding: STATIC_SURFACE,
@@ -70,7 +75,7 @@ function deckGroundModel(): BabylonNativeBlockLogicalGroundModelV1 {
       topCellKey: `${i},0,0`,
       sourceOccupiedCellKey: `${i},-1,0`,
       colliderId: "deck-collider",
-      sourceBlockId: "deck-block",
+      sourceBlockId: `deck-block-${i}`,
       colliderGroupId: "deck-source",
       visualGroupId: "deck-visual",
       traversalBinding: STATIC_SURFACE,

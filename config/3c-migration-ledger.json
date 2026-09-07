@@ -74,7 +74,7 @@
       "deletionCondition": "Golden Runtime, projections, generated checks and Camera no longer publish or consume Motion Kernel identity as authority.",
       "state": "live",
       "baselineSourceReferenceCount": 32,
-      "currentSourceReferenceCeiling": 21,
+      "currentSourceReferenceCeiling": 16,
       "evidence": [
         "6d9e030 expanded executable-source census: 32",
         "3C-5 removed Camera Domain V1 Motion Kernel authority fields; Task6 owns the remaining live Runtime seam",
@@ -82,7 +82,8 @@
         "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef",
         "M8-S1 Camera clean break removes Motion Kernel identity from the public ViewTargetSampleV1 provider shell",
         "M8-S1 current support projection removes the legacy activeMotionKernelRef spelling and lock type from the traversal boundary while retaining the canonical compiled motionKernelRef; exact executable-source census: 21",
-        "M8-S1 pre-freeze terminology correction supersedes the preceding identity shorthand: Camera and support projections delete only the legacy activeMotionKernelRef field and MotionKernelLiveLockStateV1 type; canonical compiled motionKernelRef remains the current identity"
+        "M8-S1 pre-freeze terminology correction supersedes the preceding identity shorthand: Camera and support projections delete only the legacy activeMotionKernelRef field and MotionKernelLiveLockStateV1 type; canonical compiled motionKernelRef remains the current identity",
+        "CF-05/K1 shared physical-key normalization uses canonical motionKernelRef as in pinned old input code; Native reads the admitted specialized Runtime projection once at its Host boundary. Exact source census falls from 21 to 16 (six input-local legacy spellings removed, one Host projection read added). This contracts spelling only; the specialized Runtime seam remains live and no movement authority migration is claimed."
       ]
     },
     {

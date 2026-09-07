@@ -29,6 +29,7 @@ import { isEmpty, isNil } from "lodash-es";
 
 import type {
   FixedInputV1,
+  CameraSubjectOcclusionStateV1,
   GameplayEventsQueryResultV1,
   GameplayEventsQueryV1,
   WorldRuntimeCameraStateV4,
@@ -112,6 +113,7 @@ export interface RuntimeSessionSubjectSupportV1 {
 export type RuntimeSessionDiagnosticCodeV1 =
   | "RUNTIME_SESSION_REQUEST_ID_CONFLICT"
   | "RUNTIME_SESSION_REQUEST_REJECTED"
+  | "RUNTIME_SESSION_FIXED_INPUT_REJECTED"
   | "RUNTIME_SESSION_NOT_ACTIVE"
   | "RUNTIME_SESSION_RECOVERY_DIVERGED"
   | "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE"
@@ -165,8 +167,16 @@ export type RuntimeSessionReceiptV1 =
       diagnostic: Readonly<{
         readonly code: Exclude<
           RuntimeSessionDiagnosticCodeV1,
-          "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE"
+          "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" | "RUNTIME_SESSION_FIXED_INPUT_REJECTED"
         >;
+        readonly message: string;
+      }>;
+    }>)
+  | (RuntimeSessionReceiptBaseV1 & Readonly<{
+      requestType: "fixed-input.run";
+      status: "rejected";
+      diagnostic: Readonly<{
+        readonly code: "RUNTIME_SESSION_FIXED_INPUT_REJECTED";
         readonly message: string;
       }>;
     }>)
@@ -220,6 +230,7 @@ const RUNTIME_SESSION_DIAGNOSTIC_CODES =
   new Set<RuntimeSessionDiagnosticCodeV1>([
     "RUNTIME_SESSION_REQUEST_ID_CONFLICT",
     "RUNTIME_SESSION_REQUEST_REJECTED",
+    "RUNTIME_SESSION_FIXED_INPUT_REJECTED",
     "RUNTIME_SESSION_NOT_ACTIVE",
     "RUNTIME_SESSION_RECOVERY_DIVERGED",
     "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
@@ -607,6 +618,37 @@ function validateCameraParametersV1(
   return canonicalClone(record, schemaName) as Readonly<Partial<CameraRigParametersV1>>;
 }
 
+export function parseCameraSubjectOcclusionStateV1(value: unknown): CameraSubjectOcclusionStateV1 {
+  const schemaName = "CameraSubjectOcclusionStateV1";
+  const state = snapshotDataRecord(value) ?? invalid(schemaName);
+  if (!hasExactKeys(state, ["isEnabled", "isSelectionInitialized", "selectionElapsedSeconds",
+      "selectedInstanceCount", "fadedInstanceCount", "instances"]) ||
+      typeof state.isEnabled !== "boolean" || typeof state.isSelectionInitialized !== "boolean" ||
+      !isFiniteNumber(state.selectionElapsedSeconds) || state.selectionElapsedSeconds < 0 ||
+      !isSafeNonNegativeInteger(state.selectedInstanceCount) || !isSafeNonNegativeInteger(state.fadedInstanceCount) ||
+      isNil(snapshotDataArray(state.instances))) return invalid(schemaName);
+  const instances = snapshotDataArray(state.instances)!;
+  let selected = 0;
+  let faded = 0;
+  let prior: { batchId: string; instanceIndex: number } | undefined;
+  for (const input of instances) {
+    const row = snapshotDataRecord(input) ?? invalid(schemaName);
+    if (!hasExactKeys(row, ["batchId", "instanceIndex", "opacityRatio", "targetOpacityRatio"]) ||
+        !isNonEmptyString(row.batchId) || !isSafeNonNegativeInteger(row.instanceIndex) ||
+        !isFiniteNumberInRange(row.opacityRatio, 0, 1) ||
+        ![0.3, 0.5, 1].includes(row.targetOpacityRatio as number)) return invalid(schemaName);
+    if (prior !== undefined && (row.batchId < prior.batchId ||
+        row.batchId === prior.batchId && row.instanceIndex <= prior.instanceIndex)) return invalid(schemaName);
+    prior = { batchId: row.batchId, instanceIndex: row.instanceIndex };
+    if ((row.targetOpacityRatio as number) < 1) selected++;
+    if ((row.opacityRatio as number) < 1 - 1e-4) faded++;
+  }
+  if (selected !== state.selectedInstanceCount || faded !== state.fadedInstanceCount ||
+      !state.isEnabled && instances.length > 0 ||
+      !state.isSelectionInitialized && (state.selectionElapsedSeconds !== 0 || selected > 0)) return invalid(schemaName);
+  return canonicalClone(state, schemaName) as unknown as CameraSubjectOcclusionStateV1;
+}
+
 function validateRuntimeCameraStateV4(
   value: unknown,
 ): WorldRuntimeCameraStateV4 {
@@ -632,6 +674,8 @@ function validateRuntimeCameraStateV4(
   ] as const;
   const optional = [
     "selectionDecision",
+    "authoredOpeningProfileRef",
+    "subjectOcclusion",
     "selectedTargetSocketId",
     "targetSocketPositionMetersXYZ",
     "isTargetSocketFallback",
@@ -676,7 +720,7 @@ function validateRuntimeCameraStateV4(
     !isFiniteNumber(record.fixedStepDeltaSeconds) ||
     record.fixedStepDeltaSeconds <= 0
   ) return invalid(schemaName);
-  const optionalStrings = ["selectedTargetSocketId", "collisionHitEntityId"];
+  const optionalStrings = ["selectedTargetSocketId", "collisionHitEntityId", "authoredOpeningProfileRef"];
   const optionalBooleans = [
     "isTargetSocketFallback",
     "isCollisionRetracted",
@@ -729,6 +773,9 @@ function validateRuntimeCameraStateV4(
   ) return invalid(schemaName);
   if (Object.hasOwn(record, "selectionDecision")) {
     validateCameraSelectionDecisionV2(record.selectionDecision);
+  }
+  if (Object.hasOwn(record, "subjectOcclusion")) {
+    parseCameraSubjectOcclusionStateV1(record.subjectOcclusion);
   }
   if (Object.hasOwn(record, "resolvedParameters")) {
     validateCameraParametersV1(record.resolvedParameters, true);
@@ -1003,6 +1050,9 @@ function parseRuntimeSessionReceiptBodyV1(
       diagnostic.code ===
         "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" &&
       record.requestType !== "session.reset"
+    ) return invalid(schemaName);
+    if (diagnostic.code === "RUNTIME_SESSION_FIXED_INPUT_REJECTED" &&
+      record.requestType !== "fixed-input.run"
     ) return invalid(schemaName);
     return canonicalClone(record, schemaName) as unknown as Omit<
       RuntimeSessionReceiptV1,

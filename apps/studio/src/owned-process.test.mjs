@@ -3,7 +3,7 @@ import { once } from "node:events";
 import process from "node:process";
 import test from "node:test";
 
-import { spawnOwnedProcess } from "./owned-process.mjs";
+import { spawnOwnedProcess } from "../../../scripts/lib/owned-process.mjs";
 
 function isProcessAlive(pid) {
   try {
@@ -69,4 +69,27 @@ test("escalates to SIGKILL for an owned process group that ignores SIGTERM", {
     }
     await owned.exited;
   }
+});
+
+test("cleans surviving descendants after the immediate owned parent has exited", {
+  skip: process.platform === "win32",
+}, async () => {
+  const grandchildProgram = "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000)";
+  const program = `const {spawn} = require('node:child_process');
+    const child = spawn(process.execPath, ['-e', ${JSON.stringify(grandchildProgram)}], {stdio: ['ignore', 'ignore', 'ignore', 'ipc']});
+    child.once('message', () => { process.stdout.write(String(child.pid)); process.exit(0); });`;
+  const owned = spawnOwnedProcess(process.execPath, ["-e", program], {
+    graceMs: 50, pollIntervalMs: 5, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  owned.child.stdout.on("data", bytes => { output += bytes; });
+  try {
+    assert.equal((await owned.exited).code, 0);
+    const descendant = Number(output);
+    assert.ok(Number.isSafeInteger(descendant) && descendant > 0);
+    assert.equal(isProcessAlive(descendant), true);
+    const result = await owned.terminate();
+    assert.equal(result.escalated, true);
+    assert.equal(isProcessAlive(descendant), false);
+  } finally { await owned.terminate(); }
 });

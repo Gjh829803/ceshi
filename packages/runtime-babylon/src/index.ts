@@ -1,4 +1,6 @@
 export * from "./babylon-world-runtime";
+export * from "./browser-keyboard-input";
+export { finishHostedInteractiveInputV1 } from "./browser-fixed-input-recovery";
 export {
   admitBabylonNativeSurfacesV1,
   BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1,
@@ -75,6 +77,9 @@ export {
 export * from "./subject-asset-cache";
 export * from "./subject-visual";
 export * from "./world-runtime-snapshot";
+export { installRuntimeFlightRecorderV1, parseRuntimeFlightReportV1,
+  RUNTIME_FLIGHT_REPORT_MAXIMUM_JSON_BYTES_V1,
+  type RuntimeFlightBundleV1, type RuntimeFlightReportV1, type RuntimeFlightSourceV1 } from "./runtime-flight-recorder.js";
 export {
   createFormalCaptureStartupReporterV1,
   type FormalCaptureStartupDiagnosticV1,

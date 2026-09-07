@@ -23,7 +23,8 @@ import {
   parseFormalWorldCaptureIntentV1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "@whitebox-world/runtime-contracts";
-import { type Sha256HashV1 } from "@whitebox-world/protocol";
+import { canonicalJsonBytes, type Sha256HashV1 } from "@whitebox-world/protocol";
+import type { MaterializeFormalWorldCaptureRequestInputV1 } from "./formal-capture-request.js";
 import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
@@ -48,8 +49,8 @@ import {
   type WorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import {
-  parseWorldPackageWorldBoundsV1,
-} from "@whitebox-world/world-package";
+  parseNativeSceneWorldBoundsPolicyV1,
+} from "../native-scene/world-bounds-policy.js";
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
@@ -61,6 +62,7 @@ import {
   type WorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
 import { NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 } from "./native-block-production-budget.js";
+import { createNativeSubjectHostContextV1 } from "./native-subject-host-context.js";
 import {
   createProductionWorldReconstructionRunPortsV1,
 } from "./production-run-ports.js";
@@ -85,17 +87,12 @@ const DEFAULT_REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url)),
 );
 const CASE_CORPUS_RELATIVE_PATH = path.join("artifacts", "scenes");
-const HOST_CLOSURE_RELATIVE_PATH = path.join(
-  "apps",
-  "playground",
-  "public",
-  "world-packages",
-  "cloud-ridge",
-);
 const NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export interface WorldReconstructionProductionInputV1 {
+  /** Fresh omission means world-only; resume omission retains the frozen scope. */
+  readonly visualCaptureScope?: MaterializeFormalWorldCaptureRequestInputV1["visualCaptureScope"];
   readonly executionMode?: "fresh" | "resume-host-only";
   readonly repositoryRoot?: string;
   readonly casePath: string;
@@ -234,41 +231,32 @@ function parseIntent(bytes: Uint8Array) {
   }
 }
 
-function registryOwnerRef(
-  registryLockValue: unknown,
-  resourceKind: "gameplay-bootstrap" | "world-runtime-bootstrap",
-  contentHash: Sha256HashV1,
-): string {
-  if (!Array.isArray(registryLockValue)) {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  const matches = registryLockValue.filter((entry) => {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      return false;
-    }
-    const record = entry as Record<string, unknown>;
-    return record.resourceKind === resourceKind &&
-      record.contentHash === contentHash &&
-      typeof record.resourceRef === "string" &&
-      typeof record.resolvedVersion === "string" &&
-      record.resourceRef.endsWith(`@${record.resolvedVersion}`);
-  }) as Record<string, unknown>[];
-  if (matches.length !== 1) {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  return matches[0]!.resourceRef as string;
-}
-
 interface WorldReconstructionInputFreezerHooksV1 {
   readonly afterPromotion?: () => Promise<void>;
   readonly removeOwnedPath?: (absolutePath: string) => Promise<void>;
 }
 
 interface WorldReconstructionInputFreezeInputV1 {
+  readonly visualCaptureScope: MaterializeFormalWorldCaptureRequestInputV1["visualCaptureScope"];
   readonly outputDirectoryPath: string;
   readonly caseBytes: Uint8Array;
   readonly profileBytes: Uint8Array;
   readonly intentBytes: Uint8Array;
+}
+
+function captureScopeBytes(visualCaptureScope: WorldReconstructionInputFreezeInputV1["visualCaptureScope"]): Uint8Array {
+  return canonicalJsonBytes({ kind: "world-reconstruction-capture-scope", schemaVersion: 1, visualCaptureScope });
+}
+
+async function readFrozenCaptureScope(outputDirectoryPath: string): Promise<WorldReconstructionInputFreezeInputV1["visualCaptureScope"]> {
+  const code = "WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID";
+  const bytes = await readCanonicalRegularFile(path.join(outputDirectoryPath, "inputs/visual-capture-scope.json"), code);
+  const record = parseJson(bytes, code);
+  const scope: unknown = record !== null && typeof record === "object" ? Reflect.get(record, "visualCaptureScope") : undefined;
+  if ((scope !== "world-only" && scope !== "complete-targets") || !bytesEqual(bytes, captureScopeBytes(scope))) {
+    throw new TypeError(code);
+  }
+  return scope;
 }
 
 export class WorldReconstructionInputFreezeClosedErrorV1 extends Error {
@@ -302,6 +290,7 @@ async function freezeInputs(
       ["case.json", caseBytes],
       ["evaluation-profile.json", profileBytes],
       ["formal-world-capture-intent.json", intentBytes],
+      ["visual-capture-scope.json", captureScopeBytes(input.visualCaptureScope)],
     ] as const) {
       const handle = await open(
         path.join(inputDirectoryPath, filename),
@@ -400,12 +389,7 @@ async function assertSourceInputsUnchanged(input: Readonly<{
   }
 }
 
-async function assertFrozenInputsUnchanged(input: Readonly<{
-  outputDirectoryPath: string;
-  caseBytes: Uint8Array;
-  profileBytes: Uint8Array;
-  intentBytes: Uint8Array;
-}>): Promise<void> {
+async function assertFrozenInputsUnchanged(input: WorldReconstructionInputFreezeInputV1): Promise<void> {
   const inputDirectoryPath = path.join(input.outputDirectoryPath, "inputs");
   const actual = await Promise.all([
     readCanonicalRegularFile(
@@ -426,6 +410,9 @@ async function assertFrozenInputsUnchanged(input: Readonly<{
     !bytesEqual(actual[1], input.profileBytes) ||
     !bytesEqual(actual[2], input.intentBytes)
   ) throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+  if (await readFrozenCaptureScope(input.outputDirectoryPath) !== input.visualCaptureScope) {
+    throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+  }
 }
 
 async function readJoinedRunReceipt(input: Readonly<{
@@ -641,9 +628,8 @@ function assertFrozenOwnerIdentitiesMatch(
   if (
     actual.caseHash !== expected.caseHash ||
     actual.evaluationProfileHash !== expected.evaluationProfileHash ||
-    actual.gameplayBootstrapHash !== expected.gameplayBootstrapHash ||
-    actual.worldRuntimeBootstrapHash !== expected.worldRuntimeBootstrapHash ||
-    actual.worldBoundsHash !== expected.worldBoundsHash ||
+    actual.subjectHostContextHash !== expected.subjectHostContextHash ||
+    actual.worldBoundsPolicyHash !== expected.worldBoundsPolicyHash ||
     actual.bootstrapInputHash !== expected.bootstrapInputHash
   ) throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_OWNER_INVALID");
 }
@@ -652,6 +638,9 @@ export async function runWorldReconstructionProductionV1(
   input: WorldReconstructionProductionInputV1,
   owners: WorldReconstructionProductionOwnersV1 = defaultOwners(),
 ): Promise<WorldReconstructionProductionResultV1> {
+  if (input.visualCaptureScope !== undefined && input.visualCaptureScope !== "world-only" && input.visualCaptureScope !== "complete-targets") {
+    throw new TypeError("WORLD_RECONSTRUCTION_CAPTURE_SCOPE_INVALID");
+  }
   if (input.executionMode !== undefined && input.executionMode !== "fresh" && input.executionMode !== "resume-host-only") {
     throw new TypeError("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
   }
@@ -716,6 +705,7 @@ async function runProduction(
     path.dirname(outputDirectoryPath) !== runsRoot ||
     !RUN_ID_PATTERN.test(runId)
   ) throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  const visualCaptureScope = input.visualCaptureScope ?? (isHostRecovery ? await readFrozenCaptureScope(outputDirectoryPath) : "world-only");
   deriveNativeBlockGenerationRouterRequestIdV1({
     caseId: reconstructionCase.id,
     runId,
@@ -800,76 +790,21 @@ async function runProduction(
     "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID",
   );
   const inputDirectoryPath = path.join(caseRoot, "inputs");
-  const worldBoundsPath = path.join(inputDirectoryPath, "world-bounds.json");
-  const worldBounds = parseWorldPackageWorldBoundsV1(parseJson(
+  const worldBoundsPolicyPath = path.join(inputDirectoryPath, "world-bounds-policy.json");
+  const worldBoundsPolicy = parseNativeSceneWorldBoundsPolicyV1(parseJson(
     await readCanonicalRegularFile(
-      worldBoundsPath,
-      "WORLD_RECONSTRUCTION_WORLD_BOUNDS_INVALID",
+      worldBoundsPolicyPath,
+      "WORLD_RECONSTRUCTION_WORLD_BOUNDS_POLICY_INVALID",
     ),
-    "WORLD_RECONSTRUCTION_WORLD_BOUNDS_INVALID",
+    "WORLD_RECONSTRUCTION_WORLD_BOUNDS_POLICY_INVALID",
   ));
-  const hostClosureRootPath = await canonicalDirectory(
-    path.join(repositoryRoot, HOST_CLOSURE_RELATIVE_PATH),
-    "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-  );
-  const gameplayBootstrapPath = path.join(
-    hostClosureRootPath,
-    "gameplay",
-    "bootstrap.json",
-  );
-  const worldRuntimeBootstrapPath = path.join(
-    hostClosureRootPath,
-    "runtime",
-    "world-runtime-bootstrap.json",
-  );
-  const [gameplayBootstrap, worldRuntimeBootstrap, registryLock] =
-    await Promise.all([
-      readCanonicalRegularFile(
-        gameplayBootstrapPath,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-      readCanonicalRegularFile(
-        worldRuntimeBootstrapPath,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-      readCanonicalRegularFile(
-        path.join(hostClosureRootPath, "registry-lock.json"),
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      ).then((bytes) => parseJson(
-        bytes,
-        "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
-      )),
-    ]);
-  const gameplayHash = (gameplayBootstrap as { contentHash?: unknown })
-    .contentHash;
-  const runtimeHash = (worldRuntimeBootstrap as { contentHash?: unknown })
-    .contentHash;
-  if (typeof gameplayHash !== "string" || typeof runtimeHash !== "string") {
-    throw new TypeError("WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID");
-  }
-  registryOwnerRef(
-    registryLock,
-    "gameplay-bootstrap",
-    gameplayHash as Sha256HashV1,
-  );
-  const worldRuntimeBootstrapRef = registryOwnerRef(
-    registryLock,
-    "world-runtime-bootstrap",
-    runtimeHash as Sha256HashV1,
-  );
+  const subjectHostContext = createNativeSubjectHostContextV1(reconstructionCase.id, "camera-main");
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
   const seed = Number.parseInt(caseHash.slice("sha256:".length, 15), 16);
   const derived = deriveNativeBlockGenerationBootstrapV1({
     reconstructionCase,
-    gameplayBootstrap,
-    worldRuntimeBootstrap,
-    worldBounds,
+    subjectHostContext,
+    worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     nativeSceneApiRef: NATIVE_SCENE_API_REF,
@@ -880,9 +815,8 @@ async function runProduction(
     resolveWorldReconstructionFrozenOwnerIdentitiesV1({
       reconstructionCase,
       evaluationProfile,
-      gameplayBootstrap,
-      worldRuntimeBootstrap,
-      worldBounds: derived.worldBounds,
+      subjectHostContext,
+      worldBoundsPolicy: derived.worldBoundsPolicy,
       bootstrap: derived.bootstrap,
     });
   const profilePath = path.join(
@@ -908,20 +842,16 @@ async function runProduction(
     runDirectoryPath: outputDirectoryPath,
     inputDirectoryPath,
     ...(input.backend === "cloud" ? { cloudOutputS3Root } : {}),
-    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"),
-    builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
+    builderSkillPath: path.join(repositoryRoot, ".codex/skills/worldkit-native-block-builder/SKILL.md"),
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(
       inputDirectoryPath,
       "native-scene-profile.json",
     ),
     blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"),
-    hostClosureRootPath,
-    gameplayBootstrapPath,
-    worldRuntimeBootstrapPath,
-    worldRuntimeBootstrapRef,
-    worldBoundsPath,
-    worldBounds: derived.worldBounds,
+    subjectHostContext,
+    worldBoundsPolicyPath,
+    worldBoundsPolicy: derived.worldBoundsPolicy,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed,
@@ -934,6 +864,7 @@ async function runProduction(
     worldReconstructionEvaluationProfileCanonicalBytesV1(evaluationProfile);
   try {
     await (isHostRecovery ? assertFrozenInputsUnchanged : freezeInputs)({
+      visualCaptureScope,
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,
@@ -967,6 +898,7 @@ async function runProduction(
   }
   try {
     ports = await owners.createRunPorts({
+      visualCaptureScope,
       ...(hostRecoveryIndex === undefined ? {} : { hostRecoveryIndex }),
       executionPurpose: "production",
       repositoryRoot,
@@ -1069,6 +1001,7 @@ async function runProduction(
       intentHash: reconstructionCase.formalCaptureIntentHash,
     });
     await assertFrozenInputsUnchanged({
+      visualCaptureScope,
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,

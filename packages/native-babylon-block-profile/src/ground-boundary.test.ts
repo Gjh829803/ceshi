@@ -72,6 +72,11 @@ function geometry(input: Readonly<{
     collisionPositionsMetersXYZ: positions,
     overlayPositionsMetersXYZ: positions,
     triangleIndices: indices,
+    overlayPartitions: Object.freeze([Object.freeze({
+      sourceBlockIds: Object.freeze([`${input.id}-block`]),
+      visualGroupIds: Object.freeze([`${input.id}-visual`] as const),
+      triangleIndices: indices,
+    })]),
     sourceCellCount: 1,
     vertexCount: 4,
     triangleCount: 2,

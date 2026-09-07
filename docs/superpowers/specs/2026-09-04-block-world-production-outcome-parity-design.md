@@ -11,6 +11,16 @@ in [the progress ledger](../../18-refactor-progress-and-backlog.md).
 
 ## 1. Decision
 
+2026-09-07 CF-20/MEM4 amendment, explicitly approved by the user: the Native Block
+Profile records immutable intent and clusters before allocating visual Meshes, as
+the pinned old compiler does. `createBlock`/`createBlockGrid` return frozen canonical
+inputs, not immediate Mesh handles. The existing Native Source, explicit Collider
+boundary, logical Block identities and SDK Runtime owners remain. Profile/Host
+settlement binds actual cluster Meshes and every explicit Collider join; Capture
+retains exact logical membership. This replaces the former per-Block allocation
+contract, not production policy. No count cap, new gate, hidden ground, alternate
+authoring source or extra repair task is authorized by this representation change.
+
 The current Babylon Native implementation keeps its architecture, ownership, deterministic evidence,
 and atomic publication. All non-architectural production behavior follows the successful historical
 `codex/block-world-main-integration@9e35ab53` workflow, including its stage order, requested-scope
@@ -73,6 +83,15 @@ The existing disposable renderer additionally reuses Profile shape/lattice/occup
 for in-task overlap feedback. It does not recreate a Scene, persistent Layout or Physics owner;
 unsupported structures remain advisory, and full Native/Ground admission remains Host-owned.
 
+CF-19 bounded overlap feedback (054 frozen replay, 2026-09-05): preserve the legacy
+ability to see several geometric conflicts in one shared repair cycle. The existing
+restricted renderer reports at most 32 distinct overlapping Block-ID pairs in
+deterministic discovery order, with one representative occupied cell per pair.
+Repeated cells must not grow the diagnostic collection; the response states when
+the bound prevents complete enumeration. Any overlap still rejects rendering and
+writes no comparison PNG. This changes feedback completeness, not legal geometry,
+the three-cycle budget, the static checker boundary or production success policy.
+
 CF-19 task-instruction/visual-completion clarification (2026-09-05, authorized legacy parity):
 old `9e35ab53:scripts/agents/run-spatial-world-agent.sh` supplied the exact Skill and checker/renderer
 commands plus the view/repair/recheck loop in the submitted instruction, not only in an attached
@@ -115,11 +134,31 @@ If a downstream optional visual step fails, an already admitted playable whitebo
 launchable. The requested top-level scope fails until its own required artifacts close; it does not mutate
 the upstream whitebox outcome.
 
-The historical base Visual Reconstructor had same-task self-review followed by Host file/hash/role
-closure; it did not have a separate semantic Reviewer. Those same-task and Host checks remain blocking for
-a requested base-style scope. Any new independent base semantic review is a strict diagnostic only and
-cannot introduce a new ordinary-production veto. This differs from the per-variant Reviewer in the Episode
-visual-sample scope below, which was present in the old workflow and remains part of that requested scope.
+CF-16 execution-path correction (2026-09-07, user-authorized no-new-gate parity): the pinned old
+`scripts/visual/run-styled-opening-frame-agent.sh` actually invokes `run-gemini-visual-pipeline.py`.
+Its `_generate_one` saves valid image bytes and `_generate_images` collects the declared files; it does
+not withhold PNGs on a semantic-similarity or baseline review verdict. The earlier statement that the
+old base Skill's same-task semantic verdict was a blocking production gate was not supported by that
+actual entry point. Keep the current single Codex task, opening-first inspection/frozen appearance anchor
+and existing bounded repair allowance, but deliver every final generated valid PNG after that allowance.
+Report residual visual differences without claiming semantic success. Executing the requested stage and
+Host file/hash/role closure remain required; missing/corrupt/stale outputs still fail. Neither same-task
+quality feedback nor a new independent base semantic review may create a delivery veto. This differs
+from the per-variant Reviewer in the Episode visual-sample scope below, which was present in the old
+workflow and remains part of that requested scope.
+
+CF16's current prompt bundle retains `kind: worldkit-visual-generation-prompts`
+and only schemaVersion 2, with exact top-level keys kind/schemaVersion/sceneId/
+openingFrame/styledTriviews. Restore the old opening roles
+`[actual-whitebox-opening, user-first-frame]`, tri-view roles
+`[target-whitebox-triview, styled-opening-frame, user-first-frame]`, minimum prompt
+lengths 200/150, and exact Capture target identity/order. Do not retain the old
+schema-1 alternative. The old `provider: lwdp-codex` field is removed from this
+provider-neutral task artifact: actual local/cloud routing belongs only to the
+sole router's TaskReceipt, so a local task never claims LWDP execution. This is
+an architecture adaptation, not removal of role/target checks or a new visual
+quality gate. Producer, Skill and Host consumers activate this clean break together;
+the prompt artifact alone does not prove actual image inspection or anchor use.
 
 ### 3.2 Episode visual-sample scope
 
@@ -354,5 +393,329 @@ Presence checks confirm the Package/live target identity, not that a target must
 images. Only reference-projection requirements compare normalized bounds. Outside-view results are
 observations, not Host execution failures. Malformed identity/camera/hash linkage still fails integrity;
 new semantic quality diagnostics remain report-only in ordinary production and never allocate repair
-tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
-obligations, not implied by this structural evidence.
+tasks or veto publication. CF-12 camera calibration remains a separate obligation.
+
+CF-14 visible-pixel activation is a current-only extension of this same Capture, not a new
+model/review stage. Each existing opening/side/top transaction also returns an opaque unlit
+identity PNG from the same explicit live geometry and Camera, with ungrouped geometry/Subject
+as black occluders. Display PNGs remain unchanged outputs. Each view record requires distinct
+`identityMaskPngArtifactRef` and `identityMaskPngContentHash`; its semantic observation repeats
+that exact content hash. Hash joins, publication and recovery verify all three identity images.
+Missing/stale bytes are integrity errors, never a fabricated mask or AABB fallback.
+
+The Host decodes the bound identity PNGs and measures admitted target pixels using the same
+pixel bounds/count/rounding owner as reference preparation. Semantic Evaluation consumes
+`visiblePixelProjection`, with `visible` or `not-visible` outcomes, rather than rectangular
+`structuralProjection` area. No pixels alone distinguish neither absence nor occlusion; do not
+invent that causal label. Structural observations remain available for their genuine spatial
+uses. Quality differences remain diagnostic in ordinary production, with no new source-repair
+Attempt, production veto or stricter success threshold. Actual Browser evidence is required
+before claiming same-camera masks, holes, repeated instances and occlusion are verified.
+
+Pixel absence and bounds/center/coverage drift use the existing source-repair action with the
+current-only operation `adjust-geometry`, not an inferred move/enlarge/shrink.
+Its instruction requires comparing the bound identity and display pixels with
+the frozen reference and preserving intended holes, separation and occlusion.
+This does not assert a geometric cause from an aggregate pixel count. The existing
+explicit evaluation-repair task receives all three identity masks, side/top display
+images and semantic observations through its frozen input allowlist; ordinary
+production still never allocates that external repair task.
+
+CF-14/R2-F closes the separate Opening visual consumer. The Host derives one
+opening pixel-composition projection (regions and anchors keyed by the existing
+composition target) from the admitted opening identity PNG and semantic-map
+bindings. Both the explicit Opening Host gate and Evaluation require this pixel
+projection for visual bounds/centers. There is no structural-AABB fallback.
+`FormalOpeningObservation.visualGroups` remains the structural spatial evidence:
+its depth/order and distance consumers are unchanged, as are Subject and Camera
+checks. A target with no admitted pixels is omitted from visual regions/anchors,
+not mislabeled as missing Source geometry. Pixel-region/anchor absence and drift
+use `adjust-geometry`, preserving holes and considering occlusion before repair;
+the strict gate's existing unsupported diagnostic/repair allocation policy stays
+unchanged. Its existing rejected-capture repair snapshot now also includes all
+three identity PNGs and the semantic observation, already retained by Capture.
+No new stage, quality threshold, ordinary veto, repair cycle or side/top visibility
+requirement is introduced. Required evidence is identical visible pixels with
+different structural bounds, actual pixel drift, absence, unchanged depth/order,
+and repair-input/operation closure through both consumers.
+
+CF-14/R2-D binds the actual walkable top overlays, not only the original Block
+meshes. The existing topology owner records required `overlayPartitions` on each
+geometry: deterministic partitions with exact `sourceBlockIds`, `visualGroupIds`
+(empty or one group), and triangle indices into the existing overlay positions.
+Solid geometries have no overlay partitions. Each source top-cell supplies both
+triangles and their identity; the union covers the original walkable triangles
+exactly once. No Capture consumer re-derives that identity from names or bounds.
+The existing materializer emits one explicit walkableOverlay handle per partition
+and preserves the original full-surface normals, placement and collision arrays.
+Partitions participate in geometry/topology hashes but do not change physics,
+smoothing, Collider budgets or production policy. Capture validates and colors
+these explicit handles; mixed semantic and ungrouped Blocks within one Collider
+remain supported, with ungrouped partitions black rather than a new rejection.
+
+The identity attachment must be single-sample RGBA bytes, without multisample
+resolve or image filtering: averaging two valid identity colors can create a third
+valid identity color, so exact palette membership alone cannot reject the artifact.
+Use Babylon's existing same-Camera render-target attachment with depth and the same
+raster size, geometry, viewport and projection. Restore any prior camera output target,
+dispose the temporary target on success/failure, and normalize framebuffer row order
+without interpolation. Do not disable anti-aliasing for the user's display or change
+production palette acceptance to hide this rendering defect.
+
+### CF-11 source-authored ground exploration
+
+Legacy `9e35ab53` Block Builder requires real middle/remote exploration
+anchors and a spawn-to-middle honest-width band when every Brief movement mode
+is ground-walk, ground-slide, ground-ride or ground-drive. These are authored in
+the same Builder task from the frozen Brief and World Plan. Current Native restores this as pure
+`groundExploration` data in the existing authoring sidecar, not a third Source,
+Planner Runtime coordinates, new model task or product Route/Nav authority.
+
+The required Case `groundConnectivity.mode` selects `case-defined` or
+`source-authored`. Case-defined keeps immutable metric bands and their existing
+strict bindings. Source-authored requires no pre-invented metric bands. Host
+derives the existing single-component boolean from the same parsed Brief byte
+snapshot used to bind the Palette semantic Hash, not from Palette mode labels
+or a guessed Subject shape. All-ground intent requires one reachable component;
+mixed/free-space intent permits false, including with a ground Spawn. An air
+Spawn cannot require a single ground component. The required sidecar selects the
+same mode. With true policy it declares distinct middle/remote stand
+anchors and honest-width bands, including exact Spawn to a middle anchor. With
+false policy the arrays may be empty; every declared row still undergoes validity
+and actual Ground checks. Match the old target rule: false permits a standable
+target disconnected from Spawn, retaining its unreachable measurement without a
+target-connectivity failure or forced step-frontier repair. It does not waive
+target support, clearance, exact topology or a declared band's local reachability.
+True still requires both target and whole-component connectivity. Optional
+evidence does not implement unsupported motion.
+Each source-authored band preserves the old explicit `isBidirectional` boolean:
+forward reachability is always required, reverse reachability only when true.
+Authors use true unless the Brief explicitly calls for one-way traversal. The
+flag binds validation intent and metadata/Package hashes; it does not create
+one-way geometry or activate directed transitions. Current ground remains
+bidirectional. Existing case-defined bands retain that bidirectional contract;
+the Host projects true without adding a sidecar override or changing Case bytes.
+There are no new distance, area or chunk minima and no image-quality veto.
+The old per-band 2-256 waypoint constraint remains exact; it is not a ceiling on
+the total number of exploration anchors. Parser and Ground must validate all
+declared anchors rather than introduce a separate 256-target veto. Existing
+output-byte, geometry and Ground cell budgets remain unchanged.
+Target and band IDs are unique within their own lists, as in the old checker;
+authored list order is preserved through metadata and bound by its Hash, not
+rejected or silently sorted. Waypoint order remains the actual traversal course.
+This does not relax ordering of derived materializer inventories or resource refs.
+
+One shared parser/admission checks syntax and policy in the portable Builder
+self-check and Host. Host binds the complete source intent through the existing
+authoring/layout binding, materializer metadata and Package root, then the existing
+Ground analyzer evaluates exact support, clearance and connectivity against explicit
+Frozen Contributions. Ground anchors/bands have independent local IDs but may
+diagnose the same Case ground obligation; they do not create visual-target rows.
+The original Case/Request/Bootstrap bytes and hashes are never rewritten after
+generation. Case-defined source cannot override fixed routes; source-authored source
+cannot change the frozen policy. Optional arrays do not waive actual ground-Spawn
+support, footprint or clearance, and do not change the existing expected-medium
+failure policy.
+
+This changes ordinary Ground input ownership to the old-equivalent declaration
+pattern, not the production success authority or repair budget. R5 below removes
+the ordinary generic topology/script template; explicitly declared Capture scripts
+remain exact constraints, separate from the authored Ground intent. Full region/feature
+measurements, strict authored route compilation and multi-medium selection remain CF-11/13/21/12;
+the declaration slice alone does not prove complete parity or a new real Case.
+
+### CF-11 checked-layout world bounds
+
+The frozen legacy `9e35ab53` `boundsForBlocks` is the numeric baseline: union all
+actual Block bounds (not just semantic targets or collision selections), use the
+XZ midpoint, `max(16m, span + 9m)` horizontal size and vertical range
+`[minimumY - 65m, maximumY + 16m]`. These are container margins only. The old
+foundation is not restored and no floor, Collider or quality threshold is derived
+from the margin. Real Brief geography and existing resource budgets still apply.
+
+Native Host freezes one exact world-bounds policy in `world-bounds-policy.json`:
+ordinary generation selects `checked-block-layout`; explicit fixed inputs select
+`fixed` with concrete `worldBounds`. This replaces the former unqualified bounds
+input current-only, independently of the Case's ground policy. Builder cannot edit
+it or emit Package bounds. The Host resolves the checked-layout policy only after
+the existing Native replay/evidence joins, before validating contributed geometry
+and building the Package. Fixed generic Native does not require Block evidence.
+
+Original Request, Host closure, journal, repair and resume bind
+`worldBoundsPolicyHash`; final Package root binds the concrete computed bounds.
+They are different identities, not interchangeable receipts. Ground, Capture and
+Runtime continue to consume the same verified Package manifest, not a side-file
+override. Policy changes fail existing stale-owner checks; Source changes naturally
+change checked extents and Package identity. There is no compatibility input alias,
+new model task, extra repair cycle or new ordinary production veto.
+
+### CF-14/24 whole-world inspection framing
+
+Formal side/top inspection frames the complete checked Block inventory, including
+ungrouped visual-only and off-camera scenery. Package container margins are not
+visible-world extents: keep CF-11's legacy-equivalent container bounds unchanged.
+One Host derivation supplies both Request creation and Package/Request admission;
+its inputs are verified materializer Block centers and effective axis-aligned sizes,
+not mesh-name/tag scans, semantic groups or Collider selections. Preserve the existing
+minimum inspection spans (8m X/Z, 4m Y), centered on the actual Block union. This is
+camera framing only, never required world geometry or a new production quality gate.
+Opening Camera, Subject owner, render fitting, output count, retries and ordinary
+publication criteria are unchanged. Request/Receipt hashes bind the new framing.
+
+The frozen legacy artifact-capture uses actual renderable target extents rather
+than compiler container margins (9e35ab53, artifact-capture.ts:315-340). The Native
+adaptation obtains extents from trusted checked metadata instead of entity/Mesh
+discovery. This fixes whole-world inspection, not legacy per-object tri-view parity,
+visible-pixel completeness, or Subject/Camera multi-mode acceptance.
+
+### CF-11 ground obligations are not visual identities
+
+Ordinary production must not create `entry-ground-group`/`remote-ground-group`
+semantic targets or require a second floor Collider merely to represent a template.
+The single `ground` acceptance obligation binds the required Spawn support Collider
+and the existing authored Ground exploration checks, not a visual group, material,
+topology node, scene feature or fixed geographic partition. Builder selects actual
+floor Blocks/Collider Groups explicitly and may contribute further required surfaces.
+All authored middle/remote anchors, honest-width bands, exact Spawn support and
+the single-component policy stay mandatory. Full Brief geography remains required.
+
+Only non-Subject identity targets selected from the actual palette become semantic
+silhouette/Intent bindings. A Subject-only palette therefore has an explicit empty
+target set, not a fabricated landmark. Required Case/Profile/Intent/metadata/live
+registry collections preserve exact empty-set equality; missing fields, undeclared
+groups and missing observations for declared targets remain invalid. Capture still
+renders the entire actual world and SDK Subject, all four images, live explicit
+Collider overlay and Spawn support. Empty semantic/topology obligations report
+incomplete evidence, not complete-world quality or strict acceptance. Ordinary
+publication and repair budgets are unchanged. Complete scene-feature/region
+coverage remains CF-11/21 and is not implied by removing the template.
+
+### CF-11 ordinary Capture has no invented traversal script
+
+CF-04/T1 opening timing amendment (2026-09-07): the paused old-branch opening is
+the reset/render-ready state, not a state advanced by a synthetic neutral Tick.
+The Formal provider captures all opening/identity/orthographic/tri-view images
+from that same state before the existing neutral support-sampling Tick. Camera
+and Physics retain their current single owners; rendering never advances them.
+`FormalSpawnSupportObservationV1` keeps `resetReadySnapshot` and its Hash joined
+to the Capture receipt, and now requires `sampledSnapshot` and its Hash for the
+actual support measurement. The sample belongs to the same Runtime/world and
+the immediately following neutral Tick; its committed movement medium is used
+for support observations. No old-shape fallback or relabeling of a Tick is
+allowed. The existing support sample is reordered, not duplicated; no new model
+task, ordinary gate, retry, support algorithm or extra simulation Tick is added.
+All consumers parse and hash the current observation shape together. Explicit
+scripted traversal retains its existing independently reset sampling sequence.
+
+Ordinary baseline preparation does not invent a straight 12m route, 300 Tick
+input sequence, remote checkpoint or topology relation. Ground's actual authored
+anchors and bands remain mandatory and independent of Capture scripts. Explicit
+Case-declared scripts continue to mean exactly the declared work.
+
+Required arrays are exact requested sets and may explicitly be empty: Case
+criticalTraversalChecks, Intent checkpoint criteria/topology relations, semantic
+traversal bindings and Capture request/observation checks. Empty is not a missing
+field or a successful route proof. The provider performs no route reset/input for
+zero checks and binds its empty observation to the Capture ready Snapshot; all
+image/Spawn/Collider/identity outputs remain required. Nonempty declarations retain
+their complete exact observations, independent resets and unchanged Tick budgets.
+
+Evaluation marks undeclared critical traversal incomplete using the existing
+missing-evidence diagnostic attached to Spawn support. Ordinary production outcome
+is unchanged by that strict diagnostic. Explicit NBR strict acceptance requires
+declared scripted checks and cannot pass through the empty production set. No
+source rewriting, added model/reviewer task, extra repair or fresh Browser replay
+is introduced. Full region/feature coverage and strict authored route compilation
+remain separate CF-11/13/21 obligations.
+
+### CF-11 local arrival evidence
+
+The frozen Formal Capture intent declares `reach-position` with an exact
+`standPositionMetersXYZ`, checkpoint id, source visual-group id, Capsule radius
+and tolerance. Host binding verifies the visual-group identity and preserves the
+authored position. It must never substitute the whole group's AABB: a group may
+span entry, middle and remote space. Runtime Capture and the explicit strict
+verifier use the same existing measurement function, checking each coordinate
+inside the local endpoint plus/minus the existing radius-and-tolerance margin.
+`pass-plane` and `block-plane` retain their group/Collider-bound plane semantics.
+
+This is a current-only replacement of `reach-bounds`, not an alias or optional
+fallback. Endpoint bytes participate in the existing Intent/Case/Request Hash
+chain. Case-defined Ground and Capture preserve frozen endpoint identity; the
+committed strict Case input binds its spawn and upper-platform checkpoints to
+its frozen stand positions. Historical run receipts remain unchanged. Accurate
+arrival diagnostics do not reverse ordinary production success or enable a
+fresh Browser replay in the interactive workflow. Full authored geography,
+coverage and removal of the fixed baseline remain CF-11/21 work, not proven by
+this local measurement change.
+
+### CF-04/12 authored opening Camera consumption
+
+The four opening values (`distanceMeters`, `targetHeightMeters`, `pitchRadians`,
+and `fovDegrees`) must reach the actual Camera Director, not just the Builder
+software review. For Native Block, required `openingCamera` in the existing
+authoring sidecar expresses pure numeric intent using the exact
+`BabylonNativeInitialCameraV1` shape. The Host checks the existing selectable
+third-person Profile ranges, binds the values in the authoring/layout binding
+and materializer metadata, and hashes that metadata into the Package. Runtime
+uses these verified values; Formal opening diagnostics and Ground FOV consume
+the same admitted data. Other Scene Source contracts retain their own Bootstrap.
+The immutable generation Bootstrap/WRT remain the input baseline; they are not
+rewritten or re-hashed to masquerade as the authored result. Native Module code
+still cannot create, mutate, or own a Camera. There is no missing-field fallback.
+As in `9e35ab53`, the first selected non-first-person Profile receives that
+authored baseline. The constructor's Profile hint does not override Camera
+Context selection. Resolution order is Profile parameters, authored opening,
+Context Modifiers, then explicit Preview tuning. A different selected Profile
+keeps its own parameters; returning to the opening Profile restores its authored
+baseline. Existing socket targeting and locked control-heading behavior remain
+unchanged. Validation uses the existing Profile-safe tuning ranges, not a new
+image-quality threshold or production gate.
+
+The Golden Character movement Snapshot stores body-center coordinates. Both
+fixed-transaction Camera publication and initial/rebind view publication use the
+same Host projection to Subject origin and locked local sockets, exactly once.
+No path may treat body center as Subject origin and add the capsule offset to
+the opening target. This preserves the old Subject-origin camera basis without
+changing movement state, socket precedence, or the ordinary completion policy.
+
+The Director owns the opening Profile binding. Its `authoredOpeningProfileRef`
+is included in the Camera transaction and published view Snapshot (absent before
+a successful third-person bind), restored on abort/rollback, and cleared by
+Runtime Reset. Native Block's admitted values remain in hashed Package metadata;
+authored tuning is never copied into the mutable Preview override map. Builder
+tunes the data in the existing check/render/view/repair loop, with the same three
+source files, two PNGs, shared repair budget and ordinary completion policy.
+This does not provide multi-mode Subjects, prove target-socket/pixel parity, or
+close CF-04/12. Historical Case artifacts retain their original bytes and evidence
+scope; the current-only parser does not add a bridge for older metadata shapes.
+
+### CF-03 finite zero-normal support resolution
+
+The conditional current-engine reproducer is satisfied by Babylon 9.23.0/Havok
+1.3.14: a non-penetrating capsule beside an 86-degree static plane can receive
+SLIDING with a finite zero averaged normal. The installed query assigns support
+mode before averaging only touched constraints whose upward alignment exceeds
+0.08; therefore a finite zero normal is not malformed provider data by itself.
+
+The existing BodyPort begin transaction remains the only resolution owner. Parse
+the closed native observation and finite vectors without inventing a normal. In
+the existing order, upward departure resolves unsupported; a native unsupported
+result is never promoted by contacts. Otherwise use the normalized native normal,
+or, only when it is degenerate, the normalized average of already admitted current
+manifold contacts (the existing upward alignment and support contact band). Without
+such a normal resolve unsupported. Preserve the current supported/sliding mode
+when a normal exists; do not create another slope/state classifier. BodySample,
+native integration input and committed support evidence consume that same resolved
+result. Unsupported integration receives zero normal/velocities and false dynamic
+status, never a fabricated upward vector. Non-finite, malformed, unknown and
+accessor-backed inputs still reject.
+
+No extra checkSupport call, post-contact grounding authority, Block continuity,
+ray/AABB inference, provider retry, diagnostic state machine or public schema is
+introduced. Existing Reset/abort/rollback/publication semantics retain one owner;
+the native raw observation is not a second persisted Gameplay state. This restores
+the old defensible zero-normal behavior under current ownership rather than copying
+the old Block continuity or telemetry paths. Real steep-plane RED, ordinary
+ground/slope jump-land controls, adversarial contact eligibility, integrate/sample
+coherence, Reset/abort and once-per-tick evidence are required before closure.

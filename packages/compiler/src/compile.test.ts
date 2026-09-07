@@ -38,6 +38,7 @@ import {
 
 import {
   compileCanonicalWorldV1,
+  compileNormalizedSubjectResourcesV1,
   sampleTerrainHeight,
 } from "./index";
 
@@ -376,6 +377,81 @@ const PRODUCT_FIXED_SPAWN_CASES = [
 ] as const;
 
 describe("compileWorld", () => {
+  it.each([
+    {
+      label: "registered",
+      create: createValidAuthoringSpec,
+      runtimeHash: "sha256:4aff9e12b6feb2487e0c7a9eb372bb43afecda5d9b83584f03fcc53ee3d83272",
+      planHash: "sha256:fc8f34ae5d6e265f9188bb4784c6dff84bbf71caee528cc1fb8407f801ad7253",
+    },
+    {
+      label: "package primitive",
+      create: createValidPackageSubjectWorldV4,
+      runtimeHash: "sha256:9b25a3c22ab3680c400b000f7d34d58052d139f3f8ce3a8617d28b0311406503",
+      planHash: "sha256:6124efad3a04b8bbebf942877440231a65dcc6b385bd6efb47f3e911b9057792",
+    },
+    {
+      label: "package rigged",
+      create: createValidRiggedPackageSubjectWorldV4,
+      runtimeHash: "sha256:ef2a6a1d0219d4b721d432eeae7c6ff4e499c1db80e8626f12bbddae9c1ea651",
+      planHash: "sha256:0b57400aff8d6a082fb8780de0c27243d86590a284c7d9acc047da39dde6669f",
+    },
+  ])("shares the $label Subject projection without changing pre-extraction identities", ({ create, runtimeHash, planHash }) => {
+    const normalized = normalizeAuthoringSpecV4(create());
+    if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
+      throw new Error(JSON.stringify(normalized.diagnostics));
+    }
+    const world = normalized.value;
+    const { subjectDefinitions, subjectAssets, rigProfiles, animationSets, colliderProfiles, resourceLock } = world.resources;
+    const input = {
+      resources: { subjectDefinitions, subjectAssets, rigProfiles, animationSets, colliderProfiles, resourceLock },
+      nodes: world.nodes.filter((node) => node.kind === "subject" || node.kind === "anchor"),
+    };
+    const original = structuredClone(input);
+    const projection = compileNormalizedSubjectResourcesV1(input);
+    expect(input).toEqual(original);
+    const inputObjects = new WeakSet<object>();
+    const collectInputObjects = (value: unknown): void => {
+      if (value === null || typeof value !== "object" || inputObjects.has(value)) return;
+      inputObjects.add(value);
+      Object.values(value).forEach(collectInputObjects);
+    };
+    collectInputObjects(input);
+    const assertDetachedOutput = (value: unknown): void => {
+      if (value === null || typeof value !== "object") return;
+      expect(inputObjects.has(value)).toBe(false);
+      Object.values(value).forEach(assertDetachedOutput);
+    };
+    assertDetachedOutput(projection);
+    expect(compileNormalizedSubjectResourcesV1({
+      resources: {
+        subjectDefinitions: [...subjectDefinitions].reverse(),
+        subjectAssets: [...subjectAssets].reverse(),
+        rigProfiles: [...rigProfiles].reverse(),
+        animationSets: [...animationSets].reverse(),
+        colliderProfiles: [...colliderProfiles].reverse(),
+        resourceLock: [...resourceLock].reverse(),
+      },
+      nodes: [...input.nodes].reverse(),
+    })).toEqual(projection);
+    const compiled = compileWorld({ normalizedWorldIr: world, normalizedWorldIrHash: normalized.normalizedWorldIrHash });
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    // Captured from 66d8ebc5 before moving the compiler owner, not recalculated expectations.
+    expect(compiled.worldRuntimeBootstrap.contentHash).toBe(runtimeHash);
+    expect(compiled.executionPlanHash).toBe(planHash);
+    expect(projection.subjects.map(({ spawnAnchorEntityId: _anchor, spawnSubjectOriginPositionMetersXYZ: _position, spawnSubjectFacingRadians: _facing, ...descriptor }) => descriptor))
+      .toEqual(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors);
+    for (const key of ["subjectAssets", "rigProfiles", "animationSets", "colliderProfiles"] as const) {
+      expect(projection[key]).toEqual(compiled.worldRuntimeBootstrap[key]);
+    }
+    expect(projection.subjects.map((subject) => ({
+      entityId: subject.entityId,
+      spawnAnchorEntityId: subject.spawnAnchorEntityId,
+      subjectOriginPositionMetersXYZ: subject.spawnSubjectOriginPositionMetersXYZ,
+      subjectFacingRadians: subject.spawnSubjectFacingRadians,
+    }))).toEqual(compiled.canonicalSceneExecutionPlan.subjectInstances);
+  });
+
   it("matches the one-time V5 projection receipt from one coherent asymmetric world", async () => {
     const normalized = normalizeAuthoringSpecV4(
       createCoherentAsymmetricProjectionSpec(),
@@ -1181,6 +1257,11 @@ describe("compileWorld", () => {
     const normalized = normalizeRiggedWorld();
     const world = structuredClone(normalized.value!);
     mutate(world);
+
+    expect(() => compileNormalizedSubjectResourcesV1({
+      resources: world.resources,
+      nodes: world.nodes.filter((node) => node.kind === "subject" || node.kind === "anchor"),
+    })).toThrow(message);
 
     expect(compileNormalizedWorld(world)).toEqual({
       ok: false,
