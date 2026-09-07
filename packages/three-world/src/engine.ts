@@ -6,6 +6,7 @@ import { ownViewport } from './viewport.js';
 import { WorldKeyboard, WorldInputRouter } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import { LocomotionAnimation } from './locomotion-animation.js';
+import { playLocomotion } from './assets.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
 type Entity = {
@@ -266,7 +267,10 @@ export class WorldEngine {
         } else this.locomotionAnimations.delete(id);
         const requested = customActions.get(id) ?? automatic;
         if(entity.asset.isActionComplete)this.manualActions.delete(id);
-        if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) entity.asset.play(requested);
+        if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) {
+          if (!customActions.has(id) && (requested === 'walk' || requested === 'run')) playLocomotion(entity.asset, requested);
+          else entity.asset.play(requested);
+        }
         entity.asset.update(dt);
       }
       this.cameraRig.update(dt);

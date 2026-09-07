@@ -218,6 +218,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/terrain-surface/src/triangle-xz-broadphase.test.ts", lane: "contract" },
   { path: "packages/testkit/src/testkit.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-library.test.ts", lane: "contract" },
+  { path: "packages/three-world/src/assets-locomotion.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/assets.test.ts", lane: "contract" },
   { path: "packages/three-world/src/camera.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/capture-selection-integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

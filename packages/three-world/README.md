@@ -74,6 +74,10 @@ An accepted jump still starts immediately. This presentation grace does not
 change physical `motion.isGrounded`, gravity, collision or jump eligibility.
 Episode relocation, teleport and reset discard the affected locomotion history;
 Episode input, camera relocation and the single fixed clock retain their behavior.
+Automatic walk/run playback removes a common positive first-key timestamp from
+its private loop copy and preserves normalized gait phase during direct walk/run
+transitions. Raw asset clips and explicit/manual playback keep their authored
+timing. Idle, jumping and reset do not inherit the previous gait phase.
 
 <!-- topic:assets -->
 ## Verified assets and lifetime

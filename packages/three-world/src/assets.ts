@@ -16,6 +16,14 @@ type LoadOptions = {
 type CacheEntry = { promise: Promise<GLTF>; references: number };
 const cache = new Map<string, CacheEntry>();
 const cloneFactories = new WeakMap<AssetInstance, () => AssetInstance>();
+// WorldAssets wraps EngineAssetInstance, but the owned mixer identity is shared.
+const locomotionPlayers = new WeakMap<AnimationMixer, (actionId: 'walk' | 'run') => void>();
+
+/** Internal automatic-gait path; generic and authored action playback stays separate. */
+export function playLocomotion(instance: AssetInstance, actionId: 'walk' | 'run'): void {
+  const play = locomotionPlayers.get(instance.mixer);
+  if (play) play(actionId); else instance.play(actionId);
+}
 
 function fail(code: string, id: string): never {
   throw new Error(`${code}: ${id}`);
@@ -64,39 +72,63 @@ function createInstance(
   let activeAction: AnimationAction | undefined;
   let activeActionId: string | undefined;
   let activeLoop: boolean | undefined;
+  let activeAutomaticGait = false;
+  const gaitClips = new Map<AnimationClip, AnimationClip>();
   let completed = false;
   let disposed = false;
   const ensureAlive = () => { if (disposed) fail('ASSET_DISPOSED', definition.id); };
   const onFinished = (event: { action: AnimationAction }) => { if (event.action === activeAction) completed = true; };
   mixer.addEventListener('finished', onFinished);
+  function playAction(actionId: string, options?: { playback: 'once' | 'loop' }, automaticGait = false) {
+    ensureAlive();
+    if (!Object.hasOwn(definition.actions, actionId)) fail('ASSET_ACTION_UNAVAILABLE', `${definition.id}/${actionId}`);
+    if (options !== undefined && (!options || !['once', 'loop'].includes(options.playback))) fail('ASSET_PLAYBACK_INVALID', definition.id);
+    const binding = definition.actions[actionId]!;
+    const loop = options ? options.playback === 'loop' : binding.loop;
+    const sourceClip = clips.find(candidate => candidate.name === binding.clipName)!;
+    automaticGait &&= loop;
+    let clip = sourceClip;
+    if (automaticGait) {
+      let normalized = gaitClips.get(sourceClip);
+      if (!normalized) {
+        normalized = sourceClip.clone();
+        if (normalized.tracks.length && normalized.tracks.every(track => track.times.length > 0)) {
+          const start = Math.min(...normalized.tracks.map(track => track.times[0]!));
+          // Three holds the first key before its timestamp on every loop. Remove
+          // only that shared leading interval from the private automatic clip.
+          if (start > 0 && start < normalized.duration) {
+            for (const track of normalized.tracks) track.shift(-start);
+            normalized.duration -= start;
+          }
+        }
+        gaitClips.set(sourceClip, normalized);
+      }
+      clip = normalized;
+    }
+    const next = mixer.clipAction(clip);
+    if (next === activeAction && actionId === activeActionId && loop === activeLoop && next.isRunning()) return;
+    const phase = automaticGait && activeAutomaticGait && activeAction?.isRunning()
+      && activeAction !== next && activeAction.getClip().duration > 0
+      ? activeAction.time / activeAction.getClip().duration : undefined;
+    next.reset().setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
+    if (phase !== undefined) next.time = (phase % 1) * clip.duration;
+    next.clampWhenFinished = !loop;
+    next.setEffectiveTimeScale(binding.timeScale).setEffectiveWeight(1).play();
+    if (activeAction && activeAction !== next) {
+      // A clamped one-shot is scheduled, but a stopped action cannot fade in.
+      if (binding.blendSeconds > 0 && activeAction.isScheduled()) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
+      else activeAction.stop();
+    }
+    activeAction = next; activeActionId = actionId; activeLoop = loop;
+    activeAutomaticGait = automaticGait; completed = false;
+  }
   const instance: AssetInstance = {
     object, clips, mixer, actionIds: Object.freeze(Object.keys(definition.actions)),
     get isActionComplete() { return completed; },
     get timeSeconds() { return activeAction?.time ?? 0; },
     get currentActionId() { return activeActionId; },
     get currentClipName() { return activeAction?.getClip().name; },
-    play(actionId, options) {
-      ensureAlive();
-      if (!Object.hasOwn(definition.actions, actionId)) fail('ASSET_ACTION_UNAVAILABLE', `${definition.id}/${actionId}`);
-      if (options !== undefined && (!options || !['once', 'loop'].includes(options.playback))) fail('ASSET_PLAYBACK_INVALID', definition.id);
-      const binding = definition.actions[actionId]!;
-      const loop = options ? options.playback === 'loop' : binding.loop;
-      const clip = clips.find(candidate => candidate.name === binding.clipName)!;
-      const next = mixer.clipAction(clip);
-      // An explicit playback change is a new request, not repeated locomotion selection.
-      if (next === activeAction && actionId === activeActionId && loop === activeLoop && next.isRunning()) return;
-      next.reset().setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
-      next.clampWhenFinished = !loop;
-      next.setEffectiveTimeScale(binding.timeScale).setEffectiveWeight(1).play();
-      if (activeAction && activeAction !== next) {
-        // stopAllAction() removes the old action from the mixer. Fading from it
-        // would give the new idle pose zero weight and expose the bind pose.
-        // A clamped one-shot remains scheduled and must still blend normally.
-        if (binding.blendSeconds > 0 && activeAction.isScheduled()) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
-        else activeAction.stop();
-      }
-      activeAction = next; activeActionId = actionId; activeLoop = loop; completed = false;
-    },
+    play: (actionId, options) => playAction(actionId, options),
     update(deltaSeconds) {
       ensureAlive();
       if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) fail('ASSET_DELTA_INVALID', definition.id);
@@ -105,6 +137,7 @@ function createInstance(
     dispose() {
       if (disposed) return;
       disposed = true;
+      locomotionPlayers.delete(mixer);
       runCleanup([
         () => mixer.removeEventListener('finished', onFinished),
         () => mixer.stopAllAction(), () => mixer.uncacheRoot(visual),
@@ -113,6 +146,7 @@ function createInstance(
       ]);
     },
   };
+  locomotionPlayers.set(mixer, actionId => playAction(actionId, undefined, true));
   cloneFactories.set(instance, () => {
     ensureAlive();
     // Retain the verified GLB before cloning. Disposing the source must not retire
