@@ -2,6 +2,7 @@ import type { EpisodeCapabilities, EpisodeFrame, Vec3, WorldSnapshot } from '@wo
 import type { EpisodeCaptureSession } from './browser.js';
 import type { EpisodeSegmentPlan } from './contracts.js';
 import { RouteController, type RouteDecision, type RouteMovement } from './route-controller.js';
+import { TrainingRouteController } from './training-route.js';
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 const angle = (n: number) => Math.atan2(Math.sin(n), Math.cos(n));
@@ -14,6 +15,7 @@ export interface PlayerDecision extends RouteDecision {
  * physics port owns clearance, movement, jumps and camera collision response. */
 export class PlayerCaptureController {
   private readonly route: RouteController;
+  private readonly trainingRoute:TrainingRouteController;
   private readonly ordinal: number;
   private activeSeconds = 0;
   private previousTime = 0;
@@ -33,11 +35,17 @@ export class PlayerCaptureController {
   constructor(private readonly segment: EpisodeSegmentPlan, private readonly movement: RouteMovement,
     private readonly cameraMode: EpisodeCapabilities['camera']['mode'], private readonly probe: EpisodeCaptureSession['probeStart']) {
     this.route = new RouteController(segment, movement);
+    this.trainingRoute=new TrainingRouteController(segment);
     this.ordinal = Number(segment.id.slice(-2));
     this.jumpState = (movement.jumpSpeedMetersPerSecond ?? 0) <= 0 ? 'unsupported' : this.ordinal % 2 === 0 ? 'pending' : 'not-scheduled';
     this.nextJumpAt = 14 + this.ordinal * 0.4;
   }
   async step(snapshot: WorldSnapshot, forward: Vec3, time: number): Promise<PlayerDecision> {
+    if(snapshot.training?.mountedInstanceId){
+      const decision=this.trainingRoute.step(snapshot,time);
+      return {...decision,input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
+        behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
+    }
     const dt = Math.max(0, time - this.previousTime);
     if (!this.paused) this.activeSeconds += dt;
     this.previousTime = time;
@@ -164,6 +172,13 @@ export function summarizePlayerBehavior(frames: readonly { snapshot: WorldSnapsh
 
 export function assertPlayerBehavior(frames: readonly { snapshot: WorldSnapshot; camera: EpisodeFrame['camera']; decision: RouteDecision }[], capabilities: EpisodeCapabilities) {
   const evidence = summarizePlayerBehavior(frames);
+  if(frames.some(f=>!!f.snapshot.training?.mountedInstanceId)){
+    const positions=frames.map(f=>{const id=f.snapshot.training?.mountedInstanceId;return f.snapshot.entities.find(e=>e.id===id)?.positionWorldMetersXYZ;}).filter((p):p is Vec3=>!!p);
+    const travelled=positions.slice(1).reduce((sum,p,i)=>sum+Math.hypot(...p.map((v,j)=>v-positions[i]![j]!)),0);
+    if(travelled<2||!frames.some(f=>!!f.decision.input.training))throw new Error('EPISODE_TRAINING_MOTION_MISSING');
+    if(capabilities.camera.mode!=='authored'&&evidence.renderedYawTravelDegrees<10)throw new Error('EPISODE_CAMERA_VARIATION_MISSING');
+    return;
+  }
   if (capabilities.camera.mode !== 'authored' && (evidence.renderedYawRangeDegrees < 20 || evidence.renderedYawTravelDegrees < 40)) throw new Error('EPISODE_CAMERA_VARIATION_MISSING: supported camera did not visibly turn');
   if (evidence.walkSeconds < 2 || (capabilities.movement.runSpeedMetersPerSecond > capabilities.movement.walkSpeedMetersPerSecond && evidence.runSeconds < 2)) throw new Error('EPISODE_GAIT_VARIATION_MISSING: actual travel must include walking and running');
   if (evidence.plannedJumps.some(jump => jump.takeoffAtSeconds === null || jump.landedAtSeconds === null)) throw new Error('EPISODE_PLANNED_JUMP_INCOMPLETE: requested jump lacks observed upward takeoff and landing');

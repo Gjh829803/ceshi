@@ -8,9 +8,10 @@ import Ajv from 'ajv';
 import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, readCatalog, publicAsset, isWithin, assertNoSymlinks, type Candidate } from './compiler.js';
 import { EPISODE_SCHEMA, PROJECT_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
 import type { WorldCommand } from '@worldkit/three';
-import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, type AuthoringTopic } from './authoring-schema.js';
+import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, trainingContractSource, type AuthoringTopic } from './authoring-schema.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, SDK_EXAMPLE } from './examples.js';
+import { readExampleFiles, type ExampleTopic } from './example-files.js';
 import {selectTriviewTargets} from './capture-plan.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
@@ -114,18 +115,18 @@ export class ThreeCreatorTools {
     const sdk: { sdkContracts?: string; sdkGuide?: string; worldCommandSchema?: typeof WORLD_COMMAND_SCHEMA } = this.profile === 'three-sdk' ? {
       sdkContracts: publicContractTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/src/contracts.ts'), 'utf8'), topic),
       sdkGuide: guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic),
-      ...(topic === 'control' || topic === 'extensions' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
+      ...(topic === 'control' || topic === 'extensions' || topic === 'training' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
     } : {};
     return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
+      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','environment/types.ts','platform/session.ts','runtime.ts'].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),trainingExampleTopic:'independent-world'}:{}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Paused/reset time is excluded from minimum active-play duration. Fixed XYZ targets measure proximity, never steer or teleport.' };
   }
-  async examples(topic: 'getting-started' | 'extensions' = 'getting-started') {
-    if (topic === 'extensions') {
+  async examples(topic: ExampleTopic = 'getting-started', selectedFiles?:readonly string[]) {
+    if (topic !== 'getting-started') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
-      const files: Record<string, string> = {};
-      for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) files[name] = await readFile(path.join(REPOSITORY_ROOT, 'examples/three-creator/sdk-capabilities', name), 'utf8');
-      return { profile: this.profile, topic, files, sdkExample: 'SDK v2 capability example: actual character, effects, controlled movement intent, named geometry and NPC operations. Validate in the current runtime before claiming behavior.' };
+      const root=path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='independent-world'?'training-independent':'sdk-capabilities');
+      return { profile:this.profile,topic,...await readExampleFiles(root,topic,selectedFiles),sdkExample:'Whitebox training runtime: one SDK clock, original character and reusable vehicle families. Compilation is not behavioral acceptance.' };
     }
     return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? SDK_EXAMPLE : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: this.profile === 'three-sdk' ? ['humanoid.g-bot'] : [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
   async assets(query = '', assetId?: string) { const assets = await readCatalog(); const words = query.toLowerCase().split(/\s+/).filter(Boolean); return { schemaVersion: 1, assets: assets.filter(asset => (!assetId || asset.id === assetId) && words.every(word => JSON.stringify(publicAsset(asset)).toLowerCase().includes(word))).map(publicAsset) }; }
@@ -304,7 +305,7 @@ export class ThreeCreatorTools {
           const currentState = await this.bridge(session, 'read'); if (expectedRunning) assertSdkPlaytestRunning(this.profile, currentState);
           if (currentState.errors?.length) throw new Error(`THREE_PLAYTEST_RUNTIME_ERRORS: ${JSON.stringify(currentState.errors)}`);
           if (elapsed() >= nextOperationPoll) { await observeWorldOperations(); nextOperationPoll = elapsed() + 1; }
-          if (elapsed() >= nextKeyframe) { const file = path.join(root, `keyframe-${keyframes.length.toString().padStart(3, '0')}.png`); const bytes = await session.page.screenshot({ path: file }); keyframes.push({ path: file, sha256: sha256(bytes), wallSeconds: elapsed() }); nextKeyframe += 15; }
+          if (elapsed() >= nextKeyframe) { const file = path.join(root, `keyframe-${keyframes.length.toString().padStart(3, '0')}.png`); const frame = await this.bridge(session, 'capture', ['opening']); const bytes = Buffer.from(frame.image.replace(/^data:image\/png;base64,/, ''),'base64'); await writeFile(file,bytes); keyframes.push({ path: file, sha256: sha256(bytes), wallSeconds: elapsed() }); nextKeyframe += 15; }
           const operation = this.operations.get(operationId); if (operation) operation.progress = { phase: 'real-browser-keyboard', stepIndex: index, elapsedSeconds: elapsed(), requestedSeconds, currentState };
           if (session.errors.length) throw new Error(`THREE_PLAYTEST_PAGE_ERROR: ${session.errors.join('\n')}`);
           await sleep(Math.max(0, Math.min(200, (until - elapsed()) * 1000)));
@@ -329,7 +330,7 @@ export class ThreeCreatorTools {
       if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
       const raw = path.join(root, 'playtest.webm');
       await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
+      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-fps_mode', 'passthrough', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
       videoMetadata = await probeVideo(videoFile);
       validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }

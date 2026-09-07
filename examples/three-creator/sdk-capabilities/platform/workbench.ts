@@ -1,0 +1,150 @@
+import { SPECS } from '../config';
+import { MAPS } from '../environment/maps';
+import { parseAssetProfile, type AssetProfileV1 } from './profiles';
+import './workbench.css';
+
+type Tab = 'scenes' | 'camera';
+interface WorkbenchOptions {
+  onOpenChange(open: boolean): void;
+  onPrepare(mapId: string, regionId: string, assetId: string): void;
+  getMapId(): string;
+  getAssetId(): string;
+  getProfile(id: string): AssetProfileV1;
+  applyProfile(profile: AssetProfileV1): void;
+  saveProfile(profile: AssetProfileV1): void;
+  resetProfile(id: string): void;
+  getState(): Record<string, unknown>;
+  togglePause(): void;
+  step(): void;
+}
+const make = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = '') => {
+  const node = document.createElement(tag); node.textContent = text; node.className = className; return node;
+};
+function button(label: string, action: () => void, className = 'wb-button') {
+  const node = make('button', label, className); node.type = 'button'; node.onclick = action; return node;
+}
+const note = (text: string) => make('p', text, 'wb-note');
+const subjects = [{ id: 'person', name: '主体人物', mode: 'character' }, ...SPECS];
+
+export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
+  const dialog = make('dialog', '', 'workbench'); dialog.setAttribute('aria-label', '训练与资产工作台');
+  const header = make('header', '', 'wb-header');
+  header.append(make('div', 'VECTOR / TEST PLATFORM', 'wb-eyebrow'), button('关闭 ×', () => close(), 'wb-close'));
+  const nav = make('nav', '', 'wb-tabs'); nav.setAttribute('aria-label', '工作台分区');
+  const content = make('div', '', 'wb-content'), messages = make('p', '', 'wb-message'); messages.setAttribute('role', 'status');
+  const tabs = new Map<Tab, HTMLButtonElement>();
+  let activeTab: Tab = 'scenes', previousFocus: HTMLElement | null = null;
+  let selectedMap = options.getMapId(), selectedAsset = options.getAssetId();
+  const report = (error: unknown) => { messages.textContent = error instanceof Error ? error.message : String(error); messages.dataset.error = 'true'; };
+  const inform = (message: string) => { messages.textContent = message; delete messages.dataset.error; };
+  for (const [id, label] of [['scenes', '测试场景'], ['camera', '3C 调试与配置']] as const) {
+    const tab = button(label, () => show(id)); tabs.set(id, tab); nav.append(tab);
+  }
+  dialog.append(header, make('h2', '先选场地，再开始测试'), nav, content, messages); host.append(dialog);
+  const tick = setInterval(() => {
+    if (dialog.open && activeTab === 'camera') {
+      const output = content.querySelector('output'); if (output) output.textContent = JSON.stringify(options.getState(), null, 2);
+    }
+  }, 250);
+  function close() { if (dialog.open) dialog.close(); }
+  dialog.addEventListener('close', () => { options.onOpenChange(false); previousFocus?.focus({ preventScroll: true }); });
+  dialog.addEventListener('click', event => {
+    if (event.target !== dialog) return;
+    const r = dialog.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) close();
+  });
+  function assetSelect(label: string, onChange: () => void) {
+    const wrap = make('label', label, 'wb-field'), select = make('select'); select.setAttribute('aria-label', label);
+    for (const subject of subjects) { const option = make('option', subject.name); option.value = subject.id; select.append(option); }
+    select.value = selectedAsset;
+    select.onchange = () => { selectedAsset = select.value; onChange(); };
+    wrap.append(select); return wrap;
+  }
+  function show(tab: Tab) {
+    activeTab = tab; content.replaceChildren(); inform('');
+    tabs.forEach((b, id) => b.setAttribute('aria-current', String(id === tab)));
+    if (tab === 'scenes') showScenes(); else showCamera();
+  }
+  function showScenes() {
+    content.append(note('先选择人物或载具，再准备对应区域。准备会复位这个主体；资产库的“前往”会保留其当前位置。切换地图会重新整备所有主体。'));
+    const selection = make('div', '', 'wb-parameter-grid');
+    const mapLabel = make('label', '测试地图', 'wb-field'), mapSelect = make('select'); mapSelect.setAttribute('aria-label', '测试地图');
+    for (const map of MAPS) { const option = make('option', map.name); option.value = map.id; mapSelect.append(option); }
+    mapSelect.value = selectedMap; mapSelect.onchange = () => { selectedMap = mapSelect.value; show('scenes'); };
+    mapLabel.append(mapSelect); selection.append(mapLabel, assetSelect('测试主体', () => show('scenes'))); content.append(selection);
+    const map = MAPS.find(m => m.id === selectedMap)!;
+    content.append(note(map.description));
+    const grid = make('div', '', 'wb-scene-grid'), subject = subjects.find(s => s.id === selectedAsset)!;
+    for (const region of map.regions) {
+      const compatible = region.modes.includes(subject.mode);
+      const card = make('section', '', `wb-scene${compatible ? '' : ' wb-incompatible'}`);
+      card.style.setProperty('--region-color', region.color);
+      card.append(make('span', compatible ? '可准备 · 静态测试场' : '请选择适配主体', 'wb-chip'), make('h3', region.name), note(region.description));
+      const launch = button(compatible ? `准备 ${subject.name} →` : '当前主体不适配', () => {
+        try { options.onPrepare(map.id, region.id, selectedAsset); close(); } catch (error) { report(error); }
+      });
+      launch.disabled = !compatible; card.append(launch); grid.append(card);
+    }
+    content.append(grid);
+  }
+  function showCamera() {
+    content.append(assetSelect('编辑 3C 资产', () => show('camera')));
+    content.append(note('操控与相机参数按资产独立应用。进入相应载具后使用它的配置；保存到本地后，下次打开继续使用。'));
+    const current = options.getProfile(selectedAsset);
+    if(selectedAsset==='person')content.append(note('人物使用原人物场的完整动作参数：常跑 3.1 m/s、冲刺 5.8 m/s、慢走 1.45 m/s。操控参数由人物模块管理，旧人物配置不会覆盖这套已标定手感。'));
+    const mode = SPECS.find(s => s.id === selectedAsset)?.mode;
+    const road = mode === 'wheeled' || mode === 'bike';
+    if (mode === 'space') content.append(note('默认启用平移稳定辅助：松开某个方向会消除该方向的漂移，Shift 强制制动。辅助设为 0 可测试纯惯性；已输入的方向仍能加速到最高速度。'));
+    if (mode === 'sub') content.append(note('侧向阻尼控制转向后的横滑。Space 上浮、Ctrl 下潜，Shift 独立制动。'));
+    if (road) content.append(note('转向倍率作用于随速度变化的转弯半径。1 倍在 25 米/秒时基准半径为 17.25 米；实际轨迹还受抓地、制动和碰撞影响。松油减速度为 5 米/秒²。'));
+    const grid = make('div', '', 'wb-parameter-grid');
+    const inputs: { group: 'camera' | 'control'; key: string; input: HTMLInputElement }[] = [];
+    const readFields = () => {
+      const next = options.getProfile(selectedAsset);
+      for (const { group, key, input } of inputs) (next[group] as unknown as Record<string, number>)[key] = input.value.trim() ? Number(input.value) : NaN;
+      return parseAssetProfile(next, selectedAsset);
+    };
+    const fields: { group: 'camera' | 'control'; key: string; label: string; step: number }[] = [
+      { group: 'camera', key: 'distance', label: '跟随距离 / 米', step: .25 },
+      { group: 'camera', key: 'baseFovDegrees', label: '基础视野 / 度', step: 1 },
+      { group: 'camera', key: 'recenterDelaySeconds', label: '环绕后回正等待 / 秒', step: .1 },
+      { group: 'camera', key: 'followResponsePerSecond', label: '相机跟随响应 / 每秒', step: .5 },
+      { group: 'control', key: 'speed', label: selectedAsset === 'person' ? '步行基础速度 / 米每秒' : '最大前进速度 / 米每秒', step: .5 },
+      { group: 'control', key: 'accel', label: selectedAsset === 'person' ? '地面移动响应' : '推进加速度', step: .5 },
+      { group: 'control', key: 'grip', label: selectedAsset === 'person' ? '空中移动响应' : mode === 'space' ? '平移稳定辅助 / 每秒（0 为纯惯性）' : mode === 'sub' ? '水下侧向阻尼 / 每秒' : mode === 'dragon' ? '空中松键减速系数（×2 米/秒²）' : '侧向抓地响应 / 每秒', step: .1 },
+      { group: 'control', key: 'steer', label: selectedAsset === 'person' ? '人物转向响应' : road ? '转向倍率' : '偏航响应 / 弧度每秒', step: .05 },
+    ];
+    for (const { group, key, label, step } of fields) {
+      if(selectedAsset==='person'&&(group==='control'||key==='recenterDelaySeconds'))continue;
+      if (group === 'control' && ((key === 'grip' && ['plane', 'glider', 'mount', 'carriage'].includes(mode ?? '')) || (key === 'accel' && mode === 'glider'))) continue;
+      const field = make('label', label, 'wb-field'), input = make('input'); input.type = 'number'; input.step = String(step);
+      input.value = String((current[group] as unknown as Record<string, number>)[key]);
+      inputs.push({ group, key, input });
+      input.oninput = () => { try { options.applyProfile(readFields()); inform('已应用到这个资产；保存后可跨刷新保留。'); } catch { /* Allow incomplete numeric edits until blur or save. */ } };
+      input.onchange = () => {
+        try {
+          options.applyProfile(readFields()); inform('已应用到这个资产；保存后可跨刷新保留。');
+        } catch (error) { input.value = String((options.getProfile(selectedAsset)[group] as unknown as Record<string, number>)[key]); report(error); }
+      };
+      field.append(input); grid.append(field);
+    }
+    const actions = make('div', '', 'wb-actions');
+    actions.append(button('保存这个资产的配置', () => {
+      try { const profile = readFields(); options.applyProfile(profile); options.saveProfile(profile); inform('已保存到本机浏览器。'); } catch (error) { report(error); }
+    }), button('恢复资产默认值', () => {
+      try { options.resetProfile(selectedAsset); show('camera'); inform('已恢复并清除这个资产的本地覆盖。'); } catch (error) { report(error); }
+    }), button('暂停 / 继续', () => options.togglePause()), button('单步 1/60 秒', () => options.step()));
+    const shape = make('details'); shape.append(make('summary', '碰撞体积与资产标识'), make('pre', JSON.stringify({ assetId: current.assetId, version: current.version, defaultsRevision: current.defaultsRevision, envelope: current.envelope }, null, 2), 'wb-telemetry'));
+    const output = make('output', JSON.stringify(options.getState(), null, 2), 'wb-telemetry'); output.setAttribute('aria-label', '主体和相机实时状态');
+    content.append(grid, actions, shape, make('h3', '当前运行主体 · 实时状态'), output, note('请在门框、楼梯、低顶和转角处结合移动观察镜头。渲染回调频率用于诊断，不代表显示器实际呈现 FPS。'));
+  }
+  return {
+    open(tab: Tab = 'scenes') {
+      if (!dialog.open) { previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; selectedMap = options.getMapId(); selectedAsset = options.getAssetId(); dialog.showModal(); options.onOpenChange(true); }
+      show(tab);
+    },
+    close,
+    isOpen: () => dialog.open,
+    dispose() { clearInterval(tick); close(); dialog.remove(); },
+  };
+}

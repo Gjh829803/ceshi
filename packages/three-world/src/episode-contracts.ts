@@ -2,6 +2,11 @@ import type { Vec3, WorldInput, WorldSnapshot } from './contracts.js';
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
+ readonly training?: {
+  readonly vehicleInstanceId?:string; readonly mounted?:boolean; readonly cameraMode?:0|1|2;
+  readonly velocityWorldMetersPerSecondXYZ?:Vec3; readonly pitchRadians?:number;readonly rollRadians?:number;
+  readonly throttle?:number;readonly launched?:boolean;
+ };
  readonly positionWorldMetersXYZ: Vec3;
  /** Semantic forward: -Z rotated around world +Y. */
  readonly facingYawRadians: number;
@@ -13,6 +18,11 @@ export interface EpisodeStartProbe {
  readonly diagnostics: readonly { readonly code: string; readonly message: string; readonly entityIds?: readonly string[] }[];
 }
 export interface EpisodeCapabilities {
+ readonly training?:{
+  readonly mapId:string;readonly characterInstanceId:string;
+  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./training/config').Mode;readonly available:boolean}[];
+  readonly cameraModes:readonly (0|1|2)[];readonly inputAxes:readonly string[];
+ };
  readonly schemaVersion: 1;
  readonly controlledEntityId: string;
  readonly fixedTimeStepSeconds: number;

@@ -1,5 +1,6 @@
 import type { WorldInput } from './engine-contracts.js';
 import type { CameraRigInput } from './camera.js';
+import { actionForKey, readControls, HUMANOID_BINDINGS } from './training/input.js';
 
 const UI_CONTROL_SELECTOR = 'input,textarea,select,button,a[href],[role="textbox"],[role="button"]';
 function isElement(value: EventTarget): value is Element {
@@ -17,6 +18,11 @@ function includesRoot(event: Event, root: HTMLElement | undefined): boolean {
 
 export const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space', 'KeyE']);
 export class WorldKeyboard {
+  private trainingMounted:(()=>boolean)|undefined;
+  private readonly trainingPressed=new Set<string>();
+  private readonly trainingKeys=new Set(['KeyF','KeyX','ControlLeft','ControlRight','KeyQ',...Object.values(HUMANOID_BINDINGS).map(b=>b.code)]);
+  setTrainingMode(mounted:()=>boolean):void{this.trainingMounted=mounted;}
+  private admittedKey(code:string):boolean{return MOVEMENT_KEYS.has(code)||!!this.trainingMounted&&this.trainingKeys.has(code);}
   readonly held = new Set<string>();
   private jumpQueued = false;
   private interactQueued = false;
@@ -42,20 +48,28 @@ export class WorldKeyboard {
   /** Internal admission policy; direct fixed-input keyDown/keyUp stay deterministic. */
   setEventAdmission(admit: ((event: KeyboardEvent) => boolean) | undefined): void { this.admitEvent = admit; }
   keyDown(code: string, repeat = false): void {
-    if (!this.enabled || !MOVEMENT_KEYS.has(code)) return;
+    if (!this.enabled || !this.admittedKey(code)) return;
     this.record('keydown', code, repeat);
     if (repeat && !this.held.has(code)) return;
     if (!this.held.has(code)) {
+      if(this.trainingMounted)this.trainingPressed.add(code);
       if (code === 'Space') this.jumpQueued = true;
       if (code === 'KeyE') this.interactQueued = true;
     }
     this.held.add(code);
   }
-  keyUp(code: string): void { if (MOVEMENT_KEYS.has(code)) this.record('keyup', code, false); this.held.delete(code); }
+  keyUp(code: string): void { if (this.admittedKey(code)) this.record('keyup', code, false); this.held.delete(code); }
   private record(type: 'keydown' | 'keyup' | 'blur', code: string, repeat: boolean): void {
     if (this.transcript.length < 100_000) this.transcript.push({ type, code, repeat, simulationTick: this.getTick() });
   }
   sample(): WorldInput {
+    if(this.trainingMounted){
+      const mounted=this.trainingMounted(),humanoid:import('./training/simulation').HumanoidInput={};let interact=false;
+      for(const code of this.trainingPressed){const action=actionForKey(code,mounted);if(action?.kind==='vehicle')interact=true;else if(action?.kind==='humanoid')Object.assign(humanoid,action.input);}
+      const training=readControls(this.held,mounted,this.jumpQueued,humanoid);
+      const result:WorldInput={training,interactPressed:interact,cameraYawRatio:mounted?0:Number(this.held.has('ArrowLeft'))-Number(this.held.has('ArrowRight')),cameraPitchRatio:mounted?0:Number(this.held.has('ArrowDown'))-Number(this.held.has('ArrowUp'))};
+      this.trainingPressed.clear();this.jumpQueued=false;this.interactQueued=false;return result;
+    }
     const has = (...codes: string[]) => codes.some(code => this.held.has(code));
     const result: WorldInput = {
       moveXRatio: Number(has('KeyD')) - Number(has('KeyA')),
@@ -70,7 +84,7 @@ export class WorldKeyboard {
     };
     this.jumpQueued = false; this.interactQueued = false; return result;
   }
-  clear(): void { this.held.clear(); this.jumpQueued = false; this.interactQueued = false; }
+  clear(): void { this.held.clear(); this.trainingPressed.clear();this.jumpQueued = false; this.interactQueued = false; }
   detach(): void { this.abort?.abort(); this.abort = undefined; this.clear(); }
 }
 

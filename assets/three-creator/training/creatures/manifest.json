@@ -1,0 +1,59 @@
+{
+  "horse": {
+    "sourceSha256": "3deb61550dff1d2786d04b6e8559d63ad3907d6ab606ba28ce0af074ed96341b",
+    "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
+    "byteLength": 2215736,
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "authorPage": "https://quaternius.com/packs/ultimateanimatedanimals.html",
+    "sourceName": "Horse.gltf",
+    "sourceDownload": "https://drive.google.com/uc?export=download&id=1hbtY8kxnXiPdwYGVY7rWRgU0jl_-Q-LG",
+    "jointCount": 50,
+    "clips": [
+      "Attack_Headbutt",
+      "Attack_Kick",
+      "Death",
+      "Eating",
+      "Gallop",
+      "Gallop_Jump",
+      "Idle",
+      "Idle_2",
+      "Idle_Headlow",
+      "Idle_HitReact1",
+      "Idle_HitReact2",
+      "Jump_toIdle",
+      "Walk"
+    ],
+    "locomotionClips": [
+      "Idle",
+      "Walk",
+      "Gallop",
+      "Gallop_Jump"
+    ]
+  },
+  "dragon": {
+    "sourceSha256": "39ba6ea24b5f27acf68bbf4c19fe80ba070dbec167ff14bbe933453303426f5c",
+    "sha256": "347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1",
+    "byteLength": 555856,
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "authorPage": "https://quaternius.com/packs/ultimatemonsters.html",
+    "sourceName": "Dragon_Evolved.gltf",
+    "sourceDownload": "https://drive.google.com/uc?export=download&id=1Mcfuavq7F4itG9xhqc-20_IL257ZY2_3",
+    "jointCount": 46,
+    "clips": [
+      "Death",
+      "Fast_Flying",
+      "Flying_Idle",
+      "Headbutt",
+      "HitReact",
+      "No",
+      "Punch",
+      "Yes"
+    ],
+    "locomotionClips": [
+      "Flying_Idle",
+      "Fast_Flying"
+    ]
+  }
+}

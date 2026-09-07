@@ -1,3 +1,9 @@
 export * from './contracts.js';
 export type * from './episode-contracts.js';
 export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
+export { Character as TrainingCharacter } from './training/character.js';
+export type { TrainingOptions, TrainingVehicleInstance, TrainingProfile, TrainingRuntime } from './training/runtime.js';
+export type { MapDefinition as TrainingMap, MapSpawn as TrainingSpawn } from './training/environment/types.js';
+export type { VehicleSpec as TrainingVehicleSpec } from './training/config.js';
+export { emptyInput as emptyTrainingInput } from './training/simulation.js';
+export * as training from './training/public.js';

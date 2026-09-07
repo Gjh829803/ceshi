@@ -1,0 +1,16 @@
+export { Character, Character as TrainingCharacter } from './character';
+export { FollowCamera } from './camera';
+export { Simulation, emptyInput, createVehicle, type Input, type HumanoidInput, type VehicleState, type PlayerState } from './simulation';
+export type { VehicleSpec } from './config';
+export type * from './environment/types';
+export { vehicleBody } from './environment/queries';
+export * from './platform/session';
+export * from './input';
+export { HumanoidController } from './humanoid/controller';
+export { SWIM_ROOT_DEPTH } from './humanoid/water-physics';
+export { createActionBridge } from './humanoid/action-api';
+export type { SkillRequest } from './humanoid/action-schema';
+export { readInteractionTargets } from './humanoid/render-state';
+export { updateVehicleWheels, resetVehicleWheels } from './vehicle-animation';
+export type { TrainingOptions, TrainingProfile, TrainingRuntime, TrainingVehicleInstance, TrainingSnapshot } from './runtime';
+export type { TrainingCommand } from './runtime';

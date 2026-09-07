@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground', 'examples/three-creator/sdk-capabilities'];
+const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground', 'examples/three-creator/sdk-capabilities','examples/three-creator/training-independent'];
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
-const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt','.woff','.woff2','.ttf']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const jsonBytes = value => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const writeJson = (file, value) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, jsonBytes(value)); };
@@ -25,6 +25,7 @@ const run = (command, args, options = {}) => {
 
 /** Preserve pnpm 9 resolution/integrity records verbatim; project only the importers. */
 export function projectLock(original, rootManifest) {
+  original = original.replaceAll('\r\n', '\n');
   assert(original.startsWith("lockfileVersion: '9.0'\n"), 'Only the checked pnpm 9 lock layout is supported');
   const start = original.indexOf('\nimporters:\n'), end = original.indexOf('\npackages:\n', start);
   assert(start > 0 && end > start, 'Missing pnpm importer/package sections');
@@ -87,6 +88,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   const originalPackage = readFileSync(path.join(repositoryRoot, 'package.json'));
   const originalLock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'));
   const originalWorkspace = readFileSync(path.join(repositoryRoot, 'pnpm-workspace.yaml'));
+  const workspaceText = originalWorkspace.toString().replaceAll('\r\n', '\n');
   const packageJson = JSON.parse(originalPackage);
   assert.equal(packageJson.packageManager, 'pnpm@10.14.0');
   const projectedPackage = { name: 'worldkit-three-creator-toolkit', version: '0.0.0', private: true, type: 'module', packageManager: packageJson.packageManager };
@@ -94,8 +96,8 @@ export function stageContext(repositoryRoot, outputRoot) {
   put('package.json', jsonBytes(projectedPackage), true);
   put('pnpm-lock.yaml', Buffer.from(projectLock(originalLock.toString(), projectedPackage)), true);
   // Keep the exact patch settings, but no unrelated workspace package or lifecycle hook.
-  assert(originalWorkspace.toString().includes('\nallowBuilds:\n  esbuild: true\n\npatchedDependencies:\n'), 'Review changed workspace lifecycle/patch settings');
-  const patches = originalWorkspace.toString().slice(originalWorkspace.toString().indexOf('patchedDependencies:\n'));
+  assert(workspaceText.includes('\nallowBuilds:\n  esbuild: true\n\npatchedDependencies:\n'), 'Review changed workspace lifecycle/patch settings');
+  const patches = workspaceText.slice(workspaceText.indexOf('patchedDependencies:\n'));
   assert(/^patchedDependencies:\n(?:  '@recast-navigation\/(?:core|generators)@0\.43\.1': patches\/@recast-navigation__(?:core|generators)@0\.43\.1\.patch\n?){2}$/.test(patches.trimEnd() + '\n'), 'Review changed patch allowlist');
   put('pnpm-workspace.yaml', Buffer.from('packages:\n  - "packages/three-world"\n  - "packages/camera-collision"\n\nallowBuilds:\n  esbuild: true\n\n' + patches), true);
   source('packages/three-world/package.json', true);
@@ -108,11 +110,14 @@ export function stageContext(repositoryRoot, outputRoot) {
   const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json'), 'utf8'));
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
-    assert(/^assets\/three-creator\/[a-zA-Z0-9_./-]+\.glb$/.test(asset.sourcePath), `Asset outside raw GLB allowlist: ${asset.id}`);
-    assert(/^[a-f0-9]{64}$/.test(asset.sha256)); source(asset.sourcePath);
-    const record = files.get(asset.sourcePath);
-    assert.equal(record.sha256, `sha256:${asset.sha256}`, `Asset SHA mismatch: ${asset.id}`);
-    assert.equal(record.bytes, asset.byteLength, `Asset length mismatch: ${asset.id}`);
+    for (const resource of [asset, ...(asset.resources ?? [])]) {
+      assert(/^assets\/three-creator\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
+        && !resource.sourcePath.split('/').includes('..'), `Asset outside resource allowlist: ${asset.id}`);
+      assert(/^[a-f0-9]{64}$/.test(resource.sha256)); source(resource.sourcePath);
+      const record = files.get(resource.sourcePath);
+      assert.equal(record.sha256, `sha256:${resource.sha256}`, `Asset SHA mismatch: ${asset.id}`);
+      assert.equal(record.bytes, resource.byteLength, `Asset length mismatch: ${asset.id}`);
+    }
   }
   const entries = [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
   const manifest = {

@@ -6,6 +6,13 @@
   "description": "Three.js world creation, SDK runtime and Episode data production.",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
+    "dev": "tsx scripts/three-creator/training-preview.ts",
+    "dev:training": "tsx scripts/three-creator/training-preview.ts",
+    "test:training:browser": "tsx scripts/three-creator/training-browser-smoke.ts",
+    "test:training:camera": "tsx scripts/three-creator/training-camera-browser-smoke.ts",
+    "test:training:camera:visibility": "tsx scripts/three-creator/training-camera-visibility-browser.ts",
+    "test:training:delivery": "tsx scripts/three-creator/training-delivery-smoke.ts",
+    "test:training:flow": "tsx scripts/three-creator/training-flow-acceptance.ts",
     "build": "pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime",
     "test:independent": "tsx scripts/testing/run-independent-test-gate.ts",
     "test:independent:node": "tsx scripts/testing/run-independent-test-gate.ts --lane node",

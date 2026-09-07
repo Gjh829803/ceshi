@@ -15,7 +15,7 @@ describe('Three Episode agent plan and production boundary', () => {
     expect(() => validateEpisodePlan(duplicate, { worldBuildHash: hash })).toThrow('DISTINCT_STARTS');
     expect(() => validateEpisodePlan({ ...plan(), rawKeys: ['w'] }, { worldBuildHash: hash })).toThrow('PLAN_INVALID');
     expect(() => validateEpisodePlan({ ...plan(), segments: plan().segments.slice(0, 5) }, { worldBuildHash: hash })).toThrow('SIX_ORDERED');
-    const invalid = plan(); invalid.segments[0]!.start.facingYawRadians = Infinity;
+    const invalid = plan(); invalid.segments[0]!.start = {...invalid.segments[0]!.start,facingYawRadians:Infinity};
     expect(() => validateEpisodePlan(invalid, { worldBuildHash: hash })).toThrow('PLAN_INVALID');
   });
   it('does not invalidate passing segment recipes when a sibling changes', () => {

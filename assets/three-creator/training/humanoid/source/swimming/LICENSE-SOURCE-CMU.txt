@@ -1,0 +1,22 @@
+CMU Graphics Lab Motion Capture Database
+Source: https://mocap.cs.cmu.edu/
+Source motion: Subject 125, trial 06 (Free Style)
+
+This source is NOT CC0. CMU's published terms allow research use and inclusion
+inside commercially sold products, but prohibit direct resale of the data,
+including converted data. The current website terms are authoritative.
+
+The data used in this project was obtained from mocap.cs.cmu.edu.
+The database was created with funding from NSF EIA-0196217.
+
+BVH conversion: Bruce Hahne, cgspeed, MotionBuilder-friendly 2010 conversion.
+CMU links this conversion from https://mocap.cs.cmu.edu/resources.php .
+The converter's unmodified README is kept in
+reference/additional-animations/READMEFIRST.txt .
+
+Public source BVH mirror:
+https://github.com/Shriinivas/cmubvh
+https://raw.githubusercontent.com/Shriinivas/cmubvh/main/Sequence-113-128/125/Data/125_06.zip
+
+The existing Epic-derived 101-bone target skeleton retains its separate terms.
+See THIRD_PARTY_NOTICES.md for the combined prototype's source notices.

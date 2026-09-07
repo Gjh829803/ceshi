@@ -49,7 +49,7 @@ describe('Agent presentation contract',()=>{
   const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,
    moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
   const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
-  host.getSourceFile=(fileName,languageVersion,onError,shouldCreateNewSourceFile)=>fileName===filename
+  host.getSourceFile=(fileName,languageVersion,onError,shouldCreateNewSourceFile)=>fileName.replaceAll('\\','/')===filename.replaceAll('\\','/')
    ? ts.createSourceFile(fileName,source,languageVersion,true)
    : readSource(fileName,languageVersion,onError,shouldCreateNewSourceFile);
   const program=ts.createProgram([filename],options,host);

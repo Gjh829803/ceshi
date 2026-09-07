@@ -1,0 +1,1 @@
+{"extends":"../../tsconfig.json","include":["sdk-capabilities/**/*.ts","training-independent/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}

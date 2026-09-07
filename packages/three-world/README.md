@@ -10,6 +10,76 @@ Start with the basic world API below; parameters, actions and tasks are optional
 interfaces for scenes that need them. Creator delivery and Episode scheduling
 remain outside this runtime package.
 
+<!-- topic:training -->
+## Training runtime
+
+`createWorld({scene, camera, renderer, training})` selects the integrated training
+solver as the world's only physics backend. It runs at 60 Hz using the existing
+SDK clock, Presentation and Episode port. Ordinary worlds retain their existing
+Three/Rapier backend. Training content supplies its map, vehicle specifications,
+instance IDs and Three visual roots; the SDK contains no training map catalog.
+
+```ts
+import {createWorld, TrainingCharacter} from '@worldkit/three';
+const character = new TrainingCharacter();
+await character.load(path => resourceUrls[path]); // e.g. humanoid/source/…
+const world = await createWorld({scene, camera, renderer, training: {
+  map,
+  character: {instanceId:'player', object:character.root, animation:character},
+  vehicles: [{instanceId:'rover-a', assetId:'rover', spec:roverSpec, object:roverRoot}],
+}});
+await world.execute({type:'training.approach', instanceId:'rover-a'});
+await world.execute({type:'training.enter', instanceId:'rover-a'});
+await world.start();
+```
+
+`TrainingCharacter` loads the unchanged original skeleton and runtime actions;
+the optional URL resolver supports hash-addressed, relocated resource bundles.
+Asset identity and scene instance identity are separate, including duplicate
+instances of one vehicle asset. Training vehicles use their supplied collision
+envelopes; generic actor registration does not create additional capsule bodies.
+
+The `training` namespace exports reusable content types and input/visual helpers.
+Use `world.training` for preparation, safe approach/enter/exit, map switching,
+camera mode 0/1/2, and profiles. `onVisualUpdate(dt)` updates pure visual descendants
+after the SDK has placed and animated actors. It must not rewrite actor roots,
+physics, the character mixer or camera. Do not install a second frame clock.
+
+All normal movement keys use SDK Presentation focus and input release. F enters
+or exits, E interacts with character targets, and the source humanoid and vehicle
+bindings remain available through `training`. `setInput(input)` supplies a
+programmatic override and returns a release callback scoped to that override.
+An older callback cannot release a newer UI or model override. Call that callback
+when a demo or touch interaction ends; idle UI must not force-release model input.
+`setInput(undefined)` explicitly clears any current override. `WorldInput.training`
+supplies the same complete input to deterministic SDK/Episode ticks. Action edges
+are consumed once in a multi-tick step.
+
+The closed model command family is `training.prepare`, `training.approach`,
+`training.enter`, `training.exit`, `training.camera`, `training.input`,
+`training.profile` and `training.action`. Requests use normal command identities,
+receipts and revision checks. Running character actions return an operation whose
+terminal status follows actual controller completion or cancellation. These
+commands are direct executions, not nested authoring action/parameter plans.
+Generic navigation, impulse and root-edit commands are unavailable for training
+actors. Preparation and Episode starts may relocate; ordinary motion uses input.
+
+Profiles merge by instance ID and export the complete effective configuration.
+Configuration persists across reset; actor motion, mounting, interaction objects,
+input, animation history and the active map's physics state reset. Character
+controls scale the original physical controller from source defaults (3.1 m/s
+jog, 5.8 m/s sprint), preserving original action timing. `cameraDistanceMeters`
+overrides arm distance; null restores the map/vehicle default.
+
+`world.snapshot().training` records real map, vehicle identity/family, mounting,
+speed, medium, stance and active character action state. Ordinary entity motion
+and animation observations reflect these same actors. Episode capabilities add
+the training families and instance IDs. `EpisodeStart.training` can select a
+vehicle and initialize mounting, camera mode, velocity, pitch, roll, throttle and
+launch state. The top-level start position then names the vehicle origin; facing
+retains the SDK's semantic -Z convention. The entire body and medium are checked
+before initialization, and subsequent frames advance through the same solver.
+
 <!-- topic:getting-started -->
 ## Start a world
 

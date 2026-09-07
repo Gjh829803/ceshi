@@ -93,7 +93,7 @@ function inputBasis(frame: EpisodeFrame): Vec3 {
 function movementForCapture(capabilities: EpisodeCapabilities,session:EpisodeCaptureSession): RouteMovement {
   if (!capabilities.movement) throw new Error('EPISODE_CONTROLLED_MOVEMENT_UNAVAILABLE');
   const movement = capabilities.movement;
-  if (movement.kind !== 'ground' && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: this route controller currently supports the SDK ground movement basis; a custom movement needs its declared capture controller');
+  if (movement.kind !== 'ground' && !capabilities.training && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
   if (!(movement.walkSpeedMetersPerSecond > 0) || !(movement.runSpeedMetersPerSecond > 0)) throw new Error('EPISODE_CONTROLLED_MOVEMENT_SPEED_UNAVAILABLE');
   return movement as RouteMovement;
 }
@@ -119,6 +119,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
     artifacts.push(await artifact(root, 'start-probe.json'));
     if (!probe.isValid) throw new Error(`EPISODE_START_INVALID: ${JSON.stringify(probe.diagnostics)}`);
     initialSnapshot = await session.prepareSegment(segment.start, { widthPixels: PROFILE.widthPixels, heightPixels: PROFILE.heightPixels });
+    capabilities=await session.capabilities();
     initialTick = initialSnapshot.simulationTick;
     const opening = await session.frame('image/png');
     await writeFile(path.join(root, 'first-frame.png'), imageBytes(opening.imageDataUrl, 'image/png'));
