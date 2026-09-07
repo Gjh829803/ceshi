@@ -65,3 +65,28 @@ This is a validated local correction and source-code fix. The existing r2
 recordings, frozen capture package, queues and human reviews were not overwritten.
 The 12-second comparison is diagnostic evidence, not six newly delivered full
 production clips or a claim of universal visual quality.
+
+
+## Authorized in-place rollout
+
+After the user approved updating the previous ten cases and the online campaign,
+all ten original Episode source SDK files were updated first, with their necessary
+source/derivation/index identities. All ten passed loadEpisodeSource, and all
+reference, author and non-SDK playable files remained intact.
+
+The online campaign then updated all 212 original SDK paths. The 69 cases marked
+passed in the pre-update shared human-review snapshot were first. Every remote
+SDK was hashed after replacement; the original gallery manifest and reviewer
+storage were not rewritten. One common previous SDK backup is retained for each
+runtime family.
+
+- Episode-compatible SDK: `d0a18fe8953a9a11a7adff09ee577c80a1fdf6f3e9c32382ae6b5c52485a4791`.
+- Online-compatible SDK: `40c2fb3904df01e797fb87d8fcc4464ecd0054575ce49e6e1ee967a153afba32`.
+- The online baseline was rebuilt exactly at `8e2d46cc…`; its new package passed
+  a direct bundle import with real G-bot, WorldAssets managed wrapping and Rapier:
+  no frozen gait ticks, exact phase transfer and unchanged reset pose.
+
+Rollout receipts and public verification are in
+`.codex-tmp/gait-phase-rollout-20260907`. Existing recorded media and frozen r2
+capture packages are separate artifacts; replacing SDK source files does not
+re-encode those videos or alter active queues.
