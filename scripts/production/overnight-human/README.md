@@ -368,3 +368,11 @@ feedback persists in a separate private FSx mount; publishing artifacts must
 never overwrite it. Shared human votes are not seeded from assistant account
 checks and never gate play. The review service stays available after production
 monitoring stops; cloud verification used a separate smoke run.
+
+The user subsequently explicitly paused cases without generated results while
+style optimization continues. OUT/halt.json records that request; no active jobs
+needed cancellation. Keep the88 no-artifact cases paused. The first optimization
+is a separate local input comparison documented in
+scripts/production/structural-style/README.md, based on the user's approval of
+001's matte structural appearance. It does not mutate this campaign, its frozen
+common prompt, SDK or published artifacts. There are no new cloud submissions.
