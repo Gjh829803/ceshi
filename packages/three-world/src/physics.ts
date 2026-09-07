@@ -11,6 +11,10 @@ export const DEFAULT_CHARACTER_OPTIONS: Required<CharacterOptions> = Object.free
   jumpSpeedMetersPerSecond: 5, maximumStepHeightMeters: .3, minimumStepWidthMeters: .15,
   snapToGroundDistanceMeters: .35, maximumSlopeRadians: Math.PI / 4, collisionOffsetMeters: .015,
 });
+// Float32 capsule contacts can report a slightly tilted normal on a flat cuboid.
+// This is only a retry eligibility tolerance, never the character's slope limit.
+const PLANAR_CONTACT_MINIMUM_Y = Math.cos(Math.PI / 180);
+const PLANAR_CONTACT_MAXIMUM_XZ = Math.sin(Math.PI / 180);
 let initialization: Promise<void> | undefined;
 type LocalPose = { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: THREE.Vector3; visible: boolean; matrix: THREE.Matrix4; matrixAutoUpdate: boolean };
 type DriveMode = 'ground' | 'velocity-gravity' | 'velocity-direct';
@@ -382,13 +386,39 @@ export class ThreePhysics implements PhysicsPort {
     return result;
   }
   private computeEnvironmentMotion(proposal: CharacterProposal): void {
-    const controller = proposal.entry.character!.controller;
-    controller.computeColliderMovement(proposal.entry.colliders[0]!, proposal.desired.clone().add(proposal.correction), RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined,
-      collider => this.entries.get(this.colliderOwners.get(collider.handle) ?? '')?.kind !== 'character');
+    const character = proposal.entry.character!, controller = character.controller;
+    const requested = proposal.desired.clone().add(proposal.correction);
+    const includeEnvironment = (collider: Collider): boolean => this.entries.get(this.colliderOwners.get(collider.handle) ?? '')?.kind !== 'character';
+    controller.computeColliderMovement(proposal.entry.colliders[0]!, requested, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, includeEnvironment);
     proposal.movement.copy(controller.computedMovement()); proposal.grounded = controller.computedGrounded();
+    let onlyPlanarFixedContacts = controller.numComputedCollisions() > 0;
     for (let i = 0; i < controller.numComputedCollisions(); i++) {
       const collision = controller.computedCollision(i), owner = collision?.collider ? this.colliderOwners.get(collision.collider.handle) : undefined;
       if (owner && owner !== proposal.entry.id) proposal.collisions.add(owner);
+      onlyPlanarFixedContacts &&= Boolean(collision && owner && this.entries.get(owner)?.kind === 'fixed'
+        && collision.normal1.y >= PLANAR_CONTACT_MINIMUM_Y
+        && Math.hypot(collision.normal1.x, collision.normal1.z) <= PLANAR_CONTACT_MAXIMUM_XZ);
+    }
+    const horizontal = requested.clone().setY(0), horizontalSquared = horizontal.lengthSq();
+    if (proposal.driveMode === 'ground' && character.grounded && proposal.grounded && requested.y < 0
+      && proposal.correction.lengthSq() === 0 && this.queryDirty.size === 0 && onlyPlanarFixedContacts
+      && horizontalSquared > 1e-8 && proposal.movement.dot(horizontal) < horizontalSquared * .5) {
+      // Rapier.js 0.20.0, npm gitHead 3e12c2679cb1940a876bde93af9cec0cf2f57944:
+      // https://github.com/dimforge/rapier/blob/3e12c2679cb1940a876bde93af9cec0cf2f57944/src/control/character_controller.rs#L683
+      // A near-unit vertical normal leaves a negative float32 tangent residual.
+      // handle_slopes then mistakes the remaining horizontal travel for downhill
+      // slipping and discards it. Remove only the grounded downward push in one
+      // retry; the same KCC still owns wall/step collision, snapping and support.
+      // API: https://rapier.rs/javascript3d/classes/KinematicCharacterController.html#computeColliderMovement
+      controller.computeColliderMovement(proposal.entry.colliders[0]!, horizontal, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, includeEnvironment);
+      const retry = new THREE.Vector3().copy(controller.computedMovement());
+      if (controller.computedGrounded() && retry.dot(horizontal) > proposal.movement.dot(horizontal) + 1e-5) {
+        proposal.movement.copy(retry);
+        for (let i = 0; i < controller.numComputedCollisions(); i++) {
+          const collision = controller.computedCollision(i), owner = collision?.collider ? this.colliderOwners.get(collision.collider.handle) : undefined;
+          if (owner && owner !== proposal.entry.id) proposal.collisions.add(owner);
+        }
+      }
     }
     this.constrainDirtyMotion(proposal);
   }

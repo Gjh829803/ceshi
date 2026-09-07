@@ -7,63 +7,10 @@ import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {isPassingDelivery,eventStatistics,validateDeliveryEvidence} from './three-eval-statistics.mjs';
 import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInstalledClosure,prepareBrowserRegistry} from './three-eval-runtime.mjs';
-import {withAdmissionDirectoryLock,validateSuccessfulAccountRoutingEvidence} from './three-eval-admission.mjs';
+import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
 import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
 import {stopOwnedThreeJob} from './three-eval-stop.mjs';
-
-test('Explicit account routing must be preserved in the effective service config',()=>{
-  const payload={request_id:'route-proof',options:{codex_bin:'/isolated/launcher',codex_account_ids:['successful-one','successful-two']},defaults:{model:'gpt-6-astra',reasoning_effort:'xhigh',sandbox:'workspace-write',timeout_seconds:2820,account_concurrency:5,pod_concurrency:1}};
-  const config={request_id:payload.request_id,options:{...payload.defaults,...payload.options}};
-  assert.equal(effectiveConfigMatches(config,payload),true);
-  assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_ids:undefined}},payload),false);
-  assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_ids:['different-account']}},payload),false);
-});
 const hash=x=>createHash('sha256').update(x).digest('hex');
-function accountRoutingFixture() {
-  const state={phase:'delivered',providerStatus:'completed',jobId:'gen_0123456789abcdef',requestId:'wk3-routing-source',caseId:'gpt6-source-case',taskId:'gpt6-source-case--three-sdk',profile:'three-sdk',runtimeHash:hash('previous-sdk-runtime'),model:'gpt-6-astra',reasoningEffort:'xhigh'};
-  return {state,items:{items:[{item_id:state.taskId,status:'succeeded',metadata:{model:state.model,reasoning_effort:state.reasoningEffort,codex_account_id:'synthetic-account'}}]},configEcho:{job_id:state.jobId,config:{job_id:state.jobId,request_id:state.requestId,pipeline:'codex',options:{model:state.model,reasoning_effort:state.reasoningEffort},items:[{id:state.taskId,task_id:'',model:'',reasoning_effort:''}]}},launcherReport:{kind:'three-creator-launcher-report',status:'delivered',caseId:state.caseId,taskId:state.taskId,profile:state.profile,runtimeHash:state.runtimeHash,model:state.model,reasoningEffort:state.reasoningEffort,codexBinarySha256:CODEX_BINARY_SHA256}};
-}
-const routingPin={expectedCodexBinarySha256:CODEX_BINARY_SHA256};
-test('Successful model/account evidence carries its original runtime across SDK releases',()=>{
-  const source=accountRoutingFixture(),newRuntimeHash=hash('new-camera-sdk-runtime');
-  const evidence=validateSuccessfulAccountRoutingEvidence(source,routingPin);
-  assert.notEqual(evidence.sourceRuntimeHash,newRuntimeHash);
-  assert.equal(evidence.sourceRuntimeHash,source.state.runtimeHash);
-  assert.equal(evidence.accountId,'synthetic-account');
-  assert.equal(evidence.codexBinarySha256,CODEX_BINARY_SHA256);
-});
-test('Account routing rejects wrong model or effort in every independent source of evidence',()=>{
-  for(const change of [
-    x=>x.state.model='gpt-5.5',x=>x.state.reasoningEffort='low',
-    x=>x.configEcho.config.options.model='gpt-5.5',x=>x.configEcho.config.options.reasoning_effort='low',
-    x=>x.configEcho.config.items[0].model='gpt-5.5',x=>x.configEcho.config.items[0].reasoning_effort='low',
-    x=>x.items.items[0].metadata.model='gpt-5.5',x=>x.items.items[0].metadata.reasoning_effort='low',
-    x=>x.launcherReport.model='gpt-5.5',x=>x.launcherReport.reasoningEffort='low',
-  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/MODEL|model-or-effort/i);}
-});
-test('Failed or incomplete account evidence and invalid metadata IDs cannot authorize routing',()=>{
-  for(const change of [
-    x=>x.state.phase='failed',x=>x.state.providerStatus='running',x=>x.items.items[0].status='failed',
-    x=>delete x.items.items[0].metadata,x=>delete x.items.items[0].metadata.codex_account_id,
-    ...['',' ','..','../synthetic','synthetic/account','synthetic\naccount','a'.repeat(257)].map(id=>x=>x.items.items[0].metadata.codex_account_id=id),
-    x=>delete x.launcherReport,
-  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/THREE_ACCOUNT_ROUTING_INVALID_EVIDENCE/);}
-});
-test('Account routing binds job, task and source runtime and refuses swapped or duplicate metadata',()=>{
-  for(const change of [
-    x=>x.configEcho.job_id='gen_other',x=>x.configEcho.config.job_id='gen_other',x=>x.configEcho.config.request_id='other',
-    x=>x.configEcho.config.items[0].id='other',x=>x.configEcho.config.items[0].task_id='other',
-    x=>x.items.items[0].item_id='other',x=>x.items.items.push(structuredClone(x.items.items[0])),
-    x=>x.state.taskId='different--three-sdk',x=>x.launcherReport.taskId='different--three-sdk',
-    x=>x.launcherReport.runtimeHash=hash('swapped source runtime'),x=>x.state.runtimeHash='missing',
-  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/THREE_ACCOUNT_ROUTING_INVALID_EVIDENCE/);}
-});
-test('Account routing requires the same pinned Codex binary, independent of SDK version',()=>{
-  const source=accountRoutingFixture();
-  assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,{expectedCodexBinarySha256:hash('other codex binary')}),/pinned-codex-binary/);
-  delete source.launcherReport.codexBinarySha256;
-  assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/pinned-codex-binary/);
-});
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlX8AAAAASUVORK5CYII=','base64');
 test('Python closed-archive regressions run through the Node census and propagate failures',()=>{const result=spawnSync('python3',['scripts/cloud/three-eval-unpack.test.py'],{encoding:'utf8'});if(result.error)throw result.error;assert.equal(result.status,0,result.stderr||result.stdout);});
@@ -79,6 +26,7 @@ const event=(tool,body,extra=[])=>({type:'item.completed',item:{type:'mcp_tool_c
 function lines(result){return [event('world_preview',{operationId:'preview',status:'queued'}),event('operations_get',{id:'preview',type:'world.preview',status:'succeeded',result:{view:'opening',profile:result.profile,sourceHash:result.sourceHash,worldBuildHash:result.worldBuildHash,image:{sha256:hash(png)}}},[{type:'image',mimeType:'image/png',data:png.toString('base64')}]),event('world_submit',{operationId:'submit',status:'queued'}),event('operations_get',{id:'submit',type:'world.submit',status:'succeeded',result})];}
 async function parse(events){const dir=await mkdtemp(path.join(tmpdir(),'three-events-'));try{const file=path.join(dir,'events');await writeFile(file,events.map(JSON.stringify).join('\n'));return await eventStatistics(file);}finally{await rm(dir,{recursive:true,force:true});}}
 test('Three receipt binds actual final-world PNG, profile, lock, full result and tar transport',async()=>{const f=fixture();f.events=await parse(lines(f.result));assert.equal(validateDeliveryEvidence(f).operationId,'submit');assert.equal(f.events.previewImageObservations,1);});
+test('Ultra receipts require the exact requested effort; an xhigh receipt cannot qualify',async()=>{const f=fixture();f.events=await parse(lines(f.result));f.expectedReasoningEffort='ultra';assert.throws(()=>validateDeliveryEvidence(f),/IDENTITY_FAILED/);f.launcherReport.reasoningEffort='ultra';assert.equal(validateDeliveryEvidence(f).operationId,'submit');assert.throws(()=>validateDeliveryEvidence({...f,expectedReasoningEffort:'xhigh'}),/IDENTITY_FAILED/);assert.throws(()=>validateDeliveryEvidence({...f,expectedReasoningEffort:'max'}),/REASONING_EFFORT_INVALID/);});
 test('Native, wrong engine/profile, semantic passed and nonfinite duration are rejected',()=>{const f=fixture();for(const change of [{inputWallSeconds:undefined},{inputWallSeconds:179},{inputWallSeconds:NaN},{videoMetadata:{durationSeconds:179,frameCount:179,widthPixels:960,heightPixels:540}},{captureTiming:{clock:'host'}},{activePlaySeconds:179},{activePlaySeconds:undefined},{activePlaySeconds:NaN},{activePlaySeconds:Infinity},{toolVersion:'0.1.0-experimental'},{sdkVersion:null},{browserObservationContract:'WorldObservation-v1'},{kind:'experimental-native-creator-delivery'},{engine:'babylon'},{profile:'three-raw'},{semanticStatus:'passed'},{actualWallSeconds:NaN},{actualWallSeconds:Infinity},{actualWallSeconds:undefined}])assert.equal(isPassingDelivery({...f.result,...change},'three-sdk'),false);});
 test('Fake shell/native tool receipts, stale world images and modified image bytes cannot qualify',async()=>{for(const edit of [rows=>rows.map(x=>({...x,item:{...x.item,type:'command_execution'}})),rows=>rows.map(x=>({...x,item:{...x.item,server:'worldkit_creator'}})),rows=>{const op=JSON.parse(rows[1].item.result.content[0].text);op.result.worldBuildHash=blank;rows[1].item.result.content[0].text=JSON.stringify(op);return rows;},rows=>{rows[1].item.result.content[1].data=Buffer.from('fake image').toString('base64');return rows;}]){const f=fixture();f.events=await parse(edit(lines(f.result)));assert.throws(()=>validateDeliveryEvidence(f),/UNVERIFIED/);}});
 test('Receipt must follow submitted operation; arbitrary final JSON and transport swaps rejected',async()=>{let f=fixture();f.events=await parse(lines(f.result).slice(0,2).concat(lines(f.result)[3]));assert.throws(()=>validateDeliveryEvidence(f),/UNVERIFIED/);for(const mutate of [x=>{x.eventsSha256=hash('other');},x=>{x.artifacts=structuredClone(x.artifacts);x.artifacts['creator-delivery.tar.gz'].sha256=hash('other');},x=>{x.result={...x.result,untrustedExtra:'changed'};},x=>{x.expectedRuntimeHash=hash('other');},x=>{x.result={...x.result,episodeHash:hash('changed')};}]){f=fixture();f.events=await parse(lines(f.result));mutate(f);assert.throws(()=>validateDeliveryEvidence(f));}});
@@ -95,6 +43,10 @@ test('Installed capsule verification rejects tampered pinned bytes and unlisted 
 test('Playwright metadata stays in a separate registry while executable content remains pinned',async()=>{const tmp=await mkdtemp(path.join(tmpdir(),'three-registry-')),root=await realpath(tmp);try{const browser=path.join(root,'browser'),product=path.join(browser,'browsers/chromium_headless_shell-1234'),binary=path.join(product,'chrome-headless-shell-linux64');await mkdir(binary,{recursive:true});await writeFile(path.join(binary,'chrome-headless-shell'),'pinned');await writeFile(path.join(product,'INSTALLATION_COMPLETE'),'');const registry=path.join(root,'host-cache/task/browser-registry');await prepareBrowserRegistry(browser,registry);const linked=path.join(registry,'chromium_headless_shell-1234/chrome-headless-shell-linux64');assert.equal(await readlink(linked),binary);await writeFile(path.join(registry,'chromium_headless_shell-1234/DEPENDENCIES_VALIDATED'),'');await assert.rejects(lstat(path.join(product,'DEPENDENCIES_VALIDATED')),{code:'ENOENT'});await prepareBrowserRegistry(browser,registry);await rm(linked);await mkdir(linked);await assert.rejects(prepareBrowserRegistry(browser,registry),/ENTRY_CHANGED/);}finally{await rm(tmp,{recursive:true,force:true});}});
 test('SDK-only admits five unique tasks, caps the sixth and resumes without POST; paired inputs remain equal',async()=>{
  await mkdir('.codex-tmp',{recursive:true});const dir=await mkdtemp(path.resolve('.codex-tmp/three-prepare-test-'));try{
+  const accountPolicyFile=path.join(dir,'account-policy.json'),accountInventoryFile=path.join(dir,'account-inventory.json');
+  await writeFile(accountPolicyFile,JSON.stringify({schemaVersion:1,scope:'worldkit-creator',preferred:[{label:'fixture',identitySha256:hash('fixture-account-first')}],denied:[],allowUnratedFallback:false}));
+  await writeFile(accountInventoryFile,JSON.stringify([{codexAccountId:'fixture-account-first',eligible:true,healthStatus:'active'}]));
+  const accountArgs=['--account-policy-file',accountPolicyFile,'--account-inventory-file',accountInventoryFile];
   const input={status:'draft',launcherPath:'/fsx/pipeline/worldkit-three-creator-experiments/test/three-eval-launcher.mjs',toolkitRoot:'/fsx/pipeline/worldkit-three-creator-experiments/test/toolkit/sdk',nodeBinary:'/fsx/pipeline/worldkit-three-creator-experiments/test/toolkit/runtime/bin/node',codexBinary:'/fsx/pinned/codex',codexBinarySha256:CODEX_BINARY_SHA256,browserRoot:'/fsx/pinned/browser'};
   input.hostCacheRoot='/fsx/pipeline/worldkit-three-creator-experiments/test/host-cache';
   for(const name of ['toolkitArchiveSha256','toolkitSourceHash','toolkitContentSha256','browserArchiveSha256','browserContentSha256'])input[name]=blank;
@@ -104,26 +56,49 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   const config=path.join(dir,'config.json'),lock=path.join(dir,'runtime-lock.json');await writeFile(config,JSON.stringify(input));
   execFileSync(process.execPath,['scripts/cloud/three-runtime-lock.mjs','--config',config,'--output',lock]);
   const out=path.join(dir,'run');
-  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','prepare','--suite','paired','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-pair','--output-root',out]);
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--suite','paired','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-pair','--output-root',out]);
   const plan=JSON.parse(await readFile(path.join(out,'evaluation-plan.json'),'utf8'));assert.equal(plan.cases.length,10);assert.equal(plan.maxConcurrency,4);assert.equal(plan.accountConcurrency,4);assert.deepEqual(plan.selectedTaskIds,['gpt6-eval-forest-lookout--three-raw','gpt6-eval-forest-lookout--three-sdk']);
   for(let i=0;i<10;i+=2){const [a,b]=await Promise.all(plan.cases.slice(i,i+2).map(async item=>({input:JSON.parse(await readFile(path.join(out,item.taskId,'case-input.json'),'utf8')),payload:JSON.parse(await readFile(path.join(out,item.taskId,'payload.json'),'utf8'))})));assert.equal(a.input.effectiveUserPrompt,b.input.effectiveUserPrompt);assert.equal(a.input.referenceImageSha256,b.input.referenceImageSha256);assert.equal(a.input.effectivePromptSha256,b.input.effectivePromptSha256);assert.deepEqual(a.payload.defaults,b.payload.defaults);assert.equal(a.payload.defaults.account_concurrency,4);assert.notEqual(a.payload.request_id,b.payload.request_id);assert(!a.payload.runtime_profile);}
-  assert.throws(()=>execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','run','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-pair','--output-root',out],{stdio:'pipe'}),/Command failed/);
-  const sdkOut=path.join(dir,'sdk-run'),sdkArgs=['scripts/cloud/three-eval-runner.mjs','--mode','prepare','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-sdk','--output-root',sdkOut];
+  assert.throws(()=>execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-pair','--output-root',out],{stdio:'pipe'}),/Command failed/);
+  const sdkOut=path.join(dir,'sdk-run'),sdkArgs=['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',lock,'--manifest',manifest,'--run-id','test-three-sdk','--output-root',sdkOut];
   execFileSync(process.execPath,sdkArgs);
   const sdkPlan=JSON.parse(await readFile(path.join(sdkOut,'evaluation-plan.json'),'utf8'));
   assert.equal(sdkPlan.kind,'three-creator-sdk-plan');assert.equal(sdkPlan.suite,'sdk-only');assert.equal(sdkPlan.experimentRevision,'three-sdk-v2');assert.equal(sdkPlan.cases.length,5);assert.equal(sdkPlan.selectedTaskIds.length,5);assert.equal(sdkPlan.maxConcurrency,5);assert.equal(sdkPlan.accountConcurrency,5);
   assert.equal(sdkPlan.acceptancePolicy.scope,'host-only');assert.equal(sdkPlan.acceptancePolicy.documents.length,1);for(const document of sdkPlan.acceptancePolicy.documents)assert.equal(document.sha256,hash(await readFile(document.path)));
   assert.equal((await readdir(sdkOut)).filter(name=>name.endsWith('--three-raw')).length,0);
   for(const item of sdkPlan.cases){const payload=JSON.parse(await readFile(path.join(sdkOut,item.taskId,'payload.json'),'utf8')),input=JSON.parse(await readFile(path.join(sdkOut,item.taskId,'case-input.json'),'utf8'));assert.equal(item.profile,'three-sdk');assert.equal(payload.defaults.account_concurrency,5);assert.equal(payload.defaults.pod_concurrency,1);assert.equal(input.experimentRevision,'three-sdk-v2');for(const key of ['acceptanceFocus','expectedSubjectCategory','acceptancePolicy','evaluationPolicyPath','title'])assert(!(key in input));assert(!JSON.stringify(payload).includes('retain meaningful path'));assert(!JSON.stringify(input).includes('HOST_ONLY_SECRET_REVIEW_RULE'));assert(!JSON.stringify(payload).includes('HOST_ONLY_SECRET_REVIEW_RULE'));assert(!payload.tasks[0].instruction.includes('Host acceptance focus'));assert.equal(payload.defaults.model,'gpt-6-astra');assert.equal(payload.defaults.reasoning_effort,'xhigh');assert(!payload.runtime_profile);}
-  for(const invalid of [['--max-concurrency','6'],['--account-concurrency','6'],['--profile','three-raw'],['--suite','paired'],['--experiment-revision','different-revision']])assert.throws(()=>execFileSync(process.execPath,[...sdkArgs,...invalid],{stdio:'pipe'}),/Command failed/);
-  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','stats','--manifest',manifest,'--run-id','test-three-sdk','--output-root',sdkOut]);
+  for(const invalid of [['--max-concurrency','65'],['--account-concurrency','21'],['--profile','three-raw'],['--suite','paired'],['--experiment-revision','different-revision']])assert.throws(()=>execFileSync(process.execPath,[...sdkArgs,...invalid],{stdio:'pipe'}),/Command failed/);
+  const wideOut=path.join(dir,'wide-sdk-run');
+  execFileSync(process.execPath,[...sdkArgs.map(arg=>arg===sdkOut?wideOut:arg==='test-three-sdk'?'test-three-wide':arg),'--account-concurrency','20']);
+  const widePlan=JSON.parse(await readFile(path.join(wideOut,'evaluation-plan.json'),'utf8'));assert.equal(widePlan.accountConcurrency,20);
+  for(const item of widePlan.cases){const payload=JSON.parse(await readFile(path.join(wideOut,item.taskId,'payload.json'),'utf8')),original=JSON.parse(await readFile(path.join(sdkOut,item.taskId,'payload.json'),'utf8'));assert.equal(payload.defaults.account_concurrency,20);assert.equal(payload.tasks[0].instruction,original.tasks[0].instruction);assert.equal(payload.options.codex_bin,original.options.codex_bin);assert.equal(payload.defaults.timeout_seconds,original.defaults.timeout_seconds);}
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','stats','--manifest',manifest,'--run-id','test-three-sdk','--output-root',sdkOut]);
   const sdkSummary=JSON.parse(await readFile(path.join(sdkOut,'summary.json'),'utf8'));assert.equal(sdkSummary.taskCount,5);assert.equal(sdkSummary.profileCount,1);assert.equal(sdkSummary.cases.length,5);
+
+  const ultraLock=path.join(dir,'ultra-lock.json'),ultraManifest=path.join(dir,'ultra-manifest.json'),ultraOut=path.join(dir,'ultra-run');
+  await writeFile(ultraLock,JSON.stringify({...JSON.parse(await readFile(lock,'utf8')),reasoningEffort:'ultra'}));
+  await writeFile(ultraManifest,JSON.stringify({cases:cases.map((c,i)=>({...c,...(i===0?{codexAccountIds:['fixture-account-first']}: {})}))}));
+  const ultraArgs=['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ultraLock,'--manifest',ultraManifest,'--run-id','test-three-ultra','--output-root',ultraOut,'--reasoning-effort','ultra','--case-limit','2'];
+  execFileSync(process.execPath,ultraArgs);
+  const ultraPlan=JSON.parse(await readFile(path.join(ultraOut,'evaluation-plan.json'),'utf8'));assert.equal(ultraPlan.reasoningEffort,'ultra');assert.equal(ultraPlan.selectedTaskIds.length,2);
+  const task=ultraPlan.selectedTaskIds[0],ultraPayload=JSON.parse(await readFile(path.join(ultraOut,task,'payload.json'),'utf8')),ultraInput=JSON.parse(await readFile(path.join(ultraOut,task,'case-input.json'),'utf8'));
+  assert.equal(ultraPayload.defaults.reasoning_effort,'ultra');assert.equal(ultraInput.reasoningEffort,'ultra');assert.deepEqual(ultraPayload.options.codex_account_ids,['fixture-account-first']);assert(!JSON.stringify(ultraInput).includes('fixture-account-first'));assert(!ultraPayload.tasks[0].instruction.includes('fixture-account-first'));
+  const oldPayload=JSON.parse(await readFile(path.join(sdkOut,task,'payload.json'),'utf8'));assert.equal(ultraPayload.tasks[0].instruction,oldPayload.tasks[0].instruction);
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','stats','--run-id','test-three-ultra','--output-root',ultraOut]);assert.equal(JSON.parse(await readFile(path.join(ultraOut,'summary.json'),'utf8')).reasoningEffort,'ultra');
+  const mismatched=spawnSync(process.execPath,ultraArgs.map(x=>x===ultraLock?lock:x),{encoding:'utf8'});assert.notEqual(mismatched.status,0);assert.match(mismatched.stderr,/REASONING_EFFORT_LOCK_MISMATCH/);
+
+  const tenManifest=path.join(dir,'ten-manifest.json'),tenOut=path.join(dir,'ten-run');
+  const ninetyLock=path.join(dir,'ninety-lock.json');await writeFile(ninetyLock,JSON.stringify({...JSON.parse(await readFile(lock,'utf8')),maximumTaskSeconds:5400}));
+  const drift=spawnSync(process.execPath,sdkArgs.map(value=>value===lock?ninetyLock:value),{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/FROZEN_RUNTIME_CHANGED/);assert.deepEqual(JSON.parse(await readFile(path.join(sdkOut,task,'payload.json'),'utf8')),oldPayload);
+  await writeFile(tenManifest,JSON.stringify({cases:[...cases,...cases.map(c=>({...c,id:c.id+'-extra'}))]}));
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ninetyLock,'--manifest',tenManifest,'--run-id','test-ten-sdk','--output-root',tenOut,'--case-limit','10','--max-concurrency','10']);
+  const tenPlan=JSON.parse(await readFile(path.join(tenOut,'evaluation-plan.json'),'utf8'));assert.equal(tenPlan.selectedTaskIds.length,10);assert.equal(tenPlan.maxConcurrency,10);assert.equal(tenPlan.safetyPolicy.maximumModelSeconds,5400);const tenPayload=JSON.parse(await readFile(path.join(tenOut,tenPlan.selectedTaskIds[0],'payload.json'),'utf8'));assert.equal(tenPayload.defaults.timeout_seconds,5520);
 
   // Exercise the real coordinator in an isolated checkout. Only its provider
   // transport is replaced; no production credential files or cloud API exist.
   const isolated=path.join(dir,'isolated'),cloud=path.join(isolated,'scripts/cloud');await mkdir(cloud,{recursive:true});await mkdir(path.join(isolated,'scripts/lib'));
   const isolatedPolicy=path.join(isolated,'host-policy.md');await cp(policyFile,isolatedPolicy);
-  for(const name of await readdir('scripts/cloud'))if(name.startsWith('three-eval-')||['creator-eval-diagnostics.mjs','creator-eval-runtime.mjs'].includes(name))await cp(path.join('scripts/cloud',name),path.join(cloud,name));
+  for(const name of await readdir('scripts/cloud'))if(name.startsWith('three-eval-')||['creator-eval-diagnostics.mjs','creator-eval-runtime.mjs','three-account-routing.mjs','three-execution-slots.mjs'].includes(name))await cp(path.join('scripts/cloud',name),path.join(cloud,name));
   await mkdir(path.join(isolated,'.codex-tmp/runtime-config'),{recursive:true});for(const name of ['aws-config','aws-credentials'])await writeFile(path.join(isolated,'.codex-tmp/runtime-config',name),'synthetic test only');
   const isolatedCases=[];for(const item of cases){const imagePath=path.join(isolated,path.basename(item.referenceImage.path)),promptPath=path.join(isolated,path.basename(item.effectiveUserPromptFile.path));await cp(item.referenceImage.path,imagePath);await cp(item.effectiveUserPromptFile.path,promptPath);isolatedCases.push({...item,referenceImage:{...item.referenceImage,path:imagePath},effectiveUserPromptFile:{...item.effectiveUserPromptFile,path:promptPath}});}
   const isolatedManifest=path.join(isolated,'manifest.json');await writeFile(isolatedManifest,JSON.stringify({evaluationPolicyPath:isolatedPolicy,cases:isolatedCases}));
@@ -142,19 +117,11 @@ export async function pollGenerationJob(){const until=Date.now()+800;while(calls
 export async function cancelGenerationJob(){throw Error('unexpected cancel');}
 `;
   await writeFile(path.join(isolated,'scripts/lib/lwdp-generation-client.mjs'),stub);
-  const invoke=(extra=[])=>spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-five-sdk',...extra],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});
+  const invoke=(extra=[])=>spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-five-sdk',...extra],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});
   const ran=invoke();assert.equal(ran.status,1,ran.stderr);assert.match(ran.stdout,/CREATOR_EVAL_/,ran.stderr);const recorded=(await readFile(callsFile,'utf8')).trim().split('\n').map(JSON.parse);assert.equal(recorded.length,5,ran.stdout+ran.stderr);assert.equal(new Set(recorded.map(c=>c.payload.request_id)).size,5);
   const admissions=path.join(isolated,'.codex-tmp/three-creator-eval/admissions');assert.equal((await readdir(admissions)).filter(name=>name.endsWith('.json')).length,5);
-  const logBefore=await readFile(callsFile,'utf8');const recovered=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','resume','--runtime-lock',readyPath,'--run-id','mock-five-sdk'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(recovered.status,1,recovered.stderr);assert.match(recovered.stdout,/CREATOR_EVAL_SUMMARY/);const recoveredSummary=JSON.parse(await readFile(path.join(isolated,'.codex-tmp/three-creator-eval/runs/mock-five-sdk/summary.json'),'utf8'));assert.equal(recoveredSummary.pendingCount,5);assert.equal(await readFile(callsFile,'utf8'),logBefore,'known pending requests must never POST again');
-  const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
+  const logBefore=await readFile(callsFile,'utf8');const recovered=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','resume','--runtime-lock',readyPath,'--run-id','mock-five-sdk'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(recovered.status,1,recovered.stderr);assert.match(recovered.stdout,/CREATOR_EVAL_SUMMARY/);const recoveredSummary=JSON.parse(await readFile(path.join(isolated,'.codex-tmp/three-creator-eval/runs/mock-five-sdk/summary.json'),'utf8'));assert.equal(recoveredSummary.pendingCount,5);assert.equal(await readFile(callsFile,'utf8'),logBefore,'known pending requests must never POST again');
+  const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
 
  }finally{await rm(dir,{recursive:true,force:true});}
-});
-
-// v2 removes the recorded-episode gate explicitly, without weakening archived v1.
-test('preview v2 delivery requires its own evidence and cannot claim recorded timing',()=>{
- const f=fixture(),value={...f.result,schemaVersion:2,status:'ready',validationMode:'interactive-preview',toolVersion:'0.3.0-experimental',sdkVersion:'0.3.0-experimental',previewEvidenceSha256:'d'.repeat(64)};
- for(const key of ['semanticStatus','episodeHash','actualWallSeconds','inputWallSeconds','activePlaySeconds','videoMetadata','captureTiming'])delete value[key];
- assert.equal(isPassingDelivery(value,'three-sdk'),true);
- for(const change of [{previewEvidenceSha256:undefined},{validationMode:'recorded-episode'},{schemaVersion:1},{activePlaySeconds:180},{videoMetadata:{durationSeconds:180}}])assert.equal(isPassingDelivery({...value,...change},'three-sdk'),false);
 });

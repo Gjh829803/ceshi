@@ -1,0 +1,961 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-06T13:02:42.660948+00:00",
+  "scope": "Two-case GPT-6 world reconstruction account observations",
+  "interpretation": "Account labels identify historical executions. Quality feedback, technical delivery and capacity errors are recorded separately. No account-level causal ranking established. Actual private IDs remain in ignored .codex-tmp/account-performance/account-id-map.json.",
+  "accounts": [
+    {
+      "label": "A",
+      "identityHash": "5bb04e93264f",
+      "userLikedJobIds": [
+        "gen_fe1079992dc9b5e3",
+        "gen_46237a5932d27537",
+        "gen_82e9410acbe9efd1"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "user-liked-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "B",
+      "identityHash": "f7abcf1b8d89",
+      "userLikedJobIds": [
+        "gen_ffb6845e2a241543",
+        "gen_a66b7b1be813063a"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "user-liked-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "C",
+      "identityHash": "95f8c23f5cc5",
+      "userLikedJobIds": [
+        "gen_3fc4085613628887"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "user-liked-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "D",
+      "identityHash": "1da59801262c",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_0d48cf74ac446f94",
+        "gen_ae7b0e6bb2ebb118"
+      ],
+      "selectionGuidance": "historical-below-original-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "E",
+      "identityHash": "acfc3b8cd65a",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_449377c4e0bcc976"
+      ],
+      "selectionGuidance": "historical-below-original-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "F",
+      "identityHash": "8c723340d43d",
+      "userLikedJobIds": [],
+      "userBelowOriginalJobIds": [
+        "gen_3fad93aae48e58b7"
+      ],
+      "selectionGuidance": "historical-below-original-evidence",
+      "causalQualityRanking": null
+    },
+    {
+      "label": "G",
+      "identityHash": "080b526f1d05",
+      "causalQualityRanking": null,
+      "userLikedJobIds": [
+        "gen_8e24fa692c5f35dc",
+        "gen_136aa96cbab1bebd",
+        "gen_a2db9a8a99e90399"
+      ],
+      "userBelowOriginalJobIds": [],
+      "selectionGuidance": "user-liked-evidence"
+    }
+  ],
+  "runs": [
+    {
+      "jobId": "gen_fe1079992dc9b5e3",
+      "case": "original-canyon",
+      "accountLabel": "A",
+      "actualAccountIdentityHash": "5bb04e93264f",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_ffb6845e2a241543",
+      "case": "original-ring",
+      "accountLabel": "B",
+      "actualAccountIdentityHash": "f7abcf1b8d89",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_3fc4085613628887",
+      "case": "accepted-replay-canyon",
+      "accountLabel": "C",
+      "actualAccountIdentityHash": "95f8c23f5cc5",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_46237a5932d27537",
+      "case": "accepted-replay-ring",
+      "accountLabel": "A",
+      "actualAccountIdentityHash": "5bb04e93264f",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_0d48cf74ac446f94",
+      "case": "rejected-opening-canyon",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_449377c4e0bcc976",
+      "case": "rejected-opening-ring",
+      "accountLabel": "E",
+      "actualAccountIdentityHash": "acfc3b8cd65a",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_3fad93aae48e58b7",
+      "case": "restored-ring",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_ae7b0e6bb2ebb118",
+      "case": "restored-canyon",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountEvidence": "provider items metadata, archived in exact-original-build-audit-20260906/account-routing.json",
+      "model": "gpt-6-astra",
+      "quality": {
+        "source": "user",
+        "verdict": "below-original",
+        "note": "Historical user feedback; configurations and dates vary. This is not a controlled causal account comparison."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_f0ace71487c78049",
+      "case": "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+      "requestedAccountLabel": "D",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "accountMatchesRequested": true,
+      "accountEvidence": "provider items metadata",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "worldBuildHash": "4575628136b7ac180df154ed4682d659affca62252cecd3c03af440d1c045c99",
+      "status": "delivered",
+      "elapsedSeconds": 1267.559,
+      "quality": {
+        "source": "assistant opening-image and playtest observations",
+        "verdict": "below-original",
+        "userVerdict": null,
+        "note": "See ../xhigh-selfcheck-20260906/README.md. Technical delivery does not establish fidelity or five-minute exploration."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_e682b8abea057f96",
+      "case": "gpt6-holdout-screenshot-20260823-193953--three-sdk",
+      "requestedAccountLabel": "F",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "accountMatchesRequested": true,
+      "accountEvidence": "provider items metadata",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "worldBuildHash": "273c4db33d080d7687166062254b6184f805e487a7f571ee982b15c7bb5986bc",
+      "status": "delivered",
+      "elapsedSeconds": 1574.436,
+      "quality": {
+        "source": "assistant opening-image and playtest observations",
+        "verdict": "below-original",
+        "userVerdict": null,
+        "note": "See ../xhigh-selfcheck-20260906/README.md. Technical delivery does not establish fidelity or five-minute exploration."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_d266668fa189b50b",
+      "accountLabel": "D",
+      "actualAccountIdentityHash": "1da59801262c",
+      "status": "failed",
+      "failureCategory": "model-capacity",
+      "quality": {
+        "source": null,
+        "verdict": "not-assessed-incomplete",
+        "note": "Availability failure is not a completed-world quality score."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_088cd064cb508d0b",
+      "accountLabel": "F",
+      "actualAccountIdentityHash": "8c723340d43d",
+      "status": "failed",
+      "failureCategory": "model-capacity",
+      "quality": {
+        "source": null,
+        "verdict": "not-assessed-incomplete",
+        "note": "Availability failure is not a completed-world quality score."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "runId": "known-good-xhigh-good-accounts-two-20260906",
+      "jobId": "gen_82e9410acbe9efd1",
+      "case": "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+      "requestedAccountLabel": "A",
+      "requestedAccountIdentityHash": "5bb04e93264f",
+      "selectionSourceJobId": "gen_fe1079992dc9b5e3",
+      "accountLabel": "A",
+      "actualAccountIdentityHash": "5bb04e93264f",
+      "accountMatchesRequested": true,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "status": "failed",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "userVerdict": "liked",
+        "feedbackRecordedAt": "2026-09-06T12:59:33.784941+00:00",
+        "note": "User explicitly accepted the latest two A/B-account cases. Visual approval is independent of technical delivery status."
+      },
+      "providerStatus": "completed",
+      "submittedAt": "2026-09-06T12:06:31.166Z",
+      "serverAcceptedAccountSelection": true,
+      "accountEvidence": "provider items metadata",
+      "worldBuildHash": null,
+      "startedAt": "2026-09-06T12:06:34.812Z",
+      "finishedAt": "2026-09-06T12:51:40.567Z",
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh",
+      "elapsedSeconds": 2705.755,
+      "technicalEvidence": {
+        "usage": {
+          "authority": "CLI reported counters in the retained event stream",
+          "available": false,
+          "completedTurns": [],
+          "monetaryCost": null,
+          "monetaryCostReason": "No per-job billing ledger is exposed; token counts are not currency charges."
+        },
+        "toolEvidence": {
+          "jsonLines": 245,
+          "invalidLines": 0,
+          "mcpCallsByTool": {
+            "creator_describe_environment": 1,
+            "creator_get_examples": 2,
+            "assets_search": 3,
+            "creator_get_authoring_schema": 3,
+            "assets_describe": 1,
+            "world_validate": 1,
+            "operations_get": 36,
+            "world_preview": 13,
+            "world_playtest": 15,
+            "world_inspect": 2
+          },
+          "submitOperationIds": [],
+          "successfulSubmitReceipts": [],
+          "previewImageObservations": 6,
+          "previewWorldBuildHashes": [
+            "83618d0d6b7fb7699b073c954709fd3b572937b08bbf9c5825cbee2e60f637b8",
+            "42e16ce6bc626ef355fd505e44cc4c05130a155e03301fc32f42c813564b6423",
+            "7a29df12746ab0ad599fd23682695df753d39073f68b1d97ac2aee93e1faf9b0",
+            "7025b7015841a5b732c5306f13dbc7b546a5eb4dc70cb770b96668f6c1c9e6ae",
+            "cb08e6a49cbd30352ae27b7813228146b2d531aa3d69c6c6bbc1bd61f14a9363",
+            "0ed651c42205189cf1b548cd72c7a83d5ec58174e27cfe66d522c154dd2545c7"
+          ],
+          "previewSourceHashes": [
+            "38568ef565d83cbe4930d1b1fa4e1382b50e51b596839a724b5af0ac214092a9",
+            "0667ca5e7eedab10b0c42e9b3b3dd74e619d118ad2b18998ec5107b063483ff2",
+            "27b10c0ccb3d0464f8255fba9f32c881741e7d6ce16bcdcf7dfd8c52e3e9c5d5",
+            "6083008cc1e7224fe51342c596d8ad8e59e462cb54d7a091174e462f8adda342",
+            "01f180a22ecc172ec8f72ee6e6f1e09323b2a3dc1058207a2a557e313f6257f7",
+            "e3694d16e60d29932114e2e955612c625893d5890a612561ad5b5d21f63eb0e1"
+          ],
+          "openingObservations": [
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "83618d0d6b7fb7699b073c954709fd3b572937b08bbf9c5825cbee2e60f637b8",
+              "sourceHash": "38568ef565d83cbe4930d1b1fa4e1382b50e51b596839a724b5af0ac214092a9"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "42e16ce6bc626ef355fd505e44cc4c05130a155e03301fc32f42c813564b6423",
+              "sourceHash": "0667ca5e7eedab10b0c42e9b3b3dd74e619d118ad2b18998ec5107b063483ff2"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "7a29df12746ab0ad599fd23682695df753d39073f68b1d97ac2aee93e1faf9b0",
+              "sourceHash": "27b10c0ccb3d0464f8255fba9f32c881741e7d6ce16bcdcf7dfd8c52e3e9c5d5"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "7025b7015841a5b732c5306f13dbc7b546a5eb4dc70cb770b96668f6c1c9e6ae",
+              "sourceHash": "6083008cc1e7224fe51342c596d8ad8e59e462cb54d7a091174e462f8adda342"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "cb08e6a49cbd30352ae27b7813228146b2d531aa3d69c6c6bbc1bd61f14a9363",
+              "sourceHash": "01f180a22ecc172ec8f72ee6e6f1e09323b2a3dc1058207a2a557e313f6257f7"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "0ed651c42205189cf1b548cd72c7a83d5ec58174e27cfe66d522c154dd2545c7",
+              "sourceHash": "e3694d16e60d29932114e2e955612c625893d5890a612561ad5b5d21f63eb0e1"
+            }
+          ]
+        }
+      },
+      "failureCategory": "playtest"
+    },
+    {
+      "runId": "known-good-xhigh-good-accounts-two-20260906",
+      "jobId": "gen_a66b7b1be813063a",
+      "case": "gpt6-holdout-screenshot-20260823-193953--three-sdk",
+      "requestedAccountLabel": "B",
+      "requestedAccountIdentityHash": "f7abcf1b8d89",
+      "selectionSourceJobId": "gen_ffb6845e2a241543",
+      "accountLabel": "B",
+      "actualAccountIdentityHash": "f7abcf1b8d89",
+      "accountMatchesRequested": true,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+      "status": "delivered",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "userVerdict": "liked",
+        "feedbackRecordedAt": "2026-09-06T12:59:33.784941+00:00",
+        "note": "User explicitly accepted the latest two A/B-account cases. Visual approval is independent of technical delivery status."
+      },
+      "providerStatus": "succeeded",
+      "submittedAt": "2026-09-06T12:06:30.605Z",
+      "serverAcceptedAccountSelection": true,
+      "accountEvidence": "provider items metadata",
+      "worldBuildHash": "40fa9363b6cb319e40e93b0964a3c5a3951dcf2b92347314e70a4054e5b7e23d",
+      "startedAt": "2026-09-06T12:06:34.082Z",
+      "finishedAt": "2026-09-06T12:37:59.625Z",
+      "elapsedSeconds": 1885.543,
+      "technicalEvidence": {
+        "activePlaySeconds": 237.75798479799997,
+        "targetResults": [
+          {
+            "id": "forefield",
+            "positionMetersXYZ": [
+              0,
+              0,
+              -25
+            ],
+            "toleranceMeters": 6,
+            "nearestDistanceMeters": 0.8275198393093868,
+            "reached": true
+          },
+          {
+            "id": "ring-passage",
+            "positionMetersXYZ": [
+              0,
+              0,
+              -78
+            ],
+            "toleranceMeters": 6,
+            "nearestDistanceMeters": 0.5549147636409487,
+            "reached": true
+          },
+          {
+            "id": "inner-basin",
+            "positionMetersXYZ": [
+              0,
+              1,
+              -147
+            ],
+            "toleranceMeters": 7,
+            "nearestDistanceMeters": 0.7380872085598028,
+            "reached": true
+          },
+          {
+            "id": "high-defile",
+            "positionMetersXYZ": [
+              0,
+              6,
+              -230
+            ],
+            "toleranceMeters": 7,
+            "nearestDistanceMeters": 0.7809357186529887,
+            "reached": true
+          },
+          {
+            "id": "upper-basin",
+            "positionMetersXYZ": [
+              0,
+              9,
+              -310
+            ],
+            "toleranceMeters": 7,
+            "nearestDistanceMeters": 0.37781227094209,
+            "reached": true
+          },
+          {
+            "id": "far-saddle",
+            "positionMetersXYZ": [
+              0,
+              16,
+              -408
+            ],
+            "toleranceMeters": 7,
+            "nearestDistanceMeters": 0.47109701919116165,
+            "reached": true
+          }
+        ],
+        "usage": {
+          "authority": "CLI reported counters in the retained event stream",
+          "available": true,
+          "completedTurns": [
+            {
+              "input_tokens": 5784951,
+              "cached_input_tokens": 5610240,
+              "output_tokens": 36218
+            }
+          ],
+          "monetaryCost": null,
+          "monetaryCostReason": "No per-job billing ledger is exposed; token counts are not currency charges."
+        },
+        "toolEvidence": {
+          "jsonLines": 232,
+          "invalidLines": 0,
+          "mcpCallsByTool": {
+            "creator_describe_environment": 1,
+            "creator_get_examples": 2,
+            "assets_search": 3,
+            "creator_get_authoring_schema": 3,
+            "assets_describe": 1,
+            "world_validate": 1,
+            "operations_get": 39,
+            "world_preview": 13,
+            "world_playtest": 8,
+            "world_inspect": 4,
+            "operations_cancel": 1,
+            "world_capture_triviews": 1,
+            "world_submit": 1
+          },
+          "submitOperationIds": [
+            "a151a051-b41a-4342-bda7-222241b78dee"
+          ],
+          "successfulSubmitReceipts": [
+            {
+              "operationId": "a151a051-b41a-4342-bda7-222241b78dee",
+              "delivery": {
+                "kind": "three-creator-delivery",
+                "schemaVersion": 1,
+                "toolVersion": "0.2.0-experimental",
+                "engine": "three@0.185.1",
+                "creatorRuntimeLockHash": "968433bf78ac958c0d7960a12ac2c397311283876c974b594adf58b1ff268c04",
+                "profile": "three-sdk",
+                "status": "ready-for-independent-review",
+                "technicalStatus": "passed",
+                "semanticStatus": "unreviewed",
+                "sourceHash": "3c41c81a3f1b468f972bb4f94fbe38fbc24e42e176e7fe20e879a6dcea4e0538",
+                "worldBuildHash": "40fa9363b6cb319e40e93b0964a3c5a3951dcf2b92347314e70a4054e5b7e23d",
+                "runtimeHash": "0a52dc8c4c877fc48ea20f730b07c869ee5af411fbafb50d341bcf7bd8d50290",
+                "episodeHash": "9f75920b3e3bba29d9a47dd7cabbcb98a023939f0fe4774ccec272c6e914f79f",
+                "sdkVersion": "0.2.0-experimental",
+                "browserObservationContract": "WorldObservation-v2",
+                "actualWallSeconds": 239.21427662299993,
+                "inputWallSeconds": 237.76030000000074,
+                "videoMetadata": {
+                  "durationSeconds": 238.958,
+                  "frameCount": 502,
+                  "widthPixels": 768,
+                  "heightPixels": 432
+                },
+                "captureTiming": {
+                  "clock": "browser-performance",
+                  "recordingStartedAtMilliseconds": 2322.900000002235,
+                  "initialFrameRequestedAtMilliseconds": 2323.199999999255,
+                  "finalFrameRequestedAtMilliseconds": 241285.40000000224,
+                  "stopRequestedAtMilliseconds": 241469.19999999925,
+                  "recorderStoppedAtMilliseconds": 241470,
+                  "framePeriodSeconds": 0.3333333333333333,
+                  "requestedFrames": 502,
+                  "postrollStartedAtMilliseconds": 240661.19999999925,
+                  "postrollSeconds": 0.8095
+                },
+                "activePlaySeconds": 237.75798479799997,
+                "targetResults": [
+                  {
+                    "id": "forefield",
+                    "positionMetersXYZ": [
+                      0,
+                      0,
+                      -25
+                    ],
+                    "toleranceMeters": 6,
+                    "nearestDistanceMeters": 0.8275198393093868,
+                    "reached": true
+                  },
+                  {
+                    "id": "ring-passage",
+                    "positionMetersXYZ": [
+                      0,
+                      0,
+                      -78
+                    ],
+                    "toleranceMeters": 6,
+                    "nearestDistanceMeters": 0.5549147636409487,
+                    "reached": true
+                  },
+                  {
+                    "id": "inner-basin",
+                    "positionMetersXYZ": [
+                      0,
+                      1,
+                      -147
+                    ],
+                    "toleranceMeters": 7,
+                    "nearestDistanceMeters": 0.7380872085598028,
+                    "reached": true
+                  },
+                  {
+                    "id": "high-defile",
+                    "positionMetersXYZ": [
+                      0,
+                      6,
+                      -230
+                    ],
+                    "toleranceMeters": 7,
+                    "nearestDistanceMeters": 0.7809357186529887,
+                    "reached": true
+                  },
+                  {
+                    "id": "upper-basin",
+                    "positionMetersXYZ": [
+                      0,
+                      9,
+                      -310
+                    ],
+                    "toleranceMeters": 7,
+                    "nearestDistanceMeters": 0.37781227094209,
+                    "reached": true
+                  },
+                  {
+                    "id": "far-saddle",
+                    "positionMetersXYZ": [
+                      0,
+                      16,
+                      -408
+                    ],
+                    "toleranceMeters": 7,
+                    "nearestDistanceMeters": 0.47109701919116165,
+                    "reached": true
+                  }
+                ],
+                "deliveredAt": "2026-09-06T12:36:52.162Z",
+                "files": {
+                  "captures/captures.json": "481335b89de92eec80850d2cae5c7468b597ae8f6c9ccac3165ca637f68087af",
+                  "captures/entity-triview-0c6e616ab6.png": "f26c72501f47fa98249c11af8e0dc4f6af2c6821ad81e480ccb183668569f2ed",
+                  "captures/entity-triview-18cb94ac58.png": "f0e91c8330dc2450e1862a93295ad5ed4f9da6fa7ccb404187c46ac911a7c693",
+                  "captures/entity-triview-698582e1e1.png": "3f72a9a46c9a8c7bf34c9c4bed7f613533ebbcf590c145b4ec0083fa53580b2c",
+                  "captures/entity-triview-72a9976dbb.png": "9fd597b698ba09af303771dc0a378acaed18cf954c5b6e8869157f3249598502",
+                  "captures/entity-triview-e937ad929f.png": "678470f0c44c57cfe1f90a3ae342ba8a37aa1595c0da44bb773152ee4d22150d",
+                  "captures/entity-triview-f00181461a.png": "d5c7d08b2ad79bd2350f762866135213a6ebec3e8ee895d829d07b5ccab1de46",
+                  "captures/entity-triview-f38ef55f20.png": "d3b28bfc9f0df6bf59f7b263cd99c80308e5484acc7b64e50c8d875013d30d33",
+                  "captures/entity-triview-f60d873e3f.png": "0d51d72e92688e239fa37c91ac0ca78c6559b7bc4c7745dc23cc2eb020586bf0",
+                  "captures/opening-4f53cda18c.png": "26a34b42c1daa928fa283e402130731223ee5470a298902ddacafe75f2db6099",
+                  "episode.json": "9f75920b3e3bba29d9a47dd7cabbcb98a023939f0fe4774ccec272c6e914f79f",
+                  "playable/asset-definitions.json": "1f4a6420918e8c2faf916b0a6c1c6ac897b210e1600a84550099124609696cd9",
+                  "playable/assets/subjects/4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f.glb": "4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
+                  "playable/compiled/entry-0.js": "2c474f2bb8efab46e8d33e3005d0c61e35b0f835761313a0a52e08a5afa52584",
+                  "playable/compiled/entry-0.js.map": "57615a105939be2c647a33e0c813fee0eddf34ab7ecaf2e98a96e652e17580ed",
+                  "playable/geology.js": "c32c9f869d69638362de941d95b335a8c31d1cb401d37361a0a0e243b74d5474",
+                  "playable/index.html": "e8753bd6c0a81a631d9162cab2949619b35862a56dc8effb932d0f238b861be1",
+                  "playable/main.js": "7d03d2df40a136d106702b8d1485ec406a892f6d4ea335bff1656735604e3488",
+                  "playable/project.json": "57f705f84a2539a5ed033446962200b14149548acc190371b8b62855df99e214",
+                  "playable/runtime/addon-a60c3eeffc1fd862.js": "3b77eba3af2dd25db926a50daeb3b2953be0ee77ededcabe293421c63209bc92",
+                  "playable/runtime/bridge.js": "64d7b368472dd2f953c8e7bea7397b45b9ce4765c1c46935f688ec6f5ffc8751",
+                  "playable/runtime/three.js": "07cfce21e8a76b9dd1914ab11cd2fb30e0ac84f05888f5b71e3b497d0f8af18a",
+                  "playable/runtime/worldkit-three.js": "aeb26726591c1fbedd328091d9444e8d799bfda3f951a712302217a313d3433c",
+                  "playable/traveler.js": "39d60342c650e243ed7ea3b513b53b868c7f7378e391da1290a16f5603e77e0b",
+                  "playtest/episode.json": "9f75920b3e3bba29d9a47dd7cabbcb98a023939f0fe4774ccec272c6e914f79f",
+                  "playtest/keyframe-000.png": "e94bc2a7c798c9eaddb18298fcd3a80bfc9219160aeed77be9983b7129556d45",
+                  "playtest/keyframe-001.png": "4cb84af6c66135cf7aa18f02842121cccd77be858bb29c9f1fd4ea1beefcaec7",
+                  "playtest/keyframe-002.png": "142eda4d4e7025a86c04a2825a14e5dee082dbbf8e87e93402bda0ad676c44e7",
+                  "playtest/keyframe-003.png": "88654fe2464d758f1c37f0f44e8ec91aaa1469eb31d4b5611d9e5b94caafc2ac",
+                  "playtest/keyframe-004.png": "5cbb684611409cb0b426d8578c024f10e87d20f1ebb3619f0b9dca351e3d78a1",
+                  "playtest/keyframe-005.png": "2e491048cb8cd8b3739ca87879d9a249f62a3b73b8acd558b14c6631a8704a4b",
+                  "playtest/keyframe-006.png": "2800163aa3b455103c3cc65e3639d97c8580fe426a78458e80a3095db7ff3311",
+                  "playtest/keyframe-007.png": "9bd73810980cd17ffb1ba8b4c63a59a7c129041cd02566fc0f1332e551c5742e",
+                  "playtest/keyframe-008.png": "6ea3f62d355016689b9426962714f5a83d104c27de5422f02a83d22e90aa3486",
+                  "playtest/keyframe-009.png": "aae9b5ed6806e40407d2226f0000794bccbc2fe3c1a6b94bb5daccea3c3d6af8",
+                  "playtest/keyframe-010.png": "a09e5a2fd03cd9b3ff4fe67a10258b84372e2cb821e03de3a6fac704c32be2be",
+                  "playtest/keyframe-011.png": "80b9fa7d77e65cfdc5808f54d1c668fc89e5a3c019bb78941d52b575b9b9b1a5",
+                  "playtest/keyframe-012.png": "98d14aa436f8801493857d9de3f805fb2e69844fa97840118be216b4c2403fdd",
+                  "playtest/keyframe-013.png": "2e0f4684b075a5130a3800d91707a138523cb22f6f97b16bfc2e00ebcde867af",
+                  "playtest/keyframe-014.png": "d4c30a201ebb496739ba29e5f5d29a4ee85219c97360f450b5bd9cecc160a237",
+                  "playtest/keyframe-015.png": "5f9c1c12a52a7b94844256e97cb6072c4d1e553eb1c296a0076bdb2ddf2b182e",
+                  "playtest/playtest.json": "fb8fd5368428d395a4d76b8a51a6b911393ee55097527d9ddf94a020b58fffc8",
+                  "playtest/playtest.mp4": "379ec470bc2424943cb328d5968737c0423fd359a99d02fa5f565f7bc5a571d2",
+                  "playtest/playtest.webm": "3396f599a08d0537188dbd94b2545cc94c87c5d305023952a68580245f949202",
+                  "playtest/trace.json": "e9eec9b6d7b16dd25850db1606a9ac7dcfff066b737e3cf18d8fdb4f50926838",
+                  "source/geology.js": "c32c9f869d69638362de941d95b335a8c31d1cb401d37361a0a0e243b74d5474",
+                  "source/index.html": "8bf0ddbf6f5c38cfc55aa4df163ab6baa61865e03d34813f86ffbe02a34dd399",
+                  "source/main.js": "7d03d2df40a136d106702b8d1485ec406a892f6d4ea335bff1656735604e3488",
+                  "source/project.json": "57f705f84a2539a5ed033446962200b14149548acc190371b8b62855df99e214",
+                  "source/traveler.js": "39d60342c650e243ed7ea3b513b53b868c7f7378e391da1290a16f5603e77e0b"
+                },
+                "archivePath": "/fsx/pipeline/lwdp_generation/gen_a66b7b1be813063a/tasks/gpt6-holdout-screenshot-20260823-193953--three-sdk/creator-delivery.tar.gz",
+                "archiveSha256": "52a5e9259cead42fcea1efa0c549176eebbc0b87013a48a53f487bc255d1e31c",
+                "archiveByteLength": 16749165,
+                "deliveryManifestSha256": "ac8da7bc42df0a977d9f6060672321369e7560a8391d9c660c1d1b8d9be4b6fb"
+              }
+            }
+          ],
+          "previewImageObservations": 10,
+          "previewWorldBuildHashes": [
+            "75fb07fb7407d2dc9aad22085aad27b410a3561db4f4bde19deee2e046f29c51",
+            "ff88a88d8e81d4b4dbbabf33dfecd63efa3ee867adf0462c328f8ddf736334f3",
+            "ca86b146000e085fc8abfb9a5a6d4538bd9249c7530947fd6a8cfd55270aea76",
+            "ca86b146000e085fc8abfb9a5a6d4538bd9249c7530947fd6a8cfd55270aea76",
+            "35c222b09dec2c5c4c90a755928ccaab88ab50b66809469787f7417d1c0ad5df",
+            "2cb3b742f0f00497e308e27bedcd31589ee249bc46de7c6b7b98844c905c4f0e",
+            "7e2696f237c9db40ddf09dfe2fb1e6782e32c92345bd6a179695435f03c6b2c2",
+            "9357cdcd395fe15788c03d03a01e1843d44540071beabe7d66500cd0b473ca66",
+            "c72a51b536920c2b8e4c08383f0d7856c16efe64005267eb0852ba29c430fd2a",
+            "40fa9363b6cb319e40e93b0964a3c5a3951dcf2b92347314e70a4054e5b7e23d"
+          ],
+          "previewSourceHashes": [
+            "48fe304c6e71a8d6a12f17ba4bafb1c44afa96f8161447a5728de6206bb563b1",
+            "c41e77e5bad33f816f51b0eac462ceb3d5c976c0f7530b180436409364c32119",
+            "1fe36970247c528dcbb555afa674fa6576a748b7088458971125c1b6763a2dd6",
+            "1fe36970247c528dcbb555afa674fa6576a748b7088458971125c1b6763a2dd6",
+            "9255da16f2fc0a986f57f205d671388b420e91e5eceb2cacb1002f34d8be59d0",
+            "b0aacc8352affd5b94c7bab9380680202cad75eab578e91ad5adadeebf075c4c",
+            "61cc03879debe3685e6ac90fb20e921bb57c71453ef3528a9882b29f02ffc7af",
+            "71716fa4b46d90e44874e2a5365765cf8d58d7eee39a8cd942626e0d04945e78",
+            "b53361e9bc52769f5f6aaaf37a0d087cca456b3ca4414e2075517af2783aaf25",
+            "3c41c81a3f1b468f972bb4f94fbe38fbc24e42e176e7fe20e879a6dcea4e0538"
+          ],
+          "openingObservations": [
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "75fb07fb7407d2dc9aad22085aad27b410a3561db4f4bde19deee2e046f29c51",
+              "sourceHash": "48fe304c6e71a8d6a12f17ba4bafb1c44afa96f8161447a5728de6206bb563b1"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "ff88a88d8e81d4b4dbbabf33dfecd63efa3ee867adf0462c328f8ddf736334f3",
+              "sourceHash": "c41e77e5bad33f816f51b0eac462ceb3d5c976c0f7530b180436409364c32119"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "ca86b146000e085fc8abfb9a5a6d4538bd9249c7530947fd6a8cfd55270aea76",
+              "sourceHash": "1fe36970247c528dcbb555afa674fa6576a748b7088458971125c1b6763a2dd6"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "ca86b146000e085fc8abfb9a5a6d4538bd9249c7530947fd6a8cfd55270aea76",
+              "sourceHash": "1fe36970247c528dcbb555afa674fa6576a748b7088458971125c1b6763a2dd6"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "35c222b09dec2c5c4c90a755928ccaab88ab50b66809469787f7417d1c0ad5df",
+              "sourceHash": "9255da16f2fc0a986f57f205d671388b420e91e5eceb2cacb1002f34d8be59d0"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "2cb3b742f0f00497e308e27bedcd31589ee249bc46de7c6b7b98844c905c4f0e",
+              "sourceHash": "b0aacc8352affd5b94c7bab9380680202cad75eab578e91ad5adadeebf075c4c"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "7e2696f237c9db40ddf09dfe2fb1e6782e32c92345bd6a179695435f03c6b2c2",
+              "sourceHash": "61cc03879debe3685e6ac90fb20e921bb57c71453ef3528a9882b29f02ffc7af"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "9357cdcd395fe15788c03d03a01e1843d44540071beabe7d66500cd0b473ca66",
+              "sourceHash": "71716fa4b46d90e44874e2a5365765cf8d58d7eee39a8cd942626e0d04945e78"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "c72a51b536920c2b8e4c08383f0d7856c16efe64005267eb0852ba29c430fd2a",
+              "sourceHash": "b53361e9bc52769f5f6aaaf37a0d087cca456b3ca4414e2075517af2783aaf25"
+            },
+            {
+              "profile": "three-sdk",
+              "worldBuildHash": "40fa9363b6cb319e40e93b0964a3c5a3951dcf2b92347314e70a4054e5b7e23d",
+              "sourceHash": "3c41c81a3f1b468f972bb4f94fbe38fbc24e42e176e7fe20e879a6dcea4e0538"
+            }
+          ]
+        }
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_8e24fa692c5f35dc",
+      "runId": "three-quality-transport-ten-20260906-r1",
+      "case": "gpt6-mixed-old-gvs2-00003405-d941c5--three-sdk",
+      "accountLabel": "G",
+      "actualAccountIdentityHash": "080b526f1d05",
+      "accountEvidence": "provider items metadata; exact linked worldBuildHash matches state.json",
+      "worldBuildHash": "58027b4c8e52db60da1f458ec4f18922c6a68388fd6b5c4bb55c5b313cced1fa",
+      "status": "delivered",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "08df0e65bff1246c60dfaa6dfaedddbe9eaeacc4066c1e51e1899dc2686d3261",
+      "runtimeHash": "7fdb788a78706ba925b31e63bb7a6d82417bd2af512ee67b8075bdfc08cab8de",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "userVerdict": "liked",
+        "feedbackRecordedAt": "2026-09-06T12:59:33.784941+00:00",
+        "note": "User supplied this exact playable build URL as a good result."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_136aa96cbab1bebd",
+      "runId": "three-quality-transport-ten-20260906-r1",
+      "case": "gpt6-mixed-new-lbd-2091a895578056417ce9f9a2--three-sdk",
+      "accountLabel": "G",
+      "actualAccountIdentityHash": "080b526f1d05",
+      "accountEvidence": "provider items metadata; exact linked worldBuildHash matches state.json",
+      "worldBuildHash": "6bf7b827cd639c6d42783f959c83a7104be101721ca738d4b9ae6ce4b4b8225f",
+      "status": "delivered",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "08df0e65bff1246c60dfaa6dfaedddbe9eaeacc4066c1e51e1899dc2686d3261",
+      "runtimeHash": "7fdb788a78706ba925b31e63bb7a6d82417bd2af512ee67b8075bdfc08cab8de",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "userVerdict": "liked",
+        "feedbackRecordedAt": "2026-09-06T12:59:33.784941+00:00",
+        "note": "User supplied this exact playable build URL as a good result."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "jobId": "gen_a2db9a8a99e90399",
+      "runId": "three-quality-transport-ten-20260906-r1",
+      "case": "gpt6-mixed-old-049-bay-courier-sky-ocean-60dda6--three-sdk",
+      "accountLabel": "G",
+      "actualAccountIdentityHash": "080b526f1d05",
+      "accountEvidence": "provider items metadata; exact linked worldBuildHash matches state.json",
+      "worldBuildHash": "40498a4eb8abb0df1aaf9d286acbbb8b301066484bd5dbecd3cade1c900a656a",
+      "status": "delivered",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "08df0e65bff1246c60dfaa6dfaedddbe9eaeacc4066c1e51e1899dc2686d3261",
+      "runtimeHash": "7fdb788a78706ba925b31e63bb7a6d82417bd2af512ee67b8075bdfc08cab8de",
+      "quality": {
+        "source": "user",
+        "verdict": "liked",
+        "userVerdict": "liked",
+        "feedbackRecordedAt": "2026-09-06T12:59:33.784941+00:00",
+        "note": "User supplied this exact playable build URL as a good result."
+      },
+      "cliBinaryPath": "/fsx/pipeline/worldkit-creator-experiments/gpt6-probe-20260905-c83fd126/codex-0.153.3-linux-x64/bin/codex",
+      "cliBinarySha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6",
+      "cliVersion": "0.153.3",
+      "cliEvidence": "actual creator-launcher-report.json",
+      "actualLaunchModel": "gpt-6-astra",
+      "actualLaunchReasoningEffort": "xhigh"
+    },
+    {
+      "runId": "opening-follow-good-accounts-two-20260906",
+      "requestId": "wk3-0216e8825593d23f-gpt6-holdout-013-grand-canyon-courier--three-sdk-a1",
+      "jobId": null,
+      "case": "gpt6-holdout-013-grand-canyon-courier--three-sdk",
+      "requestedAccountLabel": "A",
+      "requestedAccountIdentityHash": "5bb04e93264f",
+      "selectionSourceJobId": "gen_fe1079992dc9b5e3",
+      "accountLabel": null,
+      "actualAccountIdentityHash": null,
+      "accountMatchesRequested": null,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "c45b168a562065942ece88e0462ea65d5cc60fa9341a212e0ba98bf6ab30f630",
+      "sdkRuntimeHash": "d9c8496e04866bb4ef228dc34481c349d32a20c5369112b3d86731469773753f",
+      "cameraSourceCommit": "2a7a2f9b3c8eb384876f608b14aaf7d72f7933d7",
+      "status": "queued-behind-control",
+      "quality": {
+        "source": null,
+        "verdict": "pending",
+        "userVerdict": null
+      }
+    },
+    {
+      "runId": "opening-follow-good-accounts-two-20260906",
+      "requestId": "wk3-42d3f2c52a796125-gpt6-holdout-screenshot-20260823-193953--three-sdk-a1",
+      "jobId": null,
+      "case": "gpt6-holdout-screenshot-20260823-193953--three-sdk",
+      "requestedAccountLabel": "B",
+      "requestedAccountIdentityHash": "f7abcf1b8d89",
+      "selectionSourceJobId": "gen_ffb6845e2a241543",
+      "accountLabel": null,
+      "actualAccountIdentityHash": null,
+      "accountMatchesRequested": null,
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "promptSha256": "77f48b6053f8bfcc45328c5f4d42ffe5386c98ee4b5012a27d51bcf59ab1c323",
+      "runtimeHash": "c45b168a562065942ece88e0462ea65d5cc60fa9341a212e0ba98bf6ab30f630",
+      "sdkRuntimeHash": "d9c8496e04866bb4ef228dc34481c349d32a20c5369112b3d86731469773753f",
+      "cameraSourceCommit": "2a7a2f9b3c8eb384876f608b14aaf7d72f7933d7",
+      "status": "queued-behind-control",
+      "quality": {
+        "source": null,
+        "verdict": "pending",
+        "userVerdict": null
+      }
+    }
+  ]
+}

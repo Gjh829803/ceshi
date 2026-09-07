@@ -1,0 +1,66 @@
+--- a/project.json
++++ b/project.json
+@@ -1 +1 @@
+-{"schemaVersion":1,"assetIds":[]}
++{"schemaVersion": 1, "assetIds": ["humanoid.g-bot"]}--- a/main.js
++++ b/main.js
+@@ -20,9 +20,9 @@
+ sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-44,right:44,top:50,bottom:-50,near:.1,far:130});
+ sun.shadow.bias=-.0003;sun.shadow.normalBias=.025;scene.add(sun);scene.add(sun.target);sun.target.position.set(0,0,-25);
+ const park=buildPark(world,scene);
+-const worker=makeWorker();worker.root.traverse(o=>{if(o.isMesh)o.castShadow=false;});
++const worker=makeWorker(await world.assets.load('humanoid.g-bot'));worker.root.traverse(o=>{if(o.isMesh)o.castShadow=false;});
+ const shadowCanvas=document.createElement("canvas");shadowCanvas.width=64;shadowCanvas.height=64;const shadowCtx=shadowCanvas.getContext("2d"),gradient=shadowCtx.createRadialGradient(32,32,3,32,32,31);gradient.addColorStop(0,"rgba(25,33,23,.4)");gradient.addColorStop(1,"rgba(25,33,23,0)");shadowCtx.fillStyle=gradient;shadowCtx.fillRect(0,0,64,64);const workerShadow=new THREE.Mesh(new THREE.PlaneGeometry(.95,.65),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shadowCanvas),transparent:true,depthWrite:false}));workerShadow.rotation.x=-Math.PI/2;workerShadow.position.y=.007;worker.root.add(workerShadow);let lastGroundY=0;
+-world.addCharacter({id:'gardener',name:'Parques y Jardines · municipal gardener',object:worker.root,body:{heightMeters:1.83,radiusMeters:.26},movement:{kind:'ground',walkSpeedMetersPerSecond:1.6,runSpeedMetersPerSecond:6.5,jumpSpeedMetersPerSecond:4.7,maximumStepHeightMeters:.24,maximumSlopeRadians:.75},appearancePrompt:'Complete human gardener in forest-green cap, green work jacket and cargo trousers, chartreuse shoulder and back panel marked PARQUES Y JARDINES, silver reflective back stripe, lime and silver calf bands, work boots and belt tools.'});
++world.addCharacter({id:'gardener',name:'Parques y Jardines · municipal gardener',asset:worker.asset,body:{heightMeters:1.83,radiusMeters:.26},movement:{kind:'ground',walkSpeedMetersPerSecond:1.6,runSpeedMetersPerSecond:6.5,jumpSpeedMetersPerSecond:4.7,maximumStepHeightMeters:.24,maximumSlopeRadians:.75},appearancePrompt:'Complete human gardener in forest-green cap, green work jacket and cargo trousers, chartreuse shoulder and back panel marked PARQUES Y JARDINES, silver reflective back stripe, lime and silver calf bands, work boots and belt tools.'});
+ world.setControlledEntity('gardener');
+ world.setCameraFollow({framingMode:'preserve-opening',followHalfLifeSeconds:.06,rotationSpeedRadiansPerSecond:1,collisionRadiusMeters:.13,recoveryHalfLifeSeconds:.18,transitionSeconds:.15});
+ world.setCaptureTargets(['gardener','stone-bridge','tree-0','lamp-0','fountain','glasshouse','pavilion','quay-stairs','north-river-bridge','far-bank-terrace']);
+@@ -61,5 +61,5 @@
+  if(simulationSeconds-updateText>.2){updateText=simulationSeconds;document.querySelector('#area').textContent=best<11?closest.name:'河畔林荫道 · Riverside promenade';refresh();}
+  park.water.material.uniforms.uTime.value=simulationSeconds;
+ });
+-world.onReset(()=>{phase=0;airTime=0;wasAir=false;updateText=0;lastGroundY=0;workerShadow.position.y=.007;animateWorker(worker,{speed:0,phase:0,time:0,airborne:false,airTime:0,verticalSpeed:0,deltaSeconds:10});refresh();document.querySelector('#area').textContent='河畔林荫道 · Riverside promenade';park.water.material.uniforms.uTime.value=0;});
++world.onReset(()=>{worker.motion.reset();phase=0;airTime=0;wasAir=false;updateText=0;lastGroundY=0;workerShadow.position.y=.007;animateWorker(worker,{speed:0,phase:0,time:0,airborne:false,airTime:0,verticalSpeed:0,deltaSeconds:10});refresh();document.querySelector('#area').textContent='河畔林荫道 · Riverside promenade';park.water.material.uniforms.uTime.value=0;});
+ await world.start();
+--- a/world/worker.js
++++ b/world/worker.js
+@@ -1,3 +1,4 @@
++import {bindGbotVisualMotion} from '../gbot-visual-motion.js';
+ import * as THREE from 'three';
+ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+ const material=(color)=>new THREE.MeshLambertMaterial({color,});
+@@ -7,7 +8,7 @@
+ function ellipsoid(p,m,rx,ry,rz,x,y,z,segments=12){const o=mesh(new THREE.SphereGeometry(1,segments,8),m,p,x,y,z);o.scale.set(rx,ry,rz);return o;}
+ function taper(p,m,top,bottom,h,x,y,z,squash=1){const o=mesh(new THREE.CylinderGeometry(top,bottom,h,10),m,p,x,y,z);o.scale.z=squash;return o;}
+ function pivot(p,x,y,z){const o=new THREE.Group();o.position.set(x,y,z);p.add(o);return o;}
+-export function makeWorker(){
++export function makeWorker(asset){
+  const root=new THREE.Group();root.name='Complete uniformed municipal gardener';
+  const hips=pivot(root,0,1.005,0);
+  ellipsoid(hips,green,.188,.14,.135,0,-.04,0);
+@@ -69,21 +70,7 @@
+  }
+  function compactPart(g){for(const c of [...g.children])if(c.isGroup)compactPart(c);const grouped=new Map();for(const c of [...g.children])if(c.isMesh){c.updateMatrix();let entry=grouped.get(c.material);if(!entry){entry=[];grouped.set(c.material,entry);}let geo=c.geometry.clone().applyMatrix4(c.matrix);entry.push(geo.index?geo.toNonIndexed():geo);g.remove(c);}for(const [material,geos] of grouped){const o=new THREE.Mesh(mergeGeometries(geos,false),material);o.receiveShadow=true;g.add(o);}}
+  compactPart(root);
+- const w={root,hips,torso,head,arms,forearms,legs,knees};animateWorker(w,{speed:0,phase:0,time:0,airborne:false,airTime:0,verticalSpeed:0,deltaSeconds:10});return w;
++ const motion=bindGbotVisualMotion(asset,root,{legs,knees,arms,elbows:forearms});
++ return {root:asset.object,asset,hips,torso,head,arms,forearms,legs,knees,motion};
+ }
+-export function animateWorker(w,{speed,phase,time,airborne,airTime,verticalSpeed,deltaSeconds}){
+- const running=speed>2.2,moving=speed>.08,amp=moving?(running?.82:.48):0;
+- const blend=1-Math.exp(-deltaSeconds*17);
+- const ease=(obj,axis,value)=>obj.rotation[axis]+=(value-obj.rotation[axis])*blend;
+- const tuck=airborne?Math.sin(Math.min(1,airTime/1.05)*Math.PI)*.75:0;
+- for(let i=0;i<2;i++){
+-  const s=i===0?-1:1,cycle=Math.sin(phase+i*Math.PI);
+-  ease(w.legs[i],'x',airborne?-.17-tuck*(i===0?.8:1.1):cycle*amp);
+-  ease(w.knees[i],'x',airborne?.25+tuck:Math.max(0,-cycle)*(running?1.0:.5));
+-  ease(w.arms[i],'x',airborne?-.6-tuck*.7:-cycle*amp*.85);
+-  ease(w.arms[i],'z',s*(airborne?.2:.065));
+-  ease(w.forearms[i],'x',airborne?-.6:running?-.85:-.1);
+- }
+- ease(w.torso,'x',airborne?-.1:running?-.09:0);
+- w.hips.position.y=1.005+(moving&&!airborne?Math.cos(phase*2)*.015:Math.sin(time*1.7)*.002);
+-}
++export function animateWorker(w,{speed,airborne,verticalSpeed}){w.motion.update({velocityWorldMetersPerSecondXYZ:[speed,verticalSpeed,0],isGrounded:!airborne});}

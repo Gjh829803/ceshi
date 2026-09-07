@@ -62,6 +62,14 @@ for row in rows:
                 data,_=read_public(p); report=json.loads(data)
                 if report.get('taskId')!=row['taskId'] or report.get('workspace')!=str(out.parent): raise ValueError('LIVE_REPORT_IDENTITY_CHANGED')
                 r['launcher']={k:report.get(k) for k in ['status','startedAt','finishedAt','runtimeHash','childExitCode']}; r['launcher']['error']=safe_error(report.get('error'))
+            p=out/'creator-checkpoint.json'
+            if p.exists():
+                data,_=read_public(p); checkpoint=json.loads(data)
+                if checkpoint.get('kind')=='three-creator-checkpoint' and checkpoint.get('status')=='runnable' and checkpoint.get('taskId')==row['taskId'] and checkpoint.get('creatorRuntimeLockHash')==r.get('launcher',{}).get('runtimeHash'):
+                    hashes={k:checkpoint.get(k) for k in ['worldBuildHash','sourceHash','archiveSha256']}
+                    if all(isinstance(v,str) and re.fullmatch(r'[a-f0-9]{64}',v) for v in hashes.values()):
+                        # Receipt presence is not archive verification or a delivery.
+                        r['checkpointReceipt']={'status':'observed-unverified',**hashes,'createdAt':checkpoint.get('createdAt')}
             p=out/'creator-events.jsonl'
             if p.exists():
                 data,s=read_public(p); events=[]
@@ -114,7 +122,13 @@ for row in rows:
     results.append(r)
 print(json.dumps({'observedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'jobs':results}))`;
 
-export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namespace='ray', pod='ray-cluster-head-tmssq', container='ray-head'}={}) {
+export function selectThreeLiveHead(inventory, container='ray-head') {
+  const candidates=(inventory.items??[]).filter(item=>!item.metadata?.deletionTimestamp&&item.status?.phase==='Running'&&item.spec?.containers?.some(value=>value.name===container)&&item.status?.conditions?.some(value=>value.type==='Ready'&&value.status==='True'));
+  if(candidates.length!==1||!/^[a-z0-9-]+$/.test(candidates[0].metadata?.name??''))throw new Error('THREE_LIVE_HEAD_UNAVAILABLE');
+  return candidates[0].metadata.name;
+}
+
+export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namespace='ray', pod, container='ray-head'}={}) {
   const cacheRoot=path.join(repo,'.codex-tmp/three-creator-eval/live-cache');
   await mkdir(cacheRoot,{recursive:true});
   const fresh=[], pending=[];
@@ -124,6 +138,10 @@ export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namesp
     pending.push({jobId:job.jobId,taskId:job.taskId,requestId:job.requestId??null,workDir:job.workDir});
   }
   if (pending.length) {
+    if (!pod) {
+      const inventory=await exec('kubectl',['-n',namespace,'get','pods','-l','ray.io/cluster=ray-cluster,ray.io/node-type=head','-o','json'],{encoding:'utf8',timeout:25000,maxBuffer:2*1024*1024});
+      pod=selectThreeLiveHead(JSON.parse(inventory.stdout),container);
+    }
     const {stdout}=await exec('kubectl',['-n',namespace,'exec',pod,'-c',container,'--','python3','-c',python,JSON.stringify(pending)],{encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024});
     const result=JSON.parse(stdout);
     for(const job of result.jobs){const file=path.join(cacheRoot,job.jobId+'.json'),temp=file+`.${process.pid}.part`;await writeFile(temp,JSON.stringify({observedAt:result.observedAt,job}));const {rename}=await import('node:fs/promises');await rename(temp,file);fresh.push({...job,observedAt:result.observedAt});}

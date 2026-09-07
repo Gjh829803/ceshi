@@ -2,91 +2,57 @@ Build the uploaded reference and creative request into an explorable world using
 the selected Three Creator profile. The task ID records either `three-raw` or
 `three-sdk`; the MCP environment and examples describe that exact profile.
 
-The uploaded reference, intended subject, spatial relationships and gameplay goals
-are the creative authority. A reusable, relatively simple colored whitebox is
-sufficient: you may omit small decoration, fine textures and intricate details.
-Use stable, distinguishable colors for major objects. The first-frame viewpoint and composition must match the reference exactly. Match
-the reference's viewpoint, perspective/FOV, camera position/orientation, horizon, subject placement
-and apparent scale, landmark silhouettes and occlusion. Do not substitute a generic
-centered rear camera when the reference uses a different composition. Simplify
-geometry without changing the image's main spatial arrangement.
-
-Before implementing the world, use the built-in System Image Gen tool ($image)
-to create an overall orthographic top-down world plan. Save the actual generated image as
-planning/world-plan.png and describe the intended spaces/connections briefly in
-planning/world-plan.md. Mark the opening camera position/direction and the part
-visible in the reference, then plan the surrounding unseen world. Include meaningful
-routes, connected areas, branches/loops where suitable, elevation transitions and
-places to discover. The generated plan guides layout; the original uploaded image
-remains the authority for the opening camera and composition. Use the plan to guide
-the same world's implementation and revise it when topology changes materially. A Three screenshot or a diagram drawn
-in code is not a substitute for this ImageGen planning step.
-
-The connected traversable world must support MORE THAN five minutes of meaningful
-exploration at the normal authored movement speed. This is a content and layout
-requirement, not a minimum execution or recording time. Do not satisfy it by slowing
-the player, repeating the same small circuit, adding an empty oversized plane or
-blocking progress. Especially for enclosed references, build connected spaces
-beyond the first-frame room/corridor: additional chambers, passages, levels or
-other coherent areas appropriate to the request. Preserve the opening shot while
-extending the world outside that view. The plan may simplify detail, but intended
-connections and height transitions must be physically traversable.
+The frozen reference, intended subject, spatial relationships and gameplay goals
+are the creative authority. Old dataset policies demanding only blocks, a centered
+rear camera or Native/Babylon authoring are superseded for this experiment. Match
+the actual first-frame composition, perspective, subject scale and occlusion.
+Use recognizable low-poly geometry and stable object colors; preserve the complete
+moving subject and complete landmarks. Keep real elevation, stairs and routes.
 
 Read the environment, authoring schema and examples. Write ordinary index.html
 and local JS/TS modules. The raw profile uses normal Three and your own runtime;
 the SDK profile offers the thin SDK and its examples. Both have the same reference,
-creative request, catalog assets, budget and browser evidence tools. Use catalog
-assets or author custom geometry as appropriate; G-bot is optional and has no
-mandatory preference. Search assets by identity and inspect their limitations;
-diagnostic samples are not proof of faithful subject appearance. Do not install dependencies or change supplied tools.
+creative request, catalog assets, budget and browser evidence tools. Search assets
+by exact identity and inspect their limitations; diagnostic samples are not proof
+of faithful subject appearance. Do not install dependencies or change supplied tools.
+For humanoid leads, default to G-bot and its supplied idle/walk/run/jump actions.
+Clothing, colors or headwear alone do not justify rebuilding locomotion. Customize
+appearance where practical; if a custom humanoid is needed, prefer proven motions.
+Inspect actual walking and running from the side: forward-facing travel, natural
+knee/elbow flexion, foot contact and strides matching movement speed. Verify jump
+and landing transitions too; moving limbs alone do not establish correct animation.
 
 For the SDK world, WASD moves the character and the arrow keys rotate the camera;
-after composing the reference camera, `world.setCameraFollow()` can inherit that
-exact view for play. Explicit orbit settings remain available for a different
-gameplay view. The SDK owns continuous handoff, collision recovery and subject
-framing; use its controls before adding a custom camera writer.
 Shift stays held to run and each new Space press jumps once. Keep the verified
 ordinary jump animation continuous, then return to idle/walk/run on landing.
 R and tool reset must restore the complete initial world, camera and gameplay
 state. Use the SDK's declared extension and control capabilities when required;
 do not claim an unsupported movement or geometry behavior merely by naming it.
 
-Keep all game UI (HUD, menus, prompt inputs, crosshairs and nameplates) in an
-independent HTML/CSS layer, outside the world renderer. Physical scene signs may
-remain geometry. For the SDK profile, read the presentation schema topic and use
-`world.createPresentation()` with `ui.mount`, `ui.bind` or `ui.anchor`; retain your
-own UI design. Use live bindings for immediate controls and presented bindings
-for gameplay HUD. Handlers use current SDK state/commands. Do not add a second
-simulation or put UI in the Three canvas. The presentation container must be the
-canvas's parent; give a custom stage an explicit size.
-Only the pure world canvas is model input; never feed page screenshots, UI or
-generated video back into it. Model transport is supplied by the application,
-not implemented by these SDK methods. Explicit bitmap captures carry source
-frame keys; a raw MediaStream alone cannot identify corresponding model frames.
-When displaying model output without service frame mapping, keep presented
-HUD/anchors hidden instead of guessing a delay. Source anchor projection does not guarantee exact
-position or occlusion in generated video.
+Compare real world_preview images with the reference: subject size and placement,
+camera perspective, landmark silhouettes and spatial depth. Correct major visual
+or structural mismatches before the final recording; compilation and a technical
+passed flag alone do not establish task completion.
+Use short real keyboard episodes and world_inspect to check movement, held running,
+jumping, first-input camera continuity, wall occlusion/recovery and reset. Verify
+distinct connected areas beyond the opening, supporting five minutes of meaningful
+exploration. Repeated laps, targets already reached at spawn and oversized target
+tolerances do not prove exploration. Repair observed failures and retest the same
+world. After the final world-source change, request an opening preview and inspect
+the returned image. An episode-only edit does not invalidate that world image.
+Then record a full 180–300-second
+episode with at least 180 seconds of active play and complete object three-views
+before world_submit. Paused, loading and reset time cannot count as active play.
+Long operations return
+operation IDs: poll the same operation through operations_get; do not launch duplicates.
 
-Use world_preview to see real browser images and world_inspect for diagnostics.
-Opening resets to the reference camera; current preserves the current page. Use
-world_preview with view=current and input to hold keys briefly, click, drag or
-scroll, then inspect the returned screenshot, camera keyframes and state. Camera
-diagnostics describe actual short interactions and are informational. Choose your own checks
-and exploration; fix issues you observe. After the final source change, inspect
-an opening preview and capture complete object three-views before world_submit.
-There is no required episode file, recorded self-test, video or minimum test duration.
-The exploration requirement describes world content, not recording length.
-Current preview shows the full page for UI inspection; opening and object
-three-views capture pure world pixels. Keep any derived conditioning images free
-of baked-in HUD while preserving the original uploaded reference.
-Operations return IDs: poll the same ID through operations_get, without duplicates.
+External acceptance goals cannot be weakened by deleting waypoints, replacing
+stairs with nonphysical decorations, or detaching the required moving subject's
+parts. Preserve those goals while fixing the world. Before submitting, compare
+the evidence with the reference and user goals yourself; report unsupported,
+unverified or failed goals explicitly.
 
-Preserve requested routes, real height transitions and the complete moving subject
-while fixing the world. Report unsupported behavior and observed failures truthfully.
-Submit the playable directly when it is ready. There is no Host or human review
-stage and no approval to wait for.
-
-Run world_preview and world_submit in the same MCP service session. Do not write
+Run world_playtest and world_submit in the same MCP service session. Do not write
 delivery files, traces, receipts or tool reports manually. Submit using world_submit,
 poll until it succeeds, and leave creator-result.json and creator-delivery.tar.gz
 unchanged. Keep the original reference and failed attempts; do not replace this

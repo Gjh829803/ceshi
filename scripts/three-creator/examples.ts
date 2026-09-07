@@ -27,32 +27,15 @@ const world = await createWorld({scene,camera,canvas});
 scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
 const ground = new THREE.Mesh(new THREE.BoxGeometry(60,0.2,60),new THREE.MeshStandardMaterial({color:0x759955}));
 ground.position.y=-0.1; world.addEntity({id:'ground',object:ground,role:'terrain'});
-const player = new THREE.Group();
-const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xe87836}));
-body.position.y=0.7; player.add(body);
-world.addCharacter({id:'player',object:player,body:{heightMeters:1.4,radiusMeters:0.35}});
+// Select humanoid.g-bot in project.json. The asset path uses its supplied motions.
+const player = await world.assets.load('humanoid.g-bot');
+world.addCharacter({id:'player',asset:player});
 world.setControlledEntity('player');
-world.setCameraFollow();
+world.setCameraFollow(); // follow from the authored camera without reframing
 world.setCaptureTargets(['player']);
-// HTML UI is a separate layer; it never enters modelInput world pixels.
-const presentation = world.createPresentation();
-const positionHud = document.createElement('output');
-positionHud.style.cssText = 'position:absolute;left:16px;top:16px;color:white;background:#182634;padding:8px';
-presentation.ui.bind({id:'player-position',element:positionHud,clock:'presented',
- read:()=>world.getEntityState('player').positionWorldMetersXYZ.map(value=>Math.round(value)),
- render:position=>{positionHud.textContent='Position: '+position.join(' / ');}
-});
-const resetButton = document.createElement('button');
-resetButton.style.cssText = 'position:absolute;right:16px;top:16px';
-presentation.ui.bind({id:'reset-control',element:resetButton,clock:'live',
- read:()=>world.getEntityState('player').positionWorldMetersXYZ.some(value=>Math.abs(value)>1),
- render:away=>{resetButton.textContent=away?'Return to start':'Reset';}
-});
-resetButton.onclick=async()=>{await world.reset();presentation.focus();};
-// Raw-world view uses live state for both. Over model output, presented HUD uses
-// a mapped source frame, and is hidden when its correspondence is unknown.
 await world.start(); // prepares baseline and installs the real same-scene observer
 // WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.
-// Author pure visual child motion with onUpdate; managed root motion uses execute.
+// A custom object has no automatic limb animation; prefer supplied humanoid actions.
+// Local front is -Z. Inspect custom knees/elbows from the side during movement.
 // This is a minimal integration example, not a completed reference reconstruction.
 `;

@@ -4,7 +4,7 @@ import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { objectSchema } from './schema-helpers.js';
 export { objectSchema } from './schema-helpers.js';
 
-export const THREE_CREATOR_VERSION = '0.3.0-experimental';
+export const THREE_CREATOR_VERSION = '0.2.0-experimental';
 export type CreatorProfile = 'three-raw' | 'three-sdk';
 export type Project = { schemaVersion: 1; assetIds: string[] };
 export type EpisodeStep = {
@@ -49,19 +49,3 @@ export function profileFrom(value: unknown): CreatorProfile {
   if (value !== 'three-raw' && value !== 'three-sdk') throw new Error('THREE_PROFILE_INVALID: expected three-raw or three-sdk');
   return value;
 }
-
-export type PreviewInput = {
-  keys?: string[];
-  durationSeconds?: number;
-  click?: { xPixels: number; yPixels: number };
-  pointerDrag?: { deltaXPixels: number; deltaYPixels: number; button?: 'left' | 'middle' | 'right' };
-  wheel?: { deltaXPixels: number; deltaYPixels: number };
-};
-const pixels = { type: 'number', minimum: -8192, maximum: 8192 };
-export const PREVIEW_INPUT_SCHEMA = objectSchema({
-  keys: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 40 }, uniqueItems: true, maxItems: 20 },
-  durationSeconds: { type: 'number', minimum: 0, maximum: 15 },
-  click: objectSchema({ xPixels: { type: 'number', minimum: 0, maximum: 959 }, yPixels: { type: 'number', minimum: 0, maximum: 539 } }, ['xPixels', 'yPixels']),
-  pointerDrag: objectSchema({ deltaXPixels: pixels, deltaYPixels: pixels, button: { enum: ['left', 'middle', 'right'] } }, ['deltaXPixels', 'deltaYPixels']),
-  wheel: objectSchema({ deltaXPixels: pixels, deltaYPixels: pixels }, ['deltaXPixels', 'deltaYPixels']),
-});

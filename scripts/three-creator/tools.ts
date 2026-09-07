@@ -6,11 +6,12 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import Ajv from 'ajv';
 import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, readCatalog, publicAsset, isWithin, assertNoSymlinks, type Candidate } from './compiler.js';
-import { EPISODE_SCHEMA, PROJECT_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, type PreviewInput, PREVIEW_INPUT_SCHEMA, errorMessage, sha256 } from './contracts.js';
+import { EPISODE_SCHEMA, PROJECT_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
 import type { WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, type AuthoringTopic } from './authoring-schema.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, SDK_EXAMPLE } from './examples.js';
+import {selectTriviewTargets} from './capture-plan.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -70,11 +71,6 @@ async function command(binary: string, args: string[], cwd?: string) {
     child.stderr.on('data', data => { error = (error + data).slice(-8000); }); child.once('error', reject); child.once('close', code => code === 0 ? resolve() : reject(new Error(`THREE_PROCESS_FAILED: ${binary} ${error}`)));
   });
 }
-export async function encodePlaytestVideo(input: string, output: string): Promise<void> {
-  // yuv420p needs even dimensions. Pad only the right/bottom edge; leave frame
-  // timestamps and the existing VFR encoding path untouched.
-  await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0', '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', output]);
-}
 export async function createClosedArchive(root: string, output: string): Promise<void> {
   await assertNoSymlinks(path.join(root, 'payload')); await command('tar', ['-czf', output, '--', 'payload'], root);
 }
@@ -98,7 +94,6 @@ export class ThreeCreatorTools {
   private session?: Session;
   private playtestEvidence?: Evidence;
   private captureEvidence?: Evidence;
-  private openingEvidence?: Evidence;
   constructor(workspace: string, readonly profile: CreatorProfile) {
     this.compiler = new ThreeCompiler(workspace, profile); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
   }
@@ -106,12 +101,12 @@ export class ThreeCreatorTools {
     return { kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared prebuilt Three; the SDK profile adds the fixed SDK runtime.',
-      project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. No episode.json is required.',
+      project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
       observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
-      feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_preview with view=current accepts real keyboard, click, drag and wheel input, observes camera continuity and projected player bounds on actual renders, and returns the resulting page plus at most two real canvas keyframes. Camera signals are informational heuristics, not delivery gates or occlusion proof. Keys are released at the end; the page is paused between observations. No video is recorded. Raw worlds without snapshot report those fields as null.',
-      delivery: 'Versioned three-creator-delivery, experimental. Requires an opening preview of the current source, no observed browser/SDK errors, and real player/target front-right-back captures. No recorded episode or minimum duration is required. Preview evidence does not prove route or semantic acceptance.',
-      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Use world_preview(view=current,input={keys:["w","Shift"],durationSeconds:2}) to move and inspect the resulting image. Choose your own actions and checks.',
-      limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The tools report observable runtime facts and do not score visual fidelity or gameplay quality.'],
+      feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
+      delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a completed real 180s+ episode with captured keydown and keyup and no browser/SDK errors, and real player/target front-right-back captures. Route success is a measurement, not semantic or visual acceptance.',
+      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode; only a value below planned duration selects truncated debug. Full episodes have a bounded overhead allowance. Debug with a short playtest before the full episode.',
+      limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate.'],
     };
   }
   async schema(topic: AuthoringTopic = 'getting-started') {
@@ -121,18 +116,18 @@ export class ThreeCreatorTools {
       sdkGuide: guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic),
       ...(topic === 'control' || topic === 'extensions' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
     } : {};
-    return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, previewInput: PREVIEW_INPUT_SCHEMA, observation: COMMON_OBSERVATION,
+    return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
-      previewNote: 'opening resets the world; current preserves it. Optional input uses real browser events and is bounded to 15 seconds per call. No fixed route or minimum duration.' };
+      episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Paused/reset time is excluded from minimum active-play duration. Fixed XYZ targets measure proximity, never steer or teleport.' };
   }
   async examples(topic: 'getting-started' | 'extensions' = 'getting-started') {
     if (topic === 'extensions') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
       const files: Record<string, string> = {};
-      for (const name of ['index.html', 'main.ts', 'project.json']) files[name] = await readFile(path.join(REPOSITORY_ROOT, 'examples/three-creator/sdk-capabilities', name), 'utf8');
+      for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) files[name] = await readFile(path.join(REPOSITORY_ROOT, 'examples/three-creator/sdk-capabilities', name), 'utf8');
       return { profile: this.profile, topic, files, sdkExample: 'SDK v2 capability example: actual character, effects, controlled movement intent, named geometry and NPC operations. Validate in the current runtime before claiming behavior.' };
     }
-    return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? SDK_EXAMPLE : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: [] }) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
+    return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? SDK_EXAMPLE : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: this.profile === 'three-sdk' ? ['humanoid.g-bot'] : [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
   async assets(query = '', assetId?: string) { const assets = await readCatalog(); const words = query.toLowerCase().split(/\s+/).filter(Boolean); return { schemaVersion: 1, assets: assets.filter(asset => (!assetId || asset.id === assetId) && words.every(word => JSON.stringify(publicAsset(asset)).toLowerCase().includes(word))).map(publicAsset) }; }
   start(type: string, run: (id: string) => Promise<unknown>) {
     const now = new Date().toISOString(), id = randomUUID(); const operation: Operation = { id, type, status: 'queued', createdAt: now, updatedAt: now }; this.operations.set(id, operation);
@@ -230,65 +225,19 @@ export class ThreeCreatorTools {
     const name = `${view}-${sha256(JSON.stringify(entityIds)).slice(0, 10)}.png`, file = path.join(root, name); await mkdir(root, { recursive: true }); await writeFile(file, bytes);
     return { ...result, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: session.candidate.sourceHash, worldBuildHash: session.candidate.worldBuildHash, profile: this.profile };
   }
-  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number, input?: PreviewInput) {
-    const checkInput = new Ajv({ strict: false, strictNumbers: true }).compile(PREVIEW_INPUT_SCHEMA);
-    if (!['opening', 'current', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians)) || (input && (view !== 'current' || !checkInput(input)))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
-    const candidate = await this.compiler.prepare(), session = await this.open(candidate);
-    await this.bridge(session, 'stop');
+  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number) {
+    if (!['opening', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
+    const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'stop');
     if (view === 'opening') await this.bridge(session, 'reset');
-    const before = await this.bridge(session, 'read'), held: string[] = [];
-    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`);
-    let cameraDiagnostics: any;
-    if (input) {
-      try { await this.bridge(session, 'beginCameraPreview'); }
-      catch (error) { cameraDiagnostics = { informationalOnly: true, warnings: [errorMessage(error)] }; }
-      try {
-        await this.bridge(session, 'start');
-        if (input.click) await session.page.mouse.click(input.click.xPixels, input.click.yPixels);
-        for (const key of input.keys ?? []) { await session.page.keyboard.down(key); held.push(key); }
-        if (input.pointerDrag) {
-          const drag = input.pointerDrag; await session.page.mouse.move(480, 270);
-          await session.page.mouse.down({ button: drag.button ?? 'left' });
-          try { await session.page.mouse.move(480 + drag.deltaXPixels, 270 + drag.deltaYPixels, { steps: 8 }); }
-          finally { await session.page.mouse.up({ button: drag.button ?? 'left' }); }
-        }
-        if (input.wheel) await session.page.mouse.wheel(input.wheel.deltaXPixels, input.wheel.deltaYPixels);
-        await sleep((input.durationSeconds ?? 0.2) * 1000);
-      } finally {
-        for (const key of held.reverse()) await session.page.keyboard.up(key).catch(() => {});
-        await this.bridge(session, 'stop').catch(() => {});
-        try { cameraDiagnostics = await this.bridge(session, 'endCameraPreview') ?? cameraDiagnostics; }
-        catch (error) { cameraDiagnostics = { informationalOnly: true, warnings: [errorMessage(error)] }; }
-      }
-    }
-    if (cameraDiagnostics?.samples) {
-      const samples = cameraDiagnostics.samples; delete cameraDiagnostics.samples;
-      const file = path.join(root, 'camera-samples.json'); await json(file, { schemaVersion: 1, evidence: cameraDiagnostics.evidence, samples });
-      const bytes = await readFile(file); cameraDiagnostics.samples = { path: file, sha256: sha256(bytes), byteLength: bytes.length };
-      for (const [index, keyframe] of (cameraDiagnostics.keyframes ?? []).entries()) {
-        const bytes = Buffer.from(keyframe.image.replace(/^data:image\/png;base64,/, ''), 'base64');
-        const file = path.join(root, `camera-keyframe-${index}.png`); await writeFile(file, bytes);
-        keyframe.image = { path: file, sha256: sha256(bytes), byteLength: bytes.length };
-      }
-    }
-    const observation = await this.bridge(session, 'read');
-    let captured;
-    if (view === 'current') {
-      await mkdir(root, { recursive: true }); const file = path.join(root, 'current.png');
-      const bytes = await session.page.screenshot({ path: file });
-      captured = { view, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, profile: this.profile };
-    } else captured = await this.capture(session, root, view, entityIds, frontYawRadians);
-    const report = { ...captured, kind: 'three-creator-browser-preview', schemaVersion: 1, before, observation, input: input ?? null, ...(cameraDiagnostics ? { cameraDiagnostics } : {}), pageText: (await session.page.locator('body').innerText()).slice(0, 4000), pageErrors: [...session.errors], runtimeErrors: observation.errors ?? [], blockedNetworkRequests: [...session.networkErrors] };
-    await json(path.join(root, 'preview.json'), report);
-    if (view === 'opening') this.openingEvidence = { root, files: await hashTree(root), report };
-    return report;
+    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
   }
-  async triviews() {
+  async triviews(includeAdditionalTargets=false) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'reset');
-    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`), observation = await this.bridge(session, 'inspect'); const images = [];
+    const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`);
+    const plan=selectTriviewTargets(await this.bridge(session,'captureTargets'),includeAdditionalTargets); const images = [];
     images.push(await this.capture(session, root, 'opening'));
-    for (const id of ['player', ...Object.keys(observation.targets).filter(id => id !== 'player' && observation.targets[id].uuid !== observation.player.uuid)]) images.push(await this.capture(session, root, 'entity-triview', [id]));
-    const report = { kind: 'three-creator-captures', schemaVersion: 1, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
+    for (const target of plan.selectedTargets) images.push(await this.capture(session,root,'entity-triview',[target.id]));
+    const report = { kind: 'three-creator-captures', schemaVersion: 1, selectionPolicy:plan.selectionPolicy, conditioningEntityIds:plan.conditioningEntityIds, omittedEntityIds:plan.omittedEntityIds, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
     await json(path.join(root, 'captures.json'), report); this.captureEvidence = { root, files: await hashTree(root), report }; return { ...report, image: images[0]!.image };
   }
   private async episode(): Promise<{ episode: Episode; hash: string; bytes: Buffer }> {
@@ -380,7 +329,7 @@ export class ThreeCreatorTools {
       if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
       const raw = path.join(root, 'playtest.webm');
       await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await encodePlaytestVideo(raw, videoFile);
+      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
       videoMetadata = await probeVideo(videoFile);
       validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }
@@ -398,22 +347,21 @@ export class ThreeCreatorTools {
     this.playtestEvidence = { root, files: await hashTree(root), report }; return report;
   }
   async submit() {
-    const candidate = await this.compiler.prepare(), preview = this.openingEvidence;
-    if (!preview || preview.report.worldBuildHash !== candidate.worldBuildHash) throw new Error('THREE_SUBMIT_PREVIEW_REQUIRED: inspect an opening preview of the current source before submitting.');
-    const session = await this.open(candidate), current = await this.bridge(session, 'read');
-    if (session.errors.length || session.networkErrors.length || current.errors?.length || preview.report.pageErrors.length || preview.report.runtimeErrors.length || preview.report.blockedNetworkRequests.length) throw new Error('THREE_SUBMIT_BROWSER_ERRORS: resolve the observed runtime errors and preview again.');
-    await verifyFiles(candidate.root, candidate.files); await verifyFiles(preview.root, preview.files);
+    const candidate = await this.compiler.prepare(), episode = await this.episode(), played = this.playtestEvidence;
+    const readiness = playtestSubmissionReadiness(played?.report, { worldBuildHash: candidate.worldBuildHash, episodeHash: episode.hash });
+    if (!played || !readiness.eligible) throw new Error(`THREE_SUBMIT_PLAYTEST_REQUIRED: ${JSON.stringify(readiness)}. Keep this MCP session; resolve the listed source/episode or recording issue before submitting again.`);
+    await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files);
     if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash) await this.triviews();
     const captures = this.captureEvidence!; await verifyFiles(captures.root, captures.files);
     if (captures.report.pageErrors.length) throw new Error('THREE_SUBMIT_CAPTURE_ERRORS');
     const root = path.join(this.compiler.outputRoot, 'delivery', randomUUID()), payload = path.join(root, 'payload'); await mkdir(payload, { recursive: true });
-    await copyClosed(candidate.sourceRoot, path.join(payload, 'source')); await copyClosed(candidate.playableRoot, path.join(payload, 'playable')); await copyClosed(preview.root, path.join(payload, 'preview')); await copyClosed(captures.root, path.join(payload, 'captures'));
+    await copyClosed(candidate.sourceRoot, path.join(payload, 'source')); await copyClosed(candidate.playableRoot, path.join(payload, 'playable')); await copyClosed(played.root, path.join(payload, 'playtest')); await copyClosed(captures.root, path.join(payload, 'captures')); await writeFile(path.join(payload, 'episode.json'), episode.bytes);
     for (const prefix of ['source', 'playable']) await verifyFiles(path.join(payload, prefix), Object.fromEntries(Object.entries(candidate.files).filter(([name]) => name.startsWith(`${prefix}/`)).map(([name, hash]) => [name.slice(prefix.length + 1), hash])));
-    await verifyFiles(path.join(payload, 'preview'), preview.files); await verifyFiles(path.join(payload, 'captures'), captures.files);
-    const manifest = { kind: 'three-creator-delivery', schemaVersion: 2, validationMode: 'interactive-preview', toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready', technicalStatus: 'passed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, previewEvidenceSha256: preview.files['preview.json'], sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
+    await verifyFiles(path.join(payload, 'playtest'), played.files); await verifyFiles(path.join(payload, 'captures'), captures.files);
+    const manifest = { kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
     await json(path.join(payload, 'delivery.json'), manifest); const hashes = await hashTree(payload); await json(path.join(payload, 'artifact-hashes.json'), { schemaVersion: 1, files: hashes });
     const temporary = path.join(root, 'creator-delivery.tar.gz'); await createClosedArchive(root, temporary);
-    await verifyFiles(candidate.root, candidate.files); await verifyFiles(preview.root, preview.files); await verifyFiles(captures.root, captures.files);
+    await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files); await verifyFiles(captures.root, captures.files);
     const archivePath = path.join(this.workspace, 'creator-delivery.tar.gz'), temporaryArchive = `${archivePath}.${randomUUID()}.tmp`; await copyFile(temporary, temporaryArchive); await rename(temporaryArchive, archivePath);
     const receipt = { ...manifest, archivePath, archiveSha256: sha256(await readFile(archivePath)), archiveByteLength: (await lstat(archivePath)).size, deliveryManifestSha256: sha256(await readFile(path.join(payload, 'delivery.json'))) };
     await json(path.join(this.workspace, 'creator-result.json'), receipt); return receipt;

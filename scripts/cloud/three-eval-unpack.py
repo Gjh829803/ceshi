@@ -46,9 +46,7 @@ def main():
             listed_paths.append(name)
             assert len(listed_paths) <= 10000, 'Member limit'
             parts = PurePosixPath(name).parts
-            root_platform_scratch = tuple(part.lower() for part in parts[:3]) in {
-                ('payload', 'source', 'scratch'), ('payload', 'playable', 'scratch')}
-            if root_platform_scratch or any(part.lower() in {'codex_home', 'auth.json', 'credentials', 'aws-credentials', 'aws-config', '.aws', '.codex', '.creator-session', 'google-service-account.json'} or part.lower().startswith('codex_home_') for part in parts):
+            if any(part.lower() in {'scratch', 'codex_home', 'auth.json', 'credentials', 'aws-credentials', 'aws-config', '.aws', '.codex', '.creator-session', 'google-service-account.json'} or part.lower().startswith('codex_home_') for part in parts):
                 platform_paths.append(name)
     if platform_paths:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -97,30 +95,6 @@ def main():
     receipt_fields = {'archivePath', 'archiveSha256', 'archiveByteLength', 'deliveryManifestSha256'}
     assert {k: v for k, v in receipt.items() if k not in receipt_fields} == manifest
     assert {k: v for k, v in actual.items() if k not in ('artifact-hashes.json', 'delivery.json')} == manifest['files']
-    if manifest.get('schemaVersion') == 2:
-        assert manifest.get('validationMode') == 'interactive-preview'
-        assert manifest.get('status') == 'ready' and manifest.get('technicalStatus') == 'passed' and 'semanticStatus' not in manifest
-        assert all(key not in manifest for key in ['episodeHash', 'actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds', 'videoMetadata', 'captureTiming'])
-        assert actual['preview/preview.json'] == manifest['previewEvidenceSha256']
-        preview = json.loads((payload / 'preview/preview.json').read_text())
-        captures = json.loads((payload / 'captures/captures.json').read_text())
-        assert preview['kind'] == 'three-creator-browser-preview' and preview['view'] == 'opening'
-        for key in ['profile', 'sourceHash', 'worldBuildHash']:
-            assert preview[key] == captures[key] == manifest[key]
-        assert preview['pageErrors'] == preview['runtimeErrors'] == preview['blockedNetworkRequests'] == captures['pageErrors'] == []
-        assert actual['preview/' + PurePosixPath(preview['image']['path']).name] == preview['image']['sha256']
-        assert captures['images'] and any(i.get('view') == 'opening' for i in captures['images'])
-        assert any(i.get('view') == 'entity-triview' and 'player' in i.get('entityIds', []) for i in captures['images'])
-        assert 'playable/index.html' in actual and 'source/index.html' in actual
-        assert not any(name.startswith('playtest/') or name == 'episode.json' for name in actual)
-        report = {'kind': 'three-creator-host-artifact-verification', 'schemaVersion': 1, 'status': 'passed',
-                  **{key: manifest[key] for key in ['validationMode', 'profile', 'engine', 'sourceHash', 'worldBuildHash', 'toolVersion', 'sdkVersion', 'browserObservationContract', 'creatorRuntimeLockHash', 'previewEvidenceSha256']},
-                  'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total,
-                  'platformPathPreflight': 'passed', 'payloadPath': str(payload), 'semanticStatus': 'unreviewed', 'browserReplay': 'not-run',
-                  'qualification': 'Hash closure and opening-preview evidence only; no recorded playtest. Ready for direct publication.'}
-        (output / 'host-artifact-verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-        print(json.dumps(report)); return
-    assert manifest.get('schemaVersion') == 1
     assert actual['episode.json'] == manifest['episodeHash']
     played = json.loads((payload / 'playtest/playtest.json').read_text())
     captures = json.loads((payload / 'captures/captures.json').read_text())

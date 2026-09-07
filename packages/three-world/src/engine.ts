@@ -5,6 +5,7 @@ import { ThreeCameraRig, type CameraRigInput } from './camera.js';
 import { ownViewport } from './viewport.js';
 import { WorldKeyboard, WorldInputRouter } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
+import { LocomotionAnimation } from './locomotion-animation.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
 type Entity = {
@@ -54,6 +55,7 @@ export class WorldEngine {
   private driveProvider: ((id:string,input:WorldInput,direction:Vec3,dt:number)=>{drive:CharacterDrive;facing?:Vec3;actionId?:string}|undefined)|undefined;
   private pointerInput: CameraRigInput = {};
   private readonly jumped = new Set<string>();
+  private readonly locomotionAnimations = new Map<string, LocomotionAnimation>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
   private readonly inputRouter: WorldInputRouter;
   private readonly renders = new Set<() => void>();
@@ -218,6 +220,7 @@ export class WorldEngine {
     const previousYaw = Math.atan2(-front.x, -front.z);
     const eye = this.camera.getWorldPosition(new THREE.Vector3()), orientation = this.camera.getWorldQuaternion(new THREE.Quaternion());
     this.physics.teleport(this.controlled, positionWorldMetersXYZ);
+    this.locomotionAnimations.delete(this.controlled); this.jumped.delete(this.controlled);
     this.faceDirection(actor, new THREE.Vector3(-Math.sin(facingYawRadians), 0, -Math.cos(facingYawRadians)));
     actor.object.updateWorldMatrix(true, true);
     this.cameraRig.relocateEpisodeStart(tuple(before), positionWorldMetersXYZ, facingYawRadians - previousYaw, eye, orientation);
@@ -247,7 +250,21 @@ export class WorldEngine {
       for (const [id, entity] of this.entities) if (entity.asset) {
         const state = this.physics.state(id); const speed = state ? Math.hypot(state.velocityMetersPerSecondXYZ[0], state.velocityMetersPerSecondXYZ[2]) : 0;
         if(state?.isGrounded)this.jumped.delete(id);
-        const requested = customActions.get(id)??(!state?.isGrounded ? (this.jumped.has(id)?'jump':'fall') : speed > 3 ? 'run' : speed > 0.1 ? 'walk' : 'idle');
+        const runningIntent = id === this.controlled ? Boolean(input.run) : Boolean(this.goals.get(id)?.run);
+        const drive = drives[id];
+        let automatic = !state?.isGrounded ? (this.jumped.has(id) ? 'jump' : 'fall') : speed > 0.1 ? (runningIntent ? 'run' : 'walk') : 'idle';
+        if (state && entity.character && (!drive || 'velocityMetersPerSecondXZ' in drive)) {
+          let animation = this.locomotionAnimations.get(id);
+          if (!animation) { animation = new LocomotionAnimation(); this.locomotionAnimations.set(id, animation); }
+          automatic = animation.update(state, {
+            deltaSeconds: dt,
+            desiredSpeedMetersPerSecond: drive ? Math.hypot(...drive.velocityMetersPerSecondXZ) : 0,
+            heightMeters: (entity.character.heightMeters ?? DEFAULT_CHARACTER_OPTIONS.heightMeters) * Math.abs(entity.object.getWorldScale(new THREE.Vector3()).y),
+            run: runningIntent,
+            jumped: this.jumped.has(id),
+          });
+        } else this.locomotionAnimations.delete(id);
+        const requested = customActions.get(id) ?? automatic;
         if(entity.asset.isActionComplete)this.manualActions.delete(id);
         if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) entity.asset.play(requested);
         entity.asset.update(dt);
@@ -380,6 +397,7 @@ export class WorldEngine {
           try { this.physics.refreshMany(affected); }
           catch (error) { entity.object.position.copy(old); entity.object.matrix.copy(oldMatrix); entity.object.matrixWorldNeedsUpdate = true; entity.object.updateWorldMatrix(true, true); throw error; }
         }
+        for (const id of affected) { this.locomotionAnimations.delete(id); this.jumped.delete(id); }
         this.navigationDirty = true; return;
       }
       case 'entity.set-scale': {
@@ -416,7 +434,7 @@ export class WorldEngine {
   private removeTree(id: string): void {
     const entity = this.entity(id);
     for (const [childId, child] of [...this.entities]) if (childId !== id) { let parent = child.object.parent; while (parent && parent !== entity.object) parent = parent.parent; if (parent === entity.object) this.removeTree(childId); }
-    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.goals.delete(id); this.manualActions.delete(id); this.retired.add(entity); this.navigationDirty = true;
+    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.goals.delete(id); this.manualActions.delete(id); this.locomotionAnimations.delete(id); this.jumped.delete(id); this.retired.add(entity); this.navigationDirty = true;
   }
   private physicalAncestors(object: THREE.Object3D): string[] {
     const ancestors = new Set<THREE.Object3D>(); for (let parent = object.parent; parent; parent = parent.parent) ancestors.add(parent);
@@ -466,7 +484,7 @@ export class WorldEngine {
   inspect(): unknown { return { snapshot: this.snapshot(), physics: this.physics.audit(), inputTranscript: [...this.keyboard.transcript], prototypes: [...this.prototypes.keys()], capabilities: this.capabilities() }; }
   capabilities(): unknown { return [...this.entities].map(([id, e]) => ({ entityId: id, name: e.options.name ?? id, tags: e.options.tags ?? [], commands: ['entity.set-visible', 'entity.set-position', 'entity.set-scale', ...(id === this.controlled ? [] : ['entity.despawn']), ...(this.navigation && e.character && id !== this.controlled ? ['actor.move-to', 'actor.follow', 'actor.stop'] : []), ...(e.asset?.clips.length ? ['entity.play-action'] : []), ...(e.options.physics?.kind === 'dynamic' ? ['entity.apply-impulse'] : [])], actions: e.asset?.clips.map(c => c.name) ?? [] })); }
   reset(): void {
-    this.alive(); this.sealInitialState(); const wasRunning = this.running; this.stop(); this.goals.clear(); this.taskResults.clear();this.jumped.clear();this.manualActions.clear();
+    this.alive(); this.sealInitialState(); const wasRunning = this.running; this.stop(); this.goals.clear(); this.taskResults.clear();this.jumped.clear();this.manualActions.clear();this.locomotionAnimations.clear();
     for (const [id, entity] of this.entities) { this.physics.remove(id); setEntityBoundary(entity.object, false); if (this.baseline!.get(id) !== entity) { entity.object.removeFromParent(); this.retired.add(entity); } }
     this.entities.clear();
     for (const [id, entity] of this.baseline!) {
@@ -505,7 +523,7 @@ export class WorldEngine {
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     this.navigation?.dispose(); this.physics.dispose(); if (this.ownsRenderer) this.renderer?.dispose();
-    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); this.goals.clear(); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();
+    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); this.goals.clear(); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.locomotionAnimations.clear();this.jumped.clear();
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }
   }
 }

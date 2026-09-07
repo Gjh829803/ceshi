@@ -1,6 +1,14 @@
 import {mkdir,rmdir} from 'node:fs/promises';
 import path from 'node:path';
 
+// This lease tracks cloud execution, not later artifact download/publication.
+export function admissionIsClosed(record) {
+  if(['cancelled','stopped'].includes(record.providerStatus))return record.rayCleanupConfirmed===true;
+  if(['succeeded','completed','failed','submit_failed'].includes(record.providerStatus))return true;
+  return ['delivered','failed','cancelled','stopped'].includes(record.phase)&&
+    ((!record.jobId&&record.hasSubmissionIntent===false)||record.submissionRejected===true);
+}
+
 // Account/model compatibility survives SDK releases. Source runtime identity is
 // retained as provenance; artifact publication still requires its exact runtime.
 export function validateSuccessfulAccountRoutingEvidence({state,items,configEcho,launcherReport}, {expectedCodexBinarySha256}={}) {

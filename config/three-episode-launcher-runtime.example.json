@@ -1,0 +1,8 @@
+{
+  "codexBinary": "/absolute/pinned/codex",
+  "codexBinarySha256": "REPLACE_WITH_ACTUAL_64_HEX_SHA256",
+  "nodeBinary": "/absolute/pinned/node",
+  "toolkitRoot": "/absolute/frozen-release",
+  "allowedSourceRoot": "/absolute/frozen-release/inputs",
+  "maximumTaskSeconds": 2700
+}

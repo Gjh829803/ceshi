@@ -9,7 +9,6 @@ const finiteAtLeast = (value, minimum) => typeof value === 'number' && Number.is
 export function failureClass(message) {
   const text = String(message);
   return [
-    ['account-usage', /hit your usage limit|account has reached its usage limit/i],
     ['model-cli-version', /requires a newer version/i], ['model-capacity', /at capacity|No available agent/i],
     ['mcp-startup', /MCP.*(?:start|initial|fail)|CREATOR_MCP/i], ['runtime-browser', /browser|chromium|shared libraries/i],
     ['event-evidence', /EVENT_|RECEIPT_|TRANSPORT_|IDENTITY_/], ['world-validation', /THREE_(?:SOURCE|IMPORT|ENTRY|PROJECT|SUBMIT|DELIVERY|BUILD)/],
@@ -19,23 +18,20 @@ export function failureClass(message) {
 }
 export function isPassingDelivery(result, expectedProfile = result?.profile) {
   if (!['three-raw', 'three-sdk'].includes(expectedProfile) || result?.profile !== expectedProfile || result?.engine !== 'three@0.185.1' ||
-    result?.kind !== 'three-creator-delivery' || ![1,2].includes(result.schemaVersion) || result.status !== (result.schemaVersion === 1 ? 'ready-for-independent-review' : 'ready') ||
-    result.technicalStatus !== 'passed' || (result.schemaVersion === 1 ? result.semanticStatus !== 'unreviewed' : 'semanticStatus' in result) || result.toolVersion !== (result.schemaVersion === 1 ? '0.2.0-experimental' : THREE_TOOL_VERSION) ||
-    result.sdkVersion !== (expectedProfile === 'three-sdk' ? result.toolVersion : null) ||
+    result?.kind !== 'three-creator-delivery' || result.schemaVersion !== 1 || result.status !== 'ready-for-independent-review' ||
+    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== THREE_TOOL_VERSION ||
+    result.sdkVersion !== (expectedProfile === 'three-sdk' ? THREE_TOOL_VERSION : null) ||
     result.browserObservationContract !== (expectedProfile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1') ||
-    !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
-    !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
-  const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
-  if (result.worldBuildHash !== worldHash) return false;
-  if (result.schemaVersion === 2) return result.validationMode === 'interactive-preview' && hashPattern.test(result.previewEvidenceSha256 ?? '') && ['episodeHash','actualWallSeconds','activePlaySeconds','inputWallSeconds','videoMetadata','captureTiming'].every(key => !(key in result));
-  if (!hashPattern.test(result.episodeHash ?? '') || !finiteAtLeast(result.actualWallSeconds,180) || !finiteAtLeast(result.inputWallSeconds,180) || !finiteAtLeast(result.activePlaySeconds,180)) return false;
+    !finiteAtLeast(result.actualWallSeconds, 180) || !finiteAtLeast(result.inputWallSeconds, 180) || !finiteAtLeast(result.activePlaySeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
+    !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'episodeHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
   const video = result.videoMetadata, capture = result.captureTiming;
   if (!finiteAtLeast(video?.durationSeconds, 180) || !['frameCount','widthPixels','heightPixels'].every(key=>Number.isSafeInteger(video?.[key])&&video[key]>0) ||
     capture?.clock !== 'browser-performance' || !['initialFrameRequestedAtMilliseconds','finalFrameRequestedAtMilliseconds','recorderStoppedAtMilliseconds','framePeriodSeconds','postrollSeconds'].every(key=>finiteAtLeast(capture?.[key],0)) ||
     capture.framePeriodSeconds <= 0 || capture.framePeriodSeconds > 1 || !Number.isSafeInteger(capture.requestedFrames) || capture.requestedFrames < 2 ||
     capture.finalFrameRequestedAtMilliseconds < capture.initialFrameRequestedAtMilliseconds || capture.recorderStoppedAtMilliseconds < capture.finalFrameRequestedAtMilliseconds ||
     video.durationSeconds < result.inputWallSeconds - Math.max(1, 2*capture.framePeriodSeconds)) return false;
-  return true;
+  const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
+  return result.worldBuildHash === worldHash;
 }
 
 // Only actual completed transport events count. Shell output and assistant prose
@@ -76,12 +72,13 @@ export async function eventStatistics(file) {
   return statistics;
 }
 
-export function validateDeliveryEvidence({result, launcherReport, events, eventsSha256, artifacts, expectedRuntimeHash, expectedFixedRuntimeHash, expectedCaseId, expectedTaskId, expectedProfile, expectedWorkspace}) {
+export function validateDeliveryEvidence({result, launcherReport, events, eventsSha256, artifacts, expectedRuntimeHash, expectedFixedRuntimeHash, expectedCaseId, expectedTaskId, expectedProfile, expectedWorkspace, expectedReasoningEffort = 'xhigh'}) {
+  if (!['xhigh','ultra'].includes(expectedReasoningEffort)) throw new Error('THREE_EXPECTED_REASONING_EFFORT_INVALID');
   if (!isPassingDelivery(result, expectedProfile)) throw new Error('THREE_DELIVERY_CONTRACT_FAILED');
   if (launcherReport.kind !== 'three-creator-launcher-report' || launcherReport.runtimeHash !== expectedRuntimeHash ||
     result.creatorRuntimeLockHash !== expectedRuntimeHash || result.runtimeHash !== expectedFixedRuntimeHash || launcherReport.caseId !== expectedCaseId || launcherReport.taskId !== expectedTaskId ||
     launcherReport.profile !== expectedProfile || launcherReport.engine !== 'three@0.185.1' || launcherReport.workspace !== expectedWorkspace ||
-    launcherReport.model !== 'gpt-6-astra' || launcherReport.reasoningEffort !== 'xhigh') throw new Error('THREE_EVENT_IDENTITY_FAILED');
+    launcherReport.model !== 'gpt-6-astra' || launcherReport.reasoningEffort !== expectedReasoningEffort) throw new Error('THREE_EVENT_IDENTITY_FAILED');
   if (!hashPattern.test(eventsSha256 ?? '') || eventsSha256 !== launcherReport.eventsTransportSha256 || eventsSha256 !== launcherReport.eventsSha256) throw new Error('THREE_EVENT_STREAM_HASH_MISMATCH');
   for (const name of ['creator-result.json', 'creator-delivery.tar.gz']) {
     if (!hashPattern.test(artifacts?.[name]?.sha256 ?? '') || artifacts[name].sha256 !== launcherReport.artifacts?.[name]?.sha256 ||

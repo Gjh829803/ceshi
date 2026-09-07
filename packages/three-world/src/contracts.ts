@@ -54,8 +54,10 @@ export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMoveme
 );
 export interface CameraFollowOptions {
  readonly targetEntityId?:string;
- /** Omit orbit values to inherit the authored pose. Explicit orbit values default to target framing. */
+ /** With no orbit override, continue the authored pose and framing. */
  readonly framingMode?:'preserve-opening'|'target';
+ /** Translation damping for inherited opening framing; zero follows immediately. */
+ readonly followHalfLifeSeconds?:number;
  readonly distanceMeters?:number;
  readonly targetHeightMeters?:number;
  readonly pitchRadians?:number;
@@ -67,6 +69,10 @@ export interface CameraFollowOptions {
  readonly maximumRecoveryMetersPerSecond?:number;
  readonly targetHalfLifeSeconds?:number;
 }
+export type CaptureTargetRepresentative =
+ | {readonly kind:'object';readonly object:THREE.Object3D}
+ | {readonly kind:'instance';readonly object:THREE.InstancedMesh;readonly instanceIndex:number};
+export type CaptureTargetSelection = string | {readonly entityId:string;readonly representative?:CaptureTargetRepresentative};
 type WithoutId<T> = T extends unknown ? Omit<T,'id'> : never;
 export type SpawnTemplate =
  | {readonly kind:'entity';readonly options:WithoutId<EntityOptions>}
@@ -231,6 +237,7 @@ export interface WorldDescription {
 }
 export interface CameraState {
  readonly mode:'authored'|'follow-pending'|'follow';
+ readonly framingMode?:'preserve-opening'|'target';
  readonly positionWorldMetersXYZ:Vec3;
  readonly orientationWorldQuaternionXYZW:readonly [number,number,number,number];
  readonly desiredPositionWorldMetersXYZ:Vec3;
@@ -244,7 +251,6 @@ export interface CameraState {
  readonly targetPositionWorldMetersXYZ?:Vec3;
  readonly subjectPositionWorldMetersXYZ?:Vec3;
  readonly transitionProgressRatio?:number;
- readonly framingMode?:'preserve-opening'|'target';
 }
 export interface WorldSnapshot {
  readonly schemaVersion:2;
@@ -344,7 +350,7 @@ export interface World {
  setCameraFollow(options?:CameraFollowOptions):void;
  /** Releases SDK following without disposing/replacing the camera. */
  useAuthoredCamera():THREE.Camera;
- setCaptureTargets(entityIds:readonly string[]):void;
+ setCaptureTargets(targets:readonly CaptureTargetSelection[]):void;
  registerPrototype(definition:PrototypeDefinition):Promise<void>;
  registerGeometry(definition:GeometryDefinition):Promise<void>;
  replaceGeometry(entityId:string,geometry:THREE.BufferGeometry):Promise<CommandReceipt>;
@@ -382,6 +388,8 @@ export interface WorldObservation {
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
+ readonly captureTargetIds?:readonly string[];
+ readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;
  snapshot?():WorldSnapshot; inspect?():unknown; capabilities?():WorldDescription;
  execute?(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;

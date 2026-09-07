@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, readdir, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ThreeCompiler, hashTree } from './compiler.js';
@@ -8,13 +8,12 @@ import ts from 'typescript';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { publicContractTopic } from './authoring-schema.js';
 import { EPISODE_SCHEMA, sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, encodePlaytestVideo, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
+import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
-import { executeThreeCreatorTool, toolContent } from './mcp.js';
+import { executeThreeCreatorTool } from './mcp.js';
 import * as THREE from 'three';
-import type { WorldObservation } from '@worldkit/three';
-import { cameraPreviewDelta, observeCameraPreview, projectedPlayerBounds, targetTriviewBasis, type CameraPreviewSample } from '../../apps/three-creator-playground/bridge.js';
+import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
 
 const roots: string[] = [];
 async function fixture(source = `import * as THREE from 'three'; window.authorScene = new THREE.Scene(); document.title = 'ordinary browser APIs work';`) {
@@ -24,6 +23,19 @@ async function fixture(source = `import * as THREE from 'three'; window.authorSc
 }
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 describe('Three semantic target views', () => {
+  it('packages a runnable animated humanoid in the SDK starter', async () => {
+    const root = await fixture(), service = new ThreeCreatorTools(root, 'three-sdk');
+    try {
+      const example = await service.examples();
+      for (const [name, source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
+      const candidate = await service.compiler.prepare();
+      const catalog = JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
+      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.g-bot');
+      expect(humanoid).toBeDefined();
+      for (const action of ['idle','walk','run','jump']) expect(humanoid.actions[action].clipName).toBeTruthy();
+      expect(sha256(await readFile(path.join(candidate.playableRoot,humanoid.uri)))).toBe(humanoid.sha256);
+    } finally { await service.close(); }
+  });
   it('uses local -Z front and +X right at zero semantic yaw', () => {
     const basis = targetTriviewBasis(new THREE.Group());
     expect(basis.front.toArray()).toEqual([0, 0, -1]); expect(basis.right.toArray()).toEqual([1, -0, 0]); expect(basis.back.toArray()).toEqual([-0, -0, 1]);
@@ -42,50 +54,6 @@ describe('Three semantic target views', () => {
       const projectedMarker = marker.clone().project(camera), projectedOrigin = origin.clone().project(camera);
       expect(Math.abs(projectedMarker.x)).toBeLessThan(1e-10); expect(Math.abs(projectedMarker.y)).toBeLessThan(1e-10); expect(projectedMarker.z).toBeLessThan(projectedOrigin.z);
     }
-  });
-});
-describe('short preview camera evidence', () => {
-  const sample = (wallSeconds: number, angle: number, distance = 0): CameraPreviewSample => ({ renderIndex: Math.round(wallSeconds * 60), wallSeconds,
-    positionWorldMetersXYZ: [distance, 0, 0], orientationWorldQuaternionXYZW: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle).toArray(), playerBounds: null });
-  it('measures the actual elapsed wall interval, handles quaternion signs and never divides by zero', () => {
-    const before = sample(2, 0), after = sample(2 + 1 / 60, Math.PI / 18, 0.5);
-    const fast = cameraPreviewDelta(before, after);
-    expect(fast.angularStepRadians).toBeCloseTo(Math.PI / 18); expect(fast.positionSpeedMetersPerSecond).toBeCloseTo(30);
-    expect(fast.signals).toEqual(['large-angular-step', 'large-position-step']);
-    expect(cameraPreviewDelta(before, { ...after, wallSeconds: 2.5 }).signals).toEqual([]);
-    expect(cameraPreviewDelta(before, { ...after, wallSeconds: 2 }).angularSpeedRadiansPerSecond).toBeNull();
-    expect(cameraPreviewDelta(after, { ...after, wallSeconds: 3, orientationWorldQuaternionXYZW: after.orientationWorldQuaternionXYZW.map(value => -value) }).angularStepRadians).toBeCloseTo(0);
-    for (const hz of [30, 60, 120]) expect(cameraPreviewDelta(sample(0, 0), sample(1 / hz, 0.8 / hz, 5 / hz)).signals).toEqual([]);
-  });
-  it('projects parented player and camera world bounds and marks near-plane overlap without infinite UVs', () => {
-    const parent = new THREE.Group(); parent.position.set(7, 2, -3); parent.rotation.y = 0.8;
-    const player = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1)); player.position.y = 1; parent.add(player);
-    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100); parent.add(camera); camera.position.set(0, 1, 6);
-    const bounds = projectedPlayerBounds(player, camera)!;
-    expect(bounds.isFullyInsideViewport).toBe(true); expect(bounds.minimumMetersXYZ[0]).toBeGreaterThan(6);
-    player.position.x = 20; expect(projectedPlayerBounds(player, camera)!.isFullyInsideViewport).toBe(false);
-    player.position.set(0, 1, 6); const clipped = projectedPlayerBounds(player, camera)!;
-    expect(clipped.isFullyInFrontOfCamera).toBe(false); expect(clipped.minimumUv).toBeNull(); expect(clipped.maximumUv).toBeNull();
-  });
-  it('observes actual primary renders, bounds captures, restores the renderer and isolates evidence failures', () => {
-    const scene = new THREE.Scene(), player = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1)), camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
-    camera.position.z = 6; scene.add(player); const cameraParent = new THREE.Group(); cameraParent.rotation.y = 0.1; cameraParent.add(camera); scene.add(cameraParent);
-    const render = vi.fn(), toDataURL = vi.fn(() => 'data:image/png;base64,actual-canvas'), getRenderTarget = vi.fn((): object | null => null);
-    const renderer = { render, domElement: { toDataURL }, getRenderTarget } as unknown as THREE.WebGLRenderer;
-    const world = { scene, player, camera, renderer, snapshot: vi.fn(() => { throw new Error('optional snapshot unavailable'); }) } as unknown as WorldObservation;
-    const observation = observeCameraPreview(world);
-    renderer.render(scene, new THREE.Camera());
-    getRenderTarget.mockReturnValueOnce({}); renderer.render(scene, camera);
-    cameraParent.rotation.y += 1; renderer.render(scene, camera);
-    cameraParent.rotation.y += 1; renderer.render(scene, camera);
-    const result = observation.finish();
-    expect(render).toHaveBeenCalledTimes(5); expect(renderer.render).toBe(render); expect(result.observedRenderCount).toBe(3);
-    expect(result.samples[0]!.orientationWorldQuaternionXYZW[1]).toBeCloseTo(Math.sin(0.1 / 2));
-    expect(result.keyframes).toHaveLength(2); expect(toDataURL).toHaveBeenCalledTimes(2);
-    expect(result.warnings).toContain('Error: optional snapshot unavailable'); expect(result.informationalOnly).toBe(true);
-    toDataURL.mockImplementation(() => { throw new Error('canvas unavailable'); });
-    const second = observeCameraPreview(world); cameraParent.rotation.y += 1; expect(() => renderer.render(scene, camera)).not.toThrow();
-    expect(second.finish().warnings).toContain('Error: canvas unavailable'); expect(renderer.render).toBe(render);
   });
 });
 describe('Three browser candidate identity and admission', () => {
@@ -196,7 +164,7 @@ describe('Three tool operations and truthful submission', () => {
   it('refuses fabricated disk playtest receipts in a fresh service', async () => {
     const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 180 }], targets: [] }));
     const service = new ThreeCreatorTools(root, 'three-raw'); await mkdir(service.evidenceRoot, { recursive: true }); await writeFile(path.join(service.evidenceRoot, 'playtest.json'), '{"status":"passed","actualWallSeconds":180,"capturedInput":true}');
-    await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PREVIEW_REQUIRED/); await service.close();
+    await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PLAYTEST_REQUIRED/); await service.close();
   });
 });
 
@@ -255,19 +223,6 @@ describe('v2 command and discovery boundary', () => {
 
 
 describe('real episode and video timing boundaries', () => {
- it.each([[720,405,720,406],[721,406,722,406],[721,405,722,406],[720,406,720,406]])('encodes %ix%i VFR frames as %ix%i without changing frame count, PTS or duration', async (width,height,outputWidth,outputHeight) => {
-  const root=await fixture(),raw=path.join(root,'source.webm'),output=path.join(root,'playtest.mp4'),execFile=promisify(execFileCallback);
-  // Four real frames with unequal timestamp gaps exercise the same WebM-to-MP4
-  // encoding path as browser captures. This is synthetic local evidence only.
-  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i',`testsrc=size=${width}x${height}:rate=10:duration=0.8`,'-vf',"select='eq(n,0)+eq(n,1)+eq(n,3)+eq(n,7)'",'-vsync','0','-c:v','libvpx-vp9','-lossless','1','-pix_fmt','yuv444p',raw]);
-  const probe=async(file:string)=>JSON.parse((await execFile('ffprobe',['-v','error','-select_streams','v:0','-count_frames','-show_entries','stream=width,height,nb_read_frames,pix_fmt:frame=pts_time:format=duration','-of','json',file])).stdout);
-  const source=await probe(raw);expect([source.streams[0].width,source.streams[0].height]).toEqual([width,height]);
-  await encodePlaytestVideo(raw,output);const encoded=await probe(output);
-  expect([encoded.streams[0].width,encoded.streams[0].height]).toEqual([outputWidth,outputHeight]);expect(encoded.streams[0].pix_fmt).toBe('yuv420p');
-  expect(Number(source.streams[0].nb_read_frames)).toBe(4);expect(encoded.streams[0].nb_read_frames).toBe(source.streams[0].nb_read_frames);
-  const sourcePts=source.frames.map((frame:{pts_time:string})=>Number(frame.pts_time)),outputPts=encoded.frames.map((frame:{pts_time:string})=>Number(frame.pts_time));
-  expect(sourcePts).toEqual([0,0.1,0.3,0.7]);expect(outputPts).toEqual(sourcePts);expect(Number(encoded.format.duration)).toBe(Number(source.format.duration));
- },20_000);
  it('reserves bounded overhead for complete episodes instead of cutting off their final steps', () => {
   const full=resolvePlaytestBudget(180,180,91); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(180); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(300);
   expect(resolvePlaytestBudget(180,undefined,91).mode).toBe('full-episode');
@@ -302,85 +257,5 @@ describe('recording callback deadlines', () => {
  it('clears its timeout after successful recording setup/finalization', async () => {
   const close=vi.fn(async()=>{}); expect(await withStageDeadline(async()=>42,5,'timeout',close)).toBe(42);
   await new Promise(resolve=>setTimeout(resolve,10));expect(close).not.toHaveBeenCalled();
- });
-});
-
-describe('interactive preview delivery without recording', () => {
- it('moves the actual page, returns PNGs, releases input and submits a closed v2 archive without an episode or video', async () => {
-  const root=await fixture(), service=new ThreeCreatorTools(root,'three-sdk');
-  vi.stubEnv('WORLDKIT_CREATOR_RUNTIME_HASH','a'.repeat(64));
-  try {
-   const example=await service.examples();
-   expect(example.files).not.toHaveProperty('episode.json');
-   for(const [name,source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
-   await expect(executeThreeCreatorTool(service,'world_playtest',{})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
-   await expect(service.submit()).rejects.toThrow('THREE_SUBMIT_PREVIEW_REQUIRED');
-   const opening=await service.preview('opening');
-   expect(opening.pageErrors).toEqual([]);expect(opening.runtimeErrors).toEqual([]);
-   expect(opening).not.toHaveProperty('cameraDiagnostics');
-   const current=await service.preview('current',[],undefined,{keys:['w'],durationSeconds:0.8});
-   expect(current.observation.positionMetersXYZ[2]).toBeLessThan(opening.observation.positionMetersXYZ[2]-0.1);
-   expect(current.observation.isRunning).toBe(false);
-   expect((await readFile(current.image.path)).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
-   expect(current.cameraDiagnostics.observedRenderCount).toBeGreaterThan(2); expect(current.cameraDiagnostics.informationalOnly).toBe(true);
-   expect(current.cameraDiagnostics.sdkCameraSamples[0].simulationTick).toBeTypeOf('number');
-   expect(current.cameraDiagnostics.sdkCameraSamples[0].camera).not.toBeNull();
-   const cameraSamples = JSON.parse(await readFile(current.cameraDiagnostics.samples.path,'utf8'));
-   expect(cameraSamples.samples).toHaveLength(current.cameraDiagnostics.storedSampleCount);
-   expect(cameraSamples.samples[0].orientationWorldQuaternionXYZW).toHaveLength(4);
-   const released=await service.preview('current',[],undefined,{durationSeconds:0.3});
-   expect(Math.abs(released.observation.positionMetersXYZ[2]-current.observation.positionMetersXYZ[2])).toBeLessThan(0.2);
-   const reset=await service.preview('opening');
-   expect(reset.observation.positionMetersXYZ).toEqual(opening.observation.positionMetersXYZ);
-   const receipt=await service.submit();
-   expect(receipt.schemaVersion).toBe(2);expect(receipt.validationMode).toBe('interactive-preview');
-   for(const key of ['episodeHash','actualWallSeconds','activePlaySeconds','inputWallSeconds','videoMetadata','captureTiming']) expect(receipt).not.toHaveProperty(key);
-   const files=Object.keys(receipt.files);expect(files).toContain('preview/preview.json');expect(files.some(name=>name.startsWith('playtest/')||name==='episode.json'||name.endsWith('.mp4')||name.endsWith('.webm'))).toBe(false);
-   const execFile=promisify(execFileCallback),verified=path.join(await realpath(root),'.host-verification');
-   await execFile('python3',['scripts/cloud/three-eval-unpack.py','--archive',receipt.archivePath,'--receipt',path.join(root,'creator-result.json'),'--output',verified],{cwd:process.cwd()});
-   expect(JSON.parse(await readFile(path.join(verified,'host-artifact-verification.json'),'utf8')).validationMode).toBe('interactive-preview');
-   await writeFile(path.join(root,'main.ts'),example.files['main.ts']+'\n// author change\n');
-   await expect(service.submit()).rejects.toThrow('THREE_SUBMIT_PREVIEW_REQUIRED');
-  } finally { await service.close(); }
- },120_000);
- it('returns actual transition PNGs for a short browser camera cut without turning diagnostics into a submit gate', async () => {
-  const root=await fixture(),service=new ThreeCreatorTools(root,'three-raw'); vi.stubEnv('WORLDKIT_CREATOR_RUNTIME_HASH','b'.repeat(64));
-  try {
-   const example=await service.examples();
-   for(const [name,source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
-   // A timer may fire across a stalled browser interval, which correctly lowers
-   // the measured angular rate. Render both sides of the deliberate cut in one
-   // authored animation callback, with real render timestamps and no fake clock.
-   await writeFile(path.join(root,'main.ts'),example.files['main.ts']+`
-let cameraFrame = 0;
-const originalFrame = frame;
-frame = function(now) {
-  if (running && ++cameraFrame === 3) {
-    renderer.render(scene, camera);
-    camera.rotation.y += 0.7;
-  }
-  originalFrame(now);
-};
-const originalStart = window.__WORLDKIT_EVAL__.startLive;
-window.__WORLDKIT_EVAL__.startLive = () => { cameraFrame = 0; originalStart(); };
-`);
-   await service.preview('opening');
-   const preview=await service.preview('current',[],undefined,{keys:['w'],durationSeconds:0.8});
-   const cut=preview.cameraDiagnostics.events.find((event:any)=>event.delta.signals.includes('large-angular-step'));
-   expect(cut).toBeDefined(); expect(cut.delta.fromRenderIndex).toBe(3); expect(cut.delta.toRenderIndex).toBe(4);
-   expect(preview.cameraDiagnostics.keyframes).toHaveLength(2); expect(preview.cameraDiagnostics.sdkCameraSamples.every((value:any)=>value.simulationTick===null)).toBe(true);
-   const content=await toolContent(service,{status:'succeeded',result:preview});
-   expect(content.filter(item=>item.type==='image')).toHaveLength(3);
-   for(const frame of preview.cameraDiagnostics.keyframes) {
-    const bytes=await readFile(frame.image.path); expect(sha256(bytes)).toBe(frame.image.sha256); expect(bytes.subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
-   }
-   expect(preview.cameraDiagnostics.keyframes[0].image.sha256).not.toBe(preview.cameraDiagnostics.keyframes[1].image.sha256);
-   expect((await service.submit()).status).toBe('ready');
-  } finally { await service.close(); }
- },120_000);
- it('rejects unbounded or incompatible current-page input before opening a browser', async () => {
-  const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
-  for(const input of [{keys:['w'],durationSeconds:16},{durationSeconds:NaN},{click:{xPixels:2000,yPixels:20}}]) await expect(executeThreeCreatorTool(service,'world_preview',{view:'current',input})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
-  await expect(service.preview('opening',[],undefined,{keys:['w']})).rejects.toThrow('THREE_PREVIEW_INPUT_INVALID');await service.close();
  });
 });

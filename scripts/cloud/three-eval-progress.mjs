@@ -7,15 +7,14 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {THREE_TOOLS} from './three-eval-runtime.mjs';
 
-export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',planning:'整体地图规划',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',stopping:'等待取消完成',cancelled:'请求已取消',unknown:'等待可确认状态'});
-const toolStages = {imagegen:'planning',creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
-const operationStages = {'imagegen.generate':'planning','world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
-const toolLabels = {imagegen:'ImageGen 生成规划图',creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
+export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
+const toolStages = {creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
+const operationStages = {'world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
+const toolLabels = {creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
 const phaseSet = new Set(['not-started','submitted','queued','running','delivery-pending','delivered','failed','cancelled','stopped','stop-pending','remote-pending','submission-unknown','admission-blocked']);
-const statusSet = new Set(['submitted','submitting','queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
+const statusSet = new Set(['queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
 const operationStatusSet = new Set(['queued','running','succeeded','failed','cancelled']);
-// Retain old production events without re-exposing retired tools to agents.
-const knownTools = new Set([...THREE_TOOLS, 'world_playtest', 'imagegen']);
+const knownTools = new Set(THREE_TOOLS);
 const slug = /^[a-z0-9][a-z0-9-]{1,159}$/;
 const requestPattern = /^[a-z0-9][a-z0-9-]{2,239}$/;
 const jobPattern = /^gen_[a-f0-9]{8,64}$/;
@@ -34,9 +33,6 @@ const safeEffort = value => ['minimal','low','medium','high','xhigh','max','ultr
 const eventId = (...values) => createHash('sha256').update(JSON.stringify(values)).digest('hex').slice(0,24);
 const failureFactDefinitions = Object.freeze({
   PLATFORM_SCRATCH_SCANNED_AS_SOURCE:{layer:'host-integration',category:'host-integration',priority:0,message:'Host 将平台临时目录误扫为场景源码，工具输入边界需修复。'},
-  MODEL_USAGE_LIMIT:{layer:'model-service',category:'account-usage',priority:0.5,message:'云端账号额度已用尽，本次生成停止。'},
-  PHYSICS_TRIANGLE_BUDGET_EXCEEDED:{layer:'sdk-physics',category:'world-validation',priority:2,message:'SDK 物理三角面预算超限。'},
-  PHYSICS_COLLIDER_BUDGET_EXCEEDED:{layer:'sdk-physics',category:'world-validation',priority:2,message:'SDK 碰撞体数量预算超限。'},
   MODEL_CAPACITY:{layer:'model-service',category:'model-capacity',priority:1,failureCode:'MODEL_AT_CAPACITY',message:'模型容量不足，本次尝试未完成。'},
   PHYSICS_BOX_DEGENERATE:{layer:'author-geometry',category:'world-validation',priority:2,message:'作者几何无法生成有效盒形碰撞体。'},
   THREE_BROWSER_STARTUP_FAILED:{layer:'browser-startup',category:'runtime-browser',priority:3,message:'世界预览未能正常启动，具体原因尚未确认。'},
@@ -56,9 +52,6 @@ function cleanFailureFacts(values) {
 function publicFailure(values) {
   const text = values.filter(value => typeof value === 'string').map(value => value.slice(0,8192)).join('\n');
   const known = [
-    [/hit your usage limit|account has reached its usage limit|MODEL_USAGE_LIMIT/i,'account-usage','MODEL_USAGE_LIMIT','云端账号额度已用尽，本次生成停止。'],
-    [/PHYSICS_TRIANGLE_BUDGET_EXCEEDED/,'world-validation','PHYSICS_TRIANGLE_BUDGET_EXCEEDED','SDK 物理三角面预算超限。'],
-    [/PHYSICS_COLLIDER_BUDGET_EXCEEDED/,'world-validation','PHYSICS_COLLIDER_BUDGET_EXCEEDED','SDK 碰撞体数量预算超限。'],
     [/at capacity|MODEL_AT_CAPACITY|No available agent/i,'model-capacity','MODEL_AT_CAPACITY','模型容量不足，本次尝试未完成。'],
     [/THREE_SOURCE_SYMLINK/,'tool-input-boundary','THREE_SOURCE_SYMLINK','工具输入边界检查失败，平台临时目录需由 Host 检查。'],
     [/PHYSICS_BOX_DEGENERATE/,'world-validation','PHYSICS_BOX_DEGENERATE','作者几何无法生成有效盒形碰撞体。'],
@@ -119,7 +112,7 @@ function cleanProgress(value) {
 function cleanResultSummary(value) {
   if(!isObject(value))return null;
   const summary={};
-  if(['passed','failed','ready','ready-for-independent-review','unreviewed'].includes(value.status))summary.status=value.status;
+  if(['passed','failed','ready-for-independent-review','unreviewed'].includes(value.status))summary.status=value.status;
   for(const field of ['isCompleteEpisode','capturedInput'])if(typeof value[field]==='boolean')summary[field]=value[field];
   for(const field of ['activePlaySeconds','inputWallSeconds','actualWallSeconds','requestedSeconds','plannedSeconds','completedSteps'])if(numeric(value[field])!==null)summary[field]=value[field];
   const videoMetadata={};
@@ -174,14 +167,6 @@ async function readEvents(file, jobId) {
       result.latestTool = null; result.latestOperation = null;
       result.latestStage = 'authoring';
       pushEvent(result,{id:eventId(jobId,item.id ?? lineIndex,event.type),at,type:item.type === 'file_change' ? 'files-updated' : 'command-executed',stage:'authoring',label:item.type === 'file_change' ? 'Agent 更新场景文件' : 'Agent 执行本地工具',status:event.type === 'item.started' ? 'running' : item.status === 'failed' ? 'failed' : 'succeeded'});
-    }
-    if (['image_generation','imageGeneration','image_generation_call'].includes(item.type)) {
-      const status = event.type === 'item.started' ? 'running' : item.failure || ['failed','error'].includes(item.status) ? 'failed' : 'succeeded';
-      result.latestTool = {name:'imagegen',status:status==='succeeded'?'completed':status,at};
-      result.latestOperation = null; result.latestStage = 'planning';
-      if (event.type === 'item.completed') result.counts.imagegen = (result.counts.imagegen ?? 0) + 1;
-      pushEvent(result,{id:eventId(jobId,item.id ?? lineIndex,event.type),at,type:'tool',stage:'planning',label:toolLabels.imagegen,status,tool:'imagegen'});
-      return;
     }
     if (item.type !== 'mcp_tool_call' || item.server !== 'worldkit_three_creator' || !knownTools.has(item.tool)) return;
     result.latestTool = {name:item.tool,status:event.type === 'item.started' ? 'running' : item.error || item.result?.isError ? 'failed' : 'completed',at};
@@ -287,10 +272,9 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   const operation = summary.latestOperation;
   if (hostPhase === 'delivered') { stage='delivered'; phase='delivered'; }
   else if (hostPhase === 'failed' || launcher?.status === 'failed' || ['failed','submit_failed'].includes(api.itemStatus)) { stage='failed'; phase='failed'; }
-  else if (hostPhase === 'stop-pending') { stage='stopping'; }
-  else if (['cancelled','stopped'].includes(hostPhase)) { stage='cancelled'; }
+  else if (['cancelled','stopped','stop-pending'].includes(hostPhase)) { stage='unknown'; }
   else if (cliStarted) { phase='running'; stage=hostPhase === 'delivery-pending' || launcher?.status==='delivered' ? 'packaging' : summary.latestStage ?? toolStages[summary.latestTool?.name] ?? (operation ? operationStages[operation.type] : undefined) ?? 'starting'; }
-  else if (api.queued || ['queued','pending','submitted','submitting'].includes(providerStatus)) { stage='queued'; phase='queued'; }
+  else if (api.queued || providerStatus === 'queued' || providerStatus === 'pending') { stage='queued'; phase='queued'; }
   else if (launcher?.status === 'starting') { stage='starting'; phase='running'; }
   const terminal = ['failed','delivered','cancelled','stopped'].includes(phase);
   const completedAt = terminal ? recordedFinishedAt : null;

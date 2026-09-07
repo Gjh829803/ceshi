@@ -16,16 +16,17 @@ const layout = await parseCloudLayout(originalArgs);
 const eventsFile = path.join(layout.outputs, "creator-events.jsonl");
 const stderrFile = path.join(layout.outputs, "creator-stderr.log");
 const reportFile = path.join(layout.outputs, "creator-launcher-report.json");
-const report = {kind: "three-creator-launcher-report", schemaVersion: 1, caseId: layout.caseId, taskId: layout.taskId, profile: layout.profile, engine: "three@0.185.1", startedAt, workspace: layout.workspace, declaredOutputsRoot: layout.outputs, status: "starting", model: "gpt-6-astra", reasoningEffort: "xhigh"};
+const report = {kind: "three-creator-launcher-report", schemaVersion: 1, caseId: layout.caseId, taskId: layout.taskId, profile: layout.profile, engine: "three@0.185.1", startedAt, workspace: layout.workspace, declaredOutputsRoot: layout.outputs, status: "starting", model: "gpt-6-astra", reasoningEffort: layout.reasoningEffort};
 try {
   const lock = await readRuntimeLock(path.join(directory, "runtime-lock.json"), {checkInstalled: true});
+  if (layout.reasoningEffort !== lock.reasoningEffort) throw new Error("CREATOR_REASONING_EFFORT_LOCK_MISMATCH");
   Object.assign(report, {runtimeHash: lock.runtimeHash, codexBinary: lock.codexBinary, codexBinarySha256: lock.codexBinarySha256, toolkitRoot: lock.toolkitRoot, browserRoot: lock.browserRoot});
   const bridge = path.join(directory, "three-eval-mcp-bridge.mjs");
   const mcpArgs = [bridge, "--runtime-lock", lock.runtimeLockPath, "--workspace", layout.workspace, "--profile", layout.profile];
   const enabledTools = THREE_TOOLS;
   const toolPolicies = enabledTools.map(name => `${name}={approval_mode="approve"}`).join(",");
   const mcpConfiguration = `mcp_servers={worldkit_three_creator={command=${JSON.stringify(lock.nodeBinary)},args=${JSON.stringify(mcpArgs)},cwd=${JSON.stringify(layout.workspace)},enabled=true,required=true,env_vars=[],default_tools_approval_mode="prompt",tools={${toolPolicies}},enabled_tools=${JSON.stringify(enabledTools)},startup_timeout_sec=60,tool_timeout_sec=90}}`;
-  const overrides = ["approval_policy=\"never\"", "features.apps=false", "features.hooks=false", "features.plugins=false", "features.remote_plugin=false", "features.skill_mcp_dependency_install=false", "skills.bundled.enabled=false", "skills.include_instructions=false", "tools.view_image=true", "features.image_generation=true", "allow_login_shell=false", "features.shell_snapshot=false", "shell_environment_policy.inherit=\"core\"", mcpConfiguration];
+  const overrides = ["approval_policy=\"never\"", "features.apps=false", "features.hooks=false", "features.plugins=false", "features.remote_plugin=false", "features.skill_mcp_dependency_install=false", "skills.bundled.enabled=false", "skills.include_instructions=false", "tools.view_image=true", "allow_login_shell=false", "features.shell_snapshot=false", "shell_environment_policy.inherit=\"core\"", mcpConfiguration];
   const args = [...originalArgs.slice(0, -1), "--ignore-user-config", "--ignore-rules", "--json", ...overrides.flatMap(value => ["-c", value]), originalArgs.at(-1)];
   const env = executionEnvironment(lock, layout.workspace, {includeAuthentication: true, profile: layout.profile});
   await prepareSessionDirectories(env, lock);
@@ -75,8 +76,8 @@ try {
   Object.assign(report, {sourceHash: result.sourceHash, worldBuildHash: result.worldBuildHash, episodeHash: result.episodeHash, artifacts});
   const toolEvidence = await eventStatistics(eventsFile);
   report.toolEvidence = toolEvidence;
-  const receipt = validateDeliveryEvidence({result, launcherReport: report, events: toolEvidence, eventsSha256: report.eventsSha256, artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[layout.profile].runtimeHash, expectedCaseId: layout.caseId, expectedTaskId: layout.taskId, expectedProfile: layout.profile, expectedWorkspace: layout.workspace});
-  Object.assign(report, {status: "delivered", submitReceipt: receipt, qualification: "Three production delivery with matching MCP transport receipt; ready for direct publication"});
+  const receipt = validateDeliveryEvidence({result, launcherReport: report, events: toolEvidence, eventsSha256: report.eventsSha256, artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[layout.profile].runtimeHash, expectedCaseId: layout.caseId, expectedTaskId: layout.taskId, expectedProfile: layout.profile, expectedWorkspace: layout.workspace, expectedReasoningEffort: lock.reasoningEffort});
+  Object.assign(report, {status: "delivered", submitReceipt: receipt, qualification: "Three technical delivery with matching MCP transport receipt; independent visual/runtime review remains required"});
 } catch (error) {
   Object.assign(report, {status: "failed", error: error instanceof Error ? error.message : String(error)});
   process.stderr.write(`CREATOR_LAUNCHER_FAILED: ${report.error}\n`);

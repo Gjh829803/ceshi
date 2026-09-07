@@ -6,6 +6,8 @@ export type CameraRigFollowOptions = Readonly<{
   targetEntityId: string;
   /** Without orbit values, follow adopts the current authored pose and framing. */
   framingMode?: 'preserve-opening' | 'target';
+  /** Translation damping for preserve-opening; an explicit targetHalfLifeSeconds remains a fallback. */
+  followHalfLifeSeconds?: number;
   distanceMeters?: number;
   targetHeightMeters?: number;
   pitchRadians?: number;
@@ -45,7 +47,6 @@ type RigMemory = {
   zoomDistanceMeters: number; transitionElapsedSeconds: number;
   transitionPosition: THREE.Vector3; transitionQuaternion: THREE.Quaternion;
   framingRotation: THREE.Quaternion; smoothedSubject: THREE.Vector3;
-  inheritDistance: boolean; inheritPitch: boolean;
   safeArmDistanceMeters: number | undefined; actualArmDistanceMeters: number | undefined;
   obstructionEntityId: string | undefined; collisionPhase: CameraRigState['collisionPhase'];
   resolvedTarget: THREE.Vector3 | undefined;
@@ -65,7 +66,7 @@ function validDeltaSeconds(dt: number): void {
 function initialMemory(): RigMemory {
   return { mode: 'authored', follow: undefined, yawRadians: 0, zoomDistanceMeters: 0, transitionElapsedSeconds: 0,
     transitionPosition: new THREE.Vector3(), transitionQuaternion: new THREE.Quaternion(), framingRotation: new THREE.Quaternion(),
-    smoothedSubject: new THREE.Vector3(), inheritDistance: false, inheritPitch: false, safeArmDistanceMeters: undefined, actualArmDistanceMeters: undefined,
+    smoothedSubject: new THREE.Vector3(), safeArmDistanceMeters: undefined, actualArmDistanceMeters: undefined,
     obstructionEntityId: undefined, collisionPhase: undefined, resolvedTarget: undefined };
 }
 function copyMemory(m: RigMemory): RigMemory {
@@ -89,8 +90,9 @@ export class ThreeCameraRig {
   get mode(): CameraRigState['mode'] { return this.memory.mode; }
   get desiredYawRadians(): number {
     const follow = this.memory.follow;
+    if (follow && this.mode !== 'authored' && follow.framingMode === 'target') return this.memory.yawRadians;
     const direction = follow && this.mode !== 'authored'
-      ? new THREE.Vector3(0, 0, -1).applyQuaternion(this.orbitRotation(follow))
+      ? new THREE.Vector3(0, 0, -1).applyQuaternion(this.framedRotation(follow))
       : this.camera.getWorldDirection(new THREE.Vector3());
     return Math.atan2(-direction.x, -direction.z);
   }
@@ -101,30 +103,31 @@ export class ThreeCameraRig {
     const hasOrbit = options.distanceMeters !== undefined || options.targetHeightMeters !== undefined || options.pitchRadians !== undefined;
     const framingMode = options.framingMode ?? (hasOrbit ? 'target' : 'preserve-opening');
     if (!['preserve-opening', 'target'].includes(framingMode)) throw new Error('WORLD_CAMERA_OPTION_INVALID: framingMode');
+    if (framingMode === 'preserve-opening' && (options.distanceMeters !== undefined || options.pitchRadians !== undefined)) throw new Error('WORLD_CAMERA_OPTION_INVALID: preserve-opening cannot override distanceMeters or pitchRadians');
     const height = bounded(options.targetHeightMeters ?? (body ? body.heightMeters * .65 : 1.3), -10_000, 10_000, 'targetHeightMeters');
-    const target = subject.clone().add(new THREE.Vector3(0, height, 0)), offset = position.clone().sub(target);
-    const actualDistance = offset.length();
+    const target = subject.clone().add(new THREE.Vector3(0, height, 0));
     const follow: Follow = {
       targetEntityId: options.targetEntityId, framingMode,
-      distanceMeters: bounded(options.distanceMeters ?? (framingMode === 'preserve-opening' ? THREE.MathUtils.clamp(actualDistance, .05, 10_000) : 4), .05, 10_000, 'distanceMeters'),
+      followHalfLifeSeconds: bounded(options.followHalfLifeSeconds ?? options.targetHalfLifeSeconds ?? .08, 0, 10, 'followHalfLifeSeconds'),
+      distanceMeters: bounded(options.distanceMeters ?? 4, .05, 10_000, 'distanceMeters'),
       targetHeightMeters: height,
-      pitchRadians: bounded(options.pitchRadians ?? (framingMode === 'preserve-opening' && actualDistance > .001 ? Math.asin(THREE.MathUtils.clamp(offset.y / actualDistance, -1, 1)) : .25), -Math.PI / 2, Math.PI / 2, 'pitchRadians'),
+      pitchRadians: bounded(options.pitchRadians ?? .25, -Math.PI / 2, Math.PI / 2, 'pitchRadians'),
       activateOnInput: options.activateOnInput ?? true,
       transitionSeconds: bounded(options.transitionSeconds ?? .35, 0, 10, 'transitionSeconds'),
       rotationSpeedRadiansPerSecond: bounded(options.rotationSpeedRadiansPerSecond ?? 1.8, .001, 100, 'rotationSpeedRadiansPerSecond'),
       collisionRadiusMeters: bounded(options.collisionRadiusMeters ?? .2, .001, 10, 'collisionRadiusMeters'),
-      recoveryHalfLifeSeconds: bounded(options.recoveryHalfLifeSeconds ?? .24, .001, 10, 'recoveryHalfLifeSeconds'),
+      recoveryHalfLifeSeconds: bounded(options.recoveryHalfLifeSeconds ?? (framingMode === 'preserve-opening' ? .18 : .24), .001, 10, 'recoveryHalfLifeSeconds'),
       maximumRecoveryMetersPerSecond: bounded(options.maximumRecoveryMetersPerSecond ?? 3, .001, 1000, 'maximumRecoveryMetersPerSecond'),
       targetHalfLifeSeconds: bounded(options.targetHalfLifeSeconds ?? .1, 0, 10, 'targetHalfLifeSeconds'),
     };
     if (typeof follow.activateOnInput !== 'boolean') throw new Error('WORLD_CAMERA_OPTION_INVALID: activateOnInput');
+    const opening = framingMode === 'preserve-opening' ? this.readOpening(target) : undefined;
+    if (opening) { follow.distanceMeters = opening.distanceMeters; follow.pitchRadians = opening.pitchRadians; }
     const direction = this.camera.getWorldDirection(new THREE.Vector3());
-    const yaw = framingMode === 'preserve-opening' && actualDistance > .001 ? Math.atan2(offset.x, offset.z) : Math.atan2(-direction.x, -direction.z);
-    const framingRotation = framingMode === 'preserve-opening' && actualDistance > .001
-      ? this.lookRotation(position, target).invert().multiply(rotation) : new THREE.Quaternion();
-    this.memory = { ...initialMemory(), mode: follow.activateOnInput ? 'follow-pending' : 'follow', follow, yawRadians: yaw,
+    this.memory = { ...initialMemory(), mode: follow.activateOnInput ? 'follow-pending' : 'follow', follow,
+      yawRadians: opening?.yawRadians ?? Math.atan2(-direction.x, -direction.z),
       zoomDistanceMeters: follow.distanceMeters, transitionPosition: position, transitionQuaternion: rotation,
-      framingRotation, smoothedSubject: subject, inheritDistance: options.distanceMeters === undefined, inheritPitch: options.pitchRadians === undefined };
+      framingRotation: opening?.framingRotation ?? new THREE.Quaternion(), smoothedSubject: subject };
     this.decollider.reset(); this.solveTick = 0;
   }
   /** Called before deriving camera-relative player movement. */
@@ -141,31 +144,35 @@ export class ThreeCameraRig {
     const pitch = (input.cameraPitchRatio ?? 0) * follow.rotationSpeedRadiansPerSecond * dt + (input.pitchDeltaRadians ?? 0);
     const zoom = input.distanceDeltaMeters ?? 0;
     if (this.mode === 'follow-pending' && (input.activate || yaw || pitch || zoom)) {
-      this.memory.mode = 'follow'; this.memory.transitionElapsedSeconds = 0;
-      this.camera.getWorldPosition(this.memory.transitionPosition); this.camera.getWorldQuaternion(this.memory.transitionQuaternion);
+      // Setup may move the subject or edit the authored camera while follow is pending.
+      // Validate the final pose before handing authority to the rig.
       if (follow.framingMode === 'preserve-opening') {
         const subject = this.subject(follow.targetEntityId), target = subject.clone().add(new THREE.Vector3(0, follow.targetHeightMeters, 0));
-        const offset = this.memory.transitionPosition.clone().sub(target), length = offset.length();
-        if (length > .001) {
-          this.memory.yawRadians = Math.atan2(offset.x, offset.z);
-          if (this.memory.inheritDistance) follow.distanceMeters = THREE.MathUtils.clamp(length, .05, 10_000);
-          if (this.memory.inheritPitch) follow.pitchRadians = Math.asin(THREE.MathUtils.clamp(offset.y / length, -1, 1));
-          this.memory.framingRotation.copy(this.lookRotation(this.memory.transitionPosition, target).invert().multiply(this.memory.transitionQuaternion));
-        }
-        this.memory.zoomDistanceMeters = follow.distanceMeters; this.memory.smoothedSubject.copy(subject);
+        const opening = this.readOpening(target);
+        this.memory.yawRadians = opening.yawRadians;
+        follow.distanceMeters = opening.distanceMeters; follow.pitchRadians = opening.pitchRadians;
+        this.memory.framingRotation.copy(opening.framingRotation);
+        this.memory.zoomDistanceMeters = opening.distanceMeters; this.memory.smoothedSubject.copy(subject);
       }
+      this.memory.mode = 'follow'; this.memory.transitionElapsedSeconds = 0;
+      this.camera.getWorldPosition(this.memory.transitionPosition); this.camera.getWorldQuaternion(this.memory.transitionQuaternion);
     }
     this.memory.yawRadians += yaw;
-    if (pitch !== 0) follow.pitchRadians = THREE.MathUtils.clamp(follow.pitchRadians + pitch, MIN_PITCH_RADIANS, MAX_PITCH_RADIANS);
-    follow.distanceMeters = THREE.MathUtils.clamp(follow.distanceMeters + zoom, .05, 10_000);
+    if (pitch !== 0) follow.pitchRadians = follow.framingMode === 'preserve-opening'
+      ? THREE.MathUtils.clamp(follow.pitchRadians + pitch, -Math.PI / 2, Math.PI / 2)
+      : THREE.MathUtils.clamp(follow.pitchRadians + pitch, MIN_PITCH_RADIANS, MAX_PITCH_RADIANS);
+    // An activation or empty input must not clamp a zero-length, distant or polar opening.
+    if (zoom !== 0) follow.distanceMeters = THREE.MathUtils.clamp(follow.distanceMeters + zoom, .05,
+      follow.framingMode === 'preserve-opening' ? Math.max(10_000, follow.distanceMeters) : 10_000);
   }
   /** Once after shared physics, with no rendering or independent timer. */
   update(dt: number): void {
     validDeltaSeconds(dt); const follow = this.memory.follow; if (!follow || this.mode !== 'follow') return;
     const subject = this.subject(follow.targetEntityId), body = this.subjectBody?.(follow.targetEntityId);
     const priorSubject = this.memory.smoothedSubject;
-    if (priorSubject.distanceTo(subject) > Math.max(4, follow.distanceMeters * .5)) { priorSubject.copy(subject); this.decollider.reset(); }
-    else for (const axis of ['x', 'y', 'z'] as const) priorSubject[axis] = exponential(priorSubject[axis], subject[axis], dt, follow.targetHalfLifeSeconds);
+    const halfLife = follow.framingMode === 'preserve-opening' ? follow.followHalfLifeSeconds : follow.targetHalfLifeSeconds;
+    if (follow.framingMode === 'target' && priorSubject.distanceTo(subject) > Math.max(4, follow.distanceMeters * .5)) { priorSubject.copy(subject); this.decollider.reset(); }
+    else for (const axis of ['x', 'y', 'z'] as const) priorSubject[axis] = exponential(priorSubject[axis], subject[axis], dt, halfLife);
     const collisionHeight = body ? body.heightMeters * .65 : follow.targetHeightMeters;
     const rawPivot = subject.clone().add(new THREE.Vector3(0, collisionHeight, 0));
     const dampedPivot = priorSubject.clone().add(new THREE.Vector3(0, collisionHeight, 0));
@@ -184,12 +191,12 @@ export class ThreeCameraRig {
     this.memory.transitionElapsedSeconds += dt;
     const progress = this.transitionProgress(follow), blend = smoothstep(progress);
     const candidateEye = desiredEye.clone(); if (blend < 1) candidateEye.lerpVectors(this.memory.transitionPosition, desiredEye, blend);
-    let rotation = this.lookRotation(desiredEye, target).multiply(this.memory.framingRotation);
+    let rotation = follow.framingMode === 'preserve-opening' ? this.framedRotation(follow) : this.lookRotation(desiredEye, target);
     // Never alias the destination with the slerpQuaternions output object.
     if (blend < 1) rotation = this.memory.transitionQuaternion.clone().slerp(rotation, blend);
     const solved = this.solveCollision(physicalTarget, candidateEye, follow, dt);
     const eye = solved.eye;
-    if (eye.distanceToSquared(candidateEye) > 1e-10) {
+    if (follow.framingMode === 'target' && eye.distanceToSquared(candidateEye) > 1e-10) {
       // Preserve the subject's angular screen position while the arm retracts.
       // This changes orientation only; it cannot smooth a camera through geometry.
       const referenceRay = subjectAnchor.clone().sub(candidateEye).normalize();
@@ -294,13 +301,31 @@ export class ThreeCameraRig {
       ...(this.memory.obstructionEntityId === undefined ? {} : { obstructionEntityId: this.memory.obstructionEntityId }),
       ...(this.memory.collisionPhase === undefined ? {} : { collisionPhase: this.memory.collisionPhase }) };
   }
-  private transitionProgress(follow: Follow): number { return follow.transitionSeconds === 0 ? 1 : Math.min(1, this.memory.transitionElapsedSeconds / follow.transitionSeconds); }
+  private transitionProgress(follow: Follow): number { return follow.framingMode === 'preserve-opening' || follow.transitionSeconds === 0 ? 1 : Math.min(1, this.memory.transitionElapsedSeconds / follow.transitionSeconds); }
   private subject(id: string): THREE.Vector3 {
     const value = this.targetPosition(id); if (!value || value.length !== 3 || !value.every(Number.isFinite)) throw new Error(`WORLD_CAMERA_TARGET_INVALID: ${id}`);
     return new THREE.Vector3(...value);
   }
   private armDirection(follow: Follow): THREE.Vector3 { const cosine = Math.cos(follow.pitchRadians); return new THREE.Vector3(Math.sin(this.memory.yawRadians) * cosine, Math.sin(follow.pitchRadians), Math.cos(this.memory.yawRadians) * cosine); }
-  private orbitRotation(follow: Follow): THREE.Quaternion { return this.lookRotation(this.armDirection(follow), new THREE.Vector3()).multiply(this.memory.framingRotation); }
+  private orbitRotation(yawRadians: number, pitchRadians: number): THREE.Quaternion {
+    // Full authored roll and off-center orientation are relative to a stable world-up frame,
+    // including at the orbit poles and after a caller changes camera.up.
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitchRadians, yawRadians, 0, 'YXZ'));
+  }
+  private framedRotation(follow: Follow): THREE.Quaternion {
+    return this.orbitRotation(this.memory.yawRadians, follow.pitchRadians).multiply(this.memory.framingRotation);
+  }
+  private readOpening(target: THREE.Vector3): { distanceMeters: number; yawRadians: number; pitchRadians: number; framingRotation: THREE.Quaternion } {
+    const position = this.camera.getWorldPosition(new THREE.Vector3()), rotation = this.camera.getWorldQuaternion(new THREE.Quaternion());
+    if (![...position.toArray(), ...rotation.toArray()].every(Number.isFinite)) throw new Error('WORLD_CAMERA_POSE_INVALID');
+    const offset = position.clone().sub(target), distanceMeters = offset.length();
+    if (!Number.isFinite(distanceMeters)) throw new Error('WORLD_CAMERA_POSE_INVALID');
+    const direction = this.camera.getWorldDirection(new THREE.Vector3());
+    const yawRadians = distanceMeters > 1e-12 ? Math.atan2(offset.x, offset.z) : Math.atan2(-direction.x, -direction.z);
+    const pitchRadians = distanceMeters > 1e-12 ? Math.asin(THREE.MathUtils.clamp(offset.y / distanceMeters, -1, 1)) : 0;
+    const framingRotation = this.orbitRotation(yawRadians, pitchRadians).invert().multiply(rotation);
+    return { distanceMeters, yawRadians, pitchRadians, framingRotation };
+  }
   private lookRotation(eye: THREE.Vector3, target: THREE.Vector3): THREE.Quaternion { return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, target, this.camera.up)); }
   private probe(target: THREE.Vector3, eye: THREE.Vector3, radius: number): CameraArmHit {
     const length = target.distanceTo(eye), hit = this.castCameraArm(tuple(target), tuple(eye), radius);

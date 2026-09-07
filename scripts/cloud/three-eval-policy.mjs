@@ -28,7 +28,7 @@ export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximum
 }
 export function effectiveConfigMatches(config,payload) {
   if(config?.request_id!==payload.request_id||config?.options?.codex_bin!==payload.options.codex_bin)return false;
-  if(JSON.stringify(config.options.codex_account_ids??null)!==JSON.stringify(payload.options.codex_account_ids??null))return false;
+  if(payload.options.codex_account_ids!==undefined&&JSON.stringify(config.options.codex_account_ids)!==JSON.stringify(payload.options.codex_account_ids))return false;
   return ['model','reasoning_effort','sandbox','timeout_seconds','account_concurrency','pod_concurrency'].every(key=>config.options[key]===payload.defaults[key]);
 }
 export async function reportedTokenUsage(file) {

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "An AI-first semantic whitebox game SDK with a Canonical JSON compiler and Babylon.js plus Havok runtime.",
+  "description": "Three.js world creation, SDK runtime and Episode data production.",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
@@ -101,7 +101,14 @@
     "verify:workspace-boundaries": "tsx scripts/testing/verify-workspace-boundaries.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/verification/benchmark-route-r1b-surface-preflight.ts",
     "cloud:episode:three-batch": "node scripts/three-episode/batch-cli.mjs",
-    "cloud:episode:three-batch-infrastructure": "node scripts/cloud/three-episode-batch-infrastructure.mjs"
+    "cloud:episode:three-batch-infrastructure": "node scripts/cloud/three-episode-batch-infrastructure.mjs",
+    "three:creator": "tsx scripts/three-creator/cli.ts",
+    "three:creator:prebuild": "tsx scripts/three-creator/prebuild.ts",
+    "three:episode:source": "tsx scripts/three-episode/source.ts",
+    "three:episode:run": "tsx scripts/three-episode/workflow.ts",
+    "three:episode:batch": "node scripts/three-episode/batch-cli.mjs",
+    "three:episode:resume": "tsx scripts/three-episode/resume.ts",
+    "three:episode:preview": "node scripts/three-episode/preview-server.mjs"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",

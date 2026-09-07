@@ -1,0 +1,127 @@
+{
+  "verifiedAt": "2026-09-06T15:17:11.546608+00:00",
+  "originalRunId": "reliable-human-open-ten-20260906",
+  "verifiedCount": 10,
+  "cases": [
+    {
+      "taskId": "gpt6-human-open-01-lbd-5d074906d420411bbd45d887--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-01-lbd-5d074906d420411bbd45d887--three-sdk/ca7368bb8a0af881d8fe9b7372eecc43cdb4f5057fece9446f2b3403d3646c65/playable/index.html?play=1",
+      "worldBuildHash": "de02ae9d2507cd04f9091c5036328b8ba6d6cbbd6daf5c2391dba431a5d269c1",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "ad1abbfee4c7c965828a777c05dc461b3cb498030d0a962ada84cd697d5617a0",
+        "compiled/entry-0.js": "cff19445fe68ff934f13dd0a5210bfffc5749191c70aa5f97a209b09fcdf32a3",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-02-lbd-7aa1c6669484c2697b8978b1--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-02-lbd-7aa1c6669484c2697b8978b1--three-sdk/d7c1bccbc4f1dd4eda26c0264626585cfd5b4672a2cc1cb24db40f11216ec835/playable/index.html?play=1",
+      "worldBuildHash": "e2142abb7972b2d4de5327dc0eaed03cd53142294e03d3d0f6f0bb73706e6c0b",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "39e2226a6a50c5cb232d5233a47a6935f82597c0e57c35f7613510738ae2c24d",
+        "compiled/entry-0.js": "c598a713495815282023a83dc9525b3908312d12b1d49c044670a04dfb8bf557",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-03-lbd-b805ae1edf2674775be2818b--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-03-lbd-b805ae1edf2674775be2818b--three-sdk/a4a3723869d7080a9e7c809dd0bdae4610ccd7838e3588f05bd2db20b65f0652/playable/index.html?play=1",
+      "worldBuildHash": "2b7aa722848c4efc5b9116a444c59c29a8acb122407ebe6e6e0d93f587433a8f",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "d92a7ed20239f83c7b249063b1df0fe4a4ddd31088f9aa55ff7692aa18f2f489",
+        "compiled/entry-0.js": "9f92d5cf50a12c5688587f4bbc9bffeeb6e359097e782c2ab3e176695931bf75",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-04-lbd-403b678af8a82e1d7079a922--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-04-lbd-403b678af8a82e1d7079a922--three-sdk/54ddfb28d144d63646f0f8c4482aa848f9d4b58a4c1fc42568128caf3f5c6e14/playable/index.html?play=1",
+      "worldBuildHash": "8f9f843367b64ea955a0a5bfa734bea88fabdc176d1d1f3c71baa2f54880c0e2",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "bb51a6d51b89de7969f94926518f79b6e6d79969c2cc92e40b3ff0dc159e5213",
+        "compiled/entry-0.js": "358fa35733e356f5a42818c820d866630bd893cc041926ccded2262d4b9694b1",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-05-lbd-5b81ee7a09f01166b55d3e53--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-05-lbd-5b81ee7a09f01166b55d3e53--three-sdk/32f7caacb8b95745046288886f1b3bec2975db6782abacddabcee12e20b3d61a/playable/index.html?play=1",
+      "worldBuildHash": "cd1196af903f1f1c0af59506ed31bbb7934bc0b4a4a5fc606fa9f86d8c1f05be",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "e068df1b903abbc01ec3d7745d8d4b6232bf77d99bd6d04ee2f1ed6910d5c217",
+        "compiled/entry-0.js": "3b41743039d8067230c6525e313e1637f7bdcdb3e866a081dbbd76770426816f",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-06-lbd-34b24c6395229e0ff138ff6b--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-06-lbd-34b24c6395229e0ff138ff6b--three-sdk/662aca7c07dfe8aa3d794672b7a0db7c130afb714aa3d2b5b807bc7b2334ffde/playable/index.html?play=1",
+      "worldBuildHash": "16cd0fb5f6cb6734d2178029f637efc82a65bbefcdffa9368d1e7d5d010cc32f",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "8fc59e9fbd38a192c5eb61e7f32d9ba4bf788b875b3847ed4859b4b62302dca7",
+        "compiled/entry-0.js": "66f038dc03d97f9d1bf714098efaf4f727e0f82d7a430cae8a18e808f62e945d",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-07-lbd-183b265b63084e99146ebf85--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-07-lbd-183b265b63084e99146ebf85--three-sdk/6b5267f11753c9904546ff2fcf191bd1f5895b3e04f05a68e83dfd84feff9932/playable/index.html?play=1",
+      "worldBuildHash": "0e0db5687779dd0902e40d71eaa1dc317b087bbebc8d24c23bb4a711e6a673bc",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "24aea88aa2365618f7c4f90024a92703bf4e15c5ca621f80fa1192d34ccbee65",
+        "compiled/entry-0.js": "be80fef7651fabdedf9c4d022e14d1b920788145d6cca416d134bc97408c4c9e",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-08-lbd-d8304b1a556ce4dbd0d94a1f--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-08-lbd-d8304b1a556ce4dbd0d94a1f--three-sdk/c002563003e8774c175ef4e1e231e1138491d80cf9ba11975b4ff4e47c2c1565/playable/index.html?play=1",
+      "worldBuildHash": "4ac738631450ff91757e953f0484396eaa16eb9413b9d9b46e7f2085f67bfef6",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "d204c4e5ffa4986b225241deb3757bae52bdbd4d64f3d13a970b1831f6064c01",
+        "compiled/entry-0.js": "cdea2e1480ec5b81a82639396a741e1519e40c57a40a50cbabee4742ca7486d9",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-09-lbd-f491483977a7055d31ed243e--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-09-lbd-f491483977a7055d31ed243e--three-sdk/664a015589ae447534f840db5eac1f12e600d0fcd32e0a97dddbbf4629fd9468/playable/index.html?play=1",
+      "worldBuildHash": "56fcca2dfa1dacff37a8e6192ad7e5c0667dac8480be2ca9615d80d61932e553",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "bb89766f51c580fcd406b7e6b852f2cd02efe946c89a3b5ec746af8756e01c35",
+        "compiled/entry-0.js": "336cb2923ae76d360cd7df593add20263ff1e248d8391652b019a6d5bfc4a66e",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    },
+    {
+      "taskId": "gpt6-human-open-10-lbd-bc84eac9585d541f3e46b8b0--three-sdk",
+      "originalPlayableUrl": "http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/three/runs/reliable-human-open-ten-20260906/cases/gpt6-human-open-10-lbd-bc84eac9585d541f3e46b8b0--three-sdk/9dbf22146527a0c59bb6d3123e82455e7244318ce308fb006a337b99f5ca5ee8/playable/index.html?play=1",
+      "worldBuildHash": "068cc06ac6f10c662865c2d69ba817694d506796072686211f18b16e4834eb30",
+      "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+      "verifiedBytesSha256": {
+        "index.html": "ae7b807d0915eaac44896d990de77eef690e4462e5a7e3d642d22d4f67254f26",
+        "compiled/entry-0.js": "94bfb4892940f8c6aaecd8f7cacf481f601240ab98f773b3898482892fda070d",
+        "runtime/worldkit-three.js": "4bccf0d146b7de291756f61bc4a0fd071f89e214a62bcf7c5404b2df183a5853"
+      },
+      "status": "passed"
+    }
+  ]
+}

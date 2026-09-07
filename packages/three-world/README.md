@@ -14,7 +14,7 @@ world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
 const hero = await world.assets.load('humanoid.g-bot');
 world.addCharacter({id:'hero', asset:hero});
 world.setControlledEntity('hero');
-world.setCameraFollow(); // adopt the camera pose/composition you already authored
+world.setCameraFollow(); // continue the camera composition already authored above
 world.setCaptureTargets(['hero','tower']); // register tower first
 await world.start();
 ```
@@ -24,6 +24,8 @@ same-origin './asset-definitions.json'. A custom complete character is an ordina
 Group passed as `addCharacter({id,object,body:{heightMeters,radiusMeters}})`.
 Its tails, clothes and other visual descendants move with the root; keep their
 collisions out of the character body.
+An `object` character has no supplied limb animation. For a humanoid, prefer the
+G-bot asset path above; see Assets below for custom-rig axes and motion checks.
 
 An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
 Create `world.createPresentation()` for game UI and future model-video display.
@@ -34,34 +36,44 @@ Terrain/obstacle default to fixed collision; decoration has no collision. Use
 kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
 Register small visual stones as decoration when they should not impede walking.
 
-Set your reference camera first, then call `setCameraFollow()` to inherit its
-position, orientation, FOV and off-center composition. It follows the controlled
-entity by default; `targetEntityId` chooses another target. The exact opening pose
-is held until movement or camera input. WASD moves, arrows/drag rotate the camera,
-Shift runs, Space jumps, E interacts, R resets.
+With no orbit overrides, `setCameraFollow()` preserves the current camera pose,
+FOV and framing, then smoothly follows the controlled entity's translation.
+It does not automatically move closer or center the subject. Orbit/zoom input
+persists; `followHalfLifeSeconds` controls translation smoothing (default .08).
+The controlled entity is followed by default; `targetEntityId` selects another.
+Explicit distance/pitch/target-height values retain the legacy target framing;
+use them only for an intentional camera transition. `framingMode:'preserve-opening'`
+can select inherited framing explicitly (without distance/pitch overrides).
+The camera stays at the authored first-frame pose until input. WASD moves, arrows/drag rotate camera, Shift runs,
+Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
+collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
 
-If you want a different gameplay orbit, explicitly supply distanceMeters,
-pitchRadians or targetHeightMeters; the SDK blends into that view. `framingMode`
-can explicitly select `preserve-opening` or `target`. The default is
-`preserve-opening` when all three orbit values are omitted, and `target` otherwise.
-You do not need to calculate a second orbit merely to start playing.
-
-The SDK derives collision/subject anchors from the registered character body,
-damps target movement, retracts immediately to avoid solids, maintains the
-subject's angular framing during contraction, and restores distance with a speed
-limit. `maximumRecoveryMetersPerSecond` (default 3), `recoveryHalfLifeSeconds`
-(default .24), `targetHalfLifeSeconds` (default .1; 0 disables target damping),
-`collisionRadiusMeters` and `transitionSeconds` are optional tuning controls.
-Physical clearance can require an immediate correction; extreme confinement may
-prevent a full-body view. Camera snapshots expose the actual collision pivot,
-arm length, obstruction, phase and transition progress for debugging.
-`useAuthoredCamera()` gives camera control back for an authored scene or cutscene;
-calling `setCameraFollow()` resumes from the current pose. Keep one camera writer.
+The shared collision solver uses the registered character body, retracts away
+from real solids, and limits recovery with `maximumRecoveryMetersPerSecond`
+(default 3) and `recoveryHalfLifeSeconds` (default .18 for preserved opening,
+.24 for target framing). Target framing additionally
+compensates orientation to maintain the subject's angular position during
+retraction. Preserved opening framing retains the authored orientation and roll.
+`targetHalfLifeSeconds` controls target-framing translation damping (default .1);
+an explicit value also remains supported for preserved framing when
+`followHalfLifeSeconds` is omitted. Either damping value may be zero.
+Physical clearance may require immediate movement. Camera snapshots expose the
+collision pivot, arm length, obstruction, phase and transition progress.
+`useAuthoredCamera()` explicitly returns camera control for a cutscene;
+`setCameraFollow()` takes it back from the current pose.
 
 `start()` awaits preparation and publishes `window.__WORLDKIT_EVAL__` automatically.
 Use `stop()` to pause and `await reset()` to restore the baseline. Do not call the
 old expose/render/step methods or create another simulation timer. Query actual
 motion/animation through `getEntityState(id)` and camera state through `snapshot()`.
+
+Ground locomotion keeps its animation across brief small-step departures and
+single-tick contact-speed fluctuations. Fall presentation requires sustained
+airtime and meaningful descent, with a bounded timeout for unsupported actors.
+An accepted jump still starts immediately. This presentation grace does not
+change physical `motion.isGrounded`, gravity, collision or jump eligibility.
+Episode relocation, teleport and reset discard the affected locomotion history;
+Episode input, camera relocation and the single fixed clock retain their behavior.
 
 <!-- topic:assets -->
 ## Verified assets and lifetime
@@ -73,6 +85,19 @@ packaged selection; `world.assets.load(assetId)` creates an independent instance
 The SDK initializes available idle pose and owns animation after addCharacter.
 No manual AnimationMixer/update(0), hash entry, retargeting or private file path is
 needed. An actionId in an asset is an animation, not a physical movement ability.
+
+For humanoid leads, start with `humanoid.g-bot` and pass the loaded `asset` to
+`addCharacter`; this enables the supplied idle/walk/run/jump actions. A custom
+`object` gets physics and movement, but no automatic limb animation. Differences
+in clothing or color alone do not require writing a new gait.
+
+The actor's default local front is **-Z**, up is **+Y**, and limbs usually extend
+down **-Y**. In that frame a knee flexes backward with **negative X** rotation;
+an elbow flexes forward with **positive X** rotation. A +Z-facing animation recipe
+cannot be copied unchanged. For a differently oriented rig, derive directions
+from its actual bind pose. Inspect walk/run from the side, checking knees, elbows,
+foot contact, facing and speed; also test jumping, landing and reset. A technical
+playtest pass does not assess anatomical motion.
 
 For asynchronous changes in a running world:
 
@@ -281,7 +306,12 @@ detaches external output streams without stopping their caller-owned tracks.
 
 SDK `await start()` installs WorldObservation-v2 on the actual scene/camera and
 renderer, plus the gallery lifecycle alias. `setCaptureTargets` selects complete
-registered objects. Snapshots retain all entities, actual motion/animation,
+registered important objects in priority order; omit incidental grass, stones and clutter.
+The complete controlled subject is first; default capture delivers at most five sheets.
+For repeated objects, choose one complete representative:
+`{entityId, representative:{kind:"object", object}}` or
+`{entityId, representative:{kind:"instance", object:instancedMesh, instanceIndex}}`.
+Registration alone does not select an object for capture. Snapshots retain all entities, actual motion/animation,
 worldRevision, tick, camera and structured errors; describe is the controller view.
 
 Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views

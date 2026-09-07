@@ -1,0 +1,5259 @@
+{
+  "kind": "three-creator-installed-runtime-doctor",
+  "schemaVersion": 1,
+  "status": "passed",
+  "startedAt": "2026-09-06T15:07:08.399Z",
+  "runtimeLockHash": "3b3a925611c3096ca9d5da3aa21880bcdb508f71bd4b075c0a2b92818cbcda98",
+  "modelCalls": 0,
+  "authenticationEnvironmentPassed": false,
+  "preRunInstalledClosure": "passed",
+  "profiles": [
+    {
+      "profile": "three-sdk",
+      "workspace": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc/doctor/three-sdk-H1haZO",
+      "status": "passed",
+      "requiredMcpToolCount": 15,
+      "environment": {
+        "kind": "experimental-three-creator-environment",
+        "schemaVersion": 1,
+        "version": "0.2.0-experimental",
+        "profile": "three-sdk",
+        "engine": "three@0.185.1",
+        "sdk": "@worldkit/three",
+        "sdkVersion": "0.2.0-experimental",
+        "browserObservationContract": "WorldObservation-v2",
+        "schemaTopics": [
+          "getting-started",
+          "assets",
+          "control",
+          "extensions",
+          "observation",
+          "all"
+        ],
+        "authoring": "Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared prebuilt Three; the SDK profile adds the fixed SDK runtime.",
+        "project": "Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.",
+        "observation": "Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.",
+        "feedback": "world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.",
+        "delivery": "Versioned three-creator-delivery, experimental. Requires current source and current episode, a completed real 180s+ episode with captured keydown and keyup and no browser/SDK errors, and real player/target front-right-back captures. Route success is a measurement, not semantic or visual acceptance.",
+        "operations": "Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode; only a value below planned duration selects truncated debug. Full episodes have a bounded overhead allowance. Debug with a short playtest before the full episode.",
+        "limitations": [
+          "Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.",
+          "No Node APIs or execution of author build/config scripts.",
+          "The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate."
+        ]
+      },
+      "validation": {
+        "status": "compiled",
+        "candidateId": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+        "profile": "three-sdk",
+        "sourceHash": "550c875c04b4ac1f1ad896a84eb1b61f34ba5af8ca94a6f637c9a7ac0b69ea25",
+        "worldBuildHash": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+        "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+        "candidateCacheHit": false,
+        "runtimeCacheHit": true,
+        "runtimeValidation": "not-run",
+        "playableRoot": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc/doctor/three-sdk-H1haZO/.three-creator/candidates/3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c/playable"
+      },
+      "opening": {
+        "path": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc/doctor/three-sdk-H1haZO/.host-doctor/opening.png",
+        "sha256": "e360d87c3fd826eb10f91a2215325bb314c4a73e3ad3847e49053f608d851bb2",
+        "widthPixels": 960,
+        "heightPixels": 540
+      },
+      "inspection": {
+        "sourceHash": "550c875c04b4ac1f1ad896a84eb1b61f34ba5af8ca94a6f637c9a7ac0b69ea25",
+        "worldBuildHash": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+        "profile": "three-sdk",
+        "observation": {
+          "player": {
+            "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+            "name": "humanoid.g-bot",
+            "type": "Group",
+            "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+            "positionMetersXYZ": [
+              0,
+              0,
+              0
+            ],
+            "visible": true,
+            "childCount": 1,
+            "bounds": {
+              "minimumMetersXYZ": [
+                -0.3046020898110047,
+                0.008605499996148772,
+                -0.2718030239561458
+              ],
+              "maximumMetersXYZ": [
+                0.29129227508993183,
+                1.805697568849248,
+                0.1471275659010768
+              ]
+            }
+          },
+          "camera": {
+            "uuid": "bb7df46f-563d-4526-a0c8-4595aa0baf9d",
+            "name": "",
+            "type": "PerspectiveCamera",
+            "parentUuid": null,
+            "positionMetersXYZ": [
+              7,
+              6,
+              10
+            ],
+            "visible": true,
+            "childCount": 0,
+            "bounds": null,
+            "projectionMatrix": [
+              1.080552446421281,
+              0,
+              0,
+              0,
+              0,
+              1.9209821269711662,
+              0,
+              0,
+              0,
+              0,
+              -1.0002000200020003,
+              -1,
+              0,
+              0,
+              -0.20002000200020004,
+              0
+            ]
+          },
+          "targets": {
+            "player": {
+              "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "name": "humanoid.g-bot",
+              "type": "Group",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008605499996148772,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            }
+          },
+          "snapshot": {
+            "schemaVersion": 2,
+            "worldRevision": 4,
+            "simulationTick": 0,
+            "simulationSeconds": 0,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow-pending",
+              "positionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening"
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 3,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 4,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "motion": {
+                  "phase": "falling",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "isGrounded": false,
+                  "collisionEntityIds": []
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 0
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          },
+          "description": {
+            "schemaVersion": 2,
+            "worldRevision": 4,
+            "simulationTick": 0,
+            "supportedMovementKinds": [
+              "ground"
+            ],
+            "movements": [
+              {
+                "id": "ground",
+                "version": 1,
+                "description": "SDK ground movement and navigation"
+              }
+            ],
+            "geometries": [],
+            "entities": [
+              {
+                "state": {
+                  "id": "ground",
+                  "generation": 3,
+                  "geometryVersion": 0,
+                  "name": "ground",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "terrain",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    -0.1,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "controlOwners": []
+                },
+                "commands": [
+                  {
+                    "type": "entity.set-visible",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-visible"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "isVisible": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "isVisible"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-position",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-position"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "positionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "positionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-scale",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-scale"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "scaleLocalXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "scaleLocalXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-rotation",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-rotation"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "rotationLocalRadiansXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "rotationLocalRadiansXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.despawn",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.despawn"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-geometry",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-geometry"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "geometryId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "geometryId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  }
+                ],
+                "actionIds": []
+              },
+              {
+                "state": {
+                  "id": "player",
+                  "generation": 4,
+                  "geometryVersion": 0,
+                  "movementId": "ground",
+                  "name": "player",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "actor",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "motion": {
+                    "phase": "falling",
+                    "velocityWorldMetersPerSecondXYZ": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "isGrounded": false,
+                    "collisionEntityIds": []
+                  },
+                  "animation": {
+                    "actionId": "idle",
+                    "clipName": "idle",
+                    "timeSeconds": 0
+                  },
+                  "controlOwners": [
+                    {
+                      "channel": "locomotion",
+                      "ownerKind": "player-input"
+                    }
+                  ]
+                },
+                "commands": [
+                  {
+                    "type": "entity.set-visible",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-visible"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "isVisible": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "isVisible"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-position",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-position"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "positionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "positionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-scale",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-scale"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "scaleLocalXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "scaleLocalXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-rotation",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-rotation"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "rotationLocalRadiansXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "rotationLocalRadiansXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "ACTOR_ROTATION_OWNED_BY_MOVEMENT",
+                      "message": "ACTOR_ROTATION_OWNED_BY_MOVEMENT",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.move-to",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.move-to"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "targetPositionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "run": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "targetPositionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.follow",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.follow"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "targetEntityId": {
+                          "type": "string"
+                        },
+                        "distanceMeters": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "targetEntityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.stop",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.stop"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.resume-autonomy",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.resume-autonomy"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "AUTONOMY_NOT_REGISTERED",
+                      "message": "AUTONOMY_NOT_REGISTERED",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.set-movement",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.set-movement"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "movementId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "movementId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.play-action",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.play-action"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "actionId": {
+                          "type": "string"
+                        },
+                        "playback": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "actionId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.stop-action",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.stop-action"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  }
+                ],
+                "actionIds": [
+                  "idle",
+                  "idle.gaming",
+                  "walk",
+                  "walk.step",
+                  "run",
+                  "jump",
+                  "fall",
+                  "land.hard",
+                  "land.hard.alt",
+                  "fly",
+                  "float",
+                  "swim.surface",
+                  "swim.tread",
+                  "swim.exit",
+                  "sit",
+                  "sit.idle",
+                  "sit.ground.idle",
+                  "sit.toStand",
+                  "stand",
+                  "lay.idle",
+                  "roll.toRun",
+                  "fight.enter",
+                  "emote.salute",
+                  "emote.angry",
+                  "dance.rumba"
+                ]
+              }
+            ],
+            "prototypes": [],
+            "parameters": [],
+            "actions": []
+          },
+          "commandsSupported": true,
+          "diagnostics": {
+            "snapshot": {
+              "schemaVersion": 2,
+              "worldRevision": 4,
+              "simulationTick": 0,
+              "simulationSeconds": 0,
+              "isRunning": false,
+              "controlledEntityId": "player",
+              "camera": {
+                "mode": "follow-pending",
+                "positionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening"
+              },
+              "entities": [
+                {
+                  "id": "ground",
+                  "generation": 3,
+                  "geometryVersion": 0,
+                  "name": "ground",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "terrain",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    -0.1,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "controlOwners": []
+                },
+                {
+                  "id": "player",
+                  "generation": 4,
+                  "geometryVersion": 0,
+                  "movementId": "ground",
+                  "name": "player",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "actor",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "motion": {
+                    "phase": "falling",
+                    "velocityWorldMetersPerSecondXYZ": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "isGrounded": false,
+                    "collisionEntityIds": []
+                  },
+                  "animation": {
+                    "actionId": "idle",
+                    "clipName": "idle",
+                    "timeSeconds": 0
+                  },
+                  "controlOwners": [
+                    {
+                      "channel": "locomotion",
+                      "ownerKind": "player-input"
+                    }
+                  ]
+                }
+              ],
+              "errors": []
+            },
+            "physics": {
+              "engine": "rapier",
+              "entityCount": 2,
+              "colliderCount": 2,
+              "triangleCount": 2696,
+              "entities": [
+                {
+                  "id": "ground",
+                  "kind": "fixed",
+                  "colliderCount": 1,
+                  "triangleCount": 2696
+                },
+                {
+                  "id": "player",
+                  "kind": "character",
+                  "colliderCount": 1,
+                  "triangleCount": 0
+                }
+              ],
+              "diagnostics": []
+            },
+            "inputTranscript": []
+          },
+          "objects": [
+            {
+              "uuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "name": "",
+              "type": "Scene",
+              "parentUuid": null,
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -30,
+                  -0.20000000149011612,
+                  -30
+                ],
+                "maximumMetersXYZ": [
+                  30,
+                  1.805697568849248,
+                  30
+                ]
+              }
+            },
+            {
+              "uuid": "f4149ed7-97b4-448a-80f3-332dc8bce1f6",
+              "name": "",
+              "type": "HemisphereLight",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                1,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "8a5c0298-81b4-4d2a-a29d-8bd8f35c096d",
+              "name": "",
+              "type": "Mesh",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                -0.1,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -30,
+                  -0.20000000149011612,
+                  -30
+                ],
+                "maximumMetersXYZ": [
+                  30,
+                  1.4901161138336505e-9,
+                  30
+                ]
+              }
+            },
+            {
+              "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "name": "humanoid.g-bot",
+              "type": "Group",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008605499996148772,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            },
+            {
+              "uuid": "c44e54ba-64d3-4794-b957-7a40a2713d7a",
+              "name": "",
+              "type": "Group",
+              "parentUuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008605499996148772,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            },
+            {
+              "uuid": "d936143b-3f2a-44e1-a3a3-70fb325fb0f9",
+              "name": "Scene",
+              "type": "Group",
+              "parentUuid": "c44e54ba-64d3-4794-b957-7a40a2713d7a",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008605499996148772,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            },
+            {
+              "uuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "name": "Armature",
+              "type": "Object3D",
+              "parentUuid": "d936143b-3f2a-44e1-a3a3-70fb325fb0f9",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008605499996148772,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            },
+            {
+              "uuid": "b6a66f28-3882-460f-9d11-ed50f1d7d2e5",
+              "name": "Beta_Joints",
+              "type": "SkinnedMesh",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.29781263488314935,
+                  0.008605499996148772,
+                  -0.21004585381655377
+                ],
+                "maximumMetersXYZ": [
+                  0.28229148714937535,
+                  1.5943652138834468,
+                  0.1288370168954222
+                ]
+              }
+            },
+            {
+              "uuid": "88daa472-9a2f-459f-aeba-eb64b9bce0f3",
+              "name": "Beta_Surface",
+              "type": "SkinnedMesh",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -0.3046020898110047,
+                  0.008634752731096276,
+                  -0.2718030239561458
+                ],
+                "maximumMetersXYZ": [
+                  0.29129227508993183,
+                  1.805697568849248,
+                  0.1471275659010768
+                ]
+              }
+            },
+            {
+              "uuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "name": "mixamorigHips",
+              "type": "Bone",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                7.727290549431377e-8,
+                1.04274883296863,
+                -0.015543299897818304
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": null
+            },
+            {
+              "uuid": "083d161c-132e-4b2b-848c-ff82f0de7e5f",
+              "name": "mixamorigSpine",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                -0.006531170946451096,
+                1.1442531233250757,
+                -0.010806301760215999
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c27ce2da-876f-4ef3-b02d-0dbad97f7986",
+              "name": "mixamorigSpine1",
+              "type": "Bone",
+              "parentUuid": "083d161c-132e-4b2b-848c-ff82f0de7e5f",
+              "positionMetersXYZ": [
+                -0.008756423688360097,
+                1.2430927341290725,
+                0.004396734777637952
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "name": "mixamorigSpine2",
+              "type": "Bone",
+              "parentUuid": "c27ce2da-876f-4ef3-b02d-0dbad97f7986",
+              "positionMetersXYZ": [
+                -0.008132567298142929,
+                1.3354723450203185,
+                0.016875042611735898
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": null
+            },
+            {
+              "uuid": "1dc97788-24b3-4eab-ad2a-22bc4348c582",
+              "name": "mixamorigNeck",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                -0.0018510343767754872,
+                1.5033181202644608,
+                0.03211712692055672
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "12f67c8d-1792-49eb-af98-aa6c56452b92",
+              "name": "mixamorigHead",
+              "type": "Bone",
+              "parentUuid": "1dc97788-24b3-4eab-ad2a-22bc4348c582",
+              "positionMetersXYZ": [
+                0.0045545915893813104,
+                1.5963288866638574,
+                0.0030953311239152043
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c934b2a7-7e9b-47e9-b98e-d8a45ade6b7b",
+              "name": "mixamorigHeadTop_End",
+              "type": "Bone",
+              "parentUuid": "12f67c8d-1792-49eb-af98-aa6c56452b92",
+              "positionMetersXYZ": [
+                0.01793497179826992,
+                1.8165404760379018,
+                -0.07119506347703826
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "07c7847f-3191-47d5-9916-18d2db9e9213",
+              "name": "mixamorigRightShoulder",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                0.04113419572375262,
+                1.4442426873408638,
+                0.03761256773851964
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c5698b8c-2601-48e6-87dc-627583f2a5fa",
+              "name": "mixamorigRightArm",
+              "type": "Bone",
+              "parentUuid": "07c7847f-3191-47d5-9916-18d2db9e9213",
+              "positionMetersXYZ": [
+                0.1438261484724283,
+                1.4096508972427484,
+                0.039706747837906474
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "e4bd5b49-e047-4e8c-b336-8551bf3159b4",
+              "name": "mixamorigRightForeArm",
+              "type": "Bone",
+              "parentUuid": "c5698b8c-2601-48e6-87dc-627583f2a5fa",
+              "positionMetersXYZ": [
+                0.20851550395917404,
+                1.140290983525874,
+                0.011855641214806378
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "name": "mixamorigRightHand",
+              "type": "Bone",
+              "parentUuid": "e4bd5b49-e047-4e8c-b336-8551bf3159b4",
+              "positionMetersXYZ": [
+                0.25191719348522135,
+                0.8652983460675236,
+                -0.04056259708521136
+              ],
+              "visible": true,
+              "childCount": 5,
+              "bounds": null
+            },
+            {
+              "uuid": "4cc58348-0e2d-47f8-bed7-9f5a6ee8f8e9",
+              "name": "mixamorigRightHandThumb1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                0.22840980890161383,
+                0.8412620505943654,
+                -0.06163756144253367
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "eab31070-504a-4c4d-8403-29cc6f0ca314",
+              "name": "mixamorigRightHandThumb2",
+              "type": "Bone",
+              "parentUuid": "4cc58348-0e2d-47f8-bed7-9f5a6ee8f8e9",
+              "positionMetersXYZ": [
+                0.20818138194584604,
+                0.8077681841917255,
+                -0.07659545654332173
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b46463cb-d14d-4fde-b40b-d77988c773c2",
+              "name": "mixamorigRightHandThumb3",
+              "type": "Bone",
+              "parentUuid": "eab31070-504a-4c4d-8403-29cc6f0ca314",
+              "positionMetersXYZ": [
+                0.20697276140887635,
+                0.7736308954549161,
+                -0.0760686817931171
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "07223612-7ff4-4787-bdd3-db8016661abc",
+              "name": "mixamorigRightHandThumb4",
+              "type": "Bone",
+              "parentUuid": "b46463cb-d14d-4fde-b40b-d77988c773c2",
+              "positionMetersXYZ": [
+                0.2129564142728498,
+                0.7488994249235007,
+                -0.08001905533613665
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "df1c7a16-5b0e-4c6d-b13d-57c6aad4cdba",
+              "name": "mixamorigRightHandIndex1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                0.2440369387364772,
+                0.7761390849054335,
+                -0.06923482251214466
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8cc1d218-940c-40c3-8f8c-696ca124185d",
+              "name": "mixamorigRightHandIndex2",
+              "type": "Bone",
+              "parentUuid": "df1c7a16-5b0e-4c6d-b13d-57c6aad4cdba",
+              "positionMetersXYZ": [
+                0.24206277704220386,
+                0.7393208402120536,
+                -0.07232129432237258
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "66c87fa8-d498-4b9c-bf3f-c77eeecf7078",
+              "name": "mixamorigRightHandIndex3",
+              "type": "Bone",
+              "parentUuid": "8cc1d218-940c-40c3-8f8c-696ca124185d",
+              "positionMetersXYZ": [
+                0.2330669530058922,
+                0.7123348271887489,
+                -0.07056529465241461
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "530da319-609d-4f98-835c-68c62cb167de",
+              "name": "mixamorigRightHandIndex4",
+              "type": "Bone",
+              "parentUuid": "66c87fa8-d498-4b9c-bf3f-c77eeecf7078",
+              "positionMetersXYZ": [
+                0.22118619318521512,
+                0.6875390091670083,
+                -0.06702761304252584
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "9b23bcf2-9936-436d-8a0f-068ad1a11c6c",
+              "name": "mixamorigRightHandMiddle1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                0.258062732464821,
+                0.7707541605501115,
+                -0.05107476647232473
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5b6b720c-383c-498d-b45d-5fae4c495785",
+              "name": "mixamorigRightHandMiddle2",
+              "type": "Bone",
+              "parentUuid": "9b23bcf2-9936-436d-8a0f-068ad1a11c6c",
+              "positionMetersXYZ": [
+                0.25214568989773545,
+                0.7342451279073668,
+                -0.05003053525981077
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "55cc570f-d09a-40e2-ad0f-3afa36e99eae",
+              "name": "mixamorigRightHandMiddle3",
+              "type": "Bone",
+              "parentUuid": "5b6b720c-383c-498d-b45d-5fae4c495785",
+              "positionMetersXYZ": [
+                0.2399222266244922,
+                0.7078526404342798,
+                -0.04510449336807945
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "99a75a79-474d-4926-bb64-1b80ef0e5bb6",
+              "name": "mixamorigRightHandMiddle4",
+              "type": "Bone",
+              "parentUuid": "55cc570f-d09a-40e2-ad0f-3afa36e99eae",
+              "positionMetersXYZ": [
+                0.2210232680757387,
+                0.6870045958205774,
+                -0.03636116113395257
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "f9fa7177-8242-4449-8cbb-a35965a73653",
+              "name": "mixamorigRightHandRing1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                0.26483348399185735,
+                0.7735524087888104,
+                -0.03338939524281616
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "50dd1077-2af4-4175-945e-bc460c325a9e",
+              "name": "mixamorigRightHandRing2",
+              "type": "Bone",
+              "parentUuid": "f9fa7177-8242-4449-8cbb-a35965a73653",
+              "positionMetersXYZ": [
+                0.2567543115362542,
+                0.7408498955245675,
+                -0.03070168281737534
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "82a22071-2880-47cc-8a9f-9b9c803828c5",
+              "name": "mixamorigRightHandRing3",
+              "type": "Bone",
+              "parentUuid": "50dd1077-2af4-4175-945e-bc460c325a9e",
+              "positionMetersXYZ": [
+                0.2414718985350203,
+                0.7173185656157165,
+                -0.023791097840619887
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b540140a-1c43-4b07-9a4d-95a264978749",
+              "name": "mixamorigRightHandRing4",
+              "type": "Bone",
+              "parentUuid": "82a22071-2880-47cc-8a9f-9b9c803828c5",
+              "positionMetersXYZ": [
+                0.22241994957450248,
+                0.7015849868766303,
+                -0.014527805591168277
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "ea929a2c-cac1-4c15-863f-6f5eddde975e",
+              "name": "mixamorigRightHandPinky1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                0.26785772522915235,
+                0.7818117974904353,
+                -0.012784138530053238
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "86b0f6e2-bb99-49da-a00a-c0b3bddedb7b",
+              "name": "mixamorigRightHandPinky2",
+              "type": "Bone",
+              "parentUuid": "ea929a2c-cac1-4c15-863f-6f5eddde975e",
+              "positionMetersXYZ": [
+                0.2564614317550164,
+                0.7480954119913025,
+                -0.007367464997112286
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "2685a377-4139-4fdc-b0ee-5df9edbc5ebd",
+              "name": "mixamorigRightHandPinky3",
+              "type": "Bone",
+              "parentUuid": "86b0f6e2-bb99-49da-a00a-c0b3bddedb7b",
+              "positionMetersXYZ": [
+                0.24493161799702154,
+                0.7315464293342477,
+                -0.0015206867626752357
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "dcc0200d-1c00-44d2-a144-c6334271cf31",
+              "name": "mixamorigRightHandPinky4",
+              "type": "Bone",
+              "parentUuid": "2685a377-4139-4fdc-b0ee-5df9edbc5ebd",
+              "positionMetersXYZ": [
+                0.22963657285609007,
+                0.7192834937924409,
+                0.006437673331977926
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "0e9960c9-85d1-4e34-ae94-2ad3cb303a5e",
+              "name": "mixamorigLeftShoulder",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                -0.05003937305485555,
+                1.4481249744434794,
+                0.032413960821893205
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "a669c5b7-4972-4435-b61e-eacfdb62eaf5",
+              "name": "mixamorigLeftArm",
+              "type": "Bone",
+              "parentUuid": "0e9960c9-85d1-4e34-ae94-2ad3cb303a5e",
+              "positionMetersXYZ": [
+                -0.15527315381508822,
+                1.4264609158415429,
+                0.01819798632823208
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "28708afa-4d2d-4792-beb9-956cfe3b5e93",
+              "name": "mixamorigLeftForeArm",
+              "type": "Bone",
+              "parentUuid": "a669c5b7-4972-4435-b61e-eacfdb62eaf5",
+              "positionMetersXYZ": [
+                -0.21313111862081846,
+                1.1557673529282082,
+                -0.011677908235456988
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "name": "mixamorigLeftHand",
+              "type": "Bone",
+              "parentUuid": "28708afa-4d2d-4792-beb9-956cfe3b5e93",
+              "positionMetersXYZ": [
+                -0.26728838557065976,
+                0.8800187618364805,
+                -0.04748317528786471
+              ],
+              "visible": true,
+              "childCount": 5,
+              "bounds": null
+            },
+            {
+              "uuid": "39db625b-201b-425d-97b8-2d9f872b1ed3",
+              "name": "mixamorigLeftHandThumb1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -0.25032678441691775,
+                0.8558531010693159,
+                -0.07401837784902224
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "88709668-4b37-42e1-8e6e-022d7c340be3",
+              "name": "mixamorigLeftHandThumb2",
+              "type": "Bone",
+              "parentUuid": "39db625b-201b-425d-97b8-2d9f872b1ed3",
+              "positionMetersXYZ": [
+                -0.2354357834633853,
+                0.8213460928709291,
+                -0.09247627289975976
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8f81c81e-6ef0-4c78-a95c-f6a12489a4f1",
+              "name": "mixamorigLeftHandThumb3",
+              "type": "Bone",
+              "parentUuid": "88709668-4b37-42e1-8e6e-022d7c340be3",
+              "positionMetersXYZ": [
+                -0.23470909563016873,
+                0.7871996615025623,
+                -0.09389883704773283
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "e2cffec2-503b-46c0-95e4-0c0b0d8e83a3",
+              "name": "mixamorigLeftHandThumb4",
+              "type": "Bone",
+              "parentUuid": "8f81c81e-6ef0-4c78-a95c-f6a12489a4f1",
+              "positionMetersXYZ": [
+                -0.24011526126241922,
+                0.762171952368449,
+                -0.09711302828766176
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "9c0f5ca6-205b-4b0b-ae6b-1db445f7e430",
+              "name": "mixamorigLeftHandIndex1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -0.2682701572494152,
+                0.7909830931790836,
+                -0.07760233731812977
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "d64825e4-7b23-4c50-acfd-dcf8ddf022e6",
+              "name": "mixamorigLeftHandIndex2",
+              "type": "Bone",
+              "parentUuid": "9c0f5ca6-205b-4b0b-ae6b-1db445f7e430",
+              "positionMetersXYZ": [
+                -0.26718742997894607,
+                0.7541547983588199,
+                -0.08099323464204494
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "a47bfce2-7681-4c8b-9e6d-a3bd7a818aee",
+              "name": "mixamorigLeftHandIndex3",
+              "type": "Bone",
+              "parentUuid": "d64825e4-7b23-4c50-acfd-dcf8ddf022e6",
+              "positionMetersXYZ": [
+                -0.25810526293315955,
+                0.7271431828314179,
+                -0.08137226759193726
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "9c2323a0-89b9-40f3-b904-fe25f3307475",
+              "name": "mixamorigLeftHandIndex4",
+              "type": "Bone",
+              "parentUuid": "a47bfce2-7681-4c8b-9e6d-a3bd7a818aee",
+              "positionMetersXYZ": [
+                -0.2457796937699913,
+                0.7022911925008304,
+                -0.08071137065145975
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "fa6f812a-5f74-4132-85c5-e90815ee1c86",
+              "name": "mixamorigLeftHandMiddle1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -0.2771993231294472,
+                0.7856270992789072,
+                -0.05645786366485457
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "daf31afe-b810-4880-bcc0-c198f3585c7b",
+              "name": "mixamorigLeftHandMiddle2",
+              "type": "Bone",
+              "parentUuid": "fa6f812a-5f74-4132-85c5-e90815ee1c86",
+              "positionMetersXYZ": [
+                -0.2713032860196682,
+                0.7491013492367974,
+                -0.05677568777342118
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5da2fac4-d1eb-4a57-b8c7-d8c1c7d72003",
+              "name": "mixamorigLeftHandMiddle3",
+              "type": "Bone",
+              "parentUuid": "daf31afe-b810-4880-bcc0-c198f3585c7b",
+              "positionMetersXYZ": [
+                -0.2583302776301329,
+                0.7226775058754676,
+                -0.054845079255892576
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "80b8d63e-1d5b-4a57-9752-6258cbc8a2af",
+              "name": "mixamorigLeftHandMiddle4",
+              "type": "Bone",
+              "parentUuid": "5da2fac4-d1eb-4a57-b8c7-d8c1c7d72003",
+              "positionMetersXYZ": [
+                -0.23790723857931784,
+                0.7017379140177958,
+                -0.05079852405913767
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "fcf14b4b-8062-4140-8341-57f750b4ba76",
+              "name": "mixamorigLeftHandRing1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -0.2791320123223979,
+                0.7883696628339829,
+                -0.03761144244408565
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "15904ced-889e-407f-a0f2-fd85c96c4152",
+              "name": "mixamorigLeftHandRing2",
+              "type": "Bone",
+              "parentUuid": "fcf14b4b-8062-4140-8341-57f750b4ba76",
+              "positionMetersXYZ": [
+                -0.27130418504156384,
+                0.7578658200403043,
+                -0.03690676539602756
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c96ec23a-ed88-4b0d-a89d-cc76eeebe3de",
+              "name": "mixamorigLeftHandRing3",
+              "type": "Bone",
+              "parentUuid": "15904ced-889e-407f-a0f2-fd85c96c4152",
+              "positionMetersXYZ": [
+                -0.25453739716993007,
+                0.7338043592309533,
+                -0.03371739767005138
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "df68d17b-b3f2-4b95-bec4-c769b44e7e9e",
+              "name": "mixamorigLeftHandRing4",
+              "type": "Bone",
+              "parentUuid": "c96ec23a-ed88-4b0d-a89d-cc76eeebe3de",
+              "positionMetersXYZ": [
+                -0.2338281121018718,
+                0.7179907839399222,
+                -0.029212296687291424
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "381a3754-f642-4ddb-b05c-9b62ba93de12",
+              "name": "mixamorigLeftHandPinky1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -0.2766169933922644,
+                0.7965054296733336,
+                -0.01688885570001337
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "11608ed8-d802-4ea7-9cc0-f6d865260257",
+              "name": "mixamorigLeftHandPinky2",
+              "type": "Bone",
+              "parentUuid": "381a3754-f642-4ddb-b05c-9b62ba93de12",
+              "positionMetersXYZ": [
+                -0.2643508850542128,
+                0.7627610811396626,
+                -0.014269679731005553
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5d5862a3-675f-479a-ae8e-86423345f15a",
+              "name": "mixamorigLeftHandPinky3",
+              "type": "Bone",
+              "parentUuid": "11608ed8-d802-4ea7-9cc0-f6d865260257",
+              "positionMetersXYZ": [
+                -0.25180591076562636,
+                0.7461837515425498,
+                -0.011300253674313953
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "9a07257f-4bb4-4d8b-9a52-49175acd0559",
+              "name": "mixamorigLeftHandPinky4",
+              "type": "Bone",
+              "parentUuid": "5d5862a3-675f-479a-ae8e-86423345f15a",
+              "positionMetersXYZ": [
+                -0.23501281234412813,
+                0.7338273971506662,
+                -0.00716596954318541
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "88a68eb6-25bb-428b-a2de-9681c62b6065",
+              "name": "mixamorigRightUpLeg",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                0.08451719218185699,
+                0.9793376603221196,
+                0.00412965161415999
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "1b2785f5-64f5-42ae-92f6-398fc601e60e",
+              "name": "mixamorigRightLeg",
+              "type": "Bone",
+              "parentUuid": "88a68eb6-25bb-428b-a2de-9681c62b6065",
+              "positionMetersXYZ": [
+                0.08794128457545389,
+                0.5368171975783291,
+                -0.02822547645279843
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "429b5d38-1960-4614-ab07-5a7b7c0ac673",
+              "name": "mixamorigRightFoot",
+              "type": "Bone",
+              "parentUuid": "1b2785f5-64f5-42ae-92f6-398fc601e60e",
+              "positionMetersXYZ": [
+                0.08495009798931093,
+                0.09625068906745626,
+                0.03630971533983653
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "ae9d2cbe-e17a-468b-a0e6-3cb607838399",
+              "name": "mixamorigRightToeBase",
+              "type": "Bone",
+              "parentUuid": "429b5d38-1960-4614-ab07-5a7b7c0ac673",
+              "positionMetersXYZ": [
+                0.13319802773815048,
+                0.008963981893645251,
+                -0.05931319932213155
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "615b7273-1603-402d-9577-af6a5d4e37b6",
+              "name": "mixamorigRightToe_End",
+              "type": "Bone",
+              "parentUuid": "ae9d2cbe-e17a-468b-a0e6-3cb607838399",
+              "positionMetersXYZ": [
+                0.17465637779450205,
+                0.020718957818681525,
+                -0.14147996941059354
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "2feaea6c-f309-4ee6-b426-7191e1bb86ae",
+              "name": "mixamorigLeftUpLeg",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                -0.07860603204187479,
+                0.9695678763287557,
+                -0.011441826060382802
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "be21868a-2fbf-45ee-9f00-ac447d6c493f",
+              "name": "mixamorigLeftLeg",
+              "type": "Bone",
+              "parentUuid": "2feaea6c-f309-4ee6-b426-7191e1bb86ae",
+              "positionMetersXYZ": [
+                -0.12187688332263154,
+                0.5389197366507232,
+                -0.10917444201492629
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "ff67bb2a-715a-402a-8aea-aaff64d0a49b",
+              "name": "mixamorigLeftFoot",
+              "type": "Bone",
+              "parentUuid": "be21868a-2fbf-45ee-9f00-ac447d6c493f",
+              "positionMetersXYZ": [
+                -0.1712772406651064,
+                0.09772194057716665,
+                -0.07486400351323899
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "38f8639d-774d-4052-9fdc-6a91155bbf82",
+              "name": "mixamorigLeftToeBase",
+              "type": "Bone",
+              "parentUuid": "ff67bb2a-715a-402a-8aea-aaff64d0a49b",
+              "positionMetersXYZ": [
+                -0.1971780916917938,
+                0.010229543378365263,
+                -0.17861756342684731
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8a207fc1-f8c5-47b5-9edd-c84946d59a98",
+              "name": "mixamorigLeftToe_End",
+              "type": "Bone",
+              "parentUuid": "38f8639d-774d-4052-9fdc-6a91155bbf82",
+              "positionMetersXYZ": [
+                -0.2193968533112502,
+                0.018016027587111363,
+                -0.2683620665835172
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            }
+          ],
+          "renderer": {
+            "widthPixels": 960,
+            "heightPixels": 540,
+            "memory": {
+              "geometries": 3,
+              "textures": 3
+            },
+            "render": {
+              "frame": 7,
+              "calls": 3,
+              "triangles": 49124,
+              "points": 0,
+              "lines": 0
+            }
+          }
+        },
+        "pageErrors": [],
+        "blockedNetworkRequests": []
+      },
+      "commandChecks": [
+        {
+          "sourceHash": "550c875c04b4ac1f1ad896a84eb1b61f34ba5af8ca94a6f637c9a7ac0b69ea25",
+          "worldBuildHash": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+          "creatorOperationId": "a0c5a5c1-e141-4d83-8cfd-b3f521807f8e",
+          "command": {
+            "type": "entity.set-visible",
+            "entityId": "player",
+            "isVisible": false
+          },
+          "contextPolicy": "host-command-id-only",
+          "worldCommandReceipt": {
+            "status": "applied",
+            "commandId": "creator-tool:a0c5a5c1-e141-4d83-8cfd-b3f521807f8e",
+            "worldRevision": 5
+          },
+          "before": {
+            "schemaVersion": 2,
+            "worldRevision": 4,
+            "simulationTick": 0,
+            "simulationSeconds": 0,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow-pending",
+              "positionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening"
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 3,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 4,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "motion": {
+                  "phase": "falling",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "isGrounded": false,
+                  "collisionEntityIds": []
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 0
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          },
+          "after": {
+            "schemaVersion": 2,
+            "worldRevision": 5,
+            "simulationTick": 0,
+            "simulationSeconds": 0,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow-pending",
+              "positionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening"
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 3,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 4,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": false,
+                "isVisibleEffective": false,
+                "motion": {
+                  "phase": "falling",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "isGrounded": false,
+                  "collisionEntityIds": []
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 0
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          }
+        },
+        {
+          "sourceHash": "550c875c04b4ac1f1ad896a84eb1b61f34ba5af8ca94a6f637c9a7ac0b69ea25",
+          "worldBuildHash": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+          "creatorOperationId": "7928ebd7-d409-4338-980f-92c41dc54057",
+          "command": {
+            "type": "entity.set-visible",
+            "entityId": "player",
+            "isVisible": true
+          },
+          "contextPolicy": "host-command-id-only",
+          "worldCommandReceipt": {
+            "status": "applied",
+            "commandId": "creator-tool:7928ebd7-d409-4338-980f-92c41dc54057",
+            "worldRevision": 6
+          },
+          "before": {
+            "schemaVersion": 2,
+            "worldRevision": 5,
+            "simulationTick": 0,
+            "simulationSeconds": 0,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow-pending",
+              "positionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening"
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 3,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 4,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": false,
+                "isVisibleEffective": false,
+                "motion": {
+                  "phase": "falling",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "isGrounded": false,
+                  "collisionEntityIds": []
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 0
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          },
+          "after": {
+            "schemaVersion": 2,
+            "worldRevision": 6,
+            "simulationTick": 0,
+            "simulationSeconds": 0,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow-pending",
+              "positionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                7,
+                6,
+                10
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening"
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 3,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 4,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "motion": {
+                  "phase": "falling",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "isGrounded": false,
+                  "collisionEntityIds": []
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 0
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          }
+        }
+      ],
+      "playtest": {
+        "kind": "three-creator-browser-playtest",
+        "schemaVersion": 1,
+        "status": "passed",
+        "profile": "three-sdk",
+        "sourceHash": "550c875c04b4ac1f1ad896a84eb1b61f34ba5af8ca94a6f637c9a7ac0b69ea25",
+        "worldBuildHash": "3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c",
+        "runtimeHash": "4ba31f620f16f57f6889a4cf47eb70df8379a3316d79596e3269c04b277b3d2e",
+        "episodeHash": "2e251e2233db8a5247c3f3f7d2436bcc7f8edb0ccada37d2a9ac807bd6718fc3",
+        "requestedSeconds": 4,
+        "plannedSeconds": 4,
+        "executionMode": "full-episode",
+        "executionBudgetSeconds": 19,
+        "actualWallSeconds": 7.042381414000001,
+        "inputWallSeconds": 4.051699999988079,
+        "captureTiming": {
+          "clock": "browser-performance",
+          "recordingStartedAtMilliseconds": 1613.4000000357628,
+          "initialFrameRequestedAtMilliseconds": 1613.7000000476837,
+          "finalFrameRequestedAtMilliseconds": 8562.5,
+          "stopRequestedAtMilliseconds": 8830.600000023842,
+          "recorderStoppedAtMilliseconds": 8831.400000035763,
+          "framePeriodSeconds": 1,
+          "requestedFrames": 7,
+          "postrollStartedAtMilliseconds": 5857.100000023842,
+          "postrollSeconds": 2.974600000023842
+        },
+        "activePlaySeconds": 4.050545052,
+        "completedSteps": 3,
+        "isCompleteEpisode": true,
+        "capturedInput": true,
+        "travelledMeters": 2.4852365397588434,
+        "targetResults": [],
+        "semanticStatus": "unreviewed",
+        "failure": null,
+        "pageErrors": [],
+        "runtimeErrors": [],
+        "blockedNetworkRequests": [],
+        "videoPath": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc/doctor/three-sdk-H1haZO/.three-creator/evidence/3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c/playtest-dff44d43-55ad-4aff-a76d-6425a3eae0a6/playtest.mp4",
+        "videoMetadata": {
+          "durationSeconds": 7.03,
+          "frameCount": 7,
+          "widthPixels": 960,
+          "heightPixels": 540
+        },
+        "videoFailure": null,
+        "keyframes": [
+          {
+            "path": "/fsx/pipeline/worldkit-three-creator-experiments/humanoid-motion-guidance-a774b0cc/doctor/three-sdk-H1haZO/.three-creator/evidence/3f2166dfc7574acb514f01b20603fcd45a667e6595bf31f45b01dbbe6f4b106c/playtest-dff44d43-55ad-4aff-a76d-6425a3eae0a6/keyframe-000.png",
+            "sha256": "d80d9a6a43a2d416b05fdddc5cdde6639afcf267735a47e7999e9c122a4d70e2",
+            "wallSeconds": 0.34327751099999976
+          }
+        ],
+        "hostKeyboardEvents": [
+          {
+            "type": "keydown",
+            "key": "w",
+            "cleanup": false,
+            "wallSeconds": 0.039788520999999945,
+            "before": {
+              "wallSeconds": 0.001199999988079071,
+              "browserFrame": 0,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 0,
+              "simulationSeconds": 0,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "velocityMetersPerSecondXYZ": [
+                0,
+                0,
+                0
+              ],
+              "isGrounded": false,
+              "collisionEntityIds": [],
+              "actionId": "idle",
+              "clipName": "idle",
+              "animationTimeSeconds": 0,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow-pending",
+                "positionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening"
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keyup",
+            "key": "w",
+            "cleanup": false,
+            "wallSeconds": 2.0425868649999996,
+            "before": {
+              "wallSeconds": 2.0415,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keydown",
+            "key": "s",
+            "cleanup": false,
+            "wallSeconds": 2.044225253,
+            "before": {
+              "wallSeconds": 2.043600000023842,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keyup",
+            "key": "s",
+            "cleanup": false,
+            "wallSeconds": 3.0487735610000004,
+            "before": {
+              "wallSeconds": 3.048,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          }
+        ],
+        "hostActionEvents": [
+          {
+            "type": "keydown",
+            "key": "w",
+            "cleanup": false,
+            "wallSeconds": 0.039788520999999945,
+            "before": {
+              "wallSeconds": 0.001199999988079071,
+              "browserFrame": 0,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 0,
+              "simulationSeconds": 0,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "velocityMetersPerSecondXYZ": [
+                0,
+                0,
+                0
+              ],
+              "isGrounded": false,
+              "collisionEntityIds": [],
+              "actionId": "idle",
+              "clipName": "idle",
+              "animationTimeSeconds": 0,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow-pending",
+                "positionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  7,
+                  6,
+                  10
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening"
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keyup",
+            "key": "w",
+            "cleanup": false,
+            "wallSeconds": 2.0425868649999996,
+            "before": {
+              "wallSeconds": 2.0415,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keydown",
+            "key": "s",
+            "cleanup": false,
+            "wallSeconds": 2.044225253,
+            "before": {
+              "wallSeconds": 2.043600000023842,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          },
+          {
+            "type": "keyup",
+            "key": "s",
+            "cleanup": false,
+            "wallSeconds": 3.0487735610000004,
+            "before": {
+              "wallSeconds": 3.048,
+              "browserFrame": 40,
+              "frameDeltaSeconds": 0,
+              "snapshotSchemaVersion": 2,
+              "simulationTick": 65,
+              "simulationSeconds": 1.0833333333333333,
+              "isRunning": true,
+              "positionMetersXYZ": [
+                -1.4249162673950195,
+                0.014999689534306526,
+                -2.0356085300445557
+              ],
+              "velocityMetersPerSecondXYZ": [
+                -1.3763092756271362,
+                -0.007431506644934416,
+                -1.9661520719528198
+              ],
+              "isGrounded": true,
+              "collisionEntityIds": [
+                "ground"
+              ],
+              "actionId": "walk",
+              "clipName": "walk",
+              "animationTimeSeconds": 0.066666666666668,
+              "movementId": "ground",
+              "worldRevision": 7,
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.722559117473621,
+                  6.015084387787615,
+                  8.175079244622177
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.5750837326049805,
+                  6.0149996895343065,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "errors": []
+            }
+          }
+        ],
+        "worldOperations": [],
+        "browserKeyboardEvents": [
+          {
+            "type": "keydown",
+            "key": "w",
+            "code": "KeyW",
+            "repeat": false,
+            "isTrusted": true,
+            "timeSeconds": 0.002800000011920929,
+            "frame": 0
+          },
+          {
+            "type": "keyup",
+            "key": "w",
+            "code": "KeyW",
+            "repeat": false,
+            "isTrusted": true,
+            "timeSeconds": 2.042800000011921,
+            "frame": 40
+          },
+          {
+            "type": "keydown",
+            "key": "s",
+            "code": "KeyS",
+            "repeat": false,
+            "isTrusted": true,
+            "timeSeconds": 2.044600000023842,
+            "frame": 40
+          },
+          {
+            "type": "keyup",
+            "key": "s",
+            "code": "KeyS",
+            "repeat": false,
+            "isTrusted": true,
+            "timeSeconds": 3.049100000023842,
+            "frame": 40
+          }
+        ],
+        "lastObservation": {
+          "player": {
+            "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+            "name": "humanoid.g-bot",
+            "type": "Group",
+            "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+            "positionMetersXYZ": [
+              -1.4249167442321777,
+              0.015000035054981709,
+              -2.0356085300445557
+            ],
+            "visible": true,
+            "childCount": 1,
+            "bounds": {
+              "minimumMetersXYZ": [
+                -1.7634193728697585,
+                0.023296542088262144,
+                -2.2474462206955965
+              ],
+              "maximumMetersXYZ": [
+                -1.1910993508687393,
+                1.8208114010474212,
+                -1.8657894417697964
+              ]
+            }
+          },
+          "camera": {
+            "uuid": "bb7df46f-563d-4526-a0c8-4595aa0baf9d",
+            "name": "",
+            "type": "PerspectiveCamera",
+            "parentUuid": null,
+            "positionMetersXYZ": [
+              5.575090196929667,
+              6.015061384991888,
+              7.964401385878506
+            ],
+            "visible": true,
+            "childCount": 0,
+            "bounds": null,
+            "projectionMatrix": [
+              1.080552446421281,
+              0,
+              0,
+              0,
+              0,
+              1.9209821269711662,
+              0,
+              0,
+              0,
+              0,
+              -1.0002000200020003,
+              -1,
+              0,
+              0,
+              -0.20002000200020004,
+              0
+            ]
+          },
+          "targets": {
+            "player": {
+              "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "name": "humanoid.g-bot",
+              "type": "Group",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023296542088262144,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            }
+          },
+          "snapshot": {
+            "schemaVersion": 2,
+            "worldRevision": 7,
+            "simulationTick": 134,
+            "simulationSeconds": 2.2333333333333334,
+            "isRunning": false,
+            "controlledEntityId": "player",
+            "camera": {
+              "mode": "follow",
+              "positionWorldMetersXYZ": [
+                5.575090196929667,
+                6.015061384991888,
+                7.964401385878506
+              ],
+              "desiredPositionWorldMetersXYZ": [
+                5.575083255767822,
+                6.015000035054982,
+                7.964391469955444
+              ],
+              "desiredYawRadians": 0.6107259643892083,
+              "desiredPitchRadians": 0.3675428095077526,
+              "desiredArmDistanceMeters": 13.080137613954985,
+              "framingMode": "preserve-opening",
+              "safeArmDistanceMeters": 13.080137613954983,
+              "actualArmDistanceMeters": 13.080137613954983
+            },
+            "entities": [
+              {
+                "id": "ground",
+                "generation": 5,
+                "geometryVersion": 0,
+                "name": "ground",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "terrain",
+                "positionWorldMetersXYZ": [
+                  0,
+                  -0.1,
+                  0
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "controlOwners": []
+              },
+              {
+                "id": "player",
+                "generation": 6,
+                "geometryVersion": 0,
+                "movementId": "ground",
+                "name": "player",
+                "tags": [],
+                "appearancePrompt": "",
+                "role": "actor",
+                "positionWorldMetersXYZ": [
+                  -1.4249167442321777,
+                  0.015000035054981709,
+                  -2.0356085300445557
+                ],
+                "rotationLocalRadiansXYZ": [
+                  0,
+                  0.6107259643892083,
+                  0
+                ],
+                "scaleLocalXYZ": [
+                  1,
+                  1,
+                  1
+                ],
+                "isVisibleLocal": true,
+                "isVisibleEffective": true,
+                "motion": {
+                  "phase": "grounded",
+                  "velocityWorldMetersPerSecondXYZ": [
+                    0,
+                    -0.005997418891638517,
+                    0
+                  ],
+                  "isGrounded": true,
+                  "collisionEntityIds": [
+                    "ground"
+                  ]
+                },
+                "animation": {
+                  "actionId": "idle",
+                  "clipName": "idle",
+                  "timeSeconds": 1.1500000000000008
+                },
+                "controlOwners": [
+                  {
+                    "channel": "locomotion",
+                    "ownerKind": "player-input"
+                  }
+                ]
+              }
+            ],
+            "errors": []
+          },
+          "description": {
+            "schemaVersion": 2,
+            "worldRevision": 7,
+            "simulationTick": 134,
+            "supportedMovementKinds": [
+              "ground"
+            ],
+            "movements": [
+              {
+                "id": "ground",
+                "version": 1,
+                "description": "SDK ground movement and navigation"
+              }
+            ],
+            "geometries": [],
+            "entities": [
+              {
+                "state": {
+                  "id": "ground",
+                  "generation": 5,
+                  "geometryVersion": 0,
+                  "name": "ground",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "terrain",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    -0.1,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "controlOwners": []
+                },
+                "commands": [
+                  {
+                    "type": "entity.set-visible",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-visible"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "isVisible": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "isVisible"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-position",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-position"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "positionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "positionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-scale",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-scale"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "scaleLocalXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "scaleLocalXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-rotation",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-rotation"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "rotationLocalRadiansXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "rotationLocalRadiansXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.despawn",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.despawn"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-geometry",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-geometry"
+                        },
+                        "entityId": {
+                          "const": "ground"
+                        },
+                        "geometryId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "geometryId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  }
+                ],
+                "actionIds": []
+              },
+              {
+                "state": {
+                  "id": "player",
+                  "generation": 6,
+                  "geometryVersion": 0,
+                  "movementId": "ground",
+                  "name": "player",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "actor",
+                  "positionWorldMetersXYZ": [
+                    -1.4249167442321777,
+                    0.015000035054981709,
+                    -2.0356085300445557
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0.6107259643892083,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "motion": {
+                    "phase": "grounded",
+                    "velocityWorldMetersPerSecondXYZ": [
+                      0,
+                      -0.005997418891638517,
+                      0
+                    ],
+                    "isGrounded": true,
+                    "collisionEntityIds": [
+                      "ground"
+                    ]
+                  },
+                  "animation": {
+                    "actionId": "idle",
+                    "clipName": "idle",
+                    "timeSeconds": 1.1500000000000008
+                  },
+                  "controlOwners": [
+                    {
+                      "channel": "locomotion",
+                      "ownerKind": "player-input"
+                    }
+                  ]
+                },
+                "commands": [
+                  {
+                    "type": "entity.set-visible",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-visible"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "isVisible": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "isVisible"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-position",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-position"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "positionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "positionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-scale",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-scale"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "scaleLocalXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "scaleLocalXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.set-rotation",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.set-rotation"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "rotationLocalRadiansXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "durationSeconds": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "rotationLocalRadiansXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "ACTOR_ROTATION_OWNED_BY_MOVEMENT",
+                      "message": "ACTOR_ROTATION_OWNED_BY_MOVEMENT",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.move-to",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.move-to"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "targetPositionWorldMetersXYZ": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "run": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "targetPositionWorldMetersXYZ"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.follow",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.follow"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "targetEntityId": {
+                          "type": "string"
+                        },
+                        "distanceMeters": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "targetEntityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.stop",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.stop"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "PLAYER_INPUT_OWNS_ACTOR",
+                      "message": "PLAYER_INPUT_OWNS_ACTOR",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.resume-autonomy",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.resume-autonomy"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": false,
+                    "unavailableReason": {
+                      "code": "AUTONOMY_NOT_REGISTERED",
+                      "message": "AUTONOMY_NOT_REGISTERED",
+                      "category": "invalid-input",
+                      "entityIds": [],
+                      "phase": "control"
+                    }
+                  },
+                  {
+                    "type": "actor.set-movement",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "actor.set-movement"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "movementId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "movementId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.play-action",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.play-action"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        },
+                        "actionId": {
+                          "type": "string"
+                        },
+                        "playback": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId",
+                        "actionId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  },
+                  {
+                    "type": "entity.stop-action",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "entity.stop-action"
+                        },
+                        "entityId": {
+                          "const": "player"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "entityId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isAvailable": true
+                  }
+                ],
+                "actionIds": [
+                  "idle",
+                  "idle.gaming",
+                  "walk",
+                  "walk.step",
+                  "run",
+                  "jump",
+                  "fall",
+                  "land.hard",
+                  "land.hard.alt",
+                  "fly",
+                  "float",
+                  "swim.surface",
+                  "swim.tread",
+                  "swim.exit",
+                  "sit",
+                  "sit.idle",
+                  "sit.ground.idle",
+                  "sit.toStand",
+                  "stand",
+                  "lay.idle",
+                  "roll.toRun",
+                  "fight.enter",
+                  "emote.salute",
+                  "emote.angry",
+                  "dance.rumba"
+                ]
+              }
+            ],
+            "prototypes": [],
+            "parameters": [],
+            "actions": []
+          },
+          "commandsSupported": true,
+          "diagnostics": {
+            "snapshot": {
+              "schemaVersion": 2,
+              "worldRevision": 7,
+              "simulationTick": 134,
+              "simulationSeconds": 2.2333333333333334,
+              "isRunning": false,
+              "controlledEntityId": "player",
+              "camera": {
+                "mode": "follow",
+                "positionWorldMetersXYZ": [
+                  5.575090196929667,
+                  6.015061384991888,
+                  7.964401385878506
+                ],
+                "desiredPositionWorldMetersXYZ": [
+                  5.575083255767822,
+                  6.015000035054982,
+                  7.964391469955444
+                ],
+                "desiredYawRadians": 0.6107259643892083,
+                "desiredPitchRadians": 0.3675428095077526,
+                "desiredArmDistanceMeters": 13.080137613954985,
+                "framingMode": "preserve-opening",
+                "safeArmDistanceMeters": 13.080137613954983,
+                "actualArmDistanceMeters": 13.080137613954983
+              },
+              "entities": [
+                {
+                  "id": "ground",
+                  "generation": 5,
+                  "geometryVersion": 0,
+                  "name": "ground",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "terrain",
+                  "positionWorldMetersXYZ": [
+                    0,
+                    -0.1,
+                    0
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "controlOwners": []
+                },
+                {
+                  "id": "player",
+                  "generation": 6,
+                  "geometryVersion": 0,
+                  "movementId": "ground",
+                  "name": "player",
+                  "tags": [],
+                  "appearancePrompt": "",
+                  "role": "actor",
+                  "positionWorldMetersXYZ": [
+                    -1.4249167442321777,
+                    0.015000035054981709,
+                    -2.0356085300445557
+                  ],
+                  "rotationLocalRadiansXYZ": [
+                    0,
+                    0.6107259643892083,
+                    0
+                  ],
+                  "scaleLocalXYZ": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "isVisibleLocal": true,
+                  "isVisibleEffective": true,
+                  "motion": {
+                    "phase": "grounded",
+                    "velocityWorldMetersPerSecondXYZ": [
+                      0,
+                      -0.005997418891638517,
+                      0
+                    ],
+                    "isGrounded": true,
+                    "collisionEntityIds": [
+                      "ground"
+                    ]
+                  },
+                  "animation": {
+                    "actionId": "idle",
+                    "clipName": "idle",
+                    "timeSeconds": 1.1500000000000008
+                  },
+                  "controlOwners": [
+                    {
+                      "channel": "locomotion",
+                      "ownerKind": "player-input"
+                    }
+                  ]
+                }
+              ],
+              "errors": []
+            },
+            "physics": {
+              "engine": "rapier",
+              "entityCount": 2,
+              "colliderCount": 2,
+              "triangleCount": 2696,
+              "entities": [
+                {
+                  "id": "ground",
+                  "kind": "fixed",
+                  "colliderCount": 1,
+                  "triangleCount": 2696
+                },
+                {
+                  "id": "player",
+                  "kind": "character",
+                  "colliderCount": 1,
+                  "triangleCount": 0
+                }
+              ],
+              "diagnostics": []
+            },
+            "inputTranscript": [
+              {
+                "type": "keydown",
+                "code": "KeyW",
+                "repeat": false,
+                "simulationTick": 0
+              },
+              {
+                "type": "keyup",
+                "code": "KeyW",
+                "repeat": false,
+                "simulationTick": 65
+              },
+              {
+                "type": "keydown",
+                "code": "KeyS",
+                "repeat": false,
+                "simulationTick": 65
+              },
+              {
+                "type": "keyup",
+                "code": "KeyS",
+                "repeat": false,
+                "simulationTick": 65
+              }
+            ]
+          },
+          "objects": [
+            {
+              "uuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "name": "",
+              "type": "Scene",
+              "parentUuid": null,
+              "positionMetersXYZ": [
+                0,
+                0,
+                0
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -30,
+                  -0.20000000149011612,
+                  -30
+                ],
+                "maximumMetersXYZ": [
+                  30,
+                  1.8208114010474212,
+                  30
+                ]
+              }
+            },
+            {
+              "uuid": "f4149ed7-97b4-448a-80f3-332dc8bce1f6",
+              "name": "",
+              "type": "HemisphereLight",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                1,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "8a5c0298-81b4-4d2a-a29d-8bd8f35c096d",
+              "name": "",
+              "type": "Mesh",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                0,
+                -0.1,
+                0
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -30,
+                  -0.20000000149011612,
+                  -30
+                ],
+                "maximumMetersXYZ": [
+                  30,
+                  1.4901161138336505e-9,
+                  30
+                ]
+              }
+            },
+            {
+              "uuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "name": "humanoid.g-bot",
+              "type": "Group",
+              "parentUuid": "1ae6d49c-a78c-4f2d-a2d6-6aa38c34b622",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023296542088262144,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            },
+            {
+              "uuid": "c44e54ba-64d3-4794-b957-7a40a2713d7a",
+              "name": "",
+              "type": "Group",
+              "parentUuid": "bfdfa624-d331-4159-9441-5315a2804db5",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023296542088262144,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            },
+            {
+              "uuid": "d936143b-3f2a-44e1-a3a3-70fb325fb0f9",
+              "name": "Scene",
+              "type": "Group",
+              "parentUuid": "c44e54ba-64d3-4794-b957-7a40a2713d7a",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023296542088262144,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            },
+            {
+              "uuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "name": "Armature",
+              "type": "Object3D",
+              "parentUuid": "d936143b-3f2a-44e1-a3a3-70fb325fb0f9",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023296542088262144,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            },
+            {
+              "uuid": "b6a66f28-3882-460f-9d11-ed50f1d7d2e5",
+              "name": "Beta_Joints",
+              "type": "SkinnedMesh",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7089895601332568,
+                  0.023296542088262144,
+                  -2.2401953612330314
+                ],
+                "maximumMetersXYZ": [
+                  -1.19880897367679,
+                  1.609541167371729,
+                  -1.8797607400983722
+                ]
+              }
+            },
+            {
+              "uuid": "88daa472-9a2f-459f-aeba-eb64b9bce0f3",
+              "name": "Beta_Surface",
+              "type": "SkinnedMesh",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                -1.4249167442321777,
+                0.015000035054981709,
+                -2.0356085300445557
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": {
+                "minimumMetersXYZ": [
+                  -1.7634193728697585,
+                  0.023325797259321733,
+                  -2.2474462206955965
+                ],
+                "maximumMetersXYZ": [
+                  -1.1910993508687393,
+                  1.8208114010474212,
+                  -1.8657894417697964
+                ]
+              }
+            },
+            {
+              "uuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "name": "mixamorigHips",
+              "type": "Bone",
+              "parentUuid": "9f553950-9267-4500-8662-21e07dd8d815",
+              "positionMetersXYZ": [
+                -1.433830178126292,
+                1.0577488680236118,
+                -2.04834214178415
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": null
+            },
+            {
+              "uuid": "083d161c-132e-4b2b-848c-ff82f0de7e5f",
+              "name": "mixamorigSpine",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                -1.4367393248697404,
+                1.1592733127519927,
+                -2.041093682516254
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c27ce2da-876f-4ef3-b02d-0dbad97f7986",
+              "name": "mixamorigSpine1",
+              "type": "Bone",
+              "parentUuid": "083d161c-132e-4b2b-848c-ff82f0de7e5f",
+              "positionMetersXYZ": [
+                -1.4302505061056086,
+                1.2581998922866258,
+                -2.0277978670254324
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "name": "mixamorigSpine2",
+              "type": "Bone",
+              "parentUuid": "c27ce2da-876f-4ef3-b02d-0dbad97f7986",
+              "positionMetersXYZ": [
+                -1.4229653485093594,
+                1.3506544770478386,
+                -2.0183551377304036
+              ],
+              "visible": true,
+              "childCount": 3,
+              "bounds": null
+            },
+            {
+              "uuid": "1dc97788-24b3-4eab-ad2a-22bc4348c582",
+              "name": "mixamorigNeck",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                -1.4097685801560362,
+                1.518596573651525,
+                -2.010275696000336
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "12f67c8d-1792-49eb-af98-aa6c56452b92",
+              "name": "mixamorigHead",
+              "type": "Bone",
+              "parentUuid": "1dc97788-24b3-4eab-ad2a-22bc4348c582",
+              "positionMetersXYZ": [
+                -1.4213195622342223,
+                1.6114368054767891,
+                -2.0382321701315087
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c934b2a7-7e9b-47e9-b98e-d8a45ade6b7b",
+              "name": "mixamorigHeadTop_End",
+              "type": "Bone",
+              "parentUuid": "12f67c8d-1792-49eb-af98-aa6c56452b92",
+              "positionMetersXYZ": [
+                -1.4525866828935576,
+                1.8316422034437432,
+                -2.106957603793019
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "07c7847f-3191-47d5-9916-18d2db9e9213",
+              "name": "mixamorigRightShoulder",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                -1.3710946399565371,
+                1.4595702907885948,
+                -2.0299749484372027
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c5698b8c-2601-48e6-87dc-627583f2a5fa",
+              "name": "mixamorigRightArm",
+              "type": "Bone",
+              "parentUuid": "07c7847f-3191-47d5-9916-18d2db9e9213",
+              "positionMetersXYZ": [
+                -1.2854981969630728,
+                1.4246668175461694,
+                -2.086557705055841
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "e4bd5b49-e047-4e8c-b336-8551bf3159b4",
+              "name": "mixamorigRightForeArm",
+              "type": "Bone",
+              "parentUuid": "c5698b8c-2601-48e6-87dc-627583f2a5fa",
+              "positionMetersXYZ": [
+                -1.2473732182460031,
+                1.1547427948329623,
+                -2.1431495354571797
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "name": "mixamorigRightHand",
+              "type": "Bone",
+              "parentUuid": "e4bd5b49-e047-4e8c-b336-8551bf3159b4",
+              "positionMetersXYZ": [
+                -1.2409033165553243,
+                0.8790276560123336,
+                -2.207892095696252
+              ],
+              "visible": true,
+              "childCount": 5,
+              "bounds": null
+            },
+            {
+              "uuid": "4cc58348-0e2d-47f8-bed7-9f5a6ee8f8e9",
+              "name": "mixamorigRightHandThumb1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                -1.2721741131420807,
+                0.8548943724676407,
+                -2.2116625672198627
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "eab31070-504a-4c4d-8403-29cc6f0ca314",
+              "name": "mixamorigRightHandThumb2",
+              "type": "Bone",
+              "parentUuid": "4cc58348-0e2d-47f8-bed7-9f5a6ee8f8e9",
+              "positionMetersXYZ": [
+                -1.2972641486732335,
+                0.821352808112506,
+                -2.2121318063757105
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b46463cb-d14d-4fde-b40b-d77988c773c2",
+              "name": "mixamorigRightHandThumb3",
+              "type": "Bone",
+              "parentUuid": "eab31070-504a-4c4d-8403-29cc6f0ca314",
+              "positionMetersXYZ": [
+                -1.2979085695999322,
+                0.7872306614234735,
+                -2.2105968487183194
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "07223612-7ff4-4787-bdd3-db8016661abc",
+              "name": "mixamorigRightHandThumb4",
+              "type": "Bone",
+              "parentUuid": "b46463cb-d14d-4fde-b40b-d77988c773c2",
+              "positionMetersXYZ": [
+                -1.295173599028476,
+                0.7624242314643525,
+                -2.2169384477596776
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "df1c7a16-5b0e-4c6d-b13d-57c6aad4cdba",
+              "name": "mixamorigRightHandIndex1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                -1.2634908685016384,
+                0.789605458219547,
+                -2.2259763104203625
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8cc1d218-940c-40c3-8f8c-696ca124185d",
+              "name": "mixamorigRightHandIndex2",
+              "type": "Bone",
+              "parentUuid": "df1c7a16-5b0e-4c6d-b13d-57c6aad4cdba",
+              "positionMetersXYZ": [
+                -1.2668076469157639,
+                0.7527672942880913,
+                -2.22695349920726
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "66c87fa8-d498-4b9c-bf3f-c77eeecf7078",
+              "name": "mixamorigRightHandIndex3",
+              "type": "Bone",
+              "parentUuid": "8cc1d218-940c-40c3-8f8c-696ca124185d",
+              "positionMetersXYZ": [
+                -1.2731866016151074,
+                0.7258530457576753,
+                -2.220084353880303
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "530da319-609d-4f98-835c-68c62cb167de",
+              "name": "mixamorigRightHandIndex4",
+              "type": "Bone",
+              "parentUuid": "66c87fa8-d498-4b9c-bf3f-c77eeecf7078",
+              "positionMetersXYZ": [
+                -1.2809384811037992,
+                0.70116452561052,
+                -2.21014024464744
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "9b23bcf2-9936-436d-8a0f-068ad1a11c6c",
+              "name": "mixamorigRightHandMiddle1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                -1.241639905068859,
+                0.7843410558974623,
+                -2.218881996530824
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5b6b720c-383c-498d-b45d-5fae4c495785",
+              "name": "mixamorigRightHandMiddle2",
+              "type": "Bone",
+              "parentUuid": "9b23bcf2-9936-436d-8a0f-068ad1a11c6c",
+              "positionMetersXYZ": [
+                -1.2458689219723946,
+                0.7478794374045534,
+                -2.21422618881022
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "55cc570f-d09a-40e2-ad0f-3afa36e99eae",
+              "name": "mixamorigRightHandMiddle3",
+              "type": "Bone",
+              "parentUuid": "5b6b720c-383c-498d-b45d-5fae4c495785",
+              "positionMetersXYZ": [
+                -1.2531148170416437,
+                0.7216114935982901,
+                -2.2029242349980898
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "99a75a79-474d-4926-bb64-1b80ef0e5bb6",
+              "name": "mixamorigRightHandMiddle4",
+              "type": "Bone",
+              "parentUuid": "55cc570f-d09a-40e2-ad0f-3afa36e99eae",
+              "positionMetersXYZ": [
+                -1.263711166682757,
+                0.700966834207008,
+                -2.1847645936555686
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "f9fa7177-8242-4449-8cbb-a35965a73653",
+              "name": "mixamorigRightHandRing1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                -1.2260510351623986,
+                0.7872947273857167,
+                -2.208171790403728
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "50dd1077-2af4-4175-945e-bc460c325a9e",
+              "name": "mixamorigRightHandRing2",
+              "type": "Bone",
+              "parentUuid": "f9fa7177-8242-4449-8cbb-a35965a73653",
+              "positionMetersXYZ": [
+                -1.2311379289992241,
+                0.7546694690036958,
+                -2.20098382847787
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "82a22071-2880-47cc-8a9f-9b9c803828c5",
+              "name": "mixamorigRightHandRing3",
+              "type": "Bone",
+              "parentUuid": "50dd1077-2af4-4175-945e-bc460c325a9e",
+              "positionMetersXYZ": [
+                -1.2397864043421143,
+                0.7313013630160135,
+                -2.1863493819927347
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "b540140a-1c43-4b07-9a4d-95a264978749",
+              "name": "mixamorigRightHandRing4",
+              "type": "Bone",
+              "parentUuid": "82a22071-2880-47cc-8a9f-9b9c803828c5",
+              "positionMetersXYZ": [
+                -1.2502225488717211,
+                0.7157773330451345,
+                -2.1677369671594975
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "ea929a2c-cac1-4c15-863f-6f5eddde975e",
+              "name": "mixamorigRightHandPinky1",
+              "type": "Bone",
+              "parentUuid": "1602cae4-7fb6-4590-9108-fe9e043185ce",
+              "positionMetersXYZ": [
+                -1.2119060922643057,
+                0.7957621223239505,
+                -2.1930006390861703
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "86b0f6e2-bb99-49da-a00a-c0b3bddedb7b",
+              "name": "mixamorigRightHandPinky2",
+              "type": "Bone",
+              "parentUuid": "ea929a2c-cac1-4c15-863f-6f5eddde975e",
+              "positionMetersXYZ": [
+                -1.2181808650759534,
+                0.7621715657048534,
+                -2.181673161190742
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "2685a377-4139-4fdc-b0ee-5df9edbc5ebd",
+              "name": "mixamorigRightHandPinky3",
+              "type": "Bone",
+              "parentUuid": "86b0f6e2-bb99-49da-a00a-c0b3bddedb7b",
+              "positionMetersXYZ": [
+                -1.2243491968125504,
+                0.7457525675965225,
+                -2.170125075800745
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "dcc0200d-1c00-44d2-a144-c6334271cf31",
+              "name": "mixamorigRightHandPinky4",
+              "type": "Bone",
+              "parentUuid": "2685a377-4139-4fdc-b0ee-5df9edbc5ebd",
+              "positionMetersXYZ": [
+                -1.23243263458805,
+                0.7336635437341168,
+                -2.154757354121871
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "0e9960c9-85d1-4e34-ae94-2ad3cb303a5e",
+              "name": "mixamorigLeftShoulder",
+              "type": "Bone",
+              "parentUuid": "b68de306-fe17-4eae-bb26-b9830ca85dd5",
+              "positionMetersXYZ": [
+                -1.4489667417227485,
+                1.4633923511978788,
+                -1.9822670357839696
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "a669c5b7-4972-4435-b61e-eacfdb62eaf5",
+              "name": "mixamorigLeftArm",
+              "type": "Bone",
+              "parentUuid": "0e9960c9-85d1-4e34-ae94-2ad3cb303a5e",
+              "positionMetersXYZ": [
+                -1.5432529360204499,
+                1.4417465879207947,
+                -1.9334086017870278
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "28708afa-4d2d-4792-beb9-956cfe3b5e93",
+              "name": "mixamorigLeftForeArm",
+              "type": "Bone",
+              "parentUuid": "a669c5b7-4972-4435-b61e-eacfdb62eaf5",
+              "positionMetersXYZ": [
+                -1.6072012629216055,
+                1.1709087718594162,
+                -1.9248891932265677
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "name": "mixamorigLeftHand",
+              "type": "Bone",
+              "parentUuid": "28708afa-4d2d-4792-beb9-956cfe3b5e93",
+              "positionMetersXYZ": [
+                -1.6715415447032937,
+                0.8950286277920475,
+                -1.9232281951309866
+              ],
+              "visible": true,
+              "childCount": 5,
+              "bounds": null
+            },
+            {
+              "uuid": "39db625b-201b-425d-97b8-2d9f872b1ed3",
+              "name": "mixamorigLeftHandThumb1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -1.6728508382203218,
+                0.8708065124062736,
+                -1.9546505862199413
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "88709668-4b37-42e1-8e6e-022d7c340be3",
+              "name": "mixamorigLeftHandThumb2",
+              "type": "Bone",
+              "parentUuid": "39db625b-201b-425d-97b8-2d9f872b1ed3",
+              "positionMetersXYZ": [
+                -1.6712444683721737,
+                0.8362543758194713,
+                -1.9782458924732975
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8f81c81e-6ef0-4c78-a95c-f6a12489a4f1",
+              "name": "mixamorigLeftHandThumb3",
+              "type": "Bone",
+              "parentUuid": "88709668-4b37-42e1-8e6e-022d7c340be3",
+              "positionMetersXYZ": [
+                -1.6714986828637255,
+                0.8021053452610553,
+                -1.9797655121145241
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "e2cffec2-503b-46c0-95e4-0c0b0d8e83a3",
+              "name": "mixamorigLeftHandThumb4",
+              "type": "Bone",
+              "parentUuid": "8f81c81e-6ef0-4c78-a95c-f6a12489a4f1",
+              "positionMetersXYZ": [
+                -1.677797467344143,
+                0.7770850871969428,
+                -1.9792598985128178
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "9c0f5ca6-205b-4b0b-ae6b-1db445f7e430",
+              "name": "mixamorigLeftHandIndex1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -1.6896822939510205,
+                0.8059676378947469,
+                -1.9471975226195786
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "d64825e4-7b23-4c50-acfd-dcf8ddf022e6",
+              "name": "mixamorigLeftHandIndex2",
+              "type": "Bone",
+              "parentUuid": "9c0f5ca6-205b-4b0b-ae6b-1db445f7e430",
+              "positionMetersXYZ": [
+                -1.6907742339779324,
+                0.7691342797584612,
+                -1.9505298997289433
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "a47bfce2-7681-4c8b-9e6d-a3bd7a818aee",
+              "name": "mixamorigLeftHandIndex3",
+              "type": "Bone",
+              "parentUuid": "d64825e4-7b23-4c50-acfd-dcf8ddf022e6",
+              "positionMetersXYZ": [
+                -1.683572836063912,
+                0.742105053839386,
+                -1.9559904297069854
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "9c2323a0-89b9-40f3-b904-fe25f3307475",
+              "name": "mixamorigLeftHandIndex4",
+              "type": "Bone",
+              "parentUuid": "a47bfce2-7681-4c8b-9e6d-a3bd7a818aee",
+              "positionMetersXYZ": [
+                -1.6731145324702008,
+                0.7172302053010704,
+                -1.9624590821203916
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "fa6f812a-5f74-4132-85c5-e90815ee1c86",
+              "name": "mixamorigLeftHandMiddle1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -1.6849040472838952,
+                0.8006479366779631,
+                -1.9247392402423613
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "daf31afe-b810-4880-bcc0-c198f3585c7b",
+              "name": "mixamorigLeftHandMiddle2",
+              "type": "Bone",
+              "parentUuid": "fa6f812a-5f74-4132-85c5-e90815ee1c86",
+              "positionMetersXYZ": [
+                -1.6802898824577543,
+                0.7641107344685399,
+                -1.9283080773484067
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5da2fac4-d1eb-4a57-b8c7-d8c1c7d72003",
+              "name": "mixamorigLeftHandMiddle3",
+              "type": "Bone",
+              "parentUuid": "daf31afe-b810-4880-bcc0-c198f3585c7b",
+              "positionMetersXYZ": [
+                -1.6685754808293973,
+                0.7376639566849598,
+                -1.9341034381081093
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "80b8d63e-1d5b-4a57-9752-6258cbc8a2af",
+              "name": "mixamorigLeftHandMiddle4",
+              "type": "Bone",
+              "parentUuid": "5da2fac4-d1eb-4a57-b8c7-d8c1c7d72003",
+              "positionMetersXYZ": [
+                -1.6495356319080974,
+                0.7166891268140483,
+                -1.9424390313677267
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "fcf14b4b-8062-4140-8341-57f750b4ba76",
+              "name": "mixamorigLeftHandRing1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -1.675696462816727,
+                0.803411331772527,
+                -1.9081854346987746
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "15904ced-889e-407f-a0f2-fd85c96c4152",
+              "name": "mixamorigLeftHandRing2",
+              "type": "Bone",
+              "parentUuid": "fcf14b4b-8062-4140-8341-57f750b4ba76",
+              "positionMetersXYZ": [
+                -1.6689067459631775,
+                0.7728932666417785,
+                -1.9120329050765525
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "c96ec23a-ed88-4b0d-a89d-cc76eeebe3de",
+              "name": "mixamorigLeftHandRing3",
+              "type": "Bone",
+              "parentUuid": "15904ced-889e-407f-a0f2-fd85c96c4152",
+              "positionMetersXYZ": [
+                -1.6533586888328144,
+                0.7488027720276208,
+                -1.91897242370535
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "df68d17b-b3f2-4b95-bec4-c769b44e7e9e",
+              "name": "mixamorigLeftHandRing4",
+              "type": "Bone",
+              "parentUuid": "c96ec23a-ed88-4b0d-a89d-cc76eeebe3de",
+              "positionMetersXYZ": [
+                -1.6338162820419768,
+                0.7329538174854823,
+                -1.9271053455910032
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "381a3754-f642-4ddb-b05c-9b62ba93de12",
+              "name": "mixamorigLeftHandPinky1",
+              "type": "Bone",
+              "parentUuid": "fb107c66-5558-48d2-8ebc-adf2acbfb3d4",
+              "positionMetersXYZ": [
+                -1.6617624381974596,
+                0.8115611375231544,
+                -1.892649505299681
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "11608ed8-d802-4ea7-9cc0-f6d865260257",
+              "name": "mixamorigLeftHandPinky2",
+              "type": "Bone",
+              "parentUuid": "381a3754-f642-4ddb-b05c-9b62ba93de12",
+              "positionMetersXYZ": [
+                -1.6502410747282061,
+                0.7777958476257566,
+                -1.8974621522245214
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "5d5862a3-675f-479a-ae8e-86423345f15a",
+              "name": "mixamorigLeftHandPinky3",
+              "type": "Bone",
+              "parentUuid": "11608ed8-d802-4ea7-9cc0-f6d865260257",
+              "positionMetersXYZ": [
+                -1.6382726371899674,
+                0.7611973220497628,
+                -1.902178832626407
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "9a07257f-4bb4-4d8b-9a52-49175acd0559",
+              "name": "mixamorigLeftHandPinky4",
+              "type": "Bone",
+              "parentUuid": "5d5862a3-675f-479a-ae8e-86423345f15a",
+              "positionMetersXYZ": [
+                -1.6221498393293008,
+                0.7488127154167029,
+                -1.9083801845992983
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "88a68eb6-25bb-428b-a2de-9681c62b6065",
+              "name": "mixamorigRightUpLeg",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                -1.3529082227394604,
+                0.9943952685921573,
+                -2.079792144772641
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "1b2785f5-64f5-42ae-92f6-398fc601e60e",
+              "name": "mixamorigRightLeg",
+              "type": "Bone",
+              "parentUuid": "88a68eb6-25bb-428b-a2de-9681c62b6065",
+              "positionMetersXYZ": [
+                -1.3672527919326087,
+                0.5515941074699819,
+                -2.1043742249936397
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "429b5d38-1960-4614-ab07-5a7b7c0ac673",
+              "name": "mixamorigRightFoot",
+              "type": "Bone",
+              "parentUuid": "1b2785f5-64f5-42ae-92f6-398fc601e60e",
+              "positionMetersXYZ": [
+                -1.3334999641640792,
+                0.11094172023080784,
+                -2.0499795402328367
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "ae9d2cbe-e17a-468b-a0e6-3cb607838399",
+              "name": "mixamorigRightToeBase",
+              "type": "Bone",
+              "parentUuid": "429b5d38-1960-4614-ab07-5a7b7c0ac673",
+              "positionMetersXYZ": [
+                -1.3488213341770747,
+                0.02365502459830386,
+                -2.1559835947924606
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "615b7273-1603-402d-9577-af6a5d4e37b6",
+              "name": "mixamorigRightToe_End",
+              "type": "Bone",
+              "parentUuid": "ae9d2cbe-e17a-468b-a0e6-3cb607838399",
+              "positionMetersXYZ": [
+                -1.3619892218787577,
+                0.03527360475952779,
+                -2.2470877469140578
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            },
+            {
+              "uuid": "2feaea6c-f309-4ee6-b426-7191e1bb86ae",
+              "name": "mixamorigLeftUpLeg",
+              "type": "Bone",
+              "parentUuid": "c9047887-7dc7-4b49-861d-f15ba522aed3",
+              "positionMetersXYZ": [
+                -1.4961282465914214,
+                0.9846064198833259,
+                -2.000172366575945
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "be21868a-2fbf-45ee-9f00-ac447d6c493f",
+              "name": "mixamorigLeftLeg",
+              "type": "Bone",
+              "parentUuid": "2feaea6c-f309-4ee6-b426-7191e1bb86ae",
+              "positionMetersXYZ": [
+                -1.5870209640751196,
+                0.5535282263350306,
+                -2.0530115955544685
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "ff67bb2a-715a-402a-8aea-aaff64d0a49b",
+              "name": "mixamorigLeftFoot",
+              "type": "Bone",
+              "parentUuid": "be21868a-2fbf-45ee-9f00-ac447d6c493f",
+              "positionMetersXYZ": [
+                -1.607229798032535,
+                0.11259806781420001,
+                -1.9943147378904222
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "38f8639d-774d-4052-9fdc-6a91155bbf82",
+              "name": "mixamorigLeftToeBase",
+              "type": "Bone",
+              "parentUuid": "ff67bb2a-715a-402a-8aea-aaff64d0a49b",
+              "positionMetersXYZ": [
+                -1.6878922845894266,
+                0.024911363927219113,
+                -2.0642803056113044
+              ],
+              "visible": true,
+              "childCount": 1,
+              "bounds": null
+            },
+            {
+              "uuid": "8a207fc1-f8c5-47b5-9edd-c84946d59a98",
+              "name": "mixamorigLeftToe_End",
+              "type": "Bone",
+              "parentUuid": "38f8639d-774d-4052-9fdc-6a91155bbf82",
+              "positionMetersXYZ": [
+                -1.7575578137862173,
+                0.03254795525257395,
+                -2.1250814082250336
+              ],
+              "visible": true,
+              "childCount": 0,
+              "bounds": null
+            }
+          ],
+          "renderer": {
+            "widthPixels": 960,
+            "heightPixels": 540,
+            "memory": {
+              "geometries": 3,
+              "textures": 3
+            },
+            "render": {
+              "frame": 89,
+              "calls": 3,
+              "triangles": 49124,
+              "points": 0,
+              "lines": 0
+            }
+          }
+        },
+        "frameTiming": {
+          "frameCount": 72,
+          "maximumFrameDeltaSeconds": 2
+        }
+      },
+      "platformScratchIsolation": {
+        "syntheticFixture": true,
+        "rootSymlinkNotTraversed": true,
+        "hostJsonMutationKeepsSourceHash": true,
+        "hostJsonMutationKeepsWorldBuildHash": true
+      },
+      "episodeOnlyWorldReuse": true
+    }
+  ],
+  "postRunInstalledClosure": "passed",
+  "finishedAt": "2026-09-06T15:07:25.555Z"
+}
