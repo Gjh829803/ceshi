@@ -1,5 +1,9 @@
 # Three Episode 小批验证后的异常路径复查
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 结论：仍有三个阻塞自动生产的问题。本轮没有修改实现、启动 GPU 或提交生成任务。上一轮白膜小尾批成功不能证明后处理失败、运行中取消和控制器崩溃恢复正确。
 
 ## 1. 审查元数据

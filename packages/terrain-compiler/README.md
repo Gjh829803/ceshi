@@ -1,5 +1,9 @@
 # `@whitebox-world/terrain-compiler`
 
+> Historical package documentation. This package remains pending a separate code
+> dependency review; it does not define the current Three SDK. See the
+> [current architecture](../../docs/three-sdk-architecture.md).
+
 Deterministic trusted-Host compilation for image-generated WorldKit terrain Height
 Intent. This package turns an untrusted signed-color PNG plus Canonical AuthoringSpec V4
 constraints into finite metric height samples and a hash-bound diagnostic report.

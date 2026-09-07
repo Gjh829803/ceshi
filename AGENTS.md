@@ -4,8 +4,19 @@ This branch consolidates the current Three Creator production lane, the Three
 SDK and the independent Three Episode pipeline. The current user explicitly
 excludes the old Babylon production workflow from this integration.
 
-Read [the branch guide](docs/three-sdk-data-production.md) for entry points,
+Read [the architecture](docs/three-sdk-architecture.md) and [documentation index](docs/README.md),
+then [the branch guide](docs/three-sdk-data-production.md) for entry points,
 source provenance, implemented boundaries and verification commands.
+
+## Documentation authority
+
+Current design is ordinary Three authoring, one SDK runtime owner and an independent
+production pipeline. Keep public API guidance with actual contracts and the SDK
+README; do not recreate duplicate scene languages or separate API drafts.
+Old packages, scripts, skills and the blueprint Site remain pending separate code
+cleanup. Their presence and dated evidence do not override the current Three lane.
+Documentation-only changes require link/claim/diff checks and direct documentation
+consumer checks where applicable, not unrelated runtime or cloud replay.
 
 ## Current responsibilities
 

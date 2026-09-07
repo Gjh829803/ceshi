@@ -6,7 +6,7 @@ Review exact base `<BASE_SHA>` against exact head `<HEAD_SHA>` from remote branc
 
 Requirements:
 
-1. Read `AGENTS.md`, `docs/reviews/full-dimension-review-protocol.md`, and
+1. Read `AGENTS.md`, `docs/three-sdk-architecture.md`, `docs/three-sdk-data-production.md`, `docs/reviews/full-dimension-review-protocol.md`, and
    `docs/reviews/runtime-deep-review-checklist.md` before reviewing the diff. Read every
    applicable authoritative spec and implementation plan named in the changed files.
 2. Fetch the remote refs and prove both requested SHAs with `git cat-file -t`. Review
@@ -18,7 +18,7 @@ Requirements:
 4. Apply the protocol's required D1-D6 dimensions for the detected review mode. When the
    diff touches physics, movement, input, animation, camera, render scheduling, resource
    ownership, or Browser/CLI runtime behavior, apply the complete runtime checklist and
-   verify engine semantics against the lockfile-installed Babylon/Havok source.
+   verify engine semantics against the lockfile-installed Three/Rapier source.
 5. Search independently for P0/P1/P2 defects. For each finding use the repository's fixed
    block with: priority/title, evidence, expectation, impact, recommendation, and recheck.
    Cite exact file paths and line numbers. Do not report style preferences or hypothetical

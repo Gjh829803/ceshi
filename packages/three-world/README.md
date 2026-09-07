@@ -5,6 +5,11 @@ Create ordinary Three.js geometry and compose the reference camera freely. Impor
 physics world, controlled character, animation, follow camera and command state.
 This is the public v2 API; old engine transports are private.
 
+See the [architecture and responsibilities](../../docs/three-sdk-architecture.md).
+Start with the basic world API below; parameters, actions and tasks are optional
+interfaces for scenes that need them. Creator delivery and Episode scheduling
+remain outside this runtime package.
+
 <!-- topic:getting-started -->
 ## Start a world
 

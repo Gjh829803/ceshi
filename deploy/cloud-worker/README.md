@@ -1,5 +1,9 @@
 # Cloud worker image
 
+> Earlier workflow reference, retained for its existing code and archives.
+> It is not the current Three production entry point; follow the
+> [Three branch guide](../../docs/three-sdk-data-production.md). These instructions do not authorize a new run.
+
 The image contains the pinned WorldKit source tree, the lockfile-resolved pnpm
 workspace, Playwright Chromium, Python/Pillow, ffmpeg, and the AWS CLI. It does
 not contain `.env` files, credentials, generated Scene artifacts, Studio data,

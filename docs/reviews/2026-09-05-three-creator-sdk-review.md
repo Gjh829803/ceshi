@@ -1,5 +1,9 @@
 # Three Creator SDK integration review
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 ## Review metadata
 
 Mode B: implementation review of the experimental Three Creator lane. Frozen

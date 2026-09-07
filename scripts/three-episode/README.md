@@ -160,7 +160,7 @@ GPU workers cache one hash-locked capsule (compressed limit 1 GiB, expanded limi
 performs the complete media download/hash verification. The one-case cloud test
 did not measure a repeated-capsule cache hit or savings across different worlds.
 
-See [implementation and verification](../../docs/superpowers/plans/2026-09-06-three-episode-batch-capture.md).
+See [implementation and verification](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/docs/superpowers/plans/2026-09-06-three-episode-batch-capture.md).
 
 ## Cloud execution
 

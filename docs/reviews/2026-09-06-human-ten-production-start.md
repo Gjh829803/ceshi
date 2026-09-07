@@ -1,5 +1,9 @@
 # Human-ten pre-Seedance 生产启动
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 用户授权：使用 reliable-human-open-ten-20260906 整批生产；使用去 UI、镜头兼容的独立副本；禁止 H100；停在 Seedance 提交前。
 
 ## 输入冻结

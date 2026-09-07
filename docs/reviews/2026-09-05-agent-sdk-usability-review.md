@@ -1,5 +1,9 @@
 # Agent / SDK V2：公开合同易用性审阅
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 日期：2026-09-05。当前阶段为设计审阅；本文不是 SDK 功能实现或运行验收。唯一审阅输出为本文件，不修改运行 SDK、Creator 工具或云端任务。
 
 审阅者了解此前 SDK 和调试历史，因此这不是完全陌生用户的盲测。下文的“首次错误”将专指依据 V2 公开设计写出用例后，第一次类型检查实际返回的错误，不代表新手群体的统计结论。

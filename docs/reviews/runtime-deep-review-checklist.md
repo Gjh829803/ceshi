@@ -1,111 +1,102 @@
-# Runtime deep-review checklist
+# Three Runtime review checklist
 
-Use this checklist for Babylon/Havok runtime changes and for branches that modify input, movement, physics, animation, camera, render scheduling, assets, or runtime protocols. It turns the useful parts of the 2026-08-20 independent review into a repeatable engineering practice.
+Apply this checklist to changes in input, movement, physics, animation, camera,
+render scheduling, assets, lifecycle or runtime protocols. The current design is
+[Three SDK architecture](../three-sdk-architecture.md). Verify installed Three
+and Rapier semantics; earlier engine checklists are not this branch's authority.
 
-## 1. Establish the authority map
+## 1. Map state owners and consumers
 
-Before reading individual functions, write down the single owner and downstream consumers for each relevant state:
-
-| State | Expected authority | Typical consumers |
+| State | Owner | Consumers to check |
 | --- | --- | --- |
-| Ground support | Havok character support query | jump eligibility, gravity, action selection |
-| Water membership | semantic water sensor | movement-mode selection |
-| Subject facing | motion kernel/controller | visual root, snapshot, subject-relative input |
-| Camera orbit | Camera Director | Babylon camera, Browser controls, snapshot |
-| Active action | semantic action resolver | animation player, snapshot |
-| Simulation time | fixed-step accumulator/tick | motion, animation, deterministic protocol |
-| Resource lifetime | explicit owner stack/cache lease | instance, scene, engine disposal |
+| Character support and collision | Rapier world / character controller | gravity, jump eligibility, motion snapshot |
+| Locomotion presentation | SDK locomotion resolver and asset animation | rendered gait, walk/run phase, jump/fall presentation |
+| Controlled actor input and facing | SDK input/movement path | physics, animation, camera-relative movement |
+| Camera | authored camera or the single SDK follow owner | browser view, Creator opening/triview, Episode capture |
+| Simulation time | one fixed-step SDK clock | input edges, physics, animation, commands, Episode stepping |
+| Command and parameter channels | SDK registry / operations | gameplay, Agent tools, snapshots, reset |
+| Source pixels and UI mapping | renderer + Presentation | pure model input, displayed output, mapped HUD |
+| Resource lifetime | explicit instance/asset/presentation owner | reset, disposal, asynchronous completion |
 
-Search for a second derivation of the same state. Height sampling must not also decide whether physics says the subject is supported; camera code must not also rotate the subject; render frames must not directly define simulation speed.
+Do not infer physical support from animation, visual color, names or a substitute
+floor. Brief locomotion presentation grace must not change physics, gravity or
+jump eligibility. Direct visual writes must not overwrite managed roots or camera.
 
-## 2. Check installed engine semantics
+## 2. Verify actual dependency semantics
 
-When correctness depends on Babylon or Havok behavior:
+Record installed versions and inspect the relevant implementation/types before
+asserting coordinate order, KCC behavior, collision timing, animation sampling or
+disposal semantics. Use a small failing reproducer for a confirmed defect.
+Check exact consumers after changing a shared contract; type declarations alone
+do not prove that the engine or browser implements it.
 
-1. Record the installed package version.
-2. Read the installed implementation or authoritative API documentation for the exact method.
-3. Add a small executable probe or regression test when coordinate order, interpolation, controller integration, cloning, animation sampling, or disposal order is not obvious.
-4. Preserve the discovered assumption in a focused test rather than a comment alone.
+## 3. Exercise transitions and asymmetric cases
 
-Typical traps include Euler composition order, heightfield axes, character-controller gravity, support-query timing, skeleton clone isolation, animation-group frame units, and cleanup methods that can throw.
+- Motion: steps, slopes, edges, wall sliding, unsupported starts, falling,
+  landing, jump hold/release/repress, actor collision and control switching.
+- Animation: real walk/run clips, first-key timestamps, phase transitions,
+  single-tick speed/contact changes, jump/fall, manual playback and reset.
+- Camera: original pose/FOV/roll, first-input follow activation, orbit/drag,
+  obstruction retraction/recovery and a complete target with rotated parents.
+- Time/lifecycle: varied render intervals, pause/start, zero-tick frame reads,
+  reset with held keys, cancellation and stale async completion.
+- Geometry/assets: asymmetric shapes and transforms, collision updates,
+  multiple instances, shared resources, partial construction and failed cleanup.
+- Presentation: UI excluded from source pixels, independent model output,
+  input focus, known/unknown frame mapping, reset epochs and external track ownership.
 
-## 3. Exercise adversarial data and transitions
+Assert the immediate state at each boundary, not only the state after another tick.
 
-Do not use only symmetric or steady-state fixtures.
+## 4. Preserve Creator and Episode together
 
-- Geometry: non-square terrain, asymmetric height values, multi-axis rotations, edges, steep triangle-interpolated slopes, and colliders at non-zero offsets.
-- Motion: unsupported spawn, walking off a raised surface, landing, jumping, holding Jump, releasing and pressing again, and switching the controlled subject while moving.
-- Camera/input: orbit without subject rotation, movement after orbit, reset while keys are held, pointer/wheel/keyboard parity, and immediate snapshot after rebind.
-- Time: deterministic fixed input plus 30, 60, and 120 Hz-like render intervals, long-frame capping, pause, reset, and zero-tick calls.
-- Assets: two instances from one asset, independent skeletons/clips/sockets, missing mappings, malformed inventory, partial construction, and retry after rejection.
-- Lifetime: every owned resource disposed exactly once even when a sibling throws; raw provider messages and causes must not cross public diagnostics.
+Creator retains its actual self-check input/video and opening/representative
+capture contract. Episode retains reset-baseline initialization, segment start
+validation, input-driven motion, fixed stepping and pure renderer capture.
 
-For every transition, assert both sides of the boundary and the immediate state—not only the result after another tick hides a stale value.
+The Host-only Episode port must own the clock during capture and release it
+correctly. Initialization may relocate the start; later route targets must be
+reached through actual input/physics. Preserve successful capture evidence and
+source/runtime identities. Neither side's passing tests prove the other's behavior.
 
-## 4. Review merges semantically
+For merges, compare base, incoming and target implementations of every shared
+owner. List side-specific behavior and verify the combined result. A clean merge
+or typecheck alone is insufficient.
 
-For a branch integration, inspect base, incoming, and target versions of every shared runtime owner.
+## 5. Select evidence for affected inputs
 
-1. Build an authority matrix describing which side owns each behavior.
-2. List behaviors that exist on only one side.
-3. Resolve at the state/behavior level instead of selecting a whole conflicted file.
-4. Add a regression for each behavior that could be silently lost.
-5. Search for stale aliases, duplicate owners, fabricated compatibility refs, and public terminology introduced by either side.
+Use the focused reproducer first. For integrated runtime changes, the standard
+Three closure is:
 
-The merge is complete only when the combined behavior is demonstrated; a clean textual merge or passing typecheck is insufficient.
-
-## 5. Validate evidence at the right layer
-
-- Unit/contract tests prove deterministic state and error behavior.
-- Runtime integration tests prove real Babylon/Havok wiring and resource ownership.
-- Browser conformance proves the host, resolver, camera, input, and rendered output work together.
-- Visual inspection proves that a passing hash corresponds to the intended visible pose or scene, not merely a changed background.
-- Manual interaction is required when the acceptance claim depends on human control feel or physical display hardware.
-
-Evidence reports must name the exact commands, test counts, artifacts inspected, known warnings, and capabilities that remain experimental or unsupported.
-
-## 6. Required completion gates
-
-Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. Root `pnpm test` first runs a census, then the bounded `test:contract` lane and the single-worker `test:resource-heavy` lane; together they cover every discovered Vitest `.test.ts`, including the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses its package-owned Node runner. `pnpm test:independent` has its own fail-closed census and sequentially covers root Node `.test.mjs`, project-local Cursor Python, and the active Site. Browser verifiers, rendered inspection, manual interaction, and production builds remain different evidence layers.
-
-`pnpm test:contract:coverage` is an opt-in coverage diagnostic that reruns the contract lane with instrumentation. Run it only when a coverage claim or test-gap investigation requires it; do not append it to a passing root aggregate as a default duplicate gate.
-
-For changes touching the canonical Babylon runtime, select from this read-only base closure according to the affected contracts:
-
-```bash
+```sh
+pnpm exec vitest run packages/three-world scripts/three-creator scripts/three-episode
+node --test scripts/three-episode/*.test.mjs scripts/cloud/three-episode-scheduling.test.mjs scripts/lib/cloud-production-run.test.mjs
 pnpm typecheck
-pnpm test
-pnpm build
+pnpm test:census
+pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime
 ```
 
-Studio and the independent Node/Site gate are added only when their inputs are affected:
+Add Creator cloud contract tests when its launcher/delivery inputs change, and
+real browser/visual checks for affected capture or interaction claims. Keep cloud
+calls mocked in local contract tests; verification does not authorize production.
+Use the caller's permitted temporary output location for build artifacts.
 
-```bash
-pnpm test:studio
-pnpm test:independent
-```
+Documentation-only changes need whitespace, links and source-claim checks. If a
+README is consumed by the schema tool, also check topic extraction and its focused
+tests. Do not replay runtime/media work for unrelated prose changes.
 
-The tracked CI currently combines the temporary generated Builder bundle check, typecheck, Studio, the complete independent gate, root Vitest aggregate, Playground build, and a final tracked clean-tree assertion. Treat that workflow as an explicit coverage list, not as evidence for Browser/visual/manual lanes that it does not invoke.
+Reuse passing evidence only while its relevant inputs and claim remain unchanged.
+Do not repeat narrow tests already covered by the broader run. Root `pnpm test`,
+independent Node/Python/Site tests, tracked CI, browser capture, visual inspection
+and manual interaction have different scopes; inspect actual commands before
+claiming aggregate coverage. The old Site build is not a Three runtime gate.
 
-Browser and capability verification is a separate evidence layer. The current coverage map includes:
+## 6. Report the limits
 
-```bash
-pnpm verify:canonical
-pnpm verify:placement-layout
-pnpm verify:rigged-subject
-pnpm verify:g-bot-subject
-```
+Record source SHA/tree, commands, exit codes, test counts, inspected artifacts and
+remaining gaps. Separate environment failures, repository defects and unrun checks.
+Do not update goldens or historical artifacts to make a check pass. Preserve any
+user-owned changes, and inspect the final diff for unintended mutations.
 
-Those four commands are read-only by default: they validate exact staging inventory and remove temporary
-evidence without replacing tracked golden directories. Artifact publication requires the corresponding explicit
-`:update` command and authorization to update evidence; reviewers must inspect any resulting diff. Whole-directory
-byte equality is not a contract for screenshots and runtime/session identities.
-
-These lists are coverage maps, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
-
-- runtime or shared-contract changes: focused regression, `typecheck`, root `test`, `build`, and the directly affected Browser/capability verifier;
-- verifier, fixture, or capture changes: that verifier and its focused tests; add `build` only when shipped code or bundling changed;
-- Studio-only changes: Studio tests/build path, without repeating unrelated Vitest or Babylon gates;
-- documentation-only corrections: `git diff --check` plus link/claim inspection, without runtime replay.
-
-After an independent review finds a narrow defect, run its failing reproducer before the fix and its focused regression after the fix. Reopen the entire closure only when the fix changes a cross-cutting public contract, shared runtime authority, dependencies, or build graph. Otherwise rerun only the invalidated evidence. Also run any capability-specific verifier added by the branch. Inspect generated screenshots when visual behavior is part of the claim. A known warning must be classified and tracked; it must not be silently described as success or automatically treated as a blocker.
+A prebuild is not a deployment; a ready Prompt is not a material-complete request;
+a prepared request is not a generated video. Final video acceptance remains
+outside the currently implemented pre-Seedance workflow.

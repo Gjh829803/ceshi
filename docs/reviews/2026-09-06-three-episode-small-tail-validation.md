@@ -1,5 +1,9 @@
 # Three Episode 修复与单卡小尾批验证
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 状态：已修复确认的问题，并完成真实单案例尾批测试及资源回收。自动生产保持暂停。
 
 ## 修复对应关系

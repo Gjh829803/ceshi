@@ -1,15 +1,12 @@
-# Superpowers documentation
+# Maintenance plans and review templates
 
-This is the durable repository documentation authority used by Superpowers 6.3.0:
+Current design lives in [Three SDK architecture](../three-sdk-architecture.md)
+and the [production guide](../three-sdk-data-production.md). Use the
+[actual public API](../../packages/three-world/src/contracts.ts), not a separate
+prototype declaration.
 
-- `specs/` contains reviewed technical designs.
-- `plans/` contains implementation plans.
-- `skills/` contains reusable project-specific workflow guidance.
-
-Current cross-lane scene-authoring authority:
-
-- [`specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`](specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
-  defines the long-term Canonical JSON + Babylon Native Scene + shared SDK Runtime boundary.
-
-Root `.superpowers/` paths are reserved for execution state such as SDD ledgers and
-brainstorming sessions. They are not a parallel source of durable project truth.
+This directory retains the current documentation-cleanup checklist and optional
+[Cursor Cloud review templates](skills/cursor-cloud/README.md). Older completed
+plans, superseded engine designs and duplicate API sketches are available from
+Git history. Remaining JSON source-baseline records are historical evidence, not
+active plans or deployment authorization.

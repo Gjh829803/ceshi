@@ -1,22 +1,21 @@
-# World SDK Blueprint Site
+# Historical World SDK Blueprint Site
 
-This is the repository-owned current architecture publication for Agent Whitebox World SDK. It renders directly from `app/page.tsx`; it does not embed or restore the retired Legacy site bundle.
+This Site renders the earlier architecture from `app/page.tsx`. It is not a
+publication of the current Three SDK design. Its page, build and tests remain
+unchanged pending a separate migration or removal decision.
 
-The public claims follow the active repository authorities:
+The current sources are [Three SDK architecture](../../docs/three-sdk-architecture.md)
+and the [production guide](../../docs/three-sdk-data-production.md). Historical
+numbered-document names displayed in the existing page refer to the repository
+before the documentation cleanup, not current authority.
 
-- `docs/00-project-overview.md` for current product scope and role boundaries;
-- `docs/18-refactor-progress-and-backlog.md` for implementation status;
-- `docs/20-gameplay-integration-contract.md` for the current protocol chain.
+## Existing build
 
-When those authorities change, update the Site and its rendered contract test in the same change. Historical reviews and superseded protocol versions are not publication sources.
+The Site owns a separate npm lockfile and Vinext toolchain. Its existing test
+builds and renders the old architecture page; a pass cannot establish Three
+runtime or production readiness.
 
-## Local verification
-
-Use a supported Node version (`>=22.13`, excluding unsupported odd-numbered releases required by transitive tooling), then run:
-
-```bash
+```sh
 npm ci
 npm test
 ```
-
-`npm test` performs the Vinext production build and server-renders `/`. The test requires the current Canonical V4 → IR V4 → Plan V5 → RuntimeHost → Babylon/Havok → Browser V5/Snapshot V4 chain and rejects any `/legacy/` iframe or asset dependency.

@@ -1,5 +1,9 @@
 # Three SDK / data production integration evidence
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 Branch: `codex/three-sdk-data-production-20260907`.
 
 The branch starts at Episode production `864c2dd2`. Commit `d0c93604` snapshots

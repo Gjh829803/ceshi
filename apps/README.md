@@ -1,9 +1,16 @@
 # Applications
 
-- `playground/` is the Babylon-backed catalog Playground and runtime inspection surface.
-- `studio/` is the local Creator Studio and workflow orchestration application. Its
-  executable sources live under `studio/src/`; static assets and persisted local data
-  remain owned by the application root.
+Current Three entry points:
 
-The public architecture publication is not a workspace application. It lives under
-`sites/world-sdk-blueprint/` and uses its own npm lockfile and Cloudflare build.
+- `three-creator-playground/`: browser host/bridge for Three Creator worlds.
+- `creator-evaluation-site/`: delivered-world browsing and shared review surface;
+  see its [README](creator-evaluation-site/README.md).
+
+`playground/`, `native-scene-playground/` and `studio/` retain earlier runtime and
+workflow implementations. They remain in the workspace pending a separate code
+cleanup; their presence does not make those workflows part of the current Three
+production design.
+
+See the [architecture](../docs/three-sdk-architecture.md) and
+[production guide](../docs/three-sdk-data-production.md). The old blueprint Site
+is a historical publication; this documentation change does not update its page.

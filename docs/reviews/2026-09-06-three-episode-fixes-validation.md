@@ -1,5 +1,9 @@
 # Three Episode 异常路径修复验证 — r13
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 状态：已修复复查报告中的 F1–F3，完成本地、浏览器工具与 Linux 镜像内回归；控制器已更新且保持暂停。没有启动新的录制、样式生成或 Seedance 任务。本报告不声明整体生产无缺陷，也不把替身请求测试描述成云端故障实测。
 
 ## 修复和权威边界

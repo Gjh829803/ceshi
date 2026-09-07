@@ -1,4 +1,7 @@
-# Experimental Three Creator tools
+# Three Creator tools — v0.2 production contract
+
+For design boundaries see [Three SDK architecture](../../docs/three-sdk-architecture.md).
+This branch retains the real self-check recording contract described below.
 
 Both profiles accept ordinary `index.html` + local JavaScript/TypeScript modules.
 Use Three and its addons directly. `three-sdk` additionally provides the fixed

@@ -1,5 +1,9 @@
 # 04 rerecord: remaining gait hesitation
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 ## Finding
 
 The previous KCC/contact-state correction did not address animation timeline

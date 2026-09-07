@@ -1,5 +1,9 @@
 # `@whitebox-world/camera`
 
+> Historical package documentation. This package remains pending a separate code
+> dependency review; it does not define the current Three SDK. See the
+> [current architecture](../../docs/three-sdk-architecture.md).
+
 Provider-neutral Camera Domain for the Canonical runtime.
 
 Named camera presets are modeled as stable `cameraRigProfileRef` values plus a closed `baseMode`
@@ -37,4 +41,4 @@ provider-neutral query port. The Babylon 9.21.2 adapter currently declares
 WorldRuntime projection seam with the committed CharacterMovement transaction output.
 
 The authoritative ownership and selection rules are in
-[`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md#51-canonical-package-boundary).
+[`2026-08-24-context-driven-gameplay-camera-composition-design.md`](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md#51-canonical-package-boundary).

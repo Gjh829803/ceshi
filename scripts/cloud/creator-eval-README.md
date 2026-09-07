@@ -1,5 +1,9 @@
 # Experimental five-case cloud Creator runner
 
+> Earlier workflow reference, retained for its existing code and archives.
+> It is not the current Three production entry point; follow the
+> [Three branch guide](../../docs/three-sdk-data-production.md). These instructions do not authorize a new run.
+
 This launcher uses the existing LWDP `options.codex_bin` field. It does not add a
 runtime profile or modify the deployed CLI, account homes or global environment.
 

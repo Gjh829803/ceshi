@@ -4,6 +4,13 @@
 Three 场景生成、SDK 修复和后续数据生产收拢到一处。现有生产工作树、云任务、
 案例文件和审核数据继续保留在原位置。
 
+## 当前设计依据
+
+[Three SDK 架构](three-sdk-architecture.md) 说明创作自由、运行时职责、公开接口和
+画面/UI 分层。本文负责生产流程与接入边界；组件 README 负责实际用法。
+旧编号设计、Babylon/Native/Block ADR 和独立 API 草案不再作为本分支的指导。
+对应源码包与历史发布站点尚未清理，不应从它们的存在推断当前生产使用它们。
+
 ## 合并来源
 
 | 来源 | 纳入内容 |
@@ -141,6 +148,6 @@ pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtim
 git diff --check
 ```
 
-合并职责与证据要求见 [整合计划](superpowers/plans/2026-09-07-three-sdk-data-production.md)。
+历史合并职责与证据要求见 [整合计划（历史快照）](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/docs/superpowers/plans/2026-09-07-three-sdk-data-production.md)。
 
 本次合并的实际结果见 [整合验证记录](reviews/2026-09-07-three-sdk-data-production-integration.md)。

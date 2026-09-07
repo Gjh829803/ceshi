@@ -1,5 +1,9 @@
 # Human-ten 离线适配与去 UI 验证
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 已完成本地适配；没有运行这批真实案例的录制、规划或生成，也没有更新云端部署。原公开试玩页与冻结交付包不变。
 
 ## 适配内容

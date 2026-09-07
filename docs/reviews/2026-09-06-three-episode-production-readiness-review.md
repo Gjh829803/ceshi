@@ -1,5 +1,9 @@
 # Three Episode 生产就绪复查
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 ## 审查元数据
 
 - 模式：B，最近批量录制改动的只读审查；兼看上游入口与生产就绪缺口，不是整个 SDK 的 C 模式全仓审计。

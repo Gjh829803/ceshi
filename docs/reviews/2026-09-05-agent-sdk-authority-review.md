@@ -1,9 +1,13 @@
 # Agent / SDK v2 独立职责与 Schema 审阅
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 审阅范围：仅设计，不评定当前 SDK 实现通过，不继续运行代码修改或物理实验。
 
-- 设计正文：[Agent / SDK v2](../superpowers/specs/2026-09-05-agent-sdk-contract-v2.md)
-- 拟公开声明：[public-api.d.ts](../superpowers/designs/agent-sdk-v2/public-api.d.ts)
+- 设计正文：[Agent / SDK v2](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/docs/superpowers/specs/2026-09-05-agent-sdk-contract-v2.md)
+- 拟公开声明：[public-api.d.ts](https://github.com/seedleap/agent-whitebox-world-sdk/blob/4256b6fdf06c7ba732e13a7c9aeee553544438e9/docs/superpowers/designs/agent-sdk-v2/public-api.d.ts)
 - 审阅快照 SHA256：正文 `4fb47ed9f329d403352df5bb905dd30a5a5fcf19f202434ee2d4b7186d9f1b0b`；声明 `2f91fa4d4228cd5d09808594bceedf9be08ba3cab8ae03bec35426a2dc5af0d2`。
 
 结论：职责方向成立，但下列合同缺口应在 D0 内闭合，再派发 D1–D6。核心问题是同一实际状态仍可能有两个合法写入口，或正文承诺的失效/接管行为在公开接口中没有对应约定。以下建议不是要求把底层物理参数或基础设施字段交给快模型。

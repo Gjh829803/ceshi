@@ -1,5 +1,9 @@
 # Three SDK v2 implementation and validation
 
+> Historical source-bound review/verification record. Scope and results apply only
+> to the source and artifacts identified below. For current behavior, use the
+> [branch guide](../three-sdk-data-production.md); recheck findings against current code.
+
 Scope: the user-authorized SDK extension implementation, cloud tool availability and five concurrent model cases. The previous D0 contract review remains design history. The core implementation is commit `3a45556f`; the cloud prompt freeze is `89fa9497`. A subsequent viewport fix and its exact runtime identity are recorded by the new cloud lock. This report does not label local fixtures as generated cases.
 
 ## Implemented responsibilities
