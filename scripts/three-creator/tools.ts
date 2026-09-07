@@ -119,7 +119,7 @@ export class ThreeCreatorTools {
     } : {};
     return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
-      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','environment/types.ts','platform/session.ts','runtime.ts'].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),trainingExampleTopic:'independent-world'}:{}),
+      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','control-tuning.ts','environment/types.ts','platform/session.ts','runtime.ts'].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),trainingExampleTopic:'independent-world'}:{}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Paused/reset time is excluded from minimum active-play duration. Fixed XYZ targets measure proximity, never steer or teleport.' };
   }
   async examples(topic: ExampleTopic = 'getting-started', selectedFiles?:readonly string[]) {

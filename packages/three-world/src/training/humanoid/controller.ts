@@ -38,7 +38,7 @@ export function trajectory(tr:Traversal,t:number):Vector3 {
  * step() advances actor data by FIXED_DT; only the host calls q.stepPhysics().
  */
 export class HumanoidController {
-  movementTuning={speedScale:1,accelerationScale:1,airControlScale:1,turnScale:1};
+  movementTuning={speedScale:1,accelerationScale:1,airControlScale:1,turnScale:1,maxSpeed:5.8,slowSpeed:1.45,coastDeceleration:20,jumpSpeed:6.3};
   world: RAPIER.World;
   body: RAPIER.RigidBody;
   capsule: RAPIER.Collider;
@@ -463,9 +463,9 @@ export class HumanoidController {
     const intentTurn=hasInput&&this.lastMoveInput.lengthSq()>.01
       ?Math.atan2(this.lastMoveInput.z*input.x-this.lastMoveInput.x*input.z,this.lastMoveInput.dot(input)):0;
     if((hasInput&&this.animationEvent?.kind==='stop')||(!hasInput&&this.animationEvent?.kind==='start'))this.animationEvent=null;
-    const targetSpeed=(this.stance==='crouch'?(walk?.8:1.5):walk?1.45:sprint?5.8:3.1)*this.movementTuning.speedScale;
+    const targetSpeed=this.stance==='crouch'?(walk?.8:1.5)*this.movementTuning.speedScale:walk?this.movementTuning.slowSpeed:sprint?this.movementTuning.maxSpeed:3.1*this.movementTuning.speedScale;
     const target=input.clone().multiplyScalar(targetSpeed);
-    const accel=this.grounded?(input.lengthSq()?14:20)*this.movementTuning.accelerationScale:5*this.movementTuning.airControlScale;
+    const accel=this.grounded?(input.lengthSq()?14*this.movementTuning.accelerationScale:this.movementTuning.coastDeceleration):5*this.movementTuning.airControlScale;
     const change=target.clone().sub(this.velocity);change.y=0;
     if(change.length()>accel*dt)change.setLength(accel*dt);
     this.velocity.add(change);
@@ -483,7 +483,7 @@ export class HumanoidController {
     }
     this.coyote=this.grounded?.1:Math.max(0,this.coyote-dt);
     let jumped=false;
-    if(this.jumpBuffer>0 && this.coyote>0 && this.stance==='stand'){this.vertical=6.3;this.jumpBuffer=0;this.coyote=0;this.grounded=false;this.cooldown=.08;jumped=true;this.emitAnimation('jump',0,false,input.lengthSq()>.01);}
+    if(this.jumpBuffer>0 && this.coyote>0 && this.stance==='stand'){this.vertical=this.movementTuning.jumpSpeed;this.jumpBuffer=0;this.coyote=0;this.grounded=false;this.cooldown=.08;jumped=true;this.emitAnimation('jump',0,false,input.lengthSq()>.01);}
     const wasGrounded=this.grounded,fallSpeed=this.vertical;
     this.vertical=Math.max(-16,this.vertical-18*dt);
     const desired={x:this.velocity.x*dt,y:this.vertical*dt,z:this.velocity.z*dt};

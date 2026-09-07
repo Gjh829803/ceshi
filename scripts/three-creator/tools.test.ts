@@ -170,6 +170,12 @@ describe('Three tool operations and truthful submission', () => {
 
 
 describe('v2 command and discovery boundary', () => {
+  it('accepts expanded handling controls in Creator commands and rejects out-of-range or unknown controls',()=>{
+    const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
+    expect(check({type:'training.profile',profile:{vehicles:{rover:{maxSpeed:40,coastDeceleration:2,brakeDeceleration:30}},character:{jumpSpeed:7,slowSpeed:2}}})).toBe(true);
+    expect(check({type:'training.profile',profile:{vehicles:{rover:{coastDeceleration:-1}}}})).toBe(false);
+    expect(check({type:'training.profile',profile:{character:{inventedControl:1}}})).toBe(false);
+  });
   it('does not label a legacy or missing SDK snapshot as v2, while raw remains minimal', () => {
     expect(() => assertSdkObservationVersion('three-sdk', 2)).not.toThrow();
     expect(() => assertSdkObservationVersion('three-sdk', 1)).toThrow('THREE_SDK_OBSERVATION_VERSION_MISMATCH');

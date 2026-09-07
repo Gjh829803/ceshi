@@ -12,3 +12,13 @@ export function applyCameraProfile(runtime: Runtime, profile: AssetProfileV1) {
   const { distance, ...camera } = parsed.camera;
   runtime.applyProfile({camera, cameraDistanceMeters:distance});
 }
+
+export function readEffectiveControlProfile(runtime: Runtime, profile: AssetProfileV1): AssetProfileV1 {
+  const parsed = parseAssetProfile(profile),effective=runtime.exportProfile();
+  if(parsed.assetId==='person')parsed.control=training.parseTrainingControl(effective.character??{},parsed.control);
+  else {
+    const {camera: _camera,...control}=effective.vehicles?.[parsed.assetId]??{};
+    parsed.control=training.parseTrainingControl(control,parsed.control);
+  }
+  return parsed;
+}

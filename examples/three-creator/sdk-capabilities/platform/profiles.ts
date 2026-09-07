@@ -5,18 +5,18 @@ const { parseCameraTuning }=training;
 type CameraTuning=training.CameraTuning;
 
 export const PROFILE_VERSION = 1 as const;
-export const DEFAULTS_REVISION = 2 as const;
-export interface ControlTuning { speed: number; accel: number; grip: number; steer: number }
+export const DEFAULTS_REVISION = 3 as const;
+export type ControlTuning = training.TrainingControl;
 export interface ProfileCameraTuning extends CameraTuning { distance: number }
 export type ProfileEnvelope = CollisionEnvelope | { kind: 'capsule'; radius: number; halfHeight: number; offset: [number, number, number] };
-export interface AssetProfileV1 { version: typeof PROFILE_VERSION; defaultsRevision: 1 | 2; assetId: string; control: ControlTuning; camera: ProfileCameraTuning; envelope: ProfileEnvelope }
+export interface AssetProfileV1 { version: typeof PROFILE_VERSION; defaultsRevision: 1 | 2 | 3; assetId: string; control: ControlTuning; camera: ProfileCameraTuning; envelope: ProfileEnvelope }
 export interface ProfileStorage { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void }
 
 const person: AssetProfileV1 = {
   version: PROFILE_VERSION,
   defaultsRevision: DEFAULTS_REVISION,
   assetId: 'person',
-  control: { speed: 3.1, accel: 14, grip: 5, steer: 8 },
+  control: training.defaultTrainingControl('character',{ speed: 3.1, accel: 14, grip: 5, steer: 8 }),
   camera: { ...DEFAULT_CAMERA_TUNING, baseFovDegrees:58, followResponsePerSecond:7, collisionRadiusMeters:.2, distance:8.8 },
   envelope: { kind: 'capsule', radius: .28, halfHeight: .56, offset: [0, .84, 0] },
 };
@@ -26,7 +26,7 @@ for (const spec of SPECS) records[spec.id] = {
   version: PROFILE_VERSION,
   defaultsRevision: DEFAULTS_REVISION,
   assetId: spec.id,
-  control: { speed: spec.speed, accel: spec.accel, grip: spec.grip, steer: spec.steer },
+  control: training.defaultTrainingControl(spec.mode,spec),
   camera: { ...DEFAULT_CAMERA_TUNING, distance: spec.camera },
   envelope: structuredClone(spec.envelope),
 };
@@ -59,7 +59,7 @@ export function parseAssetProfile(input: unknown, expectedAssetId?: string): Ass
   const value = input as Record<string, unknown>;
   if (value.version !== PROFILE_VERSION) throw new Error('unsupported profile version');
   const revision = value.defaultsRevision ?? 1;
-  if (revision !== 1 && revision !== DEFAULTS_REVISION) throw new Error('unsupported defaults revision');
+  if (revision !== 1 && revision !== 2 && revision !== DEFAULTS_REVISION) throw new Error('unsupported defaults revision');
   if (typeof value.assetId !== 'string' || !DEFAULT_PROFILES[value.assetId]) throw new Error('unknown assetId');
   if (expectedAssetId && value.assetId !== expectedAssetId) throw new Error('profile assetId mismatch');
   if (!value.control || typeof value.control !== 'object' || Array.isArray(value.control)) throw new Error('control must be an object');
@@ -77,7 +77,7 @@ export function parseAssetProfile(input: unknown, expectedAssetId?: string): Ass
     version: PROFILE_VERSION,
     defaultsRevision: revision,
     assetId: value.assetId,
-    control: { speed: finite(control.speed, 'control.speed', 0, 200), accel: finite(control.accel, 'control.accel', 0, 100), grip: finite(control.grip, 'control.grip', 0, 100), steer: finite(control.steer, 'control.steer', 0, 30) },
+    control: training.parseTrainingControl(control,training.defaultTrainingControl(value.assetId==='person'?'character':SPECS.find(s=>s.id===value.assetId)!.mode,{speed:finite(control.speed,'control.speed',0,200),accel:finite(control.accel,'control.accel',0,100),grip:finite(control.grip,'control.grip',0,100),steer:finite(control.steer,'control.steer',0,30)})),
     camera: { ...parsedCamera, distance: finite(camera.distance, 'camera.distance', 1, 40) },
     envelope: parsedEnvelope,
   };
@@ -103,14 +103,17 @@ export function loadAssetProfile(storage: ProfileStorage, assetId: string): Asse
   try {
     const saved = storage.getItem(storageKey(assetId));
     if (saved === null) return undefined;
-    const parsed = parseAssetProfile(JSON.parse(saved), assetId);
-    if (parsed.defaultsRevision < DEFAULTS_REVISION) {
+    const source = JSON.parse(saved) as Record<string, unknown>;
+    let parsed = parseAssetProfile(source, assetId);
+    if (parsed.defaultsRevision === 1) {
       const previous = previousFactory[assetId];
+      const control = { ...(source.control as Record<string, unknown>) };
       (['speed', 'accel', 'grip', 'steer'] as const).forEach((key, index) => {
-        if (previous && parsed.control[key] === previous[index]) parsed.control[key] = fallback.control[key];
+        if (previous && parsed.control[key] === previous[index]) control[key] = fallback.control[key];
       });
-      parsed.defaultsRevision = DEFAULTS_REVISION;
+      parsed = parseAssetProfile({ ...source, defaultsRevision: DEFAULTS_REVISION, control }, assetId);
     }
+    else if (parsed.defaultsRevision < DEFAULTS_REVISION) parsed.defaultsRevision = DEFAULTS_REVISION;
     return parsed;
   } catch { return undefined; }
 }
