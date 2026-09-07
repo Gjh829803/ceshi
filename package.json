@@ -145,6 +145,7 @@
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^4.1.11",
     "ajv": "^8.17.1",
+    "fflate": "0.8.2",
     "gltf-validator": "2.0.0-dev.3.10",
     "playwright": "^1.62.1",
     "tsx": "^4.23.12",

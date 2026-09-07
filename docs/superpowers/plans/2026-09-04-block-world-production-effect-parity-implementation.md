@@ -1379,6 +1379,28 @@ Physics presets from six visual roles. Under the latest user scheduling, finish
 the current candidate/Case/merge first, then resolve these remaining CF contracts
 on the requested new worktree without labeling the overall goal complete.
 
+### CF-INTEGRATION/PORTABLE-GZIP (2026-09-07)
+
+Main-agent-only, sequential; owns the build-time Native type-context compressor,
+its pinned direct dev dependency and live/representative checker artifacts. CI
+`34074277406` at `bdec216e` passed all 438 contract files and 43/44 heavy files;
+only the Native exact-bundle rebuild assertion failed. Local Node 23 rebuild
+passes, but recompressing the exact same 18,984,718 decoded bytes with Node 22's
+different zlib changes the gzip hash. This is a build reproducibility defect,
+not a changed semantic checker or proof of a scene failure.
+
+Use pinned `fflate@0.8.2` at level 9 with mtime 0 for build-time gzip only. The
+portable checker retains its standard gzip decoder. Preserve exact-byte tests,
+all input validation, budgets and the identical decoded SDK graph. Required:
+Node 22 rebuild must equal Node 23's complete generated bundles, decoded graph
+byte equality, frozen representative byte equality and relocated portable tool
+execution. Linux CI remains a separate checkpoint, not inferred from macOS.
+
+The active local Case was interrupted by user-confirmed machine shutdown before
+Builder outputs existed. Its accepted Planner artifacts survive. Keep the old
+Run unchanged and resume through a new build-only Run after this tool fix, with
+no Planner resubmission and no invented successful receipt for the interrupted Run.
+
 ### CF-31/FRESH-BUILDER-TOOLS (2026-09-07)
 
 Main-agent-only, sequential. Owners: production entry selects the current SDK

@@ -1,6 +1,6 @@
 import path from "node:path";
 import ts from "typescript";
-import { gzipSync } from "node:zlib";
+import { gzipSync } from "fflate";
 import { BABYLON_NATIVE_SOURCE_COMPILER_OPTIONS_V1 } from "../native-scene/source-typecheck.ts";
 
 // Build-time only. Freeze the installed SDK/compiler input graph, never evaluate
@@ -44,5 +44,9 @@ export function buildNativeTypecheckContext(projectRoot) {
     defaultLibFileName: virtualPath(ts.getDefaultLibFilePath(options)),
     imports: Object.fromEntries(Object.entries(imports).map(([name, file]) => [name, virtualPath(file)])),
   };
-  return gzipSync(JSON.stringify(snapshot), { level: 9 }).toString("base64");
+  // Native zlib versions produce different valid DEFLATE streams for the same
+  // SDK bytes. Pin the encoder and timestamp so macOS and CI rebuild identically.
+  return Buffer.from(gzipSync(new TextEncoder().encode(JSON.stringify(snapshot)), {
+    level: 9, mtime: 0,
+  })).toString("base64");
 }

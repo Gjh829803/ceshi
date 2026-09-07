@@ -3443,7 +3443,26 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本轮原失败项均已有定向绿色证据，但没有再跑一次新的全仓 aggregate；精确候选 CI、
   新图 Case 和人类审核仍待完成。全部 CF 未关闭，main 仍未合入。
 
-- CF-31/FRESH-BUILDER-TOOLS（2026-09-07，主会话顺序执行，当前未提交）：修复新建
+- 断电后的恢复检查点（2026-09-07，`bdec216e`）：新 Case
+  `cloud-temple-cf-tools-0907` 的 Planner 在原任务内完成一次中心偏差修复，最终
+  Subject center 0.507099、self-check passed、Host plan-ready；规划已完整落盘。
+  Run `run-20260907020209-19300` 停在 `initial-generating/before`，无源码、advisory
+  PNG、Attempt Result 或 Run Receipt。用户确认电脑意外关机，原进程句柄消失；
+  这是宿主中断，不伪造为 SDK 检查失败。保留原 Run，后续用既有 build-only 入口
+  复用已接受的规划并创建新 Builder Run，不能声称原命令一口气成功。
+
+  同 SHA 远端 CI `34074277406` 已终局：contract 438/438 files、5,923 passed +
+  3 skipped；heavy 43/44 files、884/885 tests passed。此前 Native Skill 的超时
+  已消失；唯一失败是 Native checker 重建字节不一致。当前 Node 23 本地完整 bundle
+  对照 1/1 通过，进一步定位为平台 zlib 压缩差异：同一份 18,984,718 字节内容，
+  Node 23.11/zlib 1.2.12 与 Node 22.21/zlib 1.3.1 生成不同 gzip 字节。
+  CF-INTEGRATION/PORTABLE-GZIP 改为 pinned build-only `fflate@0.8.2`、level 9、
+  mtime 0；保留 exact-byte 重建断言，未改生产 gate/参数/超时/轮次。新旧解压内容
+  完全相同，SHA-256 `d1393188e27071e599e8df574e4eec613deb372a94b1b2981fa86776da4e49ce`。
+  便携/冻结/独立运行定向 3/3 通过；Node 22 重建 Node 23 生成的四份工具，精确
+  字节对照 1/1 通过（91.56s）。Linux 新 CI 仍待，不将旧失败 CI 改记为通过。
+
+- CF-31/FRESH-BUILDER-TOOLS（2026-09-07，主会话顺序执行，随后提交为 `bdec216e`）：修复新建
   build-only/生产 Run 继续读取旧 Case Builder Skill 的偏移。生产入口改为指定当前
   SDK Skill；Generation owner 在独立 canonical 工具根目录读取四个声明文件，
   仍按原路径复制到 Attempt 的 `inputs/builder-skill/` 并绑定 Hash，不暴露工作树。
