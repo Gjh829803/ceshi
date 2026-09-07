@@ -4,6 +4,7 @@ import type { MotionSource } from './humanoid/motion';
 import { resetCreatureState, stepCreature, canPlaceCreature, creatureBodies } from './creatures/controller';
 import type { CreatureState } from './creatures/types';
 import { coastSpeed, roadYawRate } from './handling';
+import {CONTROL_RANGES,defaultTrainingControl,parseTrainingControl,type TrainingControl} from './control-tuning';
 import { EnvironmentQueries, PLAYER_BODY, vehicleBody } from './environment/queries';
 import { groundVehiclePose } from './environment/vehicle-pose';
 import type { MapSpawn } from './environment/types';
@@ -15,9 +16,14 @@ export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b
 export interface HumanoidInput {toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
 export interface Input { forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;humanoid?:HumanoidInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
-export interface VehicleState { spec:VehicleSpec; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined }
+export interface VehicleState { spec:VehicleSpec & TrainingControl; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined }
+export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & TrainingControl {
+  const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof TrainingControl]]));
+  const control=parseTrainingControl(authored,defaultTrainingControl(spec.mode,spec));
+  return {...structuredClone(spec),...control};
+}
 export function createVehicle(spec:VehicleSpec):VehicleState {
-  const state:VehicleState={spec,position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
+  const state:VehicleState={spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
   resetCreatureState(state);return state;
 }
 function actorFootprints(v:VehicleState){return creatureBodies(v).map((part,index)=>{
@@ -77,7 +83,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time=0,q?:Environm
   const WATER=q?(q.waterAt(v.position)?.surface??v.position.y):legacyWater;
   const s=v.spec,mode=s.mode,old=v.position.clone();
   const road=mode==='wheeled'||mode==='bike';
-  v.steering=damp(v.steering,i.steer,Math.abs(i.steer)>0?(road?14:9):(road?22:14),dt);
+  v.steering=damp(v.steering,i.steer,Math.abs(i.steer)>0?s.steeringResponse:s.steeringReturn,dt);
   const isAircraft=mode==='plane'||mode==='glider';
   if(mode==='space') {
     const angular=new Quaternion().setFromEuler(new Euler(i.pitch*s.steer*dt,-v.steering*s.steer*dt,i.roll*s.steer*dt,'YXZ'));
@@ -90,24 +96,24 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time=0,q?:Environm
     if(Math.abs(i.strafe)<.01)v.velocity.addScaledVector(right,-v.velocity.dot(right)*attenuation);
     if(Math.abs(i.lift)<.01)v.velocity.addScaledVector(up,-v.velocity.dot(up)*attenuation);
     v.velocity.addScaledVector(forward,i.forward*s.accel*dt).addScaledVector(right,i.strafe*s.accel*dt).addScaledVector(up,i.lift*s.accel*dt);
-    if(i.boost) v.velocity.multiplyScalar(Math.exp(-8*dt));
+    if(i.boost) v.velocity.multiplyScalar(Math.exp(-s.brakeDamping*dt));
     v.velocity.clampLength(0,s.speed);v.position.addScaledVector(v.velocity,dt);
     v.yaw=Math.atan2(forward.x,forward.z);v.grounded=false;
   } else if(isAircraft) {
     if(mode==='glider'&&!v.launched) {
-      if(i.boost) {v.launched=true;v.speed=22;v.grounded=false;v.position.y=Math.max(v.position.y,groundHeight(v.position.x,v.position.z)+1.25);}
+      if(i.boost) {v.launched=true;v.speed=s.launchSpeed;v.grounded=false;v.position.y=Math.max(v.position.y,groundHeight(v.position.x,v.position.z)+1.25);}
       else {v.speed=0;v.velocity.set(0,0,0);return;}
     }
-    if(mode==='plane') v.throttle=clamp(v.throttle+(Number(i.boost)-Number(i.slow))*.38*dt,0,1);
+    if(mode==='plane') v.throttle=clamp(v.throttle+(Number(i.boost)-Number(i.slow))*s.throttleResponse*dt,0,1);
     const pitchInput=-i.forward;
     const desiredPitch=pitchInput*.62;
-    v.pitch=damp(v.pitch,desiredPitch,mode==='glider'?2.6:3.2,dt);
-    v.roll=damp(v.roll,clamp(v.steering*.6+i.roll*.8,-.9,.9),3.5,dt);
+    v.pitch=damp(v.pitch,desiredPitch,s.pitchResponse,dt);
+    v.roll=damp(v.roll,clamp(v.steering*.6+i.roll*.8,-.9,.9),s.rollResponse,dt);
     const flying=mode==='glider'||v.speed>14||!v.grounded;
     v.yaw-=v.steering*s.steer*dt*(flying?1:.35)+Math.sin(v.roll)*.20*dt;
     const thrust=mode==='plane'?v.throttle*s.accel:0;
-    const drag=mode==='plane'?.8+v.speed*v.speed*.002: .26+v.speed*v.speed*.0008;
-    v.speed=clamp(v.speed+(thrust-drag-9.8*Math.sin(v.pitch))*dt,mode==='glider'?7:0,s.speed);
+    const drag=s.drag+v.speed*v.speed*s.dragQuadratic;
+    v.speed=clamp(v.speed+(thrust-drag-9.8*Math.sin(v.pitch))*dt,Math.min(s.minimumSpeed,s.speed),s.speed);
     forward.set(Math.sin(v.yaw)*Math.cos(v.pitch),Math.sin(v.pitch),Math.cos(v.yaw)*Math.cos(v.pitch));
     v.velocity.copy(forward).multiplyScalar(v.speed);
     if(flying) {
@@ -122,15 +128,15 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time=0,q?:Environm
     v.rotation.setFromEuler(euler.set(-v.pitch,v.yaw,v.roll,'YXZ'));
   } else if(mode==='sub') {
     v.yaw-=v.steering*s.steer*dt;v.roll+=i.roll*dt;
-    v.pitch=damp(v.pitch,i.lift*.25,2,dt);
+    v.pitch=damp(v.pitch,i.lift*.25,s.pitchResponse,dt);
     forward.set(Math.sin(v.yaw)*Math.cos(v.pitch),Math.sin(v.pitch),Math.cos(v.yaw)*Math.cos(v.pitch));
-    v.velocity.addScaledVector(forward,i.forward*s.accel*dt);v.velocity.y+=i.lift*s.accel*.8*dt;
+    v.velocity.addScaledVector(forward,i.forward*s.accel*dt);v.velocity.y+=i.lift*s.verticalAcceleration*dt;
     right.set(Math.cos(v.yaw),0,-Math.sin(v.yaw));
     v.velocity.addScaledVector(right,-v.velocity.dot(right)*(1-Math.exp(-s.grip*dt)));
-    v.velocity.x*=Math.exp(-(Math.abs(i.forward)<.01?.9:.25)*dt);
-    v.velocity.z*=Math.exp(-(Math.abs(i.forward)<.01?.9:.25)*dt);
-    v.velocity.y*=Math.exp(-(Math.abs(i.lift)<.01?1.8:.35)*dt);
-    if(i.boost)v.velocity.multiplyScalar(Math.exp(-6*dt));
+    v.velocity.x*=Math.exp(-(Math.abs(i.forward)<.01?s.linearDamping:s.drag)*dt);
+    v.velocity.z*=Math.exp(-(Math.abs(i.forward)<.01?s.linearDamping:s.drag)*dt);
+    v.velocity.y*=Math.exp(-(Math.abs(i.lift)<.01?s.verticalDamping:.35)*dt);
+    if(i.boost)v.velocity.multiplyScalar(Math.exp(-s.brakeDamping*dt));
     v.velocity.clampLength(0,s.speed);
     v.position.addScaledVector(v.velocity,dt);
     terrainMove(v,old,0);
@@ -145,14 +151,14 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time=0,q?:Environm
   } else {
     forward.set(Math.sin(v.yaw),0,Math.cos(v.yaw));right.set(Math.cos(v.yaw),0,-Math.sin(v.yaw));
     let speed=v.velocity.dot(forward),side=v.velocity.dot(right);
-    const max=s.speed*(i.boost?1.15:1),water=wetHeight(v.position.x,v.position.z);
+    const max=i.boost?s.maxSpeed:s.speed,water=wetHeight(v.position.x,v.position.z);
     const driveDisabled=water&&mode!=='boat'&&mode!=='hover';
     const braking=i.forward<0&&speed>1;
-    const acceleration=braking?-s.accel*1.8:i.forward*s.accel;
+    const acceleration=braking?-s.brakeDeceleration:i.forward*s.accel;
     speed+=driveDisabled?0:acceleration*dt;
-    if(Math.abs(i.forward)<.01) speed=coastSpeed(speed,road?5:mode==='hover'?3:1.8,dt);
-    if(i.brake) speed*=Math.exp(-(road?3.8:3.5)*dt);
-    speed=clamp(speed,-max*.3,max);
+    if(Math.abs(i.forward)<.01) speed=coastSpeed(speed,s.coastDeceleration,dt);
+    if(i.brake) speed*=Math.exp(-s.brakeDamping*dt);
+    speed=clamp(speed,-s.reverseSpeed,max);
     if(driveDisabled) speed*=Math.exp(-2.5*dt);
     const yawRate=road?roadYawRate(speed,s.steer):s.steer*(mode==='boat'?Math.min(Math.abs(speed)/4,1)*Math.sign(speed):1);
     v.yaw-=v.steering*yawRate*dt*(i.brake&&mode==='wheeled'?1.25:1);
@@ -270,7 +276,7 @@ export class Simulation {
   humanoid?:HumanoidController|undefined;
   private humanoidClips:ReadonlySet<string>=new Set();
   private humanoidMotions:readonly MotionSource[]=[];
-  characterControl={speed:3.8,accel:12,grip:3,steer:14};
+  characterControl=defaultTrainingControl('character',{speed:3.8,accel:12,grip:3,steer:14});
   private prepared=new Map<string,MapSpawn>();
   vehicles=SPECS.map(createVehicle);active=-1;time=0;transition=0;transitionKind:''|'enter'|'exit'='';message='';teleportRevision=0;
   player:PlayerState={position:new Vector3(...START),velocity:new Vector3(),yaw:0,grounded:true,swimming:false,coyote:.1,jumpBuffer:0,animation:'Idle_Loop',landTimer:0};

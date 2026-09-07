@@ -16,6 +16,13 @@
 .inspector-stat-value{display:block;color:#e3ecde;font:500 17px/1.5 "IBM Plex Mono","SFMono-Regular",Consolas,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
 .inspector-position{padding:7px 8px;background:#132a2e;border:1px solid #ffffff06;border-radius:5px;font:9px/1.5 "SFMono-Regular",Consolas,monospace;color:#9fb4ad;white-space:pre-wrap;font-variant-numeric:tabular-nums}
 .inspector-group{padding:16px 0 15px;border-bottom:1px solid #ffffff0d}
+.inspector-tabs{display:flex;gap:4px;position:sticky;top:0;z-index:2;padding:10px 0;background:#0b252d;border-bottom:1px solid #ffffff0d}
+.inspector-tab{flex:1;min-width:0;padding:9px 6px;border:1px solid #ffffff12;border-radius:6px;background:#142f34;color:#9eb5ac;font-family:inherit;font-size:11px;font-weight:600;line-height:1.4;cursor:pointer}
+.inspector-tab[aria-selected=true]{color:#243b33;background:#c7dda4;border-color:#d2e5b6}.inspector-tab:hover:not([aria-selected=true]){background:#284641;color:#e3ece0}
+.inspector-tab-panel[hidden]{display:none}
+.inspector-field-note{margin:6px 0 0;color:#8fa7a0;font-size:9px;line-height:1.6}
+.inspector-motion-velocity,.inspector-effective-control{display:block;white-space:pre-wrap;font:10px/1.8 "SFMono-Regular",Consolas,monospace;font-variant-numeric:tabular-nums;color:#cddbc9;overflow-wrap:anywhere}
+.inspector-effective-control{padding:9px;background:#142c30;border:1px solid #ffffff0b;border-radius:5px}
 .inspector-group-header{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:11px}.inspector-group-title{margin:0;font-size:11px;font-weight:600;color:#e0e8df;letter-spacing:.25px}.inspector-group-kicker{font-size:8px;color:#7f9993;letter-spacing:1px}
 .inspector-modes{display:flex;gap:3px;background:#122a2e;border:1px solid #ffffff06;border-radius:6px;padding:3px}
 .inspector-mode{flex:1;min-width:0;border:1px solid transparent;border-radius:4px;padding:6px 2px;color:#9aafa8;background:transparent;font:inherit;cursor:pointer;transition:background .15s,color .15s}

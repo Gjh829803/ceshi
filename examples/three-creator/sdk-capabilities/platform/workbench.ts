@@ -1,6 +1,7 @@
 import { SPECS } from '../config';
 import { MAPS } from '../environment/maps';
 import { parseAssetProfile, type AssetProfileV1 } from './profiles';
+import {controlFields} from './control-fields';
 import './workbench.css';
 
 type Tab = 'scenes' | 'camera';
@@ -96,7 +97,7 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
     const road = mode === 'wheeled' || mode === 'bike';
     if (mode === 'space') content.append(note('默认启用平移稳定辅助：松开某个方向会消除该方向的漂移，Shift 强制制动。辅助设为 0 可测试纯惯性；已输入的方向仍能加速到最高速度。'));
     if (mode === 'sub') content.append(note('侧向阻尼控制转向后的横滑。Space 上浮、Ctrl 下潜，Shift 独立制动。'));
-    if (road) content.append(note('转向倍率作用于随速度变化的转弯半径。1 倍在 25 米/秒时基准半径为 17.25 米；实际轨迹还受抓地、制动和碰撞影响。松油减速度为 5 米/秒²。'));
+    if (road) content.append(note('转向倍率作用于随速度变化的转弯半径。实际轨迹还受抓地、制动和碰撞影响；松油减速和刹车参数可独立调整。'));
     const grid = make('div', '', 'wb-parameter-grid');
     const inputs: { group: 'camera' | 'control'; key: string; input: HTMLInputElement }[] = [];
     const readFields = () => {
@@ -109,14 +110,10 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
       { group: 'camera', key: 'baseFovDegrees', label: '基础视野 / 度', step: 1 },
       { group: 'camera', key: 'recenterDelaySeconds', label: '环绕后回正等待 / 秒', step: .1 },
       { group: 'camera', key: 'followResponsePerSecond', label: '相机跟随响应 / 每秒', step: .5 },
-      { group: 'control', key: 'speed', label: selectedAsset === 'person' ? '步行基础速度 / 米每秒' : '最大前进速度 / 米每秒', step: .5 },
-      { group: 'control', key: 'accel', label: selectedAsset === 'person' ? '地面移动响应' : '推进加速度', step: .5 },
-      { group: 'control', key: 'grip', label: selectedAsset === 'person' ? '空中移动响应' : mode === 'space' ? '平移稳定辅助 / 每秒（0 为纯惯性）' : mode === 'sub' ? '水下侧向阻尼 / 每秒' : mode === 'dragon' ? '空中松键减速系数（×2 米/秒²）' : '侧向抓地响应 / 每秒', step: .1 },
-      { group: 'control', key: 'steer', label: selectedAsset === 'person' ? '人物转向响应' : road ? '转向倍率' : '偏航响应 / 弧度每秒', step: .05 },
+      ...controlFields(mode??'character').filter(f=>!f.disabled).map(f=>({group:'control' as const,key:f.key,label:`${f.label} / ${f.unit}`,step:f.step})),
     ];
     for (const { group, key, label, step } of fields) {
-      if(selectedAsset==='person'&&(group==='control'||key==='recenterDelaySeconds'))continue;
-      if (group === 'control' && ((key === 'grip' && ['plane', 'glider', 'mount', 'carriage'].includes(mode ?? '')) || (key === 'accel' && mode === 'glider'))) continue;
+      if(selectedAsset==='person'&&key==='recenterDelaySeconds')continue;
       const field = make('label', label, 'wb-field'), input = make('input'); input.type = 'number'; input.step = String(step);
       input.value = String((current[group] as unknown as Record<string, number>)[key]);
       inputs.push({ group, key, input });

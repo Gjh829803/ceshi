@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Simulation, emptyInput, createVehicle, type Input } from './simulation';
+import { Simulation, emptyInput, createVehicle, resolveVehicleSpec, type Input } from './simulation';
 import { canPlaceCreature, resetCreatureState } from './creatures/controller';
 import { EnvironmentQueries, initEnvironmentQueries, PLAYER_BODY, vehicleBody } from './environment/queries';
 import { FollowCamera } from './camera';
@@ -8,6 +8,7 @@ import { readHumanoid } from './humanoid/render-state';
 import { readInteractionTargets } from './humanoid/render-state';
 import type { MapDefinition, MapSpawn } from './environment/types';
 import type { VehicleSpec } from './config';
+import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseTrainingControl,readTrainingControl,type TrainingControl} from './control-tuning';
 import type { CameraTuning } from './platform/session';
 import { parseCameraTuning, DEFAULT_CAMERA_TUNING } from './platform/session';
 import { validateTrainingMap } from './map-validation';
@@ -41,11 +42,12 @@ export interface TrainingOptions {
 }
 export interface TrainingProfile {
   readonly cameraDistanceMeters?:number|null;
-  readonly character?:Partial<{speed:number;accel:number;grip:number;steer:number}>;
+  readonly character?:Partial<TrainingControl>;
   readonly camera?:Partial<CameraTuning>;
-  readonly vehicles?:Readonly<Record<string,Partial<Pick<VehicleSpec,'speed'|'accel'|'grip'|'steer'|'camera'>>>>;
+  readonly vehicles?:Readonly<Record<string,Partial<TrainingControl & {camera:number}>>>;
 }
 export interface TrainingSnapshot {
+  readonly controls:{readonly character:TrainingControl;readonly vehicles:Readonly<Record<string,TrainingControl>>};
   readonly mapId:string;readonly timeSeconds:number;readonly cameraMode:0|1|2;
   readonly mountedInstanceId:string|null;readonly message:string;
   /** Latest controller sample, copied without issuing another physics query. */
@@ -92,6 +94,7 @@ export class TrainingRuntime implements PhysicsPort {
     if(!(camera instanceof THREE.PerspectiveCamera))throw new Error('TRAINING_PERSPECTIVE_CAMERA_REQUIRED');
     const ids=[options.character.instanceId,...options.vehicles.map(v=>v.instanceId)];
     if(new Set(ids).size!==ids.length||ids.some(id=>!id.trim()))throw new Error('TRAINING_INSTANCE_ID_INVALID');
+    for(const vehicle of options.vehicles)resolveVehicleSpec(vehicle.spec);
     await initEnvironmentQueries();return new TrainingRuntime(options,camera);
   }
   private constructor(readonly options:TrainingOptions,readonly camera:THREE.PerspectiveCamera){
@@ -101,7 +104,7 @@ export class TrainingRuntime implements PhysicsPort {
     this.simulation=new Simulation(this.environment,this.specs);
     this.followCamera=new FollowCamera(camera,[],this.environment);
     this.followCamera.tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...options.cameraTuning});this.baseTuning={...this.followCamera.tuning};this.initialCamera=camera.clone();
-    this.profile={character:{...this.simulation.characterControl},camera:{...this.baseTuning},vehicles:Object.fromEntries(this.specs.map(s=>[s.id,{speed:s.speed,accel:s.accel,grip:s.grip,steer:s.steer,camera:s.camera}]))};
+    this.profile={character:{...this.simulation.characterControl},camera:{...this.baseTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
     this.objects.set(options.character.instanceId,options.character.object);
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     const animation=options.character.animation;
@@ -138,12 +141,14 @@ export class TrainingRuntime implements PhysicsPort {
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean'}]),['humanoid',{type:'object',additionalProperties:{type:'boolean'}}]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:object({type:{const:type},...properties})});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
-    return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile:{type:'object',description:'TrainingProfile: character, camera, cameraDistanceMeters and vehicles keyed by instance ID.'}}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
+    const profile=object({character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[{type:'number',exclusiveMinimum:0,maximum:100},{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
+    return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():TrainingSnapshot{
     const s=this.simulation,h=s.humanoid,tr=h?.traversal,surface=h?.surface;
     const waterControllerActive=Boolean(h&&!s.vehicle&&!tr),contact=waterControllerActive?h?.water:null;
     return {
+      controls:{character:readTrainingControl(s.characterControl),vehicles:Object.fromEntries(s.vehicles.map(v=>[v.spec.id,readTrainingControl(v.spec)]))},
       mapId:this.currentMap.id,timeSeconds:s.time,cameraMode:this.followCamera.mode as 0|1|2,mountedInstanceId:s.vehicle?.spec.id??null,message:s.message,
       water:{declaredVolumeCount:this.currentMap.water.length,controllerActive:waterControllerActive,swimming:waterControllerActive&&Boolean(h?.swimming),
         contact:contact?{volumeId:contact.volumeId,surfaceHeightMeters:contact.surfaceY,depthMeters:contact.depth,submersionRatio:contact.submersion,
@@ -177,16 +182,15 @@ export class TrainingRuntime implements PhysicsPort {
   enter(id:string):boolean{if(this.simulation.vehicle)return false;const n=this.index(id);return this.simulation.nearest()===n&&this.interact();}
   exit():boolean{return !!this.simulation.vehicle&&this.interact();}
   prepareCharacter(position:Vec3,yaw=0):boolean{const ok=this.simulation.prepareCharacter(new THREE.Vector3(...position),yaw);this.sync(0);return ok;}
-  private prepareProfile(profile:TrainingProfile):TrainingProfile & {camera:CameraTuning;character:Simulation['characterControl'];vehicles:Record<string,Pick<VehicleSpec,'speed'|'accel'|'grip'|'steer'|'camera'>>;cameraDistanceMeters:number|null}{
+  private prepareProfile(profile:TrainingProfile):TrainingProfile & {camera:CameraTuning;character:TrainingControl;vehicles:Record<string,TrainingControl & {camera:number}>;cameraDistanceMeters:number|null}{
     const object=(value:unknown)=>!!value&&typeof value==='object'&&!Array.isArray(value);
     if(!object(profile)||Object.keys(profile).some(k=>!['character','camera','vehicles','cameraDistanceMeters'].includes(k)))throw new Error('TRAINING_PROFILE_INVALID');
     for(const section of [profile.character,profile.camera,profile.vehicles])if(section!==undefined&&!object(section))throw new Error('TRAINING_PROFILE_INVALID');
     if(Object.keys(profile.camera??{}).some(k=>!Object.hasOwn(DEFAULT_CAMERA_TUNING,k)))throw new Error('TRAINING_PROFILE_INVALID');
-    if(Object.keys(profile.character??{}).some(k=>!['speed','accel','grip','steer'].includes(k)))throw new Error('TRAINING_PROFILE_INVALID');
-    for(const [id,values] of Object.entries(profile.vehicles??{})){this.index(id);if(!object(values)||Object.keys(values).some(k=>!['speed','accel','grip','steer','camera'].includes(k)))throw new Error('TRAINING_PROFILE_INVALID');}
+    for(const [id,values] of Object.entries(profile.vehicles??{})){this.index(id);if(!object(values)||Object.keys(values).some(k=>k!=='camera'&&!Object.hasOwn(CONTROL_RANGES,k)))throw new Error('TRAINING_PROFILE_INVALID');}
     const camera=parseCameraTuning({...this.followCamera.tuning,...profile.camera});
-    const character={...this.simulation.characterControl,...profile.character};
-    const vehicles=Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{speed:v.spec.speed,accel:v.spec.accel,grip:v.spec.grip,steer:v.spec.steer,camera:v.spec.camera,...profile.vehicles?.[v.spec.id]}]));
+    const character=parseTrainingControl(profile.character??{},this.simulation.characterControl);
+    const vehicles=Object.fromEntries(this.simulation.vehicles.map(v=>{const {camera=v.spec.camera,...control}=profile.vehicles?.[v.spec.id]??{};return [v.spec.id,{...parseTrainingControl(control,readTrainingControl(v.spec)),camera}];}));
     const numbers=[...Object.values(character),...Object.values(vehicles).flatMap(v=>Object.values(v))];
     if(numbers.some(v=>typeof v!=='number'||!Number.isFinite(v)||v<0))throw new Error('TRAINING_PROFILE_INVALID');
     const cameraDistanceMeters=profile.cameraDistanceMeters===undefined?this.followCamera.baseDistance??null:profile.cameraDistanceMeters;
@@ -195,7 +199,7 @@ export class TrainingRuntime implements PhysicsPort {
   }
   private configureSimulation(simulation:Simulation,profile:ReturnType<TrainingRuntime['prepareProfile']>):void{
     simulation.characterControl={...profile.character};
-    const h=simulation.humanoid,c=simulation.characterControl;if(h)h.movementTuning={speedScale:c.speed/3.8,accelerationScale:c.accel/12,airControlScale:c.grip/3,turnScale:c.steer/14};
+    const h=simulation.humanoid,c=simulation.characterControl;if(h)h.movementTuning={speedScale:c.speed/3.8,accelerationScale:c.accel/12,airControlScale:c.grip/3,turnScale:c.steer/14,maxSpeed:c.maxSpeed,slowSpeed:c.slowSpeed,coastDeceleration:c.coastDeceleration,jumpSpeed:c.jumpSpeed};
     for(const v of simulation.vehicles)Object.assign(v.spec,profile.vehicles[v.spec.id]);
   }
   private commitProfile(profile:ReturnType<TrainingRuntime['prepareProfile']>):void{
@@ -301,7 +305,7 @@ export class TrainingRuntime implements PhysicsPort {
   teleport(id:string,position:Vec3):void{if(id!==this.options.character.instanceId||!this.prepareCharacter(position,this.simulation.player.yaw))throw new Error('TRAINING_START_BLOCKED');}
   applyImpulse(_id:string,_impulse:Vec3):void{throw new Error('TRAINING_IMPULSE_UNSUPPORTED');}
   step():void{throw new Error('TRAINING_REQUIRES_ENGINE_INPUT');}
-  characterSettings(_id:string):Required<CharacterOptions>{const scale=this.simulation.characterControl.speed/3.8;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:1.68,radiusMeters:.28,walkSpeedMetersPerSecond:3.1*scale,runSpeedMetersPerSecond:5.8*scale,jumpSpeedMetersPerSecond:7,maximumStepHeightMeters:.27};}
+  characterSettings(_id:string):Required<CharacterOptions>{const c=this.simulation.characterControl;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:1.68,radiusMeters:.28,walkSpeedMetersPerSecond:3.1*c.speed/3.8,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
   probeCharacterStart(id:string,position:Vec3):EpisodeStartProbe{
     if(id!==this.options.character.instanceId)throw new Error('TRAINING_CHARACTER_REQUIRED');
     const safe=this.environment.safeSpawn(new THREE.Vector3(...position),PLAYER_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35;

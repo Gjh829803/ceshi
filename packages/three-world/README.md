@@ -45,6 +45,41 @@ camera mode 0/1/2, and profiles. `onVisualUpdate(dt)` updates pure visual descen
 after the SDK has placed and animated actors. It must not rewrite actor roots,
 physics, the character mixer or camera. Do not install a second frame clock.
 
+Movement profiles use `training.TrainingControl`. Each instance resolves its own
+numeric defaults, and partial edits merge without deriving new braking or speed
+limits from unrelated fields. `exportProfile()` returns the full effective record;
+snapshots expose `training.controls`. Reset, map replacement and Episode starts
+preserve the effective configuration. Save the exported profile with your source
+and apply it during world initialization; browser local overrides alone are not a
+delivery configuration.
+
+```ts
+await world.execute({type:'training.profile',profile:{vehicles:{'rover-a':{
+  speed:20, maxSpeed:30, reverseSpeed:5, accel:8,
+  coastDeceleration:2, brakeDeceleration:18, brakeDamping:4,
+  steeringResponse:10, steeringReturn:16,
+}}}});
+```
+
+For surface vehicles, `speed` is the normal forward cap and `maxSpeed` the boosted
+cap; `reverseSpeed` is independent. Acceleration/coasting/reverse braking use
+m/s²; handbrake damping and steering response/return use 1/s. Aircraft instead
+use `speed` as their cap, `drag` plus `dragQuadratic * speed²` for air resistance,
+`pitchResponse`/`rollResponse` for attitude, and `throttleResponse` (plane) or
+`launchSpeed`/`minimumSpeed` (glider). Submarines expose `verticalAcceleration`,
+release `linearDamping`/`verticalDamping` and powered horizontal `drag` (1/s).
+Spacecraft use `grip` for uncommanded-axis stabilization and `brakeDamping` for
+Shift braking. Mounts/carriages cruise at `speed * .58`, with independent
+`maxSpeed`, `slowSpeed`, `reverseSpeed` and linear braking. Dragons separate
+`groundSpeed` from flying speed and air coasting.
+
+The existing humanoid calibration remains explicit: normal movement is
+`speed * 3.1 / 3.8`, ground acceleration is `accel * 14 / 12`, air acceleration
+is `grip * 5 / 3`, turning is `steer * 8 / 14`. `maxSpeed` (sprint), `slowSpeed`,
+`coastDeceleration` and `jumpSpeed` are independent actual-unit values. Not every
+family consumes every field; the Playground shows family applicability. These
+parameters do not override collision, gravity, traversal or animation execution.
+
 All normal movement keys use SDK Presentation focus and input release. F enters
 or exits, E interacts with character targets, and the source humanoid and vehicle
 bindings remain available through `training`. `setInput(input)` supplies a

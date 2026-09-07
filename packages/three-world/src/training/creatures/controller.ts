@@ -134,11 +134,11 @@ function moveBody(position:Vector3,delta:Vector3,body:QueryBody,yaw:number,walki
 function desiredSpeed(v:VehicleState,i:Input,dt:number,dragonAir=false){
   const spec=v.spec,dragon=spec.mode==='dragon',carriage=spec.mode==='carriage';
   const speed=v.velocity.dot(heading(carriage?v.creature!.leadYaw!:v.yaw));
-  const maximum=dragon?(dragonAir?spec.speed*(i.boost?1.2:1):5):i.slow?2.5:spec.speed*(i.boost?1:.58);
-  const backward=dragonAir?spec.speed*.2:carriage?1.4:2.5;
+  const maximum=dragon?(dragonAir?(i.boost?spec.maxSpeed:spec.speed):spec.groundSpeed):i.slow?spec.slowSpeed:i.boost?spec.maxSpeed:spec.speed*.58;
+  const backward=dragonAir||!dragon?spec.reverseSpeed:2.5;
   const braking=!dragon&&i.brake;
   const target=braking?0:clamp(i.forward,-1,1)*(i.forward<0?backward:maximum);
-  const acceleration=braking?20:Math.abs(i.forward)<.01?(dragonAir?spec.grip*2:spec.accel):spec.accel*(target*speed<0?2:1);
+  const acceleration=braking?spec.brakeDeceleration:Math.abs(i.forward)<.01?(dragon&&!dragonAir?spec.groundDeceleration:spec.coastDeceleration):target*speed<0?spec.directionChangeDeceleration:spec.accel;
   return approach(speed,target,acceleration*dt);
 }
 function updateGait(v:VehicleState,dt:number){
@@ -217,7 +217,7 @@ export function stepCreature(v:VehicleState,i:Input,dt:number,_time=0,q?:Environ
   const duration=Math.min(dt,.25),steps=Math.max(1,Math.ceil(duration*60)),slice=duration/steps;
   for(let n=0;n<steps;n++){
     const previous={position:v.position.clone(),rotation:v.rotation.clone(),yaw:v.yaw,pitch:v.pitch,roll:v.roll,leadPosition:v.creature.leadPosition?.clone(),leadYaw:v.creature.leadYaw};
-    v.steering+=(clamp(i.steer,-1,1)-v.steering)*(1-Math.exp(-10*slice));v.throttle=i.forward;
+    v.steering+=(clamp(i.steer,-1,1)-v.steering)*(1-Math.exp(-(Math.abs(i.steer)>.01?v.spec.steeringResponse:v.spec.steeringReturn)*slice));v.throttle=i.forward;
     if(v.spec.mode==='carriage')stepCarriage(v,i,slice,q);
     else if(v.spec.mode==='dragon')stepDragon(v,i,slice,q);
     else stepMount(v,i,slice,q);
