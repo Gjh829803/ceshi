@@ -231,9 +231,11 @@ def verified_payload(directory, profile, lock_hash, sdk_only=False):
     return payload, actual, report, delivery, played, captures
 
 
-def curated_playable(actual, extra):
+def curated_playable(actual, extra, asset_resources=()):
     require(isinstance(extra, list) and len(extra) <= 100, 'Invalid explicit public playable files')
     extras = {relative_name(name).as_posix() for name in extra}
+    resources = set(asset_resources)
+    require(all(re.fullmatch(r'assets/resources/[a-f0-9]{64}\.(?:glb|json|bin|png|jpg|webp|md|txt)', name) for name in resources), 'Invalid asset dependency URI')
     selected = []
     for name in actual:
         if not name.startswith('playable/'):
@@ -245,7 +247,7 @@ def curated_playable(actual, extra):
         private = any(part.startswith('.') or PRIVATE_NAME.search(part) for part in relative.parts)
         if name == 'playable/asset-definitions.json':
             private = False
-        default = (relative.as_posix() in ('index.html', 'asset-definitions.json') or
+        default = (relative.as_posix() in resources or relative.as_posix() in ('index.html', 'asset-definitions.json') or
                    suffix in PUBLIC_MEDIA or suffix == '.css' or
                    (relative.parts[0] in ('compiled', 'runtime') and suffix == '.js'))
         explicit = relative.as_posix() in extras
@@ -264,12 +266,22 @@ def validate_public_assets(payload, selected, actual):
     definitions = read_json(payload / 'playable/asset-definitions.json')
     require(definitions.get('schemaVersion') == 1 and isinstance(definitions.get('assets'), list), 'Invalid public asset definitions')
     for asset in definitions['assets']:
-        require(isinstance(asset, dict) and 'sourcePath' not in asset, 'Host source path in public asset definition')
-        uri = asset.get('uri')
-        require(isinstance(uri, str) and uri.startswith('./') and ':' not in uri and '?' not in uri and '#' not in uri, 'Asset URI must stay in this playable')
-        name = 'playable/' + relative_name(uri[2:]).as_posix()
-        require(name in selected and actual[name] == checked_hash(asset.get('sha256'), 'asset hash'), 'Public asset hash or path mismatch')
-        require(regular(payload / name).st_size == asset.get('byteLength'), 'Public asset length mismatch')
+        require(isinstance(asset, dict), 'Invalid public asset')
+        def no_private(value):
+            if isinstance(value, dict):
+                require('sourcePath' not in value, 'Host source path in public asset definition')
+                for child in value.values():
+                    no_private(child)
+            elif isinstance(value, list):
+                for child in value:
+                    no_private(child)
+        no_private(asset)
+        for resource in [asset, *asset.get('resources', [])]:
+            uri = resource.get('uri')
+            require(isinstance(uri, str) and uri.startswith('./') and ':' not in uri and '?' not in uri and '#' not in uri, 'Asset URI must stay in this playable')
+            name = 'playable/' + relative_name(uri[2:]).as_posix()
+            require(name in selected and actual[name] == checked_hash(resource.get('sha256'), 'asset hash'), 'Public asset hash or path mismatch')
+            require(regular(payload / name).st_size == resource.get('byteLength'), 'Public asset length mismatch')
 
 
 def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only=False):
@@ -278,7 +290,9 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
     row['status'] = 'ready'
     row['note'] = '生成产物已就绪，可以直接试玩。'
     prefix = f"cases/{row['id']}/{delivery['worldBuildHash']}"
-    selected = curated_playable(actual, entry.get('publicPlayableFiles', []))
+    definitions = read_json(payload / 'playable/asset-definitions.json') if 'playable/asset-definitions.json' in actual else {'assets': []}
+    resources = [resource['uri'][2:] for asset in definitions['assets'] for resource in asset.get('resources', [])]
+    selected = curated_playable(actual, entry.get('publicPlayableFiles', []), resources)
     validate_public_assets(payload, selected, actual)
     if 'playable/planning/world-plan.png' in selected:
         png_size(payload / 'playable/planning/world-plan.png')

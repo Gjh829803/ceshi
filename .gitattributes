@@ -1,5 +1,8 @@
 *.patch text eol=lf
 *.sh text eol=lf
 *.mjs text eol=lf
+# Catalog resources are content-addressed, including JSON clips and notices.
+# Preserve exact bytes on add/checkout, independent of core.autocrlf.
+assets/three-creator/training/** -text
 .codex/skills/*/scripts/self-check.mjs -whitespace
 .codex/skills/*/scripts/render-visual-review.mjs -whitespace

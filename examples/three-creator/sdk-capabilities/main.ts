@@ -1,150 +1,301 @@
-import * as THREE from 'three';
-import { createWorld, type CommandReceipt, type TaskScope, type WorldCommand } from '@worldkit/three';
+import * as T from 'three';
+import { workspaceMarkup } from './ui/workspace';
+import { decorateIcons } from './ui/icons';
+import { controlsFor } from './ui/shortcuts';
+import { renderAssetThumbnails } from './ui/thumbnails';
+import { mountInspector } from './platform/inspector';
+import { SPECS } from './config';
+import { getMap,MAPS } from './environment/maps';
+import { applyControlProfile, applyCameraProfile } from './platform/profile-runtime';
+import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfileV1 } from './platform/profiles';
+import { buildVehicle } from './models';
+import { FrameRateMeter } from './fps';
+import { FramePacingPanel } from './fps-hud';
+import { updateVehicleWheels, resetVehicleWheels } from './vehicle-animation';
+import { buildWorkspaceCatalog, type AssetEntry } from './platform/catalog';
+import { mountAssetLibrary } from './platform/library';
+import { mountWorkbench } from './platform/workbench';
+import { defaultRegion, prepareCourse } from './platform/scenarios';
+import { buildInteractionVisuals } from './humanoid/interaction-visuals';
+import { mountHumanoidLab } from './humanoid/panel';
+import { HumanoidDemo, humanoidTraversalReady } from './humanoid/demo';
+import type { CharacterTrial } from './environment/types';
+import './ui/workspace.css';
 
-const status = document.querySelector<HTMLDivElement>('#status')!;
-const loading = document.querySelector<HTMLDivElement>('#loading')!;
-async function main() {
-  const scene = new THREE.Scene(); scene.background = new THREE.Color('#acd0d9'); scene.fog = new THREE.Fog('#acd0d9', 42, 110);
-  const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 180);
-  const overviewPosition = new THREE.Vector3(19, 18, 24), overviewTarget = new THREE.Vector3(0, 0, -2);
-  camera.position.copy(overviewPosition); camera.lookAt(overviewTarget);
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.setClearColor('#acd0d9');
-  renderer.domElement.tabIndex = 0; renderer.domElement.setAttribute('aria-label', 'Three SDK 可玩场景'); document.body.prepend(renderer.domElement);
-  const world = await createWorld({ scene, camera, renderer });
-  const ownedGeometries = new Set<THREE.BufferGeometry>(), ownedMaterials = new Set<THREE.Material>();
-  const material = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: .9, ...extra }); ownedMaterials.add(m); return m; };
-  const materials = { grass: material('#7eac74'), stone: material('#d2c5a7'), step: material('#eddfbc'), sand: material('#cfb783'), copper: material('#dc8c52'), dark: material('#333e36'), cream: material('#ffdfb3'), green: material('#37654c'), blue: material('#6ea5bc'), wood: material('#bd8755') };
-  const mesh = (geometry: THREE.BufferGeometry, mat: THREE.Material, at: [number, number, number] = [0, 0, 0]) => { ownedGeometries.add(geometry); const object = new THREE.Mesh(geometry, mat); object.position.fromArray(at); object.castShadow = true; object.receiveShadow = true; return object; };
-  const box = (size: [number, number, number], at: [number, number, number], mat = materials.stone) => mesh(new THREE.BoxGeometry(...size), mat, at);
-  const addFixed = (id: string, object: THREE.Object3D) => world.addEntity({ id, object, role: 'terrain', physics: { kind: 'fixed' } });
-  scene.add(new THREE.HemisphereLight('#f4f7ed', '#58714d', 2.1));
-  const sun = new THREE.DirectionalLight('#fff2d6', 3.2); sun.position.set(-15, 30, 16); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -23, right: 23, top: 23, bottom: -23, near: .5, far: 90 }); sun.shadow.bias = -.0003; scene.add(sun);
-  addFixed('meadow', box([36, .6, 34], [0, -.3, -2], materials.grass));
-  // Real stair and sloped triangle geometry, solved by the one SDK Rapier world.
-  for (let i = 0; i < 5; i++) { const h = .18 * (i + 1); addFixed(`step-${i + 1}`, box([3.4, h, .8], [-6, h / 2, -i * .8], materials.step)); }
-  addFixed('stair-platform', box([3.4, .9, 2.4], [-6, .45, -4.8], materials.stone));
-  const rampGeometry = new THREE.BufferGeometry(); rampGeometry.setAttribute('position', new THREE.Float32BufferAttribute([4, 0, 0, 7.4, 0, 0, 4, 1.2, -6, 7.4, 1.2, -6], 3)); rampGeometry.setIndex([0, 1, 2, 2, 1, 3]); rampGeometry.computeVertexNormals();
-  addFixed('ramp', mesh(rampGeometry, materials.blue)); addFixed('ramp-platform', box([3.4, 1.2, 3], [5.7, .6, -7.5], materials.step));
-  for (const [id, at, size] of [['north', [0, .35, -18.5], [36, .7, .4]], ['south', [0, .35, 14.5], [36, .7, .4]], ['west', [-17.5, .35, -2], [.4, .7, 34]], ['east', [17.5, .35, -2], [.4, .7, 34]]] as const) addFixed(`edge-${id}`, box([...size], [...at], materials.green));
-  // These small visible stones deliberately have no collision; the role is inspectable.
-  for (let i = 0; i < 18; i++) { const angle = i * 2.399; const stone = mesh(new THREE.DodecahedronGeometry(.14 + (i % 3) * .035, 0), materials.stone, [Math.cos(angle) * (10 + i % 4), .07, -2 + Math.sin(angle) * (9 + i % 3)]); stone.scale.set(1.3, .65, .9); world.addEntity({ id: `small-stone-${i}`, object: stone, role: 'decoration', tags: ['small-stone', 'no-collision'] }); }
-  const goal = new THREE.Group(); goal.position.set(-9, .03, -10); const goalRing = mesh(new THREE.TorusGeometry(.85, .06, 6, 48), materials.copper); goalRing.rotation.x = Math.PI / 2; goal.add(goalRing); world.addEntity({ id: 'far-ring', object: goal, role: 'decoration', tags: ['npc-destination'] });
-  const resizePillar = mesh(new THREE.CylinderGeometry(.5, .7, 1.5, 6), materials.copper, [-10, .75, 4]); world.addEntity({ id: 'scale-pillar', object: resizePillar, role: 'obstacle', physics: { kind: 'fixed' } });
-  const beacon = new THREE.Group(); beacon.position.set(1.8, 0, 6.6); beacon.add(box([.55, .7, .55], [0, .35, 0], materials.dark));
-  const glow = material('#ffbb77', { emissive: '#ed843e', emissiveIntensity: .9 }); const orb = mesh(new THREE.IcosahedronGeometry(.35, 1), glow, [0, 1.2, 0]); beacon.add(orb);
-  world.addEntity({ id: 'beacon', object: beacon, role: 'decoration', tags: ['interactable', 'emissive-beacon'] });
-  const gbot = await world.assets.load('humanoid.g-bot');
-  gbot.object.position.set(0, .05, 7);
-  gbot.object.traverse(object => { if (object instanceof THREE.Mesh) { object.castShadow = true; object.receiveShadow = true; } });
-  world.addCharacter({ id: 'player', asset: gbot, name: 'G Bot' }); world.setControlledEntity('player');
-  // Complete free-form actor; all children belong to the observed/captured target.
-  const fox = new THREE.Group(); fox.position.set(4, .05, 5); fox.name = 'Copper fox with full tail';
-  const body = mesh(new THREE.SphereGeometry(.55, 16, 12), materials.copper, [0, .83, .05]); body.scale.set(.7, .9, 1.25); fox.add(body);
-  const head = mesh(new THREE.SphereGeometry(.43, 16, 12), materials.copper, [0, 1.21, -.6]); head.scale.set(1, .95, 1.15); fox.add(head);
-  const muzzle = mesh(new THREE.SphereGeometry(.25, 12, 8), materials.cream, [0, 1.1, -.94]); muzzle.scale.set(.9, .7, 1.25); fox.add(muzzle, mesh(new THREE.SphereGeometry(.085, 10, 8), materials.dark, [0, 1.13, -1.19]));
-  for (const x of [-.24, .24]) { fox.add(mesh(new THREE.ConeGeometry(.19, .55, 4), materials.copper, [x, 1.65, -.55])); fox.add(mesh(new THREE.SphereGeometry(.065, 10, 8), materials.dark, [x, 1.31, -.94])); }
-  const legs: THREE.Group[] = [];
-  for (const [x, z] of [[-.27, -.4], [.27, -.4], [-.27, .45], [.27, .45]]) { const leg = new THREE.Group(); leg.position.set(x!, .65, z!); leg.add(mesh(new THREE.CapsuleGeometry(.105, .34, 4, 10), materials.copper, [0, -.24, 0]), box([.23, .16, .32], [0, -.53, -.055], materials.dark)); fox.add(leg); legs.push(leg); }
-  const tail = new THREE.Group(); tail.position.set(0, .84, .53); const tailBase = mesh(new THREE.CapsuleGeometry(.24, .8, 6, 12), materials.copper, [0, .3, .58]); tailBase.rotation.x = .95;
-  const tailTip = mesh(new THREE.CapsuleGeometry(.19, .38, 6, 12), materials.cream, [0, .76, 1.17]); tailTip.rotation.x = .68; tail.add(tailBase, tailTip); fox.add(tail);
-  world.addCharacter({ id: 'copper-fox', object: fox, name: 'Copper fox', body: { heightMeters: 1.8, radiusMeters: .35 }, movement: { kind: 'ground', walkSpeedMetersPerSecond: 2.2 }, tags: ['custom-character', 'complete-tail'] });
-  const announce = (message: string) => { status.textContent = message; };
-  const serial = world.state.define('crates.serial', 0), crates = world.state.define<string[]>('crates.ids', []);
-  const lit = world.defineParameter({ id: 'beacon.lit', description: 'Light the beacon',
-    schema: { type: 'boolean' }, initialValue: false, writes: [{ kind: 'visual', channelId: 'beacon.material' }],
-    effect: value => { glow.color.set(value ? '#9cebd0' : '#ffbb77'); glow.emissive.set(value ? '#30b78e' : '#ed843e'); } });
-  world.onInteract('beacon', () => ({ type: 'parameter.set', parameterId: lit.id, value: !lit.value }));
-  const sky = world.defineParameter({ id: 'sky.mode', description: 'Daylight or aurora sky',
-    schema: { type: 'string', enum: ['day', 'aurora'] }, initialValue: 'day',
-    writes: [{ kind: 'visual', channelId: 'scene.sky' }],
-    effect: value => { scene.background = new THREE.Color(value === 'aurora' ? '#183158' : '#acd0d9');
-      if (scene.fog instanceof THREE.Fog) scene.fog.color.copy(scene.background); } });
-  const large = world.defineParameter({ id: 'pillar.large', description: 'Enlarge the stone pillar',
-    schema: { type: 'boolean' }, initialValue: false,
-    writes: [{ kind: 'entity', entityId: 'scale-pillar', channels: ['scale'] }],
-    plan: value => [{ type: 'entity.set-scale', entityId: 'scale-pillar', scaleLocalXYZ: value ? [1.5, 1.5, 1.5] : [1, 1, 1] }] });
-  // Player intent only: this does not implement aerial NPC pathfinding.
-  world.registerMovement({ id: 'hover-flight', version: 1, description: 'Controlled hover; hold Space to rise, release to descend; no flight navigation',
-    initialState: { elapsedSeconds: 0 }, update: ({ state, deltaSeconds, input, desiredDirectionWorldXYZ }) => ({
-      state: { elapsedSeconds: state.elapsedSeconds + deltaSeconds }, applyGravity: false,
-      velocityWorldMetersPerSecondXYZ: [desiredDirectionWorldXYZ[0] * (input.run ? 6 : 3), input.jump ? 2 : -.7, desiredDirectionWorldXYZ[2] * (input.run ? 6 : 3)],
-    }) });
-  const bridge = box([3, .3, 3], [10, .15, -3], materials.wood);
-  world.addEntity({ id: 'bridge', object: bridge, role: 'terrain' });
-  await world.registerGeometry({ id: 'bridge.short', description: 'Short bridge deck', geometry: bridge.geometry });
-  await world.registerGeometry({ id: 'bridge.long', description: 'Long bridge deck', geometry: new THREE.BoxGeometry(3, .3, 8) });
-  await world.registerPrototype({ id: 'wood-crate', description: 'A physical wooden crate',
-    template: { kind: 'entity', options: { object: box([.8, .8, .8], [0, 0, 0], materials.wood),
-      role: 'obstacle', physics: { kind: 'dynamic', shape: 'box', massKilograms: 2 }, tags: ['spawned-crate'] } } });
-  world.setAutonomy('copper-fox', { kind: 'patrol', waypointPositionsWorldMetersXYZ: [[4, 0, 5], [6, 0, 1], [0, 0, 1]], pauseSeconds: 1 });
-  async function complete(receipt: CommandReceipt, scope: TaskScope) {
-    if (receipt.status === 'rejected') throw receipt.error;
-    if (receipt.status === 'accepted') {
-      const terminal = await world.operations.wait(receipt.operationId, { signal: scope.signal });
-      if (terminal.status !== 'succeeded') throw terminal.error ?? new Error(`Operation ${terminal.status}`);
-    }
-  }
-  async function command(value: WorldCommand) {
-    const receipt = await world.execute(value);
-    if (receipt.status === 'rejected') { announce(`${receipt.error.code}: ${receipt.error.message}`); return; }
-    announce(`${value.type} · ${receipt.status}`);
-    if (receipt.status === 'accepted') {
-      void world.operations.wait(receipt.operationId).then(result => announce(`${value.type} · ${result.status}${result.error ? ': ' + result.error.message : ''}`))
-        .catch(error => announce(String(error)));
-    }
-  }
-  function button(id: string, action: () => void | Promise<void>) {
-    const element = document.getElementById(id) as HTMLButtonElement | null;
-    if (!element) throw new Error(`Missing button ${id}`);
-    element.addEventListener('click', () => {
-      element.disabled = true;
-      Promise.resolve().then(action).catch(error => announce(error?.message ?? String(error)))
-        .finally(() => { element.disabled = false; renderer.domElement.focus(); });
-    });
-  }
-  button('play', async () => { if (world.snapshot().isRunning) world.stop(); else await world.start();
-    document.getElementById('play')!.textContent = world.snapshot().isRunning ? '暂停游玩' : '继续游玩'; });
-  button('reset', async () => { await world.reset(); announce('场景与扩展已重置'); });
-  button('interact', () => command({ type: 'parameter.set', parameterId: lit.id, value: !lit.value }));
-  button('visibility', () => command({ type: 'entity.set-visible', entityId: 'beacon', isVisible: !world.getEntityState('beacon').isVisibleLocal }));
-  button('resize', () => command({ type: 'parameter.set', parameterId: large.id, value: !large.value }));
-  button('sky', () => command({ type: 'parameter.set', parameterId: sky.id, value: sky.value === 'day' ? 'aurora' : 'day' }));
-  button('flight', () => command({ type: 'actor.set-movement', entityId: 'player', movementId: 'hover-flight' }));
-  button('ground', () => command({ type: 'actor.set-movement', entityId: 'player', movementId: 'ground' }));
-  button('bridge-long', () => command({ type: 'entity.set-geometry', entityId: 'bridge', geometryId: 'bridge.long' }));
-  button('bridge-short', () => command({ type: 'entity.set-geometry', entityId: 'bridge', geometryId: 'bridge.short' }));
-  button('spawn', () => world.runTask(async scope => {
-    const index = serial.value + 1, id = `spawned-crate-${index}`;
-    await complete(await scope.execute({ type: 'entity.spawn', prototypeId: 'wood-crate', entityId: id,
-      positionWorldMetersXYZ: [-3 + crates.value.length % 3, 2, 4] }), scope);
-    scope.setState(serial, index); scope.setState(crates, [...crates.value, id]); announce(`已生成 ${id}`);
-  }));
-  button('despawn', () => world.runTask(async scope => {
-    const id = crates.value.at(-1); if (!id) { announce('暂无生成木箱'); return; }
-    await complete(await scope.execute({ type: 'entity.despawn', entityId: id }), scope);
-    scope.setState(crates, crates.value.filter(value => value !== id));
-  }));
-  button('action', () => command({ type: 'entity.play-action', entityId: 'player', actionId: 'dance.rumba', playback: 'once' }));
-  button('move', () => command({ type: 'actor.move-to', entityId: 'copper-fox', targetPositionWorldMetersXYZ: [-9, 0, -10] }));
-  button('follow', () => command({ type: 'actor.follow', entityId: 'copper-fox', targetEntityId: 'player', distanceMeters: 2.2 }));
-  button('stop', () => command({ type: 'actor.stop', entityId: 'copper-fox' }));
-  button('resume', () => command({ type: 'actor.resume-autonomy', entityId: 'copper-fox' }));
-  button('overview', () => { if (world.cameraMode === 'authored') world.setCameraFollow({ targetEntityId: 'player', distanceMeters: 7, activateOnInput: false });
-    else { world.useAuthoredCamera(); camera.position.copy(overviewPosition); camera.lookAt(overviewTarget); } });
-  world.onUpdate(({ simulationSeconds, deltaSeconds }) => {
-    const velocity = world.getEntityState('copper-fox').motion?.velocityWorldMetersPerSecondXYZ;
-    const speed = velocity ? Math.hypot(velocity[0], velocity[2]) : 0;
-    tail.rotation.z = Math.sin(simulationSeconds * 3) * .2; tail.rotation.y = Math.sin(simulationSeconds * 2.2) * .18;
-    for (let i = 0; i < legs.length; i++) legs[i]!.rotation.x = Math.sin(simulationSeconds * 10 + (i % 3 ? Math.PI : 0)) * Math.min(speed * .22, .6);
-    orb.rotation.y += deltaSeconds * .8;
-  });
-  world.onReset(() => { tail.rotation.set(0, 0, 0); legs.forEach(leg => leg.rotation.set(0, 0, 0)); orb.rotation.set(0, 0, 0); });
-  world.onDispose(() => { for (const geometry of ownedGeometries) geometry.dispose(); for (const mat of ownedMaterials) mat.dispose(); renderer.dispose(); });
-  world.setCameraFollow({ targetEntityId: 'player', distanceMeters: 7, pitchRadians: .42, targetHeightMeters: 1.1, activateOnInput: true });
-  addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
-  world.setCaptureTargets(['player', 'copper-fox', 'stair-platform', 'ramp-platform', 'beacon', 'bridge']);
-  await world.start(); loading.hidden = true; document.getElementById('play')!.textContent = '暂停游玩';
-  announce('已就绪 · 地面 / 悬浮输入 / 天空 / 桥梁 / NPC');
+
+import { createWorld, training } from '@worldkit/three';
+import { buildWorld } from './world';
+import { resolveTrainingResource, definitions } from './assets/resources';
+import effectiveProfiles from './profiles.json';
+const {emptyInput,actionForKey,readControls,createActionBridge}=training;
+type HumanoidInput=training.HumanoidInput;
+type SkillRequest=training.SkillRequest;
+const FIXED_STEP=1/60;
+document.querySelector<HTMLDivElement>('#app')!.innerHTML=workspaceMarkup;
+decorateIcons();
+const canvas=document.querySelector<HTMLCanvasElement>('#viewport')!,scene=new T.Scene();
+const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;
+renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.04;
+const camera=new T.PerspectiveCamera(55,canvas.clientWidth/canvas.clientHeight,.12,2100);
+const visuals=SPECS.map(buildVehicle),character=new training.Character();
+try {await Promise.all([character.load(resolveTrainingResource),...visuals.map(v=>v.creature?.load())]);}
+catch(error){document.getElementById('loadText')!.textContent='资源加载失败：'+String(error);throw error;}
+const sdk=await createWorld({scene,camera,renderer,canvas,assetDefinitions:definitions,
+  training:{map:getMap('campus'),vehicles:SPECS.map((spec,n)=>({instanceId:spec.id,assetId:'training.'+spec.id,spec,object:visuals[n]!.root})),character:{instanceId:'person',object:character.root,animation:character}}});
+const runtime=sdk.training!,sim=runtime.simulation,follow=runtime.followCamera;
+let currentMap=getMap('campus'),world=buildWorld(scene,currentMap);
+const session={get map(){return currentMap;},get world(){return world;},get queries(){return runtime.environment;},
+  switchMap(id:string){if(id===currentMap.id)return;const next=getMap(id),visual=buildWorld(scene,next);try{runtime.switchMap(next);}catch(error){visual.dispose();throw error;}world.dispose();world=visual;currentMap=next;},dispose(){world.dispose();sdk.dispose();}};
+const viewportUI=Array.from(canvas.parentElement!.children).filter(element=>element!==canvas) as HTMLElement[];
+const sdkPresentation=sdk.createPresentation({container:canvas.parentElement!});
+// Keep the source HUD above the SDK input surface and inside its UI boundary.
+// Otherwise the transparent orbit surface intercepts reset/quick-slot clicks.
+for(const element of viewportUI)sdkPresentation.ui.mount(element);
+const interactionVisuals=buildInteractionVisuals(scene);
+const profiles=new Map<string,AssetProfileV1>();
+const exportedProfiles=new Map<string,string>();
+for(const id of ['person',...SPECS.map(s=>s.id)]){
+  const project=(effectiveProfiles as {profiles:AssetProfileV1[]}).profiles.find(p=>p.assetId===id);
+  let profile=project??getDefaultProfile(id)!;
+  exportedProfiles.set(id,JSON.stringify(profile));
+  // Local overrides are visibly marked and never silently included in a delivery.
+  if(new URLSearchParams(location.search).get('debugProfiles')==='1'&&(location.hostname==='127.0.0.1'||location.hostname==='localhost')){try{profile=loadAssetProfile(localStorage,id)??profile;}catch{}}
+  profiles.set(id,profile);applyControlProfile(runtime,profile);
 }
-main().catch(error => { loading.textContent = `场景启动失败：${error instanceof Error ? error.message : String(error)}`; console.error(error); });
+let cameraProfileId='';
+function syncCameraProfile(force=false){const id=sim.vehicle?.spec.id??'person';if(force||id!==cameraProfileId){cameraProfileId=id;applyCameraProfile(runtime,profiles.get(id)!);}}
+syncCameraProfile();
+const frameClock={reset(){}};
+const presentation={get vehicles(){return sim.vehicles;},get player(){return sim.player;},get targets(){return training.readInteractionTargets(sim.humanoid);},snap(_sim:unknown){}};
+const pressed=new Set<string>();let dragging=false,lastX=0,lastY=0,jumpPressed=false,paused=false,ready=true,toastUntil=0,lastMessage='',lastActive=-99;
+let humanCommands:HumanoidInput={},humanDemo:HumanoidDemo|null=null,humanDebug=false;
+let disposeThumbnails:(()=>void)|undefined;
+const capsuleDebug=new T.Mesh(new T.CapsuleGeometry(.28,1.12,4,8),new T.MeshBasicMaterial({color:0x72ffb4,wireframe:true,transparent:true,opacity:.6}));capsuleDebug.visible=false;scene.add(capsuleDebug);let debugHeight=1.68;
+let panelOpen=false,quickSlots:AssetEntry[]=[];
+const elementCache=new Map<string,HTMLElement>();
+const el=(id:string)=>{let element=elementCache.get(id);if(!element){element=document.getElementById(id)!;elementCache.set(id,element);}return element;};
+const setText=(id:string,value:string)=>{const element=el(id);if(element.textContent!==value)element.textContent=value;};
+const setHTML=(id:string,value:string)=>{const element=el(id);if(element.innerHTML!==value)element.innerHTML=value;};
+const fpsMeter=new FrameRateMeter();
+const pacingPanel=new FramePacingPanel(el('performancePanel'));
+function resetFPS(state:string){fpsMeter.reset();pacingPanel.reset();setText('fpsReadout',`渲染回调 —/s · ${state}`);el('fpsReadout').removeAttribute('data-slow');}
+function input(){return panelOpen?emptyInput():readControls(pressed,!!sim.vehicle,jumpPressed,humanCommands);}
+function toast(text:string){el('toast').textContent=text;el('toast').classList.add('show');toastUntil=performance.now()+3300;}
+function clearInput(){runtime.clearInput();pressed.clear();jumpPressed=false;humanCommands={};dragging=false;}
+function syncTeleport(){humanDemo=null;clearInput();runtime.clearInput();presentation.snap(sim);frameClock.reset();lastActive=-99;toast(sim.message);if(paused)renderPausedState();if(!panelOpen)sdkPresentation.focus();}
+function selectAsset(id:string){if(!ready)return;if(id==='person'){if(sim.vehicle){runtime.interact();syncTeleport();}else {sim.message='当前已是人物 · 可前往人物动作测试点';toast(sim.message);}library.setActive(sim.vehicle?.spec.id??'person');return;}const v=sim.vehicles.find(v=>v.spec.id===id);if(v&&!sim.available(v)){toast('这个载具不适配当前地图，请在测试场景中切换到综合园区。');return;}const selected=runtime.approach(id);if(selected)syncTeleport();else toast(sim.message);}
+function visit(n:number){const spec=SPECS[n]!;const spawn=session.map.spawns.find(s=>s.vehicleId===spec.id)??{id:spec.id,vehicleId:spec.id,name:spec.name,position:spec.spawn,yaw:spec.yaw,regionId:'staging'};runtime.prepare(spec.id,spawn);syncTeleport();}
+function pause(value=!paused,showOverlay=true){paused=value;if(value)sdk.stop();else void sdk.start();frameClock.reset();presentation.snap(sim);visuals.forEach(resetVehicleWheels);resetFPS(value?'已暂停':ready?'采样中':'加载中');clearInput();el('pauseOverlay').classList.toggle('open',value&&showOverlay);el('pauseButton').textContent=value?'继续':'暂停';if(!value&&!panelOpen)sdkPresentation.focus();}
+function setCameraMode(mode:number){clearInput();runtime.setCameraMode(mode as 0|1|2);if(paused)renderPausedState();setText('cameraButton',`相机 · ${['跟随',sim.vehicle?'驾驶位':'近距','俯视'][follow.mode]}`);toast(`相机：${['自动跟随',sim.vehicle?'驾驶位':'近距离观察','俯视观察'][follow.mode]}`);sdkPresentation.focus();}
+function cycleCamera(){setCameraMode((follow.mode+1)%3);}
+function interact(){if(!ready||paused||panelOpen)return;humanDemo=null;clearInput();runtime.interact();toast(sim.message);}
+window.addEventListener('keydown',e=>{
+  if(e.altKey||e.metaKey||panelOpen||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable=true],dialog,.asset-library,.camera-inspector')))return;
+  if(e.repeat)return;
+  if(['KeyW','KeyA','KeyS','KeyD','Space'].includes(e.code))humanDemo=null;
+  if(!e.repeat){if(e.code==='Escape'||e.code==='KeyP'){pause();return;}if(paused||!ready)return;
+    if(/^Digit[1-6]$/.test(e.code)){const entry=quickSlots[Number(e.code.slice(-1))-1];if(entry)selectAsset(entry.id);}
+  }
+});
+window.addEventListener('blur',clearInput);
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&ready)pause(true);});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+el('cameraButton').onclick=cycleCamera;el('resetButton').onclick=async()=>{await sdk.reset();syncTeleport();};el('pauseButton').onclick=()=>pause();el('resumeButton').onclick=()=>pause(false);el('touchInteract').onclick=interact;
+function renderQuickSlots(assets:AssetEntry[]){
+  quickSlots=assets;const host=el('quickSlots');host.replaceChildren();
+  assets.forEach((asset,n)=>{
+    const b=document.createElement('button');b.className='vehicle-button';b.dataset.vehicleId=asset.id;b.style.setProperty('--vehicle-color',asset.color);b.title=`前往 ${asset.name}`;
+    for(const [className,text] of [['vehicle-number',String(n+1).padStart(2,'0')],['vehicle-name',asset.name]]){
+      const span=document.createElement('span');span.className=className!;span.textContent=text!;if(className==='vehicle-name'||className==='vehicle-en')span.style.display='block';b.append(span);
+    }
+    b.onclick=()=>{el('quickPanel').hidden=true;el('quickButton').setAttribute('aria-expanded','false');selectAsset(asset.id);};b.classList.toggle('selected',asset.id===sim.vehicle?.spec.id);host.append(b);
+  });
+}
+const onPanelChange=(open:boolean)=>{panelOpen=open;if(open)sdk.stop();else if(!paused)void sdk.start();clearInput();frameClock.reset();resetFPS(open?'面板暂停':paused?'已暂停':'采样中');};
+const catalog=buildWorkspaceCatalog();
+const library=mountAssetLibrary(el('libraryHost'),{assets:catalog,onSelect:selectAsset,onOpenChange:open=>{clearInput();el('workspace').classList.toggle('library-open',open);el('libraryButton').setAttribute('aria-pressed',String(open));el('exploreButton').setAttribute('aria-pressed',String(!open));},onQuickSlotsChange:renderQuickSlots});
+renderQuickSlots(library.getQuickSlots());
+function renderPausedState(_dt=0){updateVisuals(0);updateUI();renderer.render(scene,camera);}
+function prepareSelection(mapId:string,regionId:string,assetId:string){
+  humanDemo=null;
+  if(!ready)throw new Error('场地仍在加载');
+  const map=getMap(mapId),mode=assetId==='person'?'character':SPECS.find(s=>s.id===assetId)?.mode;
+  if(!mode||!map.regions.find(r=>r.id===regionId)?.modes.includes(mode))throw new Error('所选主体不适配这个训练区域');
+
+  session.switchMap(mapId);world=session.world;follow.solids=world.solids;follow.environment=session.queries;
+  prepareCourse(sim,map,regionId,assetId);pause(false,false);syncTeleport();resetFPS('采样中');
+}
+function humanoidState(){const h=sim.humanoid;return {地图:session.map.name,操控权:sim.vehicle?sim.vehicle.spec.name:'人物',状态:h?.state,动画:character.clipLabel,骨骼:character.sourceCharacter?.rigTargets,已载入动作:character.availableHumanoidClips.size,速度:h?.speed,着地:h?.grounded,姿态:h?.stance,胶囊高度:h?.capsuleHeight,水中:h?.swimming,泳姿:h?.swimStyle,动作:h?.skills.pose??h?.surface.pose,探测:h?.probe?{类型:h.probe.kind,高度:h.probe.height,厚度:h.probe.depth,原因:h.probe.reason}:null,提示:h?.lastResult,携带:h?.skills.carrying,座椅:h?.skills.seated,自动演示:humanDemo?.trial.name??null};}
+function prepareHumanTrial(mapId:string,trial:CharacterTrial,demo=false){
+  if(!ready)throw new Error('人物动作仍在加载');
+  session.switchMap(mapId);world=session.world;follow.solids=world.solids;follow.environment=session.queries;
+  if(!runtime.prepareCharacter(trial.position,trial.yaw))throw new Error(sim.message);
+  sim.message=`${trial.name} · ${trial.description}`;humanDemo=null;pause(false,false);syncTeleport();
+  if(demo){humanDemo=new HumanoidDemo(trial,sim.humanoid?.events.length??0);toast(`正在演示：${trial.name} · WASD 可随时接管`);}
+}
+const humanPanel=mountHumanoidLab(document.body,{
+  onOpenChange:onPanelChange,onPrepare:prepareHumanTrial,getState:humanoidState,
+  onAction:command=>{if(sim.vehicle){toast('请先离开载具，再执行人物动作');return;}humanDemo=null;if(paused)pause(false);if(command==='jump')jumpPressed=true;else humanCommands={...humanCommands,...command};sdkPresentation.focus();},
+  getAutoTraverse:()=>sim.humanoid?.autoTraverse??false,setAutoTraverse:value=>{if(sim.humanoid)sim.humanoid.autoTraverse=value;},
+  getSmoothing:()=>character.sourceCharacter?.smoothing??true,setSmoothing:value=>{if(character.sourceCharacter)character.sourceCharacter.smoothing=value;},
+  getDebug:()=>humanDebug,setDebug:value=>{humanDebug=value;},
+});
+const workbench=mountWorkbench(document.body,{
+  onOpenChange:onPanelChange,onPrepare:prepareSelection,getMapId:()=>session.map.id,getAssetId:()=>sim.vehicle?.spec.id??'person',
+  getProfile:id=>structuredClone(profiles.get(id)!),
+  applyProfile:value=>{const profile=parseAssetProfile(value);applyControlProfile(runtime,profile);profiles.set(profile.assetId,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
+  resetProfile:id=>{clearAssetProfile(localStorage,id);const profile=getDefaultProfile(id)!;profiles.set(id,profile);applyControlProfile(runtime,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  getState:()=>({地图:session.map.name,主体:sim.vehicle?.spec.name??'人物',资产ID:sim.vehicle?.spec.id??'person',操控权:sim.vehicle?'驾驶位':'步行',位置:(sim.vehicle?.position??sim.player.position).toArray().map(n=>+n.toFixed(2)),速度米每秒:+(sim.vehicle?.velocity.length()??sim.player.velocity.length()).toFixed(2),模拟秒:+sim.time.toFixed(3),已暂停:paused,相机臂长:+follow.distance.toFixed(2),相机避障:follow.collisionLimited,视野度:+camera.fov.toFixed(1),动画:sim.player.animation,生物模型:visuals[sim.active]?.creature?.sourceStatus,步态:sim.vehicle?.creature?.gait,骑乘姿势:sim.vehicle?.spec.characterPose==='ride'?'程序姿势占位 · 待替换专用骑乘动作':undefined}),
+  togglePause:()=>pause(!paused,false),step:()=>{if(!ready)return;pause(true,false);runtime.setInput(emptyInput());sdk.step({},1);renderPausedState(FIXED_STEP);},
+});
+const cameraDirection=new T.Vector3();
+const inspector=mountInspector(el('inspectorHost'),{
+  getAssetId:()=>sim.vehicle?.spec.id??'person',
+  getSubject:()=>({name:sim.vehicle?.spec.name??'主体人物',subtitle:sim.vehicle?`${sim.vehicle.spec.en} / ${sim.vehicle.spec.kernel}`:'TRAVERSAL / 101 BONES · 48 CLIPS',state:paused?'已暂停':sim.vehicle?'驾驶中':character.clipLabel,color:sim.vehicle?.spec.color??'#b4d7c2'}),
+  getProfile:id=>structuredClone(profiles.get(id)!),
+  applyProfile:value=>{const profile=parseAssetProfile(value);profiles.set(profile.assetId,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
+  resetProfile:id=>{const profile=structuredClone(profiles.get(id)!);profile.camera=getDefaultProfile(id)!.camera;saveAssetProfile(localStorage,profile);profiles.set(id,profile);syncCameraProfile(true);if(paused)renderPausedState();},
+  getCamera:()=>{camera.getWorldDirection(cameraDirection);return {mode:follow.mode,distance:camera.position.distanceTo(follow.target),fovDegrees:camera.fov,yawRadians:Math.atan2(cameraDirection.x,cameraDirection.z),pitchRadians:Math.asin(cameraDirection.y),collisionLimited:follow.collisionLimited};},
+  setCameraMode,
+  getTelemetry:()=>({speedKmh:(sim.vehicle?.velocity.length()??sim.player.velocity.length())*3.6,altitudeMeters:(sim.vehicle?.position??sim.player.position).y,paused,position:(sim.vehicle?.position??sim.player.position).toArray(),headingDegrees:((sim.vehicle?.yaw??sim.player.yaw)*180/Math.PI%360+360)%360}),
+  onInteract:clearInput,
+});
+function toggleInspector(show:boolean){if(show&&innerWidth<=1000)library.close();el('workspace').classList.toggle('inspector-closed',!show);el('workspace').classList.toggle('inspector-mobile-open',show);el('debugButton').setAttribute('aria-pressed',String(show));if(show)inspector.sync();}
+el('libraryButton').onclick=()=>library.isOpen()?library.close():library.open();
+el('exploreButton').onclick=()=>{library.close();el('quickPanel').hidden=true;sdkPresentation.focus();};
+el('scenesButton').onclick=el('sceneTopButton').onclick=()=>{library.close();workbench.open('scenes');};
+el('debugButton').onclick=()=>toggleInspector(library.isOpen()||el('workspace').classList.contains('inspector-closed')||innerWidth<=720&&!el('workspace').classList.contains('inspector-mobile-open'));
+el('inspectorClose').onclick=()=>toggleInspector(false);
+el('advancedButton').onclick=()=>workbench.open('camera');el('humanButton').onclick=()=>{library.close();humanPanel.open();};
+el('quickButton').onclick=()=>{clearInput();const panel=el('quickPanel');panel.hidden=!panel.hidden;el('quickButton').setAttribute('aria-expanded',String(!panel.hidden));};
+el('mapExpandButton').onclick=()=>{const expanded=el('minimap').classList.toggle('expanded');el('mapExpandButton').setAttribute('aria-expanded',String(expanded));el('mapExpandButton').setAttribute('aria-label',expanded?'缩小小地图':'展开小地图');};
+el('performanceButton').onclick=()=>{el('performancePanel').hidden=!el('performancePanel').hidden;el('performanceButton').setAttribute('aria-expanded',String(!el('performancePanel').hidden));};
+const mapSelect=el('mapSelect') as HTMLSelectElement;
+for(const map of MAPS){const option=document.createElement('option');option.value=map.id;option.textContent=map.name;mapSelect.append(option);}mapSelect.value=session.map.id;
+mapSelect.onchange=()=>{clearInput();const map=getMap(mapSelect.value);let id=sim.vehicle?.spec.id??'person';if(!map.regions.some(r=>r.modes.includes(sim.vehicle?.spec.mode??'character')))id='person';try{prepareSelection(map.id,defaultRegion(map,id).id,id);}catch(error){toast(String(error));mapSelect.value=session.map.id;}};
+const contributionDialog=el('contributionDialog') as HTMLDialogElement;
+el('contributeButton').onclick=()=>{contributionDialog.showModal();onPanelChange(true);};el('contributionClose').onclick=()=>contributionDialog.close();contributionDialog.addEventListener('close',()=>onPanelChange(false));
+el('downloadManifest').onclick=()=>{const template={schema:'vector.asset-contribution.v1',id:'team.asset-name',name:'填写资产名称',version:'0.1.0',contributor:'填写贡献者',source:'填写模型 / 动作来源与授权',status:'draft',kind:'vehicle',environment:'ground',tags:[],model:'assets/team/asset-name/model.glb',controlProfile:'profiles/team.asset-name.json',testCases:[],knownLimitations:[]};const url=URL.createObjectURL(new Blob([JSON.stringify(template,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='asset-contribution.template.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+// Delegation also covers rows and quick slots rebuilt after search/favorites.
+const releaseUIInput=(event:Event)=>{const target=event.target instanceof HTMLElement?event.target.closest('button,input,select,textarea'):null;if(target&&!target.hasAttribute('data-key'))clearInput();};
+document.addEventListener('pointerdown',releaseUIInput);document.addEventListener('focusin',releaseUIInput);
+window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();capsuleDebug.geometry.dispose();capsuleDebug.material.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
+document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);pressed.add(b.dataset.key!);if(b.dataset.key==='Space')jumpPressed=true;};const release=()=>pressed.delete(b.dataset.key!);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;});
+const resizeStage=()=>{const width=canvas.clientWidth,height=canvas.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(ready&&(paused||panelOpen))renderPausedState();};
+const stageObserver=new ResizeObserver(resizeStage);stageObserver.observe(el('stage'));
+const footerObserver=new ResizeObserver(()=>{document.documentElement.style.setProperty('--footer',`${el('shortcutFooter').offsetHeight}px`);});footerObserver.observe(el('shortcutFooter'));
+window.addEventListener('resize',resizeStage);
+const mapCanvas=document.querySelector<HTMLCanvasElement>('#map')!,ctx=mapCanvas.getContext('2d')!;
+function drawMap(){
+  const w=376,h=364,map=session.map,min=map.bounds.min,max=map.bounds.max;
+  const scale=Math.min((w-34)/(max[0]-min[0]),(h-34)/(max[2]-min[2]));
+  const cx=w/2-(min[0]+max[0])*.5*scale,cy=h/2+(min[2]+max[2])*.5*scale;
+  const mp=(x:number,z:number)=>[cx+x*scale,cy-z*scale] as const;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#294552';ctx.fillRect(12,12,w-24,h-24);
+  ctx.strokeStyle='#44616c';ctx.lineWidth=.7;
+  for(let x=16;x<w;x+=32){ctx.beginPath();ctx.moveTo(x,14);ctx.lineTo(x,h-14);ctx.stroke();}
+  for(let y=16;y<h;y+=32){ctx.beginPath();ctx.moveTo(14,y);ctx.lineTo(w-14,y);ctx.stroke();}
+  for(const water of map.water){const [x,y]=mp(water.min[0],water.max[2]);ctx.fillStyle='#267283';ctx.fillRect(x,y,(water.max[0]-water.min[0])*scale,(water.max[2]-water.min[2])*scale);}
+  for(const box of map.boxes){if(box.collision===false||box.size[0]>150||box.size[2]>150)continue;const [x,y]=mp(box.position[0],box.position[2]);ctx.fillStyle=box.position[1]<-1?'#719f9d55':'#a7bfc288';ctx.fillRect(x-box.size[0]*scale/2,y-box.size[2]*scale/2,Math.max(1,box.size[0]*scale),Math.max(1,box.size[2]*scale));}
+  ctx.font='bold 15px "Segoe UI"';
+  for(const region of map.regions){const [x,y]=mp(region.center[0],region.center[2]);ctx.strokeStyle=region.color;ctx.fillStyle=region.color;ctx.lineWidth=1;ctx.strokeRect(x-region.size[0]*scale/2,y-region.size[1]*scale/2,region.size[0]*scale,region.size[1]*scale);ctx.fillText(region.name.split(' / ')[0]!,x+3,y-4);}
+  sim.vehicles.forEach((v,n)=>{if(!sim.available(v))return;const [x,y]=mp(v.position.x,v.position.z);ctx.fillStyle=v.spec.color;ctx.beginPath();ctx.arc(x,y,sim.active===n?5:3,0,Math.PI*2);ctx.fill();});
+  const p=sim.vehicle?.position??sim.player.position,[x,y]=mp(p.x,p.z),yaw=sim.vehicle?.yaw??sim.player.yaw;
+  ctx.save();ctx.translate(x,y);ctx.rotate(yaw);ctx.fillStyle='#f7fbd9';ctx.shadowColor='#fff';ctx.shadowBlur=7;ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(-5,6);ctx.lineTo(0,3);ctx.lineTo(5,6);ctx.closePath();ctx.fill();ctx.restore();
+}
+let lastUIUpdate=-Infinity;
+function updateUI(){
+  if(performance.now()-lastUIUpdate<100)return;lastUIUpdate=performance.now();
+  const v=sim.vehicle,p=sim.player,nearest=sim.nearest(),speed=v?v.velocity.length():Math.hypot(p.velocity.x,p.velocity.z);
+  const h=sim.humanoid,traversalPrompt=humanoidTraversalReady(h)?`WASD + Space · 朝向障碍${h!.swimming?'攀上岸边':h!.probe!.kind==='vault'?'翻越':'攀上'}`:null;
+  if(lastActive!==sim.active){
+    library.setActive(v?.spec.id??'person');
+    lastActive=sim.active;el('category').textContent=v?`${['plane','glider','space','dragon'].includes(v.spec.mode)?'FLIGHT':v.spec.mode==='sub'||v.spec.mode==='boat'?'WATER':'GROUND'} / ${v.spec.kernel}`:'ON FOOT / K01';
+    el('activeName').textContent=v?.spec.name??'人物动作训练';el('activeEn').textContent=v?`${v.spec.en} / PILOT CONTROL`:'TRAVERSAL LAB / 101 BONES';
+    el('stateLabel').textContent=v?v.spec.characterPose==='ride'?'骑乘位已绑定':'驾驶位已绑定':'主体人物';
+    el('controls').innerHTML=controlsFor(v?.spec.mode??'character').map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
+    setText('shortcutSubject',v?'载具操作':'人物操作');
+    const systemKeys:[string,string][]=[...(v?.spec.mode==='space'?[]:[['↑ ↓ ← →','环绕相机'] as [string,string]]),['鼠标拖动','环绕'],['滚轮','缩放'],['R','复位'],['Esc / P','暂停'],['1–6','快速前往']];
+    setHTML('systemKeys',systemKeys.map(([keys,title])=>`<span class="shortcut"><kbd>${keys}</kbd><span>${title}</span></span>`).join(''));
+    el('cameraNote').textContent=v?v.spec.mode==='space'?'相机随飞行器上方向旋转。拖动鼠标自由观察。':'方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。':'方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。';
+    document.querySelectorAll<HTMLElement>('[data-vehicle-id]').forEach(b=>b.classList.toggle('selected',b.dataset.vehicleId===v?.spec.id));
+  }
+  el('stateValue').textContent=v?(sim.transition>0?'正在入座':v.submerged?'载具涉水，请复位':v.creature?({graze:'休息',walk:'慢走',trot:'快步',gallop:'疾驰',rest:'停驻',flap:'振翅',glide:'滑翔'}[v.creature.gait]):v.spec.mode==='glider'&&!v.launched?'等待释放':v.spec.mode==='plane'?`油门 ${Math.round(v.throttle*100)}%`:'驾驶中'):p.swimming?'游泳':p.grounded?'地面移动':'空中';
+  setText('speed',String(Math.round(speed*3.6)));const altitude=(v?.position??p.position).y;setText('heightLabel',altitude<-2?'深度':'海拔');el('height').textContent=`${Math.round(altitude<-2?-altitude-2:altitude)} m`;el('throttle').style.width=`${Math.min(100,v?.spec.mode==='plane'?v.throttle*100:speed/(v?.spec.speed??7.2)*100)}%`;
+  el('interaction').classList.toggle('small',!!v||nearest<0);
+  if(v) setHTML('interaction',v.submerged?'<kbd>R</kbd>载具涉水 · 复位后继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
+  else setHTML('interaction',nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索');
+  if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint()??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
+  else setText('bottomHint','方向键 / 鼠标环绕 · 滚轮缩放 · 页面按钮切换相机 · R 返回起点 · Esc 暂停');
+  const pos=v?.position??p.position;let zone=session.map.regions[0]!,distance=Infinity;for(const region of session.map.regions){const inside=Math.abs(pos.x-region.center[0])<=region.size[0]/2&&Math.abs(pos.z-region.center[2])<=region.size[1]/2;const d=inside?region.size[0]*region.size[1]*.00001:1000+Math.hypot(pos.x-region.center[0],pos.z-region.center[2]);if(d<distance){distance=d;zone=region;}}setText('zone',zone.name);setText('mapBadge',session.map.id==='campus'?'综合园区 · 1 km²':session.map.name);
+  mapSelect.value=session.map.id;setText('cameraButton',`相机 · ${['跟随',v?'驾驶位':'近距','俯视'][follow.mode]}`);inspector.sync();
+  el('debugButton').setAttribute('aria-pressed',String(!el('workspace').classList.contains('inspector-closed')&&(innerWidth>720||el('workspace').classList.contains('inspector-mobile-open'))&&!(innerWidth<=1000&&library.isOpen())));
+  if(sim.message&&sim.message!==lastMessage){lastMessage=sim.message;toast(sim.message);}if(performance.now()>toastUntil)el('toast').classList.remove('show');drawMap();
+}
+
+function updateCreatureVisual(n:number,dt:number){const visual=visuals[n]!,state=sim.vehicles[n]!,c=state.creature;
+  if(visual.root.visible&&visual.creature)visual.creature.update({position:state.position,rotation:state.rotation,speed:state.speed,steering:state.steering,grounded:state.grounded,time:sim.time,gait:c?.gait??'rest',phase:c?.phase??0,flying:c?.flying??false,...(c?{leadPosition:c.leadPosition,leadYaw:c.leadYaw}:{})},dt);}
+function updateVisuals(dt:number){
+  visuals.forEach((vis,n)=>{const state=sim.vehicles[n]!;updateCreatureVisual(n,dt);updateVehicleWheels(vis,state,{grounded:state.grounded&&!state.submerged,dt,revision:sim.teleportRevision,active:n===sim.active});if(n===sim.active)vis.rotors.forEach(r=>r.rotation.z+=(state.speed+4)*dt*4);vis.label.visible=n!==sim.active&&camera.position.distanceToSquared(state.position)<8100;});
+  const held=character.carriedAttachment;interactionVisuals.update(training.readInteractionTargets(sim.humanoid).map(target=>held&&target.id===held.id&&target.state==='carried'?{...target,position:held.position}:target));
+  world.update(sim.time,sim.vehicle?.position??sim.player.position,follow.underwater);
+  updateUI();
+}
+runtime.onVisualUpdate(updateVisuals);
+let releaseUIOverride:(()=>void)|undefined;
+sdk.onUpdate(({deltaSeconds})=>{
+  const demo=humanDemo?.step(deltaSeconds,humanoidTraversalReady(sim.humanoid));if(humanDemo&&!demo)humanDemo=null;
+  const override=demo??(pressed.size||jumpPressed||Object.keys(humanCommands).length?input():undefined);
+  if(override)releaseUIOverride=runtime.setInput(override);
+  else if(releaseUIOverride){releaseUIOverride();releaseUIOverride=undefined;}
+  jumpPressed=false;humanCommands={};syncCameraProfile();
+});
+sdk.onReset(()=>{clearInput();humanDemo=null;lastActive=-99;});
+await sdk.start();
+el('loading').classList.add('hidden');sdkPresentation.focus();
+toast('Whitebox SDK · 101 骨 / 48 动作 / 19 载具 / 3 地图');
+disposeThumbnails=renderAssetThumbnails([{id:'person',object:character.root},...visuals.map((v,n)=>({id:SPECS[n]!.id,object:v.root}))],(id,url)=>library.setThumbnail(id,url));
+// Register DOM state with Presentation; model input continues to capture only the world canvas.
+const status=document.createElement('span');status.style.cssText='position:absolute;right:12px;bottom:12px;color:#fff;background:#20343ddd;padding:6px;font:12px sans-serif';
+sdkPresentation.ui.bind({id:'configuration-status',element:status,clock:'live',read:()=>[...profiles].some(([id,p])=>JSON.stringify(p)!==exportedProfiles.get(id)),render:value=>{status.textContent=value?'配置有未导出修改':'项目配置已锁定';}});
+const exportButton=document.createElement('button');exportButton.textContent='导出全部配置';exportButton.onclick=()=>{const value={schemaVersion:1,profiles:[...profiles.values()]};const uri=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=uri;a.download='profiles.json';a.click();setTimeout(()=>URL.revokeObjectURL(uri),1000);toast('将 profiles.json 放回项目目录后重新编译，交付才会使用这些参数');};
+el('advancedButton').parentElement!.append(exportButton);
+// Small local command surface for repeatable training selections and state inspection.
+const labAPI={
+  getState:()=>({mapId:session.map.id,activeVehicle:sim.vehicle?.spec.id??null,mode:sim.vehicle?.spec.mode??'character',position:(sim.vehicle?.position??sim.player.position).toArray(),speed:sim.vehicle?.speed??sim.player.velocity.length(),animation:sim.player.animation,ready,paused,simulationTime:sim.time,camera:{mode:follow.mode,yaw:follow.yaw,pitch:follow.pitch,distance:follow.distance,position:camera.position.toArray(),target:follow.target.toArray()},vehicleCount:SPECS.length,creature:sim.vehicle?.creature,creatureSources:visuals.filter(v=>v.creature).map(v=>({id:v.root.name,...v.creature!.sourceStatus}))}),
+  selectVehicle:(id:string)=>{const n=SPECS.findIndex(s=>s.id===id);if(n<0)throw new Error('Unknown vehicle');visit(n);return labAPI.getState();},
+  reset:async()=>{await sdk.reset();syncTeleport();return labAPI.getState();},
+  humanoidState:()=>({...humanoidState(),events:sim.humanoid?.events.slice(-6),position:sim.humanoid?.position.toArray(),targets:[...sim.humanoid!.skills.targets.values()].map(t=>({id:t.definition.id,state:t.state,position:t.position.toArray()}))}),
+};
+const humanoidActions=createActionBridge(()=>sim.humanoid!,()=>ready&&!paused&&!panelOpen&&sim.active<0);
+Object.assign(window,{trainingGround:labAPI,traversalActions:humanoidActions});
+type ModelContext={registerTool:(tool:{name:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean};execute:(input:unknown)=>unknown},options:{signal:AbortSignal})=>void|Promise<void>};
+const context=(document as Document&{modelContext?:ModelContext}).modelContext;
+if(context?.registerTool){
+  const lifecycle=new AbortController();
+  const register=(name:string,description:string,inputSchema:object,readOnlyHint:boolean,execute:(input:unknown)=>unknown)=>{
+    try{void Promise.resolve(context.registerTool({name,description,inputSchema,annotations:{readOnlyHint},execute},{signal:lifecycle.signal})).catch(error=>console.warn('Training tool unavailable',error));}catch(error){console.warn('Training tool unavailable',error);}
+  };
+  register('inspect_training_ground','Read current vehicle, location, speed and character state.',{type:'object',properties:{},additionalProperties:false},true,()=>labAPI.getState());
+  register('inspect_humanoid_training','Read the original character action, rig, interaction targets and recent traversal events.',{type:'object',properties:{},additionalProperties:false},true,()=>labAPI.humanoidState());
+  register('prepare_character_trial','Move the character to an authored action workshop trial; optionally play its interruptible demonstration.',{type:'object',properties:{mapId:{type:'string',enum:MAPS.filter(m=>m.characterTrials?.length).map(m=>m.id)},trialId:{type:'string'},demo:{type:'boolean'}},required:['mapId','trialId'],additionalProperties:false},false,input=>{
+    if(!input||typeof input!=='object'||!('mapId'in input)||!('trialId'in input)||typeof input.mapId!=='string'||typeof input.trialId!=='string')throw new Error('mapId and trialId are required');
+    const trial=getMap(input.mapId).characterTrials?.find(t=>t.id===input.trialId);if(!trial)throw new Error('Unknown character trial');
+    humanPanel.close();prepareHumanTrial(input.mapId,trial,'demo'in input&&input.demo===true);return labAPI.humanoidState();
+  });
+  register('perform_character_action','Execute an original character skill with a stable request id and optional interaction target; source state and clip guards apply.',{type:'object',properties:{action:{type:'string',enum:['roll','slide','pickup','putDown','sit','standUp']},requestId:{type:'string'},targetId:{type:'string'}},required:['action','requestId'],additionalProperties:false},false,input=>humanoidActions.execute(input as SkillRequest));
+  register('prepare_training_vehicle','Restore the selected vehicle at its staging point and move the character next to it. Does not board the vehicle.',{type:'object',properties:{vehicleId:{type:'string',enum:SPECS.map(s=>s.id)}},required:['vehicleId'],additionalProperties:false},false,input=>{
+    if(!ready)throw new Error('Training ground is still loading');
+    if(!input||typeof input!=='object'||!('vehicleId'in input)||typeof input.vehicleId!=='string')throw new Error('vehicleId is required');
+    const result=labAPI.selectVehicle(input.vehicleId);updateUI();return result;
+  });
+  register('enter_or_exit_training_vehicle','Board the nearest stationary vehicle, or exit the currently occupied vehicle when speed and landing clearance allow.',{type:'object',properties:{},additionalProperties:false},false,()=>{
+    if(!ready||paused)throw new Error('Resume the loaded training ground first');
+    humanDemo=null;if(!runtime.interact())throw new Error(sim.message);updateUI();return labAPI.getState();
+  });
+  window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
+}

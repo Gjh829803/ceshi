@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -21,6 +21,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  control: ['state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
  presentation: ['createPresentation','state','execute','getEntityState','reset'],
+ training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
 export function publicContractTopic(source: string, topic: AuthoringTopic): string {
@@ -50,4 +51,16 @@ export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  let selected=sections[0]??'';
  for(let i=1;i<sections.length;i+=2) if(sections[i]===topic) selected+=sections[i+1]??'';
  return selected.trim();
+}
+
+/** Extract the public shapes, not the runtime implementation or bundled datasets. */
+export function trainingContractSource(source:string):string {
+ const file=ts.createSourceFile('training.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+ const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
+ const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingRuntime');
+ if(runtime){const allowed=new Set(['snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','onVisualUpdate']);
+  const signatures=runtime.members.filter((member):member is ts.MethodDeclaration=>ts.isMethodDeclaration(member)&&allowed.has(member.name.getText(file))).map(method=>{
+   const end=method.body?.pos??method.end;return source.slice(method.getStart(file),end).trim()+';';
+  });declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
+ return declarations.join('\n');
 }

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { PROJECT_SCHEMA, type Project, type CreatorProfile, sha256 } from './contracts.js';
+import { catalogResources, publicCatalogValue, readCatalogResource } from './asset-resources.js';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
@@ -14,7 +15,7 @@ const EXCLUDED = new Set(['.git', '.three-creator', 'node_modules', 'outputs', '
 // LWDP owns task-root scratch (Codex sessions, tool wrappers and changing logs).
 // Exclude it before any filesystem access; nested author directories keep their meaning.
 const HOST_OWNED_ROOTS = new Set(['scratch']);
-const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.glb', '.gltf', '.bin', '.wasm', '.woff', '.woff2', '.mp3', '.ogg', '.wav']);
+const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.glb', '.gltf', '.bin', '.wasm', '.woff', '.woff2', '.ttf', '.txt', '.mp3', '.ogg', '.wav']);
 export type AssetCatalogEntry = Record<string, any> & { id: string; uri: string; sha256: string; byteLength: number; sourcePath: string };
 export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
 export type PrebuiltRuntimeManifest = { schemaVersion: 1; profile: CreatorProfile; cacheIdentity: string; runtimeHash: string; files: Record<string, string> };
@@ -47,7 +48,7 @@ export async function readCatalog(): Promise<AssetCatalogEntry[]> {
     return catalog.assets;
   } catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
 }
-export function publicAsset(entry: AssetCatalogEntry): Record<string, unknown> { const { sourcePath: _private, ...rest } = entry; return rest; }
+export function publicAsset(entry: AssetCatalogEntry): Record<string, unknown> { return publicCatalogValue(entry); }
 async function copyTree(from: string, to: string) {
   await mkdir(to, { recursive: true });
   for (const entry of await readdir(from)) {
@@ -154,13 +155,11 @@ export class ThreeCompiler {
     await rm(root, { recursive: true, force: true }); await mkdir(sourceRoot, { recursive: true }); await mkdir(playableRoot, { recursive: true });
     for (const [name, data] of sourceFiles) { const file = path.join(sourceRoot, name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, data); }
     await copyTree(sourceRoot, playableRoot); await copyTree(runtime.root, path.join(playableRoot, 'runtime'));
-    for (const asset of selected) {
-      const source = path.resolve(REPOSITORY_ROOT, asset.sourcePath);
-      if (!isWithin(REPOSITORY_ROOT, source) || !isWithin(REPOSITORY_ROOT, await realpath(source)) || (await lstat(source)).isSymbolicLink()) throw new Error('THREE_ASSET_SOURCE_ESCAPE');
-      const bytes = await readFile(source);
-      if (sha256(bytes) !== asset.sha256 || bytes.length !== asset.byteLength) throw new Error(`THREE_ASSET_HASH_MISMATCH: ${asset.id}`);
-      if (!/^\.\/assets\/subjects\/[a-f0-9]{64}\.glb$/.test(asset.uri)) throw new Error(`THREE_ASSET_URI_INVALID: ${asset.id}`);
-      const destination = path.join(playableRoot, asset.uri); await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, bytes);
+      for (const asset of selected) {
+        for (const resource of catalogResources(asset)) {
+          const bytes = await readCatalogResource(REPOSITORY_ROOT, resource);
+          const destination = path.join(playableRoot, resource.uri); await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, bytes);
+        }
     }
     await writeFile(path.join(playableRoot, 'asset-definitions.json'), JSON.stringify({ schemaVersion: 1, assets: selected.map(publicAsset) }, null, 2));
     const imports: Record<string, string> = { three: './runtime/three.js' };
@@ -193,7 +192,7 @@ export class ThreeCompiler {
       const entry = src ? path.resolve(sourceRoot, src) : path.join(sourceRoot, `inline-${entryCount}.ts`);
       if (!isWithin(sourceRoot, entry)) throw new Error('THREE_ENTRY_PATH_ESCAPE');
       const out = `compiled/entry-${entryCount++}.js`;
-      const common = { bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const } };
+      const common = { bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const, '.woff': 'file' as const, '.woff2': 'file' as const, '.ttf': 'file' as const } };
       if (src) await build({ ...common, entryPoints: [entry] }); else await build({ ...common, stdin: { contents: body, loader: 'ts', resolveDir: sourceRoot, sourcefile: path.basename(entry) } });
       const css = out.replace(/\.js$/, '.css'); let cssTag = '';
       try { await lstat(path.join(playableRoot, css)); cssTag = `<link rel="stylesheet" href="./${css}">`; } catch (error: any) { if (error.code !== 'ENOENT') throw error; }

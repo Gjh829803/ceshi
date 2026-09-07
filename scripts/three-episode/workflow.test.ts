@@ -56,8 +56,8 @@ it('isolates each shared-capsule case in planner and capture continuation config
  const base={planningSourceRoot:'/fsx/frozen',sourceManifestRelativePath:'inputs/old/source.json',planningSourceManifest:'/fsx/old/source.json'};
  const a=caseRuntimeConfig(base,'/episode/inputs/case-a/source.json','/episode','a'.repeat(64));
  const b=caseRuntimeConfig(base,'/episode/inputs/case-b/source.json','/episode','b'.repeat(64));
- expect(a.planningSourceManifest).toBe('/fsx/frozen/inputs/case-a/source.json');expect(a.sourceManifestRelativePath).toBe('inputs/case-a/source.json');
- expect(b.planningSourceManifest).toBe('/fsx/frozen/inputs/case-b/source.json');expect(b.planningSourceManifestSha256).not.toBe(a.planningSourceManifestSha256);
+ expect(a.planningSourceManifest).toBe(path.join('/fsx/frozen','inputs/case-a/source.json'));expect(a.sourceManifestRelativePath).toBe('inputs/case-a/source.json');
+ expect(b.planningSourceManifest).toBe(path.join('/fsx/frozen','inputs/case-b/source.json'));expect(b.planningSourceManifestSha256).not.toBe(a.planningSourceManifestSha256);
  expect(base.sourceManifestRelativePath).toBe('inputs/old/source.json');expect(()=>caseRuntimeConfig(base,'/outside/source.json','/episode','a'.repeat(64))).toThrow('OUTSIDE_CAPSULE');
 });
 

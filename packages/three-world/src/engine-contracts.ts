@@ -113,6 +113,7 @@ export type CharacterEntityOptions = EntityOptions & Readonly<{
   asset?: AssetInstance;
 }>;
 export type WorldInput = Readonly<{
+  training?:import('./training/simulation').Input;
   moveXRatio?: number;
   moveZRatio?: number;
   moveYRatio?: number;

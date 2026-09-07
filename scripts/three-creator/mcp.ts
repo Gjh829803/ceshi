@@ -8,12 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { ThreeCreatorTools } from './tools.js';
 import { objectSchema, profileFrom, THREE_CREATOR_VERSION, sha256, errorMessage, type CreatorProfile } from './contracts.js';
 import { AUTHORING_TOPICS } from './authoring-schema.js';
+import { EXAMPLE_TOPICS } from './example-files.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 const string = { type: 'string', minLength: 1 };
 export const THREE_CREATOR_TOOLS = [
   { name: 'creator_describe_environment', description: 'Read the selected Three raw/SDK profile, actual capabilities and limitations. Call first.', inputSchema: objectSchema({}) },
   { name: 'creator_get_authoring_schema', description: 'Read the selected public SDK topic, shared observer and independent episode schema. Default is getting-started; use control/extensions when needed.', inputSchema: objectSchema({ topic: { enum: AUTHORING_TOPICS } }) },
-  { name: 'creator_get_examples', description: 'Get an ordinary HTML project. Default getting-started is minimal; SDK extensions is the full asset/control/movement/effects/geometry example.', inputSchema: objectSchema({ topic: { enum: ['getting-started', 'extensions'] } }) },
+  { name: 'creator_get_examples', description: 'Get source examples with the complete file manifest. Read by training topic or explicit files; independent-world avoids workspace UI and campus layout.', inputSchema: objectSchema({ topic: { enum: EXAMPLE_TOPICS }, files:{type:'array',items:string,maxItems:32,uniqueItems:true} }) },
   { name: 'assets_search', description: 'Search verified reusable GLB assets, exact actions and limitations. Does not expose private Host source paths.', inputSchema: objectSchema({ query: string }) },
   { name: 'assets_describe', description: 'Describe a catalog asset and exact animation mapping. Select its id in project.json assetIds; SDK world.assets.load(id) loads the packaged verified resource.', inputSchema: objectSchema({ assetId: string }, ['assetId']) },
   { name: 'world_validate', description: 'Compile a browser candidate without executing author code/config on the Host. Cached fixed Three/SDK is reused. Episode-only changes do not rebuild the world. Returns operationId; compilation alone is not runtime acceptance.', inputSchema: objectSchema({}) },
@@ -35,7 +36,7 @@ export async function executeThreeCreatorTool(service: ThreeCreatorTools, name: 
   switch (name) {
     case 'creator_describe_environment': return service.environment();
     case 'creator_get_authoring_schema': return service.schema(input.topic);
-    case 'creator_get_examples': return service.examples(input.topic);
+    case 'creator_get_examples': return service.examples(input.topic,input.files);
     case 'assets_search': return service.assets(input.query);
     case 'assets_describe': return service.assets('', input.assetId);
     case 'world_validate': return service.start('world.validate', () => service.validate());

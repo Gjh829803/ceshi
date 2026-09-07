@@ -1,5 +1,5 @@
 import Ajv from 'ajv';
-import type { Vec3 } from '@worldkit/three';
+import type { Vec3, EpisodeStart } from '@worldkit/three';
 import { sha256Canonical } from '../lib/canonical-json.mjs';
 
 export const EPISODE_VERSION = 'three-episode-agent@1';
@@ -15,7 +15,7 @@ export const PRE_SEEDANCE_PROFILE = Object.freeze({
 export interface EpisodeWaypoint { positionWorldMetersXYZ: Vec3; gait: 'walk' | 'run' }
 export interface EpisodeSegmentPlan {
   id: string;
-  start: { positionWorldMetersXYZ: Vec3; facingYawRadians: number };
+  start: EpisodeStart;
   waypoints: EpisodeWaypoint[];
   endBehavior: 'stop' | 'reverse' | 'loop';
   coverageTargetIds?: string[];
@@ -43,7 +43,10 @@ const vec3 = { type: 'array', minItems: 3, maxItems: 3, items: { type: 'number' 
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 export const SEGMENT_SCHEMA = object({
   id: { enum: SEGMENT_IDS },
-  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' } }),
+  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },training:object({
+    vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
+    velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
+  },[]) },['positionWorldMetersXYZ','facingYawRadians']),
   waypoints: { type: 'array', minItems: 1, maxItems: 256, items: object({ positionWorldMetersXYZ: vec3, gait: { enum: ['walk', 'run'] } }) },
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
   coverageTargetIds: { type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },

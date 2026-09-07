@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink, cp } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
 import { chromium } from 'playwright';
@@ -93,7 +93,7 @@ describe('Three Episode planner MCP boundary',()=>{
  it.each(['absolute','relocated-portable'])('uses actual stdio MCP and Chromium with %s source for observation, picking, native probing and submission',async mode=>{
   const selectedManifest=mode==='absolute'?sourceManifest:portableManifest;
   const outputRoot=output(),transport=new StdioClientTransport({command:process.execPath,
-   args:['--import',path.join(repository,'node_modules/tsx/dist/loader.mjs'),path.join(repository,'scripts/three-episode/mcp.ts'),'--source-manifest',selectedManifest,'--source-root',path.dirname(selectedManifest),'--output-root',outputRoot],
+   args:['--import',pathToFileURL(path.join(repository,'node_modules/tsx/dist/loader.mjs')).href,path.join(repository,'scripts/three-episode/mcp.ts'),'--source-manifest',selectedManifest,'--source-root',path.dirname(selectedManifest),'--output-root',outputRoot],
    cwd:repository,stderr:'pipe',env:{PATH:process.env.PATH??'/usr/bin:/bin',HOME:root,WORLDKIT_CHROMIUM_EXECUTABLE:chromium.executablePath(),TSX_DISABLE_CACHE:'1'}});
   let stderr='';transport.stderr?.on('data',data=>{stderr+=String(data);});
   const client=new Client({name:'episode-fixture-client',version:'1'},{capabilities:{}});

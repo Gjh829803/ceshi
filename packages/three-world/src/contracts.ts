@@ -107,7 +107,7 @@ export type WriteClaim =
  | {readonly kind:'visual';readonly channelId:string}
  | {readonly kind:'state';readonly stateId:string};
 export type ParameterCommand = {readonly type:'parameter.set';readonly parameterId:string;readonly value:Scalar};
-export type WorldCommand = PrimitiveCommand | ParameterCommand
+export type WorldCommand = PrimitiveCommand | ParameterCommand | import('./training/runtime').TrainingCommand
  | {readonly type:'action.invoke';readonly actionId:string;readonly arguments:Readonly<Record<string,Scalar>>};
 export interface ExecutionOptions {
  /** Host adds this; repeated command IDs return the original receipt, never spawn twice. */
@@ -161,6 +161,7 @@ export interface EffectParameterDefinition<S extends ScalarSchema> {
 }
 export type ParameterDefinition<S extends ScalarSchema> = PropertyParameterDefinition<S>|EffectParameterDefinition<S>;
 export interface WorldInput {
+ readonly training?:import('./training/simulation').Input;
  readonly moveXRatio?:number; readonly moveZRatio?:number; readonly moveYRatio?:number;
  readonly cameraYawRatio?:number; readonly cameraPitchRatio?:number;
  readonly run?:boolean; readonly jump?:boolean; readonly jumpPressed?:boolean;
@@ -253,6 +254,7 @@ export interface CameraState {
  readonly transitionProgressRatio?:number;
 }
 export interface WorldSnapshot {
+ readonly training?:import('./training/runtime').TrainingSnapshot;
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;
@@ -336,6 +338,7 @@ export interface WorldPresentation {
  dispose():void;
 }
 export interface World {
+ readonly training:import('./training/runtime.js').TrainingRuntime|undefined;
  readonly scene:THREE.Scene;
  readonly camera:THREE.Camera;
  readonly cameraMode:'authored'|'follow-pending'|'follow';

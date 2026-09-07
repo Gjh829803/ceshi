@@ -1,0 +1,1073 @@
+{
+  "schema": "preserved-traversal-lab-source/1",
+  "model": "gasp-research/climb-2m5.experimental.glb",
+  "boneCount": 101,
+  "runtimeClipCount": 48,
+  "runtimeClips": [
+    {
+      "id": "idle-loop",
+      "file": "gasp-research/idle-loop.experimental.glb",
+      "metadata": "gasp-research/idle-loop.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "walk-loop",
+      "file": "gasp-research/walk-loop.experimental.glb",
+      "metadata": "gasp-research/walk-loop.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "run-loop",
+      "file": "gasp-research/run-loop.experimental.glb",
+      "metadata": "gasp-research/run-loop.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "hurdle-1m",
+      "file": "gasp-research/hurdle-1m.experimental.glb",
+      "metadata": "gasp-research/hurdle-1m.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "mantle-1m",
+      "file": "gasp-research/mantle-1m.experimental.glb",
+      "metadata": "gasp-research/mantle-1m.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "climb-2m5",
+      "file": "gasp-research/climb-2m5.experimental.glb",
+      "metadata": "gasp-research/climb-2m5.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "crouch-idle",
+      "file": "gasp-research/crouch-idle.experimental.glb",
+      "metadata": "gasp-research/crouch-idle.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "crouch-walk",
+      "file": "gasp-research/crouch-walk.experimental.glb",
+      "metadata": "gasp-research/crouch-walk.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "jump-stand",
+      "file": "gasp-research/jump-stand.experimental.glb",
+      "metadata": "gasp-research/jump-stand.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "jump-run",
+      "file": "gasp-research/jump-run.experimental.glb",
+      "metadata": "gasp-research/jump-run.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "fall-loop",
+      "file": "gasp-research/fall-loop.experimental.glb",
+      "metadata": "gasp-research/fall-loop.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "land-light",
+      "file": "gasp-research/land-light.experimental.glb",
+      "metadata": "gasp-research/land-light.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "land-heavy",
+      "file": "gasp-research/land-heavy.experimental.glb",
+      "metadata": "gasp-research/land-heavy.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "land-run-light",
+      "file": "gasp-research/land-run-light.experimental.glb",
+      "metadata": "gasp-research/land-run-light.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "land-run-heavy",
+      "file": "gasp-research/land-run-heavy.experimental.glb",
+      "metadata": "gasp-research/land-run-heavy.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "run-start",
+      "file": "gasp-research/run-start.experimental.glb",
+      "metadata": "gasp-research/run-start.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "run-stop",
+      "file": "gasp-research/run-stop.experimental.glb",
+      "metadata": "gasp-research/run-stop.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "turn-left",
+      "file": "gasp-research/turn-left.experimental.glb",
+      "metadata": "gasp-research/turn-left.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "turn-right",
+      "file": "gasp-research/turn-right.experimental.glb",
+      "metadata": "gasp-research/turn-right.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "turn-back-left",
+      "file": "gasp-research/turn-back-left.experimental.glb",
+      "metadata": "gasp-research/turn-back-left.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "turn-back-right",
+      "file": "gasp-research/turn-back-right.experimental.glb",
+      "metadata": "gasp-research/turn-back-right.metadata.json",
+      "source": "Epic GASP",
+      "license": "UE-Only source; existing local research conversion"
+    },
+    {
+      "id": "roll",
+      "file": "actions/roll.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "slide-start",
+      "file": "actions/slide-start.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "slide-loop",
+      "file": "actions/slide-loop.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "slide-exit",
+      "file": "actions/slide-exit.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "carry-walk",
+      "file": "actions/carry-walk.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "pickup",
+      "file": "actions/pickup.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "sit-enter",
+      "file": "actions/sit-enter.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "sit-idle",
+      "file": "actions/sit-idle.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "sit-exit",
+      "file": "actions/sit-exit.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "hang-enter",
+      "file": "actions/hang-enter.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "hang-exit",
+      "file": "actions/hang-exit.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "hang-idle",
+      "file": "actions/hang-idle.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "hang-left",
+      "file": "actions/hang-left.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "hang-right",
+      "file": "actions/hang-right.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "climb-up",
+      "file": "actions/climb-up.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "climb-down",
+      "file": "actions/climb-down.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "climb-ledge",
+      "file": "actions/climb-ledge.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-enter",
+      "file": "actions/prone-enter.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-exit",
+      "file": "actions/prone-exit.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-idle",
+      "file": "actions/prone-idle.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-forward",
+      "file": "actions/prone-forward.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-backward",
+      "file": "actions/prone-backward.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-left",
+      "file": "actions/prone-left.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "prone-right",
+      "file": "actions/prone-right.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "swim-idle",
+      "file": "swimming/swim-idle.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "swim-forward",
+      "file": "swimming/swim-forward.clip.json",
+      "source": "Quaternius UAL",
+      "license": "CC0 source motion; Epic-derived target skeleton retains separate restrictions"
+    },
+    {
+      "id": "swim-freestyle",
+      "file": "swimming/swim-freestyle.clip.json",
+      "source": "CMU 125/06",
+      "license": "CMU terms; Epic-derived target skeleton retains separate restrictions"
+    }
+  ],
+  "unusedSourceReferences": [
+    "gasp-research/run-pivot.experimental.glb",
+    "actions/pickup-ground.clip.json"
+  ],
+  "sourceCode": {
+    "file": "src/humanoid/source-character.ts",
+    "source": "src/character.ts",
+    "sha256": "8413463ca1f44aae912735ee4bac54033a7c21e8f3e75cb0bf656a62201b95da",
+    "pathAndTypeOnlyModifications": [
+      [
+        "import type { Simulation } from './physics';",
+        "import type { SourceCharacterFrame as Simulation } from './animation';"
+      ],
+      [
+        "from './gasp/motion'",
+        "from './motion'"
+      ],
+      [
+        "from './animation-catalog'",
+        "from './catalog'"
+      ],
+      [
+        "./assets/gasp-research/",
+        "/assets/humanoid/source/gasp-research/"
+      ],
+      [
+        "./assets/swimming/",
+        "/assets/humanoid/source/swimming/"
+      ],
+      [
+        "./assets/actions/",
+        "/assets/humanoid/source/actions/"
+      ]
+    ]
+  },
+  "catalog": {
+    "file": "src/humanoid/catalog.ts",
+    "source": "src/animation-catalog.ts",
+    "sha256": "340e9f0b0968d47574d527f6e8b4e85d9df2d704c5f9b042d68b3fb78e9936ba"
+  },
+  "files": [
+    {
+      "file": "actions/audit.json",
+      "source": "public/assets/actions/audit.json",
+      "bytes": 3046480,
+      "sha256": "af1d1312662800709e525d6f9340244bc0432b779747dc25f110a85a8b54a89b"
+    },
+    {
+      "file": "actions/carry-walk.clip.json",
+      "source": "public/assets/actions/carry-walk.clip.json",
+      "bytes": 709923,
+      "sha256": "5e15adbd340ab570ac2289be8ddac6d39b662df16a812cebf9d03293a29fa042"
+    },
+    {
+      "file": "actions/climb-down.clip.json",
+      "source": "public/assets/actions/climb-down.clip.json",
+      "bytes": 259313,
+      "sha256": "a4c1b06c3cced021a498dd5569e5715d91a0a30a8bdef1724dd70652d62364ab"
+    },
+    {
+      "file": "actions/climb-ledge.clip.json",
+      "source": "public/assets/actions/climb-ledge.clip.json",
+      "bytes": 155105,
+      "sha256": "c325675b5b03ab333ed1faf7c9e29e8500f3c519ecd34d82fae8847911362cbd"
+    },
+    {
+      "file": "actions/climb-up.clip.json",
+      "source": "public/assets/actions/climb-up.clip.json",
+      "bytes": 259268,
+      "sha256": "793090f74b5bbf11e0e605c0baec356e4e1a40a0b2edd0e2f8403157d73d58b2"
+    },
+    {
+      "file": "actions/hang-enter.clip.json",
+      "source": "public/assets/actions/hang-enter.clip.json",
+      "bytes": 291666,
+      "sha256": "456281846a0064be81d72512d71da222fccb26c55b793bc6f64cfd43e6a2346b"
+    },
+    {
+      "file": "actions/hang-exit.clip.json",
+      "source": "public/assets/actions/hang-exit.clip.json",
+      "bytes": 289050,
+      "sha256": "ba54a6ad11dfac29415f3d92e9c41a469a9b27f14d64488e357b8b70ff2b2b05"
+    },
+    {
+      "file": "actions/hang-idle.clip.json",
+      "source": "public/assets/actions/hang-idle.clip.json",
+      "bytes": 530037,
+      "sha256": "c5c69b3426c315d36fa2fee2a55da41bc342ead6235d441e9b800455681743a0"
+    },
+    {
+      "file": "actions/hang-left.clip.json",
+      "source": "public/assets/actions/hang-left.clip.json",
+      "bytes": 193444,
+      "sha256": "89805aa47ecc6f9408a7d46c8bd39395983bd7bc8e3d732b1419d2eafe4309da"
+    },
+    {
+      "file": "actions/hang-right.clip.json",
+      "source": "public/assets/actions/hang-right.clip.json",
+      "bytes": 193503,
+      "sha256": "b3e62b487f05f74d97b85d112b657858a27355d7e273e8c8f7a17ec39612afde"
+    },
+    {
+      "file": "actions/LICENSE-SOURCE-CC0.txt",
+      "source": "public/assets/actions/LICENSE-SOURCE-CC0.txt",
+      "bytes": 332,
+      "sha256": "6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061"
+    },
+    {
+      "file": "actions/pickup-ground.clip.json",
+      "source": "public/assets/actions/pickup-ground.clip.json",
+      "bytes": 686481,
+      "sha256": "1c80b1fca08490a632b13b72de2029a5945b4d780480c3fb3f675a7f81bfaa9e"
+    },
+    {
+      "file": "actions/pickup.clip.json",
+      "source": "public/assets/actions/pickup.clip.json",
+      "bytes": 279743,
+      "sha256": "d4839c22205f929e16e39e63799834159f48c64caeaf351174b17ea2a092364b"
+    },
+    {
+      "file": "actions/prone-backward.clip.json",
+      "source": "public/assets/actions/prone-backward.clip.json",
+      "bytes": 871408,
+      "sha256": "dfcbbe1dc928f12b17c508f56965e702390f1946dc2bc8b69a78df8f92473821"
+    },
+    {
+      "file": "actions/prone-enter.clip.json",
+      "source": "public/assets/actions/prone-enter.clip.json",
+      "bytes": 679456,
+      "sha256": "218608967a83c8b347cd149a462944e3c91754a0e029e8077b2c0724567ea92b"
+    },
+    {
+      "file": "actions/prone-exit.clip.json",
+      "source": "public/assets/actions/prone-exit.clip.json",
+      "bytes": 706503,
+      "sha256": "d2c64efb20b11d052be65a592dcdd9e5764045505c1ba1260b62f1ff0b6319ab"
+    },
+    {
+      "file": "actions/prone-forward.clip.json",
+      "source": "public/assets/actions/prone-forward.clip.json",
+      "bytes": 766824,
+      "sha256": "674ff5711e374ea5c2c197e8d58d1daac36713447e4b91e688bf786ffee0805d"
+    },
+    {
+      "file": "actions/prone-idle.clip.json",
+      "source": "public/assets/actions/prone-idle.clip.json",
+      "bytes": 786017,
+      "sha256": "6755325c31a941b089c84afdd2c527b70c303288c6cc34b565f945418227c76a"
+    },
+    {
+      "file": "actions/prone-left.clip.json",
+      "source": "public/assets/actions/prone-left.clip.json",
+      "bytes": 469246,
+      "sha256": "eec59918545f39d68abff15093eca708899c0ab7bf45274d28dc7f4e715cd8a8"
+    },
+    {
+      "file": "actions/prone-right.clip.json",
+      "source": "public/assets/actions/prone-right.clip.json",
+      "bytes": 469146,
+      "sha256": "bf1bd0784b29426a6e6d5a49011a9d91a1ff60351c390687be7c800fb7df036e"
+    },
+    {
+      "file": "actions/roll.clip.json",
+      "source": "public/assets/actions/roll.clip.json",
+      "bytes": 519455,
+      "sha256": "8f1698911f83678facc12f49c35bb0abd4e6b41ff58344e91e17f28c0c50f158"
+    },
+    {
+      "file": "actions/runtime.json",
+      "source": "public/assets/actions/runtime.json",
+      "bytes": 203292,
+      "sha256": "a285939e5f20717db8e1b8d7b3164e17e19951542a64fa76803a1277370da450"
+    },
+    {
+      "file": "actions/sit-enter.clip.json",
+      "source": "public/assets/actions/sit-enter.clip.json",
+      "bytes": 468543,
+      "sha256": "eb5dcd39dc01efb74405e3493df9edfe8d5c504c5becb40de0fe599cd1a62458"
+    },
+    {
+      "file": "actions/sit-exit.clip.json",
+      "source": "public/assets/actions/sit-exit.clip.json",
+      "bytes": 385211,
+      "sha256": "435bc38b5270705997cf5d818e9469124b4c78bd97fb64f1fc5113e8d02e42f7"
+    },
+    {
+      "file": "actions/sit-idle.clip.json",
+      "source": "public/assets/actions/sit-idle.clip.json",
+      "bytes": 332724,
+      "sha256": "fdf537decd04a591af17e10375e89b8e8892fea5369ce93a596b1d0436042191"
+    },
+    {
+      "file": "actions/slide-exit.clip.json",
+      "source": "public/assets/actions/slide-exit.clip.json",
+      "bytes": 211074,
+      "sha256": "8b83a8ba7a65334c5a5f3c256c212c1d2906cceda1d3e858fea1e6af2606ac9d"
+    },
+    {
+      "file": "actions/slide-loop.clip.json",
+      "source": "public/assets/actions/slide-loop.clip.json",
+      "bytes": 702686,
+      "sha256": "55da5199740bbae85282af6cbe013b512b31ba635ba5409c0cf193fe1ec13bb5"
+    },
+    {
+      "file": "actions/slide-start.clip.json",
+      "source": "public/assets/actions/slide-start.clip.json",
+      "bytes": 324651,
+      "sha256": "bb60e2a94b50bfe9b996608e28eb4c2d5ddcafa1c1468bf806bbda246fd56a57"
+    },
+    {
+      "file": "exports/action-kit/manifest.json",
+      "source": "exports/action-kit/manifest.json",
+      "bytes": 26986,
+      "sha256": "bc4b43c80ee4cecfcf399d3cc32e05b302a86b4a9aaa16280ee749a3f517a89a"
+    },
+    {
+      "file": "exports/action-kit/README.md",
+      "source": "exports/action-kit/README.md",
+      "bytes": 7547,
+      "sha256": "d2090126d8fee550238b12fdad10fabf866a5f4cc512481bdb5ddc974b15bfe2"
+    },
+    {
+      "file": "gasp-research/climb-2m5.conversion-report.json",
+      "source": "public/assets/gasp-research/climb-2m5.conversion-report.json",
+      "bytes": 9457,
+      "sha256": "b54e6c61437a12a3915059d9de8d200ce5a923ee6bcd26efdfe06db222eef0be"
+    },
+    {
+      "file": "gasp-research/climb-2m5.experimental.glb",
+      "source": "public/assets/gasp-research/climb-2m5.experimental.glb",
+      "bytes": 996756,
+      "sha256": "c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1"
+    },
+    {
+      "file": "gasp-research/climb-2m5.metadata.json",
+      "source": "public/assets/gasp-research/climb-2m5.metadata.json",
+      "bytes": 20555,
+      "sha256": "8774c715fdc463d48efd1c626d639c9f0447be74514ee8c2505310a64ef19ee8"
+    },
+    {
+      "file": "gasp-research/conversion-report.json",
+      "source": "public/assets/gasp-research/conversion-report.json",
+      "bytes": 9431,
+      "sha256": "683e3e327879e5cf56451c95ad7be4ffe27c01a96232f6651470beec20ad1cdb"
+    },
+    {
+      "file": "gasp-research/crouch-idle.conversion-report.json",
+      "source": "public/assets/gasp-research/crouch-idle.conversion-report.json",
+      "bytes": 9300,
+      "sha256": "d60cfa9c1cfec0800d3412f507ccfd866a65c0ba92adc8c4cca6c44b1255dc80"
+    },
+    {
+      "file": "gasp-research/crouch-idle.experimental.glb",
+      "source": "public/assets/gasp-research/crouch-idle.experimental.glb",
+      "bytes": 1839888,
+      "sha256": "fa2ea1d7f1a0c93b6e5bd12efbf4c5c0c9d333e5b89048762ace6722b270ed9a"
+    },
+    {
+      "file": "gasp-research/crouch-idle.metadata.json",
+      "source": "public/assets/gasp-research/crouch-idle.metadata.json",
+      "bytes": 33186,
+      "sha256": "458f1fc99a0b4690159aad4ca40b3c3a9c6afceaa7bc2f26f3f8fbecfd466c1f"
+    },
+    {
+      "file": "gasp-research/crouch-walk.conversion-report.json",
+      "source": "public/assets/gasp-research/crouch-walk.conversion-report.json",
+      "bytes": 8462,
+      "sha256": "1aad5d2ecae0c874c9b9e02e9070871748bc2b3b8b1c28b60b8028817dcddcbf"
+    },
+    {
+      "file": "gasp-research/crouch-walk.experimental.glb",
+      "source": "public/assets/gasp-research/crouch-walk.experimental.glb",
+      "bytes": 959024,
+      "sha256": "1d65446d0eb40548464a80d89321bc08b93b7e875852d4aa95c7c98a49275ecc"
+    },
+    {
+      "file": "gasp-research/crouch-walk.metadata.json",
+      "source": "public/assets/gasp-research/crouch-walk.metadata.json",
+      "bytes": 14248,
+      "sha256": "936a19f12303438d5a93d19e508e28cdcd71b9b7de3e7d54e746f902624ec8e0"
+    },
+    {
+      "file": "gasp-research/fall-loop.conversion-report.json",
+      "source": "public/assets/gasp-research/fall-loop.conversion-report.json",
+      "bytes": 7746,
+      "sha256": "c986e91c0edd8b54d078fe6dd0457c83f26f3d72f0ce7e6878e8a579ea3dd3bc"
+    },
+    {
+      "file": "gasp-research/fall-loop.experimental.glb",
+      "source": "public/assets/gasp-research/fall-loop.experimental.glb",
+      "bytes": 979472,
+      "sha256": "f868c4cfbaf61bf2bbb4da483d7941b2d34cec7d3f6a66f23eac2dd2ca756bc4"
+    },
+    {
+      "file": "gasp-research/fall-loop.metadata.json",
+      "source": "public/assets/gasp-research/fall-loop.metadata.json",
+      "bytes": 9546,
+      "sha256": "05b6ce70c8ea2378c7d626574639e8a8abc62b0bfe803fad7bdbe976dea030d5"
+    },
+    {
+      "file": "gasp-research/hurdle-1m.conversion-report.json",
+      "source": "public/assets/gasp-research/hurdle-1m.conversion-report.json",
+      "bytes": 6827,
+      "sha256": "2ac53fc7fd6fa54f7a73a98467be1121d3984b147acf3bd06fae0b590944ebe7"
+    },
+    {
+      "file": "gasp-research/hurdle-1m.experimental.glb",
+      "source": "public/assets/gasp-research/hurdle-1m.experimental.glb",
+      "bytes": 878848,
+      "sha256": "173f77a0a67ed2d2bb2eaf061a042328a6683d0753b68593b258a33b6573fa1c"
+    },
+    {
+      "file": "gasp-research/hurdle-1m.metadata.json",
+      "source": "public/assets/gasp-research/hurdle-1m.metadata.json",
+      "bytes": 25256,
+      "sha256": "4808a69a49a1749aa20f81240b35ff00839aea5c1457cbcad71ecbd790ebbac3"
+    },
+    {
+      "file": "gasp-research/idle-loop.conversion-report.json",
+      "source": "public/assets/gasp-research/idle-loop.conversion-report.json",
+      "bytes": 9283,
+      "sha256": "dfc77ee16fe100180db4a1e58a00bf89b805034521da6a3dc3799088ccb76bfb"
+    },
+    {
+      "file": "gasp-research/idle-loop.experimental.glb",
+      "source": "public/assets/gasp-research/idle-loop.experimental.glb",
+      "bytes": 1840048,
+      "sha256": "0e1a189955a2647ad0edf1161bb8a10152b91d9146bbb53b0b1996c7c5b0ea7f"
+    },
+    {
+      "file": "gasp-research/idle-loop.metadata.json",
+      "source": "public/assets/gasp-research/idle-loop.metadata.json",
+      "bytes": 33661,
+      "sha256": "b0ad1a2c8bb889126fdfd4a512aa560dfa2ab9e106640d7f1c6da41b891313a4"
+    },
+    {
+      "file": "gasp-research/jump-run.conversion-report.json",
+      "source": "public/assets/gasp-research/jump-run.conversion-report.json",
+      "bytes": 6934,
+      "sha256": "b405ad16cd7bfad508cc26b974f8dff8e48c7e432cd60df3ee651165f6bab51a"
+    },
+    {
+      "file": "gasp-research/jump-run.experimental.glb",
+      "source": "public/assets/gasp-research/jump-run.experimental.glb",
+      "bytes": 852816,
+      "sha256": "142de55d4eafa223b516deccffee13504225ad262eb6f4ac2cb3e02d6d92440d"
+    },
+    {
+      "file": "gasp-research/jump-run.metadata.json",
+      "source": "public/assets/gasp-research/jump-run.metadata.json",
+      "bytes": 8014,
+      "sha256": "449b983441c837c02c50b3a11fe48887cb001545a8c4762d22ac0f3a32b2cdce"
+    },
+    {
+      "file": "gasp-research/jump-stand.conversion-report.json",
+      "source": "public/assets/gasp-research/jump-stand.conversion-report.json",
+      "bytes": 6836,
+      "sha256": "c5fe2468cc0ce7468f579a40b1d36fa373e7a87ae09d4b4919cf58b322832701"
+    },
+    {
+      "file": "gasp-research/jump-stand.experimental.glb",
+      "source": "public/assets/gasp-research/jump-stand.experimental.glb",
+      "bytes": 785780,
+      "sha256": "fb817380cfa070628a3b2fa5f6c0163012af31fc69361a30db5da20e24cfed1f"
+    },
+    {
+      "file": "gasp-research/jump-stand.metadata.json",
+      "source": "public/assets/gasp-research/jump-stand.metadata.json",
+      "bytes": 7670,
+      "sha256": "00a916711a839695e035191bc4c8e8fcc9fdcb31c322b0653a8d1084be5dfbe9"
+    },
+    {
+      "file": "gasp-research/land-heavy.conversion-report.json",
+      "source": "public/assets/gasp-research/land-heavy.conversion-report.json",
+      "bytes": 8552,
+      "sha256": "573d4ab65cbd933c0c5acd6bcbaab399aad6dc4f71f9ce95d454687655a7c667"
+    },
+    {
+      "file": "gasp-research/land-heavy.experimental.glb",
+      "source": "public/assets/gasp-research/land-heavy.experimental.glb",
+      "bytes": 968436,
+      "sha256": "d8122f0ee93c334a51df3912d6619ad2afe6787454ab305c56de83541a929490"
+    },
+    {
+      "file": "gasp-research/land-heavy.metadata.json",
+      "source": "public/assets/gasp-research/land-heavy.metadata.json",
+      "bytes": 11089,
+      "sha256": "9e959d72773f5522a448ac24fb2aebabbc3f350146abdf9ff99abc263b87a150"
+    },
+    {
+      "file": "gasp-research/land-light.conversion-report.json",
+      "source": "public/assets/gasp-research/land-light.conversion-report.json",
+      "bytes": 6946,
+      "sha256": "6983b12269f275b70615e9bf7d92d253cdb3f8808c3f03485e39f2d44fcf15c6"
+    },
+    {
+      "file": "gasp-research/land-light.experimental.glb",
+      "source": "public/assets/gasp-research/land-light.experimental.glb",
+      "bytes": 827520,
+      "sha256": "c5b2dc80c9e3224a3c1f1f4d74a8f226df5b24c5fd4b27efa54bb35908343208"
+    },
+    {
+      "file": "gasp-research/land-light.metadata.json",
+      "source": "public/assets/gasp-research/land-light.metadata.json",
+      "bytes": 9744,
+      "sha256": "1f5651d9983a563e24c5861dffb3dc0b70703984249f9ff1f200bd40eb272afb"
+    },
+    {
+      "file": "gasp-research/land-run-heavy.conversion-report.json",
+      "source": "public/assets/gasp-research/land-run-heavy.conversion-report.json",
+      "bytes": 7717,
+      "sha256": "eb7a895baccdba28ca7bada3a4a0e132af9d91164e2d6e6918614d4e3bf228ba"
+    },
+    {
+      "file": "gasp-research/land-run-heavy.experimental.glb",
+      "source": "public/assets/gasp-research/land-run-heavy.experimental.glb",
+      "bytes": 869344,
+      "sha256": "1b12549eb5814ce9ac2be172f2df3bcb7c3b55484299e7a35396825ff1b15833"
+    },
+    {
+      "file": "gasp-research/land-run-heavy.metadata.json",
+      "source": "public/assets/gasp-research/land-run-heavy.metadata.json",
+      "bytes": 8954,
+      "sha256": "f62887fc16bd37ceebea9b49a0a592b9aacc14dc92dab21be3b4edd09a2915a6"
+    },
+    {
+      "file": "gasp-research/land-run-light.conversion-report.json",
+      "source": "public/assets/gasp-research/land-run-light.conversion-report.json",
+      "bytes": 6051,
+      "sha256": "2f4ec414ac88f33161e58331ee782d27abedcfcc14451154c872462106268dc4"
+    },
+    {
+      "file": "gasp-research/land-run-light.experimental.glb",
+      "source": "public/assets/gasp-research/land-run-light.experimental.glb",
+      "bytes": 747500,
+      "sha256": "0ff31325e9300f18ea8ee22183170be8816d393636ba7600eba18a0d890461a2"
+    },
+    {
+      "file": "gasp-research/land-run-light.metadata.json",
+      "source": "public/assets/gasp-research/land-run-light.metadata.json",
+      "bytes": 7189,
+      "sha256": "d952777e18bcc5277c61764d34fcf8b79ef67107ad85984d72fb83e9a4223b34"
+    },
+    {
+      "file": "gasp-research/LICENSE-NOTICE.txt",
+      "source": "public/assets/gasp-research/LICENSE-NOTICE.txt",
+      "bytes": 322,
+      "sha256": "2f31459eb57a518f2d1cbcebf11a014697ccb5204cd790e499a253f1a231609d"
+    },
+    {
+      "file": "gasp-research/mantle-1m.conversion-report.json",
+      "source": "public/assets/gasp-research/mantle-1m.conversion-report.json",
+      "bytes": 5910,
+      "sha256": "f4178652fd6a016d65be58c8a315512d050e86a7061e84b56c60486fd608d365"
+    },
+    {
+      "file": "gasp-research/mantle-1m.experimental.glb",
+      "source": "public/assets/gasp-research/mantle-1m.experimental.glb",
+      "bytes": 791104,
+      "sha256": "1ca566664d1bb74e9a32559cdc8fb392b906cb9f2877c92ceb5774176e80f0d5"
+    },
+    {
+      "file": "gasp-research/mantle-1m.metadata.json",
+      "source": "public/assets/gasp-research/mantle-1m.metadata.json",
+      "bytes": 16571,
+      "sha256": "d56138b57832a91ea857dabc8505ce8c4fc1519cbc46efaff298684144440903"
+    },
+    {
+      "file": "gasp-research/movement-audit.json",
+      "source": "public/assets/gasp-research/movement-audit.json",
+      "bytes": 65941,
+      "sha256": "3d89500a2dfad64d4cde1d8c9bd9aab8e03d585f128663ea8bf2c387e425095d"
+    },
+    {
+      "file": "gasp-research/run-loop.conversion-report.json",
+      "source": "public/assets/gasp-research/run-loop.conversion-report.json",
+      "bytes": 6713,
+      "sha256": "fc926fe439ad39f24d30ecf56aaf4e1dce80cb0f4a7d58f3ff0ad5a336df259a"
+    },
+    {
+      "file": "gasp-research/run-loop.experimental.glb",
+      "source": "public/assets/gasp-research/run-loop.experimental.glb",
+      "bytes": 785996,
+      "sha256": "eeb6e4e509fcbb3e4d7fbbcd440e07e9b14b416b56df569ff1dce4f43619e514"
+    },
+    {
+      "file": "gasp-research/run-loop.metadata.json",
+      "source": "public/assets/gasp-research/run-loop.metadata.json",
+      "bytes": 10146,
+      "sha256": "310cb296c8d111317bd879dfc0760ccc0400322a97f954487dc9cf01bd2cff15"
+    },
+    {
+      "file": "gasp-research/run-pivot.conversion-report.json",
+      "source": "public/assets/gasp-research/run-pivot.conversion-report.json",
+      "bytes": 7688,
+      "sha256": "7ba785c869577ef9517089adf93690790d3f45bbe8acff909889e0df2decbc25"
+    },
+    {
+      "file": "gasp-research/run-pivot.experimental.glb",
+      "source": "public/assets/gasp-research/run-pivot.experimental.glb",
+      "bytes": 893108,
+      "sha256": "9edec0e5855a9228bf2fbec309760e6eec27f1b882063b813cf1425dd4c9cacd"
+    },
+    {
+      "file": "gasp-research/run-pivot.metadata.json",
+      "source": "public/assets/gasp-research/run-pivot.metadata.json",
+      "bytes": 12903,
+      "sha256": "a93b848a1aa928b64f185aecd65c4060c0d3c4f306ac4385a498f405e4a0c13d"
+    },
+    {
+      "file": "gasp-research/run-start.conversion-report.json",
+      "source": "public/assets/gasp-research/run-start.conversion-report.json",
+      "bytes": 6838,
+      "sha256": "843667ede00cf2b9718e1236a59d9747ca88d2dadd40adfeb98aad080a6fd9b7"
+    },
+    {
+      "file": "gasp-research/run-start.experimental.glb",
+      "source": "public/assets/gasp-research/run-start.experimental.glb",
+      "bytes": 804172,
+      "sha256": "ab2a34a9d4899244d3ea3979d7275265eae964e06dc28e5b086836b50b4e7779"
+    },
+    {
+      "file": "gasp-research/run-start.metadata.json",
+      "source": "public/assets/gasp-research/run-start.metadata.json",
+      "bytes": 10552,
+      "sha256": "6d519a47b896888122cfe5874d6fba5919dc12b1b2682b050d33bc0f9c378d7b"
+    },
+    {
+      "file": "gasp-research/run-stop.conversion-report.json",
+      "source": "public/assets/gasp-research/run-stop.conversion-report.json",
+      "bytes": 7667,
+      "sha256": "ad6c148cf08854cf0032faee69f5af26ea60114ec3e2329a737288532ac4f191"
+    },
+    {
+      "file": "gasp-research/run-stop.experimental.glb",
+      "source": "public/assets/gasp-research/run-stop.experimental.glb",
+      "bytes": 883708,
+      "sha256": "855b90cc0b22c08b07395466213b2f8f97fa8c46a82fc7bddb14ccf88a1f9a67"
+    },
+    {
+      "file": "gasp-research/run-stop.metadata.json",
+      "source": "public/assets/gasp-research/run-stop.metadata.json",
+      "bytes": 11332,
+      "sha256": "65e7c1a487f3512ef90da34e84da094ac2e91585440e940e4bc5c15c1593b819"
+    },
+    {
+      "file": "gasp-research/turn-back-left.conversion-report.json",
+      "source": "public/assets/gasp-research/turn-back-left.conversion-report.json",
+      "bytes": 5878,
+      "sha256": "458c26bd3c62a46922bdf7530c0628206a04ee0627014b67418f3589bf9eaa68"
+    },
+    {
+      "file": "gasp-research/turn-back-left.experimental.glb",
+      "source": "public/assets/gasp-research/turn-back-left.experimental.glb",
+      "bytes": 794852,
+      "sha256": "aa6d62cc23e9418b47f85c7babc68feaf0b4eed7a2ec1d88790085cb83038ab1"
+    },
+    {
+      "file": "gasp-research/turn-back-left.metadata.json",
+      "source": "public/assets/gasp-research/turn-back-left.metadata.json",
+      "bytes": 7829,
+      "sha256": "9ebb0fb9345cba9b32802e5b68999359c28b65538df965d7930eb54d7b120d29"
+    },
+    {
+      "file": "gasp-research/turn-back-right.conversion-report.json",
+      "source": "public/assets/gasp-research/turn-back-right.conversion-report.json",
+      "bytes": 5877,
+      "sha256": "e66b373be682f4cf2edaf952400155435a1fe4c41430e4e481964f53f27b8f46"
+    },
+    {
+      "file": "gasp-research/turn-back-right.experimental.glb",
+      "source": "public/assets/gasp-research/turn-back-right.experimental.glb",
+      "bytes": 794700,
+      "sha256": "477768875ef3f7702b253062d61023feb70820e3955f0cfd98538a3048e9636c"
+    },
+    {
+      "file": "gasp-research/turn-back-right.metadata.json",
+      "source": "public/assets/gasp-research/turn-back-right.metadata.json",
+      "bytes": 7832,
+      "sha256": "f860df4b080cea72b56ead7f16c6599b6461f66f754c7bb1cd9d363c16093b36"
+    },
+    {
+      "file": "gasp-research/turn-left.conversion-report.json",
+      "source": "public/assets/gasp-research/turn-left.conversion-report.json",
+      "bytes": 5864,
+      "sha256": "a4f6426d93f9b38218ef8509b41f6db2454db408b5dc9b750037f364a7c03cd9"
+    },
+    {
+      "file": "gasp-research/turn-left.experimental.glb",
+      "source": "public/assets/gasp-research/turn-left.experimental.glb",
+      "bytes": 763376,
+      "sha256": "08a8a54d5cd1406cca9d3ebd9543be42fc44cb0331a1c2f387903cad2b102d20"
+    },
+    {
+      "file": "gasp-research/turn-left.metadata.json",
+      "source": "public/assets/gasp-research/turn-left.metadata.json",
+      "bytes": 7294,
+      "sha256": "d1f70fa3db725e9408a4055a9c8cc7f6732e6e4a02a5065e8e6c53a600e16b8b"
+    },
+    {
+      "file": "gasp-research/turn-right.conversion-report.json",
+      "source": "public/assets/gasp-research/turn-right.conversion-report.json",
+      "bytes": 5856,
+      "sha256": "53fdcc0aeee68ce32750263831f9afeed353fb2c53d062fe30feba3ecd982d27"
+    },
+    {
+      "file": "gasp-research/turn-right.experimental.glb",
+      "source": "public/assets/gasp-research/turn-right.experimental.glb",
+      "bytes": 763368,
+      "sha256": "95637ba1def417385e36174a370d9fa08b605f9c2a4433fe227144c560e2ebce"
+    },
+    {
+      "file": "gasp-research/turn-right.metadata.json",
+      "source": "public/assets/gasp-research/turn-right.metadata.json",
+      "bytes": 7281,
+      "sha256": "38bb6c04045d2a1d2e23c2e5f1039d46e51f26b3b1334dba8846e4e4e6a0dec3"
+    },
+    {
+      "file": "gasp-research/walk-loop.conversion-report.json",
+      "source": "public/assets/gasp-research/walk-loop.conversion-report.json",
+      "bytes": 9350,
+      "sha256": "5007446dd465eadac9f8efbd533ac7bdf80d4d66f676d97e85a251f1ab569afa"
+    },
+    {
+      "file": "gasp-research/walk-loop.experimental.glb",
+      "source": "public/assets/gasp-research/walk-loop.experimental.glb",
+      "bytes": 996780,
+      "sha256": "c3afe8bc96d59048ae58068c9d9081f61488b6e62b982f1dad7bba2fdf2a48c7"
+    },
+    {
+      "file": "gasp-research/walk-loop.metadata.json",
+      "source": "public/assets/gasp-research/walk-loop.metadata.json",
+      "bytes": 15813,
+      "sha256": "42f2264e7a7cd92e4c9a7f985428ee2c87fc9241f14de8023b81e175a4486dc8"
+    },
+    {
+      "file": "LICENSE-ANIMATIONS.txt",
+      "source": "public/assets/LICENSE-ANIMATIONS.txt",
+      "bytes": 332,
+      "sha256": "6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061"
+    },
+    {
+      "file": "LICENSE-UAL2.txt",
+      "source": "public/assets/LICENSE-UAL2.txt",
+      "bytes": 541,
+      "sha256": "f9b1de4e8feff135555ac1c7d2eec65035a05fd74e4d632a3f826ac985c3f22c"
+    },
+    {
+      "file": "reference/additional-animations/inventory.json",
+      "source": "reference/additional-animations/inventory.json",
+      "bytes": 40528,
+      "sha256": "ccbbabf83b21a99766c94e50ac6a0b503fc0b24e95d7dfe525d40987b3ab8f01"
+    },
+    {
+      "file": "reference/additional-animations/LICENSE-UAL1-CC0.txt",
+      "source": "reference/additional-animations/LICENSE-UAL1-CC0.txt",
+      "bytes": 320,
+      "sha256": "d77329b05c4c206e76c83285ecdd1e5f2b3df2350ec80657ebdb5a706a0fc0de"
+    },
+    {
+      "file": "reference/additional-animations/LICENSE-UAL2-CC0.txt",
+      "source": "reference/additional-animations/LICENSE-UAL2-CC0.txt",
+      "bytes": 320,
+      "sha256": "d77329b05c4c206e76c83285ecdd1e5f2b3df2350ec80657ebdb5a706a0fc0de"
+    },
+    {
+      "file": "reference/additional-animations/README.md",
+      "source": "reference/additional-animations/README.md",
+      "bytes": 7351,
+      "sha256": "97481375c4c3ea722870ba1dfd7e095a5cf856f9cfe1ee42165d0834928ae774"
+    },
+    {
+      "file": "reference/additional-animations/READMEFIRST.txt",
+      "source": "reference/additional-animations/READMEFIRST.txt",
+      "bytes": 13248,
+      "sha256": "8e6fe2e640b3728ef2e43e722cb5ae9cdf0010028c0517c4226ed165f9037930"
+    },
+    {
+      "file": "reference/gasp-cpp/APACHE-2.0.txt",
+      "source": "reference/gasp-cpp/APACHE-2.0.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "reference/gasp-cpp/LICENSE",
+      "source": "reference/gasp-cpp/LICENSE",
+      "bytes": 567,
+      "sha256": "e7c63c0f9045092919dfb0be33d0e6d5eb13346a88b81b375e85df7314abc55e"
+    },
+    {
+      "file": "reference/gasp-samples/MOVEMENT_EXTENSION.md",
+      "source": "reference/gasp-samples/MOVEMENT_EXTENSION.md",
+      "bytes": 4799,
+      "sha256": "6a7a86521739bd33d6c4bd5f509d62e291c3d67cd3a7b093ec6497a147b03be3"
+    },
+    {
+      "file": "reference/gasp-samples/movement-extension-sources.json",
+      "source": "reference/gasp-samples/movement-extension-sources.json",
+      "bytes": 16723,
+      "sha256": "553f8adda915b0bd58b1fa5759feae38b4d1e80a0c3b52e86c0bf66cfdafe6eb"
+    },
+    {
+      "file": "swimming/audit.json",
+      "source": "public/assets/swimming/audit.json",
+      "bytes": 20926,
+      "sha256": "0105fe9749b332cb04ac081072ed5b9b3c2d4995f011208ac86e800c135154f8"
+    },
+    {
+      "file": "swimming/freestyle-audit.json",
+      "source": "public/assets/swimming/freestyle-audit.json",
+      "bytes": 12131,
+      "sha256": "d03fa990fa089fb3a3cd2a231d72831455ce54abb6a6ee0dc7e3784add58f359"
+    },
+    {
+      "file": "swimming/LICENSE-SOURCE-CC0.txt",
+      "source": "public/assets/swimming/LICENSE-SOURCE-CC0.txt",
+      "bytes": 332,
+      "sha256": "6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061"
+    },
+    {
+      "file": "swimming/LICENSE-SOURCE-CMU.txt",
+      "source": "public/assets/swimming/LICENSE-SOURCE-CMU.txt",
+      "bytes": 1034,
+      "sha256": "84a52c6ab396c8304c3b7f1f9729af14832a68bddb0c613a1d82467de716b4cb"
+    },
+    {
+      "file": "swimming/README.md",
+      "source": "public/assets/swimming/README.md",
+      "bytes": 4643,
+      "sha256": "8ab9788d633b312452d13ed7413da406c2138a0a16500ed41d0e7f48843707f1"
+    },
+    {
+      "file": "swimming/swim-forward.clip.json",
+      "source": "public/assets/swimming/swim-forward.clip.json",
+      "bytes": 263546,
+      "sha256": "ee885cc6c4f5171ab07ec7b00e36d84119980d73bc756691d1a9b0a083ef0de7"
+    },
+    {
+      "file": "swimming/swim-freestyle.clip.json",
+      "source": "public/assets/swimming/swim-freestyle.clip.json",
+      "bytes": 296086,
+      "sha256": "0302d01dfe58b9a2320ad664bec89cb3dbdfa9461a451f4eec7ad4c854e9c3c4"
+    },
+    {
+      "file": "swimming/swim-idle.clip.json",
+      "source": "public/assets/swimming/swim-idle.clip.json",
+      "bytes": 542155,
+      "sha256": "c1f90d8b963991157c6ccd18069b5e8dbe7b5f7a62ff652bd71b99828719b9db"
+    },
+    {
+      "file": "THIRD_PARTY_NOTICES.md",
+      "source": "THIRD_PARTY_NOTICES.md",
+      "bytes": 7613,
+      "sha256": "d89ffeafc5db24f96da4417c83cbf48d000a4af749865b15af972006ca8a3a92"
+    }
+  ]
+}

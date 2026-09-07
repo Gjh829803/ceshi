@@ -145,7 +145,7 @@ describe('Three tool operations and truthful submission', () => {
   it('archives only payload files, excluding macOS AppleDouble metadata and symlinks', async () => {
     const root = await fixture(), payload = path.join(root, 'payload'); await mkdir(payload); await writeFile(path.join(payload, 'hello.txt'), 'hello'); const execFile = promisify(execFileCallback);
     if (process.platform === 'darwin') await execFile('xattr', ['-w', 'com.apple.metadata:three-creator-test', 'test', payload]);
-    const archive = path.join(root, 'result.tar.gz'); await createClosedArchive(root, archive); const members = (await execFile('tar', ['-tzf', archive])).stdout.trim().split('\n'); expect(members.map(name => name.replace(/\/$/, '')).sort()).toEqual(['payload', 'payload/hello.txt']);
+    const archive = path.join(root, 'result.tar.gz'); await createClosedArchive(root, archive); const members = (await execFile('tar', ['-tzf', archive])).stdout.trim().split(/\r?\n/); expect(members.map(name => name.replace(/\/$/, '')).sort()).toEqual(['payload', 'payload/hello.txt']);
     await symlink(path.join(root, 'main.ts'), path.join(payload, 'evil')); await expect(createClosedArchive(root, archive)).rejects.toThrow(/THREE_SYMLINK_REJECTED/);
   });
   it('rejects NaN tool arguments and unknown forged disk operations', async () => {
@@ -177,11 +177,17 @@ describe('v2 command and discovery boundary', () => {
     expect(() => assertSdkObservationVersion('three-raw', null)).not.toThrow();
   });
   it('covers every declared World command discriminator and rejects old dialect/extra authority/NaN', async () => {
-    const source = await readFile('packages/three-world/src/contracts.ts', 'utf8');
+    const source = await readFile('packages/three-world/src/contracts.ts', 'utf8') + '\n' + await readFile('packages/three-world/src/training/runtime.ts','utf8');
     const file = ts.createSourceFile('contracts.ts', source, ts.ScriptTarget.Latest, true);
     const types: string[] = [];
-    const visit = (node: ts.Node) => { if (ts.isPropertySignature(node) && node.name.getText(file) === 'type' && node.type && ts.isLiteralTypeNode(node.type) && ts.isStringLiteral(node.type.literal)) types.push(node.type.literal.text); ts.forEachChild(node, visit); };
-    for (const node of file.statements) if (ts.isTypeAliasDeclaration(node) && ['PrimitiveCommand','ParameterCommand','WorldCommand'].includes(node.name.text)) visit(node);
+    const visit = (node: ts.Node) => {
+      if (ts.isPropertySignature(node) && node.name.getText(file) === 'type' && node.type) {
+        for(const literal of ts.isUnionTypeNode(node.type)?node.type.types:[node.type])
+          if(ts.isLiteralTypeNode(literal)&&ts.isStringLiteral(literal.literal))types.push(literal.literal.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    for (const node of file.statements) if (ts.isTypeAliasDeclaration(node) && ['PrimitiveCommand','ParameterCommand','WorldCommand','TrainingCommand'].includes(node.name.text)) visit(node);
     expect(WORLD_COMMAND_SCHEMA.oneOf.map(schema => (schema.properties.type as {const:string}).const).sort()).toEqual(types.sort());
     const check = new Ajv({ strict:false, strictNumbers:true }).compile(WORLD_COMMAND_SCHEMA);
     for (const command of [

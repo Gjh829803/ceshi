@@ -7,6 +7,7 @@ import { WorldKeyboard, WorldInputRouter } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import { LocomotionAnimation } from './locomotion-animation.js';
 import { playLocomotion } from './assets.js';
+import { TrainingRuntime, type TrainingOptions } from './training/runtime.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
 type Entity = {
@@ -19,6 +20,7 @@ export type CameraFollow = Omit<import('./camera.js').CameraRigFollowOptions,'ta
 export type WorldOptions = {
   scene?: THREE.Scene; camera?: THREE.Camera; canvas?: HTMLCanvasElement; renderer?: THREE.WebGLRenderer;
   physics?: PhysicsOptions; fixedTimeStepSeconds?: number; navigation?: boolean;
+  training?:TrainingOptions;
 };
 export type CommandResult = { status: 'applied' | 'rejected'; revision: number; error?: { code: string; message: string } };
 const position = (object: THREE.Object3D): THREE.Vector3 => worldPose(object).position;
@@ -34,7 +36,8 @@ export class WorldEngine {
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;
   readonly renderer: THREE.WebGLRenderer | undefined;
-  readonly physics: ThreePhysics;
+  readonly physics: Pick<ThreePhysics,keyof ThreePhysics>;
+  readonly training:TrainingRuntime|undefined;
   readonly keyboard: WorldKeyboard;
   readonly fixedTimeStepSeconds: number;
   private readonly navigation: ThreeNavigation | undefined;
@@ -78,12 +81,13 @@ export class WorldEngine {
   private resetHandler:(()=>void)|undefined;
   private releaseViewport:(()=>void)|undefined;
 
-  private constructor(options: WorldOptions, physics: ThreePhysics, navigation: ThreeNavigation | undefined) {
+  private constructor(options: WorldOptions, physics: Pick<ThreePhysics,keyof ThreePhysics>, navigation: ThreeNavigation | undefined) {
     this.scene = options.scene ?? new THREE.Scene();
     this.camera = options.camera ?? new THREE.PerspectiveCamera(55, 16 / 9, 0.05, 3000);
     this.renderer = options.renderer ?? (options.canvas ? new THREE.WebGLRenderer({ canvas: options.canvas, antialias: true, preserveDrawingBuffer: true }) : undefined);
     this.ownsRenderer = options.renderer === undefined;
     this.physics = physics; this.navigation = navigation;
+    this.training=physics instanceof TrainingRuntime?physics:undefined;
     this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius),
       id => this.entities.has(id) ? tuple(position(this.entity(id).object)) : undefined,
       id => { const entity = this.entities.get(id); if (!entity?.character) return undefined;
@@ -92,20 +96,23 @@ export class WorldEngine {
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
+    if(this.training)this.keyboard.setTrainingMode(()=>!!this.training!.simulation.vehicle);
     this.inputRouter = new WorldInputRouter(this.keyboard, {
       isRunning: () => this.running, canZoom: () => this.cameraRig.mode !== 'authored',
       onPointer: input => { this.pointerInput = { activate: true,
         yawDeltaRadians: (this.pointerInput.yawDeltaRadians ?? 0) + (input.yawDeltaRadians ?? 0),
         pitchDeltaRadians: (this.pointerInput.pitchDeltaRadians ?? 0) + (input.pitchDeltaRadians ?? 0),
         distanceDeltaMeters: (this.pointerInput.distanceDeltaMeters ?? 0) + (input.distanceDeltaMeters ?? 0) }; },
-      onRelease: () => { this.pointerInput = {}; },
+      onRelease: () => { this.pointerInput = {};this.training?.clearInput(); },
     });
     if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.inputRouter.bind(this.renderer.domElement);if(this.ownsRenderer)this.releaseViewport=ownViewport(this.renderer,this.camera,this.renderer.domElement); }
   }
   static async create(options: WorldOptions = {}): Promise<WorldEngine> {
-    const physics = await ThreePhysics.create(options.physics);
+    if(options.training&&options.fixedTimeStepSeconds!==undefined&&options.fixedTimeStepSeconds!==1/60)throw new Error('TRAINING_REQUIRES_60HZ');
+    if(options.training&&!options.camera)options={...options,camera:new THREE.PerspectiveCamera(55,16/9,.05,3000)};
+    const physics = options.training?await TrainingRuntime.create(options.training,options.camera!):await ThreePhysics.create(options.physics);
     let navigation: ThreeNavigation | undefined;
-    try { navigation = options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation); }
+    try { navigation = options.training||options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation); }
     catch (error) { navigation?.dispose(); physics.dispose(); throw error; }
   }
   get simulationTick(): number { return this.tick; }
@@ -148,6 +155,7 @@ export class WorldEngine {
   }
   interact(id: string, actorEntityId = this.controlled): void { this.entity(id); for (const handler of this.interactions.get(id) ?? []) handler({ world: this, entityId: id, ...(actorEntityId ? { actorEntityId } : {}) }); }
   setCameraFollow(options: CameraFollow = {}): void {
+    if(this.training){this.training.setCameraMode(0);return;}
     const targetEntityId=options.targetEntityId??this.controlled;
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
     this.cameraRig.setFollow({...options,targetEntityId});
@@ -183,16 +191,18 @@ export class WorldEngine {
     this.scene.updateMatrixWorld(true); this.camera.updateWorldMatrix(true, false);
     this.cameraInitial = this.camera.clone(); this.cameraInitialParent = this.camera.parent; this.controlledInitial = this.controlled;
     this.cameraRig.sealInitialState();
+    this.training?.sealInitialState();
   }
   step(input: WorldInput = {}, ticks = 1): WorldSnapshot {
     this.alive(); if (!Number.isInteger(ticks) || ticks < 0 || ticks > 36_000) throw new Error('WORLD_TICKS_INVALID');
     this.validateInput(input);
     this.sealInitialState();
-    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) });
+    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) });
     return this.snapshot();
   }
   private validateInput(input: WorldInput): void {
     if (!input || typeof input !== 'object') throw new Error('WORLD_INPUT_INVALID');
+    if(input.training){if(!this.training)throw new Error('TRAINING_INPUT_REQUIRES_RUNTIME');this.training.validateInput(input.training);}
     for (const key of ['moveXRatio', 'moveZRatio', 'moveYRatio', 'cameraYawRatio', 'cameraPitchRatio'] as const) if (input[key] !== undefined && (!Number.isFinite(input[key]) || Math.abs(input[key]) > 1)) throw new Error('WORLD_INPUT_INVALID');
     for (const key of ['run', 'jump', 'jumpPressed', 'interact', 'interactPressed'] as const) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error('WORLD_INPUT_INVALID');
   }
@@ -206,12 +216,14 @@ export class WorldEngine {
   }
   /** Shared input basis for both the fixed-step controller and Host route conversion. */
   controlForwardWorldXYZ(): Vec3 {
+    if(this.training){const yaw=this.training.followCamera.yaw;return [Math.sin(yaw),0,Math.cos(yaw)];}
     const yaw = this.cameraRig.desiredYawRadians;
     const forward = this.cameraRig.mode === 'authored' ? this.camera.getWorldDirection(new THREE.Vector3()) : new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     forward.y = 0; if (forward.lengthSq() < .001) forward.set(0, 0, -1);
     return tuple(forward.normalize());
   }
   prepareEpisodeStart(positionWorldMetersXYZ: Vec3, facingYawRadians: number): void {
+    if(this.training){if(!this.training.prepareCharacter(positionWorldMetersXYZ,facingYawRadians+Math.PI))throw new Error('TRAINING_START_BLOCKED');this.training.followCamera.reset(this.training.simulation);this.keyboard.clear();this.pointerInput={};return;}
     this.alive(); if (this.running) throw new Error('EPISODE_LIVE_CLOCK_ACTIVE');
     if (!this.controlled) throw new Error('EPISODE_CONTROL_REQUIRED');
     finiteVec(positionWorldMetersXYZ, 'episode start'); if (!Number.isFinite(facingYawRadians)) throw new Error('EPISODE_START_FACING_INVALID');
@@ -231,6 +243,7 @@ export class WorldEngine {
     const dt = this.fixedTimeStepSeconds;
     try {
       for (const update of this.updates) { const result: unknown = update({ world: this, deltaSeconds: dt, simulationTick: this.tick + 1 }); if (result && typeof (result as Promise<unknown>).then === 'function') throw new Error('WORLD_ASYNC_UPDATE_UNSUPPORTED: prepare async content before a fixed update'); }
+      if(this.training){this.training.advance(input,dt,this.pointerInput);this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;}
       this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.jump)},dt);this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
       const customActions=new Map<string,string>();
@@ -455,7 +468,7 @@ export class WorldEngine {
     this.sealInitialState(); this.accumulatorSeconds += Math.min(deltaSeconds, 0.25);
     let steps = 0;
     while (this.accumulatorSeconds + 1e-10 >= this.fixedTimeStepSeconds && steps++ < 15) {
-      const sampled = input === undefined ? this.keyboard.sample() : steps === 1 ? input : { ...input, ...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) };
+      const sampled = input === undefined ? this.keyboard.sample() : steps === 1 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) };
       this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
     }
   }
@@ -507,6 +520,7 @@ export class WorldEngine {
     this.controlled = this.controlledInitial;
     if (this.cameraInitial) { this.camera.copy(this.cameraInitial, false); if (this.cameraInitialParent) this.cameraInitialParent.add(this.camera); else this.camera.removeFromParent(); }
     this.cameraRig.reset();
+    this.training?.reset();
     this.tick = 0; this.revision += 1; this.failures.length = 0; this.keyboard.transcript.length = 0; this.navigationDirty = true;
     for (const callback of this.resets) callback(); this.render(); if (wasRunning) this.start();
   }

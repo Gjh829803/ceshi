@@ -148,6 +148,18 @@ class Fixture:
 
 
 class EvaluationSiteTests(unittest.TestCase):
+    def test_declared_hashed_action_dependencies_are_public_but_source_is_not(self):
+        resource = 'assets/resources/' + 'a' * 64 + '.json'
+        notice = 'assets/resources/' + 'b' * 64 + '.txt'
+        actual = {'playable/index.html': '', 'playable/' + resource: '', 'playable/' + notice: '', 'playable/private-source.ts': '', 'playable/profiles.json': ''}
+        selected = site.curated_playable(actual, [], [resource, notice])
+        self.assertIn('playable/' + resource, selected)
+        self.assertIn('playable/' + notice, selected)
+        self.assertNotIn('playable/private-source.ts', selected)
+        self.assertNotIn('playable/profiles.json', selected)
+        with self.assertRaises(Exception):
+            site.curated_playable(actual, [], ['../private-source.ts'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='three-site-local-fixture-')
         self.root = Path(self.temp.name).resolve()
