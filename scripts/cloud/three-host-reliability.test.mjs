@@ -16,6 +16,11 @@ import {runWithExecutionSlots} from './three-execution-slots.mjs';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const policy={schemaVersion:1,scope:'worldkit-creator',preferred:['A','B'].map(label=>({label,identitySha256:hash(label)})),denied:[{label:'D',identitySha256:hash('D')}],allowUnratedFallback:false};
 const inventory=['A','B','D','unrated'].map(codexAccountId=>({codexAccountId,eligible:true,healthStatus:'active'}));
+test('submission endpoint override accepts only an explicit loopback HTTP port',()=>{
+ assert.equal(validateCreatorAccountPolicy(policy),policy);
+ for(const port of [1,18465,65535])assert.equal(validateCreatorAccountPolicy({...policy,submissionApiBase:'http://127.0.0.1:'+port}).submissionApiBase,'http://127.0.0.1:'+port);
+ for(const submissionApiBase of [null,'','http://127.0.0.1','http://127.0.0.1:0','http://127.0.0.1:65536','http://127.0.0.1:018465','https://127.0.0.1:18465','http://localhost:18465','http://127.0.0.1.example:18465','http://user:secret@127.0.0.1:18465','http://127.0.0.1:18465/','http://127.0.0.1:18465?token=x','http://[::1]:18465'])assert.throws(()=>validateCreatorAccountPolicy({...policy,submissionApiBase}),/SUBMISSION_API_BASE_INVALID/);
+});
 test('optional account roots are scoped to project experiments and bind exactly one selected identity',()=>{
  const root='/fsx/pipeline/worldkit-three-creator-experiments/owned-account-pools',restricted={...policy,codexAccountRoot:root};
  assert.equal(creatorAccountRoot(['A'],policy),undefined);

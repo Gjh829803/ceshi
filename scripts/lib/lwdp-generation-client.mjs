@@ -223,6 +223,7 @@ export async function findGenerationJobByRequestId(requestId, {
 export async function submitCodexGenerationJob(payload, {
   recoveryAttempts = 3,
   recoveryDelayMs = 1_000,
+  recoveryConfig,
   ...options
 } = {}) {
   if (typeof payload?.request_id !== "string" || payload.request_id.length === 0) {
@@ -247,6 +248,7 @@ export async function submitCodexGenerationJob(payload, {
       try {
         const recovered = await findGenerationJobByRequestId(payload.request_id, {
           ...options,
+          ...(recoveryConfig===undefined?{}:{config:recoveryConfig}),
           pipeline: "codex",
           maxAttempts: 1,
         });

@@ -146,6 +146,11 @@ requires that root and requests every eligible preferred account, up to 64,
 using the shared root directly. Its physical members, preferred policy and
 requested account IDs must agree; actual execution must belong to that requested
 set. Account basenames and the provider's global slot limits remain shared.
+An optional `submissionApiBase` accepts only `http://127.0.0.1:<port>` for a
+task-owned submission proxy. Initial and identical-idempotency replay POSTs use
+that endpoint; lookup, polling, cancellation and uncertain-POST recovery GETs
+keep the original service configuration. A proxy failure never triggers a POST
+to the original endpoint. Authentication stays in the private runtime config.
 
 A new run requires an explicit selection manifest. Resume uses the saved manifest
 path and verifies its unchanged bytes. Model input contains the original reference,

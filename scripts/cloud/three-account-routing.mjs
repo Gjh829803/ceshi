@@ -6,6 +6,7 @@ export function validateCreatorAccountPolicy(policy) {
   if(policy.selection!==undefined&&!['single','pool'].includes(policy.selection))throw Error('CREATOR_ACCOUNT_SELECTION_MODE_INVALID');
   if(policy.selection==='pool'&&(policy.codexAccountRoot===undefined||policy.preferred.length>64))throw Error('CREATOR_ACCOUNT_POOL_POLICY_INVALID');
   if(policy.probation!==undefined&&!Array.isArray(policy.probation))throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
+  if(policy.submissionApiBase!==undefined){const match=typeof policy.submissionApiBase==='string'&&/^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})$/.exec(policy.submissionApiBase);if(!match||Number(match[1])>65535)throw Error('CREATOR_SUBMISSION_API_BASE_INVALID');}
   if(policy.codexAccountRoot!==undefined&&(typeof policy.codexAccountRoot!=='string'||!policy.codexAccountRoot.startsWith('/fsx/pipeline/worldkit-three-creator-experiments/')||policy.codexAccountRoot.split('/').slice(1).some(part=>! /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(part)||part==='.'||part==='..')))throw Error('CREATOR_ACCOUNT_ROOT_INVALID');
   const all=[...policy.preferred,...policy.denied,...(policy.probation??[])];
   if(!policy.preferred.length||all.some(row=>typeof row.label!=='string'||!/^[a-f0-9]{64}$/.test(row.identitySha256??''))||new Set(all.map(row=>row.identitySha256)).size!==all.length)throw Error('CREATOR_ACCOUNT_POLICY_INVALID');

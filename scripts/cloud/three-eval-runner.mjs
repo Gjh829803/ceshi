@@ -198,14 +198,16 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
         replayIntentAndSubmit: async () => {
           const frozen=await optionalJson(intentFile);
           if(frozen?.requestId!==plan.requestId||frozen.payloadHash!==plan.payloadHash)throw Error("CREATOR_SUBMISSION_INTENT_MISMATCH");
-          const config=await loadLwdpGenerationConfig();
-          const response=await withAdmissionLock("__dispatch",async()=>submitCodexGenerationJob(plan.payload,{config,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(30000)})}));
+          const config=await loadLwdpGenerationConfig(accountPolicy.submissionApiBase?{LWDP_API_BASE:accountPolicy.submissionApiBase}:undefined);
+          const recoveryConfig=accountPolicy.submissionApiBase?await loadLwdpGenerationConfig():config;
+          const response=await withAdmissionLock("__dispatch",async()=>submitCodexGenerationJob(plan.payload,{config,recoveryConfig,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(30000)})}));
           state.submissionRecovery={kind:"same-idempotency-key-replay",at:new Date().toISOString()};
           return submittedJobId(response);
         },
         createIntentAndSubmit: async () => {
           await uploadS3File(plan.imagePath, plan.imageS3Uri); await uploadS3File(plan.inputFile, plan.inputS3Uri);
-          const config = await loadLwdpGenerationConfig(); // Never serialized or passed to a model/MCP.
+          const config = await loadLwdpGenerationConfig(accountPolicy.submissionApiBase?{LWDP_API_BASE:accountPolicy.submissionApiBase}:undefined); // Never serialized or passed to a model/MCP.
+          const recoveryConfig=accountPolicy.submissionApiBase?await loadLwdpGenerationConfig():config;
           let submission;
           await withAdmissionLock("__dispatch", async () => {
             if (stopAdmission || await optionalJson(haltPath)) throw new Error("CREATOR_RUN_HALTED_BEFORE_POST");
@@ -213,7 +215,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
             state.phase = "submission-unknown"; await save();
             // With config already resolved, the single POST begins inside the
             // same cross-process mutex used to write a durable run halt.
-            submission = submitCodexGenerationJob(plan.payload, {config, fetchImplementation: (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(30000)})});
+            submission = submitCodexGenerationJob(plan.payload, {config,recoveryConfig, fetchImplementation: (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(30000)})});
             submission.catch(() => {}); // Await outside the mutex; preserve the original rejection.
           });
           return submittedJobId(await submission);

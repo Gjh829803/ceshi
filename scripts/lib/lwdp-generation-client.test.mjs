@@ -194,6 +194,21 @@ test("recovers one single-task Codex job by exact request_id without a second PO
   ]);
 });
 
+test('isolated submission uses public exact-request recovery without a public POST fallback',async()=>{
+ const publicConfig={baseUrl:'https://lwdp.example.test',token:'test-closed-token',userId:'worldkit-studio'},isolatedConfig={...publicConfig,baseUrl:'http://127.0.0.1:18465'};
+ for(const recoverySucceeds of [true,false]){
+  const calls=[];
+  const submit=()=>submitCodexGenerationJob({request_id:'owned-isolated-request',tasks:[{id:'case-one'}]},{config:isolatedConfig,recoveryConfig:publicConfig,recoveryAttempts:2,recoveryDelayMs:1,fetchImplementation:async(url,init)=>{
+   calls.push({url,method:init.method});assert.equal(init.headers['X-LWDP-Token'],'test-closed-token');
+   if(init.method==='POST')throw Error('isolated endpoint connection lost');
+   return new Response(JSON.stringify(recoverySucceeds?{job_id:'gen_recovered',status:'submitted'}:{error:'not found'}),{status:recoverySucceeds?200:404});
+  }});
+  if(recoverySucceeds)assert.equal(submittedJobId(await submit()),'gen_recovered');else await assert.rejects(submit(),/outcome is unknown/);
+  assert.deepEqual(calls[0],{url:'http://127.0.0.1:18465/api/v1/generation/codex/jobs',method:'POST'});
+  assert.equal(calls.filter(call=>call.method==='POST').length,1);assert(calls.slice(1).every(call=>call.method==='GET'&&call.url==='https://lwdp.example.test/api/v1/generation/jobs/by-request-id/owned-isolated-request?pipeline=codex'));
+ }
+});
+
 test("does not hide a conflicting idempotency payload behind request lookup", async () => {
   const requests = [];
   await assert.rejects(submitCodexGenerationJob({
