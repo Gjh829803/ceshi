@@ -6,6 +6,16 @@ import { readHumanoid,copyHumanoid,blendHumanoid,readInteractionTargets,copyTarg
 import type { InteractionVisualTarget } from './humanoid/interaction-visuals';
 export const FIXED_STEP=1/60;
 export interface MotionPose {position:Vector3;rotation:Quaternion;velocity:Vector3;yaw:number;speed:number;steering:number;creature?:CreatureState|undefined;humanoid?:HumanoidRenderState|undefined;cameraHeight?:number|undefined}
+export interface TrainingDisplaySample {
+  readonly epoch:number;
+  readonly previousTick:number;
+  readonly currentTick:number;
+  readonly alpha:number;
+  readonly timeSeconds:number;
+  readonly mountedInstanceId:string|null;
+  readonly player:MotionPose;
+  readonly vehicles:readonly MotionPose[];
+}
 function copyCreature(from?:CreatureState):CreatureState|undefined{return from?{...from,leadPosition:from.leadPosition?.clone()}:undefined;}
 const pose=():MotionPose=>({position:new Vector3(),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0});
 const copy=(out:MotionPose,from:MotionPose)=>{out.position.copy(from.position);out.rotation.copy(from.rotation);out.velocity.copy(from.velocity);out.yaw=from.yaw;out.speed=from.speed;out.steering=from.steering;out.creature=copyCreature(from.creature);out.humanoid=copyHumanoid(from.humanoid);out.cameraHeight=from.cameraHeight;};
@@ -25,11 +35,22 @@ function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.positi
 }
 /** One render timestamp shared by meshes, mounted characters and camera. */
 export class PresentationState {
+  private previousTime=0;
+  private currentTime=0;
+  private mountedInstanceId:string|null=null;
   targets:InteractionVisualTarget[]=[];private previousTargets:InteractionVisualTarget[]=[];private currentTargets:InteractionVisualTarget[]=[];
   player=pose();vehicles:MotionPose[];previousPlayer=pose();currentPlayer=pose();previousVehicles:MotionPose[];currentVehicles:MotionPose[];revision=-1;active=-2;
   constructor(sim:Simulation){this.vehicles=sim.vehicles.map(pose);this.previousVehicles=sim.vehicles.map(pose);this.currentVehicles=sim.vehicles.map(pose);this.snap(sim);}
-  snap(sim:Simulation){read(sim,this.currentPlayer,this.currentVehicles);this.currentTargets=readInteractionTargets(sim.humanoid);this.previousTargets=copyTargets(this.currentTargets);copy(this.previousPlayer,this.currentPlayer);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));this.revision=sim.teleportRevision;this.active=sim.active;this.interpolate(1);}
-  beforeStep(sim:Simulation){if(this.revision!==sim.teleportRevision||this.active!==sim.active)this.snap(sim);this.previousTargets=copyTargets(this.currentTargets);copy(this.previousPlayer,this.currentPlayer);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));}
-  afterStep(sim:Simulation){if(this.revision!==sim.teleportRevision||this.active!==sim.active){this.snap(sim);return;}read(sim,this.currentPlayer,this.currentVehicles);this.currentTargets=readInteractionTargets(sim.humanoid);}
+  snap(sim:Simulation){this.previousTime=this.currentTime=sim.time;this.mountedInstanceId=sim.vehicle?.spec.id??null;read(sim,this.currentPlayer,this.currentVehicles);this.currentTargets=readInteractionTargets(sim.humanoid);this.previousTargets=copyTargets(this.currentTargets);copy(this.previousPlayer,this.currentPlayer);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));this.revision=sim.teleportRevision;this.active=sim.active;this.interpolate(1);}
+  beforeStep(sim:Simulation){if(this.revision!==sim.teleportRevision||this.active!==sim.active)this.snap(sim);this.previousTime=this.currentTime;this.previousTargets=copyTargets(this.currentTargets);copy(this.previousPlayer,this.currentPlayer);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));}
+  afterStep(sim:Simulation){if(this.revision!==sim.teleportRevision||this.active!==sim.active){this.snap(sim);return;}this.currentTime=sim.time;read(sim,this.currentPlayer,this.currentVehicles);this.currentTargets=readInteractionTargets(sim.humanoid);}
   interpolate(alpha:number){alpha=Math.max(0,Math.min(1,alpha));blend(this.player,this.previousPlayer,this.currentPlayer,alpha);this.targets=blendTargets(this.previousTargets,this.currentTargets,alpha);this.vehicles.forEach((p,n)=>blend(p,this.previousVehicles[n]!,this.currentVehicles[n]!,alpha));}
+  sample(alpha:number,epoch:number,previousTick:number,currentTick:number):TrainingDisplaySample {
+    alpha=Math.max(0,Math.min(1,alpha));
+    const player=pose(),vehicles=this.currentVehicles.map(pose);
+    blend(player,this.previousPlayer,this.currentPlayer,alpha);
+    vehicles.forEach((value,index)=>blend(value,this.previousVehicles[index]!,this.currentVehicles[index]!,alpha));
+    return {epoch,previousTick,currentTick,alpha,timeSeconds:this.previousTime+(this.currentTime-this.previousTime)*alpha,mountedInstanceId:this.mountedInstanceId,player,vehicles};
+  }
+
 }

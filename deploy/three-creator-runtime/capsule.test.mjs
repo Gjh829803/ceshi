@@ -70,7 +70,7 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
-      for (const example of ['sdk-capabilities','character-actions']) {
+      for (const example of ['sdk-capabilities','character-actions','horse-riding']) {
         const relative = `examples/three-creator/${example}/${name}`;
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }

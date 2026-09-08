@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type {CaptureTargetRepresentative, WorldObservation} from '@worldkit/three';
 
-type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'player'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'>;
+type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'player'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'|'withPresentation'>;
 export type CaptureTargetDescriptor={id:string;sourceEntityId:string;representative?:{kind:'object'|'instance';objectUuid:string;instanceIndex?:number}};
 type Selection={descriptor:CaptureTargetDescriptor;object:THREE.Object3D;representative?:CaptureTargetRepresentative};
 function fail(code:string):never{throw new Error(`THREE_CAPTURE_${code}`);}
@@ -115,6 +115,13 @@ function instanceProxy(selection:Selection,scene:THREE.Scene){
 
 /** Capture only: no second scene, simulation clock, physics world or fabricated mesh. */
 export function captureObjectViews(world:CaptureWorld,view:'top-down'|'entity-triview',entityIds:string[]=[],frontYawRadians:number|null=null){
+  return withCapturePresentation(world,()=>capturePresentedObjectViews(world,view,entityIds,frontYawRadians));
+}
+/** Raw Three observers retain their direct capture behavior. */
+export function withCapturePresentation<T>(world:Pick<WorldObservation,'withPresentation'>,work:()=>T):T {
+  return world.withPresentation?world.withPresentation(work):work();
+}
+function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-triview',entityIds:string[],frontYawRadians:number|null){
   const {scene,renderer}=world;scene.updateMatrixWorld(true);
   if(view==='entity-triview'&&entityIds.length>1)fail('SINGLE_TARGET_REQUIRED');
   const available=selections(world),ids=entityIds.length?entityIds:view==='entity-triview'?['player']:[];

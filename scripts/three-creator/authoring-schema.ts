@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -22,6 +22,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
  presentation: ['createPresentation','state','execute','getEntityState','reset'],
  training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'mounted-interaction':['training','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['training','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
@@ -63,6 +64,14 @@ export function trainingContractSource(source:string):string {
   const signatures=runtime.members.filter((member):member is ts.MethodDeclaration=>ts.isMethodDeclaration(member)&&allowed.has(member.name.getText(file))).map(method=>{
    const end=method.body?.pos??method.end;return source.slice(method.getStart(file),end).trim()+';';
   });declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
+ const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingHorse');
+ if(horse){const printer=ts.createPrinter();const members=horse.members.filter(member=>!(ts.canHaveModifiers(member)?ts.getModifiers(member):undefined)?.some(m=>m.kind===ts.SyntaxKind.PrivateKeyword||m.kind===ts.SyntaxKind.ProtectedKeyword));
+  const signatures=members.map(member=>{
+   if(ts.isPropertyDeclaration(member))return `${member.modifiers?.some(m=>m.kind===ts.SyntaxKind.ReadonlyKeyword)?'readonly ':''}${member.name.getText(file)}: ${member.type?.getText(file)};`;
+   if(ts.isGetAccessorDeclaration(member))return `get ${member.name.getText(file)}(): ${member.type?.getText(file)};`;
+   if(ts.isMethodDeclaration(member)||ts.isConstructorDeclaration(member))return source.slice(member.getStart(file),member.body?.pos??member.end).trim()+';';
+   return printer.printNode(ts.EmitHint.Unspecified,member,file);
+  });declarations.push(`export declare class TrainingHorse {\n${signatures.join('\n')}\n}`);}
  return declarations.join('\n');
 }
 

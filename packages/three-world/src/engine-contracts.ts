@@ -151,6 +151,8 @@ export type WorldSnapshot = Readonly<{
 }>;
 /** Minimal common observer for raw Three and SDK worlds. Host owns evaluation. */
 export interface WorldObservation {
+ /** Host-only synchronous capture transaction at the exact current fixed sample. */
+ withPresentation?<T>(work:()=>T):T;
   readonly ready: boolean;
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;

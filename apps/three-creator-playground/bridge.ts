@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { WorldCommand, WorldDescription, WorldObservation } from '@worldkit/three';
-import {captureObjectViews, captureTargets} from './capture.js';
+import {captureObjectViews, captureTargets, withCapturePresentation} from './capture.js';
 export {targetTriviewBasis} from './capture.js';
 
 declare global {
@@ -37,7 +37,7 @@ function createBridge() {
     // One actual render of the same current scene, without advancing its clock.
     const world = observation();
     const requestedAt = performance.now(); requestRecordedFrame();
-    world.renderer.render(world.scene, world.camera); await afterPaint();
+    withCapturePresentation(world,()=>world.renderer.render(world.scene,world.camera)); await afterPaint();
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => { current.removeEventListener('dataavailable', flushed); reject(new Error('THREE_VIDEO_FLUSH_TIMEOUT')); }, 5000);
       const flushed = () => { clearTimeout(timeout); resolve(); };
@@ -75,7 +75,7 @@ function createBridge() {
   window.addEventListener('keydown', keyListener, true); window.addEventListener('keyup', keyListener, true);
   function sample(deltaSeconds: number) {
     const world = observation(), snapshot = world.snapshot?.(), entity = snapshot?.entities.find(e => e.id === snapshot.controlledEntityId);
-    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, water: snapshot?.training?.water ?? null, errors: snapshot?.errors ?? [] };
+    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, water: snapshot?.training?.water ?? null, training: snapshot?.training ?? null, errors: snapshot?.errors ?? [] };
   }
   const frames: number[] = [];
   function frame(now: number) {
@@ -103,7 +103,7 @@ function createBridge() {
       const world = observation(); if (!world.operation) throw new Error('THREE_WORLD_OPERATIONS_UNSUPPORTED');
       return world.operation(worldOperationId);
     },
-    async reset() { const world = observation(); await world.stopLive(); await world.reset(); world.renderer.render(world.scene, world.camera); },
+    async reset() { const world = observation(); await world.stopLive(); await world.reset(); withCapturePresentation(world,()=>world.renderer.render(world.scene,world.camera)); },
     async start() {
       const world = observation();
       // Existing gallery integrations use this small lifecycle alias for both profiles.
@@ -136,14 +136,14 @@ function createBridge() {
       recordingStartedAt = performance.now(); current.start(1000);
       // A zero-rate stream needs an actual frame before some browsers emit start.
       initialFrameRequestedAt = performance.now(); requestRecordedFrame();
-      const world = observation(); world.renderer.render(world.scene, world.camera);
+      const world = observation(); withCapturePresentation(world,()=>world.renderer.render(world.scene,world.camera));
       await started; await flushCurrentCanvas(current);
     },
     endRecording: finishRecording,
     captureTargets() { return captureTargets(observation()); },
     capture(view: 'opening' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
       const world = observation();
-      if (view === 'opening') { world.scene.updateMatrixWorld(true); world.renderer.render(world.scene, world.camera); return { view, image: world.renderer.domElement.toDataURL('image/png'), player: describe(world.player) }; }
+      if (view === 'opening') return withCapturePresentation(world,()=>{world.scene.updateMatrixWorld(true);world.renderer.render(world.scene,world.camera);return {view,image:world.renderer.domElement.toDataURL('image/png'),player:describe(world.player)};});
       return captureObjectViews(world, view, entityIds, frontYawRadians);
     },
   };

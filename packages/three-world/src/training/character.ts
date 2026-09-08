@@ -77,6 +77,27 @@ export class Character {
   private localFacing = new T.Vector3(0, 0, 1);
   private simulationIdentity: object | undefined;
   private mountedMode: 'stand' | 'drive' | 'ride' | null = null;
+  // Source nodes are registered on adoption. Later author-added visual children
+  // are not animation-owned, so their evaluated locals survive repeated frames.
+  private presentationNodes=new Set<T.Object3D>([this.actor]);
+  private previousPose: {node:T.Object3D;position:T.Vector3;rotation:T.Quaternion;scale:T.Vector3}[] = [];
+  private currentPose: typeof this.previousPose = [];
+  private snapPose = true;
+  /** Snapshot source locals only after the single fixed animation evaluation. */
+  capturePresentationPose():void {
+    this.previousPose=this.currentPose;
+    this.currentPose=[];
+    for(const node of this.presentationNodes)this.currentPose.push({node,position:node.position.clone(),rotation:node.quaternion.clone(),scale:node.scale.clone()});
+    if(this.snapPose||this.previousPose.length!==this.currentPose.length){this.previousPose=this.currentPose;this.snapPose=false;}
+  }
+  applyPresentationPose(alpha:number):void {
+    this.currentPose.forEach((pose,index)=>{
+      const previous=this.previousPose[index]!;
+      pose.node.position.lerpVectors(previous.position,pose.position,alpha);
+      pose.node.quaternion.slerpQuaternions(previous.rotation,pose.rotation,alpha);
+      pose.node.scale.lerpVectors(previous.scale,pose.scale,alpha);
+    });
+  }
   private hipOffset = new T.Vector3();
   constructor(source?: SourceCharacter) {
     this.root.name = 'Host_Character'; this.root.add(this.actor);
@@ -90,18 +111,39 @@ export class Character {
   get hip() { return this.source?.bones.pelvis; }
   private adopt(source: SourceCharacter) {
     this.source = source; this.actor.add(source.root);
+    this.presentationNodes=new Set([this.actor]);
+    source.root.traverse(node=>this.presentationNodes.add(node));
+    this.previousPose=[];this.currentPose=[];this.snapPose=true;
     this.overlay = new MountedRiderPose(source.root); this.loaded = true;
   }
   async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
-  dispose():void{this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+  dispose():void{this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+
+  /** Internal presentation correction. Physics and the managed root stay untouched. */
+  alignMountedPelvis(anchorWorld: T.Matrix4): void {
+    const pelvis = this.hip;
+    if (!pelvis || !this.actor.parent) return;
+    this.actor.parent.updateWorldMatrix(true, false);
+    const local = this.actor.parent.matrixWorld.clone().invert().multiply(anchorWorld);
+    const desired = new T.Vector3(), rotation = new T.Quaternion(), scale = new T.Vector3();
+    local.decompose(desired, rotation, scale);
+    if (!local.elements.every(Number.isFinite) || local.determinant() <= 0) throw new Error('TRAINING_SEAT_ANCHOR_INVALID');
+    this.actor.position.set(0, 0, 0);
+    this.actor.quaternion.copy(rotation);
+    this.actor.updateWorldMatrix(false, true);
+    const actual = this.actor.parent.worldToLocal(pelvis.getWorldPosition(new T.Vector3()));
+    this.actor.position.copy(desired).sub(actual);
+    this.actor.updateWorldMatrix(false, true);
+  }
 
   update(dt: number, pose: HumanoidRenderState) {
     const source = this.source; if (!source) return;
-    this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.carriedAttachment = null;
+    this.applyPresentationPose(1);
+    this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
     const mode = pose.mounted ?? null;
     const mounted = mode !== null;
     const identity = pose.simulationIdentity;
-    if (identity !== this.simulationIdentity || mode !== this.mountedMode) this.frame = emptyFrame();
+    if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
     Object.assign(this.frame, pose);
     // Position and heading already belong to the host root. Keep source-local

@@ -12,6 +12,7 @@ import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, 
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, sdkExample } from './examples.js';
 import { readExampleFiles, type ExampleTopic } from './example-files.js';
+import {mountUsage} from './mount-guidance.js';
 import {characterUsage} from './character-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
@@ -121,23 +122,23 @@ export class ThreeCreatorTools {
   async schema(topic: AuthoringTopic = 'getting-started') {
     if (!AUTHORING_TOPICS.includes(topic)) throw new Error('THREE_SCHEMA_TOPIC_UNKNOWN');
     const policy=this.compiler.assetPolicy().policy;
-    const suggestedExample=topic==='character-actions'?'character-actions':'independent-world';
-    const trainingExampleTopic=this.profile==='three-sdk'&&['training','character-actions','all'].includes(topic)&&await this.exampleAvailable(suggestedExample)?suggestedExample:undefined;
+    const suggestedExample=topic==='mounted-interaction'?'mounted-interaction':topic==='character-actions'?'character-actions':'independent-world';
+    const trainingExampleTopic=this.profile==='three-sdk'&&['training','character-actions','mounted-interaction','all'].includes(topic)&&await this.exampleAvailable(suggestedExample)?suggestedExample:undefined;
     const guide=(markdown:string)=>guideTopic(markdown,topic)
-      .replace(/<!-- asset-info:([a-zA-Z0-9._-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,(_match,id:string,body:string)=>policy.allowedAssetIds.includes(id)?body:'');
+      .replace(/<!-- asset-info:([a-zA-Z0-9._,-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,(_match,ids:string,body:string)=>ids.split(',').every(required=>policy.allowedAssetIds.includes(required))?body:'');
     const sdk: { sdkContracts?: string; sdkGuide?: string; sdkFactoryContracts?:string; worldCommandSchema?: typeof WORLD_COMMAND_SCHEMA } = this.profile === 'three-sdk' ? {
       sdkContracts: publicContractTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/src/contracts.ts'), 'utf8'), topic),
       sdkFactoryContracts: humanoidContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/humanoid.ts'),'utf8')),
       sdkGuide: guide(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8')),
-      ...(topic === 'control' || topic === 'extensions' || topic === 'training' || topic === 'character-actions' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
+      ...(topic === 'control' || topic === 'extensions' || topic === 'training' || topic === 'character-actions' || topic === 'mounted-interaction' || topic === 'all' ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
     } : {};
     return { topic, availableTopics: AUTHORING_TOPICS, project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       ...(this.profile==='three-sdk'?{entryPoint:{module:'@worldkit/three',name:'createHumanoidWorld',optionsType:'HumanoidWorldOptions',mapType:'TrainingMap'},...(topic==='character-actions'||topic==='control'||topic==='all'?{characterCapabilities:training.CHARACTER_CAPABILITIES,controlBindings:training.INPUT_BINDINGS}:{}),...(topic==='extensions'||topic==='all'?{runtimeSource:{tool:'creator_materialize_runtime',sourceRoot:'sdk',buildTool:'world_validate',entry:'sdk/three-world/src/index.ts'}}:{})}:{}),
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
-      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='character-actions'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','control-tuning.ts','environment/types.ts','platform/session.ts','runtime.ts',...(topic==='character-actions'||topic==='all'?['humanoid/action-schema.ts','simulation.ts']:[])].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),...(trainingExampleTopic?{trainingExampleTopic}:{})}:{}),
+      ...(this.profile==='three-sdk'&&(topic==='training'||topic==='character-actions'||topic==='mounted-interaction'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','control-tuning.ts','environment/types.ts','platform/session.ts','runtime.ts',...(topic==='mounted-interaction'||topic==='all'?['horse.ts']:[]),...(topic==='character-actions'||topic==='mounted-interaction'||topic==='all'?['humanoid/action-schema.ts','simulation.ts']:[])].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),...(trainingExampleTopic?{trainingExampleTopic}:{})}:{}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.' };
   }
-  private exampleRoot(topic:ExampleTopic){return path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='character-actions'?'character-actions':topic==='independent-world'?'training-independent':'sdk-capabilities');}
+  private exampleRoot(topic:ExampleTopic){return path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='mounted-interaction'?'horse-riding':topic==='character-actions'?'character-actions':topic==='independent-world'?'training-independent':'sdk-capabilities');}
   private async exampleAvailable(topic:ExampleTopic){
     const required=JSON.parse(await readFile(path.join(this.exampleRoot(topic),'project.json'),'utf8')).assetIds as string[];
     const allowed=this.compiler.assetPolicy().policy.allowedAssetIds;return required.every(id=>allowed.includes(id));
@@ -146,15 +147,15 @@ export class ThreeCreatorTools {
     if (topic !== 'getting-started') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
       const root=this.exampleRoot(topic);
-      if(!await this.exampleAvailable(topic))throw new Error(`THREE_EXAMPLE_ASSETS_UNAVAILABLE: ${topic}`);
+      if(!await this.exampleAvailable(topic))throw new Error(`THREE_EXAMPLE_ASSETS_UNAVAILABLE: ${topic}: ${JSON.parse(await readFile(path.join(root,'project.json'),'utf8')).assetIds.filter((id:string)=>!this.compiler.assetPolicy().policy.allowedAssetIds.includes(id)).join(', ')}`);
       return { profile:this.profile,topic,...await readExampleFiles(root,topic,selectedFiles),sdkExample:'Whitebox training runtime: one SDK clock, supplied humanoid and reusable vehicle families. Compilation is not behavioral acceptance.' };
     }
     return { profile: this.profile, files: { 'main.ts': this.profile === 'three-sdk' ? sdkExample(this.compiler.assetPolicy().policy.defaultHumanoidAssetId) : RAW_EXAMPLE, 'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>', 'project.json': JSON.stringify({ schemaVersion: 1, assetIds: this.profile === 'three-sdk' ? [this.compiler.assetPolicy().policy.defaultHumanoidAssetId] : [] }), 'episode.json': JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['Shift'], durationSeconds: 2 }, { keysUp: ['w', 'Shift'], durationSeconds: 1 }, { keysDown: ['ArrowLeft'], durationSeconds: 1 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.2 }, { keysUp: ['Space'], durationSeconds: 1 }], targets: [] }, null, 2) }, sdkExample: this.profile === 'three-sdk' ? 'Read the exported contracts and the installed SDK example before using createHumanoidWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.' : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/player/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.' }; }
   async assets(query = '', assetId?: string) {
     const allowed=this.compiler.allowedAssets(),ids=allowed.map(asset=>asset.id),words=query.toLowerCase().split(/\s+/).filter(Boolean);
-    const rows=allowed.map(asset=>({asset:publicAsset(asset),usage:characterUsage(asset,this.profile,ids)}));
-    const selected=rows.filter(row=>(!assetId||row.asset.id===assetId)&&words.every(word=>JSON.stringify({asset:row.asset,useWhen:row.usage?.useWhen,skills:row.usage?.skillRequests,bindings:row.usage?.controlBindings,hints:row.usage?.controlHints,capabilities:row.usage?.capabilities}).toLowerCase().includes(word)));
-    return {schemaVersion:1,assets:selected.map(row=>row.asset),characterUsage:selected.flatMap(row=>row.usage?[row.usage]:[])};
+    const rows=allowed.map(asset=>({asset:publicAsset(asset),usage:characterUsage(asset,this.profile,ids),mount:mountUsage(asset,this.profile,ids)}));
+    const selected=rows.filter(row=>(!assetId||row.asset.id===assetId)&&words.every(word=>JSON.stringify({asset:row.asset,useWhen:row.usage?.useWhen,skills:row.usage?.skillRequests,bindings:row.usage?.controlBindings,hints:row.usage?.controlHints,capabilities:row.usage?.capabilities,mount:row.mount}).toLowerCase().includes(word)));
+    return {schemaVersion:1,assets:selected.map(row=>row.asset),mountUsage:selected.flatMap(row=>row.mount?[row.mount]:[]),characterUsage:selected.flatMap(row=>row.usage?[row.usage]:[])};
   }
   start(type: string, run: (id: string) => Promise<unknown>) {
     const now = new Date().toISOString(), id = randomUUID(); const operation: Operation = { id, type, status: 'queued', createdAt: now, updatedAt: now }; this.operations.set(id, operation);

@@ -15,12 +15,38 @@ const identity=new Quaternion();
 function shape(body:QueryBody){return body.kind==='capsule'?new RAPIER.Capsule(body.height/2-body.radius,body.radius):new RAPIER.Cuboid(...body.halfExtents);}
 function center(p:Vector3,body:QueryBody,rotation:Quaternion){return new Vector3(...body.offset).applyQuaternion(rotation).add(p);}
 function extents(body:QueryBody,rotation:Quaternion){
-  if(body.kind==='capsule')return new Vector3(body.radius,body.height/2,body.radius);
+  if(body.kind==='capsule'){const axis=new Vector3(0,body.height/2-body.radius,0).applyQuaternion(rotation);return new Vector3(Math.abs(axis.x)+body.radius,Math.abs(axis.y)+body.radius,Math.abs(axis.z)+body.radius);}
   const e=new Vector3();body.halfExtents.forEach((half,axis)=>{const v=new Vector3().setComponent(axis,half).applyQuaternion(rotation);e.add(new Vector3(Math.abs(v.x),Math.abs(v.y),Math.abs(v.z)));});return e;
+}
+export interface BodyPose {
+  position: Vector3;
+  rotation: Quaternion;
+  body: QueryBody;
+}
+export interface BodyQueryFilter {
+  readonly excludedColliderHandles?: ReadonlySet<number>;
+  readonly excludedActorIds?: ReadonlySet<string>;
+}
+function validatePose(pose: BodyPose) {
+  const b = pose.body,
+    dimensions =
+      b.kind === "capsule" ? [b.radius, b.height] : [...b.halfExtents];
+  if (
+    ![
+      ...pose.position.toArray(),
+      ...pose.rotation.toArray(),
+      ...b.offset,
+      ...dimensions,
+    ].every(Number.isFinite) ||
+    dimensions.some((n) => n <= 0) ||
+    Math.abs(pose.rotation.lengthSq() - 1) > 1e-5 ||
+    (b.kind === "capsule" && b.height < 2 * b.radius)
+  )
+    throw new Error("TRAINING_QUERY_INVALID");
 }
 export interface MoveResult {position:Vector3;grounded:boolean;normal:Vector3;blocked:boolean;normals:Vector3[]}
 export interface HumanoidRig {world:RAPIER.World;body:RAPIER.RigidBody;capsule:RAPIER.Collider;controller:RAPIER.KinematicCharacterController}
-export interface ActorQueryBody {id:string;position:Vector3;rotation:Quaternion;body:QueryBody}
+export interface ActorQueryBody {id:string;actorId?:string;position:Vector3;rotation:Quaternion;body:QueryBody}
 
 /** The map owns one world. Borrowed character rigs and interaction bodies share its fixed tick. */
 export class EnvironmentQueries {
@@ -28,8 +54,9 @@ export class EnvironmentQueries {
   private controller:RAPIER.KinematicCharacterController;
   private disposed=false;
   private staticColliders=new Map<string,RAPIER.Collider>();
+  private staticColliderIds=new Map<number,string>();
   private rigs=new Set<HumanoidRig>();
-  private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string}>();
+  private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string;actorId:string}>();
   private actorColliderHandles=new Set<number>();
   // Vehicle simulation already resolves actor contacts. Excluding its own proxy
   // also keeps floor/spawn/camera queries from hitting the controlled character.
@@ -52,6 +79,7 @@ export class EnvironmentQueries {
       for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++){
         const x=box.position[0]-box.size[0]/2+(ix+.5)*width,z=box.position[2]-box.size[2]/2+(iz+.5)*depth;
         const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(width/2,box.size[1]/2,depth/2).setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85));
+        this.staticColliderIds.set(collider.handle,box.id);
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
     }
@@ -64,14 +92,14 @@ export class EnvironmentQueries {
   }
   private assertLive(){if(this.disposed)throw new Error('Environment queries disposed');}
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
-  colliderId(handle:number):string{return [...this.staticColliders].find(([,c])=>c.handle===handle)?.[0]??[...this.actorColliders].find(([,v])=>v.collider.handle===handle)?.[0]??`collider-${handle}`;}
+  colliderId(handle:number):string{return this.staticColliderIds.get(handle)??[...this.actorColliders].find(([,v])=>v.collider.handle===handle)?.[0]??`collider-${handle}`;}
   raycast(origin:Vector3,direction:Vector3,distance:number){
     this.assertLive();const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,direction),distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
     if(!hit)return null;
     const id=[...this.staticColliders].find(([,c])=>c.handle===hit.collider.handle)?.[0]??`collider-${hit.collider.handle}`;
     return {id,distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.staticColliders.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id);}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
    * Cached handles are safe to inspect from Rapier query predicates. */
@@ -97,11 +125,169 @@ export class EnvironmentQueries {
       if(entry&&entry.bodyKey!==bodyKey){this.queryExcluded.delete(entry.collider.handle);this.actorColliderHandles.delete(entry.collider.handle);this.world.removeCollider(entry.collider,false);this.actorColliders.delete(actor.id);entry=undefined;}
       if(!entry){
         const b=actor.body,desc=b.kind==='capsule'?RAPIER.ColliderDesc.capsule(b.height/2-b.radius,b.radius):RAPIER.ColliderDesc.cuboid(...b.halfExtents);
-        entry={collider:this.world.createCollider(desc),bodyKey};this.actorColliders.set(actor.id,entry);this.actorColliderHandles.add(entry.collider.handle);this.queryExcluded.add(entry.collider.handle);
+        entry={collider:this.world.createCollider(desc),bodyKey,actorId:actor.actorId??actor.id};this.actorColliders.set(actor.id,entry);this.actorColliderHandles.add(entry.collider.handle);this.queryExcluded.add(entry.collider.handle);
       }
       entry.collider.setTranslation(center(actor.position,actor.body,actor.rotation));entry.collider.setRotation(actor.rotation);
     }
     for(const [id,entry] of this.actorColliders)if(!live.has(id)){this.queryExcluded.delete(entry.collider.handle);this.actorColliderHandles.delete(entry.collider.handle);this.world.removeCollider(entry.collider,false);this.actorColliders.delete(id);}
+  }
+  /** Direct per-collider queries read current poses without advancing Rapier's broadphase. */
+  private directColliders(filter: BodyQueryFilter = {}): RAPIER.Collider[] {
+    this.assertLive();
+    const excluded = new Set(filter.excludedColliderHandles);
+    for (const entry of this.actorColliders.values()) {
+      // Actor part IDs are retained; exclusion names the exact instance, never a prefix.
+      if (filter.excludedActorIds?.has(entry.actorId))
+        excluded.add(entry.collider.handle);
+    }
+    const colliders: RAPIER.Collider[] = [];
+    this.world.colliders.forEach((c) => {
+      if (c.isEnabled() && !c.isSensor() && !excluded.has(c.handle))
+        colliders.push(c);
+    });
+    return colliders;
+  }
+  bodyOverlap(
+    pose: BodyPose,
+    filter?: BodyQueryFilter,
+    contactToleranceMeters = 0,
+  ): boolean {
+    validatePose(pose);
+    if (!Number.isFinite(contactToleranceMeters) || contactToleranceMeters < 0)
+      throw new Error("TRAINING_QUERY_INVALID");
+    contactToleranceMeters = Math.min(contactToleranceMeters, this.controller.offset());
+    const c = center(pose.position, pose.body, pose.rotation),
+      e = extents(pose.body, pose.rotation);
+    if (
+      c
+        .clone()
+        .sub(e)
+        .toArray()
+        .some((v, i) => v < this.map.bounds.min[i]!) ||
+      c
+        .clone()
+        .add(e)
+        .toArray()
+        .some((v, i) => v > this.map.bounds.max[i]!)
+    )
+      return true;
+    const body = shape(pose.body);
+    return this.directColliders(filter).some((other) => {
+      const hit = body.contactShape(
+        c,
+        pose.rotation,
+        other.shape,
+        other.translation(),
+        other.rotation(),
+        0,
+      );
+      // Only upward support contact receives KCC numerical tolerance. Walls never do.
+      return (
+        !!hit &&
+        hit.distance < 0 &&
+        !(
+          hit.normal2.y >= Math.SQRT1_2 &&
+          hit.distance >= -contactToleranceMeters
+        )
+      );
+    });
+  }
+  bodyPathBlocked(
+    poses: readonly BodyPose[],
+    filter?: BodyQueryFilter,
+  ): boolean {
+    const clearance =
+      this.rigs.values().next().value?.controller.offset() ??
+      this.controller.offset();
+    for (const pose of poses)
+      if (this.bodyOverlap(pose, filter, clearance)) return true;
+    const colliders = this.directColliders(filter);
+    for (let n = 1; n < poses.length; n++) {
+      const from = poses[n - 1]!,
+        to = poses[n]!;
+      // Paths translate a fixed upright capsule. Rotation/shape changes need explicit segments.
+      if (
+        from.rotation.angleTo(to.rotation) > 1e-6 ||
+        JSON.stringify(from.body) !== JSON.stringify(to.body)
+      )
+        throw new Error("TRAINING_QUERY_INVALID");
+      const start = center(from.position, from.body, from.rotation),
+        delta = center(to.position, to.body, to.rotation).sub(start),
+        body = shape(from.body);
+      if (delta.lengthSq() < 1e-12) continue;
+      for (const other of colliders) {
+        const hit = body.castShape(
+          start,
+          from.rotation,
+          delta,
+          other.shape,
+          other.translation(),
+          other.rotation(),
+          { x: 0, y: 0, z: 0 },
+          clearance,
+          1,
+          true,
+        );
+        if (!hit) continue;
+        const contact = body.contactShape(
+          start,
+          from.rotation,
+          other.shape,
+          other.translation(),
+          other.rotation(),
+          clearance,
+        );
+        if (
+          contact &&
+          contact.normal2.y >= Math.SQRT1_2 &&
+          contact.distance >= -clearance &&
+          delta.dot(
+            new Vector3(
+              contact.normal2.x,
+              contact.normal2.y,
+              contact.normal2.z,
+            ),
+          ) >= -1e-8
+        )
+          continue;
+        return true;
+      }
+    }
+    return false;
+  }
+  standingSupport(
+    position: Vector3,
+    maximumDropMeters: number,
+    maximumSlopeRadians: number,
+  ): { height: number; normal: Vector3 } | null {
+    if (
+      ![...position.toArray(), maximumDropMeters, maximumSlopeRadians].every(
+        Number.isFinite,
+      ) ||
+      maximumDropMeters < 0 ||
+      maximumSlopeRadians < 0 ||
+      maximumSlopeRadians >= Math.PI / 2
+    )
+      throw new Error("TRAINING_QUERY_INVALID");
+    const ray = new RAPIER.Ray(position, { x: 0, y: -1, z: 0 });
+    let nearest: RAPIER.RayIntersection | null = null;
+    for (const other of this.directColliders({
+      excludedColliderHandles: this.queryExcluded,
+    })) {
+      const hit = other.castRayAndGetNormal(ray, maximumDropMeters, true);
+      if (hit && (!nearest || hit.timeOfImpact < nearest.timeOfImpact))
+        nearest = hit;
+    }
+    return nearest && nearest.normal.y >= Math.cos(maximumSlopeRadians)
+      ? {
+          height: position.y - nearest.timeOfImpact,
+          normal: new Vector3(
+            nearest.normal.x,
+            nearest.normal.y,
+            nearest.normal.z,
+          ),
+        }
+      : null;
   }
   stepPhysics(dt:number){this.assertLive();this.world.timestep=dt;this.world.step();}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}

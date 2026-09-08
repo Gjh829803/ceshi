@@ -10,3 +10,5 @@ export { emptyInput as emptyTrainingInput } from './training/simulation.js';
 export * as training from './training/public.js';
 export { INPUT_BINDINGS, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type ControlAction } from './training/input.js';
 export { CHARACTER_CAPABILITIES, type CharacterCapability, type CharacterCapabilityState } from './training/character-capabilities.js';
+export { TrainingHorse } from './training/horse.js';
+export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './training/horse.js';

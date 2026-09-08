@@ -137,7 +137,10 @@ function stepMount(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,true,q);
   if(clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
   v.velocity.copy(v.position).sub(old).divideScalar(dt);
-  v.grounded=moved.grounded;if(v.grounded)v.velocity.y=0;
+  // Keep the full solved translation for observations and physical dismount.
+  // Grounded motion chooses its resting downward probe above, independently of
+  // this output velocity, so an uphill component cannot become a new jump.
+  v.grounded=moved.grounded;
   v.pitch=0;v.roll=0;v.rotation.copy(rotationAt(v.yaw));
 }
 function stepCarriage(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){

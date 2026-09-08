@@ -488,3 +488,59 @@ Read the real exports from contracts.ts using the Creator schema tool by topic.
 Types describe the API; use a complete real input plan to check broad opening
 composition, connected routes and the requested core movement/actions and their
 physical results. Choose the recording length by functional coverage.
+
+<!-- topic:mounted-interaction -->
+<!-- asset-info:training.horse,humanoid.source-101 -->
+### Imported horse and rider anchors
+
+`TrainingHorse` owns the real `creatures/horse.glb` skeleton, cloned clips and
+playback resources. Load it with the Host's permitted logical resource resolver:
+
+```ts
+import { TrainingHorse } from '@worldkit/three';
+const horse = new TrainingHorse();
+await horse.load(resolveTrainingResource);
+// Pass alongside the existing vehicle instanceId, assetId and calibrated spec:
+const horseInstance = {
+  instanceId: 'horse-1', assetId: 'training.horse', spec: horseSpec,
+  object: horse.root, visual: horse,
+  seatAnchor: {
+    nodeName: 'Body', maximumOffsetMeters: 0.145579,
+    maximumRotationRadians: 0.122951,
+  },
+};
+```
+
+The adapter must already be loaded, its logical root must be unit-scale, and its
+vehicle mode must be `mount`. Model normalization stays under `content` (uniform
+scale 0.451293531823, target bounds 1.4 × 2.3 × 3.55 metres). Runtime takes disposal
+ownership when created successfully; otherwise the caller disposes the adapter.
+Do not register another mixer or visual callback for this horse subtree.
+
+`graze` samples the original Idle clip; `walk` and `trot` sample Walk; `gallop`
+samples Gallop. The source has no trot clip. Motion phase is the fixed controller's
+integrated stride angle: walk/trot advance at 2.5 × speed radians/second, gallop at
+1.8 × speed (with the existing minimum rate). Idle uses the shared sample time.
+Absolute clip evaluation is repeatable across display/fixed restores and epochs;
+there is no render delta accumulation or historical crossfade. Smooth weights
+use the current speed: Idle→Walk over 0.12–1 m/s, Walk→Gallop over 8–9 m/s. Only horizontal
+Body translation is removed from cloned tracks; vertical stride and joints remain.
+
+`spec.seat` remains the only logical seat. Omitting `seatAnchor` uses that fixed
+root-local transform. A declared Body/socket uses its rest-pose inverse to derive
+an animated root-local transform and rejects missing, invalid or out-of-bounds
+anchors. The limits above round upward from 8192 intervals plus exact source key times
+(maximum 0.145578694707 metres and 0.122950402397 radians), after normalization
+includes intermediate blend geometry. A 64-interval-only limit missed key extrema. They apply to this
+normalized horse, not arbitrary assets. `seat.driver` is not a bone in this GLB; use `Body` for its animated anchor.
+
+Runtime samples the horse before aligning the actual Source101 pelvis under
+`TrainingCharacter.actor`, then restores the fixed pose after display. It does
+not move the logical rider root or capsule to follow a bone. The real horse plus
+Source101 geometry fits the existing box envelope (X ±0.8, Y 0–3.3, Z ±1.9 metres)
+across the measured fixed and animated seats; maximum measured height is
+2.520854 metres. The rider remains a procedural seated overlay, with no authored
+mount/dismount clips, rein contact solver or guarantee against visible body
+interpenetration. Browser visual and capture acceptance are separate checks.
+
+<!-- /asset-info -->

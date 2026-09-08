@@ -1,5 +1,7 @@
 import {describe,it,expect,vi,beforeAll} from 'vitest';
-import {Group,PerspectiveCamera,Vector2,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Quaternion,Vector2,type WebGLRenderer} from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
+import type {WorldEngine} from '../engine';
 import type {WorldObservation} from '../contracts';
 import {createWorld} from '../world';
 import {ThreePhysics} from '../physics';
@@ -52,7 +54,11 @@ describe('SDK training runtime',()=>{
   const world=await fixture();try{const runtime=world.training!;runtime.simulation.setHumanoidAssets(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);
    expect(runtime.characterCapabilities().find(c=>c.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW',parameters:{minimumSpeedMetersPerSecond:ACTION_TUNING.slideMinimumSpeedMetersPerSecond}});
    expect(runtime.approach('car-1')).toBe(true);expect(runtime.enter('car-1')).toBe(true);
-   const request={requestId:'mounted-roll',action:'roll' as const};const result=await world.execute({type:'training.action',request});
+   const request={requestId:'mounted-roll',action:'roll' as const};
+   expect(runtime.characterCapabilities().find(c=>c.id==='roll')).toMatchObject({eligible:false,reason:'TRAINING_TRANSITION_ACTIVE'});
+   expect(await world.execute({type:'training.action',request})).toMatchObject({status:'rejected',error:{code:'TRAINING_TRANSITION_ACTIVE'}});
+   expect(runtime.simulation.humanoid!.skills.status(request.requestId)).toBeNull();world.step({},60);
+   const result=await world.execute({type:'training.action',request});
    expect(result).toMatchObject({status:'rejected',error:{code:'MOUNTED'}});expect(runtime.characterCapabilities().find(c=>c.id==='roll')).toMatchObject({eligible:false,reason:'MOUNTED'});
    world.step({},180);expect(world.snapshot().training?.character.activeAction).toBeNull();
   }finally{world.dispose();}
@@ -132,13 +138,39 @@ describe('SDK training runtime',()=>{
   const world=await fixture();try{const r=world.training!;
    r.switchMap({...map,id:'partial',boxes:[map.boxes[0]!,{id:'occluder',position:position as [number,number,number],size:size as [number,number,number]}]});
    world.step({},1);expect(r.followCamera.distance).toBeCloseTo(8.8);expect(r.followCamera.collisionLimited).toBe(false);
-   const eye=world.camera.position.clone();world.step({},90);expect(world.camera.position.distanceTo(eye)).toBeLessThan(.03);
+   const eye=world.camera.position.clone();
+   world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-9);
+   expect(r.followCamera.presentationTarget.distanceTo(world.camera.position)).toBeCloseTo(8.8);
+   world.step({},90);world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(.03);
   }finally{world.dispose();}
  });
  it('still keeps the camera sphere out of geometry when the capsule is partly visible',async()=>{
   const world=await fixture();try{const r=world.training!;
    r.switchMap({...map,id:'eye-wall',boxes:[map.boxes[0]!,{id:'eye-post',position:[0,4,-8.25],size:[.1,6,.4]}]});world.step({},1);
    expect(world.camera.position.z).toBeGreaterThan(-7.9);expect(r.followCamera.collisionLimited).toBe(true);
+   const eye=world.camera.position.clone();world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-9);
+   const h=r.simulation.humanoid!;
+   expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+  }finally{world.dispose();}
+ });
+ it.each([
+  {name:'partial thin pole',position:[0,2,-2],size:[.06,4,.2],blocked:false},
+  {name:'full wall',position:[0,2,-2],size:[6,4,.2],blocked:true},
+  {name:'eye collision',position:[0,4,-8.25],size:[.1,6,.4],blocked:true},
+ ])('uses the same camera collision policy for interpolated $name and exact capture',async({position,size,blocked})=>{
+  const world=await fixture();try{
+   const r=world.training!,engine=(world as unknown as {engine:WorldEngine}).engine;
+   r.switchMap({...map,id:'render-policy',boxes:[map.boxes[0]!,{id:'occluder',position:position as [number,number,number],size:size as [number,number,number]}]});
+   world.step({},2);
+   const canonical=world.camera.position.clone(),c=r.followCamera;
+   const controls={yaw:c.yaw,pitch:c.pitch,distance:c.distance,lastOrbit:c.lastOrbit,target:c.target.clone()};
+   engine.render(.5);
+   const distance=c.presentationTarget.distanceTo(world.camera.position);
+   if(blocked)expect(distance).toBeLessThan(8.6);else expect(distance).toBeCloseTo(8.8);
+   const h=r.simulation.humanoid!;
+   expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+   expect({yaw:c.yaw,pitch:c.pitch,distance:c.distance,lastOrbit:c.lastOrbit,target:c.target}).toEqual(controls);
+   world.render();expect(world.camera.position.distanceTo(canonical)).toBeLessThan(1e-9);
   }finally{world.dispose();}
  });
  it('sweeps the actual camera trajectory instead of teleporting through a pillar during orbit',async()=>{
@@ -227,14 +259,23 @@ describe('SDK training runtime',()=>{
   const world=await fixture(renderer);try{await world.start();const port=(win as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__.episode!;
    const start={positionWorldMetersXYZ:[-20,.03,-20] as const,facingYawRadians:Math.PI,training:{vehicleInstanceId:'car-1',mounted:true,cameraMode:2 as const,velocityWorldMetersPerSecondXYZ:[0,0,4] as const}};
    expect(port.capabilities().training?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+   const runtime=world.training!,ownedSnapshot=world.snapshot();
+   for(const mutate of [()=>runtime.enter('car-1'),()=>runtime.exit(),()=>runtime.command({type:'training.input',input:emptyInput()}),()=>runtime.command({type:'training.action',request:{requestId:'external-roll',action:'roll'}}),()=>runtime.setInput(emptyInput()),()=>runtime.clearInput(),()=>runtime.prepareCharacter([0,.03,0]),()=>runtime.prepare('car-1',map.spawns[0]!),()=>runtime.approach('car-1'),()=>runtime.switchMap(map),()=>runtime.applyProfile({}),()=>runtime.advance({},1/60),()=>runtime.reset(),()=>runtime.prepareEpisodeStart(start),()=>runtime.useAuthoredCamera(),()=>runtime.setCameraMode(1)]){
+    expect(mutate).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot()).toEqual(ownedSnapshot);
+   }
    expect(world.snapshot().training?.mountedInstanceId).toBe('car-1');expect(world.isRunning).toBe(false);expect(()=>world.step({},1)).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
-   const frame=port.advance({training:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.training?.cameraMode).toBe(2);expect(canvas.width).toBe(640);port.release();
+   const frame=port.advance({training:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.training?.cameraMode).toBe(2);expect(canvas.width).toBe(640);
+   port.advance({training:{...emptyInput(),brake:true}},120);
+   expect(await port.execute({type:'training.exit'})).toMatchObject({status:'applied'});port.advance({},120);
+   expect(await port.execute({type:'training.enter',instanceId:'car-1'})).toMatchObject({status:'applied'});port.advance({},120);
+   expect(world.snapshot().training?.mountedInstanceId).toBe('car-1');port.release();
    world.training!.simulation.setHumanoidAssets(new Set(['roll']),[]);
    await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});port.advance({},30);
    const ticks=world.simulationTick;
    expect(await world.execute({type:'training.input',input:emptyInput()})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
    expect(await world.execute({type:'actor.stop',entityId:'player'})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
    expect(await port.execute({type:'training.profile',profile:{character:{speed:99}}} as never)).toMatchObject({status:'rejected',error:{code:'EPISODE_COMMAND_UNSUPPORTED'}});
+   expect(await port.execute({type:'training.input',input:{...emptyInput(),humanoid:{unknown:true}}} as never)).toMatchObject({status:'rejected',error:{code:'TRAINING_INPUT_INVALID'}});
    const action=await port.execute({type:'training.action',request:{requestId:'episode-roll',action:'roll'}});if(action.status!=='accepted')throw new Error('Episode action rejected');
    expect(world.simulationTick).toBe(ticks);expect(port.operation(action.operationId).status).toBe('running');
    const stepPhysics=vi.spyOn(world.training!.environment,'stepPhysics');port.advance({},120);expect(stepPhysics).toHaveBeenCalledTimes(120);expect(port.operation(action.operationId).status).toBe('succeeded');
@@ -245,6 +286,13 @@ describe('SDK training runtime',()=>{
    await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});expect(port.operation(resetAction.operationId).status).toBe('cancelled');
    port.advance({},30);const releaseAction=await port.execute({type:'training.action',request:{requestId:'episode-release',action:'roll'}});if(releaseAction.status!=='accepted')throw new Error('Episode action rejected');
    port.release();expect(world.operations.get(releaseAction.operationId).status).toBe('cancelled');expect(()=>port.execute({type:'training.input',input:null})).toThrow('EPISODE_SEGMENT_NOT_PREPARED');
+   await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+   const interactions=vi.spyOn(runtime.simulation,'interact');port.advance({interact:true},1);
+   expect(interactions).toHaveBeenCalledTimes(1);expect(()=>world.stop()).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+   port.advance({interact:true},1);expect(interactions).toHaveBeenCalledTimes(1);
+   const visual=vi.fn();runtime.onVisualUpdate(visual);port.advance({},1);
+   const captured=port.frame('image/png');expect(port.frame('image/png').snapshot).toEqual(captured.snapshot);expect(visual).toHaveBeenCalledTimes(1);
+   world.dispose();expect(()=>runtime.advance({},1/60)).toThrow('TRAINING_DISPOSED');
   }finally{world.dispose();vi.unstubAllGlobals();}
  });
  it('tracks a physical character action through terminal operation status and clears it on reset',async()=>{

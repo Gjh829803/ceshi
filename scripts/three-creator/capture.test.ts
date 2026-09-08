@@ -134,3 +134,14 @@ describe('actual representative browser captures',()=>{
   }finally{await service.close();await rm(root,{recursive:true,force:true});}
  },120000);
 });
+
+it('opens the synchronous SDK presentation before capture measurement and restores on rejection',()=>{
+ const f=fixture();let active=false,entered=0;
+ const world={...f.world,withPresentation<T>(work:()=>T):T{entered++;active=true;try{return work();}finally{active=false;}}};
+ // Invalid multi-target capture rejects before touching renderer state. It still
+ // belongs inside the Host transaction, including target measurement/selection.
+ const update=f.scene.updateMatrixWorld.bind(f.scene);
+ f.scene.updateMatrixWorld=(force?:boolean)=>{expect(active).toBe(true);return update(force);};
+ expect(()=>captureObjectViews(world,'entity-triview',['hero','2'])).toThrow('SINGLE_TARGET_REQUIRED');
+ expect(entered).toBe(1);expect(active).toBe(false);
+});
