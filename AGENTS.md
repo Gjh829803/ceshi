@@ -5,6 +5,27 @@ Read [the architecture](docs/three-sdk-architecture.md), then the relevant
 or [Episode](scripts/three-episode/README.md) guide. Public contracts and their
 actual consumers are authoritative.
 
+## Design intent
+
+Read [the design background and tradeoffs](docs/three-sdk-architecture.md#设计背景与取舍)
+before proposing architecture changes. The team moved away from the heavy
+Babylon + SDK approach after observing GPT-6 Astra's strong native Three.js scene
+reconstruction. Give the Agent freedom to author geometry, spatial connections,
+colliders and scene logic. Keep SDK investment focused on difficult reusable
+capabilities such as preset characters, rigging, actions and stable runtime execution.
+Judge new abstractions and validation by generation quality, success rate, rework
+and elapsed time. Prefer accurate existing contracts and useful feedback; add
+wrappers or mandatory gates only for demonstrated needs, not API symmetry or
+framework completeness. These are maintainer tradeoffs, not extra generation steps.
+Follow [the Harness feedback principles](docs/three-sdk-architecture.md#harness-反馈与生产校验):
+keep production gates minimal and feedback useful. Expose actual state, visual
+evidence, action outcomes and diagnostic causes on demand, with source identity
+and sampling time. Default to concise summaries; distinguish unknown, stale or
+inferred evidence from measured failures. Auxiliary diagnostics should degrade
+locally rather than block production. Observation must not advance simulation or
+take execution ownership. Scale engineering checks to affected behavior; do not
+turn optional observation or development regression into mandatory generation steps.
+
 ## Authoring and capability layers
 
 Creator worlds use white/light-gray primitive environment forms, uniform basic
