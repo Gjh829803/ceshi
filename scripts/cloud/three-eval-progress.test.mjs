@@ -30,7 +30,7 @@ test('real CLI activity and current MCP stage override queued API items/counters
  const f=await fixture();try{
   await f.saveState();await json(path.join(f.caseRoot,'job-final.json'),{job_id:f.state.jobId,request_id:f.state.requestId,status:'running',counters:{total:1,queued:1,running:0}});
   await json(path.join(f.caseRoot,'items.json'),{items:[{item_id:taskId,status:'queued'}]});
-  const queued=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(queued.cases[0].phase,'queued');assert.equal(queued.cases[0].startedAt,null);
+  const queued=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(queued.cases[0].phase,'starting');assert.equal(queued.cases[0].stage,'awaiting-agent');assert.equal(queued.cases[0].startedAt,null);
   const running=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now}),row=running.cases[0];
   assert.equal(row.phase,'running');assert.equal(row.stage,'preview');assert.equal(row.hostPhase,'submitted');assert.equal(row.itemStatus,'queued');assert.equal(row.providerQueueIsStale,true);
   assert.equal(row.startedAt,startedAt);assert.equal(row.queueSeconds,60);assert.equal(row.elapsedSeconds,600);assert.equal(row.completedAt,null);
@@ -41,12 +41,67 @@ test('real CLI activity and current MCP stage override queued API items/counters
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
-test('missing local/live evidence leaves unknown time, model and no fabricated attempts',async()=>{
+test('a selected task without submission waits on the Host without invented execution evidence',async()=>{
  const f=await fixture();try{
   const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
-  assert.equal(row.phase,'unknown');assert.equal(row.stage,'unknown');assert.equal(result.model,null);assert.equal(result.effort,null);
+  assert.equal(row.phase,'queued');assert.equal(row.stage,'queued');assert.equal(row.stageLabel,'等待执行');assert.equal(result.model,null);assert.equal(result.effort,null);
   for(const key of ['submittedAt','startedAt','completedAt','lastObservedAt','queueSeconds','elapsedSeconds'])assert.equal(row[key],null);
   assert.deepEqual(row.attempts,[]);assert.deepEqual(row.events,[]);assert.deepEqual(row.toolSummary.counts,{});
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('provider running and a submitted request do not claim Agent execution before CLI evidence',async()=>{
+ const f=await fixture();try{
+  await f.saveState();
+  for(const launcher of [undefined,{status:'starting',runtimeHash}]){
+   const live={...f.live,cliActivityObserved:false,events:{},launcher};
+   const row=(await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(live),now})).cases[0];
+   assert.equal(row.providerStatus,'running');assert.equal(row.phase,'starting');assert.equal(row.stage,'awaiting-agent');
+   assert.equal(row.stageLabel,'请求已提交 · 等待 Agent 启动');assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);
+   assert(!row.events.some(event=>event.type==='agent-started'));assert.equal(row.queueSeconds,600);
+  }
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('frozen case inputs expose requested model configuration for both submitted and waiting tasks',async()=>{
+ const f=await fixture();try{
+  const input={schemaVersion:1,kind:'three-creator-case-input',caseId,taskId,profile:'three-sdk',runtimeHash,model:'gpt-6-astra',reasoningEffort:'xhigh',effectiveUserPrompt:'PRIVATE_PROMPT'};
+  const inputHash=hash(JSON.stringify(input));f.plan.cases[0].caseHash=inputHash;f.state.caseHash=inputHash;
+  delete f.state.model;delete f.state.reasoningEffort;
+  await json(path.join(f.caseRoot,'case-input.json'),input);await f.saveState();
+  const secondCase='second-reference',secondTask=secondCase+'--three-sdk';
+  const secondInput={...input,caseId:secondCase,taskId:secondTask};
+  f.plan.selectedTaskIds.push(secondTask);f.plan.cases.push({caseId:secondCase,taskId:secondTask,profile:'three-sdk',caseHash:hash(JSON.stringify(secondInput)),requestId:'request-second-reference'});
+  await json(path.join(f.runRoot,secondTask,'case-input.json'),secondInput);await json(path.join(f.runRoot,'evaluation-plan.json'),f.plan);
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now});
+  assert.equal(result.model,'gpt-6-astra');assert.equal(result.effort,'xhigh');
+  assert.deepEqual(result.configuration,{kind:'requested',model:'gpt-6-astra',effort:'xhigh'});
+  assert.deepEqual(result.cases.map(row=>row.phase),['starting','queued']);
+  assert(result.cases.every(row=>row.configuration.source==='frozen-case-input'&&row.configuration.kind==='requested'));
+  assert(result.cases.every(row=>row.startedAt===null&&row.cliActivityObserved===false));
+  assert(!JSON.stringify(result).includes('PRIVATE_PROMPT'));
+  await json(path.join(f.runRoot,secondTask,'case-input.json'),{...secondInput,model:'gpt-5.5'});
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('stopped and cancelled Host outcomes retain their terminal identity',async()=>{
+ const f=await fixture();try{
+  for(const phase of ['cancelled','stopped','stop-pending']){
+   f.state.phase=phase;await f.saveState();
+   const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+   assert.equal(row.phase,phase);assert.equal(row.startedAt,null);
+  }
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('an uncertain submission intent alone cannot claim a confirmed request or Agent startup',async()=>{
+ const f=await fixture();try{
+  f.state.phase='submission-unknown';delete f.state.jobId;delete f.state.submittedAt;delete f.state.providerStatus;await f.saveState();
+  await json(path.join(f.caseRoot,'submission-intent.json'),{requestId:f.state.requestId,createdAt:submittedAt});
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'unknown');assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);
+  assert(!row.events.some(event=>['submitted','agent-started'].includes(event.type)));
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
@@ -56,7 +111,7 @@ test('keeps a genuine capacity failure and retry distinct, rejecting changed inp
   f.launcher.status='failed';f.launcher.finishedAt='2026-09-05T09:32:00.000Z';f.launcher.childExitCode=1;await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
   const retry=await fixture('run-retry','gen_0000000000000002',f.container);retry.state.submittedAt='2026-09-05T09:35:00.000Z';retry.state.providerStatus='queued';await retry.saveState();
   const options={runRoot:f.runRoot,attemptRunRoots:[retry.runRoot],now};
-  const result=await buildThreeRunProgress(options),row=result.cases[0];assert.equal(row.phase,'queued');assert.equal(row.attempts.length,2);
+  const result=await buildThreeRunProgress(options),row=result.cases[0];assert.equal(row.phase,'starting');assert.equal(row.stage,'awaiting-agent');assert.equal(row.attempts.length,2);
   assert.equal(row.attempts[0].failure.code,'MODEL_AT_CAPACITY');assert.equal(row.attempts[0].completedAt,f.launcher.finishedAt);assert.equal(row.attempts[1].jobId,retry.state.jobId);
   assert(!JSON.stringify(result).includes('PRIVATE_TOKEN'));assert(row.events.some(event=>event.code==='MODEL_AT_CAPACITY'));
   retry.plan.cases[0].caseHash=hash('different input');await json(path.join(retry.runRoot,'evaluation-plan.json'),retry.plan);

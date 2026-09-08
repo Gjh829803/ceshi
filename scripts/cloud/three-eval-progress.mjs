@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {THREE_TOOLS} from './three-eval-runtime.mjs';
 
-export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
+export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行','awaiting-agent':'请求已提交 · 等待 Agent 启动',starting:'启动 Agent',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
 const toolStages = {creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',creator_materialize_runtime:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
 const operationStages = {'world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
 const toolLabels = {creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',creator_materialize_runtime:'准备作品运行时源码',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
@@ -224,8 +224,12 @@ function counterState(job, item) {
 }
 async function loadAttempt(runRoot, plan, task, live, now) {
   const caseRoot = path.join(runRoot,task.taskId);
-  const [state,intent,config,localLauncher,job,items] = await Promise.all(['state.json','submission-intent.json','config-echo.json','creator-launcher-report.json','job-final.json','items.json'].map(name=>readJson(path.join(caseRoot,name))));
+  const [state,intent,config,localLauncher,job,items,caseInput] = await Promise.all(['state.json','submission-intent.json','config-echo.json','creator-launcher-report.json','job-final.json','items.json','case-input.json'].map(name=>readJson(path.join(caseRoot,name))));
   const identity = {runId:plan.runId,taskId:task.taskId,caseId:task.caseId,requestId:task.requestId,caseHash:task.caseHash,runtimeHash:plan.runtimeHash,profile:task.profile};
+  if (caseInput) {
+    checkIdentity(caseInput,identity,['taskId','caseId','runtimeHash','profile']);
+    if(caseInput.kind!=='three-creator-case-input' || caseInput.schemaVersion!==1 || createHash('sha256').update(JSON.stringify(caseInput)).digest('hex')!==task.caseHash)fail('IDENTITY_MISMATCH');
+  }
   if (state) checkIdentity(state,identity,['taskId','caseId','requestId','caseHash','runtimeHash','profile']);
   if (intent) checkIdentity(intent,identity,['requestId']);
   if (live) checkIdentity(live,identity,['runId','taskId','caseId','requestId','caseHash','runtimeHash']);
@@ -257,12 +261,13 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   const providerStatus = statusSet.has(state?.providerStatus) ? state.providerStatus : statusSet.has(job?.status) ? job.status : statusSet.has(live?.providerStatus) ? live.providerStatus : null;
   const hostPhase = phaseSet.has(state?.phase) ? state.phase : phaseSet.has(live?.phase) ? live.phase : 'not-started';
   const cliStarted = summary.cliActivityObserved || ['running','delivered'].includes(launcher?.status) || Number.isInteger(launcher?.childExitCode);
+  const submissionConfirmed = Boolean(jobId || ['submitted','queued','running','delivery-pending','delivered'].includes(hostPhase));
   const submittedAt = date(state?.submittedAt ?? intent?.createdAt ?? live?.submittedAt);
   const startedAt = cliStarted ? date(launcher?.startedAt) : null;
   const recordedFinishedAt = date(launcher?.finishedAt ?? item?.completed_at ?? item?.finished_at ?? job?.completed_at ?? job?.finished_at);
   const lastObservedAt = latestDate([live?.observedAt,state?.lastObservedAt,state?.updatedAt,job?.updated_at]);
   const events = [];
-  if (submittedAt) events.push({id:eventId(jobId ?? task.requestId,'submitted'),at:submittedAt,type:'submitted',stage:'unknown',label:'请求已提交',status:'succeeded'});
+  if (submittedAt && submissionConfirmed) events.push({id:eventId(jobId ?? task.requestId,'submitted'),at:submittedAt,type:'submitted',stage:'unknown',label:'请求已提交',status:'succeeded'});
   if (cliStarted) events.push({id:eventId(jobId,'started'),at:startedAt,type:'agent-started',stage:'starting',label:'Agent 已开始执行',status:'succeeded'});
   events.push(...summary.events);
   if (live) events.push(...summary.operations.map(operation=>operationEvent(jobId,operation)));
@@ -274,8 +279,9 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   else if (hostPhase === 'failed' || launcher?.status === 'failed' || ['failed','submit_failed'].includes(api.itemStatus)) { stage='failed'; phase='failed'; }
   else if (['cancelled','stopped','stop-pending'].includes(hostPhase)) { stage='unknown'; }
   else if (cliStarted) { phase='running'; stage=hostPhase === 'delivery-pending' || launcher?.status==='delivered' ? 'packaging' : summary.latestStage ?? toolStages[summary.latestTool?.name] ?? (operation ? operationStages[operation.type] : undefined) ?? 'starting'; }
+  else if (submissionConfirmed || launcher?.status === 'starting') { stage='awaiting-agent'; phase='starting'; }
   else if (api.queued || providerStatus === 'queued' || providerStatus === 'pending') { stage='queued'; phase='queued'; }
-  else if (launcher?.status === 'starting') { stage='starting'; phase='running'; }
+  else if (hostPhase === 'not-started') { stage='queued'; phase='queued'; }
   const terminal = ['failed','delivered','cancelled','stopped'].includes(phase);
   const completedAt = terminal ? recordedFinishedAt : null;
   const terminalFailure = phase==='failed' ? publicFailure([state?.failure?.message,launcher?.error,item?.error,job?.error,...summary.failureValues]) : undefined;
@@ -291,11 +297,14 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   if (terminal) events.push({id:eventId(jobId,phase),at:completedAt,type:'attempt-finished',stage:phase==='delivered'?'delivered':phase==='failed'?'failed':'unknown',label:phase==='delivered' ? '技术交付已通过 Host 检查' : phase==='failed' ? '本次尝试失败' : '本次尝试已停止',status:phase==='delivered' ? 'succeeded' : phase==='failed' ? 'failed' : 'cancelled',...(failure ? {detail:failure.message,code:failure.code} : {})});
   const counts = Object.fromEntries(Object.entries(summary.counts).sort(([a],[b])=>a.localeCompare(b)));
   const end = completedAt ?? (!terminal ? now : null);
-  phase = ['running','queued','failed','delivered'].includes(phase) ? phase : 'unknown';
+  phase = ['running','starting','queued','failed','delivered','cancelled','stopped','stop-pending'].includes(phase) ? phase : 'unknown';
   const awaitingToolResult=phase==='running'&&summary.awaitingToolResult;
+  const configurationSource = caseInput ? 'frozen-case-input' : config ? 'provider-config-echo' : state?.model || state?.reasoningEffort ? 'host-state' : null;
+  const model = safeModel(caseInput?.model ?? config?.config?.options?.model ?? state?.model);
+  const effort = safeEffort(caseInput?.reasoningEffort ?? config?.config?.options?.reasoning_effort ?? state?.reasoningEffort);
   return {runId:plan.runId,taskId:task.taskId,jobId,phase,hostPhase,stage,stageLabel:awaitingToolResult?'等待工具返回':THREE_PROGRESS_STAGE_LABELS[stage],awaitingToolResult,submittedAt,startedAt,completedAt,lastObservedAt,
-    elapsedSeconds:seconds(submittedAt,end),queueSeconds:startedAt ? seconds(submittedAt,startedAt) : phase==='queued' ? seconds(submittedAt,lastObservedAt) : null,
-    model:safeModel(config?.config?.options?.model ?? state?.model),effort:safeEffort(config?.config?.options?.reasoning_effort ?? state?.reasoningEffort),providerStatus,itemStatus:api.itemStatus,providerCounters:api.counters,
+    elapsedSeconds:seconds(submittedAt,end),queueSeconds:startedAt ? seconds(submittedAt,startedAt) : ['queued','starting'].includes(phase) ? seconds(submittedAt,lastObservedAt) : null,
+    model,effort,configuration:{kind:'requested',source:configurationSource,model,effort},providerStatus,itemStatus:api.itemStatus,providerCounters:api.counters,
     cliActivityObserved:cliStarted,providerQueueIsStale:cliStarted && api.queued,
     ...(failure ? {failure} : {}),failureFacts,toolSummary:{counts,imageResponses:summary.imageResponses,latestTool:summary.latestTool?.name ?? null,...(operation ? {latestOperation:{type:operation.type,status:operation.status,executionStatus:operation.executionStatus,resultStatus:operation.resultStatus,...(operation.resultSummary ? {resultSummary:operation.resultSummary} : {}),...(operation.playtestAdequacy ? {playtestAdequacy:operation.playtestAdequacy} : {}),createdAt:operation.createdAt,updatedAt:operation.updatedAt,...(operation.progress ? {progress:operation.progress} : {})}} : {})},events:orderedEvents(events)};
 }
@@ -331,7 +340,7 @@ export async function buildThreeRunProgress({runRoot,attemptRunRoots=[],liveStat
   }
   for(const run of runs.slice(1))if(run.plan.selectedTaskIds.some(id=>!selected.has(id)))fail('RETRY_IDENTITY_MISMATCH');
   const identical = field => {const values=cases.map(row=>row[field]);return values.every(value=>value!==null&&value===values[0])?values[0]:null;};
-  return {schemaVersion:1,kind:'three-creator-run-progress',runId:primary.plan.runId,updatedAt,model:identical('model'),effort:identical('effort'),cases};
+  return {schemaVersion:1,kind:'three-creator-run-progress',runId:primary.plan.runId,updatedAt,model:identical('model'),effort:identical('effort'),configuration:{kind:'requested',model:identical('model'),effort:identical('effort')},cases};
 }
 
 async function main() {

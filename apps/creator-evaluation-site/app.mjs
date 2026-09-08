@@ -2,8 +2,8 @@
 // result readiness, active playback and human feedback retain separate owners.
 import { SharedReviews, reviewSummary } from './reviews.mjs';
 const $ = (id) => document.getElementById(id);
-const labels = { cancelled: "已终止", stopping: "正在终止", ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "排队中", submitted: "已提交", starting: "启动中", verifying: "产物同步中", delivered: "产物同步中", failed: "失败", unknown: "待确认" };
-const stages = { cancelled: "已终止", stopping: "正在终止", queued: "等待执行", starting: "启动 Agent", planning: "整体地图规划", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
+const labels = { cancelled: "已终止", stopping: "正在终止", ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "等待执行", submitted: "已提交", starting: "等待 Agent 启动", verifying: "产物同步中", delivered: "产物同步中", failed: "失败", unknown: "待确认" };
+const stages = { cancelled: "已终止", stopping: "正在终止", queued: "等待执行", "awaiting-agent": "请求已提交 · 等待 Agent 启动", starting: "启动 Agent", planning: "整体地图规划", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
 const toolStatusLabels = { succeeded: "调用完成", failed: "未通过", running: "进行中", queued: "等待中", completed: "已返回" };
 function operationDetail(p) {
   const op = p?.toolSummary?.latestOperation;
@@ -137,11 +137,12 @@ function renderCoverage(c) {
   }
 }
 function setConnection() {
-  const active = (progress?.cases || []).filter((c) => ["running", "queued", "unknown"].includes(c.phase));
-  const observed = active.map((c) => timeMs(c.lastObservedAt));
+  const active = (progress?.cases || []).filter((c) => (c.jobId || c.submittedAt) && ["running", "starting", "submitted", "queued", "unknown"].includes(c.phase));
+  const observed = active.map((c) => timeMs(c.lastObservedAt) ?? timeMs(c.submittedAt));
   const seen = progress ? active.length ? observed.every((t) => t !== null) ? Math.min(...observed) : null : timeMs(progress.updatedAt) : timeMs(data?.updatedAt);
   const age = seen === null ? null : (Date.now() - seen) / 1e3;
-  const stale = lastRefreshFailed || !lastFetchAt || active.length > 0 && (age === null || age > 50);
+  const needsUpdates = (progress?.cases || []).some(c => !["delivered", "failed", "cancelled", "stopped"].includes(c.phase));
+  const stale = lastRefreshFailed || !lastFetchAt || needsUpdates && (age === null || age > 90);
   $("connection").classList.toggle("stale", stale);
   $("connection").lastElementChild.textContent = lastRefreshFailed ? "更新连接中断" : stale ? "状态更新延迟" : progressUnavailable ? "产物视图 · 过程未连接" : "状态已连接";
   $("updated").textContent = seen === null ? "暂无更新时间" : `最近观测 ${formatTime(new Date(seen).toISOString())}`;
@@ -150,7 +151,7 @@ function drawSummary() {
   if (!data)
     return;
   const rows = data.cases.map((c) => caseStatus(c));
-  const values = [[data.cases.length, "本轮任务", ""], [rows.filter((s) => ["running", "starting"].includes(s)).length, "运行中", "running"], [rows.filter((s) => ["queued", "submitted", "unknown"].includes(s)).length, "排队 / 待确认", ""], [rows.filter((s) => s === "verifying").length, "产物同步中", ""], [data.cases.filter(isPlayable).length, "可试玩", "ready"], [rows.filter((s) => ["failed", "issues"].includes(s)).length, "生产异常", "failed"]];
+  const values = [[data.cases.length, "本轮任务", ""], [rows.filter((s) => s === "running").length, "Agent 执行中", "running"], [rows.filter((s) => ["queued", "submitted", "starting", "unknown"].includes(s)).length, "等待执行 / 启动", ""], [rows.filter((s) => s === "verifying").length, "产物同步中", ""], [data.cases.filter(isPlayable).length, "可试玩", "ready"], [rows.filter((s) => ["failed", "issues"].includes(s)).length, "生产异常", "failed"]];
   $("run-stats").replaceChildren(...values.map(([n, label, kind]) => {
     const card = el("div", void 0, `stat ${kind}`);
     card.append(el("strong", n), el("span", label));
@@ -158,7 +159,7 @@ function drawSummary() {
   }));
   $("evaluation-title").textContent = data.title || "云端生成评测";
   $("evaluation-description").textContent = data.description || "查看场景的生成过程、交付物与试玩结果。";
-  $("run-meta").replaceChildren(...[progress?.model || "模型待确认", progress?.reasoningEffort || progress?.effort || "推理配置待确认", data.suite === "sdk-only" ? "Three SDK" : "参考图生成", `${data.cases.length} 个 case`, data.sourceIdentity?.branch, data.id].filter(Boolean).map((t) => el("span", t, "meta-chip")));
+  $("run-meta").replaceChildren(...[progress?.model ? `配置模型 · ${progress.model}` : "模型配置待确认", (progress?.reasoningEffort || progress?.effort) ? `配置推理 · ${progress.reasoningEffort || progress.effort}` : "推理配置待确认", data.suite === "sdk-only" ? "Three SDK" : "参考图生成", `${data.cases.length} 个 case`, data.sourceIdentity?.branch, data.id].filter(Boolean).map((t) => el("span", t, "meta-chip")));
   $("run-source").textContent = JSON.stringify(data.sourceIdentity || {}, null, 2);
   $("run-history").replaceChildren(...(data.historyRuns || []).map((run) => {
     const a = el("a", `↗ ${run.label}`);
