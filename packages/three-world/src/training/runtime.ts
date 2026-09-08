@@ -133,7 +133,11 @@ export class TrainingRuntime implements PhysicsPort {
       case 'training.profile':this.applyProfile(command.profile);break;
       case 'training.action':{const result=this.simulation.humanoid?.skills.request(command.request);if(!result)throw new Error('TRAINING_CHARACTER_UNAVAILABLE');return result;}
     }
-    if(!accepted)throw new Error(`TRAINING_COMMAND_BLOCKED: ${this.simulation.message}`);
+    if (!accepted) {
+      const interaction = command.type === 'training.enter' || command.type === 'training.exit';
+      const code = interaction ? this.simulation.failureCode ?? 'TRAINING_COMMAND_BLOCKED' : 'TRAINING_COMMAND_BLOCKED';
+      throw new Error(`${code}: ${this.simulation.message}`);
+    }
   }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
@@ -178,9 +182,9 @@ export class TrainingRuntime implements PhysicsPort {
   private index(id:string):number{const n=this.options.vehicles.findIndex(v=>v.instanceId===id);if(n<0)throw new Error(`TRAINING_INSTANCE_UNKNOWN: ${id}`);return n;}
   prepare(id:string,spawn:MapSpawn):boolean{const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
   approach(id:string):boolean{this.index(id);const ok=this.simulation.approach(id);this.sync(0);return ok;}
-  interact():boolean{const ok=this.simulation.interact();this.sync(0);return ok;}
-  enter(id:string):boolean{if(this.simulation.vehicle)return false;const n=this.index(id);return this.simulation.nearest()===n&&this.interact();}
-  exit():boolean{return !!this.simulation.vehicle&&this.interact();}
+  interact():boolean{const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
+  enter(id:string):boolean{const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
+  exit():boolean{const ok=this.simulation.exit();if(ok)this.sync(0);return ok;}
   prepareCharacter(position:Vec3,yaw=0):boolean{const ok=this.simulation.prepareCharacter(new THREE.Vector3(...position),yaw);this.sync(0);return ok;}
   private prepareProfile(profile:TrainingProfile):TrainingProfile & {camera:CameraTuning;character:TrainingControl;vehicles:Record<string,TrainingControl & {camera:number}>;cameraDistanceMeters:number|null}{
     const object=(value:unknown)=>!!value&&typeof value==='object'&&!Array.isArray(value);

@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Vector3 } from 'three';
-import {type EnvironmentQueries,type HumanoidRig} from '../environment/queries';
+import {type EnvironmentQueries,type HumanoidRig,type QueryBody} from '../environment/queries';
 import {humanoidLevel,type HumanoidLevel,type LevelBox} from './level-adapter';
 import {createTraversalMotion,type MotionPlan,type MotionSource} from './motion';
 import {SWIM_ROOT_DEPTH,SWIM_SPEED,SWIM_FAST_SPEED,swimVerticalVelocity,type WaterContact} from './water-physics';
@@ -146,6 +146,24 @@ export class HumanoidController {
   teleportTo(position:Vector3,yaw=0){
     if(!this.canBoard){this.lastResult=this.boardingReason;return false;}
     this.surface.reset();this.resetMovement(position.x,position.z,position.y,yaw-Math.PI);return true;
+  }
+  get standingQueryBody(): QueryBody {
+    return {
+      kind: "capsule",
+      radius: RADIUS,
+      height: 2 * CENTER,
+      offset: [0, CENTER, 0],
+    };
+  }
+  /** Receives an already validated synchronous dismount decision. */
+  commitDismount(position: Vector3, yaw: number, velocity: Vector3): void {
+    this.surface.reset();
+    this.resetMovement(position.x, position.z, position.y, yaw - Math.PI);
+    this.velocity.set(velocity.x, 0, velocity.z);
+    this.vertical = velocity.y;
+    this.mounted = false;
+    this.capsule.setEnabled(true);
+    this.commitPose();
   }
   setMounted(mounted:boolean,position?:Vector3,yaw=0){
     if(mounted&&!this.canBoard){this.lastResult=this.boardingReason;return false;}

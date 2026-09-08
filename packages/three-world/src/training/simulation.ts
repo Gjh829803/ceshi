@@ -1,3 +1,4 @@
+import {evaluateMount,evaluateDismount,type MountContext,type MountDecision,type MountFailureCode} from './mounted-interaction';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { HumanoidController } from './humanoid/controller';
 import type { MotionSource } from './humanoid/motion';
@@ -278,6 +279,7 @@ export class Simulation {
   private humanoidMotions:readonly MotionSource[]=[];
   characterControl=defaultTrainingControl('character',{speed:3.8,accel:12,grip:3,steer:14});
   private prepared=new Map<string,MapSpawn>();
+  failureCode:MountFailureCode|undefined;
   vehicles=SPECS.map(createVehicle);active=-1;time=0;transition=0;transitionKind:''|'enter'|'exit'='';message='';teleportRevision=0;
   player:PlayerState={position:new Vector3(...START),velocity:new Vector3(),yaw:0,grounded:true,swimming:false,coyote:.1,jumpBuffer:0,animation:'Idle_Loop',landTimer:0};
   constructor(environment?:EnvironmentQueries,specs:readonly VehicleSpec[]=[]){this.vehicles=specs.map(createVehicle);if(environment)this.setEnvironment(environment);}
@@ -288,7 +290,7 @@ export class Simulation {
     staged.characterControl={...this.characterControl};staged.setHumanoidAssets(this.humanoidClips,this.humanoidMotions);return staged;
   }
   adoptEnvironment(staged:Simulation):void{this.dispose();Object.assign(this,staged);}
-  private syncActorBodies(){this.environment?.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,...part}))));}
+  private syncActorBodies(){this.environment?.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,...part}))));}
   private syncHumanoidPlayer(){
     const h=this.humanoid,p=this.player;if(!h)return;
     p.position.copy(h.position);p.velocity.copy(h.velocity);p.velocity.y=h.vertical;p.yaw=Math.atan2(h.facing.x,h.facing.z);
@@ -353,28 +355,210 @@ export class Simulation {
       const safe=q.safeSpawn(p);if(safe)return safe;
     }return null;
   }
-  interact():boolean {
-    if(this.transition>0)return false;
-    if(this.vehicle) {
-      const v=this.vehicle;
-      if(v.velocity.length()>5){this.message='速度过快，请先减速至 18 km/h 以下再离开载具';return false;}
-      if(this.environment){const pt=this.boardingPoint(v);if(!pt){this.message='两侧没有安全落点，移动载具后再试';return false;}if(this.humanoid&&!this.humanoid.setMounted(false,pt,v.yaw))return false;this.active=-1;this.player.position.copy(pt);this.player.velocity.copy(v.velocity);this.player.yaw=v.yaw;this.player.grounded=false;this.player.animation='Sitting_Exit';this.transition=.38;this.transitionKind='exit';this.message='已离开载具';return true;}
-      const r=v.spec.radius+1.2,origin=v.position;
-      const offsets=[[r,0],[-r,0],[0,-r-1],[0,r+1]];
-      for(const [x=0,z=0] of offsets) {
-        const pt=new Vector3(x,0,z).applyQuaternion(v.rotation).add(origin);pt.y=Math.max(pt.y,groundHeight(pt.x,pt.z));
-        const blockedVehicle=this.vehicles.some(other=>other!==v&&actorBlocksPlayer(other,pt,.6));
-        if(validExit(pt.x,origin.y+.5,pt.z)&&!blockedVehicle) {
-          this.active=-1;this.player.position.copy(pt);this.player.velocity.copy(v.velocity);this.player.yaw=v.yaw;
-          this.player.grounded=false;this.player.animation='Sitting_Exit';this.transition=.38;this.transitionKind='exit';this.message='已离开载具';return true;
+  private mountContext(): MountContext {
+    return {
+      environment: this.environment!,
+      humanoid: this.humanoid!,
+      vehicles: this.vehicles,
+      available: (v) => this.available(v),
+      transitionSeconds: this.transition,
+      mountedInstanceId: this.vehicle?.spec.id ?? null,
+    };
+  }
+  private commitInteraction(
+    decision: MountDecision,
+    entering: boolean,
+  ): boolean {
+    if (!decision.ok) {
+      this.failureCode = decision.code;
+      this.message = decision.message;
+      return false;
+    }
+    const index = this.vehicles.findIndex(
+      (v) => v.spec.id === decision.instanceId,
+    );
+    if (entering) {
+      if (!this.humanoid!.setMounted(true)) return false;
+      this.active = index;
+      this.player.position.copy(decision.position);
+      this.player.velocity.set(0, 0, 0);
+      this.player.yaw = decision.yaw;
+    } else {
+      this.humanoid!.commitDismount(
+        decision.position,
+        decision.yaw,
+        decision.velocity,
+      );
+      this.active = -1;
+      this.syncHumanoidPlayer();
+    }
+    this.failureCode = undefined;
+    this.transition = entering ? 0.5 : 0.38;
+    this.transitionKind = entering ? "enter" : "exit";
+    this.player.animation = entering ? "Sitting_Enter" : "Sitting_Exit";
+    this.teleportRevision++;
+    this.message = entering ? "控制权已交给坐骑" : "已离开坐骑";
+    this.syncActorBodies();
+    return true;
+  }
+  enter(id: string): boolean {
+    this.failureCode = undefined;
+    this.syncActorBodies();
+    const target = this.vehicles.find((v) => v.spec.id === id);
+    if (
+      this.environment &&
+      this.humanoid &&
+      (target?.spec.mode === "mount" ||
+        !target ||
+        this.vehicle?.spec.mode === "mount")
+    )
+      return this.commitInteraction(
+        evaluateMount(this.mountContext(), id),
+        true,
+      );
+    if (this.vehicle) {
+      this.failureCode = "TRAINING_ALREADY_MOUNTED";
+      return false;
+    }
+    return this.interact(id);
+  }
+  exit(): boolean {
+    this.failureCode = undefined;
+    if (
+      this.environment &&
+      this.humanoid &&
+      (this.vehicle?.spec.mode === "mount" || !this.vehicle)
+    ) {
+      this.syncActorBodies();
+      return this.commitInteraction(
+        evaluateDismount(this.mountContext()),
+        false,
+      );
+    }
+    return this.interact();
+  }
+  interact(targetId?: string): boolean {
+    this.failureCode = undefined;
+    if (
+      this.vehicle?.spec.mode === "mount" &&
+      this.environment &&
+      this.humanoid
+    )
+      return this.exit();
+    if (this.transition > 0) {
+      this.failureCode = "TRAINING_TRANSITION_ACTIVE";
+      return false;
+    }
+    if (!this.vehicle && this.environment && this.humanoid && !targetId) {
+      this.syncActorBodies();
+      const nearby = this.vehicles
+        .filter((v) => this.available(v))
+        .sort(
+          (a, b) =>
+            a.position.distanceToSquared(this.player.position) -
+            b.position.distanceToSquared(this.player.position),
+        );
+      for (const v of nearby) {
+        if (v.spec.mode === "mount") {
+          const decision = evaluateMount(this.mountContext(), v.spec.id);
+          if (decision.ok) return this.commitInteraction(decision, true);
+        } else if (this.nearest() === this.vehicles.indexOf(v))
+          return this.interact(v.spec.id);
+      }
+      const first = nearby.find((v) => v.spec.mode === "mount");
+      if (first)
+        return this.commitInteraction(
+          evaluateMount(this.mountContext(), first.spec.id),
+          true,
+        );
+    }
+    if (this.vehicle) {
+      const v = this.vehicle;
+      if (v.velocity.length() > 5) {
+        this.message = "速度过快，请先减速至 18 km/h 以下再离开载具";
+        return false;
+      }
+      if (this.environment) {
+        const pt = this.boardingPoint(v);
+        if (!pt) {
+          this.message = "两侧没有安全落点，移动载具后再试";
+          return false;
+        }
+        if (this.humanoid && !this.humanoid.setMounted(false, pt, v.yaw))
+          return false;
+        this.active = -1;
+        this.player.position.copy(pt);
+        this.player.velocity.copy(v.velocity);
+        this.player.yaw = v.yaw;
+        this.player.grounded = false;
+        this.player.animation = "Sitting_Exit";
+        this.transition = 0.38;
+        this.transitionKind = "exit";
+        this.message = "已离开载具";
+        return true;
+      }
+      const r = v.spec.radius + 1.2,
+        origin = v.position;
+      const offsets = [
+        [r, 0],
+        [-r, 0],
+        [0, -r - 1],
+        [0, r + 1],
+      ];
+      for (const [x = 0, z = 0] of offsets) {
+        const pt = new Vector3(x, 0, z).applyQuaternion(v.rotation).add(origin);
+        pt.y = Math.max(pt.y, groundHeight(pt.x, pt.z));
+        const blockedVehicle = this.vehicles.some(
+          (other) => other !== v && actorBlocksPlayer(other, pt, 0.6),
+        );
+        if (validExit(pt.x, origin.y + 0.5, pt.z) && !blockedVehicle) {
+          this.active = -1;
+          this.player.position.copy(pt);
+          this.player.velocity.copy(v.velocity);
+          this.player.yaw = v.yaw;
+          this.player.grounded = false;
+          this.player.animation = "Sitting_Exit";
+          this.transition = 0.38;
+          this.transitionKind = "exit";
+          this.message = "已离开载具";
+          return true;
         }
       }
-      this.message='两侧没有安全落点，移动载具后再试';return false;
+      this.message = "两侧没有安全落点，移动载具后再试";
+      return false;
     }
-    if(this.humanoid&&!this.humanoid.canBoard){this.message=this.humanoid.boardingReason;return false;}
-    const n=this.nearest();if(n<0){this.message='靠近载具，按 F 进入驾驶位';return false;}
-    if(this.humanoid&&!this.humanoid.setMounted(true))return false;
-    this.active=n;this.player.velocity.set(0,0,0);this.player.animation='Sitting_Enter';this.transition=.5;this.transitionKind='enter';this.message='控制权已交给载具';return true;
+    if (this.humanoid && !this.humanoid.canBoard) {
+      this.message = this.humanoid.boardingReason;
+      return false;
+    }
+    const n = targetId
+      ? this.vehicles.findIndex(
+          (v) =>
+            v.spec.id === targetId &&
+            this.available(v) &&
+            v.velocity.length() < 3 &&
+            v.position.distanceTo(this.player.position) <
+              Math.max(
+                5.3,
+                vehicleBody(v.spec).kind === "box"
+                  ? (vehicleBody(v.spec) as { halfExtents: readonly number[] })
+                      .halfExtents[0]! + 2
+                  : 0,
+              ),
+        )
+      : this.nearest();
+    if (n < 0) {
+      this.message = "靠近载具，按 F 进入驾驶位";
+      return false;
+    }
+    if (this.humanoid && !this.humanoid.setMounted(true)) return false;
+    this.active = n;
+    this.player.velocity.set(0, 0, 0);
+    this.player.animation = "Sitting_Enter";
+    this.transition = 0.5;
+    this.transitionKind = "enter";
+    this.message = "控制权已交给载具";
+    return true;
   }
   visit(n:number) {
     const v=this.vehicles[n];if(!v)return;
@@ -455,14 +639,62 @@ export class Simulation {
     this.time+=dt;this.transition=Math.max(0,this.transition-dt);
     const vehicleBefore=this.vehicle?.position.clone();
     const before=this.vehicle?{rotation:this.vehicle.rotation.clone(),yaw:this.vehicle.yaw,pitch:this.vehicle.pitch,roll:this.vehicle.roll,creature:this.vehicle.creature?{...this.vehicle.creature,leadPosition:this.vehicle.creature.leadPosition?.clone()}:undefined}:undefined;
-    for(const v of this.vehicles) {
-      // Parked craft keep their transforms; only the occupied craft owns input.
-      if(v===this.vehicle&&this.transition===0)stepVehicle(v,i,dt,this.time,this.environment);
+    for (const v of this.vehicles) {
+      // Only the occupied craft owns input. Unoccupied mounts coast or settle;
+      // parked non-mount craft retain the existing no-advance policy.
+      if (v === this.vehicle && this.transition === 0)
+        stepVehicle(v, i, dt, this.time, this.environment);
+      else if (
+        v !== this.vehicle &&
+        v.spec.mode === "mount" &&
+        this.available(v) &&
+        (v.velocity.lengthSq() > 1e-8 ||
+          !v.grounded ||
+          (this.environment &&
+            !this.environment.standingSupport(
+              v.position,
+              0.08,
+              Math.PI / 2 - 0.01,
+            )))
+      ) {
+        const previous = {
+          position: v.position.clone(),
+          rotation: v.rotation.clone(),
+          yaw: v.yaw,
+          pitch: v.pitch,
+          roll: v.roll,
+          creature: v.creature
+            ? { ...v.creature, leadPosition: v.creature.leadPosition?.clone() }
+            : undefined,
+        };
+        stepVehicle(v, emptyInput(), dt, this.time, this.environment);
+        if (
+          this.vehicles.some(
+            (o) => o !== v && this.available(o) && actorsTouch(v, o),
+          )
+        ) {
+          Object.assign(v, previous);
+          v.velocity.set(0, 0, 0);
+          v.speed = 0;
+        }
+      }
     }
     if(this.vehicle&&vehicleBefore){if(!this.environment&&!this.vehicle.creature)separateVehicleContacts(this.vehicle,this.vehicles,vehicleBefore);else if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;}}
     const p=this.player;
-    if(this.vehicle) {p.position.copy(this.vehicle!.position);p.yaw=this.vehicle.yaw;p.animation=this.transition>0?'Sitting_Enter':this.vehicle.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';return;}
-    if(this.transition>0){p.animation='Sitting_Exit';return;}
+    if (this.vehicle) {
+      p.position.copy(this.vehicle.position);
+      if (this.vehicle.spec.mode === 'mount') {
+        p.position.add(new Vector3(...this.vehicle.spec.seat).applyQuaternion(this.vehicle.rotation));
+      }
+      p.yaw = this.vehicle.yaw;
+      p.animation = this.transition > 0 ? 'Sitting_Enter' : this.vehicle.spec.characterPose === 'stand' ? 'Idle_Loop' : 'Driving_Loop';
+      return;
+    }
+    if (this.transition > 0) {
+      if (!this.humanoid) { p.animation = 'Sitting_Exit'; return; }
+      // Suppress actions as well as walking without freezing the physical controller.
+      i = emptyInput();
+    }
     if(this.humanoid){
       const h=this.humanoid;
       // On walls, source controls follow the registered wall tangent regardless of orbit.
