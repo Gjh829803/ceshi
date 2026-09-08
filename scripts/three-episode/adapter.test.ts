@@ -2,16 +2,14 @@ import {it,expect} from 'vitest';
 import {mkdtemp,mkdir,writeFile,readFile,rm,realpath} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {ThreeCompiler,hashTree} from '../three-creator/compiler.js';
 import {prepareEpisodeSource,loadEpisodeSource} from './source.js';
 import {openEpisodeBrowser} from './browser.js';
 import {installEpisodePresentation} from './presentation.js';
-import provenance from './compat/creator-camera-provenance.json';
 const sha=(v:Buffer)=>createHash('sha256').update(v).digest('hex');
-it.each(['creator','manual-repair'])('derives %s input with the pinned camera and hides dynamic UI',async origin=>{
+it('preserves the delivered runtime and hides dynamic UI for capture',async()=>{
  const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'episode-adapter-')));
  try{
   const author=path.join(root,'author');await mkdir(author);
@@ -23,30 +21,20 @@ const world=await createWorld({scene,camera,renderer,navigation:false,assetDefin
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80,20,20),new THREE.MeshBasicMaterial({color:'#73664e'}));floor.rotation.x=-Math.PI/2;world.addEntity({id:'floor',object:floor,role:'terrain'});
 const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5,1.8,.5),new THREE.MeshBasicMaterial({color:'#00ccff'}));mesh.position.y=.9;actor.add(mesh);world.addCharacter({id:'traveler',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('traveler');world.setCameraFollow({framingMode:'preserve-opening',followHalfLifeSeconds:.045});await world.start();`);
   const compiler=new ThreeCompiler(author,'three-sdk'),candidate=await compiler.prepare();
-  const baseline=await compiler.prepareRuntime(),cameraModulePath=fileURLToPath(new URL('./compat/creator-camera.ts',import.meta.url));
-  const adapted=await compiler.prepareRuntime({cameraModulePath});expect(adapted.cacheIdentity).not.toBe(baseline.cacheIdentity);expect((await compiler.prepareRuntime({cameraModulePath})).hit).toBe(true);expect((await compiler.prepareRuntime()).hash).toBe(baseline.hash);
   await mkdir(path.join(candidate.root,'captures'));
   const image=await sharp({create:{width:2,height:2,channels:3,background:'#193148'}}).png().toBuffer();
   await writeFile(path.join(candidate.root,'captures/opening.png'),image);
   const captures={selectionPolicy:'important-representatives-v1',conditioningEntityIds:['player'],images:[{view:'opening',image:{path:'opening.png',sha256:sha(image)}},{view:'entity-triview',entityIds:['player'],orientationTargetId:'traveler',image:{path:'opening.png',sha256:sha(image)}},{view:'entity-triview',entityIds:['extra'],orientationTargetId:'extra',image:{path:'opening.png',sha256:sha(image)}}]};
   await writeFile(path.join(candidate.root,'captures/captures.json'),JSON.stringify(captures));
   const files=await hashTree(candidate.root);
-  // Fixture header selects the production compatibility path; it is not a real Creator delivery.
-  await writeFile(path.join(candidate.root,'delivery.json'),JSON.stringify({kind:'three-creator-delivery',schemaVersion:1,profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:provenance.deliveryRuntimeHash,assetPolicySha256:candidate.assetPolicySha256,files}));
-  if(origin==='manual-repair'){
-   const headerPath=path.join(candidate.root,'delivery.json'),header=JSON.parse(await readFile(headerPath,'utf8'));
-   const repair=Buffer.from(JSON.stringify({kind:'manual-humanoid-motion-repair',worldBuildHash:header.worldBuildHash,sourceHash:header.sourceHash,runtimeHash:header.runtimeHash}));
-   const regression=Buffer.from(JSON.stringify({status:'succeeded',result:{status:'passed',worldBuildHash:header.worldBuildHash}}));
-   await writeFile(path.join(candidate.root,'repair.json'),repair);await writeFile(path.join(candidate.root,'regression.json'),regression);
-   Object.assign(header,{kind:'three-episode-repaired-delivery',repairEvidence:{path:'repair.json',sha256:sha(repair)},regressionEvidence:{path:'regression.json',sha256:sha(regression)}});await writeFile(headerPath,JSON.stringify(header));
-  }
+  await writeFile(path.join(candidate.root,'delivery.json'),JSON.stringify({kind:'three-creator-delivery',schemaVersion:1,profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash,assetPolicySha256:candidate.assetPolicySha256,files}));
   const source=await prepareEpisodeSource({payloadRoot:candidate.root,outputRoot:path.join(root,'derived'),worldId:'fixture',referenceImage:{path:path.join(candidate.root,'captures/opening.png'),sha256:sha(image)}});
   expect(source.sourceFiles).toEqual(await hashTree(candidate.sourceRoot));
   expect(await loadEpisodeSource(path.join(root,'derived/source.json'))).toEqual(source);
   const derivation=JSON.parse(await readFile(path.join(root,'derived/derivation.json'),'utf8'));
-  expect(derivation.cameraCompatibility.deliveryRuntimeHash).toBe(provenance.deliveryRuntimeHash);expect(derivation.authorCompiledEntriesUnchanged).toBe(true);
+  expect(source.runtimeHash).toBe(candidate.runtimeHash);expect(derivation.authorCompiledEntriesUnchanged).toBe(true);
   expect(source.targets).toHaveLength(1);expect(source.targets[0]).toMatchObject({id:'traveler',role:'primary-subject'});expect(source.referenceImage?.sha256).toBe(sha(image));
-  const sdk=await readFile(path.join(source.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(sdk).toContain('followHalfLifeSeconds');expect(sdk).toContain('prepareSegment');expect(sdk).not.toContain('class CameraHardDecolliderV1');
+  const sdk=await readFile(path.join(source.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(sdk).toContain('followHalfLifeSeconds');expect(sdk).toContain('prepareSegment');expect(sdk).toBe(await readFile(path.join(candidate.playableRoot,'runtime/worldkit-three.js'),'utf8'));
   const session=await openEpisodeBrowser({playableRoot:source.playableRoot,widthPixels:320,heightPixels:180});
   try{
    await session.page.waitForSelector('canvas[data-worldkit-episode-surface]',{state:'visible'});

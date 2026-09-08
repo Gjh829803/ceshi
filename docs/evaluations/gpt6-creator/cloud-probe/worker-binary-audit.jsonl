@@ -1,2 +1,0 @@
-{"binaries": {"node": "/codex-tools/bin/node", "npm": null, "pnpm": null, "codex": "/codex-tools/bin/codex", "chromium": null, "chromium-browser": null, "google-chrome": null, "ffmpeg": "/usr/bin/ffmpeg", "ffprobe": "/usr/bin/ffprobe"}, "pythonModules": {"PIL": false, "playwright": false, "numpy": true}, "runtimeRoots": {"/opt/worldkit": false, "/opt/worldkit-assets": false, "/ms-playwright": false}}
-{"playwright":false,"playwright-core":false,"@babylonjs/core":false,"@babylonjs/havok":false}

@@ -1,79 +1,68 @@
-# Three SDK and data production branch
+# Three world authoring and data production
 
-This branch consolidates the current Three Creator production lane, the Three
-SDK and the independent Three Episode pipeline. The current user explicitly
-excludes the old Babylon production workflow from this integration.
+Read [the architecture](docs/three-sdk-architecture.md), then the relevant
+[SDK](packages/three-world/README.md), [Creator](scripts/three-creator/README.md)
+or [Episode](scripts/three-episode/README.md) guide. Public contracts and their
+actual consumers are authoritative.
 
-Read [the architecture](docs/three-sdk-architecture.md) and [documentation index](docs/README.md),
-then [the branch guide](docs/three-sdk-data-production.md) for entry points,
-source provenance, implemented boundaries and verification commands.
+## Authoring and capability layers
 
-## Documentation authority
+1. Reuse: `createHumanoidWorld` loads `humanoid.source-101` and its contextual
+   controller. This is the recommended humanoid starting point.
+2. Bind: author ordinary Three Mesh/Group geometry freely. Bind custom subjects
+   through `addCharacter({object,body,movement})`; bind vehicles through their
+   visual root and `TrainingVehicleInstance.spec`. Define actual colliders,
+   interaction anchors, climb surfaces and water for contextual abilities.
+3. Configure: apply and export explicit movement/profile parameters with units.
+4. Implement: edit the relevant SDK source module, rebuild it for the project,
+   and verify its callers. Delivery must identify the actual runtime bytes.
 
-Current design is ordinary Three authoring, one SDK runtime owner and an independent
-production pipeline. Keep public API guidance with actual contracts and the SDK
-README; do not recreate duplicate scene languages or separate API drafts.
-The workspace now contains only `packages/three-world` and its shared
-`packages/camera-collision` dependency. The old Babylon/Havok packages, applications,
-CLI, executable skills and blueprint Site are retired. Retained shared helpers
-and dated evidence do not re-enable those workflows.
-Documentation-only changes require link/claim/diff checks and direct documentation
-consumer checks where applicable, not unrelated runtime or cloud replay.
+The asset catalog is a reuse library. It is not the limit of what an Agent can
+create. Prefer the supplied humanoid rig and animation set; custom skeletons need
+compatible bone mapping and animation validation. Drawing a mesh alone supplies
+neither collision nor a locomotion or skeletal animation controller.
 
-## Current responsibilities
+## Execution ownership
 
-- `packages/three-world`: Three/Rapier runtime; one fixed clock, physics world,
-  character support authority, animation owner and camera writer.
-- `scripts/three-creator` and `scripts/cloud/three-eval*`: retain the verified
-  Creator v0.2 production delivery contract, including actual self-check input
-  recording. Do not silently mix preview-first v0.3 tools with v0.2 validators.
-- `scripts/three-episode`: consumes a verified delivered world, plans and records
-  six 30-second clips, prepares ten visual styles and video requests. Its own
-  recording is independent of Creator's self-check recording.
-- Episode execution requires `--stop-before-seedance`. Video provider submission
-  and automatic subscription to Creator deliveries are not implemented here.
-- Shared human feedback must not be forked by SDK version. World reviews remain
-  in the existing shared service; image feedback uses the existing case/style/
-  image identity. A previous image decision does not approve different images.
-- Generated case data, recorded media, request journals and reviewer stores remain
-  external to Git. Private runtime configuration remains under ignored
-  `.codex-tmp`; never commit credentials or copy them into model workspaces.
+- The SDK owns one clock, physics world, controller per actor, animation owner
+  and active camera writer. Extensions return intent to those owners.
+- Three authoring owns visual geometry, materials, scene composition and game UI.
+  Runtime source changes belong in the project runtime build; do not install a
+  second physics, animation or camera loop in scene code.
+- Creator owns compilation, browser tools, real self-check recording and delivery.
+  Episode independently plans and records real SDK inputs/actions.
+- Keyboard, Agent requests and recordings use the same action contracts and
+  controls metadata. Describe preconditions, scene requirements, completion and
+  rejection reasons; an available clip is not proof of an executable ability.
+- UI uses the Presentation DOM layer. Model input and production recordings use
+  the renderer's pure world pixels.
 
-## Model and account selection
+## Production and data
 
-For GPT-6 task classification, consult
-`docs/evaluations/gpt6-three/account-performance/gpt6-capabilities-20260907.md`.
-Its 18 labels are user-confirmed model capabilities. Use the referenced local
-email mapping for exact identity matching; check current availability separately
-and preserve existing quality evidence. Unlisted capability is unknown.
+Episode produces six 30-second clips, ten styles and prepared video requests.
+Executable workflows require `--stop-before-seedance`; provider submission and
+an automatic Creator delivery subscription are not implemented.
+Keep source/runtime/asset hashes, request identities, recorded evidence and
+review identity consistent. Reconcile uncertain requests before retrying.
+Shared reviews remain in their existing service. Exact image approval does not
+approve a different image. Credentials, generated media, request journals and
+review stores stay outside Git; private runtime config belongs in `.codex-tmp`.
+Do not start, restart or change external production jobs without task authorization.
 
-## Existing production and changes
+For GPT-6 task classification, consult the user-confirmed
+[account capability record](docs/evaluations/gpt6-three/account-performance/gpt6-capabilities-20260907.md).
+Match exact identities through its private mapping and check live availability
+separately; unlisted capability is unknown.
 
-This branch does not take ownership of existing production processes. Do not
-restart the closed overnight campaign, submit the paused missing cases, rewrite
-running job inputs or create a replacement for an unknown request outcome.
-Reconcile the exact persisted request/job identity before any retry.
+## Engineering
 
-Source worktrees are preserved. Existing published SDK files were already updated
-in place on 2026-09-07, as requested; that deployment is separate from building
-new artifacts from this integrated branch. Keep old provider archives as evidence.
-A new Episode source derives its runtime identity through the source adapter.
-
-## Engineering and verification
-
-For a cross-cutting change, define responsibility boundaries, dependencies,
-exclusive file/process ownership and integration evidence before parallel edits.
-Root owns shared interfaces and final integration. Follow
-`docs/reviews/runtime-deep-review-checklist.md` for runtime changes; verify actual
-installed dependency semantics and use a failing reproducer for a confirmed bug.
-
-Preserve both Creator camera/capture behavior and Episode reset/capture behavior
-when integrating the SDK. Passing one side's tests does not establish the other.
-Run relevant Three tests, typecheck, test census and runtime prebuild on the final
-source state. Keep cloud calls mocked during local contract tests. Do not claim
-video readiness from a prompt-only or material-incomplete request.
-
-Ordinary scene tasks may author Three geometry, assets and supported SDK intent;
-they must not patch physics, animation, camera or host validators to pass a scene.
-New production capsules must bind the integrated source and actual runtime bytes.
-Historical runtime locks remain history and do not release this new SDK.
+For parallel edits, assign exclusive file ownership and agree shared interfaces
+before implementation. Root owns integration. Follow the
+[runtime checklist](docs/reviews/runtime-deep-review-checklist.md) for runtime
+changes. Verify both Creator and Episode consumers, installed dependency
+semantics, lifecycle transitions and actual failure conditions.
+Run relevant tests, typecheck, test census and runtime prebuild for the final
+source. Keep cloud transport mocked during local contract tests. Documentation
+changes require link, source-claim, diff and direct schema-consumer checks.
+Write current usage directly and concisely; avoid duplicate API drafts or
+chronological design narratives.

@@ -141,6 +141,32 @@ def finite_number(value, label, minimum=0):
     return value
 
 
+def public_evaluation(value):
+    require(isinstance(value, dict), 'Invalid evaluation coverage')
+    result = {}
+    for field in ('actions', 'sceneRequirements', 'checks'):
+        entries = value.get(field, [])
+        require(isinstance(entries, list) and len(entries) <= 32 and all(isinstance(text, str) and 0 < len(text) <= 500 for text in entries), 'Invalid evaluation ' + field)
+        result[field] = entries
+    return result
+
+
+def public_source_identity(value, lock_hash):
+    require(isinstance(value, dict), 'Invalid source identity')
+    result = {'creatorRuntimeLockHash': lock_hash}
+    for field in ('branch', 'sdkVersion'):
+        if field in value:
+            require(isinstance(value[field], str) and 0 < len(value[field]) <= 200 and not any(ord(c) < 32 for c in value[field]), 'Invalid source ' + field)
+            result[field] = value[field]
+    if 'commit' in value:
+        require(isinstance(value['commit'], str) and re.fullmatch(r'[a-f0-9]{40}', value['commit']), 'Invalid source commit')
+        result['commit'] = value['commit']
+    for field in ('sourceSnapshotSha256', 'sdkSourceSha256'):
+        if field in value:
+            result[field] = checked_hash(value[field], field)
+    return result
+
+
 def requires_active_play(delivery, sdk_only=False):
     if sdk_only:
         return True
@@ -347,7 +373,7 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
                         'videoDurationSeconds': video_seconds, 'visitedTargets': sum(target['reached'] for target in targets), 'targetCount': len(targets),
                         'travelledMeters': finite_number(played.get('travelledMeters'), 'travelledMeters'),
                         'captureFps': round(frame_count / video_seconds, 3), 'captureFpsSource': 'measured-video-frames-per-duration'})
-    row.update({'sourceHash': delivery['sourceHash'], 'worldBuildHash': delivery['worldBuildHash'], 'archiveSha256': report['archiveSha256'],
+    row.update({'sourceHash': delivery['sourceHash'], 'runtimeHash': delivery['runtimeHash'], 'creatorRuntimeLockHash': delivery['creatorRuntimeLockHash'], 'worldBuildHash': delivery['worldBuildHash'], 'archiveSha256': report['archiveSha256'],
                 'opening': opening, 'playable': prefix + '/playable/index.html', 'triviews': triviews, 'metrics': metrics,
                 'validationMode': delivery.get('validationMode', 'recorded-episode'),
                 'deliveryStatus': 'ready'})
@@ -386,7 +412,7 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         checked_hash(item.get('caseHash'), 'caseHash')
         tasks[task_id] = item
     selected_ids = plan.get('selectedTaskIds')
-    require(isinstance(selected_ids, list) and 1 <= len(selected_ids) <= (5 if sdk_only else 10) and all(isinstance(task_id, str) for task_id in selected_ids) and len(set(selected_ids)) == len(selected_ids) and all(task_id in tasks for task_id in selected_ids), 'Invalid explicit planned task selection')
+    require(isinstance(selected_ids, list) and 1 <= len(selected_ids) <= 10 and all(isinstance(task_id, str) for task_id in selected_ids) and len(set(selected_ids)) == len(selected_ids) and all(task_id in tasks for task_id in selected_ids), 'Invalid explicit planned task selection')
     require(all(task_id in selected_ids for task_id in publication['cases']), 'Publication contains an unselected task')
     title = publication.get('title', 'Three Creator · SDK 独立评测' if sdk_only else 'Three Creator · 原生 Three 与薄 SDK 对照评测')
     description = publication.get('description', '独立 Three 实验；参考还原、外部任务目标和可玩性由 Host 分别审查。')
@@ -396,6 +422,7 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
               'title': ('LOCAL FIXTURE · ' if local_fixture else '') + title, 'description': description, 'reviewStorageKey': storage_key,
               'evidenceScope': 'local-fixture' if local_fixture else EVIDENCE_SCOPES[suite],
               'updatedAt': datetime.now(timezone.utc).isoformat(), 'cases': []}
+    result['sourceIdentity'] = public_source_identity(publication.get('sourceIdentity', {}), lock_hash)
     history = publication.get('historyRuns', [])
     require(isinstance(history, list) and len(history) <= 20, 'Invalid run history')
     result['historyRuns'] = []
@@ -444,8 +471,11 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         require(isinstance(display_title, str) and 0 < len(display_title) <= 240, 'Invalid public display title')
         row = {'id': task_id, 'baseCaseId': task['caseId'], 'profile': task['profile'], 'title': display_title,
                'status': status, 'tags': case['selectionTags'] + [task['profile']], 'reference': reference_relative, 'referenceImageSha256': reference_hash, 'prompt': prompt, 'note': note}
+        if 'evaluation' in entry or 'evaluation' in case:
+            row['evaluation'] = public_evaluation(entry.get('evaluation', case.get('evaluation')))
         if status in ('ready', 'issues'):
             add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only)
+        row['reviewIdentity'] = {'runId': run_id, 'taskId': task_id, 'worldBuildHash': row.get('worldBuildHash')}
         result['cases'].append(row)
     output = Path(output).absolute()
     require(not output.exists() and not output.is_symlink(), 'Use a new independent output directory; existing Native/Three sites are never overwritten')
@@ -459,7 +489,7 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
             shutil.copyfile(source, destination)
             require(file_digest(destination) == expected_hash, f'Artifact changed during copy: {relative}')
         ui = Path(__file__).resolve().parents[2] / 'apps/creator-evaluation-site'
-        for name in ('index.html', 'app.mjs', 'styles.css'):
+        for name in ('index.html', 'app.mjs', 'styles.css', 'reviews.mjs'):
             regular(ui / name)
             shutil.copyfile(ui / name, stage / name)
         (stage / 'results.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

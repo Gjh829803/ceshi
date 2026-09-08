@@ -16,9 +16,9 @@ export interface WorldObservation {
  reset():void|Promise<void>;
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
- 'getting-started': ['scene','camera','cameraMode','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','useAuthoredCamera','setCaptureTargets','onUpdate','getEntityState','start','stop','reset','dispose'],
+ 'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','useAuthoredCamera','setCaptureTargets','onUpdate','getEntityState','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
- control: ['state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
+ control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
  presentation: ['createPresentation','state','execute','getEntityState','reset'],
  training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
@@ -44,7 +44,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic): stri
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n')}\n${topic==='getting-started'?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${topic==='getting-started'?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;
@@ -59,9 +59,25 @@ export function trainingContractSource(source:string):string {
  const file=ts.createSourceFile('training.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingRuntime');
- if(runtime){const allowed=new Set(['snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','onVisualUpdate']);
+ if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','onVisualUpdate']);
   const signatures=runtime.members.filter((member):member is ts.MethodDeclaration=>ts.isMethodDeclaration(member)&&allowed.has(member.name.getText(file))).map(method=>{
    const end=method.body?.pos??method.end;return source.slice(method.getStart(file),end).trim()+';';
   });declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
  return declarations.join('\n');
+}
+
+/** The factory shape follows its implementation; aliases point at public SDK types. */
+export function humanoidContractSource(source:string):string {
+ const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+ const factory=file.statements.find((node):node is ts.FunctionDeclaration=>ts.isFunctionDeclaration(node)&&node.name?.text==='createHumanoidWorld');
+ if(!factory?.body)throw new Error('THREE_HUMANOID_FACTORY_MISSING');
+ const signature=source.slice(factory.getStart(file),factory.body.pos).trim().replace('export async function','export declare function')+';';
+ return `import type {WorldOptions,ThreeWorld,TrainingMap,TrainingCharacter,training} from '@worldkit/three';
+type MapDefinition=TrainingMap;
+type Character=TrainingCharacter;
+type TrainingProfile=training.TrainingProfile;
+type TrainingVehicleInstance=training.TrainingVehicleInstance;
+type AssetDefinition=NonNullable<WorldOptions['assetDefinitions']>[string];
+${trainingContractSource(source)}
+${signature}`;
 }

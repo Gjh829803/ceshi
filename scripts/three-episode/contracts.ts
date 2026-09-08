@@ -2,7 +2,7 @@ import Ajv from 'ajv';
 import type { Vec3, EpisodeStart } from '@worldkit/three';
 import { sha256Canonical } from '../lib/canonical-json.mjs';
 
-export const EPISODE_VERSION = 'three-episode-agent@1';
+export const EPISODE_VERSION = 'three-episode-agent@2';
 export const SEGMENT_IDS = Array.from({ length: 6 }, (_, i) => `segment-0${i}`);
 export const PRE_SEEDANCE_PROFILE = Object.freeze({
   kind: 'three-episode-production-profile', schemaVersion: 1, version: EPISODE_VERSION,
@@ -13,6 +13,20 @@ export const PRE_SEEDANCE_PROFILE = Object.freeze({
 });
 
 export interface EpisodeWaypoint { positionWorldMetersXYZ: Vec3; gait: 'walk' | 'run' }
+export type EpisodeActionIntent =
+  | { kind: 'skill'; action: 'roll' | 'slide' | 'pickup' | 'putDown' | 'sit' | 'standUp' }
+  | { kind: 'posture'; stance: 'stand' | 'crouch' | 'prone' }
+  | { kind: 'climb'; direction: 'enter' | 'exit' | 'up' | 'down' | 'left' | 'right' }
+  | { kind: 'swim-style'; style: 'freestyle' | 'breaststroke' };
+export interface EpisodeActionGoal {
+  id: string;
+  trigger: { waypointIndex: number; radiusMeters: number };
+  targetId?: string;
+  intent: EpisodeActionIntent;
+  /** The intent's actual state (and terminal operation for skills) must match first. */
+  completion: { kind: 'settled'; holdSeconds: number } | { kind: 'displacement'; minimumMeters: number };
+  timeoutSeconds: number;
+}
 export interface EpisodeSegmentPlan {
   id: string;
   start: EpisodeStart;
@@ -20,9 +34,10 @@ export interface EpisodeSegmentPlan {
   endBehavior: 'stop' | 'reverse' | 'loop';
   coverageTargetIds?: string[];
   purpose: string;
+  actionGoals?: EpisodeActionGoal[];
 }
 export interface EpisodePlan {
-  kind: 'worldkit-three-episode-plan'; schemaVersion: 1;
+  kind: 'worldkit-three-episode-plan'; schemaVersion: 2;
   worldBuildHash: string; segments: EpisodeSegmentPlan[];
 }
 export interface EpisodeFile { path: string; sha256: string; byteLength?: number }
@@ -34,6 +49,7 @@ export interface EpisodeSourceManifest {
   kind: 'three-episode-source'; schemaVersion: 1;
   worldId: string; sourceHash: string; worldBuildHash: string; runtimeHash: string;
   sourceWorldBuildHash: string; sourceRuntimeHash: string; sourceDeliveryManifestSha256: string;
+  runtimeSourceHash?: string | null;
   /** Pinned Creator policy; absent only for historical policy-less deliveries. */
   assetPolicySha256?: string;
   sourceRoot: string; playableRoot: string; sourceFiles: Record<string, string>;
@@ -43,6 +59,22 @@ export interface EpisodeSourceManifest {
 }
 const vec3 = { type: 'array', minItems: 3, maxItems: 3, items: { type: 'number' } };
 const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
+export const ACTION_GOAL_SCHEMA = object({
+  id: { type: 'string', minLength: 1, maxLength: 80 },
+  trigger: object({ waypointIndex: { type: 'integer', minimum: 0, maximum: 255 }, radiusMeters: { type: 'number', minimum: 0.2, maximum: 2 } }),
+  targetId: { type: 'string', minLength: 1, maxLength: 256 },
+  intent: { oneOf: [
+    object({ kind: { const: 'skill' }, action: { enum: ['roll', 'slide', 'pickup', 'putDown', 'sit', 'standUp'] } }),
+    object({ kind: { const: 'posture' }, stance: { enum: ['stand', 'crouch', 'prone'] } }),
+    object({ kind: { const: 'climb' }, direction: { enum: ['enter', 'exit', 'up', 'down', 'left', 'right'] } }),
+    object({ kind: { const: 'swim-style' }, style: { enum: ['freestyle', 'breaststroke'] } }),
+  ] },
+  completion: { oneOf: [
+    object({ kind: { const: 'settled' }, holdSeconds: { type: 'number', minimum: 0, maximum: 20 } }),
+    object({ kind: { const: 'displacement' }, minimumMeters: { type: 'number', exclusiveMinimum: 0, maximum: 20 } }),
+  ] },
+  timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
+}, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
 export const SEGMENT_SCHEMA = object({
   id: { enum: SEGMENT_IDS },
   start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },training:object({
@@ -53,9 +85,10 @@ export const SEGMENT_SCHEMA = object({
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
   coverageTargetIds: { type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
   purpose: { type: 'string', minLength: 1, maxLength: 2000 },
+  actionGoals: { type: 'array', minItems: 1, maxItems: 32, items: ACTION_GOAL_SCHEMA },
 }, ['id', 'start', 'waypoints', 'endBehavior', 'purpose']);
 export const EPISODE_PLAN_SCHEMA = object({
-  kind: { const: 'worldkit-three-episode-plan' }, schemaVersion: { const: 1 },
+  kind: { const: 'worldkit-three-episode-plan' }, schemaVersion: { const: 2 },
   worldBuildHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
   segments: { type: 'array', minItems: 1, maxItems: 6, items: SEGMENT_SCHEMA },
 });
@@ -70,6 +103,17 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
       (ids.length !== 6 || SEGMENT_IDS.some((id, i) => ids[i] !== id)))) throw new Error('EPISODE_PLAN_SIX_ORDERED_SEGMENTS_REQUIRED');
   const starts = plan.segments.map(s => s.start.positionWorldMetersXYZ.join(','));
   if (new Set(starts).size !== starts.length) throw new Error('EPISODE_PLAN_DISTINCT_STARTS_REQUIRED');
+  for (const segment of plan.segments) {
+    const goals = segment.actionGoals ?? [];
+    if (new Set(goals.map(g => g.id)).size !== goals.length) throw new Error('EPISODE_ACTION_GOAL_ID_DUPLICATED');
+    goals.forEach((goal, index) => {
+      if (goal.trigger.waypointIndex >= segment.waypoints.length || (index && goal.trigger.waypointIndex < goals[index - 1]!.trigger.waypointIndex)) throw new Error('EPISODE_ACTION_GOAL_ORDER_INVALID');
+      if (goal.intent.kind === 'skill' && ['pickup', 'sit'].includes(goal.intent.action) && !goal.targetId) throw new Error('EPISODE_ACTION_TARGET_REQUIRED');
+      if (goal.intent.kind === 'climb' && !['enter', 'exit'].includes(goal.intent.direction) && goal.completion.kind !== 'displacement') throw new Error('EPISODE_CLIMB_DISPLACEMENT_REQUIRED');
+      if (goal.intent.kind === 'skill' && !['roll', 'slide'].includes(goal.intent.action) && goal.completion.kind === 'displacement') throw new Error('EPISODE_ACTION_DISPLACEMENT_UNSUPPORTED');
+      if (goal.completion.kind === 'settled' && goal.completion.holdSeconds >= goal.timeoutSeconds) throw new Error('EPISODE_ACTION_TIMEOUT_TOO_SHORT');
+    });
+  }
   return structuredClone(plan);
 }
 /** This run's explicit user stop is durable; a caller cannot bypass it with a stage option. */

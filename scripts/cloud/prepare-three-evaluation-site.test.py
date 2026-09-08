@@ -196,11 +196,11 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Preview browser errors'):
             fixture.stage('reject-errors')
 
-    def test_five_sdk_only_cases_stage_with_truthful_labels_and_metrics(self):
-        fixture = Fixture(self.root, count=5)
+    def test_ten_sdk_only_cases_stage_with_truthful_labels_and_metrics(self):
+        fixture = Fixture(self.root, count=10)
         report, result = fixture.stage()
         self.assertEqual(report['mountPath'], '/creator-evals/three/')
-        self.assertEqual(report['caseCount'], 5); self.assertEqual(report['playableCount'], 5)
+        self.assertEqual(report['caseCount'], 10); self.assertEqual(report['playableCount'], 10)
         self.assertEqual(result['suite'], 'sdk-only'); self.assertEqual(result['evidenceScope'], 'local-fixture')
         self.assertEqual(site.EVIDENCE_SCOPES['sdk-only'], 'sdk-only-cloud-evaluation')
         self.assertEqual(site.EVIDENCE_SCOPES['paired'], 'paired-cloud-evaluation')
@@ -212,6 +212,46 @@ class EvaluationSiteTests(unittest.TestCase):
             self.assertEqual(row['metrics']['actualWallSeconds'], 200)
             self.assertTrue((self.root / 'staged' / row['playable']).is_file())
         self.assertFalse(any(p.name == 'project.json' or p.suffix == '.ts' for p in (self.root / 'staged').rglob('*')))
+
+    def test_source_and_action_coverage_preserve_real_delivery_and_review_identity(self):
+        fixture = Fixture(self.root)
+        task = fixture.plan['selectedTaskIds'][0]
+        fixture.publication['sourceIdentity'] = {'branch': 'codex/actions', 'commit': 'a' * 40, 'sourceSnapshotSha256': 'b' * 64, 'privatePath': '/not-public'}
+        fixture.publication['cases'][task]['evaluation'] = {'actions': ['滑铲'], 'sceneRequirements': ['落地、空手，速度至少 2.5 m/s'], 'checks': ['低通道出口受阻时保持低姿态']}
+        _, result = fixture.stage()
+        row = result['cases'][0]
+        self.assertEqual(result['sourceIdentity']['creatorRuntimeLockHash'], fixture.lock)
+        self.assertNotIn('privatePath', result['sourceIdentity'])
+        self.assertEqual(row['evaluation']['actions'], ['滑铲'])
+        self.assertEqual(row['reviewIdentity'], {'runId': fixture.run_id, 'taskId': task, 'worldBuildHash': row['worldBuildHash']})
+        self.assertEqual(row['creatorRuntimeLockHash'], fixture.lock)
+        self.assertEqual(len(row['runtimeHash']), 64)
+
+    def test_live_run_destination_is_isolated_and_rejects_incompatible_modes(self):
+        manifest = {'kind': 'three-creator-evaluation-gallery', 'id': 'local-live-run', 'cases': [{'id': 'local-case--three-sdk', 'baseCaseId': 'local-case', 'profile': 'three-sdk'}]}
+        remote, mode = publisher.publication_target(manifest, 'three', run_page=True)
+        self.assertEqual(remote, publisher.REMOTE + '/three/runs/local-live-run')
+        self.assertEqual(mode, 'run-page')
+        self.assertEqual(publisher.publication_target(manifest, 'three', run_page=True, progress_only=True)[1], 'run-page-progress')
+        with self.assertRaises(ValueError): publisher.publication_target(manifest, 'three', run_page=True, archive_run=True)
+
+    def test_live_run_install_updates_own_run_and_refuses_archive_or_other_tasks(self):
+        def install(root, task='local-case--three-sdk', status='queued'):
+            manifest = encoded({'id': 'local-live-run', 'cases': [{'id': task, 'status': status}]})
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode='w') as archive:
+                for name, data in [('index.html', b'LOCAL FIXTURE'), ('results.json', manifest)]:
+                    entry = tarfile.TarInfo(name); entry.size = len(data); archive.addfile(entry, io.BytesIO(data))
+            return subprocess.run([sys.executable, '-c', publisher.INSTALL, str(root), 'run-page', sha(manifest), 'local-live-run', json.dumps([task])], input=buffer.getvalue(), capture_output=True)
+        root = self.root / 'live'
+        self.assertEqual(install(root).returncode, 0)
+        self.assertEqual(install(root, status='running').returncode, 0)
+        original = (root / 'results.json').read_bytes()
+        self.assertNotEqual(install(root, task='another-case--three-sdk').returncode, 0)
+        self.assertEqual((root / 'results.json').read_bytes(), original)
+        archive = self.root / 'archive'; archive.mkdir(); (archive / 'results.json').write_bytes(original)
+        self.assertNotEqual(install(archive).returncode, 0)
+        self.assertEqual((archive / 'results.json').read_bytes(), original)
 
     def test_host_titles_and_history_preserve_case_inputs_and_artifact_paths(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]

@@ -1,4 +1,4 @@
-import type { Vec3, WorldInput, WorldSnapshot } from './contracts.js';
+import type { CommandReceipt, OperationStatus, Vec3, WorldInput, WorldSnapshot } from './contracts.js';
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
@@ -46,11 +46,15 @@ export interface EpisodeFrame {
   readonly controlForwardWorldXYZ: Vec3;
  };
 }
+export type EpisodeCommand=Extract<import('./training/runtime').TrainingCommand,{readonly type:'training.action'|'training.input'|'training.exit'}>|{readonly type:'training.enter';readonly instanceId:string};
 export interface EpisodeRuntimePort {
  readonly schemaVersion: 1;
  capabilities(): EpisodeCapabilities;
  probeStart(start: EpisodeStart): EpisodeStartProbe;
  prepareSegment(start: EpisodeStart, viewport: { readonly widthPixels: number; readonly heightPixels: number }): Promise<WorldSnapshot>;
+ /** Commands share the live dispatcher and are admitted only while this segment owns the clock. */
+ execute(command:EpisodeCommand):Promise<CommandReceipt>;
+ operation(operationId:string):OperationStatus;
  advance(input: WorldInput, ticks: number): WorldSnapshot;
  frame(mimeType: 'image/jpeg' | 'image/png'): EpisodeFrame;
  release(): void;

@@ -1,4 +1,5 @@
 import { build, type Plugin } from 'esbuild';
+import {readWorkspaceRuntime,materializeWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 import Ajv from 'ajv';
 import { readFile, writeFile, mkdir, readdir, lstat, realpath, copyFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,7 +19,7 @@ const EXCLUDED = new Set(['.git', '.three-creator', 'node_modules', 'outputs', '
 const HOST_OWNED_ROOTS = new Set(['scratch']);
 const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.glb', '.gltf', '.bin', '.wasm', '.woff', '.woff2', '.ttf', '.txt', '.mp3', '.ogg', '.wav']);
 export type AssetCatalogEntry = Record<string, any> & { id: string; uri: string; sha256: string; byteLength: number; sourcePath: string };
-export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; assetPolicySha256: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
+export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; runtimeSourceHash: string | null; assetPolicySha256: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
 export type AssetPolicyOptions = { assetPolicySnapshotPath?: string; assetPolicySha256?: string };
 export type PrebuiltRuntimeManifest = { schemaVersion: 1; profile: CreatorProfile; cacheIdentity: string; runtimeHash: string; files: Record<string, string> };
 export function isWithin(root: string, file: string): boolean { const relative = path.relative(root, file); return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative); }
@@ -122,9 +123,16 @@ export class ThreeCompiler {
     if (!result.has('index.html')) throw new Error('THREE_ENTRY_MISSING: write index.html with a local module script');
     return result;
   }
-  async prepareRuntime(options: { cameraModulePath?: string } = {}): Promise<{ root: string; hash: string; hit: boolean; cacheIdentity: string }> {
+  async materializeRuntime() {
+    if(this.profile!=='three-sdk')throw new Error('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
+    return materializeWorkspaceRuntime(REPOSITORY_ROOT,this.workspace);
+  }
+  async prepareRuntime(options: { cameraModulePath?: string; workspaceRuntime?:WorkspaceRuntime|null } = {}): Promise<{ root: string; hash: string; hit: boolean; cacheIdentity: string }> {
     await assertNoSymlinks(this.outputRoot);
     if(options.cameraModulePath&&this.profile!=='three-sdk')throw new Error('THREE_CAMERA_OVERRIDE_REQUIRES_SDK');
+    const workspaceRuntime=options.workspaceRuntime===undefined?await readWorkspaceRuntime(REPOSITORY_ROOT,this.workspace):options.workspaceRuntime??undefined;
+    if(workspaceRuntime&&this.profile!=='three-sdk')throw new Error('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
+    if(workspaceRuntime&&options.cameraModulePath)throw new Error('THREE_RUNTIME_OVERRIDE_CONFLICT');
     const cameraModule=options.cameraModulePath?{file:await realpath(options.cameraModulePath),bytes:await readFile(options.cameraModulePath)}:undefined;
     const sdkFiles = this.profile === 'three-sdk' ? await hashTree(path.join(REPOSITORY_ROOT, 'packages/three-world/src')) : {};
     for (const key of Object.keys(sdkFiles)) if (key.endsWith('.test.ts')) delete sdkFiles[key];
@@ -135,12 +143,12 @@ export class ThreeCompiler {
     for (const key of Object.keys(sharedCameraFiles)) if (key.endsWith('.test.ts')) delete sharedCameraFiles[key];
     const bridge = await readFile(path.join(REPOSITORY_ROOT, 'apps/three-creator-playground/bridge.ts'));
     const versions = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'package.json'), 'utf8'));
-    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, cameraOverrideSha256: cameraModule ? sha256(cameraModule.bytes) : null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))) }));
+    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, workspaceRuntimeSourceHash: workspaceRuntime?.sourceHash??null, cameraOverrideSha256: cameraModule ? sha256(cameraModule.bytes) : null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))), workspaceRuntimeCompiler:sha256(await readFile(new URL('./workspace-runtime.ts',import.meta.url))) }));
     const root = path.join(this.outputRoot, 'runtime', cacheIdentity);
     const sealed = this.runtimes.get(cacheIdentity);
     if (sealed) { await verifyFiles(root, sealed.files); return { root, hash: sealed.hash, hit: true, cacheIdentity }; }
     const prebuilt = process.env.WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT;
-    if (prebuilt) {
+    if (prebuilt && !workspaceRuntime) {
       const bytes = await readFile(path.join(prebuilt, 'runtime-manifest.json'));
       if (sha256(bytes) !== process.env.WORLDKIT_THREE_PREBUILT_RUNTIME_MANIFEST_SHA256) throw new Error('THREE_PREBUILT_MANIFEST_HASH_MISMATCH');
       const manifest = JSON.parse(bytes.toString()) as PrebuiltRuntimeManifest;
@@ -149,7 +157,7 @@ export class ThreeCompiler {
       this.runtimes.set(cacheIdentity, { files: manifest.files, hash: manifest.runtimeHash }); return { root, hash: manifest.runtimeHash, hit: true, cacheIdentity };
     }
     await rm(root, { recursive: true, force: true }); await mkdir(root, { recursive: true });
-    const base = { bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
+    const base = { tsconfigRaw: {compilerOptions: {target:'ES2022',useDefineForClassFields:true}}, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
     const threeEsmEntry = path.join(path.dirname(require.resolve('three')), 'three.module.js');
     await build({ ...base, entryPoints: [threeEsmEntry], outfile: path.join(root, 'three.js') });
     await build({ ...base, entryPoints: [path.join(REPOSITORY_ROOT, 'apps/three-creator-playground/bridge.ts')], external: ['three'], outfile: path.join(root, 'bridge.js') });
@@ -165,8 +173,8 @@ export class ThreeCompiler {
       },
     }] : [];
     if (this.profile === 'three-sdk') await build({ ...base,
-      entryPoints: [path.join(REPOSITORY_ROOT, 'packages/three-world/src/index.ts')],
-      plugins: [...cameraPlugins, { name: 'shared-three-only', setup: plugin => {
+      entryPoints: [workspaceRuntime?.entry??path.join(REPOSITORY_ROOT, 'packages/three-world/src/index.ts')],
+      plugins: [...(workspaceRuntime?[workspaceRuntime.plugin]:[]), ...cameraPlugins, { name: 'shared-three-only', setup: plugin => {
         plugin.onResolve({ filter: /^three$/ }, args => ({ path: args.path, external: true }));
       } }], outfile: path.join(root, 'worldkit-three.js') });
     const files = await hashTree(root), hash = sha256(JSON.stringify(files));
@@ -181,7 +189,13 @@ export class ThreeCompiler {
     const sources = Object.fromEntries([...sourceFiles].map(([name, data]) => [name, sha256(data)]));
     const assets = this.allowedAssets();
     const selected = (project as Project).assetIds.map(id => { const asset = assets.find(a => a.id === id); if (!asset) throw new Error(`THREE_ASSET_POLICY_DENIED: ${id}`); return asset; });
-    const runtime = await this.prepareRuntime();
+    const workspaceRuntime=await readWorkspaceRuntime(REPOSITORY_ROOT,this.workspace);
+    if(workspaceRuntime&&this.profile!=='three-sdk')throw new Error('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
+    if(workspaceRuntime){
+      if([...sourceFiles.keys()].filter(name=>name.startsWith('sdk/')).length!==workspaceRuntime.files.size)throw new Error('THREE_RUNTIME_SOURCE_CHANGED');
+      for(const [name,bytes]of workspaceRuntime.files)if(!sourceFiles.get(`sdk/${name}`)?.equals(bytes))throw new Error('THREE_RUNTIME_SOURCE_CHANGED');
+    }
+    const runtime = await this.prepareRuntime({workspaceRuntime:workspaceRuntime??null});
     const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256 }));
     const worldBuildHash = sha256(JSON.stringify({ sourceHash, runtimeHash: runtime.hash, profile: this.profile }));
     const previous = this.candidates.get(worldBuildHash);
@@ -212,6 +226,7 @@ export class ThreeCompiler {
         if (/^three\/(addons|examples\/jsm)\/.+\.js$/.test(args.path) && !args.path.includes('..')) { addonImports.add(args.path); return { path: args.path, external: true }; }
         if (!args.path.startsWith('.')) throw new Error(`THREE_IMPORT_NOT_ALLOWED: ${args.path}; use local files, three/addons, or the selected SDK profile`);
         const candidate = path.resolve(args.resolveDir, args.path);
+        if(isWithin(path.join(sourceRoot,'sdk'),candidate))throw new Error('THREE_RUNTIME_IMPORT_USE_PUBLIC_PACKAGE: import @worldkit/three');
         if (!isWithin(sourceRoot, candidate)) throw new Error(`THREE_IMPORT_PATH_ESCAPE: ${args.path}`);
         return;
       });
@@ -248,7 +263,7 @@ export class ThreeCompiler {
     const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>`;
     html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, value => value + injected) : injected + html;
     await writeFile(path.join(playableRoot, 'index.html'), html);
-    const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };
+    const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, runtimeSourceHash:workspaceRuntime?.sourceHash??null, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };
     await this.verifyCandidatePolicy(candidate);
     this.candidates.set(worldBuildHash, candidate); return candidate;
   }

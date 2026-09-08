@@ -6,6 +6,31 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {isPassingDelivery,eventStatistics,validateDeliveryEvidence} from './three-eval-statistics.mjs';
+test('Installed doctor uses the live MCP input schema and short recordings cannot submit',()=>{
+  execFileSync(process.execPath,['--import','tsx','--input-type=module','-e',`
+    import assert from 'node:assert/strict';
+    import Ajv from 'ajv';
+    import {THREE_CREATOR_TOOLS} from './scripts/three-creator/mcp.ts';
+    import {EPISODE_SCHEMA} from './scripts/three-creator/contracts.ts';
+    import {resolvePlaytestBudget,playtestSubmissionReadiness} from './scripts/three-creator/tools.ts';
+    import {createDoctorBrowserPlan} from './scripts/cloud/three-runtime-doctor.mjs';
+    const ajv=new Ajv({strict:false,strictNumbers:true});
+    for(const duration of [3,4,15]) {
+      const plan=createDoctorBrowserPlan(duration);
+      for(const [name,args] of [['world_preview',plan.preview],['world_playtest',plan.playtest],['world_capture_triviews',plan.triviews],['world_submit',plan.submit]]) {
+        const check=ajv.compile(THREE_CREATOR_TOOLS.find(tool=>tool.name===name).inputSchema);
+        assert(check(args),name+JSON.stringify(check.errors));
+      }
+      assert(ajv.validate(EPISODE_SCHEMA,plan.episode));
+      const planned=plan.episode.steps.reduce((sum,step)=>sum+step.durationSeconds,0);
+      assert.equal(planned,181);assert.equal(resolvePlaytestBudget(planned,duration,plan.episode.steps.length).mode,'debug');
+      assert.equal(playtestSubmissionReadiness({status:'passed',worldBuildHash:'world',episodeHash:'episode',executionMode:'debug',isCompleteEpisode:false,actualWallSeconds:duration,inputWallSeconds:duration,activePlaySeconds:duration,videoMetadata:{durationSeconds:duration}},{worldBuildHash:'world',episodeHash:'episode'}).eligible,false);
+    }
+    const preview=ajv.compile(THREE_CREATOR_TOOLS.find(tool=>tool.name==='world_preview').inputSchema);
+    assert.equal(preview({view:'current',input:{keys:['w'],durationSeconds:4}}),false);
+    assert.throws(()=>createDoctorBrowserPlan(180));
+  `],{stdio:'pipe',timeout:30000});
+});
 import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInstalledClosure,prepareBrowserRegistry} from './three-eval-runtime.mjs';
 import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
 import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
@@ -94,8 +119,15 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   const ninetyLock=path.join(dir,'ninety-lock.json');await writeFile(ninetyLock,JSON.stringify({...JSON.parse(await readFile(lock,'utf8')),maximumTaskSeconds:5400}));
   const drift=spawnSync(process.execPath,sdkArgs.map(value=>value===lock?ninetyLock:value),{encoding:'utf8'});assert.notEqual(drift.status,0);assert.match(drift.stderr,/FROZEN_RUNTIME_CHANGED/);assert.deepEqual(JSON.parse(await readFile(path.join(sdkOut,task,'payload.json'),'utf8')),oldPayload);
   await writeFile(tenManifest,JSON.stringify({cases:[...cases,...cases.map(c=>({...c,id:c.id+'-extra'}))]}));
-  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ninetyLock,'--manifest',tenManifest,'--run-id','test-ten-sdk','--output-root',tenOut,'--case-limit','10','--max-concurrency','10']);
+  execFileSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ninetyLock,'--manifest',tenManifest,'--run-id','test-ten-sdk','--output-root',tenOut,'--max-concurrency','10']);
   const tenPlan=JSON.parse(await readFile(path.join(tenOut,'evaluation-plan.json'),'utf8'));assert.equal(tenPlan.selectedTaskIds.length,10);assert.equal(tenPlan.maxConcurrency,10);assert.equal(tenPlan.safetyPolicy.maximumModelSeconds,5400);const tenPayload=JSON.parse(await readFile(path.join(tenOut,tenPlan.selectedTaskIds[0],'payload.json'),'utf8'));assert.equal(tenPayload.defaults.timeout_seconds,5520);
+  const narrowOut=path.join(dir,'narrow-run'),narrowArgs=['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','prepare','--runtime-lock',ninetyLock,'--manifest',tenManifest,'--run-id','test-narrow-sdk','--output-root',narrowOut];
+  execFileSync(process.execPath,[...narrowArgs,'--case-limit','2']);
+  const narrowPlan=JSON.parse(await readFile(path.join(narrowOut,'evaluation-plan.json'),'utf8'));
+  execFileSync(process.execPath,narrowArgs);
+  assert.deepEqual(JSON.parse(await readFile(path.join(narrowOut,'evaluation-plan.json'),'utf8')).selectedTaskIds,narrowPlan.selectedTaskIds,'saved selection survives a later invocation without filters');
+  const widening=spawnSync(process.execPath,[...narrowArgs,'--case-limit','10'],{encoding:'utf8'});assert.notEqual(widening.status,0);assert.match(widening.stderr,/FROZEN_CASE_SELECTION_CHANGED/);
+  assert.deepEqual(JSON.parse(await readFile(path.join(narrowOut,'evaluation-plan.json'),'utf8')).selectedTaskIds,narrowPlan.selectedTaskIds);
 
   // Exercise the real coordinator in an isolated checkout. Only its provider
   // transport is replaced; no production credential files or cloud API exist.
@@ -131,4 +163,13 @@ export async function cancelGenerationJob(){throw Error('unexpected cancel');}
   const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
 
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('workspace runtime receipts bind source identity and still require exact Host evidence',async()=>{
+ const f=fixture();f.result.runtimeSourceHash=hash('workspace source');f.result.runtimeHash=hash('workspace compiled runtime');
+ f.result.worldBuildHash=hash(JSON.stringify({sourceHash:f.result.sourceHash,runtimeHash:f.result.runtimeHash,profile:f.result.profile}));
+ f.events=await parse(lines(f.result));assert.equal(validateDeliveryEvidence(f).operationId,'submit');
+ f.result={...f.result,runtimeSourceHash:hash('modified source')};assert.throws(()=>validateDeliveryEvidence(f),/UNVERIFIED/);
+ const unbound=fixture();unbound.expectedFixedRuntimeHash=hash('other runtime');unbound.events=await parse(lines(unbound.result));assert.throws(()=>validateDeliveryEvidence(unbound),/IDENTITY_FAILED/);
+ assert.equal(isPassingDelivery({...f.result,runtimeSourceHash:'invalid'}),false);
 });

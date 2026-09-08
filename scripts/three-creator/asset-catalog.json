@@ -2,24 +2,59 @@
   "schemaVersion": 1,
   "assets": [
     {
-      "id": "humanoid.preset-101",
-      "displayName": "Default preset humanoid / Playground 101-bone character",
+      "id": "quadruped.animal.large-static",
+      "displayName": "Single large quadruped diagnostic specimen",
+      "uri": "./assets/subjects/70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b.glb",
+      "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
+      "byteLength": 27616,
+      "sourcePath": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
+      "usage": "diagnostic",
+      "recommendedFor": [
+        "static asset loading diagnostic"
+      ],
+      "recommendedBody": null,
+      "locomotionBindingIds": [],
+      "selectedNodeIndices": [
+        2,
+        7,
+        12,
+        14,
+        15,
+        17
+      ],
+      "rootTransform": {
+        "positionMetersXYZ": [
+          -1.1497997045516968,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Static six-mesh diagnostic animal; no skeleton or authored animation.",
+        "The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal.",
+        "Not a fox or nine-tailed fox reference; do not recommend it for matching those characters.",
+        "A character controller can translate this object but cannot supply leg motion."
+      ]
+    },
+    {
+      "id": "humanoid.source-101",
+      "displayName": "默认人形 / Source 101 / 48 动作",
       "uri": "./assets/subjects/bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4.glb",
       "sha256": "bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4",
       "byteLength": 4643232,
-      "sourcePath": "assets/three-creator/humanoid/preset-101/v1/preset-101.glb",
+      "sourcePath": "assets/three-creator/humanoid/source-101/model.glb",
       "usage": "reusable",
-      "recommendedFor": [
-        "default humanoid character",
-        "human motion proxy"
-      ],
-      "recommendedBody": {
-        "heightMeters": 1.8,
-        "radiusMeters": 0.35
-      },
-      "locomotionBindingIds": [
-        "ground.standard"
-      ],
       "rootTransform": {
         "positionMetersXYZ": [
           0,
@@ -69,305 +104,6 @@
           "timeScale": 1
         }
       },
-      "limitations": [
-        "Recommended default humanoid; other catalog assets and custom characters remain supported.",
-        "Five ordinary locomotion clips. Landing returns to grounded locomotion; no standalone landing action.",
-        "Gait rates match default ground speeds (walk 2.4 m/s, run 4.8 m/s); custom speeds need visual stride checks.",
-        "Full 48-action traversal/interaction uses humanoid.source-101 with TrainingCharacter and supported scene conditions."
-      ],
-      "resources": [
-        {
-          "path": "humanoid/source/THIRD_PARTY_NOTICES.md",
-          "uri": "./assets/resources/8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524.md",
-          "sha256": "8276bedbba6b1eaa347c516fdd0a44a68a63bef42241767b3e4c0b4486a3a524",
-          "byteLength": 6595,
-          "sourcePath": "assets/three-creator/training/humanoid/source/THIRD_PARTY_NOTICES.md"
-        },
-        {
-          "path": "humanoid/source/gasp-research/LICENSE-NOTICE.txt",
-          "uri": "./assets/resources/ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c.txt",
-          "sha256": "ee588de755b9a7cbcda2ba92e04ae2c460e398b4120c562ad881d19bc735d17c",
-          "byteLength": 407,
-          "sourcePath": "assets/three-creator/training/humanoid/source/gasp-research/LICENSE-NOTICE.txt"
-        }
-      ],
-      "provenance": {
-        "sourceAssetId": "humanoid.source-101",
-        "repository": "vehicle-training-ground",
-        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
-        "derived": true,
-        "sourceManifest": "assets/three-creator/humanoid/preset-101/v1/provenance.json"
-      }
-    },
-    {
-      "id": "humanoid.g-bot",
-      "displayName": "G Bot animated humanoid",
-      "uri": "./assets/subjects/4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f.glb",
-      "sha256": "4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
-      "byteLength": 6743072,
-      "sourcePath": "assets/three-creator/humanoid/g-bot/v2/g-bot.glb",
-      "usage": "reusable",
-      "recommendedFor": [
-        "humanoid character",
-        "human motion proxy"
-      ],
-      "recommendedBody": {
-        "heightMeters": 1.8,
-        "radiusMeters": 0.35
-      },
-      "locomotionBindingIds": [
-        "ground.standard"
-      ],
-      "rootTransform": {
-        "positionMetersXYZ": [
-          0,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {
-        "idle": {
-          "clipName": "idle",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "idle.gaming": {
-          "clipName": "idle.gaming",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "walk": {
-          "clipName": "walk",
-          "loop": true,
-          "blendSeconds": 0.15,
-          "timeScale": 1
-        },
-        "walk.step": {
-          "clipName": "walk.step",
-          "loop": false,
-          "blendSeconds": 0.12,
-          "timeScale": 1
-        },
-        "run": {
-          "clipName": "run",
-          "loop": true,
-          "blendSeconds": 0.12,
-          "timeScale": 1
-        },
-        "jump": {
-          "clipName": "jump",
-          "loop": false,
-          "blendSeconds": 0.1,
-          "timeScale": 1
-        },
-        "fall": {
-          "clipName": "fall",
-          "loop": true,
-          "blendSeconds": 0.12,
-          "timeScale": 1
-        },
-        "land.hard": {
-          "clipName": "land.hard",
-          "loop": false,
-          "blendSeconds": 0.08,
-          "timeScale": 1
-        },
-        "land.hard.alt": {
-          "clipName": "land.hard.alt",
-          "loop": false,
-          "blendSeconds": 0.08,
-          "timeScale": 1
-        },
-        "fly": {
-          "clipName": "fly",
-          "loop": true,
-          "blendSeconds": 0.18,
-          "timeScale": 1
-        },
-        "float": {
-          "clipName": "float",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "swim.surface": {
-          "clipName": "swim.surface",
-          "loop": true,
-          "blendSeconds": 0.18,
-          "timeScale": 1
-        },
-        "swim.tread": {
-          "clipName": "swim.tread",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "swim.exit": {
-          "clipName": "swim.exit",
-          "loop": false,
-          "blendSeconds": 0.15,
-          "timeScale": 1
-        },
-        "sit": {
-          "clipName": "sit",
-          "loop": false,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "sit.idle": {
-          "clipName": "sit.idle",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "sit.ground.idle": {
-          "clipName": "sit.ground.idle",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "sit.toStand": {
-          "clipName": "sit.toStand",
-          "loop": false,
-          "blendSeconds": 0.15,
-          "timeScale": 1
-        },
-        "stand": {
-          "clipName": "stand",
-          "loop": false,
-          "blendSeconds": 0.18,
-          "timeScale": 1
-        },
-        "lay.idle": {
-          "clipName": "lay.idle",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        },
-        "roll.toRun": {
-          "clipName": "roll.toRun",
-          "loop": false,
-          "blendSeconds": 0.08,
-          "timeScale": 1
-        },
-        "fight.enter": {
-          "clipName": "fight.enter",
-          "loop": false,
-          "blendSeconds": 0.12,
-          "timeScale": 1
-        },
-        "emote.salute": {
-          "clipName": "emote.salute",
-          "loop": false,
-          "blendSeconds": 0.15,
-          "timeScale": 1
-        },
-        "emote.angry": {
-          "clipName": "emote.angry",
-          "loop": false,
-          "blendSeconds": 0.15,
-          "timeScale": 1
-        },
-        "dance.rumba": {
-          "clipName": "dance.rumba",
-          "loop": true,
-          "blendSeconds": 0.2,
-          "timeScale": 1
-        }
-      },
-      "limitations": [
-        "No authored backward, strafe, turn-in-place, or straddle/riding animation.",
-        "Animations supply visual poses; flight, swimming, combat and riding need separate gameplay and physics.",
-        "One-shot poses do not automatically move the collider, align a seat, or restore idle.",
-        "Source GLB already contains metric conversion. Preserve internal transforms and apply only the specified visual root correction.",
-        "Use parsed Three AnimationClip durations; first keys begin at about 1/30 second."
-      ]
-    },
-    {
-      "id": "quadruped.animal.large-static",
-      "displayName": "Single large quadruped diagnostic specimen",
-      "uri": "./assets/subjects/70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b.glb",
-      "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
-      "byteLength": 27616,
-      "sourcePath": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
-      "usage": "diagnostic",
-      "recommendedFor": [
-        "static asset loading diagnostic"
-      ],
-      "recommendedBody": null,
-      "locomotionBindingIds": [],
-      "selectedNodeIndices": [
-        2,
-        7,
-        12,
-        14,
-        15,
-        17
-      ],
-      "rootTransform": {
-        "positionMetersXYZ": [
-          -1.1497997045516968,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          0,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {},
-      "limitations": [
-        "Static six-mesh diagnostic animal; no skeleton or authored animation.",
-        "The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal.",
-        "Not a fox or nine-tailed fox reference; do not recommend it for matching those characters.",
-        "A character controller can translate this object but cannot supply leg motion."
-      ]
-    },
-    {
-      "id": "humanoid.source-101",
-      "displayName": "原版人物 / 101 骨 / 48 动作",
-      "path": "humanoid/source/gasp-research/climb-2m5.experimental.glb",
-      "uri": "./assets/subjects/c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1.glb",
-      "sha256": "c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1",
-      "byteLength": 996756,
-      "sourcePath": "assets/three-creator/training/humanoid/source/gasp-research/climb-2m5.experimental.glb",
-      "usage": "reusable",
-      "rootTransform": {
-        "positionMetersXYZ": [
-          0,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          0,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {},
       "limitations": [],
       "provenance": {
         "repository": "vehicle-training-ground",
@@ -917,10 +653,11 @@
         }
       ],
       "recommendedBody": {
-        "heightMeters": 1.68,
-        "radiusMeters": 0.28
+        "heightMeters": 1.8,
+        "radiusMeters": 0.35
       },
       "locomotionBindingIds": [
+        "ground.standard",
         "training.humanoid"
       ],
       "runtimeActions": [
@@ -1214,7 +951,11 @@
         }
       ],
       "boneCount": 101,
-      "runtimeClipCount": 48
+      "runtimeClipCount": 48,
+      "recommendedFor": [
+        "human protagonist",
+        "full humanoid actions"
+      ]
     },
     {
       "id": "training.rover",

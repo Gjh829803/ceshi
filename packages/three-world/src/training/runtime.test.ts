@@ -8,11 +8,83 @@ import {Simulation} from './simulation';
 import type {MapDefinition} from './environment/types';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
+import {DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints} from './input';
+import {ACTION_TUNING} from './humanoid/action-schema';
 import type {TrainingControl} from './control-tuning';
 const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]},{id:'wall',position:[0,2,10],size:[30,4,1]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'car',name:'Car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],playerSpawn:[0,.03,0]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it('uses a fresh sprint+crouch edge for slide and remaps movement, HUD and action admission together',()=>{
+  const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setTrainingMode(()=>false);keyboard.enabled=true;
+  keyboard.keyDown('KeyC');keyboard.keyDown('ShiftLeft');expect(keyboard.sample().training?.humanoid).toEqual({toggleCrouch:true});
+  expect(keyboard.sample().training?.humanoid).toEqual({});keyboard.keyUp('KeyC');keyboard.keyDown('KeyC');expect(keyboard.sample().training?.humanoid).toEqual({slide:true});
+  keyboard.keyDown('KeyC',true);expect(keyboard.sample().training?.humanoid).toEqual({});keyboard.clear();
+  keyboard.keyDown('ControlLeft');expect(keyboard.sample().training).toMatchObject({slow:false,humanoid:{toggleCrouch:true}});
+  keyboard.setKeyBindings({forward:['KeyI'],crouch:['KeyB']});expect(keyboard.sample().training?.humanoid).toEqual({});
+  keyboard.keyDown('KeyW');keyboard.keyDown('KeyC');expect(keyboard.sample().training?.forward).toBe(0);
+  keyboard.keyDown('KeyI');keyboard.keyDown('ShiftRight');keyboard.keyDown('KeyB');expect(keyboard.sample().training).toMatchObject({forward:1,boost:true,humanoid:{slide:true}});
+  expect(controlHints(keyboard.getKeyBindings())).toContainEqual(['B','蹲伏 / 站立；攀爬时松手']);
+  expect(()=>createKeyBindings({crouch:['KeyW']})).toThrow('KEY_BINDING_CONFLICT');expect(()=>createKeyBindings({roll:['Escape']})).toThrow('KEY_BINDINGS_INVALID');
+  expect(DEFAULT_KEY_BINDINGS.roll).toEqual(['KeyQ']);
+ });
+ it('probes and prepares near-table starts with the same humanoid capsule used for movement',async()=>{
+  const world=await fixture();try{const runtime=world.training!;
+   runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'table',position:[0,.45,.835],size:[2,.9,1]}]});
+   const start={positionWorldMetersXYZ:[0,.02,0] as const,facingYawRadians:Math.PI};
+   const before=world.getEntityState('player').positionWorldMetersXYZ;
+   expect(runtime.probeEpisodeStart(start).isValid).toBe(true);expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(before);
+   expect(()=>runtime.prepareEpisodeStart(start)).not.toThrow();world.step({},30);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(0,2);
+   expect(runtime.probeEpisodeStart({...start,positionWorldMetersXYZ:[0,.02,.1]}).isValid).toBe(false);
+  }finally{world.dispose();}
+ });
+ it('keeps a physical slide low under a ceiling until continued movement clears the exit',async()=>{
+  const world=await fixture();try{const runtime=world.training!;
+   runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'low-roof',position:[0,1.35,5.5],size:[4,.3,5]}]});
+   runtime.simulation.setHumanoidAssets(new Set(['slide-start','slide-loop','slide-exit']),[]);world.step({},30);world.step({training:{...emptyInput(),forward:1,boost:true}},30);
+   const start=await world.execute({type:'training.action',request:{requestId:'tunnel-slide',action:'slide'}});if(start.status!=='accepted')throw new Error('Slide was not accepted');
+   world.step({},180);expect(world.operations.get(start.operationId).status).toBe('running');expect(runtime.simulation.humanoid!.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);
+   const stopped=world.getEntityState('player').positionWorldMetersXYZ[2];world.step({},30);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(stopped);
+   world.step({training:{...emptyInput(),forward:1}},420);expect(world.operations.get(start.operationId).status).toBe('succeeded');expect(runtime.simulation.humanoid!.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(8.25);
+  }finally{world.dispose();}
+ });
+ it('rejects mounted skills immediately and shares rejection conditions with the capability query',async()=>{
+  const world=await fixture();try{const runtime=world.training!;runtime.simulation.setHumanoidAssets(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);
+   expect(runtime.characterCapabilities().find(c=>c.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW',parameters:{minimumSpeedMetersPerSecond:ACTION_TUNING.slideMinimumSpeedMetersPerSecond}});
+   expect(runtime.approach('car-1')).toBe(true);expect(runtime.enter('car-1')).toBe(true);
+   const request={requestId:'mounted-roll',action:'roll' as const};const result=await world.execute({type:'training.action',request});
+   expect(result).toMatchObject({status:'rejected',error:{code:'MOUNTED'}});expect(runtime.characterCapabilities().find(c=>c.id==='roll')).toMatchObject({eligible:false,reason:'MOUNTED'});
+   world.step({},180);expect(world.snapshot().training?.character.activeAction).toBeNull();
+  }finally{world.dispose();}
+ });
+ it('returns authored approach anchors and exactly the eligibility used by target execution',async()=>{
+  const world=await fixture();try{const runtime=world.training!;
+   runtime.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',position:[5,.5,5],approach:[5,.03,4],yaw:.4}]});
+   runtime.simulation.setHumanoidAssets(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   const before=world.getEntityState('player').positionWorldMetersXYZ,target=runtime.snapshot().interactionTargets[0]!;
+   expect(target).toMatchObject({id:'seat',approachPositionWorldMetersXYZ:[5,.03,4],facingYawRadians:.4,eligible:false,reason:'OUT_OF_REACH'});
+   const result=await world.execute({type:'training.action',request:{requestId:'distant-seat',action:'sit',targetId:'seat'}});
+   expect(result).toMatchObject({status:'rejected',error:{code:target.reason}});expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(before);
+   (target.approachPositionWorldMetersXYZ as unknown as number[])[0]=100;expect(runtime.snapshot().interactionTargets[0]!.approachPositionWorldMetersXYZ[0]).toBe(5);
+  }finally{world.dispose();}
+ });
+ it('uses E to enter a collider-backed climb, Space to attempt the top and crouch to release',async()=>{
+  const world=await fixture();try{const runtime=world.training!;
+   runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'climb-wall',position:[0,1.5,1],size:[3,3,1]}],climbSurfaces:[{id:'face',colliderId:'climb-wall',kind:'wall',center:[0,1.5,.5],normal:[0,0,-1],width:3,minY:0,maxY:3}]});
+   runtime.simulation.setHumanoidAssets(new Set(['hang-enter','hang-exit','hang-idle','hang-left','hang-right','climb-up','climb-down']),[]);world.step({},30);
+   expect(runtime.characterCapabilities().find(c=>c.id==='climb')).toMatchObject({eligible:true});
+   world.step({training:{...emptyInput(),humanoid:{interact:true}}},1);expect(runtime.snapshot().surface).toMatchObject({mode:'climbing',surfaceId:'face'});
+   world.step({},180);world.step({training:{...emptyInput(),jump:true}},1);expect(runtime.snapshot().surface.mode).toBe('climbing');
+   world.step({training:{...emptyInput(),humanoid:{toggleCrouch:true}}},1);expect(runtime.snapshot().surface.mode).toBe('none');
+  }finally{world.dispose();}
+ });
+ it('consumes Space as standing up from crouch before allowing another jump',async()=>{
+  const world=await fixture();try{world.step({},30);world.step({training:{...emptyInput(),humanoid:{toggleCrouch:true}}},1);expect(world.snapshot().training?.character.stance).toBe('crouch');
+   world.step({training:{...emptyInput(),jump:true}},1);expect(world.snapshot().training?.character.stance).toBe('stand');expect(world.training!.simulation.humanoid!.vertical).toBe(0);
+   world.step({training:{...emptyInput(),jump:true}},1);expect(world.training!.simulation.humanoid!.vertical).toBeGreaterThan(0);
+  }finally{world.dispose();}
+ });
+
  it.each(['plane','sub','space','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
   const speeds=[];
   for(const stronger of [false,true]){
@@ -157,6 +229,22 @@ describe('SDK training runtime',()=>{
    expect(port.capabilities().training?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
    expect(world.snapshot().training?.mountedInstanceId).toBe('car-1');expect(world.isRunning).toBe(false);expect(()=>world.step({},1)).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
    const frame=port.advance({training:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.training?.cameraMode).toBe(2);expect(canvas.width).toBe(640);port.release();
+   world.training!.simulation.setHumanoidAssets(new Set(['roll']),[]);
+   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});port.advance({},30);
+   const ticks=world.simulationTick;
+   expect(await world.execute({type:'training.input',input:emptyInput()})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
+   expect(await world.execute({type:'actor.stop',entityId:'player'})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
+   expect(await port.execute({type:'training.profile',profile:{character:{speed:99}}} as never)).toMatchObject({status:'rejected',error:{code:'EPISODE_COMMAND_UNSUPPORTED'}});
+   const action=await port.execute({type:'training.action',request:{requestId:'episode-roll',action:'roll'}});if(action.status!=='accepted')throw new Error('Episode action rejected');
+   expect(world.simulationTick).toBe(ticks);expect(port.operation(action.operationId).status).toBe('running');
+   const stepPhysics=vi.spyOn(world.training!.environment,'stepPhysics');port.advance({},120);expect(stepPhysics).toHaveBeenCalledTimes(120);expect(port.operation(action.operationId).status).toBe('succeeded');
+   const cancelled=await port.execute({type:'training.action',request:{requestId:'episode-cancel',action:'roll'}});if(cancelled.status!=='accepted')throw new Error('Episode action rejected');
+   await port.execute({type:'training.input',input:{...emptyInput(),humanoid:{cancel:true}}});port.advance({},1);expect(port.operation(cancelled.operationId).status).toBe('cancelled');
+   await port.execute({type:'training.input',input:null});port.advance({},30);
+   const resetAction=await port.execute({type:'training.action',request:{requestId:'episode-reset',action:'roll'}});if(resetAction.status!=='accepted')throw new Error('Episode action rejected');
+   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});expect(port.operation(resetAction.operationId).status).toBe('cancelled');
+   port.advance({},30);const releaseAction=await port.execute({type:'training.action',request:{requestId:'episode-release',action:'roll'}});if(releaseAction.status!=='accepted')throw new Error('Episode action rejected');
+   port.release();expect(world.operations.get(releaseAction.operationId).status).toBe('cancelled');expect(()=>port.execute({type:'training.input',input:null})).toThrow('EPISODE_SEGMENT_NOT_PREPARED');
   }finally{world.dispose();vi.unstubAllGlobals();}
  });
  it('tracks a physical character action through terminal operation status and clears it on reset',async()=>{

@@ -7,7 +7,7 @@ import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const assets = catalog.assets as unknown as readonly (AssetDefinition & { sourcePath: string })[];
-const humanoid = assets.find((asset) => asset.id === 'humanoid.g-bot')!;
+const humanoid = assets.find((asset) => asset.id === 'humanoid.source-101')!;
 const animal = assets.find((asset) => asset.id === 'quadruped.animal.large-static')!;
 const instances: AssetInstance[] = [];
 const readBytes = (definition: typeof humanoid) => () => readFile(resolve(definition.sourcePath));
@@ -44,25 +44,19 @@ describe('Three asset loader against original project GLBs', () => {
     instance.update(.5);expect(idle.getEffectiveWeight()).toBe(1);
   });
 
-  it('binds all 25 original clips and drives real bones in metric coordinates', async () => {
-    const instance = await load();
+  it('binds source humanoid clips to its metric skeleton without root drift', async () => {
+    const instance=await load();
     expect(meshes(instance)).toHaveLength(2);
-    expect(instance.clips.map((clip) => clip.name).sort()).toEqual(Object.keys(humanoid.actions).sort());
-    expect(pose(instance).getSize(new Vector3()).y).toBeCloseTo(1.809, 2);
-    expect(instance.object.children[0]!.rotation.y).toBe(Math.PI);
-    const sourceArmature = instance.object.getObjectByName('Armature')!;
-    expect(sourceArmature.scale.x).toBeCloseTo(0.01);
-    instance.play('idle');
-    instance.update(0.5);
-    const idle = pose(instance);
-    instance.play('jump');
-    instance.update(0.5);
-    const jump = pose(instance);
-    expect(jump.min.y - idle.min.y).toBeGreaterThan(0.2);
-    expect(jump.max.y).toBeLessThan(idle.max.y);
-    // These original clips actually contain a key starting at 1/30 s.
-    expect(instance.clips.find((clip) => clip.name === 'walk')!.duration).toBe(1);
-    expect(instance.object.position.toArray()).toEqual([0, 0, 0]);
+    expect(instance.clips.map(clip=>clip.name).sort()).toEqual(Object.keys(humanoid.actions).sort());
+    const mesh=meshes(instance)[0] as SkinnedMesh;
+    expect(mesh.skeleton.bones).toHaveLength(101);
+    instance.play('idle');instance.update(0);
+    const idle=pose(instance);expect(idle.min.y).toBeGreaterThan(-.12);expect(idle.max.y).toBeGreaterThan(1.6);
+    const calf=instance.object.getObjectByName('calf_l')!,before=calf.quaternion.clone();
+    instance.play('jump');instance.update(.3);
+    expect(calf.quaternion.angleTo(before)).toBeGreaterThan(.01);
+    expect(instance.object.getObjectByName('root')!.position.length()).toBeLessThan(1e-6);
+    expect(instance.object.position.toArray()).toEqual([0,0,0]);
   });
 
   it('keeps skeletons, animation time, materials and clips independent with shared geometry', async () => {
@@ -82,10 +76,11 @@ describe('Three asset loader against original project GLBs', () => {
     const bColor = (b.material as MeshStandardMaterial).color.getHex();
     (a.material as MeshStandardMaterial).color.setHex(0xff0055);
     expect((b.material as MeshStandardMaterial).color.getHex()).toBe(bColor);
+    second.play('idle');second.update(0);const still=pose(second).clone();
     first.play('jump'); first.update(0.6);
     expect(second.mixer.time).toBe(0);
-    expect(pose(second).min.y).toBeCloseTo(-0.00035, 4);
-    expect(pose(first).min.y).toBeGreaterThan(0.2);
+    expect(pose(second).min.distanceTo(still.min)).toBeLessThan(1e-6);
+    expect(pose(first).max.distanceTo(still.max)).toBeGreaterThan(.01);
     const geometryDisposed = vi.fn();
     a.geometry.addEventListener('dispose', geometryDisposed);
     first.dispose(); first.dispose();
@@ -105,19 +100,19 @@ describe('Three asset loader against original project GLBs', () => {
     const walk = instance.mixer.existingAction(instance.clips.find((clip) => clip.name === 'walk')!)!;
     expect(walk.loop).toBe(LoopRepeat);
     instance.play('walk'); instance.update(0.2);
-    expect(walk.time).toBeCloseTo(0.5);
+    expect(walk.time).toBeCloseTo(.5*humanoid.actions.walk!.timeScale);
     expect(instance.currentActionId).toBe('walk');
     expect(instance.currentClipName).toBe('walk');
-    instance.play('run'); instance.update(0.06);
+    instance.play('run'); instance.update(humanoid.actions.run!.blendSeconds/2);
     const run = instance.mixer.existingAction(instance.clips.find((clip) => clip.name === 'run')!)!;
     expect(run.getEffectiveWeight()).toBeCloseTo(0.5);
     expect(walk.getEffectiveWeight()).toBeCloseTo(0.5);
-    instance.play('emote.salute'); instance.update(10);
-    const salute = instance.mixer.existingAction(instance.clips.find((clip) => clip.name === 'emote.salute')!)!;
-    expect(salute.loop).toBe(LoopOnce);
-    expect(salute.clampWhenFinished).toBe(true);
-    expect(salute.paused).toBe(true);
-    expect(salute.time).toBeCloseTo(salute.getClip().duration);
+    instance.play('jump'); instance.update(10);
+    const jumpAction = instance.mixer.existingAction(instance.clips.find((clip) => clip.name === 'jump')!)!;
+    expect(jumpAction.loop).toBe(LoopOnce);
+    expect(jumpAction.clampWhenFinished).toBe(true);
+    expect(jumpAction.paused).toBe(true);
+    expect(jumpAction.time).toBeCloseTo(jumpAction.getClip().duration);
   });
 
   it('honors an explicit playback change while the same clip is already running', async () => {
@@ -125,15 +120,15 @@ describe('Three asset loader against original project GLBs', () => {
     instance.play('walk', { playback: 'once' });
     const action = instance.mixer.existingAction(instance.clips.find(clip => clip.name === 'walk')!)!;
     expect(action.loop).toBe(LoopOnce); expect(instance.timeSeconds).toBe(0);
-    instance.update(2); expect(instance.isActionComplete).toBe(true);
+    instance.update(action.getClip().duration/humanoid.actions.walk!.timeScale+.1); expect(instance.isActionComplete).toBe(true);
     instance.play('walk', { playback: 'loop' }); instance.update(2);
     expect(action.loop).toBe(LoopRepeat); expect(instance.isActionComplete).toBe(false);
   });
 
   it('reports real one-shot completion rather than interpreting a pause as completion', async () => {
     const instance = await load(); expect(instance.isActionComplete).toBe(false);
-    instance.play('emote.salute'); instance.update(.2);
-    const action = instance.mixer.existingAction(instance.clips.find(clip => clip.name === 'emote.salute')!)!;
+    instance.play('jump'); instance.update(.2);
+    const action = instance.mixer.existingAction(instance.clips.find(clip => clip.name === 'jump')!)!;
     action.paused = true; instance.update(1); expect(instance.isActionComplete).toBe(false);
     action.paused = false; instance.update(10); expect(instance.isActionComplete).toBe(true);
     instance.play('idle'); instance.mixer.stopAllAction(); expect(instance.isActionComplete).toBe(false);
@@ -163,14 +158,14 @@ describe('Three asset loader against original project GLBs', () => {
     await expect(loadAsset(humanoid, { fetchBytes: async () => { throw new Error('fetch failure'); } }))
       .rejects.toThrow('fetch failure');
     const instance = await load();
-    expect(instance.clips).toHaveLength(25);
+    expect(instance.clips).toHaveLength(5);
   });
 
   it('fails missing clips, unknown/duplicate selections and invalid time without breaking live assets', async () => {
     const live = await load();
     await expect(loadAsset({ ...humanoid, actions: { bad: { clipName: 'absent', loop: true, blendSeconds: 0, timeScale: 1 } } }))
       .rejects.toThrow('ASSET_CLIP_NOT_FOUND');
-    await expect(loadAsset({ ...humanoid, selectedNodeIndices: [65] }))
+    await expect(loadAsset({ ...humanoid, selectedNodeIndices: [103] }))
       .rejects.toThrow('ASSET_SKINNED_NODE_SELECTION_UNSUPPORTED');
     await expect(loadAsset({ ...animal, selectedNodeIndices: [999] }, { fetchBytes: readBytes(animal) }))
       .rejects.toThrow('ASSET_NODE_NOT_FOUND');
@@ -179,7 +174,8 @@ describe('Three asset loader against original project GLBs', () => {
     expect(() => live.update(-1)).toThrow('ASSET_DELTA_INVALID');
     expect(() => live.update(NaN)).toThrow('ASSET_DELTA_INVALID');
     live.play('run'); live.update(0.5);
-    expect(pose(live).min.y).toBeGreaterThan(0.1);
+    expect(live.object.getObjectByName('root')!.position.length()).toBeLessThan(1e-6);
+    expect(Number.isFinite(pose(live).min.y)).toBe(true);
   });
 
   it('resolves browser asset URIs relative to the manifest base URI', async () => {

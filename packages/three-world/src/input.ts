@@ -1,6 +1,6 @@
 import type { WorldInput } from './engine-contracts.js';
 import type { CameraRigInput } from './camera.js';
-import { actionForKey, readControls, HUMANOID_BINDINGS } from './training/input.js';
+import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './training/input.js';
 
 const UI_CONTROL_SELECTOR = 'input,textarea,select,button,a[href],[role="textbox"],[role="button"]';
 function isElement(value: EventTarget): value is Element {
@@ -16,13 +16,16 @@ function includesRoot(event: Event, root: HTMLElement | undefined): boolean {
   return !!root && event.composedPath().some(value => value === root || (isElement(value) && root.contains(value)));
 }
 
-export const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space', 'KeyE']);
+export const MOVEMENT_KEYS = new Set(Object.values(DEFAULT_KEY_BINDINGS).flat());
 export class WorldKeyboard {
   private trainingMounted:(()=>boolean)|undefined;
-  private readonly trainingPressed=new Set<string>();
-  private readonly trainingKeys=new Set(['KeyF','KeyX','ControlLeft','ControlRight','KeyQ',...Object.values(HUMANOID_BINDINGS).map(b=>b.code)]);
+  private readonly trainingPressed:KeyAction[]=[];
+  private bindings:KeyBindings=DEFAULT_KEY_BINDINGS;
+  getKeyBindings():KeyBindings{return createKeyBindings({},this.bindings);}
+  setKeyBindings(overrides:Partial<KeyBindings>):void{const next=createKeyBindings(overrides,this.bindings);this.clear();this.bindings=next;}
+  private bound(action:ControlAction,code:string):boolean{return this.bindings[action].includes(code);}
   setTrainingMode(mounted:()=>boolean):void{this.trainingMounted=mounted;}
-  private admittedKey(code:string):boolean{return MOVEMENT_KEYS.has(code)||!!this.trainingMounted&&this.trainingKeys.has(code);}
+  private admittedKey(code:string):boolean{return Object.values(this.bindings).some(codes=>codes.includes(code));}
   readonly held = new Set<string>();
   private jumpQueued = false;
   private interactQueued = false;
@@ -30,14 +33,13 @@ export class WorldKeyboard {
   private admitEvent: ((event: KeyboardEvent) => boolean) | undefined;
   enabled = false;
   readonly transcript: { type: 'keydown' | 'keyup' | 'blur'; code: string; repeat: boolean; simulationTick: number }[] = [];
-  constructor(private readonly getTick: () => number, private readonly reset: () => void) {}
+  constructor(private readonly getTick: () => number, _reset: () => void) {}
   attach(target: Window): void {
     this.detach(); this.abort = new AbortController();
     const options = { signal: this.abort.signal };
     target.addEventListener('keydown', event => {
       if (!this.enabled || hasUIControl(event) || (this.admitEvent && !this.admitEvent(event))) return;
-      if (MOVEMENT_KEYS.has(event.code) || event.code === 'KeyR') event.preventDefault();
-      if (event.code === 'KeyR' && !event.repeat) { this.reset(); return; }
+      if (this.admittedKey(event.code)) event.preventDefault();
       this.keyDown(event.code, event.repeat);
     }, options);
     target.addEventListener('keyup', event => this.keyUp(event.code), options);
@@ -52,9 +54,9 @@ export class WorldKeyboard {
     this.record('keydown', code, repeat);
     if (repeat && !this.held.has(code)) return;
     if (!this.held.has(code)) {
-      if(this.trainingMounted)this.trainingPressed.add(code);
-      if (code === 'Space') this.jumpQueued = true;
-      if (code === 'KeyE') this.interactQueued = true;
+      if(this.trainingMounted){const action=actionForKey(code,this.trainingMounted(),this.held,this.bindings);if(action)this.trainingPressed.push(action);}
+      if (this.bound('jump',code)) this.jumpQueued = true;
+      if (this.bound('interact',code)) this.interactQueued = true;
     }
     this.held.add(code);
   }
@@ -65,26 +67,26 @@ export class WorldKeyboard {
   sample(): WorldInput {
     if(this.trainingMounted){
       const mounted=this.trainingMounted(),humanoid:import('./training/simulation').HumanoidInput={};let interact=false;
-      for(const code of this.trainingPressed){const action=actionForKey(code,mounted);if(action?.kind==='vehicle')interact=true;else if(action?.kind==='humanoid')Object.assign(humanoid,action.input);}
-      const training=readControls(this.held,mounted,this.jumpQueued,humanoid);
-      const result:WorldInput={training,interactPressed:interact,cameraYawRatio:mounted?0:Number(this.held.has('ArrowLeft'))-Number(this.held.has('ArrowRight')),cameraPitchRatio:mounted?0:Number(this.held.has('ArrowDown'))-Number(this.held.has('ArrowUp'))};
-      this.trainingPressed.clear();this.jumpQueued=false;this.interactQueued=false;return result;
+      for(const action of this.trainingPressed){if(action.kind==='vehicle')interact=true;else if(!mounted)Object.assign(humanoid,action.input);}
+      const training=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings);
+      const result:WorldInput={training,interactPressed:interact,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
+      this.trainingPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
     }
-    const has = (...codes: string[]) => codes.some(code => this.held.has(code));
+    const has = (action:ControlAction) => this.bindings[action].some(code => this.held.has(code));
     const result: WorldInput = {
-      moveXRatio: Number(has('KeyD')) - Number(has('KeyA')),
-      moveZRatio: Number(has('KeyS')) - Number(has('KeyW')),
-      cameraYawRatio:Number(has('ArrowLeft'))-Number(has('ArrowRight')),
-      cameraPitchRatio:Number(has('ArrowDown'))-Number(has('ArrowUp')),
-      run: has('ShiftLeft', 'ShiftRight'),
-      jump: this.jumpQueued || has('Space'),
+      moveXRatio: Number(has('right')) - Number(has('left')),
+      moveZRatio: Number(has('backward')) - Number(has('forward')),
+      cameraYawRatio:Number(has('cameraLeft'))-Number(has('cameraRight')),
+      cameraPitchRatio:Number(has('cameraDown'))-Number(has('cameraUp')),
+      run: has('sprint'),
+      jump: this.jumpQueued || has('jump'),
       jumpPressed: this.jumpQueued,
-      interact: this.interactQueued || has('KeyE'),
+      interact: this.interactQueued || has('interact'),
       interactPressed: this.interactQueued,
     };
     this.jumpQueued = false; this.interactQueued = false; return result;
   }
-  clear(): void { this.held.clear(); this.trainingPressed.clear();this.jumpQueued = false; this.interactQueued = false; }
+  clear(): void { this.held.clear(); this.trainingPressed.length=0;this.jumpQueued = false; this.interactQueued = false; }
   detach(): void { this.abort?.abort(); this.abort = undefined; this.clear(); }
 }
 

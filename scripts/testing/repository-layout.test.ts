@@ -34,7 +34,7 @@ describe("Three repository layout", () => {
     const entries = await readdir(path.join(REPOSITORY_ROOT, "scripts"), { withFileTypes: true });
     expect(entries.filter((entry) => entry.isFile() && entry.name !== "README.md").map((entry) => entry.name)).toEqual([]);
     for (const currentPath of [
-      "scripts/three-creator", "scripts/three-episode", "scripts/cloud", "scripts/production", "scripts/testing",
+      "scripts/three-creator", "scripts/three-episode", "scripts/cloud", "scripts/testing",
       "docs/three-sdk-architecture.md", "docs/three-sdk-data-production.md", "packages/three-world/README.md",
       "deploy/creator-evaluation/gateway.mjs",
     ]) {
@@ -42,7 +42,7 @@ describe("Three repository layout", () => {
     }
   });
 
-  it("has no retired workspace packages or dangling legacy dependencies", async () => {
+  it("resolves all workspace dependencies", async () => {
     expect(await scanThreeWorkspace(REPOSITORY_ROOT)).toEqual([]);
   });
 });

@@ -1,8 +1,7 @@
 # Three Creator cloud experiment
 
-This is a new experimental lane. The Native V3 SDK, locks, jobs, gallery results
-and receipt rules stay unchanged. A Three delivery is technical evidence ready
-for independent review; it is never relabeled Native or semantic success.
+Run a frozen selection of Three authoring cases through cloud Codex. Each
+delivery contains technical evidence for independent visual and playable review.
 
 ## Identity and execution
 
@@ -10,26 +9,22 @@ for independent review; it is never relabeled Native or semantic success.
   and delivery fields. Both use GPT-6 Astra / xhigh and the same pinned Codex
   0.153.3 Linux binary, browser capsule, original reference, creative request,
   asset catalog, deadline and review goals.
-- The original five-case manifest is retained as provenance. The default
-  `--suite sdk-only` produces exactly five SDK task identities, with experiment
-  revision `three-sdk-v2`. This revision labels the experiment; the implemented
-  runtime/delivery profile remains `three-sdk`. The old Native policy suffix is
-  replaced with `three-eval-instructions.md`; the two inherited block/centered-rear
-  phrases are explicitly normalized to free geometry/reference camera. Original
-  policy bytes remain in the Host source manifest and their hash in case-input.
-  Both paired profiles receive identical cleaned creative input bytes.
-- SDK-only defaults to all five cases; `--case-id <source-case-id>` or
-  `--case-limit N` narrows execution while retaining the five-case plan.
-  `--suite paired` explicitly restores the previous raw/SDK experiment: it
-  plans ten tasks and defaults to the forest pair. `--profile` can narrow a
-  suite but cannot admit raw into SDK-only. Existing run plans retain their
-  suite/revision; changing either requires a deliberate new run ID.
-- SDK-only account and local concurrency default to five; the paired defaults
-  remain four. Both flags accept one through five, pod concurrency stays one.
-  These are requested limits, not proof of five actual simultaneous processes;
+- A selection manifest contains 1–100 unique cases. The default `--suite sdk-only`
+  creates one `three-sdk` task per case. Its default experiment revision is
+  `three-sdk-v2`; use an explicit revision to identify a particular evaluation.
+  Every task receives the reference image, creative request and shared
+  `three-eval-instructions.md`. Acceptance policy stays in the Host plan.
+- SDK-only executes the entire manifest by default. `--case-id <source-case-id>`
+  or `--case-limit N` selects a subset. `--suite paired` creates raw/SDK tasks
+  and defaults to the forest pair. `--profile` narrows the selected suite.
+  Saved task selections are reused on resume. Changing selection, suite or
+  revision requires a new run ID.
+- SDK-only account and local concurrency default to five; paired defaults to
+  four. Local concurrency accepts 1–64 and account concurrency accepts 1–20;
+  pod concurrency stays one. These are requested limits, not measured capacity;
   account caps, scheduler resources and observed startup are reported separately.
-  A shared local admission mutex caps all Three in-flight requests at five
-  across multiple coordinators. Mutex
+  A shared local admission mutex checks all Three in-flight requests against
+  the configured local limit across coordinators. Mutex
   contention is retried briefly; unknown requests and crashed locks are never
   guessed complete or silently removed.
 - A durable request intent is written before the one POST. Unknown outcomes
@@ -53,8 +48,8 @@ configuration. Both profiles are prebuilt using
 `scripts/three-creator/prebuild.ts`; the tools verify each manifest pin and
 actual bundle bytes before loading the fixed runtime.
 
-Create a freeze input JSON containing explicit status (`draft` until Root's T5
-approval), source commit, absolute cloud paths, pinned capsule/source/manifest
+Create a freeze input JSON containing explicit status (`draft` until the installed
+doctor passes), source commit, absolute cloud paths, pinned capsule/source/manifest
 hashes, browser environment, `hostCacheRoot` and `prebuiltRuntimes`.
 `hostCacheRoot` must be the experiment's `host-cache` sibling of `toolkit`, for
 example `/fsx/pipeline/worldkit-three-creator-experiments/RUN/host-cache`.
@@ -82,7 +77,7 @@ installation or cloud capabilities. Use a fresh task-owned FSx prefix under
 Codex/browser binaries without overwriting them. Stage the four launcher modules
 alongside `runtime-lock.json`. Stage the doctor separately when needed.
 
-The launcher loads only `worldkit_three_creator`, with exactly 15 declared tools
+The launcher loads only `worldkit_three_creator`, with exactly 16 declared tools
 and per-tool approval. Global `never` plus `workspace-write` remains unchanged.
 The MCP child receives no authentication variables. The Codex process receives
 only the platform-provided CODEX_HOME in addition to the task environment; no
@@ -90,11 +85,11 @@ account home is copied, inspected or modified by these scripts.
 
 This release pins Creator tool version `0.2.0-experimental`; SDK receipts must
 carry the same `sdkVersion` and `WorldObservation-v2`. Raw retains the minimum
-`WorldObservation-v1` contract and null SDK version. The two new MCP tools,
+`WorldObservation-v1` contract and null SDK version. The MCP tools
 `world_execute_command` and `world_get_operation`, expose structured SDK control
 and its ongoing operation status. A Creator operation and a world operation are
-separate IDs. Old version-0.1 doctor artifacts remain historical evidence and
-cannot satisfy this new delivery contract.
+separate IDs. `creator_materialize_runtime` exports project-owned SDK source for
+customization; delivery identifies the actual source and runtime bytes.
 
 Each task uses `hostCacheRoot/<sha256(absolute workspace)>/browser-registry` as
 the effective `PLAYWRIGHT_BROWSERS_PATH`. It is outside the author workspace.
@@ -111,16 +106,16 @@ validation skip flag is used.
 Run the actual installed no-model doctor with the capsule's Node:
 
 ```sh
-node three-runtime-doctor.mjs --runtime-lock /ABS/runtime-lock.json --output-root /ABS/new-doctor --profile three-sdk --duration-seconds 180
+node three-runtime-doctor.mjs --runtime-lock /ABS/runtime-lock.json --output-root /ABS/new-doctor --profile three-sdk --duration-seconds 4
 ```
 
-It requires the selected MCP tool list, real previews and image bytes, actual browser
-keyboard/video, compiler runtime pins and episode-only world reuse. It accepts
-a draft lock to allow capability verification before release. Four seconds is
-the default smoke duration; it does not imply a 180-second delivery or semantic
-acceptance. `--duration-seconds 180` additionally tests actual three views,
-same-session world_submit, final JSON equality and the archive byte hash, with a
-small alternating-input fixture. Omitting `--profile` checks both profiles.
+It verifies the MCP tool list, compiler runtime pins, actual browser images,
+keyboard movement, recorded video, world commands and three views. A real
+`world_playtest` truncates a 181-second fixture to 3–15 seconds, defaulting to
+four. The doctor requires `world_submit` to reject this short proof with
+`THREE_SUBMIT_PLAYTEST_REQUIRED`. It accepts a draft lock; omitting `--profile`
+checks both profiles. This infrastructure check does not establish a production
+delivery or case quality.
 The installed toolkit/browser closure must pass both before and after browser
 execution. SDK/browser/toolkit changes require the affected doctor again.
 
@@ -171,19 +166,14 @@ generation is submitted. Foreign job identities are never cancelled.
 Each successful task must preserve the full Codex event stream. The validator
 requires a real final-world preview PNG whose bytes match the MCP image hash;
 an actual world_submit operation followed by its successful operations_get;
-matching engine/profile/lock/fixed-runtime/world/episode identities; complete
+matching engine/profile/lock/world/runtime/episode identities; complete
 receipt equality; and raw transport hashes matching the downloaded result/tar.
-Episode-only edits require a new episode, not an unnecessary new world image.
-Host wall duration, browser input duration, active play duration and actual
-encoded video duration must each reach 180 seconds and match the sealed
-playtest. The video is compared with browser input time, not evidence-transfer
-or encoder recovery time. Actual-canvas capture endpoints use that browser
-clock; stopped-canvas postroll is recorded separately and never counted as
-input or active play. VFR output is allowed and its average frame rate is not
-forced to equal the requested sampling rate. The independent extractor uses
-`ffprobe` to compare actual MP4 duration, frame count and dimensions with the
-MCP-bound metadata. Episode schema v1 remains compatible; v2 can include
-structured commands and explicit lifecycle steps.
+The schema-version-1 delivery must be `ready-for-independent-review`, with
+complete 180-second-or-longer actual wall time, browser input, active play and
+recorded video, plus captured three-view images. Actual video metadata and
+browser capture timing must agree with the receipt. A project-owned runtime
+binds its source and manifest hashes to the delivered runtime. Episode schema
+v2 can include structured commands and explicit lifecycle steps.
 
 Then independently verify and extract without executing author files:
 
@@ -192,10 +182,9 @@ node scripts/cloud/three-eval-verify.mjs --case-root DOWNLOAD --runtime-lock LOC
 ```
 
 The extractor rejects path traversal, links, duplicate paths, special files,
-oversized archives and incomplete manifest/file/video/capture evidence. It
-preserves recorded unreachable targets for independent review. Real replay,
+oversized archives and incomplete manifest/file/video/capture evidence. Real replay,
 reference composition, complete moving subjects and external path goals remain
-separate acceptance gates. Publishing is not performed by these new scripts.
+separate acceptance gates. Run preparation and execution do not publish the site.
 
 Validation: `node --test scripts/cloud/three-eval.test.mjs` plus capsule tests.
 Tests, Linux dependency import doctor, full browser doctor and model execution

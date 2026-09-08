@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Build the Source101 model with ground locomotion bindings.
+
+Run with --check to verify model bytes, provenance and catalog bindings.
+"""
+import argparse
+import copy
+import hashlib
+import json
+import math
+from pathlib import Path
+import struct
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / 'assets/three-creator/training/humanoid/source'
+DEST = ROOT / 'assets/three-creator/humanoid/source-101'
+CLIPS = {'idle': 'idle-loop', 'walk': 'walk-loop', 'run': 'run-loop',
+         'jump': 'jump-stand', 'fall': 'fall-loop'}
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def glb(file):
+    data = file.read_bytes()
+    assert struct.unpack_from('<III', data) == (0x46546C67, 2, len(data))
+    size, kind = struct.unpack_from('<II', data, 12)
+    assert kind == 0x4E4F534A
+    document = json.loads(data[20:20 + size])
+    length, kind = struct.unpack_from('<II', data, 20 + size)
+    assert kind == 0x004E4942 and len(document['buffers']) == 1
+    return document, data[28 + size:28 + size + length]
+
+
+def floats(document, binary, index):
+    accessor = document['accessors'][index]
+    assert accessor['componentType'] == 5126 and 'sparse' not in accessor
+    width = {'SCALAR': 1, 'VEC3': 3, 'VEC4': 4}[accessor['type']]
+    view = document['bufferViews'][accessor['bufferView']]
+    assert view.get('byteStride', width * 4) == width * 4
+    start = view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
+    return list(struct.unpack_from('<' + 'f' * accessor['count'] * width, binary, start))
+
+
+def build():
+    source_files = [SOURCE / 'gasp-research/climb-2m5.experimental.glb']
+    document, original = glb(source_files[0])
+    document = copy.deepcopy(document)
+    # The source model and skin stay intact. Only its presentation offset changes.
+    nodes = {node['name']: i for i, node in enumerate(document['nodes'])}
+    assert len(nodes) == len(document['nodes'])
+    document['nodes'][nodes['GASP_DirectFK_Research']]['translation'] = [0, 0, 0]
+    document['nodes'][nodes['root']]['translation'] = [0, 0, 0]
+    document['animations'] = []
+    binary = bytearray(original)
+
+    def append(values, width):
+        while len(binary) % 4:
+            binary.append(0)
+        start = len(binary)
+        binary.extend(struct.pack('<' + 'f' * len(values), *values))
+        view = len(document['bufferViews'])
+        document['bufferViews'].append({'buffer': 0, 'byteOffset': start, 'byteLength': len(values) * 4})
+        accessor = {'bufferView': view, 'componentType': 5126,
+                    'count': len(values) // width, 'type': {1: 'SCALAR', 3: 'VEC3', 4: 'VEC4'}[width]}
+        if width == 1:
+            accessor.update(min=[min(values)], max=[max(values)])
+        index = len(document['accessors'])
+        document['accessors'].append(accessor)
+        return index
+
+    for action, name in CLIPS.items():
+        file = SOURCE / f'gasp-research/{name}.experimental.glb'
+        source_files.append(file)
+        src, data = glb(file)
+        # Do not silently accept incompatible skeletons or bind poses.
+        assert [src['nodes'][i]['name'] for i in src['skins'][0]['joints']] == [
+            document['nodes'][i]['name'] for i in document['skins'][0]['joints']]
+        animation = {'name': action, 'samplers': [], 'channels': []}
+        for channel in src['animations'][0]['channels']:
+            target = channel['target']
+            bone = src['nodes'][target['node']]['name']
+            if bone == 'root' and target['path'] == 'translation':
+                continue  # Rapier owns world translation, including jump height.
+            sampler = src['animations'][0]['samplers'][channel['sampler']]
+            assert sampler.get('interpolation', 'LINEAR') == 'LINEAR'
+            times = floats(src, data, sampler['input'])
+            values = floats(src, data, sampler['output'])
+            width = 4 if target['path'] == 'rotation' else 3
+            assert len(values) == len(times) * width
+            # Same yaw removal as the preserved Training source loader.
+            if bone == 'root' and target['path'] == 'rotation':
+                for i in range(0, len(values), 4):
+                    x, y, z, w = values[i:i + 4]
+                    length = math.hypot(y, w)
+                    if length > 1e-4:
+                        sy, cw = y / length, w / length
+                        x, y, z, w = cw*x-sy*z, cw*y-sy*w, cw*z+sy*x, cw*w+sy*y
+                    norm = math.sqrt(x*x+y*y+z*z+w*w)
+                    values[i:i+4] = [v / norm for v in (x, y, z, w)]
+            # Enter the measured takeoff pose (frame 10) on the physical jump edge.
+            # Other clips retain their full source pose sequence.
+            start = 10 / 30 if action == 'jump' else times[0]
+            first = next(i for i, t in enumerate(times) if t >= start - 1e-6)
+            times = [max(0, t - times[first]) for t in times[first:]]
+            values = values[first * width:]
+            index = len(animation['samplers'])
+            animation['samplers'].append({'input': append(times, 1), 'output': append(values, width), 'interpolation': 'LINEAR'})
+            animation['channels'].append({'sampler': index, 'target': {'node': nodes[bone], 'path': target['path']}})
+        document['animations'].append(animation)
+    document['buffers'] = [{'byteLength': len(binary)}]
+    document['asset']['generator'] = 'WorldKit Source101 ground.standard adapter v1'
+    encoded = json.dumps(document, separators=(',', ':'), ensure_ascii=False).encode()
+    encoded += b' ' * (-len(encoded) % 4)
+    result = (struct.pack('<III', 0x46546C67, 2, 28 + len(encoded) + len(binary))
+              + struct.pack('<II', len(encoded), 0x4E4F534A) + encoded
+              + struct.pack('<II', len(binary), 0x004E4942) + binary)
+    provenance = {'schemaVersion': 1, 'sourceAssetId': 'humanoid.source-101',
+                  'sources': [{'path': str(p.relative_to(ROOT)), 'sha256': digest(p.read_bytes())} for p in source_files],
+                  'actions': CLIPS, 'normalization': 'zero stage/root translation; remove root translation tracks and root yaw; jump starts at source frame 10; catalog rotates +Z to -Z',
+                  'outputSha256': digest(result), 'outputByteLength': len(result)}
+    return bytes(result), (json.dumps(provenance, indent=2) + '\n').encode()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true')
+    args = parser.parse_args()
+    model, provenance = build()
+    catalog_path = ROOT / 'scripts/three-creator/asset-catalog.json'
+    catalog = json.loads(catalog_path.read_bytes())
+    source = next(a for a in catalog['assets'] if a['id'] == 'humanoid.source-101')
+    entry = {**source,
+             'uri': f'./assets/subjects/{digest(model)}.glb', 'sha256': digest(model), 'byteLength': len(model),
+             'sourcePath': str((DEST / 'model.glb').relative_to(ROOT)),
+             'recommendedBody': {'heightMeters': 1.8, 'radiusMeters': .35},
+             'locomotionBindingIds': ['ground.standard', 'training.humanoid'],
+             'rootTransform': {'positionMetersXYZ': [0, 0, 0], 'rotationEulerRadiansXYZ': [0, math.pi, 0], 'scaleXYZ': [1, 1, 1]},
+             'actions': {action: {'clipName': action, 'loop': action != 'jump', 'blendSeconds': .1,
+                                  'timeScale': {'walk': 2.4/2, 'run': 4.8/5}.get(action, 1)} for action in CLIPS}}
+    if args.check:
+        assert (DEST / 'model.glb').read_bytes() == model, 'Model byte mismatch'
+        assert (DEST / 'provenance.json').read_bytes() == provenance, 'Provenance mismatch'
+        assert source == entry, 'Catalog binding mismatch'
+    else:
+        DEST.mkdir(parents=True, exist_ok=True)
+        (DEST / 'model.glb').write_bytes(model)
+        (DEST / 'provenance.json').write_bytes(provenance)
+        catalog['assets'] = [entry if a['id'] == entry['id'] else a for a in catalog['assets']]
+        catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    print(f'Source101 verified: {len(model)} bytes, sha256 {digest(model)}')
+
+
+if __name__ == '__main__':
+    main()

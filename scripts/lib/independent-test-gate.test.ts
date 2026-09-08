@@ -140,7 +140,6 @@ describe("independent test repository census", () => {
         "scripts/lib/gpu-capture-batch.test.mjs",
         "scripts/lib/lwdp-generation-client.test.mjs",
         "scripts/lib/vertex-event-director.test.mjs",
-        "scripts/production/overnight-human/production.test.mjs",
         "scripts/three-episode/batch-integration.test.mjs",
         "scripts/three-episode/batch-resources.test.mjs",
         "scripts/three-episode/batch.test.mjs",

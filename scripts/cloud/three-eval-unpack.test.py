@@ -1,3 +1,4 @@
+import importlib.util
 import hashlib
 import io
 import json
@@ -53,6 +54,25 @@ class ClosedArchiveTests(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertIn('PLATFORM_PRIVATE_PATH_IN_ARTIFACT', error)
             self.assertNotIn('synthetic private marker', error)
+
+
+class WorkspaceRuntimeTests(unittest.TestCase):
+    def test_source_and_byte_identity_are_both_required(self):
+        spec = importlib.util.spec_from_file_location('unpack', Path(__file__).with_name('three-eval-unpack.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        hash_json = lambda value: hashlib.sha256(json.dumps(value, separators=(',', ':')).encode()).hexdigest()
+        source = {'runtime.json': 'a' * 64, 'three-world/src/index.ts': 'b' * 64}
+        actual = {prefix + name: value for prefix in ['source/sdk/', 'playable/sdk/'] for name, value in source.items()}
+        runtime = {name: 'c' * 64 for name in ['bridge.js', 'three.js', 'worldkit-three.js']}
+        actual.update({'playable/runtime/' + name: value for name, value in runtime.items()})
+        manifest = {'profile': 'three-sdk', 'runtimeSourceHash': hash_json(sorted(source.items())), 'runtimeHash': hash_json(runtime)}
+        module.verify_workspace_runtime(manifest, actual)
+        for changed in [{**actual, 'source/sdk/three-world/src/index.ts': 'd' * 64}, {**actual, 'playable/runtime/worldkit-three.js': 'd' * 64}]:
+            with self.assertRaises(AssertionError):
+                module.verify_workspace_runtime(manifest, changed)
+        with self.assertRaises(AssertionError):
+            module.verify_workspace_runtime({**manifest, 'runtimeSourceHash': None}, actual)
 
 
 if __name__ == '__main__':

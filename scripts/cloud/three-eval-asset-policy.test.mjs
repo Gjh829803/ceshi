@@ -22,7 +22,7 @@ async function fixture(t) {
 test('new runs freeze policy and resumes preserve exact persisted policy without reading current config',async()=>{
  const frozen=await freezeRunAssetPolicy({toolkitRoot});
  assert.equal(frozen.assetPolicySha256.length,64);
- assert(!frozen.assetPolicySnapshot.policy.allowedAssetIds.includes('humanoid.g-bot'));
+ assert.equal(frozen.assetPolicySnapshot.policy.defaultHumanoidAssetId,'humanoid.source-101');
  assert.deepEqual(await freezeRunAssetPolicy({toolkitRoot:'/does-not-exist',previousPlan:frozen}),frozen);
  assert.deepEqual(await freezeRunAssetPolicy({toolkitRoot:'/does-not-exist',previousPlan:{schemaVersion:1}}),{});
  await assert.rejects(freezeRunAssetPolicy({toolkitRoot,previousPlan:{...frozen,assetPolicySha256:'b'.repeat(64)}}),/POLICY_HASH/);

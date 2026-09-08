@@ -4,7 +4,8 @@ import type {HumanoidActionContext} from './types';
 import type {ClimbSurface,SurfaceCommands,SurfacePose} from './surface-types';
 import runtime from './action-runtime.json';
 
-const DT=1/60,RADIUS=.28,STAND_HEIGHT=1.68,PRONE_HEIGHT=.66,CLIMB_HEIGHT=1.76;
+export const SURFACE_TUNING=Object.freeze({standingHeightMeters:1.68,proneHeightMeters:.66,climbHeightMeters:1.76,proneSpeedMetersPerSecond:.85,climbVerticalSpeedMetersPerSecond:.72,climbLateralSpeedMetersPerSecond:.42,entryDistanceMinimumMeters:.28,entryDistanceMaximumMeters:.8});
+const DT=1/60,RADIUS=.28,STAND_HEIGHT=SURFACE_TUNING.standingHeightMeters,PRONE_HEIGHT=SURFACE_TUNING.proneHeightMeters,CLIMB_HEIGHT=SURFACE_TUNING.climbHeightMeters;
 const UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1};
 const META=new Map(runtime.clips.map(clip=>[clip.id,clip]));
 const duration=(id:string)=>META.get(id)?.duration??1;
@@ -54,11 +55,6 @@ export class SurfaceActions {
     sim.body.setTranslation(center,true);sim.body.setNextKinematicTranslation(center);
     sim.world.propagateModifiedBodyPositionsToColliders();
   }
-  private has(ids:string[]){
-    const missing=ids.find(id=>!this.availableClips.has(id));
-    if(missing)this.sim.lastResult=`真实动画尚未载入：${missing}`;
-    return !missing;
-  }
   private move(delta:Vector3,gravity:boolean){
     const sim=this.sim;
     if(gravity){sim.vertical=Math.max(-16,sim.vertical-18*DT);delta.y=sim.vertical*DT;}
@@ -92,7 +88,7 @@ export class SurfaceActions {
       const old=sim.facing.clone();sim.facing.set(Math.sin(yaw),0,Math.cos(yaw));
       if(!this.clearProne())sim.facing.copy(old);
     }
-    const delta=input.clone().setY(0).multiplyScalar(.85*DT);
+    const delta=input.clone().setY(0).multiplyScalar(SURFACE_TUNING.proneSpeedMetersPerSecond*DT);
     const hull=this.proneHull();
     if(delta.lengthSq()>0){
       const hit=sim.world.castShape(hull.center,hull.rotation,delta,hull.shape,0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule,undefined,this.proneObstacle);
@@ -100,11 +96,29 @@ export class SurfaceActions {
     }
     return this.move(delta,true);
   }
+  eligibility(action:'prone'|'climb'|'releaseClimb'){
+    const sim=this.sim;
+    const reject=(reason:string,message:string)=>({eligible:false,reason,message});
+    if(sim.isMounted)return reject('MOUNTED','请先离开载具或坐骑');
+    if(action==='releaseClimb')return this.mode==='climbing'?{eligible:true,reason:'READY',message:'可松手'}:reject('NOT_CLIMBING','当前未攀爬');
+    if(sim.skills.active||sim.skills.carrying||sim.skills.seated)return reject('BUSY','请先完成动作、放下物件或起身');
+    if(action==='prone'&&this.mode==='prone')return this.phase!=='loop'?reject('BUSY','姿态过渡中'):!this.clearHeight(1.72)?reject('HEADROOM_BLOCKED','低顶下不能起身'): {eligible:true,reason:'READY',message:'可起身'};
+    if(this.mode!=='none'||sim.traversal||sim.swimming)return reject('INVALID_STATE','请先回到可站立地面');
+    const missing=(action==='prone'?PRONE_CLIPS:CLIMB_CLIPS).find(id=>!this.availableClips.has(id));
+    if(missing)return reject('ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`);
+    if(action==='prone'){
+      if(!sim.grounded)return reject('NOT_GROUNDED','匍匐需要地面支撑');
+      if(!this.clearProne())return reject('BODY_CLEARANCE_BLOCKED','周围空间不足，身体无法趴下');
+    }else{
+      if(sim.stance!=='stand')return reject('STANCE_REQUIRED','请先站立');
+      if(!this.chooseSurface())return reject('NO_CLIMB_SURFACE','靠近并正对绑定碰撞体的攀爬面');
+      if(!this.clearHeight(CLIMB_HEIGHT))return reject('HEADROOM_BLOCKED','攀爬入口头顶空间不足');
+    }
+    return {eligible:true,reason:'READY',message:'可执行'};
+  }
   private startProne(){
     const sim=this.sim;
-    if(!sim.grounded||sim.swimming||sim.traversal){sim.lastResult='匍匐需要稳定地面支撑';return false;}
-    if(!this.has(PRONE_CLIPS))return false;
-    if(!this.clearProne()){sim.lastResult='周围空间不足，身体无法趴下';return false;}
+    const eligibility=this.eligibility('prone');if(!eligibility.eligible){sim.lastResult=eligibility.message;return false;}
     this.mode='prone';this.phase='enter';this.time=0;this.loopTime=0;
     sim.stance='stand';sim.animationEvent=null;sim.completedMotion=null;sim.jumpBuffer=0;
     sim.controller.disableAutostep();sim.lastResult='匍匐：正在趴下';return true;
@@ -147,7 +161,7 @@ export class SurfaceActions {
       const delta=sim.position.clone().sub(center),distance=delta.dot(normal),lateral=delta.dot(tangent);
       const collider=sim.blocks.find(block=>block.id===surface.colliderId)?.collider;
       const margin=surface.kind==='ladder'?.18:.65;
-      if(!collider||normal.lengthSq()<.9||surface.maxY-surface.minY<1.7||surface.width<.65||distance<.28||distance>.8
+      if(!collider||normal.lengthSq()<.9||surface.maxY-surface.minY<1.7||surface.width<.65||distance<SURFACE_TUNING.entryDistanceMinimumMeters||distance>SURFACE_TUNING.entryDistanceMaximumMeters
         ||Math.abs(lateral)>surface.width/2-margin||sim.facing.dot(normal)>-.55||sim.position.y<surface.minY-.05||sim.position.y>surface.maxY-1.4)return null;
       const origin=sim.position.clone().addScaledVector(UP,.95);
       const hit=sim.ray(origin,normal.clone().negate(),.85,undefined);
@@ -157,11 +171,8 @@ export class SurfaceActions {
   }
   private startClimb(){
     const sim=this.sim;
-    if(sim.swimming||sim.traversal||sim.stance!=='stand'){sim.lastResult='当前姿态不能进入攀爬面';return false;}
-    if(!this.has(CLIMB_CLIPS))return false;
-    const match=this.chooseSurface();
-    if(!match){sim.lastResult='靠近并正对标示的岩壁或梯子，再按 B';return false;}
-    if(!this.clearHeight(CLIMB_HEIGHT)){sim.lastResult='攀爬入口头顶空间不足';return false;}
+    const eligibility=this.eligibility('climb');if(!eligibility.eligible){sim.lastResult=eligibility.message;return false;}
+    const match=this.chooseSurface()!;
     this.surface=match.surface;this.normal.copy(match.normal);this.tangent.copy(match.tangent);
     this.target.copy(match.center).addScaledVector(match.normal,.30).addScaledVector(match.tangent,match.surface.kind==='ladder'?0:match.lateral);
     this.target.y=Math.max(sim.position.y,match.surface.minY+.08);
@@ -188,7 +199,8 @@ export class SurfaceActions {
   }
   private stepClimb(input:Vector3,commands:SurfaceCommands,jump:boolean){
     const sim=this.sim,surface=this.surface!;
-    if(jump){this.release();return false;}
+    if(commands.releaseClimb){this.release();return false;}
+    if(jump){if(this.phase==='loop'&&this.tryTop())return true;sim.lastResult='顶部暂不具备可翻上的空间';}
     if(commands.climb){
       if(this.phase==='loop'&&sim.position.y<=surface.minY+.16){this.phase='exit';this.time=0;}
       else {this.release();return false;}
@@ -222,9 +234,9 @@ export class SurfaceActions {
     const up=Math.max(-1,Math.min(1,-input.dot(this.normal))),side=surface.kind==='ladder'?0:input.dot(this.tangent);
     const currentSide=sim.position.clone().sub(new Vector3(...surface.center)).dot(this.tangent);
     const limit=surface.width/2-(surface.kind==='ladder'?.18:.65);
-    const nextSide=Math.max(-limit,Math.min(limit,currentSide+side*.42*DT));
+    const nextSide=Math.max(-limit,Math.min(limit,currentSide+side*SURFACE_TUNING.climbLateralSpeedMetersPerSecond*DT));
     const top=surface.maxY-1.4;
-    const nextY=Math.max(surface.minY+.08,Math.min(top,sim.position.y+up*.72*DT));
+    const nextY=Math.max(surface.minY+.08,Math.min(top,sim.position.y+up*SURFACE_TUNING.climbVerticalSpeedMetersPerSecond*DT));
     const delta=this.tangent.clone().multiplyScalar(nextSide-currentSide);delta.y=nextY-sim.position.y;
     const actual=this.move(delta,false);this.loopTime+=DT;
     const key=actual.y>.001?'climb-up':actual.y<-.001?'climb-down':Math.abs(actual.dot(this.tangent))>.001?(side<0?'hang-left':'hang-right'):'hang-idle';

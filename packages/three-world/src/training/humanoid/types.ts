@@ -9,7 +9,7 @@ import type {AnimationEvent,Block,Probe,Traversal} from './controller';
 export interface HumanoidActionContext {
   world:RAPIER.World;body:RAPIER.RigidBody;capsule:RAPIER.Collider;controller:RAPIER.KinematicCharacterController;
   level:HumanoidLevel;blocks:Block[];position:Vector3;velocity:Vector3;facing:Vector3;
-  grounded:boolean;vertical:number;speed:number;collisions:number;state:string;stance:'stand'|'crouch';swimming:boolean;
+  readonly isMounted:boolean;grounded:boolean;vertical:number;speed:number;collisions:number;state:string;stance:'stand'|'crouch';swimming:boolean;
   capsuleHalf:number;capsuleHeight:number;actionCapsuleHalf:number|null;
   skills:ActionSystem;surface:SurfaceActions;traversal:Traversal|null;probe:Probe|null;
   elapsed:number;cooldown:number;jumpBuffer:number;lastResult:string;

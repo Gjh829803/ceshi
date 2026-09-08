@@ -1,54 +1,44 @@
-# Three SDK + 数据生产
+# Three SDK 与数据生产
 
-本分支 `codex/three-sdk-data-production-20260907` 将当前 Three 场景生成、SDK 和
-后续 Episode 数据生产整合在一起。以已验证的 Creator 生产契约生成场景，
-由独立 Episode 流程规划路线、录制白膜、制作风格素材并准备视频请求。
+Agent 使用普通 Three.js 创建可玩世界，复用或修改人物、动作、物理与镜头能力。
+人形推荐 `humanoid.source-101`，包含 48 个动画片段和对应的场景动作控制；
+其他主体可自行绘制 Mesh，再绑定移动、碰撞和交互能力。
 
 ```mermaid
 flowchart LR
-  A[原图与场景需求] --> B[Three Creator 云生成与自检]
-  B --> C[可玩场景与共享人工审核]
-  C --> D[选定案例 · Episode 接入]
-  D --> E[路线规划 · SDK 录制]
-  E --> F[6 × 30 秒白膜与轨迹]
-  F --> G[10 套风格 · 首帧与三视图]
-  G --> H[事件与 Prompt · 视频请求就绪]
-  H -. 待接入 .-> I[视频生成与最终数据验收]
+  A[原图与需求] --> B[Agent 创作 Mesh 与场景]
+  B --> C[绑定主体与动作 · 用户操作]
+  C --> D[Creator 自检与交付]
+  D --> E[Episode 规划 · 真实动作录制]
+  E --> F[6 × 30 秒 · 10 套风格]
+  F --> G[视频输入与请求准备]
 ```
 
-当前已实现到 **Seedance 提交前**，不包含视频提供商提交或 Creator 交付自动订阅。
-SDK 已包含步态连续性和小台阶下坠误触发修复。审核记录沿用现有通用身份。
+Agent 按四层使用：**直接复用 → 场景与能力绑定 → 参数配置 → 源码修改**。
+按键、Agent 指令和录制共用执行逻辑；能力说明明确前置条件、场景要求和实际结果。
+当前视频流程执行到 Seedance 提交前。
 
-- [当前文档索引](docs/README.md) · [Three SDK 设计与职责](docs/three-sdk-architecture.md)。
-- [统一分支与数据生产说明](docs/three-sdk-data-production.md)：来源、流程、命令、产物和后续衔接。
-- [Three SDK](packages/three-world/README.md)：物理、角色、动作、相机与捕获接口。
-- [Creator 工具](scripts/three-creator/README.md) · [云生成](scripts/cloud/three-eval-README.md)。
-- [Three Episode](scripts/three-episode/README.md)：批量录制、样式、检查点与恢复。
+- [文档索引](docs/README.md) · [设计与职责](docs/three-sdk-architecture.md)
+- [SDK 用法与动作条件](packages/three-world/README.md)
+- [Creator 创作工具](scripts/three-creator/README.md) · [云生成](scripts/cloud/three-eval-README.md)
+- [Episode 录制与素材](scripts/three-episode/README.md) · [生产流程](docs/three-sdk-data-production.md)
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm dev
+```
+
+本地训练场默认地址为 `http://127.0.0.1:5175/`，展示完整人物、19 个载具和三张
+示例地图。修改源码后重启服务；项目参数保存在 `profiles.json`，界面支持导出。
+`?debugProfiles=1` 可加载浏览器本地调试参数，正式交付使用项目配置。
+
+独立集成示例位于 [character-actions](examples/three-creator/character-actions/main.ts)
+和 [training-independent](examples/three-creator/training-independent/main.ts)。
+`pnpm test:training:browser` 检查工作台，`pnpm test:training:delivery` 验证真实浏览器
+自检、交付和独立 Episode 消费；后者需要 FFmpeg/ffprobe。
+
+```sh
 pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime
 ```
 
-运行配置、素材和云任务状态均为外部输入；安装依赖或构建 SDK 不会启动数据生产。
-
-## 训练场
-
-`pnpm dev` 编译并打开本地训练场服务，默认入口 `http://127.0.0.1:5175/`。
-它使用原始 101 骨人物、48 个运行时动作、19 个载具和三张地图；运行代码由
-Three/Rapier SDK 执行，资产、地图与工作台位于 `examples/three-creator/sdk-capabilities`。
-这是编译后的固定候选，修改源码后需要重启服务。
-
-项目覆盖配置在 `profiles.json`，界面可导出。只有显式添加 `?debugProfiles=1`
-才读取本地调试配置；交付与 Episode 默认不读取这些调试覆盖。
-独立资产消费示例位于 `examples/three-creator/training-independent`，不依赖训练园区布局。
-执行 `pnpm test:training:browser` 检查工作台，`pnpm test:training:delivery` 执行
-至少 180 秒真实浏览器自检、交付与独立 Episode 消费检查（需要 FFmpeg/ffprobe）。
-这些本地验证不等同于云端真实生成、13 类完整 Episode 六段录像或外部发布验收。
-
-移植边界与验收进度见 [实施记录](docs/superpowers/plans/2026-09-07-training-ground-migration.md)。
-新需求创建独立港区、人物/载具调用、Creator 交付与 Episode 消费的本地证据见
-[端到端验收记录](docs/reviews/2026-09-07-training-flow-acceptance.md)。
-
-工作区仅保留 `three-world` 与共享 `camera-collision`；旧 Babylon/Havok 包、演示、
-CLI、技能和架构站点已移除。当前测试清单覆盖全部剩余测试，`pnpm build` 构建 Three SDK。
+构建与本地验证不启动云生产。外部运行配置和任务身份见各组件说明。

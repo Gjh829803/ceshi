@@ -30,7 +30,7 @@ describe('Three semantic target views', () => {
       for (const [name, source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
       const candidate = await service.compiler.prepare();
       const catalog = JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
-      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.preset-101');
+      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.source-101');
       expect(humanoid).toBeDefined();
       for (const action of ['idle','walk','run','jump']) expect(humanoid.actions[action].clipName).toBeTruthy();
       expect(sha256(await readFile(path.join(candidate.playableRoot,humanoid.uri)))).toBe(humanoid.sha256);
@@ -138,7 +138,7 @@ describe('Three tool operations and truthful submission', () => {
   it('adds the actual SDK public guide and contracts only to the SDK profile', async () => {
     const root = await fixture(), raw = new ThreeCreatorTools(root, 'three-raw'), sdk = new ThreeCreatorTools(root, 'three-sdk');
     const rawSchema = await raw.schema(), sdkSchema = await sdk.schema();
-    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain("'./asset-definitions.json'"); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
+    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain('createHumanoidWorld'); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
     const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });

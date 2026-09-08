@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { chromium, type Page } from 'playwright';
 import type { Vec3, WorldInput, WorldSnapshot } from '@worldkit/three';
-import type { EpisodeRuntimePort, EpisodeCapabilities, EpisodeStart, EpisodeStartProbe, EpisodeFrame } from '@worldkit/three';
+import type { EpisodeRuntimePort, EpisodeCapabilities, EpisodeStart, EpisodeStartProbe, EpisodeFrame, CommandReceipt, OperationStatus } from '@worldkit/three';
 
 export interface EpisodeBrowserOptions {
   playableRoot: string; executablePath?: string; headless?: boolean;
@@ -28,6 +28,8 @@ export interface EpisodeCaptureSession {
   probeStart(start: EpisodeStart): Promise<EpisodeStartProbe>;
   prepareSegment(start: EpisodeStart, viewport: { widthPixels: number; heightPixels: number }): Promise<WorldSnapshot>;
   advance(input: WorldInput, ticks: number): Promise<WorldSnapshot>;
+  execute(command: Parameters<EpisodeRuntimePort['execute']>[0]): Promise<CommandReceipt>;
+  operation(id: string): Promise<OperationStatus>;
   frame(mimeType: 'image/jpeg' | 'image/png'): Promise<EpisodeFrame>;
   release(): Promise<void>;
   close(): Promise<void>;
@@ -101,7 +103,7 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
     await page.evaluate(async () => {
       const observer = (window as any).__WORLDKIT_EVAL__;
       await observer.stopLive();
-      if (!observer.episode || typeof observer.episode.prepareSegment !== 'function') throw new Error('EPISODE_RUNTIME_PORT_MISSING: this immutable playable requires an explicitly recorded SDK production rebuild');
+      if (!observer.episode || ['prepareSegment', 'execute', 'operation'].some(method => typeof observer.episode[method] !== 'function')) throw new Error('EPISODE_RUNTIME_PORT_MISSING: build and deliver a runtime with the Episode capture port');
       (window as any).__THREE_EPISODE_VIEWS__ = { serial: 0, views: new Map() };
     });
     const call = <K extends keyof EpisodeRuntimePort>(method: K, args: unknown[] = []): Promise<any> => page.evaluate(async ({ method, args }) => {
@@ -116,6 +118,7 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
       page, errors,
       capabilities: () => call('capabilities'), probeStart: start => call('probeStart', [start]),
       prepareSegment: (start, viewport) => call('prepareSegment', [start, viewport]),
+      execute: command => call('execute', [command]), operation: id => call('operation', [id]),
       advance: async (input, ticks) => {
         if(adapterId===ARBORIST_CAPTURE_ADAPTER&&input.jumpPressed)await page.evaluate(async()=>{
           window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space',key:' ',bubbles:true,repeat:false}));

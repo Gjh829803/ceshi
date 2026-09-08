@@ -16,16 +16,28 @@ The `positionWorldMetersXYZ` for a start is the character's **foot/root position
 
 Read the actual movement capabilities rather than assume speeds or jumping. Plan reachable straight connections between consecutive waypoints; include turns before walls and around obstacles. The Host converts intentions into actual player inputs with local correction. It does not fly along your coordinate list or teleport past obstacles. Waypoint Y represents the intended support/floor level, not merely an XZ destination. `gait` is `walk` or `run`.
 
-Plan deliberate changes of direction and walk/run pacing appropriate to the terrain and landmarks, rather than six straight constant-speed traversals. Allow space for brief pauses to look around and, when the actual subject can jump, a grounded jump on locally clear supported travel. The versioned Host input policy adds short observations, side glances, small pitch changes, gait transitions and bounded jump attempts; it never chooses new waypoints. Leave ample route length for these pace changes.
+Plan deliberate changes of direction and pacing appropriate to the terrain and landmarks. When this world has authored action affordances, include useful actionGoals along the route. Allow space for brief pauses to look around and, when the actual subject can jump, a grounded jump on locally clear supported travel. For routes without actionGoals the Host adds observations, camera variation and bounded jumps. Routes with actionGoals keep the planned gait and pause route progression while actual actions execute. The Host never chooses new route waypoints. Leave ample route length for these pace changes.
 
 Provide enough useful travel for approximately 30 seconds at the actual speed. A longer route may be cut at the segment duration. `endBehavior:"stop"` is suitable when the route lasts long enough. Use `"reverse"` only for an intentionally reversible route, or `"loop"` for a genuine continuous loop including its closing edge. Do not default to repeating a tiny safe circuit or six barely shifted copies of the same start. Do not invent content the delivered world does not contain. Select coverage and viewpoints within its actual limits.
+
+Optional `actionGoals` run once, in increasing `trigger.waypointIndex` order; several goals may share a waypoint. Each goal has:
+
+- `id`, `trigger:{waypointIndex,radiusMeters}` (radius 0.2–2 m), optional `targetId`, `timeoutSeconds` (0.1–25 s).
+- `intent`: `{kind:"skill",action:"roll"|"slide"|"pickup"|"putDown"|"sit"|"standUp"}`, `{kind:"posture",stance:"stand"|"crouch"|"prone"}`, `{kind:"climb",direction:"enter"|"exit"|"up"|"down"|"left"|"right"}`, or `{kind:"swim-style",style:"freestyle"|"breaststroke"}`.
+- `completion`: `{kind:"settled",holdSeconds:1}` observes the intent's actual state for that duration, or `{kind:"displacement",minimumMeters:2}` requires observed movement from the action start. Skills also require a succeeded operation. Climb movement requires displacement completion.
+
+Read `snapshot.training.characterCapabilities` and the authored source to establish support and conditions. `pickup` and `sit` require a real `targetId`. Put their trigger waypoint within 2 m of the target's returned approachPositionWorldMetersXYZ; the Host walks to that anchor and checks actual eligibility before requesting the skill. It does not teleport or synthesize an interaction target. For climbing, approach a declared collision-backed surface, enter it, then issue directional goals with its `targetId` to verify the actual surface. A swim-style goal requires actual swimming in declared water; route into the pool first.
+
+For a slide, plan a **run** approach with enough distance to reach the controller's minimum actual speed (default 2.5 m/s), put its trigger before the low opening, and put the next waypoint beyond the tunnel. Example goal: `{"id":"pass-low-tunnel","trigger":{"waypointIndex":1,"radiusMeters":0.6},"intent":{"kind":"skill","action":"slide"},"completion":{"kind":"displacement","minimumMeters":2},"timeoutSeconds":6}`. The controller requires supported ground, empty hands and no conflicting action; an exit with low headroom keeps the character crouched. Add a stand posture goal only after leaving the low ceiling. A visible low tunnel needs real collision; a tunnel is not itself required to begin sliding.
+
+Every declared goal must finish within the 30-second capture. Plan explicit hold time for a seated pose, and enough time for entry/exit transitions and navigation. A goal never counts as successful from command acceptance alone. The Host records commands and actual state changes at 60 Hz into `action-timeline.json`; this evidence also conditions visual events and final video prompts. Missing, rejected, failed and cancelled goals fail capture rather than being invented later.
 
 The plan object has this structure (the coordinates below are explanatory placeholders, not suggested starts or a route for your world):
 
 ```json
 {
   "kind": "worldkit-three-episode-plan",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "worldBuildHash": "copy the exact supplied world identity",
   "segments": [
     {

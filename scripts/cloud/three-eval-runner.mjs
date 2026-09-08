@@ -55,9 +55,9 @@ const maxConcurrency = Number(options["--max-concurrency"] ?? previousPlan?.maxC
 if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 64) throw new Error("--max-concurrency must be an integer in [1, 64]");
 const accountConcurrency = Number(options["--account-concurrency"] ?? previousPlan?.accountConcurrency ?? (suite === "sdk-only" ? 5 : 4));
 if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 20) throw new Error("--account-concurrency must be an integer in [1, 20]");
-const caseLimit = Number(options["--case-limit"] ?? 5);
+const caseLimit = Number(options["--case-limit"] ?? sourceManifest.cases.length);
 if (!Number.isSafeInteger(caseLimit) || caseLimit < 1 || caseLimit > sourceManifest.cases.length) throw new Error("--case-limit must fit the frozen manifest");
-const requestedCaseId = options["--case-id"] ?? (options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");
+const requestedCaseId = options["--case-id"] ?? (previousPlan || options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");
 const requestedProfile = options["--profile"];
 if (requestedProfile && !profiles.includes(requestedProfile)) throw new Error("--profile must belong to the selected suite; sdk-only admits only three-sdk");
 if (requestedCaseId && !sourceManifest.cases.some(item => item.id === requestedCaseId)) throw new Error("--case-id must identify one of the frozen cases");
@@ -137,7 +137,11 @@ for (const item of manifest.cases) {
   await writeJson(path.join(caseRoot, "payload.json"), payload); plans.push(plan);
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
-const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
+const explicitSelection = ["--case-id", "--case-limit", "--profile"].some(key => options[key] !== undefined);
+const executionPlans = previousPlan?.selectedTaskIds && !explicitSelection
+  ? plans.filter(plan => previousPlan.selectedTaskIds.includes(plan.item.id))
+  : plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
+if (previousPlan?.selectedTaskIds && JSON.stringify(executionPlans.map(plan => plan.item.id)) !== JSON.stringify(previousPlan.selectedTaskIds)) throw new Error("CREATOR_FROZEN_CASE_SELECTION_CHANGED: use a deliberate new run ID");
 await writeJson(path.join(outputRoot, "evaluation-plan.json"), {...frozenAssetPolicy, schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeLockPath:lock.runtimeLockPath,accountPolicyPath,accountInventoryPath,accountPolicySha256:sha256(accountPolicyBytes), runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=${sourceManifest.cases.length} profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.

@@ -9,7 +9,7 @@ export interface RouteMovement {
 export interface RouteDecision {
   readonly input: WorldInput;
   readonly waypointIndex: number;
-  readonly mode: 'travel' | 'backtrack' | 'finished' | 'failed';
+  readonly mode: 'travel' | 'backtrack' | 'finished' | 'failed' | 'action';
   readonly positionWorldMetersXYZ: Vec3;
   readonly targetPositionWorldMetersXYZ?: Vec3;
   readonly distanceToTargetMeters?: number;
@@ -44,6 +44,17 @@ export class RouteController {
   private jumpAttempted = false;
   private readonly breadcrumbs: Vec3[] = [];
   private failure: RouteDecision['diagnostic'];
+  private waypointHold: { waypointIndex: number; radiusMeters: number } | undefined;
+  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.waypointHold = trigger; }
+  completeHeldWaypoint(index: number) {
+    if (Math.max(0, this.index - (this.segment.endBehavior === 'reverse' ? 1 : 0)) !== index) throw new Error('EPISODE_ACTION_ROUTE_INDEX_CHANGED');
+    this.anchor = undefined; this.stationarySince = undefined; this.recoveredAtWaypoint = false; this.jumpAttempted = false;
+    const next = this.index + this.direction;
+    if (next >= 0 && next < this.route.length) this.index = next;
+    else if (this.segment.endBehavior === 'loop') this.index = 0;
+    else if (this.segment.endBehavior === 'reverse') { this.direction *= -1; this.index = Math.max(0, Math.min(this.route.length - 1, this.index + this.direction)); }
+    else this.arrived = true;
+  }
   constructor(private readonly segment: EpisodeSegmentPlan, private readonly movement: RouteMovement) {
     this.route = segment.waypoints.map(waypoint => ({ ...waypoint }));
     if (segment.endBehavior === 'reverse') {
@@ -75,8 +86,13 @@ export class RouteController {
     const speed = this.route[this.index]?.gait === 'run' ? this.movement.runSpeedMetersPerSecond : this.movement.walkSpeedMetersPerSecond;
     // One rendered interval of forward motion plus a small body-relative radius.
     // Height is checked independently; another floor is never reached in XZ only.
-    const horizontalTolerance = Math.max(0.3, Math.min(0.8, this.movement.radiusMeters + speed / 24));
+    const held = this.waypointHold?.waypointIndex === waypointIndex() ? this.waypointHold : undefined;
+    const horizontalTolerance = held?.radiusMeters ?? Math.max(0.3, Math.min(0.8, this.movement.radiusMeters + speed / 24));
     const verticalTolerance = Math.max(0.3, Math.min(0.7, this.movement.heightMeters * 0.25));
+    if (held && !this.recoveryTarget && horizontalDistance <= horizontalTolerance && Math.abs(position[1] - target[1]) <= verticalTolerance) {
+      this.anchor = position; this.stationarySince = elapsedSeconds;
+      return { ...base, mode: 'action', input: {}, targetPositionWorldMetersXYZ: target, distanceToTargetMeters };
+    }
     if (horizontalDistance <= horizontalTolerance && Math.abs(position[1] - target[1]) <= verticalTolerance) {
       this.anchor = position; this.stationarySince = elapsedSeconds;
       if (this.recoveryTarget) { this.recoveryTarget = undefined; }
