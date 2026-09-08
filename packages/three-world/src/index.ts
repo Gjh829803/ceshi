@@ -7,3 +7,5 @@ export type { MapDefinition as TrainingMap, MapSpawn as TrainingSpawn } from './
 export type { VehicleSpec as TrainingVehicleSpec } from './training/config.js';
 export { emptyInput as emptyTrainingInput } from './training/simulation.js';
 export * as training from './training/public.js';
+export { TrainingHorse } from './training/horse.js';
+export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './training/horse.js';

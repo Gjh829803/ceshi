@@ -16,3 +16,5 @@ export { readInteractionTargets } from './humanoid/render-state';
 export { updateVehicleWheels, resetVehicleWheels } from './vehicle-animation';
 export type { TrainingOptions, TrainingProfile, TrainingRuntime, TrainingVehicleInstance, TrainingSnapshot } from './runtime';
 export type { TrainingCommand } from './runtime';
+export { TrainingHorse } from './horse';
+export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './horse';

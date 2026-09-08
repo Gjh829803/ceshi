@@ -6,6 +6,7 @@ import { canPlaceCreature, resetCreatureState } from './creatures/controller';
 import { EnvironmentQueries, initEnvironmentQueries, PLAYER_BODY, vehicleBody } from './environment/queries';
 import { FollowCamera } from './camera';
 import { Character } from './character';
+import type { TrainingHorse, TrainingSeatAnchor } from './horse';
 import { readHumanoid } from './humanoid/render-state';
 import { readInteractionTargets } from './humanoid/render-state';
 import type { MapDefinition, MapSpawn } from './environment/types';
@@ -35,6 +36,8 @@ export interface TrainingVehicleInstance {
   readonly assetId:string;
   readonly spec:VehicleSpec;
   readonly object:THREE.Object3D;
+  readonly visual?:TrainingHorse;
+  readonly seatAnchor?:TrainingSeatAnchor;
 }
 export interface TrainingOptions {
   readonly map:MapDefinition;
@@ -101,7 +104,21 @@ export class TrainingRuntime implements PhysicsPort {
     if(!(camera instanceof THREE.PerspectiveCamera))throw new Error('TRAINING_PERSPECTIVE_CAMERA_REQUIRED');
     const ids=[options.character.instanceId,...options.vehicles.map(v=>v.instanceId)];
     if(new Set(ids).size!==ids.length||ids.some(id=>!id.trim()))throw new Error('TRAINING_INSTANCE_ID_INVALID');
-    for(const vehicle of options.vehicles)resolveVehicleSpec(vehicle.spec);
+    const ownedHorses = new Set<TrainingHorse>();
+    for(const vehicle of options.vehicles) {
+      resolveVehicleSpec(vehicle.spec);
+      if (vehicle.seatAnchor && !vehicle.visual) throw new Error('TRAINING_HORSE_INSTANCE_INVALID');
+      if (vehicle.visual) {
+        if (ownedHorses.has(vehicle.visual)) throw new Error('TRAINING_HORSE_INSTANCE_INVALID');
+        ownedHorses.add(vehicle.visual);
+        vehicle.object.updateWorldMatrix(true, false);
+        const worldScale = new THREE.Vector3(); vehicle.object.getWorldScale(worldScale);
+        if (vehicle.object !== vehicle.visual.root || !vehicle.visual.loaded || vehicle.spec.mode !== 'mount' ||
+          vehicle.object.scale.distanceTo(new THREE.Vector3(1,1,1)) > 1e-9 || worldScale.distanceTo(new THREE.Vector3(1,1,1)) > 1e-9 ||
+          !vehicle.object.matrixWorld.elements.every(Number.isFinite)) throw new Error('TRAINING_HORSE_INSTANCE_INVALID');
+        vehicle.visual.readSeatAnchor(vehicle.spec.seat, vehicle.seatAnchor);
+      }
+    }
     await initEnvironmentQueries();return new TrainingRuntime(options,camera);
   }
   private constructor(readonly options:TrainingOptions,readonly camera:THREE.PerspectiveCamera){
@@ -345,6 +362,24 @@ export class TrainingRuntime implements PhysicsPort {
         this.followCamera.capturePresentationPose(this.simulation,true);
       }
     }
+    this.sampleHorses(this.presentation.sample(1,this.presentationEpoch,0,0));
+    this.alignHorseRider();
+  }
+  private sampleHorses(sample: TrainingDisplaySample): void {
+    this.options.vehicles.forEach((instance, index) => {
+      const pose = sample.vehicles[index]!;
+      instance.visual?.sample({epoch:sample.epoch,timeSeconds:sample.timeSeconds,
+        phase:pose.creature?.phase ?? 0,speedMetersPerSecond:pose.speed,gait:pose.creature?.gait ?? 'graze'});
+    });
+  }
+  private alignHorseRider(): void {
+    const index = this.simulation.active;
+    if (index < 0) return;
+    const instance = this.options.vehicles[index]!;
+    if (!instance.visual) return;
+    instance.object.updateWorldMatrix(true, true);
+    const anchor = instance.visual.readSeatAnchor(this.simulation.vehicles[index]!.spec.seat, instance.seatAnchor);
+    this.options.character.animation?.alignMountedPelvis(instance.object.matrixWorld.clone().multiply(anchor));
   }
   /** Canonical copies: physical observations never read a temporary display root. */
   logicalPose(id:string):{position:THREE.Vector3;rotation:THREE.Quaternion}|undefined {
@@ -385,6 +420,8 @@ export class TrainingRuntime implements PhysicsPort {
         object.quaternion.copy(logical.rotation);
       }
       this.options.character.animation?.applyPresentationPose(1);
+      this.sampleHorses(this.presentation.sample(1,this.presentationEpoch,tick,tick));
+      this.alignHorseRider();
       for(const object of this.objects.values())object.updateWorldMatrix(true,true);
     };
     try {
@@ -392,6 +429,7 @@ export class TrainingRuntime implements PhysicsPort {
         const object=this.options.vehicles[index]!.object;
         object.position.copy(pose.position);object.quaternion.copy(pose.rotation);
       });
+      this.sampleHorses(sample);
       const character=this.options.character.object;
       character.position.copy(sample.player.position);character.quaternion.copy(sample.player.rotation);
       this.options.character.animation?.applyPresentationPose(sample.alpha);
@@ -409,6 +447,7 @@ export class TrainingRuntime implements PhysicsPort {
         character.quaternion.copy(vehicle.rotation);
       }
       for(const object of this.objects.values())object.updateWorldMatrix(true,true);
+      this.alignHorseRider();
       if(!this.authored&&this.followCamera.initialized)this.followCamera.present(index>=0?sample.vehicles[index]!:sample.player,sample.alpha);
       return restore;
     } catch(error){restore();throw error;}
@@ -444,5 +483,5 @@ export class TrainingRuntime implements PhysicsPort {
     for(const notify of this.simulationReplacements)notify();
     this.camera.copy(this.initialCamera);this.camera.fov=this.followCamera.tuning.baseFovDegrees;this.camera.updateProjectionMatrix();this.followCamera.mode=0;this.followCamera.reset(this.simulation);this.sync(0);
   }
-  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.environment.dispose();this.options.character.animation?.dispose();}
+  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.environment.dispose();this.options.character.animation?.dispose();for(const vehicle of this.options.vehicles)vehicle.visual?.dispose();}
 }

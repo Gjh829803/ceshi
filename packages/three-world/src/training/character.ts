@@ -125,6 +125,23 @@ export class Character {
   async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
   dispose():void{this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
 
+  /** Internal presentation correction. Physics and the managed root stay untouched. */
+  alignMountedPelvis(anchorWorld: T.Matrix4): void {
+    const pelvis = this.hip;
+    if (!pelvis || !this.actor.parent) return;
+    this.actor.parent.updateWorldMatrix(true, false);
+    const local = this.actor.parent.matrixWorld.clone().invert().multiply(anchorWorld);
+    const desired = new T.Vector3(), rotation = new T.Quaternion(), scale = new T.Vector3();
+    local.decompose(desired, rotation, scale);
+    if (!local.elements.every(Number.isFinite) || local.determinant() <= 0) throw new Error('TRAINING_SEAT_ANCHOR_INVALID');
+    this.actor.position.set(0, 0, 0);
+    this.actor.quaternion.copy(rotation);
+    this.actor.updateWorldMatrix(false, true);
+    const actual = this.actor.parent.worldToLocal(pelvis.getWorldPosition(new T.Vector3()));
+    this.actor.position.copy(desired).sub(actual);
+    this.actor.updateWorldMatrix(false, true);
+  }
+
   private legacyFrame(dt: number, name: string, speed: number) {
     if (name !== this.fallbackName) { this.fallbackName = name; this.fallbackTime = 0; }
     this.fallbackTime += Math.max(0, dt);
@@ -138,7 +155,7 @@ export class Character {
   update(dt: number, name: string, speed: number, seated: boolean, riding = false, pose?: HumanoidRenderState) {
     const source = this.source; if (!source) return;
     this.applyPresentationPose(1);
-    this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.carriedAttachment = null;
+    this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
     const mode = pose?.mounted !== undefined ? pose.mounted : riding ? 'ride' : seated || name === 'Driving_Loop' ? 'drive' : null;
     const mounted = mode !== null;
     const identity = pose?.simulationIdentity ?? this.fallbackIdentity;
