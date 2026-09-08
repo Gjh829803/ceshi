@@ -35,8 +35,8 @@
 | --- | --- | --- |
 | 资产及能力信息 | [asset-catalog.json](../assets/three-creator/asset-catalog.json)：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制 | `assets_search` 查找，`assets_describe` 读取详情 |
 | 可用权限 | [asset-policy.json](../config/three-creator/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
-| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [tools.ts](../scripts/three-creator/tools.ts) 的主题分派 | `creator_get_authoring_schema` 读取真实接口和使用条件 |
-| 可复用示例 | `examples/three-creator/`；新示例在 [example-files.ts](../scripts/three-creator/example-files.ts) 的 `EXAMPLE_TOPICS` 和 `tools.ts` 的 `exampleRoot` 注册，并纳入[运行包](../scripts/cloud/three-capsule.mjs) | `creator_get_examples` 取得可用代码和文件清单 |
+| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [creator-discovery.ts](../scripts/three-creator/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、training 等接口 |
+| 可复用示例 | `examples/three-creator/`；新示例在 [example-files.ts](../scripts/three-creator/example-files.ts) 的 `EXAMPLE_TOPICS` 和 `creator-discovery.ts` 的 `exampleRoot` 注册，并纳入[运行包](../scripts/cloud/three-capsule.mjs) | `creator_get_examples` 取得可用代码和文件清单 |
 
 包内文件不会自动全部加载，依赖的其他资产 ID 也不会自动被选中：文件依赖登记到条目的 `resources`，需要组合的资产 ID 在项目中一并选择。
 
