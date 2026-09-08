@@ -6,7 +6,56 @@ import { WATER } from './config';
 import type { MotionPose } from './presentation';
 import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './platform/session';
 import type { EnvironmentQueries } from './environment/queries';
+interface CameraPresentationPose {
+  position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
+  up:T.Vector3; fov:number; near:number;
+}
 export class FollowCamera {
+  private displayedTarget:T.Vector3|undefined;
+  get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
+  private previousPresentation:CameraPresentationPose|undefined;
+  private currentPresentation:CameraPresentationPose|undefined;
+  /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
+  beforeFixedUpdate():void {
+    this.displayedTarget=undefined;
+    const pose=this.currentPresentation;
+    if(pose){
+      this.camera.position.copy(pose.position);
+      this.camera.quaternion.copy(pose.rotation);
+      this.camera.up.copy(pose.up);
+      this.camera.fov=pose.fov;
+      this.camera.near=pose.near;
+      this.camera.updateProjectionMatrix();
+    }
+    this.previousPresentation=pose;
+  }
+  capturePresentationPose(sim:Simulation,snap=false):void {
+    this.currentPresentation={
+      position:this.camera.position.clone(), rotation:this.camera.quaternion.clone(),
+      target:this.target.clone(), subject:(sim.vehicle?.position??sim.player.position).clone(),
+      up:this.camera.up.clone(), fov:this.camera.fov, near:this.camera.near,
+    };
+    if(snap||!this.previousPresentation)this.previousPresentation=this.currentPresentation;
+  }
+  present(pose:MotionPose,alpha:number):void {
+    const a=this.previousPresentation,b=this.currentPresentation;
+    if(!a||!b)return;
+    const subject=a.subject.clone().lerp(b.subject,alpha);
+    const offset=pose.position.clone().sub(subject);
+    const target=a.target.clone().lerp(b.target,alpha).add(offset);
+    this.displayedTarget=target;
+    const eye=a.position.clone().lerp(b.position,alpha).add(offset);
+    const resolved=this.tuning.collisionEnabled&&this.environment
+      ? this.environment.cameraCast(target,eye,this.tuning.collisionRadiusMeters) : eye;
+    this.camera.position.copy(resolved);
+    this.camera.quaternion.slerpQuaternions(a.rotation,b.rotation,alpha);
+    this.camera.up.copy(a.up).lerp(b.up,alpha).normalize();
+    if(this.camera.position.distanceToSquared(eye)>1e-10)this.camera.lookAt(target);
+    this.camera.fov=a.fov+(b.fov-a.fov)*alpha;
+    this.camera.near=b.near;
+    this.camera.updateProjectionMatrix();
+  }
+
   tuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
   baseDistance?:number;
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;

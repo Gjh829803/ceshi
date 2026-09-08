@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { registerTrainingHost } from './host-access';
+import { PresentationState, type TrainingDisplaySample } from './presentation';
 import { Simulation, emptyInput, createVehicle, resolveVehicleSpec, type Input } from './simulation';
 import { canPlaceCreature, resetCreatureState } from './creatures/controller';
 import { EnvironmentQueries, initEnvironmentQueries, PLAYER_BODY, vehicleBody } from './environment/queries';
@@ -77,6 +79,10 @@ export class TrainingRuntime implements PhysicsPort {
   private readonly objects=new Map<string,THREE.Object3D>();
   private readonly specs:VehicleSpec[];
   private disposed=false;
+  private episodeOwned=false;
+  private readonly presentation:PresentationState;
+  private presentationEpoch=0;
+  private visualSample:TrainingDisplaySample|undefined;
   private authored=false;
   private previousJump=false;
   private previousInteract=false;
@@ -109,7 +115,17 @@ export class TrainingRuntime implements PhysicsPort {
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     const animation=options.character.animation;
     if(animation)this.simulation.setHumanoidAssets(animation.availableHumanoidClips,animation.motionSources);
-    this.sync(0);this.followCamera.reset(this.simulation);
+    this.presentation=new PresentationState(this.simulation);
+    registerTrainingHost(this, {
+      isDisposed: () => this.disposed,
+      setEpisodeOwned: owned => { this.assertLive(); this.episodeOwned=owned; },
+      advance: (input,dt,pointer) => { this.assertLive(); this.advanceOwned(input,dt,pointer); },
+      reset: () => { this.assertLive(); this.resetOwned(); },
+      clearInput: () => { this.assertLive(); this.clearInputOwned(); },
+      prepareEpisodeStart: start => { this.assertLive(); this.prepareEpisodeStartOwned(start); },
+      present: (alpha,tick) => { this.assertLive(); return this.present(alpha,tick); },
+    });
+    this.followCamera.reset(this.simulation);this.sync(0,false);
   }
   private instanceMap(map:MapDefinition):MapDefinition {
     return {...map,spawns:map.spawns.flatMap(spawn=>{
@@ -118,17 +134,29 @@ export class TrainingRuntime implements PhysicsPort {
       return match.length?[{...spawn,vehicleId:match[0]!.instanceId}]:[spawn];
     })};
   }
+  private assertLive():void { if(this.disposed)throw new Error('TRAINING_DISPOSED'); }
+  private assertExternalMutation():void {
+    this.assertLive();
+    if(this.episodeOwned)throw new Error('EPISODE_CAPTURE_OWNS_CLOCK');
+  }
+  advance(input:WorldInput,dt:number,pointer:CameraRigInput={}):void { this.assertExternalMutation(); this.advanceOwned(input,dt,pointer); }
+  reset():void { this.assertExternalMutation(); this.resetOwned(); }
+  prepareEpisodeStart(start:EpisodeStart):void { this.assertExternalMutation(); this.prepareEpisodeStartOwned(start); }
+  clearInput():void { this.assertExternalMutation(); this.clearInputOwned(); }
+  prepareCharacter(position:Vec3,yaw=0):boolean { this.assertExternalMutation(); return this.prepareCharacterOwned(position,yaw); }
+  approach(id:string):boolean { this.assertExternalMutation(); return this.approachOwned(id); }
+  setCameraMode(mode:0|1|2):void { this.assertExternalMutation(); this.setCameraModeOwned(mode); }
   get cameraMode():'authored'|'follow'{return this.authored?'authored':'follow';}
-  command(command:TrainingCommand):SkillResult|undefined{
+  command(command:TrainingCommand):SkillResult|undefined{this.assertExternalMutation();
     const fields:Record<TrainingCommand['type'],readonly string[]>={'training.prepare':['instanceId','spawn'],'training.approach':['instanceId'],'training.enter':['instanceId'],'training.exit':[],'training.camera':['mode'],'training.input':['input'],'training.profile':['profile'],'training.action':['request']};
     if(!Object.hasOwn(fields,command.type)||Object.keys(command).some(k=>k!=='type'&&!fields[command.type].includes(k)))throw new Error('TRAINING_COMMAND_INVALID');
     let accepted=true;
     switch(command.type){
       case 'training.prepare':if(!command.spawn||!Array.isArray(command.spawn.position)||command.spawn.position.length!==3||command.spawn.position.some(n=>!Number.isFinite(n))||!Number.isFinite(command.spawn.yaw))throw new Error('TRAINING_SPAWN_INVALID');accepted=this.prepare(command.instanceId,command.spawn);break;
-      case 'training.approach':accepted=this.approach(command.instanceId);break;
+      case 'training.approach':accepted=this.approachOwned(command.instanceId);break;
       case 'training.enter':accepted=this.enter(command.instanceId);break;
       case 'training.exit':accepted=this.exit();break;
-      case 'training.camera':this.setCameraMode(command.mode);break;
+      case 'training.camera':this.setCameraModeOwned(command.mode);break;
       case 'training.input':this.setInput(command.input??undefined);break;
       case 'training.profile':this.applyProfile(command.profile);break;
       case 'training.action': {
@@ -178,22 +206,22 @@ export class TrainingRuntime implements PhysicsPort {
   }
   actionIds(id:string):readonly string[]{return id===this.options.character.instanceId?[...this.options.character.animation?.availableHumanoidClips??[]]:[];}
   animationState(id:string):import('../contracts').EntityState['animation']{if(id!==this.options.character.instanceId)return;const source=this.options.character.animation?.sourceCharacter;if(!source)return;const key=Object.keys(source.weights).sort((a,b)=>(source.weights[b]??0)-(source.weights[a]??0))[0];if(!key||!source.actions[key])return;const action=source.actions[key];return {actionId:key,clipName:action.getClip().name,timeSeconds:action.time};}
-  cameraSnapshot():import('../contracts').CameraState{const c=this.followCamera,q=this.camera.quaternion;return {mode:this.cameraMode,positionWorldMetersXYZ:tuple(this.camera.position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w],desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.distance,actualArmDistanceMeters:c.target.distanceTo(this.camera.position),collisionPhase:c.collisionLimited?'constrained':'clear'};}
-  useAuthoredCamera():void{this.authored=true;}
-  setCameraMode(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('TRAINING_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.initialized=false;}
+  cameraSnapshot():import('../contracts').CameraState{const c=this.followCamera,q=this.camera.quaternion;return {mode:this.cameraMode,positionWorldMetersXYZ:tuple(this.camera.position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w],desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.distance,actualArmDistanceMeters:c.presentationTarget.distanceTo(this.camera.position),collisionPhase:c.collisionLimited?'constrained':'clear'};}
+  useAuthoredCamera():void{this.assertExternalMutation();this.authored=true;}
+  private setCameraModeOwned(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('TRAINING_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.initialized=false;}
   validateInput(input:Input):void{for(const key of ['forward','steer','lift','roll','pitch','strafe'] as const)if(typeof input[key]!=='number'||!Number.isFinite(input[key])||Math.abs(input[key])>1)throw new Error('TRAINING_INPUT_INVALID');for(const key of ['boost','brake','jump','slow'] as const)if(typeof input[key]!=='boolean')throw new Error('TRAINING_INPUT_INVALID');if(input.humanoid&&Object.values(input.humanoid).some(v=>typeof v!=='boolean'))throw new Error('TRAINING_INPUT_INVALID');}
   setInput(input:Input):()=>void;
   setInput(input:undefined):void;
   setInput(input:Input|undefined):(()=>void)|void;
-  setInput(input:Input|undefined):(()=>void)|void{if(input===undefined){this.input=undefined;this.inputGeneration++;return;}this.validateInput(input);const generation=++this.inputGeneration;this.input={...input,humanoid:{...input.humanoid}};return()=>{if(this.inputGeneration===generation){this.input=undefined;this.inputGeneration++;}};}
-  clearInput():void{this.setInput(undefined);this.previousJump=false;this.previousInteract=false;}
+  setInput(input:Input|undefined):(()=>void)|void{this.assertExternalMutation();if(input===undefined){this.input=undefined;this.inputGeneration++;return;}this.validateInput(input);const generation=++this.inputGeneration;this.input={...input,humanoid:{...input.humanoid}};return()=>{this.assertExternalMutation();if(this.inputGeneration===generation){this.input=undefined;this.inputGeneration++;}};}
+  private clearInputOwned():void{this.input=undefined;this.inputGeneration++;this.previousJump=false;this.previousInteract=false;}
   private index(id:string):number{const n=this.options.vehicles.findIndex(v=>v.instanceId===id);if(n<0)throw new Error(`TRAINING_INSTANCE_UNKNOWN: ${id}`);return n;}
-  prepare(id:string,spawn:MapSpawn):boolean{const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
-  approach(id:string):boolean{this.index(id);const ok=this.simulation.approach(id);this.sync(0);return ok;}
-  interact():boolean{const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
-  enter(id:string):boolean{const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
-  exit():boolean{const ok=this.simulation.exit();if(ok)this.sync(0);return ok;}
-  prepareCharacter(position:Vec3,yaw=0):boolean{const ok=this.simulation.prepareCharacter(new THREE.Vector3(...position),yaw);this.sync(0);return ok;}
+  prepare(id:string,spawn:MapSpawn):boolean{this.assertExternalMutation();const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
+  private approachOwned(id:string):boolean{this.index(id);const ok=this.simulation.approach(id);this.sync(0);return ok;}
+  interact():boolean{this.assertExternalMutation();const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
+  enter(id:string):boolean{this.assertExternalMutation();const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
+  exit():boolean{this.assertExternalMutation();const ok=this.simulation.exit();if(ok)this.sync(0);return ok;}
+  private prepareCharacterOwned(position:Vec3,yaw=0):boolean{const ok=this.simulation.prepareCharacter(new THREE.Vector3(...position),yaw);this.sync(0);return ok;}
   private prepareProfile(profile:TrainingProfile):TrainingProfile & {camera:CameraTuning;character:TrainingControl;vehicles:Record<string,TrainingControl & {camera:number}>;cameraDistanceMeters:number|null}{
     const object=(value:unknown)=>!!value&&typeof value==='object'&&!Array.isArray(value);
     if(!object(profile)||Object.keys(profile).some(k=>!['character','camera','vehicles','cameraDistanceMeters'].includes(k)))throw new Error('TRAINING_PROFILE_INVALID');
@@ -219,20 +247,20 @@ export class TrainingRuntime implements PhysicsPort {
     if(profile.cameraDistanceMeters===null)delete this.followCamera.baseDistance;else this.followCamera.baseDistance=profile.cameraDistanceMeters;
     this.profile=structuredClone(profile);this.baselineProfile=structuredClone(profile);
   }
-  applyProfile(profile:TrainingProfile):void{this.commitProfile(this.prepareProfile(profile));}
+  applyProfile(profile:TrainingProfile):void{this.assertExternalMutation();this.commitProfile(this.prepareProfile(profile));}
   exportProfile():TrainingProfile{return structuredClone(this.profile);}
-  onVisualUpdate(callback:(deltaSeconds:number)=>void):()=>void{this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
-  onSimulationReplaced(callback:()=>void):()=>void{this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
-  switchMap(map:MapDefinition):void{
+  onVisualUpdate(callback:(deltaSeconds:number)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
+  onSimulationReplaced(callback:()=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
+  switchMap(map:MapDefinition):void{this.assertExternalMutation();
     const profile=this.prepareProfile(this.profile);validateTrainingMap(map);
     const replacement=new EnvironmentQueries(this.instanceMap(map));
     const previous=this.environment;
     let staged:Simulation;try{staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);}catch(error){replacement.dispose();throw error;}
     this.simulation.adoptEnvironment(staged);this.currentMap=map;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();
     for(const notify of this.simulationReplacements)notify();
-    this.clearInput();this.followCamera.reset(this.simulation);this.sync(0);
+    this.clearInputOwned();this.followCamera.reset(this.simulation);this.sync(0);
   }
-  sealInitialState():void{this.baselineProfile=this.exportProfile();}
+  sealInitialState():void{this.assertExternalMutation();this.baselineProfile=this.exportProfile();}
   episodeCapabilities():NonNullable<EpisodeCapabilities['training']>{return {mapId:this.currentMap.id,characterInstanceId:this.options.character.instanceId,vehicles:this.snapshot().vehicles.map(({instanceId,assetId,mode,available})=>({instanceId,assetId,mode,available})),cameraModes:[0,1,2],inputAxes:['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow','humanoid']};}
   private episodeCandidate(start:EpisodeStart){
     const config=start.training!,index=this.index(config.vehicleInstanceId!),current=this.simulation.vehicles[index]!;
@@ -263,20 +291,23 @@ export class TrainingRuntime implements PhysicsPort {
     valid=valid&&!this.simulation.vehicles.some((v,i)=>i!==index&&this.simulation.available(v)&&Math.abs(v.position.y-candidate.position.y)<2&&Math.hypot(v.position.x-candidate.position.x,v.position.z-candidate.position.z)<v.spec.radius+candidate.spec.radius);
     return {isValid:valid,requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:tuple(candidate.position),diagnostics:valid?[]:[{code:'TRAINING_START_BLOCKED',message:'The full vehicle envelope, medium or another actor blocks this start.'}]};
   }
-  prepareEpisodeStart(start:EpisodeStart):void{
+  private prepareEpisodeStartOwned(start:EpisodeStart):void{
     const probe=this.probeEpisodeStart(start);if(!probe.isValid)throw new Error('TRAINING_START_BLOCKED');
-    this.clearInput();const config=start.training;
+    this.clearInputOwned();const config=start.training;
     if(config?.vehicleInstanceId){
       const {candidate,index}=this.episodeCandidate({...start,positionWorldMetersXYZ:probe.resolvedPositionWorldMetersXYZ});Object.assign(this.simulation.vehicles[index]!,candidate);
-      if(config.mounted===false){if(!this.approach(config.vehicleInstanceId))throw new Error('TRAINING_START_EXIT_BLOCKED');}
-      else{if(!this.simulation.humanoid?.setMounted(true))throw new Error('TRAINING_START_MOUNT_BLOCKED');this.simulation.active=index;this.simulation.transition=0;this.simulation.transitionKind='';this.simulation.player.position.copy(candidate.position);this.simulation.player.yaw=candidate.yaw;}
-    }else if(!this.prepareCharacter(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians+Math.PI))throw new Error('TRAINING_START_BLOCKED');
-    this.simulation.teleportRevision++;this.setCameraMode(config?.cameraMode??0);this.followCamera.reset(this.simulation);this.sync(0);
+      if(config.mounted===false){if(!this.approachOwned(config.vehicleInstanceId))throw new Error('TRAINING_START_EXIT_BLOCKED');}
+      else{if(!this.simulation.humanoid?.setMounted(true))throw new Error('TRAINING_START_MOUNT_BLOCKED');this.simulation.active=index;this.simulation.transition=0;this.simulation.transitionKind='';this.simulation.player.position.copy(candidate.position).add(new THREE.Vector3(...candidate.spec.seat).applyQuaternion(candidate.rotation));this.simulation.player.yaw=candidate.yaw;}
+    }else if(!this.prepareCharacterOwned(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians+Math.PI))throw new Error('TRAINING_START_BLOCKED');
+    this.simulation.teleportRevision++;this.setCameraModeOwned(config?.cameraMode??0);this.followCamera.reset(this.simulation);this.sync(0);
   }
-  advance(input:WorldInput,dt:number,pointer:CameraRigInput={}):void{
+  private advanceOwned(input:WorldInput,dt:number,pointer:CameraRigInput={}):void{
     if(this.disposed)throw new Error('TRAINING_DISPOSED');
+    if(!this.authored)this.followCamera.beforeFixedUpdate();
+    const previousBinding=this.presentation.active,previousRevision=this.presentation.revision;
+    this.presentation.beforeStep(this.simulation);
     const controls=this.input??input.training??{...emptyInput(),forward:-(input.moveZRatio??0),steer:input.moveXRatio??0,lift:input.moveYRatio??0,boost:!!input.run,jump:input.jumpPressed??!!(input.jump&&!this.previousJump)};
-    if(!this.input&&(input.interactPressed??!!(input.interact&&!this.previousInteract)))this.interact();
+    if(!this.input&&(input.interactPressed??!!(input.interact&&!this.previousInteract))){if(this.simulation.interact())this.sync(0);}
     // WorldKeyboard already expresses yaw as a signed angle. Convert back to
     // source orbit units once so drag limits and manual-recenter grace agree.
     if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbit(-(pointer.yawDeltaRadians??0)/.004,(pointer.pitchDeltaRadians??0)/.004,this.simulation.time,this.simulation);
@@ -285,13 +316,13 @@ export class TrainingRuntime implements PhysicsPort {
       const pitchScale=this.simulation.vehicle?.003:.004;
       this.followCamera.orbit(-(input.cameraYawRatio??0)*dt*1.2/.004,(input.cameraPitchRatio??0)*dt/pitchScale,this.simulation.time,this.simulation);
     }
-    this.simulation.step(controls,dt,this.followCamera.yaw);this.sync(dt);
-    if(!this.authored)this.followCamera.update(this.simulation,dt);
+    this.simulation.step(controls,dt,this.followCamera.yaw);this.presentation.afterStep(this.simulation);this.sync(dt);
+    if(!this.authored){this.followCamera.update(this.simulation,dt);this.followCamera.capturePresentationPose(this.simulation,previousBinding!==this.simulation.active||previousRevision!==this.simulation.teleportRevision);}
     this.previousJump=!!input.jump;this.previousInteract=!!input.interact;
     // One-shot commands are consumed exactly once even during multi-tick frames.
     if(this.input)this.input={...this.input,jump:false,humanoid:{}};
   }
-  private sync(dt:number):void {
+  private sync(dt:number,snapCamera=true):void {
     for(const v of this.simulation.vehicles){const object=this.objects.get(v.spec.id)!;object.position.copy(v.position);object.quaternion.copy(v.rotation);object.visible=this.simulation.available(v);}
     const p=this.simulation.player,object=this.options.character.object;
     object.position.copy(p.position);object.rotation.set(0,p.yaw,0);
@@ -301,10 +332,84 @@ export class TrainingRuntime implements PhysicsPort {
     if(pose)pose.mounted=mounted?(mounted.spec.characterPose==='stand'?'stand':mounted.spec.characterPose==='ride'?'ride':'drive'):null;
     this.options.character.animation?.update(dt,p.animation,p.velocity.length(),!!mounted,mounted?.spec.characterPose==='ride',pose);
     for(const object of this.objects.values())object.updateWorldMatrix(true,true);
-    for(const update of this.visualUpdates)update(dt);
+    this.options.character.animation?.capturePresentationPose();
+    if(dt===0){
+      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+      this.options.character.animation?.capturePresentationPose();
+      if(!this.authored){
+        if(snapCamera){
+          this.followCamera.beforeFixedUpdate();
+          this.followCamera.update(this.simulation,0);
+        }
+        this.followCamera.capturePresentationPose(this.simulation,true);
+      }
+    }
+  }
+  /** Canonical copies: physical observations never read a temporary display root. */
+  logicalPose(id:string):{position:THREE.Vector3;rotation:THREE.Quaternion}|undefined {
+    if(id===this.options.character.instanceId){
+      const mounted=this.simulation.vehicle;
+      if(mounted)return {
+        position:mounted.position.clone().add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation)),
+        rotation:mounted.rotation.clone(),
+      };
+      return {
+        position:this.simulation.player.position.clone(),
+        rotation:new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),this.simulation.player.yaw),
+      };
+    }
+    const vehicle=this.simulation.vehicles.find(value=>value.spec.id===id);
+    return vehicle?{position:vehicle.position.clone(),rotation:vehicle.rotation.clone()}:undefined;
+  }
+  private present(alpha:number,tick:number):()=>void {
+    if(this.presentation.revision!==this.simulation.teleportRevision||this.presentation.active!==this.simulation.active){
+      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+    }
+    let sample=this.presentation.sample(alpha,this.presentationEpoch,Math.max(0,tick-1),tick);
+    const previous=this.visualSample;
+    // Explicit captures may precede a live frame at an earlier interpolation time.
+    // A rewind is a history cut, never a negative delta hidden by clamping.
+    if(previous&&sample.timeSeconds<previous.timeSeconds){
+      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+      sample=this.presentation.sample(1,this.presentationEpoch,tick,tick);
+    }
+    const restore=()=>{
+      for(const [id,object] of this.objects){
+        const logical=this.logicalPose(id)!;
+        object.position.copy(logical.position);
+        object.quaternion.copy(logical.rotation);
+      }
+      this.options.character.animation?.applyPresentationPose(1);
+      for(const object of this.objects.values())object.updateWorldMatrix(true,true);
+    };
+    try {
+      sample.vehicles.forEach((pose,index)=>{
+        const object=this.options.vehicles[index]!.object;
+        object.position.copy(pose.position);object.quaternion.copy(pose.rotation);
+      });
+      const character=this.options.character.object;
+      character.position.copy(sample.player.position);character.quaternion.copy(sample.player.rotation);
+      this.options.character.animation?.applyPresentationPose(sample.alpha);
+      const last=this.visualSample;
+      if(!last||last.epoch!==sample.epoch||last.previousTick!==sample.previousTick||last.currentTick!==sample.currentTick||last.alpha!==sample.alpha){
+        const elapsed=last&&last.epoch===sample.epoch?sample.timeSeconds-last.timeSeconds:0;
+        for(const update of this.visualUpdates)update(elapsed);
+        this.visualSample=sample;
+      }
+      // Rider placement follows visual callbacks and uses the same vehicle sample.
+      const index=this.simulation.active;
+      if(index>=0){
+        const vehicle=sample.vehicles[index]!,seat=this.simulation.vehicles[index]!.spec.seat;
+        character.position.copy(vehicle.position).add(new THREE.Vector3(...seat).applyQuaternion(vehicle.rotation));
+        character.quaternion.copy(vehicle.rotation);
+      }
+      for(const object of this.objects.values())object.updateWorldMatrix(true,true);
+      if(!this.authored&&this.followCamera.initialized)this.followCamera.present(index>=0?sample.vehicles[index]!:sample.player,sample.alpha);
+      return restore;
+    } catch(error){restore();throw error;}
   }
   state(id:string):PhysicsEntityState|undefined{
-    if(id===this.options.character.instanceId){const p=this.simulation.player,h=this.simulation.humanoid,contacts:string[]=[];if(h&&!this.simulation.vehicle)for(let i=0;i<h.controller.numComputedCollisions();i++){const collision=h.controller.computedCollision(i);if(collision?.collider)contacts.push(this.environment.colliderId(collision.collider.handle));}return {id,positionMetersXYZ:tuple(this.options.character.object.position),velocityMetersPerSecondXYZ:tuple(this.simulation.vehicle?.velocity??p.velocity),isGrounded:this.simulation.vehicle?.grounded??p.grounded,collisionEntityIds:[...new Set(contacts)]};}
+    if(id===this.options.character.instanceId){const p=this.simulation.player,h=this.simulation.humanoid,contacts:string[]=[];if(h&&!this.simulation.vehicle)for(let i=0;i<h.controller.numComputedCollisions();i++){const collision=h.controller.computedCollision(i);if(collision?.collider)contacts.push(this.environment.colliderId(collision.collider.handle));}return {id,positionMetersXYZ:tuple(this.logicalPose(id)!.position),velocityMetersPerSecondXYZ:tuple(this.simulation.vehicle?.velocity??p.velocity),isGrounded:this.simulation.vehicle?.grounded??p.grounded,collisionEntityIds:[...new Set(contacts)]};}
     const v=this.simulation.vehicles.find(v=>v.spec.id===id);return v?{id,positionMetersXYZ:tuple(v.position),velocityMetersPerSecondXYZ:tuple(v.velocity),isGrounded:v.grounded,collisionEntityIds:[]}:undefined;
   }
   addCharacter(id:string,object:THREE.Object3D,_options?:CharacterOptions):void{if(!this.objects.has(id)||this.objects.get(id)!==object)throw new Error('TRAINING_CONTENT_REGISTER_IN_OPTIONS');}
@@ -314,7 +419,7 @@ export class TrainingRuntime implements PhysicsPort {
   refresh(_id:string):void{throw new Error('TRAINING_USE_RUNTIME_COMMANDS');}
   refreshMany(ids:readonly string[]):void{if(ids.length)throw new Error('TRAINING_USE_RUNTIME_COMMANDS');}
   setEnabled(_id:string,_enabled:boolean):void{throw new Error('TRAINING_USE_RUNTIME_COMMANDS');}
-  teleport(id:string,position:Vec3):void{if(id!==this.options.character.instanceId||!this.prepareCharacter(position,this.simulation.player.yaw))throw new Error('TRAINING_START_BLOCKED');}
+  teleport(id:string,position:Vec3):void{this.assertExternalMutation();if(id!==this.options.character.instanceId||!this.prepareCharacterOwned(position,this.simulation.player.yaw))throw new Error('TRAINING_START_BLOCKED');}
   applyImpulse(_id:string,_impulse:Vec3):void{throw new Error('TRAINING_IMPULSE_UNSUPPORTED');}
   step():void{throw new Error('TRAINING_REQUIRES_ENGINE_INPUT');}
   characterSettings(_id:string):Required<CharacterOptions>{const c=this.simulation.characterControl;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:1.68,radiusMeters:.28,walkSpeedMetersPerSecond:3.1*c.speed/3.8,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
@@ -326,13 +431,13 @@ export class TrainingRuntime implements PhysicsPort {
   castCameraArm(target:Vec3,eye:Vec3,radius:number){const t=new THREE.Vector3(...target);return {distanceMeters:t.distanceTo(this.environment.cameraCast(t,new THREE.Vector3(...eye),radius))};}
   probe(origin:Vec3,direction:Vec3,distance:number){const result=this.environment.raycast(new THREE.Vector3(...origin),new THREE.Vector3(...direction),distance);return result?{entityId:result.id,distanceMeters:result.distance,normalWorldXYZ:tuple(result.normal)}:null;}
   audit():PhysicsAudit{return {engine:'rapier',entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:id===this.options.character.instanceId?'character':'training-vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};}
-  reset():void{
+  private resetOwned():void{
     const profile=this.prepareProfile(this.baselineProfile);validateTrainingMap(this.currentMap);
     const replacement=new EnvironmentQueries(this.instanceMap(this.currentMap)),previous=this.environment;
     let staged:Simulation;try{staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);}catch(error){replacement.dispose();throw error;}
-    this.simulation.adoptEnvironment(staged);this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();this.clearInput();
+    this.simulation.adoptEnvironment(staged);this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();this.clearInputOwned();
     for(const notify of this.simulationReplacements)notify();
-    this.camera.copy(this.initialCamera);this.camera.fov=this.followCamera.tuning.baseFovDegrees;this.camera.updateProjectionMatrix();this.followCamera.mode=0;this.followCamera.reset(this.simulation);this.sync(0);if(!this.authored)this.followCamera.update(this.simulation,0);
+    this.camera.copy(this.initialCamera);this.camera.fov=this.followCamera.tuning.baseFovDegrees;this.camera.updateProjectionMatrix();this.followCamera.mode=0;this.followCamera.reset(this.simulation);this.sync(0);
   }
-  dispose():void{if(this.disposed)return;this.disposed=true;this.clearInput();this.visualUpdates.clear();this.simulation.dispose();this.environment.dispose();this.options.character.animation?.dispose();}
+  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.environment.dispose();this.options.character.animation?.dispose();}
 }

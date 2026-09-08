@@ -83,6 +83,24 @@ export class Character {
   private mountedMode: 'stand' | 'drive' | 'ride' | null = null;
   private fallbackName = '';
   private fallbackTime = 0;
+  private previousPose: {node:T.Object3D;position:T.Vector3;rotation:T.Quaternion;scale:T.Vector3}[] = [];
+  private currentPose: typeof this.previousPose = [];
+  private snapPose = true;
+  /** Snapshot source locals only after the single fixed animation evaluation. */
+  capturePresentationPose():void {
+    this.previousPose=this.currentPose;
+    this.currentPose=[];
+    this.actor.traverse(node=>this.currentPose.push({node,position:node.position.clone(),rotation:node.quaternion.clone(),scale:node.scale.clone()}));
+    if(this.snapPose||this.previousPose.length!==this.currentPose.length){this.previousPose=this.currentPose;this.snapPose=false;}
+  }
+  applyPresentationPose(alpha:number):void {
+    this.currentPose.forEach((pose,index)=>{
+      const previous=this.previousPose[index]!;
+      pose.node.position.lerpVectors(previous.position,pose.position,alpha);
+      pose.node.quaternion.slerpQuaternions(previous.rotation,pose.rotation,alpha);
+      pose.node.scale.lerpVectors(previous.scale,pose.scale,alpha);
+    });
+  }
   private hipOffset = new T.Vector3();
   constructor(source?: SourceCharacter) {
     this.root.name = 'Host_Character'; this.root.add(this.actor);
@@ -99,7 +117,7 @@ export class Character {
     this.overlay = new MountedRiderPose(source.root); this.loaded = true;
   }
   async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
-  dispose():void{this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+  dispose():void{this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
 
   private legacyFrame(dt: number, name: string, speed: number) {
     if (name !== this.fallbackName) { this.fallbackName = name; this.fallbackTime = 0; }
@@ -113,11 +131,12 @@ export class Character {
 
   update(dt: number, name: string, speed: number, seated: boolean, riding = false, pose?: HumanoidRenderState) {
     const source = this.source; if (!source) return;
+    this.applyPresentationPose(1);
     this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.carriedAttachment = null;
     const mode = pose?.mounted !== undefined ? pose.mounted : riding ? 'ride' : seated || name === 'Driving_Loop' ? 'drive' : null;
     const mounted = mode !== null;
     const identity = pose?.simulationIdentity ?? this.fallbackIdentity;
-    if (identity !== this.simulationIdentity || mode !== this.mountedMode) this.frame = emptyFrame();
+    if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
     const input = pose ?? this.legacyFrame(dt, name, speed);
     Object.assign(this.frame, input);

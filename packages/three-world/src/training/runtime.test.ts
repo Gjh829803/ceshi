@@ -155,8 +155,19 @@ describe('SDK training runtime',()=>{
   const world=await fixture(renderer);try{await world.start();const port=(win as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__.episode!;
    const start={positionWorldMetersXYZ:[-20,.03,-20] as const,facingYawRadians:Math.PI,training:{vehicleInstanceId:'car-1',mounted:true,cameraMode:2 as const,velocityWorldMetersPerSecondXYZ:[0,0,4] as const}};
    expect(port.capabilities().training?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+   const runtime=world.training!,ownedSnapshot=world.snapshot();
+   for(const mutate of [()=>runtime.enter('car-1'),()=>runtime.exit(),()=>runtime.setInput(emptyInput()),()=>runtime.clearInput(),()=>runtime.prepareCharacter([0,.03,0]),()=>runtime.prepare('car-1',map.spawns[0]!),()=>runtime.approach('car-1'),()=>runtime.switchMap(map),()=>runtime.applyProfile({}),()=>runtime.advance({},1/60),()=>runtime.reset(),()=>runtime.prepareEpisodeStart(start),()=>runtime.useAuthoredCamera(),()=>runtime.setCameraMode(1)]){
+    expect(mutate).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot()).toEqual(ownedSnapshot);
+   }
    expect(world.snapshot().training?.mountedInstanceId).toBe('car-1');expect(world.isRunning).toBe(false);expect(()=>world.step({},1)).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
    const frame=port.advance({training:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.training?.cameraMode).toBe(2);expect(canvas.width).toBe(640);port.release();
+   await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+   const interactions=vi.spyOn(runtime.simulation,'interact');port.advance({interact:true},1);
+   expect(interactions).toHaveBeenCalledTimes(1);expect(()=>world.stop()).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+   port.advance({interact:true},1);expect(interactions).toHaveBeenCalledTimes(1);
+   const visual=vi.fn();runtime.onVisualUpdate(visual);port.advance({},1);
+   const captured=port.frame('image/png');expect(port.frame('image/png').snapshot).toEqual(captured.snapshot);expect(visual).toHaveBeenCalledTimes(1);
+   world.dispose();expect(()=>runtime.advance({},1/60)).toThrow('TRAINING_DISPOSED');
   }finally{world.dispose();vi.unstubAllGlobals();}
  });
  it('tracks a physical character action through terminal operation status and clears it on reset',async()=>{
