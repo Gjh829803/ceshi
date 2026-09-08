@@ -4,6 +4,7 @@ import { ThreeCameraRig } from './camera.js';
 import { ThreePhysics } from './physics.js';
 import { createWorld } from './world.js';
 import type { Vec3 } from './engine-contracts.js';
+import type {WorldEngine} from './engine.js';
 
 const distance = (a: Vec3, b: Vec3) => new THREE.Vector3(...a).distanceTo(new THREE.Vector3(...b));
 const unobstructed = (target: Vec3, eye: Vec3) => ({ distanceMeters: distance(target, eye) });
@@ -15,6 +16,68 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('restores only the near plane owned by first person and keeps pending author edits',()=>{
+    const {camera,rig}=fixture();rig.setFollow({targetEntityId:'wolf'});camera.near=.7;
+    rig.useAuthoredCamera();expect(camera.near).toBe(.7);
+    rig.setFollow({targetEntityId:'wolf',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});camera.near=.4;
+    rig.setPerspective('first-person');expect(camera.near).toBe(.035);
+    rig.setPerspective('third-person');expect(camera.near).toBe(.4);
+  });
+  it('does not seal a temporary pre-start perspective as the configured reset default',()=>{
+    const {rig}=fixture();rig.setFollow({targetEntityId:'wolf',view:{eyeOffsetLocalMetersXYZ:[0,1,0],defaultPerspective:'third-person'}});
+    rig.setPerspective('first-person');rig.sealInitialState();rig.reset();
+    expect(rig.snapshot()).toMatchObject({perspective:'third-person',view:{defaultPerspective:'third-person'}});
+  });
+  it('uses a local nonhuman eye, preserves third-person distance and resets the configured default',()=>{
+    const {camera}=fixture(),subject=new THREE.Group();subject.position.set(4,2,3);subject.rotation.y=Math.PI/2;subject.scale.setScalar(2);subject.updateMatrixWorld(true);
+    const rig=new ThreeCameraRig(camera,unobstructed,()=>subject.position.toArray(),()=>({heightMeters:2,radiusMeters:.5}),()=>({matrixWorld:subject.matrixWorld,frontYawRadians:0}));
+    const eye:[number,number,number]=[0,.8,-.3];
+    rig.setFollow({targetEntityId:'wolf',distanceMeters:5,activateOnInput:false,transitionSeconds:0,view:{eyeOffsetLocalMetersXYZ:eye,defaultPerspective:'first-person',keyboardToggleEnabled:true}});
+    expect(camera.position.distanceTo(subject.localToWorld(new THREE.Vector3(...eye)))).toBeLessThan(1e-8);
+    expect(camera.getWorldDirection(new THREE.Vector3()).distanceTo(new THREE.Vector3(-1,0,0))).toBeLessThan(1e-8);
+    rig.sealInitialState();eye[1]=99;
+    rig.updateDesired({distanceDeltaMeters:20,yawDeltaRadians:.2},0);rig.update(0);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBe(0);
+    rig.setPerspective('third-person');expect(camera.near).toBe(.05);expect(rig.snapshot().desiredArmDistanceMeters).toBe(5);
+    rig.reset();expect(rig.snapshot()).toMatchObject({perspective:'first-person',view:{defaultPerspective:'first-person',keyboardToggleEnabled:true,eyeOffsetLocalMetersXYZ:[0,.8,-.3]}});
+    const state=rig.snapshot();expect(rig.snapshot()).toEqual(state);
+  });
+
+  it('allows programmatic nonhuman perspectives with shortcut disabled and preserves authored ownership',async()=>{
+    const camera=new THREE.PerspectiveCamera(50,1,.1,200),world=await createWorld({camera,navigation:false});
+    try{
+      world.addCharacter({id:'wolf',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.4}});world.setControlledEntity('wolf');
+      world.setCameraFollow({view:{eyeOffsetLocalMetersXYZ:[0,1,0],defaultPerspective:'first-person'}});
+      world.step({cameraTogglePressed:true},3);expect(world.snapshot().camera.perspective).toBe('first-person');
+      world.setCameraPerspective('third-person');expect(world.snapshot().camera.perspective).toBe('third-person');
+      world.setCameraFollow({view:{eyeOffsetLocalMetersXYZ:[0,1,0],keyboardToggleEnabled:true},activateOnInput:false});
+      world.step({cameraTogglePressed:true},3);expect(world.snapshot().camera.perspective).toBe('first-person');
+      world.useAuthoredCamera();world.step({cameraTogglePressed:true});expect(world.cameraMode).toBe('authored');
+    }finally{world.dispose();}
+  });
+  it('retains ordinary camera key edges between fixed ticks and drops them on stop',async()=>{
+    const world=await createWorld({camera:new THREE.PerspectiveCamera(),navigation:false});
+    try{
+      world.addCharacter({id:'fox',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.4}});world.setControlledEntity('fox');
+      world.setCameraFollow({view:{eyeOffsetLocalMetersXYZ:[0,.8,0],keyboardToggleEnabled:true}});
+      const engine=(world as unknown as {engine:WorldEngine}).engine;
+      engine.advance(1/120,{cameraTogglePressed:true});expect(world.snapshot().camera.perspective).toBe('third-person');
+      engine.advance(1/120,{});expect(world.snapshot().camera.perspective).toBe('first-person');
+      engine.advance(3/60,{cameraTogglePressed:true});expect(world.snapshot().camera.perspective).toBe('third-person');
+      engine.advance(1/120,{cameraTogglePressed:true});world.stop();world.step({});expect(world.snapshot().camera.perspective).toBe('third-person');
+    }finally{world.dispose();}
+  });
+  it('keeps the nonhuman eye on the safe side of a real thin wall',async()=>{
+    const physics=await ThreePhysics.create(),camera=new THREE.PerspectiveCamera(),wall=new THREE.Mesh(new THREE.BoxGeometry(8,5,.2));wall.position.set(0,2,-1.5);
+    try{
+      physics.addRigid('wall',wall,{kind:'fixed',shape:'box'});physics.step(1/60,{});
+      const rig=new ThreeCameraRig(camera,physics.castCameraArm.bind(physics),()=>[0,0,0],()=>({heightMeters:1.2,radiusMeters:.4}));
+      rig.setFollow({targetEntityId:'wolf',view:{eyeOffsetLocalMetersXYZ:[0,.9,-3],defaultPerspective:'first-person'}});
+      for(let i=0;i<20;i++)rig.update(1/60);
+      expect(camera.position.z).toBeGreaterThan(-1.4);expect(rig.snapshot().obstructionEntityId).toBe('wall');
+      expect(rig.snapshot().perspective).toBe('first-person');
+    }finally{physics.dispose();wall.geometry.dispose();}
+  });
   it('inherits the final authored pose when camera composition changes while follow is pending', () => {
     const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 3, 8); camera.lookAt(0, 1.3, 0);
     const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]); rig.setFollow({ targetEntityId: 'hero' });

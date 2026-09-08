@@ -121,6 +121,33 @@ pathfinding or compatible skeletal animation. A catalog creature documented as a
 Training mount does not automatically provide standalone flight or swimming.
 Keep visual limb animation on SDK update callbacks without moving the owned root.
 
+For first/third-person switching, supply an eye in the subject root's **local**
+coordinates. It follows the root's scale and rotation; initial looking direction
+uses the actor's semantic front (`frontYawRadians`, default local -Z).
+
+```ts
+world.setCameraFollow({targetEntityId: 'fox', view: {
+  eyeOffsetLocalMetersXYZ: [0, .82, -.5],
+  defaultPerspective: 'third-person', keyboardToggleEnabled: true,
+}});
+world.setKeyBindings({cameraToggle: ['KeyV']}); // Optional; default is T.
+world.setCameraPerspective('first-person'); // Does not change the reset default.
+```
+
+Configure before `start()` to establish the reset baseline. Without `view`, the
+existing third-person behavior is unchanged. With `view`, defaults are third
+person and shortcut disabled; selecting first person applies the eye immediately.
+Keyboard switching respects UI focus and pause and keeps one edge per press.
+Programmatic switching remains available with the shortcut disabled. First-person
+zoom is ignored and the existing third-person distance is retained. Mouse look
+uses a stable horizon; the SDK does not infer a creature's neck rig or wing motion.
+The subject itself is excluded only while rendering the primary first-person
+view, then its render layers are restored; object views show the complete model.
+Eye collision uses the existing camera solver. Read the effective configuration,
+current `perspective` and collision result from `world.snapshot().camera`.
+Episode starts inherit the saved view; optional `start.cameraPerspective` selects
+a segment view without changing that default. Keep capture targets on the actor.
+
 This route has no human mount/dismount controller. Show controls for its actual
 abilities, exercise movement/collision/camera/reset, and use the same Creator
 playtest/submit and Episode capture interfaces. Training-specific character
@@ -363,7 +390,8 @@ claiming recording or visual acceptance.
 First-person driving inherits the vehicle controller's existing tilt, including
 for custom vehicle geometry bound to that controller. Keep this default feedback;
 scene code does not add another camera sway loop or a separate tilt setting.
-These view presets require Training and do not supply a generic nonhuman eye rig.
+These profile settings apply to Training. Independent subjects configure the eye
+through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
 ### Training camera perspectives
 

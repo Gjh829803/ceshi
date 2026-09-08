@@ -2,6 +2,8 @@ import type { CommandReceipt, OperationStatus, Vec3, WorldInput, WorldSnapshot }
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
+ /** Optional segment view; takes precedence over a legacy training.cameraMode. */
+ readonly cameraPerspective?:import('./contracts.js').CameraPerspective;
  readonly training?: {
   readonly vehicleInstanceId?:string; readonly mounted?:boolean; readonly cameraMode?:0|1|2;
   readonly velocityWorldMetersPerSecondXYZ?:Vec3; readonly pitchRadians?:number;readonly rollRadians?:number;
