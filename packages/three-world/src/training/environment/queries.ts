@@ -1,4 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
+import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
+import { probeTrainingCamera } from '../camera-queries';
+import type { Vec3 } from '../../contracts';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { VehicleSpec } from '../config';
 import type { MapDefinition } from './types';
@@ -345,10 +348,16 @@ export class EnvironmentQueries {
     p.clamp(min,max);
     return {position:p,grounded,normal:normals[0]??new Vector3(0,1,0),normals,blocked:p.clone().sub(position).distanceToSquared(delta)>1e-6};
   }
+  cameraProbe(from:Vec3,to:Vec3,radius:number) {
+    this.assertLive();
+    const hit=probeTrainingCamera(this.world,from,to,radius,undefined,this.environmentFilter,.015);
+    // Preserve the vehicle query's historical 0.002 of the swept segment margin.
+    const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
+    return {...hit,distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};
+  }
   cameraCast(from:Vector3,to:Vector3,radius=.25):Vector3 {
-    this.assertLive();const delta=to.clone().sub(from);
-    const hit=this.world.castShape(from,identity,delta,new RAPIER.Ball(radius),.015,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
-    return hit?from.clone().addScaledVector(delta,Math.max(0,hit.time_of_impact-.002)):to.clone();
+    const solver=new CameraCollisionSolver((a,b,r)=>this.cameraProbe(a,b,r));
+    return new Vector3(...solver.project({target:from.toArray(),eye:to.toArray(),current:to.toArray(),radius,armClearance:0}).position);
   }
 }
 export const createQueries=(map:MapDefinition)=>new EnvironmentQueries(map);

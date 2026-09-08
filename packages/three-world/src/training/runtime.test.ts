@@ -1,5 +1,6 @@
+import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
-import {Group,PerspectiveCamera,Quaternion,Vector2,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Quaternion,Vector2,Vector3,type WebGLRenderer} from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type {WorldEngine} from '../engine';
 import type {WorldObservation} from '../contracts';
@@ -264,6 +265,9 @@ describe('SDK training runtime',()=>{
     expect(mutate).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot()).toEqual(ownedSnapshot);
    }
    expect(world.snapshot().training?.mountedInstanceId).toBe('car-1');expect(world.isRunning).toBe(false);expect(()=>world.step({},1)).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+   const collisionBefore=runtime.followCamera.collisionState;
+   const repeatedCollisionFrame=port.frame('image/png');expect(port.frame('image/png')).toEqual(repeatedCollisionFrame);
+   expect(runtime.followCamera.collisionState).toEqual(collisionBefore);
    const frame=port.advance({training:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.training?.cameraMode).toBe(2);expect(canvas.width).toBe(640);
    port.advance({training:{...emptyInput(),brake:true}},120);
    expect(await port.execute({type:'training.exit'})).toMatchObject({status:'applied'});port.advance({},120);
@@ -344,4 +348,49 @@ describe('SDK training runtime',()=>{
   const world=await fixture();try{world.training!.switchMap({...map,id:'second',playerSpawn:[20,.03,20]});world.step({moveZRatio:-1},10);await world.reset();expect(world.training!.environment.map.id).toBe('second');expect(world.getEntityState('player').positionWorldMetersXYZ[0]).toBeCloseTo(20);}finally{world.dispose();}
   await expect(createWorld({training:{map,vehicles:[],character:{instanceId:'p',object:new Group()}},fixedTimeStepSeconds:1/30})).rejects.toThrow('TRAINING_REQUIRES_60HZ');
  });
+});
+
+it('keeps humanoid collision recovery independent of display frequency and other worlds',async()=>{
+ const worlds=await Promise.all([fixture(),fixture(),fixture()]);
+ try {
+  const distances:number[]=[];
+  for(const [index,world] of worlds.entries()){
+   const r=world.training!,engine=(world as unknown as {engine:WorldEngine}).engine;
+   r.switchMap({...map,id:'recovery',boxes:[map.boxes[0]!,{id:'wall',position:[0,2,-2],size:[6,4,.2]}]});
+   world.step({},2);expect(r.followCamera.distance).toBeLessThan(2);
+   const state=r.followCamera.collisionState;
+   for(let frame=0;frame<index*3;frame++)engine.render(.5);
+   expect(r.followCamera.collisionState).toEqual(state);
+   // Orbit out from behind the obstruction without resetting collision memory.
+   r.followCamera.yaw=Math.PI/2;
+   for(let tick=0;tick<30;tick++){
+    world.step({},1);
+    for(let frame=0;frame<index*2;frame++)engine.render(.5);
+   }
+   world.render();distances.push(r.followCamera.distance);
+   expect(r.followCamera.collisionState.authorityTick).toBeGreaterThan(0);
+  }
+  expect(distances[1]).toBeCloseTo(distances[0]!,10);expect(distances[2]).toBeCloseTo(distances[0]!,10);
+  const peer=worlds[1]!.training!.followCamera.collisionState;
+  await worlds[0]!.reset();worlds[0]!.step({},1);
+  expect(worlds[1]!.training!.followCamera.collisionState).toEqual(peer);
+ }finally{worlds.forEach(world=>world.dispose());}
+});
+
+it('uses a committed fallback so an emergency display is independent of earlier render alphas',async()=>{
+ const world=await fixture();
+ try {
+  const r=world.training!,c=r.followCamera;
+  // Deterministic query seam: the second half of the interpolation has an
+  // inseparable pivot; either committed eye remains physically clear.
+  Object.defineProperty(c,'collision',{value:new CameraCollisionSolver((a,b)=>a[0]>1&&a[2]>-5?
+   {distanceMeters:0,startedOverlapping:true,normalWorldXYZ:[1,0,0],penetrationDepthMeters:.01,colliderEntityId:'narrow-gap'}:
+   {distanceMeters:Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])})});
+  r.simulation.player.position.set(0,0,0);c.target.set(0,1,0);c.camera.position.set(0,3,-8);c.capturePresentationPose(r.simulation,true);c.beforeFixedUpdate();
+  r.simulation.player.position.set(2,0,0);c.target.set(2,1,0);c.camera.position.set(2,3,-8);c.capturePresentationPose(r.simulation);
+  const pose=(alpha:number)=>({position:new Vector3(2*alpha,0,0),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0,cameraHeight:1});
+  c.present(pose(.8),.8);const direct=c.camera.position.clone(),state=c.collisionState;
+  c.present(pose(.2),.2);expect(c.camera.position.distanceTo(direct)).toBeGreaterThan(.1);
+  c.present(pose(.8),.8);expect(c.camera.position).toEqual(direct);expect(c.collisionState).toEqual(state);
+ }finally{world.dispose();}
 });
