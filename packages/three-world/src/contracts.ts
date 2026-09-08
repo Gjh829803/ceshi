@@ -166,6 +166,8 @@ export interface WorldInput {
  readonly cameraYawRatio?:number; readonly cameraPitchRatio?:number;
  readonly run?:boolean; readonly jump?:boolean; readonly jumpPressed?:boolean;
  readonly interact?:boolean; readonly interactPressed?:boolean;
+ /** One-shot Training first/third-person toggle, subject to profile.view.keyboardToggleEnabled. */
+ readonly cameraTogglePressed?:boolean;
 }
 export interface MovementContext<T extends JsonValue> {
  readonly entityId:string; readonly deltaSeconds:number; readonly simulationTick:number;
@@ -387,8 +389,8 @@ export interface World {
 
 /** Small same-scene browser observer. Tools inspect these live objects, never a display clone. */
 export interface WorldObservation {
- /** Host-only synchronous capture transaction at the exact current fixed sample. */
- withPresentation?<T>(work:()=>T):T;
+ /** Host-only synchronous capture transaction. Object views show the complete preset body. */
+ withPresentation?<T>(work:()=>T,options?:{readonly view?:'world'|'object'}):T;
  readonly episode?:import('./episode-contracts.js').EpisodeRuntimePort;
  readonly ready:boolean; readonly scene:THREE.Scene; readonly camera:THREE.Camera;
  readonly renderer:THREE.WebGLRenderer; readonly player:THREE.Object3D;

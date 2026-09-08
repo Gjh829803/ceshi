@@ -161,6 +161,17 @@ describe('Three tool operations and truthful submission', () => {
     const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });
+  it('discovers persistent camera defaults and admits the same view configuration for recorded commands',async()=>{
+    const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
+    try{
+      const schema=await service.schema('training');
+      expect(schema.sdkGuide).toContain('defaultPerspective');expect(schema.sdkGuide).toContain('keyboardToggleEnabled');
+      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.trainingSourceContracts?.['runtime.ts']).toContain('TrainingViewSettings');
+      const check=new Ajv({strict:false}).compile(WORLD_COMMAND_SCHEMA);
+      expect(check({type:'training.profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(true);
+      expect(check({type:'training.profile',profile:{view:{defaultPerspective:'invented'}}})).toBe(false);
+    }finally{await service.close();}
+  });
   it('archives only payload files, excluding macOS AppleDouble metadata and symlinks', async () => {
     const root = await fixture(), payload = path.join(root, 'payload'); await mkdir(payload); await writeFile(path.join(payload, 'hello.txt'), 'hello'); const execFile = promisify(execFileCallback);
     if (process.platform === 'darwin') await execFile('xattr', ['-w', 'com.apple.metadata:three-creator-test', 'test', payload]);

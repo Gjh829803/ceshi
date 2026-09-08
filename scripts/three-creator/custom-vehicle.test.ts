@@ -8,6 +8,58 @@ import {executeThreeCreatorTool} from './mcp';
 import {createAssetPolicySnapshot,assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
 
+it('captures a complete rider in object views while preserving the configured first-person world',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'rider-full-capture-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-vehicle');
+  for(const [name,content]of Object.entries(example.files))await writeFile(path.join(root,name),name==='main.ts'?content.replace(
+   'createHumanoidWorld({','createHumanoidWorld({profile:{view:{defaultPerspective:"first-person"}},'):content);
+  await service.inspect();const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(async()=>{
+   const host=window.__THREE_CREATOR_HOST__!,world=window.__WORLDKIT_EVAL__!;await host.stop();
+   host.capture('opening',[],null);
+   const before=world.snapshot!(),first=host.capture('entity-triview',['player'],null).image;
+   const after=world.snapshot!();
+   const meshes:import('three').SkinnedMesh[]=[];world.player.traverse(o=>{if((o as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(o as import('three').SkinnedMesh);});
+   const clipped=meshes.map(mesh=>mesh.geometry);
+   const failedRender=world.renderer.render;
+   world.renderer.render=()=>{throw new Error('object capture fixture');};
+   try{host.capture('entity-triview',['player'],null);}catch{}finally{world.renderer.render=failedRender;}
+   const restoredAfterFailure=meshes.every((mesh,i)=>mesh.geometry===clipped[i]);
+   await world.execute!({type:'training.camera',mode:0});
+   const full=host.capture('entity-triview',['player'],null).image;
+   return {sameImage:first===full,before,after,restoredAfterFailure};
+  });
+  expect(result.before.training!.cameraMode).toBe(1);expect(result.after).toEqual(result.before);
+  expect(result.sameImage).toBe(true);expect(result.restoredAfterFailure).toBe(true);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);
+
+it('uses configured first-person defaults and SDK keyboard toggles in a generated rider world',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'rider-view-settings-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-vehicle');
+  for(const [name,content]of Object.entries(example.files))await writeFile(path.join(root,name),name==='main.ts'?content.replace(
+   'createHumanoidWorld({','createHumanoidWorld({profile:{view:{defaultPerspective:"first-person",keyboardToggleEnabled:true}},'):content);
+  const initial=await service.inspect();expect(initial.observation.snapshot.training.cameraMode).toBe(1);
+  const page=(service as unknown as {session:{page:Page}}).session.page;
+  const mode=()=>page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode);
+  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===0);
+  await page.keyboard.down('t');expect(await mode()).toBe(0);await page.keyboard.up('t');
+  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===1);
+  await page.evaluate(()=>{const input=document.createElement('input');input.id='focus-fixture';document.body.append(input);input.focus();});
+  await page.keyboard.press('t');expect(await mode()).toBe(1);
+  await page.evaluate(()=>document.getElementById('focus-fixture')!.remove());await page.mouse.click(20,20);
+  await service.executeCommand({type:'training.profile',profile:{view:{keyboardToggleEnabled:false}}});
+  await page.keyboard.press('t');expect(await mode()).toBe(1);
+  await service.executeCommand({type:'training.camera',mode:0});expect(await mode()).toBe(0);
+  await page.evaluate(async()=>{await window.__THREE_CREATOR_HOST__!.reset();});expect(await mode()).toBe(1);
+  await page.keyboard.press('t');expect(await mode()).toBe(1);
+  const result=await service.inspect();expect(result.pageErrors).toEqual([]);
+  expect(result.feedback.characterContinuity.issues).toEqual([]);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);
+
 it('observes SDK first-person clipping as partial and restores full rider checks on return',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'rider-perspectives-')),service=new ThreeCreatorTools(root,'three-sdk');
  try{

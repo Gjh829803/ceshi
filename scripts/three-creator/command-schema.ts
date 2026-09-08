@@ -9,6 +9,7 @@ const axis={type:'number',minimum:-1,maximum:1};
 const trainingInput=objectSchema({forward:axis,steer:axis,roll:axis,lift:axis,pitch:axis,strafe:axis,boost:boolean,brake:boolean,slow:boolean,jump:boolean,
  humanoid:objectSchema(Object.fromEntries(training.HUMANOID_INPUT_FIELDS.map(key=>[key,boolean])),[])},['forward','steer','roll','lift','pitch','strafe','boost','brake','slow','jump']);
 const trainingProfile=objectSchema({character:objectSchema(training.CONTROL_SCHEMA_PROPERTIES,[]),
+ view:objectSchema(training.TRAINING_VIEW_SCHEMA_PROPERTIES,[]),
  cameraDistanceMeters:{anyOf:[{type:'number',minimum:1,maximum:40},{type:'null'}]},
  camera:objectSchema({recenterDelaySeconds:number,recenterResponsePerSecond:number,followResponsePerSecond:number,baseFovDegrees:number,targetHeightOffset:number,horizontalOffset:number,collisionEnabled:boolean,collisionRadiusMeters:number},[]),
  vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:number},[])}},[]);

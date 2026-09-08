@@ -74,7 +74,7 @@ export class WorldEngine {
   private lastFrameTime = 0;
   private frameId = 0;
   private frameGeneration = 0;
-  private pendingTrainingEdges={interact:false,jump:false,trainingJump:false,humanoid:{} as Record<string,boolean>};
+  private pendingTrainingEdges={interact:false,jump:false,cameraToggle:false,trainingJump:false,humanoid:{} as Record<string,boolean>};
   private previousJump = false;
   private previousInteract = false;
   private navigationDirty = true;
@@ -201,14 +201,14 @@ export class WorldEngine {
     this.alive(); if (!Number.isInteger(ticks) || ticks < 0 || ticks > 36_000) throw new Error('WORLD_TICKS_INVALID');
     this.validateInput(input);
     this.sealInitialState();
-    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) });
+    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) });
     return this.snapshot();
   }
   private validateInput(input: WorldInput): void {
     if (!input || typeof input !== 'object') throw new Error('WORLD_INPUT_INVALID');
     if(input.training){if(!this.training)throw new Error('TRAINING_INPUT_REQUIRES_RUNTIME');this.training.validateInput(input.training);}
     for (const key of ['moveXRatio', 'moveZRatio', 'moveYRatio', 'cameraYawRatio', 'cameraPitchRatio'] as const) if (input[key] !== undefined && (!Number.isFinite(input[key]) || Math.abs(input[key]) > 1)) throw new Error('WORLD_INPUT_INVALID');
-    for (const key of ['run', 'jump', 'jumpPressed', 'interact', 'interactPressed'] as const) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error('WORLD_INPUT_INVALID');
+    for (const key of ['run', 'jump', 'jumpPressed', 'interact', 'interactPressed', 'cameraTogglePressed'] as const) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error('WORLD_INPUT_INVALID');
   }
   private faceDirection(entity: Entity, direction: THREE.Vector3): void {
     const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-direction.x, -direction.z) - (entity.options.frontYawRadians ?? 0));
@@ -247,7 +247,12 @@ export class WorldEngine {
     const dt = this.fixedTimeStepSeconds;
     try {
       for (const update of this.updates) { const result: unknown = update({ world: this, deltaSeconds: dt, simulationTick: this.tick + 1 }); if (result && typeof (result as Promise<unknown>).then === 'function') throw new Error('WORLD_ASYNC_UPDATE_UNSUPPORTED: prepare async content before a fixed update'); }
-      if(this.training){trainingHost(this.training).advance(input,dt,this.pointerInput);this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;}
+      if(this.training){
+        const mode=this.training.followCamera.mode;
+        trainingHost(this.training).advance(input,dt,this.pointerInput);
+        if(mode!==this.training.followCamera.mode)this.inputRouter.releasePointerLock();
+        this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;
+      }
       this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.jump)},dt);this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
       const customActions=new Map<string,string>();
@@ -477,18 +482,18 @@ export class WorldEngine {
     // Preserve only one-shot edges; analog axes always use the latest sample.
     if(this.training&&input){
       const pending=this.pendingTrainingEdges;
-      pending.interact ||= !!input.interactPressed;pending.jump ||= !!input.jumpPressed;
+      pending.interact ||= !!input.interactPressed;pending.jump ||= !!input.jumpPressed;pending.cameraToggle ||= !!input.cameraTogglePressed;
       pending.trainingJump ||= !!input.training?.jump;
       for(const [key,value] of Object.entries(input.training?.humanoid??{}))if(value)pending.humanoid[key]=true;
     }
     let steps = 0;
     while (this.accumulatorSeconds + 1e-10 >= this.fixedTimeStepSeconds && steps++ < 15) {
-      let sampled = input === undefined ? this.keyboard.sample() : steps === 1 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }) };
+      let sampled = input === undefined ? this.keyboard.sample() : steps === 1 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) };
       if(this.training&&steps===1){
         const pending=this.pendingTrainingEdges;
-        sampled={...sampled,...(pending.interact?{interactPressed:true}:{}),...(pending.jump?{jumpPressed:true}:{}),
+        sampled={...sampled,...(pending.interact?{interactPressed:true}:{}),...(pending.jump?{jumpPressed:true}:{}),...(pending.cameraToggle?{cameraTogglePressed:true}:{}),
           ...(pending.trainingJump||Object.keys(pending.humanoid).length?{training:{...emptyInput(),...sampled.training,jump:pending.trainingJump||!!sampled.training?.jump,humanoid:{...sampled.training?.humanoid,...pending.humanoid}}}:{})};
-        this.pendingTrainingEdges={interact:false,jump:false,trainingJump:false,humanoid:{}};
+        this.pendingTrainingEdges={interact:false,jump:false,cameraToggle:false,trainingJump:false,humanoid:{}};
       }
       this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
     }
@@ -506,18 +511,18 @@ export class WorldEngine {
     };
     this.frameId = requestAnimationFrame(frame);
   }
-  stop(): void { this.pendingTrainingEdges={interact:false,jump:false,trainingJump:false,humanoid:{}};this.running = false; this.inputRouter.clear(); this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
+  stop(): void { this.pendingTrainingEdges={interact:false,jump:false,cameraToggle:false,trainingJump:false,humanoid:{}};this.running = false; this.inputRouter.clear(); this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(alpha=1): void {
     if(this.disposed)return;
     this.withPresentation(()=>this.renderer?.render(this.scene,this.camera),alpha);
     try { for(const callback of this.renders)callback(); }
     catch(error){this.recordError('WORLD_FRAME_FAILED',error);this.stop();throw error;}
   }
-  withPresentation<T>(callback:()=>T,alpha=1):T {
+  withPresentation<T>(callback:()=>T,alpha=1,view:'world'|'object'='world'):T {
     this.alive();
     let restore:(()=>void)|undefined;
     try {
-      restore=this.training?trainingHost(this.training).present(alpha,this.tick):undefined;
+      restore=this.training?trainingHost(this.training).present(alpha,this.tick,view):undefined;
       this.scene.updateMatrixWorld(true);
       const result=callback();
       if(result&&typeof (result as unknown as PromiseLike<unknown>).then==='function'){
@@ -572,7 +577,7 @@ export class WorldEngine {
     if (!this.renderer || !this.controlled) throw new Error('WORLD_OBSERVER_REQUIRES_RENDERER_AND_PLAYER'); const world = this;
     const selected = options.targetEntityIds === undefined ? undefined : new Set(options.targetEntityIds);
     if (selected) for (const id of selected) this.entity(id);
-    const observer: WorldObservation = { withPresentation:work=>world.withPresentation(work),ready: true, scene: this.scene, camera: this.camera, renderer: this.renderer, get player() { return world.entity(world.controlled!).object; }, get targets() { return Object.fromEntries([...world.entities].filter(([id]) => !selected || selected.has(id) || id === world.controlled).map(([id, e]) => [id, e.object])); }, get targetFrontYawRadiansById() { return Object.fromEntries([...world.entities].map(([id, e]) => [id, e.options.frontYawRadians ?? 0])); }, startLive: () => this.start(), stopLive: () => this.stop(), reset: () => this.reset(), snapshot: () => this.snapshot(), inspect: () => this.inspect(), capabilities: () => this.capabilities(), execute: command => this.execute(command) };
+    const observer: WorldObservation = { withPresentation:(work,options)=>world.withPresentation(work,1,options?.view),ready: true, scene: this.scene, camera: this.camera, renderer: this.renderer, get player() { return world.entity(world.controlled!).object; }, get targets() { return Object.fromEntries([...world.entities].filter(([id]) => !selected || selected.has(id) || id === world.controlled).map(([id, e]) => [id, e.object])); }, get targetFrontYawRadiansById() { return Object.fromEntries([...world.entities].map(([id, e]) => [id, e.options.frontYawRadians ?? 0])); }, startLive: () => this.start(), stopLive: () => this.stop(), reset: () => this.reset(), snapshot: () => this.snapshot(), inspect: () => this.inspect(), capabilities: () => this.capabilities(), execute: command => this.execute(command) };
     this.observer = observer;
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; target.__WORLDKIT_EVAL__ = observer; target.__WORLDKIT_CREATOR__ = observer; }
     return observer;

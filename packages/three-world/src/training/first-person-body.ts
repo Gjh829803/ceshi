@@ -42,5 +42,10 @@ export class FirstPersonBody {
     this.active = active;
     for (const { mesh, original, local } of this.meshes) mesh.geometry = active ? local : original;
   }
+  /** Synchronous rendering override; restore the enclosing view on success or failure. */
+  present(active:boolean):()=>void {
+    const previous=this.active;this.setActive(active);
+    return ()=>this.setActive(previous);
+  }
   dispose(): void { this.setActive(false); for (const { local } of this.meshes) local.dispose(); }
 }

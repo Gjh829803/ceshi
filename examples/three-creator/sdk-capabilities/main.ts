@@ -48,6 +48,7 @@ catch(error){document.getElementById('loadText')!.textContent='资源加载失�
 const sdk=await createWorld({scene,camera,renderer,canvas,assetDefinitions:definitions,
   training:{map:getMap('campus'),vehicles:SPECS.map((spec,n)=>({instanceId:spec.id,assetId:'training.'+spec.id,spec,object:visuals[n]!.root})),character:{instanceId:'person',object:character.root,animation:character}}});
 const runtime=sdk.training!,sim=runtime.simulation,follow=runtime.followCamera;
+runtime.applyProfile({view:{keyboardToggleEnabled:true}});
 const accessories=createAccessoryPreview(character);
 let currentMap=getMap('campus'),world=buildWorld(scene,currentMap);
 const session={get map(){return currentMap;},get world(){return world;},get queries(){return runtime.environment;},
@@ -106,7 +107,6 @@ function interact(){if(!ready||paused||panelOpen)return;humanDemo=null;clearInpu
 window.addEventListener('keydown',e=>{
   if(e.altKey||e.metaKey||panelOpen||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable=true],dialog,.asset-library,.camera-inspector')))return;
   if(e.repeat)return;
-  if(e.code==='KeyT'&&!paused&&ready){e.preventDefault();cycleCamera();return;}
   if(['forward','backward','left','right','jump'].some(action=>sdk.getKeyBindings()[action as training.ControlAction].includes(e.code)))humanDemo=null;
   if(!e.repeat){if(e.code==='Escape'){pause();return;}if(paused||!ready)return;
     if(/^Digit[1-6]$/.test(e.code)&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes(e.code))){const entry=quickSlots[Number(e.code.slice(-1))-1];if(entry)selectAsset(entry.id);}
@@ -253,7 +253,7 @@ function updateUI(){
   if(v) setHTML('interaction',v.submerged?'载具涉水 · 使用页面复位按钮继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
   else setHTML('interaction',h?.skills.hint(sdk.getKeyBindings())??(h?.surface.mode==='climbing'?'Space 尝试翻上 · C 松手':runtime.characterCapabilities().find(c=>c.id==='climb')?.eligible?'E 进入攀爬':null)??(nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索'));
   if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint(sdk.getKeyBindings())??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
-  else setText('bottomHint',follow.mode===1?'点击画面锁定鼠标 · 自由观察不改变车辆方向 · T 切换视角 · Esc 释放 / 暂停':'点击 / 拖动观察 · 滚轮调距离 · T 切换三种视角 · 页面复位按钮返回起点 · Esc 暂停');
+  else setText('bottomHint',follow.mode===1?'点击画面锁定鼠标 · 自由观察不改变车辆方向 · T 切换视角 · Esc 释放 / 暂停':'点击 / 拖动观察 · 滚轮调距离 · T 切换第一 / 第三人称 · 页面复位按钮返回起点 · Esc 暂停');
   const pos=v?.position??p.position;let zone=session.map.regions[0]!,distance=Infinity;for(const region of session.map.regions){const inside=Math.abs(pos.x-region.center[0])<=region.size[0]/2&&Math.abs(pos.z-region.center[2])<=region.size[1]/2;const d=inside?region.size[0]*region.size[1]*.00001:1000+Math.hypot(pos.x-region.center[0],pos.z-region.center[2]);if(d<distance){distance=d;zone=region;}}setText('zone',zone.name);setText('mapBadge',session.map.id==='campus'?'综合园区 · 1 km²':session.map.name);
   mapSelect.value=session.map.id;setText('cameraButton',`相机 · ${['第三人称','第一人称','沉浸越肩'][follow.mode]}`);inspector.sync();
   el('debugButton').setAttribute('aria-pressed',String(!el('workspace').classList.contains('inspector-closed')&&(innerWidth>720||el('workspace').classList.contains('inspector-mobile-open'))&&!(innerWidth<=1000&&library.isOpen())));

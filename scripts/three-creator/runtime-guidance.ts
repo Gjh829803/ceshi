@@ -5,7 +5,7 @@ import type {CreatorProfile} from './contracts.js';
 import {REPOSITORY_ROOT,type ThreeCompiler} from './compiler.js';
 import {readWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 
-const DEFINITION_FILES = ['training/humanoid/action-schema.ts','training/input.ts','training/character-capabilities.ts'] as const;
+const DEFINITION_FILES = ['training/humanoid/action-schema.ts','training/input.ts','training/character-capabilities.ts','training/runtime.ts'] as const;
 
 /** One validated source snapshot per discovery call; never import author modules. */
 export class RuntimeGuidance {
