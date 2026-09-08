@@ -77,9 +77,9 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
   }
   const cameraGroup=group('相机模式','CAMERA');
   const modes=create('div','inspector-modes');modes.setAttribute('role','group');modes.setAttribute('aria-label','相机模式');
-  const modeButtons=['跟随','近距','俯视'].map((label,index)=>{
-    const button=create('button','inspector-mode',label);button.type='button';button.dataset.mode=String(index);
-    button.addEventListener('click',()=>{options.onInteract?.();options.setCameraMode(index);sync();});modes.append(button);return button;
+  const modeButtons=[['第一人称',1],['第三人称',0],['沉浸越肩',2]].map(([label,index])=>{
+    const button=create('button','inspector-mode',String(label));button.type='button';button.dataset.mode=String(index);
+    button.addEventListener('click',()=>{options.onInteract?.();options.setCameraMode(Number(index));sync();});modes.append(button);return button;
   });
   const modeNote=create('p','inspector-mode-note');cameraGroup.append(modes,modeNote);
   const actual=create('div','inspector-camera-actual');
@@ -178,7 +178,7 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     const nextId=options.getAssetId(),changed=nextId!==activeId;activeId=nextId;
     const profile=options.getProfile(activeId),subjectValue=options.getSubject(),camera=options.getCamera(),telemetry=options.getTelemetry?.()??{};
     const movement=options.getMovement(),family=movement.family;
-    const person=activeId==='person',overview=camera.mode===2,cockpit=!person&&camera.mode===1;
+    const person=activeId==='person',shoulder=camera.mode===2,cockpit=camera.mode===1;
     panel.dataset.assetId=activeId;panel.dataset.mode=String(camera.mode);
     write(subjectName,subjectValue.name);write(subjectSubtitle,subjectValue.subtitle??activeId.toUpperCase());write(subjectState,subjectValue.state??(person?'步行':'驾驶'));
     subjectMark.style.setProperty('--subject-color',subjectValue.color??'#d3e9a8');
@@ -186,8 +186,8 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     write(live,telemetry.paused?'已暂停':'实时');live.dataset.paused=String(!!telemetry.paused);
     write(speed,format(telemetry.speedKmh));write(altitude,format(telemetry.altitudeMeters));write(headingValue,format(telemetry.headingDegrees,0));
     write(position,`X ${format(telemetry.position?.[0])}    Y ${format(telemetry.position?.[1])}    Z ${format(telemetry.position?.[2])}`);
-    modeButtons.forEach((button,index)=>{button.setAttribute('aria-pressed',String(camera.mode===index));if(index===1)write(button,person?'近距':'驾驶位');});
-    write(modeNote,overview?(person?'全场观察 · 距离由地图范围自动确定':'俯视当前载具，基础距离控制观察高度'):cockpit?'驾驶位视角 · 鼠标调整观察方向':person&&camera.mode===1?'近距离观察 · 固定 3.2 m，支持环绕':'自动跟随主体 · 鼠标自由环绕');
+    modeButtons.forEach(button=>button.setAttribute('aria-pressed',String(camera.mode===Number(button.dataset.mode))));
+    write(modeNote,shoulder?'近距离右肩视角 · 滚轮调节距离 · 移动时轻微拉远':cockpit?'第一人称 · 点击画面自由观察，T 切换，Esc 释放':'第三人称跟随 · 鼠标自由环绕');
     write(actualDistance,`${format(camera.distance,2)} m`);write(actualFov,`${format(camera.fovDegrees)}°`);
     write(actualYaw,`${format(camera.yawRadians*180/Math.PI)}°`);write(actualPitch,`${format(camera.pitchRadians*180/Math.PI)}°`);
     const descriptions=controlFields(family),visible=new Set(descriptions.map(d=>d.key));
@@ -206,15 +206,16 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     write(velocity,`VX ${format(movement.velocity[0],2)}   VY ${format(movement.velocity[1],2)}   VZ ${format(movement.velocity[2],2)} m/s`);
     write(support,`支撑接触：${movement.grounded?'有':'无'} · 世界坐标速度只读`);
     write(effective,`生效配置\n${descriptions.filter(d=>!d.disabled).map(d=>`${d.label}: ${format(movement.control[d.key],d.step<.001?4:2)} ${d.unit}`).join('\n')}`);
-    disable(distance,cockpit||person&&camera.mode!==0,'此模式的距离由驾驶位或地图范围决定');
-    disable(response,cockpit||person&&overview,'当前模式不使用跟随阻尼');
-    disable(vertical,person&&overview,'全场观察固定注视地图中心');disable(horizontal,person&&overview,'全场观察固定注视地图中心');
-    disable(delay,person||camera.mode!==0,'人物保持原有自由环绕；载具仅跟随模式自动回正');disable(recenter,person||camera.mode!==0,'人物保持原有自由环绕；载具仅跟随模式自动回正');
-    write(recenterNote,person?'人物使用自由环绕，不自动回正。':camera.mode!==0?'切换到跟随模式后生效。':'载具移动时回正；环绕操作会重新计时。');
-    write(lensNote,person?'人物视野固定为设置值。':'随速度增加视野，上方显示实时结果。');
-    collisionToggle.checked=profile.camera.collisionEnabled;collisionToggle.disabled=person&&overview;
-    disable(radius,!profile.camera.collisionEnabled||person&&overview,'关闭检测或全场观察时不使用探测球');
-    const collisionActive=profile.camera.collisionEnabled&&!(person&&overview);
+    distance.row.hidden=shoulder;
+    disable(distance,cockpit||shoulder,'第一人称固定眼位；越肩使用独立近距镜头，滚轮可调 1.3–3.2 m');
+    disable(response,cockpit,'当前模式不使用跟随阻尼');
+    disable(vertical,cockpit,'第一人称眼位由人物姿态决定');disable(horizontal,cockpit,'第一人称眼位由人物姿态决定');
+    disable(delay,person||cockpit,'人物保持原有自由环绕；载具在第三人称和越肩模式可自动回正');disable(recenter,person||cockpit,'人物保持原有自由环绕；载具在第三人称和越肩模式可自动回正');
+    write(recenterNote,person?'人物使用自由环绕，不自动回正。':cockpit?'第一人称保持独立观察，不自动回正。':'载具移动时回正；环绕操作会重新计时。');
+    write(lensNote,shoulder?'越肩随移动速度最多增加 4° 视野。':person||cockpit?'视野固定为设置值。':'随速度增加视野，上方显示实时结果。');
+    collisionToggle.checked=profile.camera.collisionEnabled;collisionToggle.disabled=cockpit;
+    disable(radius,cockpit||!profile.camera.collisionEnabled,'关闭检测或第一人称时不使用探测球');
+    const collisionActive=profile.camera.collisionEnabled&&!cockpit;
     write(collisionState,!collisionActive?'检测未启用':camera.collisionLimited?'检测到遮挡 · 镜头已收回':'检测正常 · 镜头无遮挡');collisionState.dataset.limited=String(collisionActive&&camera.collisionLimited);
     const hasChanges=dirty.has(`${activeId}:movement`)||dirty.has(`${activeId}:camera`);save.dataset.dirty=String(hasChanges);
     if(changed){write(status,hasChanges?'实时已应用 · 尚未保存到本地':'参数按当前资产独立保存；正式交付需导出配置。');status.dataset.error='false';}

@@ -1,6 +1,7 @@
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
-import {Group,PerspectiveCamera,Quaternion,Vector2,Vector3,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,type WebGLRenderer} from 'three';
+import {FirstPersonBody} from './first-person-body';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type {WorldEngine} from '../engine';
 import type {WorldObservation} from '../contracts';
@@ -92,6 +93,67 @@ describe('SDK training runtime',()=>{
   }finally{world.dispose();}
  });
 
+ it('replaces overview with a near right-shoulder camera, keeps actor translation and recovers speed framing',async()=>{
+  const world=await fixture();try{
+   const r=world.training!,s=r.simulation,c=r.followCamera;for(let i=0;i<20;i++)r.advance({},1/60);
+   r.setCameraMode(2);expect(c.distance).toBeCloseTo(2);expect(c.camera.position.x).toBeLessThan(s.player.position.x-.3);
+   expect(c.camera.position.distanceTo(s.player.position)).toBeLessThan(3);
+   const relative=c.camera.position.clone().sub(s.player.position);
+   s.player.position.x+=4;c.update(s,1/60);expect(c.camera.position.clone().sub(s.player.position).distanceTo(relative)).toBeLessThan(.01);
+   s.player.velocity.set(0,0,5.8);for(let i=0;i<120;i++)c.update(s,1/60);
+   expect(c.distance).toBeGreaterThan(2.25);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees+4,1);
+   s.player.velocity.set(0,0,0);for(let i=0;i<120;i++)c.update(s,1/60);expect(c.distance).toBeCloseTo(2,1);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees,1);
+   c.scroll(-10000,s);c.update(s,1/60);expect(c.distance).toBeCloseTo(1.3);
+   r.setCameraMode(1);expect(c.distance).toBe(0);r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);
+  }finally{world.dispose();}
+ });
+ it('retracts the shoulder arm against a wall and restores it after leaving',async()=>{
+  const world=await fixture();try{
+   const r=world.training!,s=r.simulation,c=r.followCamera;
+   s.player.position.set(0,0,8);s.player.yaw=Math.PI;r.setCameraMode(2);
+   expect(c.collisionLimited).toBe(true);expect(c.camera.position.z).toBeLessThan(9.5);expect(c.distance).toBeLessThan(1.5);
+   s.player.position.z=5;for(let i=0;i<120;i++)c.update(s,1/60);
+   expect(c.camera.position.z).toBeLessThan(9.5);expect(c.distance).toBeCloseTo(2,1);
+  }finally{world.dispose();}
+ });
+ it('clips only local head triangles, preserving shared geometry, material groups and bone transforms',()=>{
+  const root=new Group(),pelvis=new Bone(),head=new Bone();pelvis.name='pelvis';head.name='head';pelvis.add(head);
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(new Array(18).fill(0),3));
+  geometry.setAttribute('skinIndex',new Uint16BufferAttribute([0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],4));
+  geometry.setAttribute('skinWeight',new Float32BufferAttribute(Array.from({length:6},()=>[1,0,0,0]).flat(),4));geometry.setIndex([0,1,2,3,4,5]);geometry.addGroup(0,3,0);geometry.addGroup(3,3,1);
+  const mesh=new SkinnedMesh(geometry);mesh.add(pelvis);mesh.bind(new Skeleton([pelvis,head]));root.add(mesh);
+  const body=new FirstPersonBody(root);body.setActive(true);
+  expect(mesh.geometry.index!.count).toBe(3);expect(geometry.index!.count).toBe(6);expect(mesh.geometry.groups[1]!.count).toBe(0);expect(head.scale.toArray()).toEqual([1,1,1]);
+  body.setActive(false);expect(mesh.geometry).toBe(geometry);body.setActive(true);body.dispose();expect(mesh.geometry).toBe(geometry);geometry.dispose();mesh.skeleton.dispose();
+ });
+ it('uses a zero-arm posture eye for first person and restores third person on reset',async()=>{
+  const world=await fixture();try{
+   const r=world.training!,c=r.followCamera,s=r.simulation;
+   for(let i=0;i<20;i++)r.advance({},1/60);
+   r.setCameraMode(1);expect(c.distance).toBe(0);expect(c.camera.near).toBe(.035);
+   expect(c.camera.position.y-s.player.position.y).toBeCloseTo(s.humanoid!.capsuleHeight-.12);
+   const standing=c.camera.position.y;c.orbit(100,70,s.time,s);c.update(s,0);
+   expect(c.yaw).toBeCloseTo(-.4);expect(c.pitch).toBeCloseTo(.28);
+   for(let i=0;i<45;i++)r.advance({training:{...emptyInput(),humanoid:i===0?{toggleCrouch:true}:{}}},1/60);
+   expect(c.camera.position.y).toBeLessThan(standing-.2);
+   c.scroll(900,s);expect(c.distance).toBe(0);
+   r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);expect(c.camera.near).toBe(.08);
+   r.setCameraMode(1);await world.reset();expect(c.mode).toBe(0);expect(c.distance).toBeGreaterThan(3);
+  }finally{world.dispose();}
+ });
+ it('keeps seat look independent of steering and inherits vehicle rotation exactly once',async()=>{
+  const world=await fixture();try{
+   const r=world.training!,s=r.simulation,c=r.followCamera;
+   expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);r.setCameraMode(1);const v=s.vehicle!;
+   c.orbit(100,0,s.time,s);c.update(s,0);const initialYaw=v.yaw;
+   v.yaw+=.7;v.rotation.setFromEuler(new Euler(-.2,v.yaw,.3,'YXZ'));c.update(s,0);
+   const actual=c.camera.getWorldDirection(new Vector3());
+   const expected=new Vector3(0,0,1).applyQuaternion(new Quaternion().setFromEuler(new Euler(0,-.4,0,'YXZ'))).applyQuaternion(v.rotation);
+   expect(actual.distanceTo(expected)).toBeLessThan(1e-6);expect(c.yaw).toBeCloseTo(initialYaw+.3);
+   expect(v.steering).toBe(0);expect(v.throttle).toBe(0);
+   c.orbit(1e5,-1e5,s.time,s);c.update(s,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
+  }finally{world.dispose();}
+ });
  it.each(['plane','sub','space','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
   const speeds=[];
   for(const stronger of [false,true]){

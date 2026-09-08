@@ -29,6 +29,17 @@ describe('training motion and camera inspector',()=>{
  afterEach(async()=>{await page?.close();});afterAll(async()=>{await browser?.close();});
  const state=()=>page.evaluate(()=>(window as any).inspectorTest.state());
  const control=(key:string)=>page.locator(`[data-control-field="${key}"] input[type=number]`);
+ it('offers only first person, third person and shoulder with truthful mode-specific controls',async()=>{
+  await page.getByRole('tab',{name:'相机模式'}).click();
+  expect(await page.locator('[data-mode].inspector-mode').allTextContents()).toEqual(['第一人称','第三人称','沉浸越肩']);
+  await page.getByRole('button',{name:'沉浸越肩',exact:true}).click();expect((await state()).mode).toBe(2);
+  expect(await page.locator('[data-camera-field="distance"]').isVisible()).toBe(false);
+  expect(await page.locator('[data-camera-field="horizontalOffset"] input[type=number]').isEnabled()).toBe(true);
+  await page.getByRole('button',{name:'第一人称',exact:true}).click();expect((await state()).mode).toBe(1);
+  expect(await page.locator('[data-camera-field="horizontalOffset"] input[type=number]').isDisabled()).toBe(true);
+  await page.getByRole('button',{name:'第三人称',exact:true}).click();expect((await state()).mode).toBe(0);
+  expect(await page.locator('[data-camera-field="distance"] input[type=number]').isEnabled()).toBe(true);
+ });
  it('edits independent speed, coasting and braking values and switches family-specific fields',async()=>{
   await page.evaluate(()=>(window as any).inspectorTest.select('rover'));
   for(const [key,value]of [['maxSpeed','40'],['reverseSpeed','5'],['coastDeceleration','2'],['brakeDeceleration','25'],['brakeDamping','4'],['steeringResponse','8'],['steeringReturn','12']])await control(key!).fill(value!);
@@ -42,7 +53,7 @@ describe('training motion and camera inspector',()=>{
   expect(await motion.getAttribute('aria-selected')).toBe('true');
   const a=await motion.boundingBox(),b=await camera.boundingBox();expect(a!.y).toBe(b!.y);
   await motion.focus();await page.keyboard.press('ArrowRight');expect(await camera.getAttribute('aria-selected')).toBe('true');
-  expect(await control('speed').isVisible()).toBe(false);expect(await page.getByRole('button',{name:'跟随',exact:true}).isVisible()).toBe(true);
+  expect(await control('speed').isVisible()).toBe(false);expect(await page.getByRole('button',{name:'第三人称',exact:true}).isVisible()).toBe(true);
   await page.keyboard.press('Home');expect(await motion.getAttribute('aria-selected')).toBe('true');
  });
  it('applies controls independently per asset and resets only the active section',async()=>{

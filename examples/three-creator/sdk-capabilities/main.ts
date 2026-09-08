@@ -100,12 +100,13 @@ function syncTeleport(){humanDemo=null;clearInput();runtime.clearInput();present
 function selectAsset(id:string){if(!ready)return;if(id==='person'){if(sim.vehicle){runtime.interact();syncTeleport();}else {sim.message='当前已是人物 · 可前往人物动作测试点';toast(sim.message);}library.setActive(sim.vehicle?.spec.id??'person');return;}const v=sim.vehicles.find(v=>v.spec.id===id);if(v&&!sim.available(v)){toast('这个载具不适配当前地图，请在测试场景中切换到综合园区。');return;}const selected=runtime.approach(id);if(selected)syncTeleport();else toast(sim.message);}
 function visit(n:number){const spec=SPECS[n]!;const spawn=session.map.spawns.find(s=>s.vehicleId===spec.id)??{id:spec.id,vehicleId:spec.id,name:spec.name,position:spec.spawn,yaw:spec.yaw,regionId:'staging'};runtime.prepare(spec.id,spawn);syncTeleport();}
 function pause(value=!paused,showOverlay=true){paused=value;if(value)sdk.stop();else void sdk.start();frameClock.reset();presentation.snap(sim);visuals.forEach(resetVehicleWheels);resetFPS(value?'已暂停':ready?'采样中':'加载中');clearInput();el('pauseOverlay').classList.toggle('open',value&&showOverlay);el('pauseButton').textContent=value?'继续':'暂停';if(!value&&!panelOpen)sdkPresentation.focus();}
-function setCameraMode(mode:number){clearInput();runtime.setCameraMode(mode as 0|1|2);if(paused)renderPausedState();setText('cameraButton',`相机 · ${['跟随',sim.vehicle?'驾驶位':'近距','俯视'][follow.mode]}`);toast(`相机：${['自动跟随',sim.vehicle?'驾驶位':'近距离观察','俯视观察'][follow.mode]}`);sdkPresentation.focus();}
+function setCameraMode(mode:number){clearInput();if(document.pointerLockElement)document.exitPointerLock();runtime.setCameraMode(mode as 0|1|2);if(paused)renderPausedState();setText('cameraButton',`相机 · ${['第三人称','第一人称','沉浸越肩'][follow.mode]}`);toast(mode===1?'第一人称：点击画面锁定鼠标，Esc 释放；WASD 操控，T 切换视角。':`相机：${mode===0?'第三人称跟随':'近距离沉浸越肩 · 滚轮调距离，点击画面自由观察'}`);sdkPresentation.focus();}
 function cycleCamera(){setCameraMode((follow.mode+1)%3);}
 function interact(){if(!ready||paused||panelOpen)return;humanDemo=null;clearInput();runtime.interact();toast(sim.message);}
 window.addEventListener('keydown',e=>{
   if(e.altKey||e.metaKey||panelOpen||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable=true],dialog,.asset-library,.camera-inspector')))return;
   if(e.repeat)return;
+  if(e.code==='KeyT'&&!paused&&ready){e.preventDefault();cycleCamera();return;}
   if(['forward','backward','left','right','jump'].some(action=>sdk.getKeyBindings()[action as training.ControlAction].includes(e.code)))humanDemo=null;
   if(!e.repeat){if(e.code==='Escape'){pause();return;}if(paused||!ready)return;
     if(/^Digit[1-6]$/.test(e.code)&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes(e.code))){const entry=quickSlots[Number(e.code.slice(-1))-1];if(entry)selectAsset(entry.id);}
@@ -241,7 +242,7 @@ function updateUI(){
     el('stateLabel').textContent=v?v.spec.characterPose==='ride'?'骑乘位已绑定':'驾驶位已绑定':'主体人物';
     el('controls').innerHTML=controlsFor(v?.spec.mode??'character',sdk.getKeyBindings()).map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
     setText('shortcutSubject',v?'载具操作':'人物操作');
-    const systemKeys:[string,string][]=[...(v?.spec.mode==='space'?[]:[['↑ ↓ ← →','环绕相机'] as [string,string]]),['鼠标拖动','环绕'],['滚轮','缩放'],['Esc','菜单 / 暂停'],['1–6','快速前往']];
+    const systemKeys:[string,string][]=[['T','切换三种视角'],['点击 / 拖动','观察'],['滚轮','镜头距离'],['Esc','释放 / 暂停'],['1–6','快速前往']];
     setHTML('systemKeys',systemKeys.map(([keys,title])=>`<span class="shortcut"><kbd>${keys}</kbd><span>${title}</span></span>`).join(''));
     el('cameraNote').textContent=v?v.spec.mode==='space'?'相机随飞行器上方向旋转。拖动鼠标自由观察。':'方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。':'方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。';
     document.querySelectorAll<HTMLElement>('[data-vehicle-id]').forEach(b=>b.classList.toggle('selected',b.dataset.vehicleId===v?.spec.id));
@@ -252,9 +253,9 @@ function updateUI(){
   if(v) setHTML('interaction',v.submerged?'载具涉水 · 使用页面复位按钮继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
   else setHTML('interaction',h?.skills.hint(sdk.getKeyBindings())??(h?.surface.mode==='climbing'?'Space 尝试翻上 · C 松手':runtime.characterCapabilities().find(c=>c.id==='climb')?.eligible?'E 进入攀爬':null)??(nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索'));
   if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint(sdk.getKeyBindings())??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
-  else setText('bottomHint','方向键 / 鼠标环绕 · 滚轮缩放 · 页面按钮切换相机 · 页面复位按钮返回起点 · Esc 菜单');
+  else setText('bottomHint',follow.mode===1?'点击画面锁定鼠标 · 自由观察不改变车辆方向 · T 切换视角 · Esc 释放 / 暂停':'点击 / 拖动观察 · 滚轮调距离 · T 切换三种视角 · 页面复位按钮返回起点 · Esc 暂停');
   const pos=v?.position??p.position;let zone=session.map.regions[0]!,distance=Infinity;for(const region of session.map.regions){const inside=Math.abs(pos.x-region.center[0])<=region.size[0]/2&&Math.abs(pos.z-region.center[2])<=region.size[1]/2;const d=inside?region.size[0]*region.size[1]*.00001:1000+Math.hypot(pos.x-region.center[0],pos.z-region.center[2]);if(d<distance){distance=d;zone=region;}}setText('zone',zone.name);setText('mapBadge',session.map.id==='campus'?'综合园区 · 1 km²':session.map.name);
-  mapSelect.value=session.map.id;setText('cameraButton',`相机 · ${['跟随',v?'驾驶位':'近距','俯视'][follow.mode]}`);inspector.sync();
+  mapSelect.value=session.map.id;setText('cameraButton',`相机 · ${['第三人称','第一人称','沉浸越肩'][follow.mode]}`);inspector.sync();
   el('debugButton').setAttribute('aria-pressed',String(!el('workspace').classList.contains('inspector-closed')&&(innerWidth>720||el('workspace').classList.contains('inspector-mobile-open'))&&!(innerWidth<=1000&&library.isOpen())));
   if(sim.message&&sim.message!==lastMessage){lastMessage=sim.message;toast(sim.message);}if(performance.now()>toastUntil)el('toast').classList.remove('show');drawMap();
 }
