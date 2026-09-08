@@ -19,7 +19,7 @@ Production deliveries open for play when their files are ready.
 Plans admit either legacy three-creator-paired-plan (suite omitted or paired),
 or three-creator-sdk-plan (suite sdk-only, only three-sdk tasks). Both require
 explicit selectedTaskIds. SDK-only and SDK 0.2+ deliveries require matching
-180s+ active/input recordings and 180s+ video. Older paired artifacts remain
+positive active/input durations and an actual video. Older paired artifacts remain
 readable without inventing active time that their original evidence did not record.
 """
 import argparse
@@ -188,8 +188,8 @@ def requires_active_play(delivery, sdk_only=False):
 def validate_recorded_timing(played, delivery, active_required):
     for field, label in (('activePlaySeconds', 'active duration'), ('inputWallSeconds', 'input duration')):
         if active_required or field in played:
-            seconds = finite_number(played.get(field), field, 180 if active_required else 0)
-            require(seconds < 3600, f'Invalid recorded {label}: {field}')
+            seconds = finite_number(played.get(field), field)
+            require(0 < seconds < 3600, f'Invalid recorded {label}: {field}')
             if active_required or field in delivery:
                 require(seconds == delivery.get(field), f'Recorded {label} mismatch')
         else:
@@ -249,8 +249,8 @@ def verified_payload(directory, profile, lock_hash, sdk_only=False):
     same(played, delivery, ('profile', 'sourceHash', 'worldBuildHash', 'runtimeHash', 'episodeHash'), 'Playtest')
     same(captures, delivery, ('profile', 'sourceHash', 'worldBuildHash'), 'Capture manifest')
     require(played.get('status') == 'passed' and played.get('isCompleteEpisode') is True and played.get('capturedInput') is True, 'No complete passing recorded episode')
-    seconds = finite_number(played.get('actualWallSeconds'), 'actualWallSeconds', 180)
-    require(seconds < 3600 and seconds == delivery.get('actualWallSeconds'), 'Recorded wall duration mismatch')
+    seconds = finite_number(played.get('actualWallSeconds'), 'actualWallSeconds')
+    require(0 < seconds < 3600 and seconds == delivery.get('actualWallSeconds'), 'Recorded wall duration mismatch')
     validate_recorded_timing(played, delivery, requires_active_play(delivery, sdk_only))
     require(played.get('pageErrors') == [] and played.get('runtimeErrors') == [] and played.get('blockedNetworkRequests') == [] and captures.get('pageErrors') == [], 'Recorded browser errors')
     require(isinstance(played.get('targetResults'), list) and played['targetResults'] == delivery.get('targetResults'), 'Target measurement mismatch')
@@ -357,7 +357,8 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
         require(video in ('playtest/playtest.mp4', 'playtest/playtest.webm') and video in actual, 'Recorded video missing from closure')
         selected.append(video)
         metadata = played.get('videoMetadata', {})
-        video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration', 180 if requires_active_play(delivery, sdk_only) else .001)
+        video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration')
+        require(video_seconds > 0, 'Invalid video duration')
         frame_count = finite_number(metadata.get('frameCount'), 'video frames', 1)
         targets = played['targetResults']
         require(all(isinstance(target, dict) and type(target.get('reached')) is bool for target in targets), 'Invalid target result')

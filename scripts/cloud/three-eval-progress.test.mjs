@@ -5,7 +5,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import test from 'node:test';
-import {buildThreeRunProgress} from './three-eval-progress.mjs';
+import {buildThreeRunProgress,serializeThreeRunProgress} from './three-eval-progress.mjs';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const taskId='new-reference--three-sdk',caseId='new-reference',runtimeHash=hash('runtime'),caseHash=hash('case');
@@ -25,6 +25,25 @@ async function fixture(runId='run-main',jobId='gen_0000000000000001',root) {
   return {container,runRoot,caseRoot,plan,state,live,launcher,async saveState(){await json(path.join(caseRoot,'state.json'),state);}};
 }
 const snapshot=(...attempts)=>({kind:'three-creator-safe-live-status',schemaVersion:1,observedAt,attempts});
+
+test('ten long case histories stay publishable without losing attempts, current status or visited stages',()=>{
+ const stages=['starting','authoring','preview','playtest','capture','packaging','delivered'];
+ const attempt=index=>({jobId:`gen_${index}`,phase:'delivered',toolSummary:{counts:{world_playtest:40}},events:Array.from({length:100},(_,i)=>({id:`${index}-${i}`,stage:stages[Math.min(i,6)],status:i===6?'failed':'succeeded',detail:'实际工具证据。'.repeat(25),at:observedAt}))});
+ const original={schemaVersion:1,runId:'ten-cases',cases:Array.from({length:10},(_,i)=>({...attempt(i),taskId:`case-${i}`,attempts:Array.from({length:8},(_,j)=>attempt(i*8+j))}))};
+ const before=JSON.stringify(original),serialized=serializeThreeRunProgress(original),result=JSON.parse(serialized);
+ assert(Buffer.byteLength(before)>512*1024);assert(Buffer.byteLength(serialized)<=512*1024);assert.equal(JSON.stringify(original),before);
+ assert.equal(result.cases.length,10);
+ for(let i=0;i<10;i++){
+  const row=result.cases[i];assert.equal(row.taskId,`case-${i}`);assert.equal(row.attempts.length,8);
+  for(const value of [row,...row.attempts]){
+   assert.equal(value.phase,'delivered');assert.equal(value.toolSummary.counts.world_playtest,40);
+   assert(value.omittedEventCount>0);assert.equal(value.events.length+value.omittedEventCount,100);
+   assert.deepEqual(new Set(value.events.map(event=>event.stage)),new Set(stages));
+   assert(value.events.at(-1).id.endsWith('-99'));
+  }
+ }
+ const small={cases:[{events:[],attempts:[]}]};assert.deepEqual(JSON.parse(serializeThreeRunProgress(small)),small);
+});
 
 test('real CLI activity and current MCP stage override queued API items/counters',async()=>{
  const f=await fixture();try{
@@ -257,14 +276,15 @@ test('projects actual operation history once per identity in timestamp order wit
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
-test('separates call execution from checks and never calls short or under-duration playtests passed',async()=>{
+test('separates call execution from complete action evidence without a recording length threshold',async()=>{
  const f=await fixture();try{
   await f.saveState();
-  const full={status:'passed',isCompleteEpisode:true,capturedInput:true,activePlaySeconds:181,inputWallSeconds:182,actualWallSeconds:185,videoMetadata:{durationSeconds:184,frameCount:182,widthPixels:960,heightPixels:540,path:'PRIVATE_VIDEO'}};
+  const full={status:'passed',isCompleteEpisode:true,capturedInput:true,activePlaySeconds:2,inputWallSeconds:2.1,actualWallSeconds:3,videoMetadata:{durationSeconds:2.5,frameCount:8,widthPixels:960,heightPixels:540,path:'PRIVATE_VIDEO'}};
   const cases=[
    {result:{...full,status:'failed',failure:'THREE_EPISODE_OPERATION_FAILED',privateDetails:'PRIVATE_DETAILS'},status:'failed',resultStatus:'failed',detail:'调用已完成，检查结果失败。'},
-   {result:{...full,isCompleteEpisode:false},status:'succeeded',resultStatus:'passed',adequacy:'short-test',detail:'调用已完成，仅完成短测，未完成整段自测。'},
-   {result:{...full,activePlaySeconds:126.2},status:'succeeded',resultStatus:'passed',adequacy:'duration-insufficient',detail:'调用已完成，自测时长不足 180 秒。'},
+   {result:{...full,isCompleteEpisode:false},status:'succeeded',resultStatus:'passed',adequacy:'short-test',detail:'调用已完成，仅执行调试片段，未完成动作计划。'},
+   {result:{...full,activePlaySeconds:0},status:'succeeded',resultStatus:'passed',adequacy:'invalid-recording',detail:'调用已完成，缺少有效操作或录像时间。'},
+   {result:{...full,activePlaySeconds:0.01},status:'succeeded',resultStatus:'passed',adequacy:'complete',detail:'检查结果通过。'},
    {result:{status:'passed'},status:'succeeded',resultStatus:'passed',adequacy:'unverified',detail:'调用已完成，完整自测证据尚不足。'},
    {result:full,status:'succeeded',resultStatus:'passed',adequacy:'complete',detail:'检查结果通过。'},
    {result:undefined,status:'succeeded',resultStatus:null,detail:'工具调用已完成，检查结果尚未确认。'},

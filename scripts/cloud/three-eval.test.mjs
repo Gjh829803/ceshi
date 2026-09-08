@@ -6,32 +6,42 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {isPassingDelivery,eventStatistics,validateDeliveryEvidence} from './three-eval-statistics.mjs';
-test('Installed doctor uses the live MCP input schema and short recordings cannot submit',()=>{
+test('Installed doctor admits complete short recordings and rejects truncated evidence',()=>{
   execFileSync(process.execPath,['--import','tsx','--input-type=module','-e',`
     import assert from 'node:assert/strict';
     import Ajv from 'ajv';
     import {THREE_CREATOR_TOOLS} from './scripts/three-creator/mcp.ts';
     import {EPISODE_SCHEMA} from './scripts/three-creator/contracts.ts';
     import {resolvePlaytestBudget,playtestSubmissionReadiness} from './scripts/three-creator/tools.ts';
-    import {createDoctorBrowserPlan,createDoctorCommands} from './scripts/cloud/three-runtime-doctor.mjs';
+    import {createDoctorBrowserPlan,createDoctorCommands,createDoctorDeliveryGate} from './scripts/cloud/three-runtime-doctor.mjs';
     import {Scene,PerspectiveCamera} from 'three';
     import {createHumanoidWorld} from './packages/three-world/src/humanoid.ts';
     import {Character} from './packages/three-world/src/training/character.ts';
     const ajv=new Ajv({strict:false,strictNumbers:true});
     for(const duration of [3,4,15]) {
       const plan=createDoctorBrowserPlan(duration);
-      for(const [name,args] of [['world_preview',plan.preview],['world_playtest',plan.playtest],['world_capture_triviews',plan.triviews],['world_submit',plan.submit]]) {
+      for(const [name,args] of [['world_preview',plan.preview],['world_playtest',plan.playtest],['world_playtest',plan.debugPlaytest],['world_capture_triviews',plan.triviews],['world_submit',plan.submit]]) {
         const check=ajv.compile(THREE_CREATOR_TOOLS.find(tool=>tool.name===name).inputSchema);
         assert(check(args),name+JSON.stringify(check.errors));
       }
       assert(ajv.validate(EPISODE_SCHEMA,plan.episode));
       const planned=plan.episode.steps.reduce((sum,step)=>sum+step.durationSeconds,0);
-      assert.equal(planned,181);assert.equal(resolvePlaytestBudget(planned,duration,plan.episode.steps.length).mode,'debug');
-      assert.equal(playtestSubmissionReadiness({status:'passed',worldBuildHash:'world',episodeHash:'episode',executionMode:'debug',isCompleteEpisode:false,actualWallSeconds:duration,inputWallSeconds:duration,activePlaySeconds:duration,videoMetadata:{durationSeconds:duration}},{worldBuildHash:'world',episodeHash:'episode'}).eligible,false);
+      assert.equal(planned,duration);assert.equal(resolvePlaytestBudget(planned,plan.playtest.durationSeconds,plan.episode.steps.length).mode,'full-episode');
+      assert.equal(resolvePlaytestBudget(planned,plan.debugPlaytest.durationSeconds,plan.episode.steps.length).mode,'debug');
+      const recorded={status:'passed',sourceHash:'source',runtimeHash:'runtime',worldBuildHash:'world',episodeHash:'episode',executionMode:'full-episode',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:duration,inputWallSeconds:duration,activePlaySeconds:duration,videoMetadata:{durationSeconds:duration}};
+      assert.equal(playtestSubmissionReadiness(recorded,{worldBuildHash:'world',episodeHash:'episode'}).eligible,true);
+      assert.equal(playtestSubmissionReadiness({...recorded,executionMode:'debug',isCompleteEpisode:false},{worldBuildHash:'world',episodeHash:'episode'}).eligible,false);
+      const truncated={id:'debug-submit',status:'failed',error:'THREE_SUBMIT_PLAYTEST_REQUIRED: INCOMPLETE_EPISODE'};
+      const complete={id:'complete-submit',status:'succeeded',result:{...recorded,kind:'three-creator-delivery',technicalStatus:'passed',archiveSha256:'a'.repeat(64),archiveByteLength:1024}};
+      const validation={sourceHash:'source',worldBuildHash:'world',runtimeHash:'runtime'};
+      const gate=createDoctorDeliveryGate({truncated,complete,playtest:recorded,validation});
+      assert.equal(gate.status,'passed');assert.equal(gate.technicalDeliveryVerified,true);assert.equal(gate.truncatedEpisode.status,'rejected');assert.equal(gate.completeEpisode.status,'delivered');assert.equal(gate.completeEpisode.activePlaySeconds,duration);
+      assert.throws(()=>createDoctorDeliveryGate({truncated,complete:{...complete,result:{...complete.result,episodeHash:'stale-episode'}},playtest:recorded,validation}));
+      assert.throws(()=>createDoctorDeliveryGate({truncated,complete,playtest:{...recorded,isCompleteEpisode:false},validation}));
     }
     const preview=ajv.compile(THREE_CREATOR_TOOLS.find(tool=>tool.name==='world_preview').inputSchema);
     assert.equal(preview({view:'current',input:{keys:['w'],durationSeconds:4}}),false);
-    assert.throws(()=>createDoctorBrowserPlan(180));
+    assert.throws(()=>createDoctorBrowserPlan(0));assert.throws(()=>createDoctorBrowserPlan(16));
     const character=new Character();character.loaded=true;
     const world=await createHumanoidWorld({scene:new Scene(),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},character,characterId:'person',map:{id:'doctor-test',name:'Doctor',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]}});
     try {
@@ -66,8 +76,8 @@ const hash=x=>createHash('sha256').update(x).digest('hex');
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlX8AAAAASUVORK5CYII=','base64');
 test('Python closed-archive regressions run through the Node census and propagate failures',()=>{const result=spawnSync('python3',['scripts/cloud/three-eval-unpack.test.py'],{encoding:'utf8'});if(result.error)throw result.error;assert.equal(result.status,0,result.stderr||result.stdout);});
-function fixture() {
-  const result={kind:'three-creator-delivery',schemaVersion:1,toolVersion:'0.2.0-experimental',sdkVersion:'0.2.0-experimental',engine:'three@0.185.1',profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',semanticStatus:'unreviewed',browserObservationContract:'WorldObservation-v2',actualWallSeconds:180,inputWallSeconds:180,activePlaySeconds:180,videoMetadata:{durationSeconds:180,frameCount:181,widthPixels:960,heightPixels:540},captureTiming:{clock:'browser-performance',initialFrameRequestedAtMilliseconds:0,finalFrameRequestedAtMilliseconds:180100,recorderStoppedAtMilliseconds:181000,framePeriodSeconds:1,requestedFrames:182,postrollSeconds:1},
+function fixture(seconds = 180) {
+  const result={kind:'three-creator-delivery',schemaVersion:1,toolVersion:'0.2.0-experimental',sdkVersion:'0.2.0-experimental',engine:'three@0.185.1',profile:'three-sdk',status:'ready-for-independent-review',technicalStatus:'passed',semanticStatus:'unreviewed',browserObservationContract:'WorldObservation-v2',actualWallSeconds:seconds,inputWallSeconds:seconds,activePlaySeconds:seconds,videoMetadata:{durationSeconds:seconds,frameCount:Math.max(2,Math.ceil(seconds)+1),widthPixels:960,heightPixels:540},captureTiming:{clock:'browser-performance',initialFrameRequestedAtMilliseconds:0,finalFrameRequestedAtMilliseconds:seconds*1000,recorderStoppedAtMilliseconds:seconds*1000,framePeriodSeconds:1,requestedFrames:Math.max(2,Math.ceil(seconds)+1),postrollSeconds:0},
     sourceHash:hash('author'),runtimeHash:hash('compiler'),creatorRuntimeLockHash:hash('lock'),episodeHash:hash('episode'),archiveSha256:hash('tar'),archiveByteLength:3,archivePath:workspace+'/creator-delivery.tar.gz',deliveryManifestSha256:hash('manifest')};
   result.worldBuildHash=hash(JSON.stringify({sourceHash:result.sourceHash,runtimeHash:result.runtimeHash,profile:result.profile}));
   const artifacts={'creator-result.json':{sha256:hash(JSON.stringify(result)),bytes:100},'creator-delivery.tar.gz':{sha256:result.archiveSha256,bytes:3}};
@@ -79,7 +89,20 @@ function lines(result){return [event('world_preview',{operationId:'preview',stat
 async function parse(events){const dir=await mkdtemp(path.join(tmpdir(),'three-events-'));try{const file=path.join(dir,'events');await writeFile(file,events.map(JSON.stringify).join('\n'));return await eventStatistics(file);}finally{await rm(dir,{recursive:true,force:true});}}
 test('Three receipt binds actual final-world PNG, profile, lock, full result and tar transport',async()=>{const f=fixture();f.events=await parse(lines(f.result));assert.equal(validateDeliveryEvidence(f).operationId,'submit');assert.equal(f.events.previewImageObservations,1);});
 test('Ultra receipts require the exact requested effort; an xhigh receipt cannot qualify',async()=>{const f=fixture();f.events=await parse(lines(f.result));f.expectedReasoningEffort='ultra';assert.throws(()=>validateDeliveryEvidence(f),/IDENTITY_FAILED/);f.launcherReport.reasoningEffort='ultra';assert.equal(validateDeliveryEvidence(f).operationId,'submit');assert.throws(()=>validateDeliveryEvidence({...f,expectedReasoningEffort:'xhigh'}),/IDENTITY_FAILED/);assert.throws(()=>validateDeliveryEvidence({...f,expectedReasoningEffort:'max'}),/REASONING_EFFORT_INVALID/);});
-test('Native, wrong engine/profile, semantic passed and nonfinite duration are rejected',()=>{const f=fixture();for(const change of [{inputWallSeconds:undefined},{inputWallSeconds:179},{inputWallSeconds:NaN},{videoMetadata:{durationSeconds:179,frameCount:179,widthPixels:960,heightPixels:540}},{captureTiming:{clock:'host'}},{activePlaySeconds:179},{activePlaySeconds:undefined},{activePlaySeconds:NaN},{activePlaySeconds:Infinity},{toolVersion:'0.1.0-experimental'},{sdkVersion:null},{browserObservationContract:'WorldObservation-v1'},{kind:'experimental-native-creator-delivery'},{engine:'babylon'},{profile:'three-raw'},{semanticStatus:'passed'},{actualWallSeconds:NaN},{actualWallSeconds:Infinity},{actualWallSeconds:undefined}])assert.equal(isPassingDelivery({...f.result,...change},'three-sdk'),false);});
+test('Positive short recordings qualify with the same final receipt and transport evidence',async()=>{
+  for(const seconds of [0.000001,0.05,1,179,180]){
+    const f=fixture(seconds);assert.equal(isPassingDelivery(f.result,'three-sdk'),true);
+    f.events=await parse(lines(f.result));assert.equal(validateDeliveryEvidence(f).operationId,'submit');
+  }
+});
+test('Nonpositive, nonfinite and nonnumeric recording durations are rejected',()=>{
+  const f=fixture();
+  for(const value of [0,-1,NaN,Infinity,-Infinity,undefined,null,true,'1']){
+    for(const key of ['actualWallSeconds','inputWallSeconds','activePlaySeconds'])assert.equal(isPassingDelivery({...f.result,[key]:value},'three-sdk'),false,`${key}: ${value}`);
+    assert.equal(isPassingDelivery({...f.result,videoMetadata:{...f.result.videoMetadata,durationSeconds:value}},'three-sdk'),false,`video: ${value}`);
+  }
+});
+test('Native, wrong engine/profile, semantic passed and incomplete video evidence are rejected',()=>{const f=fixture();for(const change of [{videoMetadata:{...f.result.videoMetadata,durationSeconds:177}},{videoMetadata:{...f.result.videoMetadata,frameCount:0}},{captureTiming:{clock:'host'}},{toolVersion:'0.1.0-experimental'},{sdkVersion:null},{browserObservationContract:'WorldObservation-v1'},{kind:'experimental-native-creator-delivery'},{engine:'babylon'},{profile:'three-raw'},{semanticStatus:'passed'}])assert.equal(isPassingDelivery({...f.result,...change},'three-sdk'),false);});
 test('Fake shell/native tool receipts, stale world images and modified image bytes cannot qualify',async()=>{for(const edit of [rows=>rows.map(x=>({...x,item:{...x.item,type:'command_execution'}})),rows=>rows.map(x=>({...x,item:{...x.item,server:'worldkit_creator'}})),rows=>{const op=JSON.parse(rows[1].item.result.content[0].text);op.result.worldBuildHash=blank;rows[1].item.result.content[0].text=JSON.stringify(op);return rows;},rows=>{rows[1].item.result.content[1].data=Buffer.from('fake image').toString('base64');return rows;}]){const f=fixture();f.events=await parse(edit(lines(f.result)));assert.throws(()=>validateDeliveryEvidence(f),/UNVERIFIED/);}});
 test('Receipt must follow submitted operation; arbitrary final JSON and transport swaps rejected',async()=>{let f=fixture();f.events=await parse(lines(f.result).slice(0,2).concat(lines(f.result)[3]));assert.throws(()=>validateDeliveryEvidence(f),/UNVERIFIED/);for(const mutate of [x=>{x.eventsSha256=hash('other');},x=>{x.artifacts=structuredClone(x.artifacts);x.artifacts['creator-delivery.tar.gz'].sha256=hash('other');},x=>{x.result={...x.result,untrustedExtra:'changed'};},x=>{x.expectedRuntimeHash=hash('other');},x=>{x.result={...x.result,episodeHash:hash('changed')};}]){f=fixture();f.events=await parse(lines(f.result));mutate(f);assert.throws(()=>validateDeliveryEvidence(f));}});
 test('Profile derives from exact original task layout; conflicting low effort rejected',async()=>{const root=await mkdtemp(path.join(tmpdir(),'three-layout-'));try{const work=path.join(root,'gpt6-eval-forest-lookout--three-raw');await mkdir(path.join(work,'outputs'),{recursive:true});const args=['exec','-C',work,'--output-last-message',path.join(work,'outputs','last.md'),'--add-dir',path.join(work,'outputs'),'--model','gpt-6-astra','--sandbox','workspace-write','-c','model_reasoning_effort="xhigh"','prompt'];assert.equal((await parseCloudLayout(args)).profile,'three-raw');await assert.rejects(parseCloudLayout([...args.slice(0,-1),'-c','model_reasoning_effort="low"','prompt']));}finally{await rm(root,{recursive:true,force:true});}});

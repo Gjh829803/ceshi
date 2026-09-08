@@ -1,11 +1,11 @@
 export const RAW_EXAMPLE = `import * as THREE from 'three';
-const scene = new THREE.Scene(); scene.background = new THREE.Color('#92bad0');
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#eeeeee');
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1000);
 camera.position.set(7, 6, 10); camera.lookAt(0, 0.7, 0);
 const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth, innerHeight); document.body.append(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x476035, 2));
-const ground = new THREE.Mesh(new THREE.BoxGeometry(60, 0.2, 60), new THREE.MeshStandardMaterial({color:0x759955})); ground.position.y=-0.1; scene.add(ground);
-const player = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xe87836})); body.position.y=0.7; player.add(body); scene.add(player);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 2));
+const ground = new THREE.Mesh(new THREE.BoxGeometry(60, 0.2, 60), new THREE.MeshStandardMaterial({color:0xcccccc})); ground.position.y=-0.1; scene.add(ground);
+const player = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xffffff})); body.position.y=0.7; player.add(body); scene.add(player);
 // This tiny raw example only demonstrates input/observation. It has no physics engine,
 // obstacles, exploration or reference reconstruction; build those for the actual task.
 const keys = new Set(); let running=false, previous=0, frameId=0;
@@ -19,20 +19,21 @@ window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,player,targets:{playe
 `;
 export const SDK_EXAMPLE = `import * as THREE from 'three';
 import {createHumanoidWorld, type TrainingMap} from '@worldkit/three';
-const scene = new THREE.Scene(); scene.background = new THREE.Color('#92bad0');
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#eeeeee');
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1000);
 camera.position.set(7,6,10); camera.lookAt(0,0.7,0);
 const canvas = document.createElement('canvas'); document.body.append(canvas);
-scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
+scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,2));
 const map:TrainingMap={id:'world',name:'World',description:'Exploration',
  bounds:{min:[-30,-5,-30],max:[30,30,30]},
- boxes:[{id:'ground',position:[0,-.1,0],size:[60,.2,60],color:'#759955'}],
+ boxes:[{id:'ground',position:[0,-.1,0],size:[60,.2,60],color:'#cccccc'}],
  water:[],regions:[],spawns:[],playerSpawn:[0,0,0]};
 for(const box of map.boxes){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color}));
  mesh.position.set(...box.position);scene.add(mesh);
 }
 // Select humanoid.source-101 in project.json; the helper loads all supplied actions.
+// Reuse the visible supplied model. Use accent colors only for key landmarks.
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player'});
 world.setCaptureTargets(['player']);
 await world.start();

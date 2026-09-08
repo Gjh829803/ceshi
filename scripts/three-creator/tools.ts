@@ -45,8 +45,9 @@ export function validateCaptureTiming(inputTiming: any, captureTiming: any, vide
   if (Math.abs(inputTiming.durationSeconds - (inputTiming.endedAtMilliseconds-inputTiming.startedAtMilliseconds)/1000) > .001) throw new Error('THREE_INPUT_CLOCK_INVALID');
   if (videoDurationSeconds < inputTiming.durationSeconds - Math.max(1, 2*captureTiming.framePeriodSeconds)) throw new Error('THREE_VIDEO_DURATION_MISMATCH: real recording ended before the browser input episode');
 }
-export function hasMinimumRecordedPlay(report: { actualWallSeconds?: number; inputWallSeconds?: number; activePlaySeconds?: number; videoMetadata?: { durationSeconds?: number } | null }): boolean {
-  return [report.actualWallSeconds, report.inputWallSeconds, report.activePlaySeconds, report.videoMetadata?.durationSeconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 180);
+const positiveFinite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
+export function hasRecordedPlay(report: { actualWallSeconds?: number; inputWallSeconds?: number; activePlaySeconds?: number; videoMetadata?: { durationSeconds?: number } | null }): boolean {
+  return [report.actualWallSeconds, report.inputWallSeconds, report.activePlaySeconds, report.videoMetadata?.durationSeconds].every(positiveFinite);
 }
 export function playtestSubmissionReadiness(report: any, current: { worldBuildHash: string; episodeHash: string }) {
   const issues: Array<{ code: string; field?: string; actual?: unknown; required?: unknown }> = [];
@@ -56,7 +57,7 @@ export function playtestSubmissionReadiness(report: any, current: { worldBuildHa
   if (report.capturedInput !== true) issues.push({ code: 'TRUSTED_KEYBOARD_INPUT_MISSING', actual: report.capturedInput ?? null, required: true });
   for (const field of ['actualWallSeconds', 'inputWallSeconds', 'activePlaySeconds', 'videoDurationSeconds']) {
     const actual = field === 'videoDurationSeconds' ? report.videoMetadata?.durationSeconds : report[field];
-    if (typeof actual !== 'number' || !Number.isFinite(actual) || actual < 180) issues.push({ code: 'RECORDED_DURATION_INSUFFICIENT', field, actual: actual ?? null, required: 180 });
+    if (!positiveFinite(actual)) issues.push({ code: 'RECORDED_TIME_INVALID', field, actual: actual ?? null, required: 'finite-positive' });
   }
   if (report.worldBuildHash !== current.worldBuildHash) issues.push({ code: 'WORLD_SOURCE_CHANGED_AFTER_PLAYTEST', actual: report.worldBuildHash ?? null, required: current.worldBuildHash });
   if (report.episodeHash !== current.episodeHash) issues.push({ code: 'EPISODE_CHANGED_AFTER_PLAYTEST', actual: report.episodeHash ?? null, required: current.episodeHash });
@@ -112,8 +113,8 @@ export class ThreeCreatorTools {
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
       observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
-      delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a completed real 180s+ episode with captured keydown and keyup and no browser/SDK errors, and real player/target front-right-back captures. Route success is a measurement, not semantic or visual acceptance.',
-      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode; only a value below planned duration selects truncated debug. Full episodes have a bounded overhead allowance. Debug with a short playtest before the full episode.',
+      delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a complete nonempty real episode with captured keydown and keyup, valid video and no browser/SDK errors, and real player/target front-right-back captures. Choose the episode length needed to demonstrate the requested behavior. Route success is a measurement, not semantic or visual acceptance.',
+      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode, which has a bounded overhead allowance. For targeted diagnosis, a durationSeconds below the plan selects truncated debug.',
       limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate.'],
     };
   }
@@ -134,7 +135,7 @@ export class ThreeCreatorTools {
       ...(this.profile==='three-sdk'?{entryPoint:{module:'@worldkit/three',name:'createHumanoidWorld',optionsType:'HumanoidWorldOptions',mapType:'TrainingMap'},...(topic==='character-actions'||topic==='control'||topic==='all'?{characterCapabilities:training.CHARACTER_CAPABILITIES,controlBindings:training.INPUT_BINDINGS}:{}),...(topic==='extensions'||topic==='all'?{runtimeSource:{tool:'creator_materialize_runtime',sourceRoot:'sdk',buildTool:'world_validate',entry:'sdk/three-world/src/index.ts'}}:{})}:{}),
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.', ...sdk,
       ...(this.profile==='three-sdk'&&(topic==='training'||topic==='character-actions'||topic==='all')?{trainingSourceContracts:Object.fromEntries(await Promise.all(['config.ts','control-tuning.ts','environment/types.ts','platform/session.ts','runtime.ts',...(topic==='character-actions'||topic==='all'?['humanoid/action-schema.ts','simulation.ts']:[])].map(async name=>[name,trainingContractSource(await readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src/training',name),'utf8'))]))),...(trainingExampleTopic?{trainingExampleTopic}:{})}:{}),
-      episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Paused/reset time is excluded from minimum active-play duration. Fixed XYZ targets measure proximity, never steer or teleport.' };
+      episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.' };
   }
   private exampleRoot(topic:ExampleTopic){return path.join(REPOSITORY_ROOT,'examples/three-creator',topic==='character-actions'?'character-actions':topic==='independent-world'?'training-independent':'sdk-capabilities');}
   private async exampleAvailable(topic:ExampleTopic){

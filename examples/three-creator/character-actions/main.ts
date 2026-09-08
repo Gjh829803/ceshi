@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import {createHumanoidWorld,training} from '@worldkit/three';
 import {map} from './map';
 
-const scene=new THREE.Scene();scene.background=new THREE.Color('#9ec8dc');
-scene.add(new THREE.HemisphereLight('#ffffff','#52604e',2.5));
-const sun=new THREE.DirectionalLight('#fff1d7',3);sun.position.set(8,15,10);scene.add(sun);
+const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
+scene.add(new THREE.HemisphereLight('#ffffff','#aaaaaa',2.5));
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.05,150);
 camera.position.set(3.5,3.8,8);camera.lookAt(3.5,1,0);
 const canvas=document.createElement('canvas');document.body.append(canvas);
@@ -13,7 +12,7 @@ for(const box of map.boxes){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color}));
  mesh.position.set(...box.position);scene.add(mesh);
 }
-const water=new THREE.Mesh(new THREE.PlaneGeometry(11,40),new THREE.MeshStandardMaterial({color:'#3997ba',transparent:true,opacity:.55,roughness:.3,side:THREE.DoubleSide}));
+const water=new THREE.Mesh(new THREE.PlaneGeometry(11,40),new THREE.MeshStandardMaterial({color:'#88aebe',transparent:true,opacity:.55,roughness:1,side:THREE.DoubleSide}));
 water.rotation.x=-Math.PI/2;water.position.set(10.5,0,0);scene.add(water);
 
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person'});

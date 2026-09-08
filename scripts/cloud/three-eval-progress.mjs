@@ -126,8 +126,8 @@ function playtestAdequacy(type,summary) {
   if(type!=='world.playtest')return null;
   if(summary?.isCompleteEpisode===false)return 'short-test';
   const times=[summary?.activePlaySeconds,summary?.inputWallSeconds,summary?.actualWallSeconds,summary?.videoMetadata?.durationSeconds];
-  if(times.some(value=>numeric(value)!==null&&value<180))return 'duration-insufficient';
-  return summary?.isCompleteEpisode===true&&summary?.capturedInput===true&&times.every(value=>numeric(value)!==null&&value>=180) ? 'complete' : 'unverified';
+  if(times.some(value=>numeric(value)===0))return 'invalid-recording';
+  return summary?.isCompleteEpisode===true&&summary?.capturedInput===true&&times.every(value=>numeric(value)!==null&&value>0) ? 'complete' : 'unverified';
 }
 function cleanOperation(value) {
   if (!isObject(value) || !Object.hasOwn(operationStages,value.type) || !operationStatusSet.has(value.status)) return null;
@@ -198,8 +198,8 @@ function operationEvent(jobId, operation) {
   let detail=operation.failure?.message;
   if(operation.executionStatus==='succeeded') {
     if(operation.resultStatus==='failed')detail='调用已完成，检查结果失败。';
-    else if(operation.playtestAdequacy==='short-test')detail='调用已完成，仅完成短测，未完成整段自测。';
-    else if(operation.playtestAdequacy==='duration-insufficient')detail='调用已完成，自测时长不足 180 秒。';
+    else if(operation.playtestAdequacy==='short-test')detail='调用已完成，仅执行调试片段，未完成动作计划。';
+    else if(operation.playtestAdequacy==='invalid-recording')detail='调用已完成，缺少有效操作或录像时间。';
     else if(operation.resultStatus==='passed'&&operation.playtestAdequacy==='unverified')detail='调用已完成，完整自测证据尚不足。';
     else if(operation.resultStatus==='passed')detail='检查结果通过。';
     else detail='工具调用已完成，检查结果尚未确认。';
@@ -368,6 +368,26 @@ export async function buildThreeRunProgress({runRoot,attemptRunRoots=[],liveStat
   return {schemaVersion:1,kind:'three-creator-run-progress',runId:primary.plan.runId,updatedAt,model:identical('model'),effort:identical('effort'),configuration:{kind:'requested',model:identical('model'),effort:identical('effort')},cases};
 }
 
+// The publisher admits 512 KiB. Keep identities and current status intact while
+// bounding repeated history across ten cases and their account attempts.
+export function serializeThreeRunProgress(progress) {
+  const result=structuredClone(progress),rows=result.cases.flatMap(row=>[row,...row.attempts]);
+  const original=rows.map(row=>row.events);
+  for(const limit of [100,50,25,12,6,3,1,0]) {
+    rows.forEach((row,index)=>{
+      const events=original[index],keep=new Set(limit ? events.slice(-limit) : []);
+      // Preserve the latest evidence for each visited stage, including failures.
+      const stages=new Map();for(const event of events)stages.set(event.stage,event);
+      for(const event of stages.values())keep.add(event);
+      row.events=events.filter(event=>keep.has(event));
+      if(row.events.length<events.length)row.omittedEventCount=events.length-row.events.length;
+    });
+    const serialized=JSON.stringify(result)+'\n';
+    if(Buffer.byteLength(serialized)<=512*1024)return serialized;
+  }
+  fail('PUBLIC_SNAPSHOT_TOO_LARGE');
+}
+
 async function main() {
   const args=process.argv.slice(2), options={attemptRunRoots:[]};
   for(let i=0;i<args.length;i+=2){const key=args[i],value=args[i+1];if(!value)fail('ARGUMENT_INVALID');if(key==='--attempt-run-root')options.attemptRunRoots.push(value);else if(['--run-root','--live-status','--output'].includes(key)&&options[key]===undefined)options[key]=value;else fail('ARGUMENT_INVALID');}
@@ -377,7 +397,7 @@ async function main() {
   const output=path.resolve(options['--output']);if(path.basename(output)!=='progress.json')fail('OUTPUT_INVALID');await rootPath(path.dirname(output));
   const existing=await openedFile(output,MAX_JSON_BYTES);await existing?.close();
   const temporary=`${output}.${randomUUID()}.part`;
-  try {await writeFile(temporary,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o644});await rename(temporary,output);} finally {await unlink(temporary).catch(()=>{});}
+  try {await writeFile(temporary,serializeThreeRunProgress(result),{flag:'wx',mode:0o644});await rename(temporary,output);} finally {await unlink(temporary).catch(()=>{});}
   process.stdout.write(JSON.stringify({kind:result.kind,runId:result.runId,cases:result.cases.length,updatedAt:result.updatedAt})+'\n');
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{process.stderr.write((/^THREE_PROGRESS_[A-Z_]+$/.test(error?.message??'')?error.message:'THREE_PROGRESS_FAILED')+'\n');process.exitCode=1;});

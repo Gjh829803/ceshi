@@ -131,18 +131,19 @@ it('rejects changed packaged dependencies independently of the declared asset ID
 it('carries the same policy through the real submit serializer and archive using mocked completed evidence',async()=>{
  const root=await workspace(),service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const episode=JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:180}],targets:[]});
+  const episode=JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:.2},{keysUp:['w'],durationSeconds:.1}],targets:[]});
   await writeFile(path.join(root,'episode.json'),episode);
   const candidate=await service.compiler.prepare();
   const playRoot=path.join(service.evidenceRoot,'mock-play'),captureRoot=path.join(service.evidenceRoot,'mock-captures');
   await mkdir(playRoot,{recursive:true});await mkdir(captureRoot,{recursive:true});
   // Controlled unit fixtures only: this does not claim any actual recording.
-  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:180,inputWallSeconds:180,activePlaySeconds:180,
-   videoMetadata:{durationSeconds:180},worldBuildHash:candidate.worldBuildHash,episodeHash:sha256(episode)};
+  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:.5,inputWallSeconds:.3,activePlaySeconds:.3,
+   videoMetadata:{durationSeconds:.4},worldBuildHash:candidate.worldBuildHash,episodeHash:sha256(episode)};
   const captures={worldBuildHash:candidate.worldBuildHash,pageErrors:[]};
   await writeFile(path.join(playRoot,'mock.json'),JSON.stringify(report));await writeFile(path.join(captureRoot,'mock.json'),JSON.stringify(captures));
   Object.assign(service,{playtestEvidence:{root:playRoot,files:await hashTree(playRoot),report},captureEvidence:{root:captureRoot,files:await hashTree(captureRoot),report:captures}});
   const receipt=await service.submit();
+  expect(receipt.inputWallSeconds).toBe(.3);expect(receipt.videoMetadata.durationSeconds).toBe(.4);
   expect(receipt.assetPolicySha256).toBe(service.compiler.assetPolicySha256);
   const archived=JSON.parse(execFileSync('tar',['-xOf',receipt.archivePath,'payload/playable/asset-policy.json'],{encoding:'utf8'}));
   const delivery=JSON.parse(execFileSync('tar',['-xOf',receipt.archivePath,'payload/delivery.json'],{encoding:'utf8'}));

@@ -71,7 +71,7 @@ pauses, `reset()` restores the baseline, and `dispose()` releases resources.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:assets -->
-## Select, load and customize assets
+## Select, load and reuse assets
 
 Use `assets_search` / `assets_describe`, then select IDs in
 `project.json: {schemaVersion:1,assetIds:['humanoid.source-101']}`. The compiler
@@ -80,10 +80,12 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
 
-The catalog is a library to reuse, not a restriction on Three geometry. Human
-characters preferably retain the supplied body, skeleton and motions; clothes,
-colors and visual descendants may be customized. Custom subjects and compatible
-external assets are admitted according to the task's effective asset policy.
+Default human characters to the supplied visible model, skeleton and motions;
+omit added clothing, accessories and decorative visual children. Reuse other
+supplied subjects when suitable. When none fits, draw simple Mesh/Group geometry
+and bind its abilities. The catalog supports reuse without restricting Three
+geometry; custom subjects and compatible external assets follow the task's
+effective asset policy.
 
 An instance belongs to one live character. For asynchronous changes:
 

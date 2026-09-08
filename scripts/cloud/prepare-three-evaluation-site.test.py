@@ -313,30 +313,49 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'activePlaySeconds'):
             fixture.stage()
 
-    def test_active_duration_threshold_and_identity_are_both_enforced(self):
+    def test_positive_active_duration_and_identity_are_both_enforced(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
         played = json.loads((payload / 'playtest/playtest.json').read_text()); delivery = json.loads((payload / 'delivery.json').read_text())
-        for value in (None, True, -1, 179.99, 3600):
+        for value in (None, True, -1, 0, 3600):
             with self.subTest(value=value):
                 played['activePlaySeconds'] = value; delivery['activePlaySeconds'] = value
                 write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
                 with self.assertRaisesRegex(ValueError, 'activePlaySeconds|active duration'):
                     fixture.stage()
-        played['activePlaySeconds'] = 180; delivery['activePlaySeconds'] = 181
+        played['activePlaySeconds'] = 4; delivery['activePlaySeconds'] = 5
         write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'active duration'):
             fixture.stage()
 
-    def test_missing_input_timing_or_short_video_cannot_publish_v2(self):
+    def test_missing_input_timing_or_empty_video_cannot_publish_v2(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
         played = json.loads((payload / 'playtest/playtest.json').read_text())
         played.pop('inputWallSeconds'); write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'inputWallSeconds'):
             fixture.stage()
-        played['inputWallSeconds'] = 185; played['videoMetadata']['durationSeconds'] = 179
+        played['inputWallSeconds'] = 185; played['videoMetadata']['durationSeconds'] = 0
         write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'video duration'):
             fixture.stage()
+
+    def test_short_complete_recording_publishes_but_truncation_and_stale_episode_do_not(self):
+        fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
+        played = json.loads((payload / 'playtest/playtest.json').read_text()); delivery = json.loads((payload / 'delivery.json').read_text())
+        for field, seconds in [('actualWallSeconds', 4.4), ('inputWallSeconds', 4.1), ('activePlaySeconds', 4)]:
+            played[field] = seconds; delivery[field] = seconds
+        played['videoMetadata'].update(durationSeconds=4.3, frameCount=13)
+        write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
+        _, result = fixture.stage('short-complete')
+        self.assertEqual(result['cases'][0]['metrics']['activePlaySeconds'], 4)
+        self.assertEqual(result['cases'][0]['metrics']['videoDurationSeconds'], 4.3)
+        played['isCompleteEpisode'] = False
+        write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
+        with self.assertRaisesRegex(ValueError, 'complete passing recorded episode'):
+            fixture.stage('short-truncated')
+        played['isCompleteEpisode'] = True; played['episodeHash'] = '0' * 64
+        write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
+        with self.assertRaisesRegex(ValueError, 'Playtest identity mismatch: episodeHash'):
+            fixture.stage('short-stale')
 
     def test_local_fixture_requires_opt_in_but_no_manual_review_file(self):
         fixture = Fixture(self.root)

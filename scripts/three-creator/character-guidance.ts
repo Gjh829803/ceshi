@@ -16,7 +16,7 @@ export function characterUsage(asset:AssetCatalogEntry,profile:CreatorProfile,_a
       {id:'scene',entry:'TrainingMap: boxes, water, climbSurfaces, interactions'},
       {id:'parameters',entry:'training.profile + character capability parameters'},
       {id:'source',entry:'creator_materialize_runtime → sdk/three-world/src/training → world_validate'}]}:{}),
-  mesh:'Author custom Three geometry freely. Human rigs/actions are recommended for humans. Other subjects bind via createWorld/addCharacter({object,body,movement}), registerMovement, or TrainingVehicleInstance {object,spec}. Skeletal clips require a compatible rig.',
+  mesh:'Reuse supplied subjects where suitable. For humans, keep the supplied visible model, rig and actions together; use it directly without added clothing or accessories. If no suitable subject is provided, draw a simple Mesh/Group and bind via createWorld/addCharacter({object,body,movement}), registerMovement, or TrainingVehicleInstance {object,spec}. Use white/light-gray geometry with accent colors only for key landmarks. Skeletal clips require a compatible rig.',
   limitations:[
    'Animation clips are playback assets; executable skills, input-driven states and automatic transitions are listed separately.',
    sdk?'Use capability scene conditions and current snapshot eligibility. An accepted receipt starts an operation; query its completion and resulting state.':'The raw profile loads models/clips with Three and supplies its own movement/physics implementation.',
