@@ -50,6 +50,11 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/three-episode/cpu-routing.test.mjs", lane: "node" },
     { path: "scripts/three-episode/human-review-store.test.mjs", lane: "node" },
     { path: "scripts/three-episode/outbox.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/seedance-admission-service.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/seedance-preflight.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/seedance-production-budget.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/seedance-python.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/seedance-slot.test.mjs", lane: "node" },
     { path: "scripts/three-episode/streaming-overlay.test.mjs", lane: "node" },
     { path: "scripts/three-episode/visuals.test.mjs", lane: "node" },
   ]);

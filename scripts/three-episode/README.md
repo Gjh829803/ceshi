@@ -3,8 +3,10 @@
 Episode consumes a verified `three-sdk` delivery, plans routes and action goals,
 and records the same controllers users operate. One case produces six 30-second
 clips at 1280×720 / 24fps, ten visual styles and up to sixty video requests.
-**Executable workflows require `--stop-before-seedance`; video provider
-submission and automatic Creator delivery subscription are not implemented.**
+Preparation workflows require `--stop-before-seedance`. The separate
+[Seedance cloud lane](../../docs/three-episode-seedance.md) submits reviewed
+requests and recovers videos to private S3. Automatic Creator delivery
+subscription is not implemented.
 
 ## Source and runtime
 

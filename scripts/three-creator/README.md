@@ -46,8 +46,8 @@ otherwise draw and bind them to existing ground/vehicle controllers. Compatible 
 explicit requirement. See the [SDK guide](../../packages/three-world/README.md)
 for exact calls and action cards.
 
-`creator_get_authoring_schema({topic})` returns the matching SDK README guide
-by default, with `availableSections`. Select `sections` from guide, contracts,
+`creator_get_authoring_schema({topic})` returns a short guide by default, with
+`availableSections` and `runtimeGuidance` identifying its source. Select `sections` from guide, contracts,
 project, episode, observation, commands or training; `["all"]` returns the complete
 selected topic. For example, `{topic:"mounted-interaction", sections:["training"]}`
 returns actual Training source contracts. Public type declarations use an
@@ -76,6 +76,25 @@ browser runtime. Keep one clock, physics backend, actor controller, animation
 owner and camera writer. The Host bundles source with its installed dependencies;
 project Node scripts and arbitrary build config are not executed. Host validation
 and delivery code are outside the exported runtime.
+
+Discovery reads a validated snapshot of the current `sdk/` sources when present.
+`runtimeGuidance.runtimeSourceHash` identifies that snapshot; compare it with
+`world_validate` or `world_inspect.runtimeSourceHash`. Subsequent source edits get
+a new hash. Missing or invalid workspace files fail explicitly instead of falling
+back to Host declarations.
+
+For a workspace SDK, `contracts`/`training` sections use its declarations.
+`runtimeDefinitions` (training/commands sections and asset details) contains current
+exported definition source, including tuning and input bindings. Initializers are
+never evaluated on the Host. Evaluated Host capability cards and key bindings are
+omitted because they may be stale; use the current source and actual
+`world_inspect.observation.snapshot.training.characterCapabilities` eligibility.
+Search still uses catalog/baseline terms to find assets, not to certify edited
+runtime abilities. Mounted integration remains unverified until checked in that
+runtime. Examples are marked `exampleAuthority: host-baseline` and require adapting
+to modified interfaces. Without `sdk/`, existing Host guidance remains available.
+Host asset policy, episode schema and closed command validation remain independent
+of authored runtime declarations.
 
 Both project source identity and actual runtime bytes enter the candidate and
 delivery. Run a fresh playtest after a source/runtime change. Parameter changes

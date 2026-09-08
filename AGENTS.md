@@ -49,8 +49,10 @@ neither collision nor a locomotion or skeletal animation controller.
 ## Production and data
 
 Episode produces six 30-second clips, ten styles and prepared video requests.
-Executable workflows require `--stop-before-seedance`; provider submission and
-an automatic Creator delivery subscription are not implemented.
+Preparation workflows require `--stop-before-seedance`. The separate
+[Seedance cloud lane](docs/three-episode-seedance.md) consumes reviewed requests,
+dispatches provider jobs and persists native media, checks and delivery in S3.
+An automatic Creator delivery subscription is not implemented.
 Keep source/runtime/asset hashes, request identities, recorded evidence and
 review identity consistent. Reconcile uncertain requests before retrying.
 Shared reviews remain in their existing service. Exact image approval does not

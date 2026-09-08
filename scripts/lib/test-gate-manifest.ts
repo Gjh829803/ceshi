@@ -60,6 +60,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/three-creator/equipment-panel.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/example-files.test.ts", lane: "contract" },
   { path: "scripts/three-creator/mount-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
+  { path: "scripts/three-creator/runtime-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/tool-usability.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/tools.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/training-families.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

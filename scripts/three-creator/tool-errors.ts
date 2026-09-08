@@ -40,6 +40,9 @@ export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
     case 'THREE_EXAMPLE_ASSETS_UNAVAILABLE':
       nextSteps = [{ instruction: 'Choose an asset or example whose dependencies are in the frozen allowed catalog. Do not edit or widen the Host policy.', tool: 'assets_search', arguments: { query: '' } }];
       break;
+    case 'THREE_RUNTIME_GUIDANCE_SOURCE_MISSING':
+      nextSteps = [{ instruction: 'Read the named workspace SDK source file and restore or update the requested interface there. Host baseline contracts cannot substitute for a missing workspace definition.' }];
+      break;
     case 'THREE_SCHEMA_TOPIC_UNKNOWN':
     case 'THREE_SDK_EXAMPLE_UNSUPPORTED':
     case 'THREE_WORLD_COMMANDS_UNSUPPORTED':
