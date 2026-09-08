@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Vector3 } from 'three';
+import { Group, Vector3 } from 'three';
+import { Character } from './character';
+import type { Character as SourceCharacter } from './humanoid/source-character';
 import { createMountedFixture } from './mounted-test-fixture';
 import { emptyInput } from './simulation';
 import type { WorldEngine } from '../engine';
 import { PresentationState } from './presentation';
+
+// Distinguish the adopted SDK source subtree from later author-owned children.
+function instrumentedCharacter() {
+  const root=new Group(),bone=new Group();root.add(bone);
+  const update=vi.fn((dt:number)=>{bone.position.x+=dt;bone.rotation.y+=dt;});
+  const source={root,bones:{pelvis:bone},actions:{},weights:{},motionSources:[],update,dispose:vi.fn()} as unknown as SourceCharacter;
+  return {animation:new Character(source),bone,update,source};
+}
 
 const engineOf = (world: unknown) => (world as { engine: WorldEngine }).engine;
 describe('mounted presentation', () => {
@@ -110,14 +120,11 @@ it('preserves authored opening camera through repeated display and fixed steps',
 });
 
 it('keeps the fixed character local pose and animation clock across display interpolation', async () => {
-  const {Character}=await import('./character');
-  const {Group}=await import('three');
   const world=await createMountedFixture();
   try {
-    const animation=new Character(),bone=new Group();animation.actor.add(bone);
+    const {animation,bone,update}=instrumentedCharacter();
     world.training!.options.character.object.add(animation.root);
     Object.defineProperty(world.training!.options.character,'animation',{value:animation});
-    const update=vi.spyOn(animation,'update').mockImplementation(dt=>{bone.position.x+=dt;bone.rotation.y+=dt;});
     world.step({},2);const current=bone.position.x;
     engineOf(world).withPresentation(()=>expect(bone.position.x).toBeCloseTo(current-1/120),.5);
     expect(bone.position.x).toBe(current);expect(update).toHaveBeenCalledTimes(2);
@@ -171,4 +178,66 @@ it('opens exact current capture samples and restores after synchronous callback 
   expect(()=>engine.withPresentation(()=>{runtime.options.vehicles[0]!.object.position.set(100,100,100);throw new Error('capture failure');})).toThrow('capture failure');
   expect(runtime.options.vehicles[0]!.object.position).toEqual(canonical);
  }finally{world.dispose();}
+});
+
+it('keeps character and camera at the common cut sample after exact capture then same-tick rewind',async()=>{
+ const world=await createMountedFixture();
+ try {
+  const runtime=world.training!,engine=engineOf(world),{animation,bone,update}=instrumentedCharacter();
+  runtime.options.character.object.add(animation.root);
+  Object.defineProperty(runtime.options.character,'animation',{value:animation});
+  runtime.enter('horse-1');world.step({},31);world.step({training:{...emptyInput(),forward:1}},20);
+  engine.render(1);
+  const canonical={horse:runtime.options.vehicles[0]!.object.position.clone(),bone:bone.position.x,camera:runtime.camera.position.clone()};
+  const frames:number[]=[];
+  for(const alpha of [.25,.5])engine.withPresentation(()=>{
+   frames.push(bone.position.x);
+   expect(runtime.options.vehicles[0]!.object.position).toEqual(canonical.horse);
+   expect(bone.position.x).toBe(canonical.bone);
+   expect(runtime.camera.position).toEqual(canonical.camera);
+  },alpha);
+  expect(frames).toEqual([canonical.bone,canonical.bone]);expect(update).toHaveBeenCalledTimes(52);
+  world.step({training:{...emptyInput(),forward:1}},1);
+  engine.withPresentation(()=>expect(bone.position.x).toBeCloseTo(canonical.bone+1/120),.5);
+  expect(update).toHaveBeenCalledTimes(53);
+ }finally{world.dispose();}
+});
+
+it('retains a permitted author child local transform on a repeated Character sample',async()=>{
+ const world=await createMountedFixture();
+ try {
+  const runtime=world.training!,engine=engineOf(world),{animation}=instrumentedCharacter(),authorChild=new Group();
+  animation.actor.add(authorChild);runtime.options.character.object.add(animation.root);
+  Object.defineProperty(runtime.options.character,'animation',{value:animation});
+  world.step({},2);
+  let evaluated=false;
+  const visual=vi.fn((dt:number)=>{
+   authorChild.position.x=evaluated?authorChild.position.x+dt:7;
+   authorChild.rotation.y=.4;evaluated=true;
+  });runtime.onVisualUpdate(visual);
+  const captured:number[][]=[];
+  for(let frame=0;frame<2;frame++)engine.withPresentation(()=>captured.push([authorChild.position.x,authorChild.rotation.y]));
+  expect(captured).toEqual([[7,.4],[7,.4]]);expect(visual).toHaveBeenCalledTimes(1);
+  world.step({},1);engine.render();
+  expect(authorChild.position.x).toBeCloseTo(7+1/60);expect(visual).toHaveBeenCalledTimes(2);
+ }finally{world.dispose();}
+});
+
+it('starts fresh owned pose history when a source is asynchronously adopted',async()=>{
+ const {Character:Source}=await import('./humanoid/source-character');
+ const {source,bone}=instrumentedCharacter(),animation=new Character();
+ const authorChild=new Group();animation.actor.add(authorChild);
+ animation.actor.position.x=3;animation.capturePresentationPose();
+ const load=vi.spyOn(Source,'load').mockResolvedValue(source);
+ try {
+  await animation.load();
+  animation.update(1/60,'Idle',0,false);animation.capturePresentationPose();
+  const canonicalBone=bone.position.x;
+  authorChild.position.x=7;
+  animation.applyPresentationPose(.5);
+  expect(animation.actor.position.x).toBe(0);
+  expect(bone.position.x).toBe(canonicalBone);
+  expect(authorChild.position.x).toBe(7);
+  animation.applyPresentationPose(1);expect(authorChild.position.x).toBe(7);
+ }finally{load.mockRestore();animation.dispose();}
 });

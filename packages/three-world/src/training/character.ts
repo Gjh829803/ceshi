@@ -83,6 +83,9 @@ export class Character {
   private mountedMode: 'stand' | 'drive' | 'ride' | null = null;
   private fallbackName = '';
   private fallbackTime = 0;
+  // Source nodes are registered on adoption. Later author-added visual children
+  // are not animation-owned, so their evaluated locals survive repeated frames.
+  private presentationNodes=new Set<T.Object3D>([this.actor]);
   private previousPose: {node:T.Object3D;position:T.Vector3;rotation:T.Quaternion;scale:T.Vector3}[] = [];
   private currentPose: typeof this.previousPose = [];
   private snapPose = true;
@@ -90,7 +93,7 @@ export class Character {
   capturePresentationPose():void {
     this.previousPose=this.currentPose;
     this.currentPose=[];
-    this.actor.traverse(node=>this.currentPose.push({node,position:node.position.clone(),rotation:node.quaternion.clone(),scale:node.scale.clone()}));
+    for(const node of this.presentationNodes)this.currentPose.push({node,position:node.position.clone(),rotation:node.quaternion.clone(),scale:node.scale.clone()});
     if(this.snapPose||this.previousPose.length!==this.currentPose.length){this.previousPose=this.currentPose;this.snapPose=false;}
   }
   applyPresentationPose(alpha:number):void {
@@ -114,10 +117,13 @@ export class Character {
   get hip() { return this.source?.bones.pelvis; }
   private adopt(source: SourceCharacter) {
     this.source = source; this.actor.add(source.root);
+    this.presentationNodes=new Set([this.actor]);
+    source.root.traverse(node=>this.presentationNodes.add(node));
+    this.previousPose=[];this.currentPose=[];this.snapPose=true;
     this.overlay = new MountedRiderPose(source.root); this.loaded = true;
   }
   async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
-  dispose():void{this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+  dispose():void{this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
 
   private legacyFrame(dt: number, name: string, speed: number) {
     if (name !== this.fallbackName) { this.fallbackName = name; this.fallbackTime = 0; }

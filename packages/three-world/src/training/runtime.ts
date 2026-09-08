@@ -82,6 +82,7 @@ export class TrainingRuntime implements PhysicsPort {
   private episodeOwned=false;
   private readonly presentation:PresentationState;
   private presentationEpoch=0;
+  private presentationCutTick:number|undefined;
   private visualSample:TrainingDisplaySample|undefined;
   private authored=false;
   private previousJump=false;
@@ -334,7 +335,7 @@ export class TrainingRuntime implements PhysicsPort {
     for(const object of this.objects.values())object.updateWorldMatrix(true,true);
     this.options.character.animation?.capturePresentationPose();
     if(dt===0){
-      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;
       this.options.character.animation?.capturePresentationPose();
       if(!this.authored){
         if(snapCamera){
@@ -363,14 +364,18 @@ export class TrainingRuntime implements PhysicsPort {
   }
   private present(alpha:number,tick:number):()=>void {
     if(this.presentation.revision!==this.simulation.teleportRevision||this.presentation.active!==this.simulation.active){
-      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;
     }
-    let sample=this.presentation.sample(alpha,this.presentationEpoch,Math.max(0,tick-1),tick);
+    // A cut fixes every owner at the current sample until a new fixed interval.
+    // In particular, a later RAF alpha cannot rewind only bones or the camera.
+    const cut=this.presentationCutTick===tick;
+    let sample=this.presentation.sample(cut?1:alpha,this.presentationEpoch,cut?tick:Math.max(0,tick-1),tick);
     const previous=this.visualSample;
     // Explicit captures may precede a live frame at an earlier interpolation time.
     // A rewind is a history cut, never a negative delta hidden by clamping.
     if(previous&&sample.timeSeconds<previous.timeSeconds){
       this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;
+      this.presentationCutTick=tick;
       sample=this.presentation.sample(1,this.presentationEpoch,tick,tick);
     }
     const restore=()=>{
