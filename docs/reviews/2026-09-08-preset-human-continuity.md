@@ -61,3 +61,30 @@ receipt、录制报告、运行身份、Episode 骑乘图及重复/重置比较�
 - sourceHash: `6d441bdf01c3d59656571aff7da8811d3adef60b78c9c3000e8a742796d8abbd`
 - runtimeHash: `2e94394769660af0f58be56ad3006ce2ead53e62eaa723483f5077982870d177`
 - worldBuildHash: `c929998c4c2392e6a81fcb4dba929aa6bbe9ccbcfd3d6a86ee5c46950308f049`
+
+## 深度复审后的诊断修复
+
+针对 `685c7a0b` 的进一步浏览器复现发现三个 P2：手动矩阵未参与隐藏判断、
+多材质忽略实际绘制组、辅助诊断异常传播到 Host ready/inspect。均已修复：
+
+- 只计算临时世界矩阵，遵守 `matrixAutoUpdate` 和 `matrixWorldAutoUpdate`；
+  不修改对象或 SDK 的矩阵，秩二平面仍可显示，点/线塌缩判定为隐藏。
+- 材质可见性按实际绘制组与 drawRange/元素数量的交集判断；未引用空槽及未
+  指定 materialIndex 的组遵循 Three 的跳过语义，不凭任意可见材质判通过。
+- 诊断异常返回 `CHARACTER_DIAGNOSTICS_UNAVAILABLE`，不阻断 ready/inspect；
+  初次观察失败不提交部分基线，后续失败不替换已有基线。
+
+新增 6 项单元回归和 1 项真实浏览器回归，后者对比人物隐藏/正常 PNG，
+并注入仅影响诊断的矩阵克隆故障，验证工具仍可用且恢复后基线保留。
+相关 20 个文件共 242 项通过；胶囊 Node 6 项、typecheck、census、
+workspace boundaries 和 runtime prebuild 通过。独立静态复审无新可操作问题。
+
+最终真实 Creator 自检 9.074 秒并技术交付，连续性问题列表为空；
+Episode 骑乘推进 120 tick，同帧重复和重置后的 PNG 一致。
+新证据目录 `.codex-tmp/preset-human/run-1788870580403/`。
+运行时构建输出 `.codex-tmp/preset-human/prebuilt-diagnostic-fixes/`。
+
+- runtimeHash: `a4866397f286812afde751dfaee067e3af422a2e0f66e0e1351ff29baa94f592`
+- worldBuildHash: `52e014717c86ee93df5b52e7a8949197939e67e38dca236affdb89f40a4d7019`
+
+保持辅助诊断范围；本轮没有修改 SDK 控制权、技术交付准入或云部署。

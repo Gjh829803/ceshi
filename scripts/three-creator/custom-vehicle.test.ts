@@ -72,3 +72,50 @@ it('allows procedural vehicle geometry when the frozen policy forbids custom ext
   const schema=await service.schema();expect(schema.humanAuthoring.exampleTopic).toBe('custom-vehicle');
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 });
+
+it('matches actual rider pixels for manual transforms and material groups without blocking Host observation',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'rider-renderability-'));
+ const service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-vehicle');
+  for(const [file,content]of Object.entries(example.files))await writeFile(path.join(root,file),content);
+  await service.inspect();
+  const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(async()=>{
+   const world=window.__WORLDKIT_EVAL__!,host=window.__THREE_CREATOR_HOST__!;
+   await host.stop();
+   const meshes:import('three').SkinnedMesh[]=[];
+   world.player.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
+   const saved=meshes.map(mesh=>({mesh,matrix:mesh.matrix.clone(),auto:mesh.matrixAutoUpdate,groups:structuredClone(mesh.geometry.groups),material:mesh.material}));
+   const normal=host.capture('opening',[],null).image;
+   world.player.visible=false;const hidden=host.capture('opening',[],null).image;world.player.visible=true;
+   for(const {mesh}of saved){mesh.matrixAutoUpdate=false;mesh.matrix.makeScale(0,0,0);mesh.matrixWorldNeedsUpdate=true;}
+   const collapsed=host.capture('opening',[],null).image,matrixFeedback=host.read().characterContinuity;
+   for(const s of saved){s.mesh.matrix.copy(s.matrix);s.mesh.matrixAutoUpdate=s.auto;s.mesh.matrixWorldNeedsUpdate=true;}
+   for(const {mesh,material}of saved){
+    const on=(Array.isArray(material)?material[0]!:material).clone(),off=on.clone();off.visible=false;
+    mesh.material=[off,on];mesh.geometry.clearGroups();mesh.geometry.addGroup(0,mesh.geometry.index!.count,0);
+   }
+   const grouped=host.capture('opening',[],null).image,groupFeedback=host.read().characterContinuity;
+   for(const {mesh,material}of saved){
+    mesh.material=[undefined,Array.isArray(material)?material[0]:material] as import('three').Material[];
+    mesh.geometry.clearGroups();mesh.geometry.addGroup(0,mesh.geometry.index!.count,1);
+   }
+   const supported=host.capture('opening',[],null).image,supportedFeedback=host.read().characterContinuity;
+   const target=meshes[0]!,clone=target.matrix.clone,auto=target.matrixAutoUpdate;
+   target.matrixAutoUpdate=false;
+   target.matrix.clone=()=>{throw new Error('diagnostic-only clone failure');};
+   const degraded={ready:host.ready(),feedback:host.inspect().characterContinuity};
+   target.matrix.clone=clone;target.matrixAutoUpdate=auto;
+   for(const s of saved){s.mesh.material=s.material;s.mesh.geometry.groups=s.groups;}
+   return {normalDiffersFromHidden:normal!==hidden,collapsedEqualsHidden:collapsed===hidden,groupedEqualsHidden:grouped===hidden,
+    supportedEqualsNormal:supported===normal,matrixFeedback,groupFeedback,supportedFeedback,degraded,recovered:host.read().characterContinuity};
+  });
+  expect(result.normalDiffersFromHidden).toBe(true);
+  expect(result.collapsedEqualsHidden).toBe(true);expect(result.matrixFeedback.issues).toContain('CHARACTER_VISUAL_HIDDEN');
+  expect(result.groupedEqualsHidden).toBe(true);expect(result.groupFeedback.issues).toContain('CHARACTER_VISUAL_HIDDEN');
+  expect(result.supportedEqualsNormal).toBe(true);expect(result.supportedFeedback.issues).toEqual([]);
+  expect(result.degraded).toMatchObject({ready:true,feedback:{advisory:true,status:'unavailable',issues:['CHARACTER_DIAGNOSTICS_UNAVAILABLE']}});
+  expect(result.recovered.issues).toEqual([]);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);

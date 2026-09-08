@@ -5,7 +5,7 @@ import {CharacterContinuityMonitor,summarizeCharacterContinuity} from './charact
 
 function fixture(){
  const scene=new THREE.Scene(),root=new THREE.Group(),bone=new THREE.Bone();
- const mesh=new THREE.SkinnedMesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
+ const mesh:THREE.SkinnedMesh=new THREE.SkinnedMesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
  mesh.add(bone);mesh.bind(new THREE.Skeleton([bone]));root.add(mesh);scene.add(root);
  const world={scene,player:root,targets:{person:root},camera:new THREE.PerspectiveCamera()} as unknown as WorldObservation;
  const snapshot={controlledEntityId:'person',training:{character:{instanceId:'person'},mountedInstanceId:null}} as WorldSnapshot;
@@ -70,4 +70,65 @@ it('keeps separate baselines for independent worlds and retains failures in a bo
  const long=summarizeCharacterContinuity(Array.from({length:140},(_,i)=>({wallSeconds:i,characterContinuity:i%2?first:hidden})));
  expect(long.events).toHaveLength(128);expect(long.omittedTransitions).toBe(12);
  expect(long.issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
+
+it('observes manual matrices and preserves legitimate planar transforms without writing matrices',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);
+ f.mesh.matrixAutoUpdate=false;f.mesh.matrix.makeScale(0,0,0);
+ const frozen=f.mesh.matrix.clone(),worldBefore=f.mesh.matrixWorld.clone();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+ expect(f.mesh.matrix.equals(frozen)).toBe(true);expect(f.mesh.matrixWorld.equals(worldBefore)).toBe(true);
+ f.mesh.matrix.identity();f.mesh.scale.setScalar(0);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.mesh.matrix.makeScale(1,1,0);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.mesh.matrixWorldAutoUpdate=false;f.mesh.matrixWorld.makeScale(0,0,0);f.mesh.matrix.identity();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
+
+it('uses only material groups that intersect the actual draw range',()=>{
+ const f=fixture(),on=new THREE.MeshBasicMaterial(),off=new THREE.MeshBasicMaterial({visible:false});
+ f.monitor.read(f.world,f.snapshot);
+ f.mesh.material=[off,on];f.mesh.geometry.clearGroups();f.mesh.geometry.addGroup(0,6,0);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+ f.mesh.geometry.addGroup(6,6,1);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.mesh.geometry.setDrawRange(0,6);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+ f.mesh.geometry.setDrawRange(6,6);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.mesh.geometry.setDrawRange(0,0);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
+
+it('ignores explicitly undefined unused material slots supported by Three',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);
+ f.mesh.material=[undefined,new THREE.MeshBasicMaterial()] as unknown as THREE.Material[];
+ f.mesh.geometry.clearGroups();f.mesh.geometry.addGroup(0,36,1);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+});
+
+it('isolates diagnostic exceptions and does not replace the baseline after a failed read',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);
+ const material=f.mesh.material as THREE.Material;
+ Object.defineProperty(material,'visible',{configurable:true,get(){throw new Error('fixture failure');}});
+ expect(f.monitor.read(f.world,f.snapshot)).toMatchObject({advisory:true,status:'unavailable',issues:['CHARACTER_DIAGNOSTICS_UNAVAILABLE'],evidence:null});
+ Object.defineProperty(material,'visible',{configurable:true,writable:true,value:true});
+ f.mesh.geometry=f.mesh.geometry.clone();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
+});
+
+it('does not invent material zero for an unassigned draw group',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);
+ f.mesh.material=[new THREE.MeshBasicMaterial()];
+ f.mesh.geometry.groups=[{start:0,count:36}];
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
+
+it('does not commit a partial baseline when the first diagnostic read fails',()=>{
+ const f=fixture(),clone=f.mesh.matrix.clone;
+ f.mesh.matrixAutoUpdate=false;f.mesh.matrix.clone=()=>{throw new Error('fixture failure');};
+ expect(f.monitor.read(f.world,f.snapshot).status).toBe('unavailable');
+ f.mesh.matrix.clone=clone;f.mesh.geometry=f.mesh.geometry.clone();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
 });

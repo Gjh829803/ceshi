@@ -1,5 +1,5 @@
 import type {WorldObservation,WorldSnapshot} from '@worldkit/three';
-import type {Mesh,Object3D,Skeleton,Bone,BufferGeometry} from 'three';
+import {Matrix4,Vector3,type Mesh,type Object3D,type Skeleton,type Bone,type BufferGeometry,type Material} from 'three';
 
 interface VisualBinding {
  mesh:Mesh;
@@ -27,14 +27,39 @@ function visuals(root:Object3D):VisualBinding[]{
  });
  return result;
 }
-function renderable(mesh:Mesh,world:WorldObservation):boolean{
+/** Read the transform Three will use, without updating authored or cached matrices. */
+function effectiveWorldMatrix(object:Object3D,cache:Map<Object3D,Matrix4>):Matrix4{
+ const existing=cache.get(object);if(existing)return existing;
+ const matrix=object.matrixWorldAutoUpdate===false?object.matrixWorld.clone():
+  object.matrixAutoUpdate?new Matrix4().compose(object.position,object.quaternion,object.scale):object.matrix.clone();
+ if(object.matrixWorldAutoUpdate!==false&&object.parent)matrix.premultiply(effectiveWorldMatrix(object.parent,cache));
+ if(!matrix.elements.every(Number.isFinite))throw new Error('Nonfinite character transform');
+ cache.set(object,matrix);return matrix;
+}
+function hasSurfaceTransform(matrix:Matrix4):boolean{
+ const x=new Vector3().setFromMatrixColumn(matrix,0),y=new Vector3().setFromMatrixColumn(matrix,1),z=new Vector3().setFromMatrixColumn(matrix,2);
+ // Rank two can still render a surface. Only point/line collapse is certainly hidden.
+ return x.clone().cross(y).lengthSq()>0||x.clone().cross(z).lengthSq()>0||y.cross(z).lengthSq()>0;
+}
+function visibleMaterial(material:Material|undefined):boolean{
+ return !!material&&material.visible&&material.colorWrite&&(!material.transparent||material.opacity>0);
+}
+function hasVisibleDraw(mesh:Mesh):boolean{
+ const geometry=mesh.geometry,count=geometry.index?.count??geometry.attributes.position?.count??0;
+ const start=Math.max(0,geometry.drawRange.start),end=Math.min(count,geometry.drawRange.start+geometry.drawRange.count);
+ if(end<=start)return false;
+ if(!Array.isArray(mesh.material))return visibleMaterial(mesh.material);
+ const materials=mesh.material;
+ return geometry.groups.some(group=>Math.min(end,group.start+group.count)>Math.max(start,group.start)
+  &&visibleMaterial(group.materialIndex===undefined?undefined:materials[group.materialIndex]));
+}
+function renderable(mesh:Mesh,world:WorldObservation,matrices:Map<Object3D,Matrix4>):boolean{
  let attached=false;
  for(let node:Object3D|null=mesh;node;node=node.parent){
-  if(!node.visible||[node.scale.x,node.scale.y,node.scale.z].some(value=>!Number.isFinite(value)||value===0))return false;
+  if(!node.visible)return false;
   if(node===world.scene)attached=true;
  }
- const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
- return attached&&mesh.layers.test(world.camera.layers)&&materials.some(material=>material.visible&&material.colorWrite&&(!material.transparent||material.opacity>0));
+ return attached&&mesh.layers.test(world.camera.layers)&&hasSurfaceTransform(effectiveWorldMatrix(mesh,matrices))&&hasVisibleDraw(mesh);
 }
 function sameVisuals(before:readonly VisualBinding[],after:readonly VisualBinding[]):boolean{
  return before.length===after.length&&before.every(binding=>{
@@ -44,12 +69,19 @@ function sameVisuals(before:readonly VisualBinding[],after:readonly VisualBindin
  });
 }
 
+function unavailable(code:string):CharacterContinuity{
+ return {advisory:true,status:'unavailable',issues:[code],evidence:null,scope};
+}
+
 /** Host observation only. Never changes visibility, parenting, bones or SDK state. */
 export class CharacterContinuityMonitor {
  // The SDK reinstalls its public observer on start; the live scene survives pause/reset.
  private readonly baselines=new WeakMap<Object3D,Baseline>();
  read(world:WorldObservation,snapshot:WorldSnapshot|null):CharacterContinuity {
-  const unavailable=(code:string):CharacterContinuity=>({advisory:true,status:'unavailable',issues:[code],evidence:null,scope});
+  try{return this.observe(world,snapshot);}
+  catch{return unavailable('CHARACTER_DIAGNOSTICS_UNAVAILABLE');}
+ }
+ private observe(world:WorldObservation,snapshot:WorldSnapshot|null):CharacterContinuity {
   const character=snapshot?.training?.character;
   if(!character)return unavailable('CHARACTER_TELEMETRY_UNAVAILABLE');
   const root=Object.hasOwn(world.targets,character.instanceId)?world.targets[character.instanceId]:
@@ -59,13 +91,15 @@ export class CharacterContinuityMonitor {
   let baseline=this.baselines.get(world.scene);
   if(!baseline){
    if(!current.some(value=>value.bones.length>0))return unavailable('CHARACTER_RIG_UNOBSERVED');
-   baseline={root,instanceId:character.instanceId,visuals:current};this.baselines.set(world.scene,baseline);
+   baseline={root,instanceId:character.instanceId,visuals:current};
   }
   const issues:string[]=[];
   if(root!==baseline.root||character.instanceId!==baseline.instanceId)issues.push('CHARACTER_ROOT_REPLACED');
   if(!sameVisuals(baseline.visuals,current))issues.push('CHARACTER_VISUAL_REPLACED');
-  const renderableMeshCount=current.filter(value=>renderable(value.mesh,world)).length;
+  const matrices=new Map<Object3D,Matrix4>();
+  const renderableMeshCount=current.filter(value=>renderable(value.mesh,world,matrices)).length;
   if(!current.length||renderableMeshCount<current.length)issues.push('CHARACTER_VISUAL_HIDDEN');
+  this.baselines.set(world.scene,baseline);
   return {advisory:true,status:issues.length?'issues':'observed',issues,scope,evidence:{
    instanceId:character.instanceId,rootUuid:root.uuid,baselineRootUuid:baseline.root.uuid,
    mountedInstanceId:snapshot.training!.mountedInstanceId,meshCount:current.length,renderableMeshCount,
