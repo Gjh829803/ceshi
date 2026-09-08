@@ -38,7 +38,8 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'play
 world.setCaptureTargets(['player']);
 await world.start();
 // Add scene conditions for contextual actions: see character-actions capability cards.
-// Custom subjects may use createWorld + addCharacter({object,body,movement}).
+// Custom nonhuman subjects may use createWorld + addCharacter({object,body,movement}).
+// For a custom vehicle, keep this preset person and read the custom-vehicle example.
 `;
 
 export function sdkExample(_assetId: string): string { return SDK_EXAMPLE; }

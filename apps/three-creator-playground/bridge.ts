@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { WorldCommand, WorldDescription, WorldObservation } from '@worldkit/three';
 import {captureObjectViews, captureTargets, withCapturePresentation} from './capture.js';
+import {CharacterContinuityMonitor} from './character-continuity.js';
 export {targetTriviewBasis} from './capture.js';
 
 declare global {
@@ -27,6 +28,7 @@ export function filterDescription(value: WorldDescription | null, query?: { quer
   return { ...value, entities: value.entities.filter(entity => (!query.entityIds?.length || query.entityIds.includes(entity.state.id)) && words.every(word => JSON.stringify(entity).toLowerCase().includes(word))) };
 }
 function createBridge() {
+  const characterContinuity=new CharacterContinuityMonitor();
   let trace: any[] = [], events: any[] = [], frameCount = 0, active = false, startedAt = 0, previousFrameAt = 0, lastSampleAt = 0;
   let recorder: MediaRecorder | undefined, recordedChunks: Blob[] = [], stream: MediaStream | undefined;
   let captureIntervalMilliseconds = 1000 / 3, lastCapturedAt = -Infinity;
@@ -75,7 +77,7 @@ function createBridge() {
   window.addEventListener('keydown', keyListener, true); window.addEventListener('keyup', keyListener, true);
   function sample(deltaSeconds: number) {
     const world = observation(), snapshot = world.snapshot?.(), entity = snapshot?.entities.find(e => e.id === snapshot.controlledEntityId);
-    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, water: snapshot?.training?.water ?? null, training: snapshot?.training ?? null, errors: snapshot?.errors ?? [] };
+    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, characterContinuity: characterContinuity.read(world,snapshot??null), water: snapshot?.training?.water ?? null, training: snapshot?.training ?? null, errors: snapshot?.errors ?? [] };
   }
   const frames: number[] = [];
   function frame(now: number) {
@@ -86,11 +88,12 @@ function createBridge() {
     requestAnimationFrame(frame);
   }
   return {
-    ready() { try { observation(); return true; } catch { return false; } },
+    ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
     inspect(query?: { query?: string; entityIds?: string[] }) {
       const world = observation(); world.scene.updateMatrixWorld(true);
+      const snapshot=world.snapshot?.()??null;
       const objects: ReturnType<typeof describe>[] = []; world.scene.traverse(object => { if (objects.length < 1000) objects.push(describe(object)); });
-      return { player: describe(world.player), camera: { ...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray() }, targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])), snapshot: world.snapshot?.() ?? null, description: filterDescription(world.capabilities?.() ?? null, query), commandsSupported: typeof world.execute === 'function', diagnostics: world.inspect?.() ?? null, objects, renderer: { widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height, memory: { ...world.renderer.info.memory }, render: { ...world.renderer.info.render } } };
+      return { player: describe(world.player), camera: { ...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray() }, targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])), snapshot, characterContinuity:characterContinuity.read(world,snapshot), description: filterDescription(world.capabilities?.() ?? null, query), commandsSupported: typeof world.execute === 'function', diagnostics: world.inspect?.() ?? null, objects, renderer: { widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height, memory: { ...world.renderer.info.memory }, render: { ...world.renderer.info.render } } };
     },
     async executeCommand(command: WorldCommand, commandId: string) {
       const world = observation(); if (!world.execute) throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED');

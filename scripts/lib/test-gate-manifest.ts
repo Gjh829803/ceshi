@@ -15,6 +15,7 @@ export interface TestGateManifestEntryV1 {
 }
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
+  { path: "apps/three-creator-playground/character-continuity.test.ts", lane: "contract" },
   { path: "packages/camera-collision/src/camera-collision-solver.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-library.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-locomotion.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
@@ -56,6 +57,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/three-creator/capture.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/character-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/three-creator/compiler.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "scripts/three-creator/custom-vehicle.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/example-files.test.ts", lane: "contract" },
   { path: "scripts/three-creator/mount-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/three-creator/runtime-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },

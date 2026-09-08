@@ -14,6 +14,8 @@ import { CreatorDiscovery, type SchemaSection } from './creator-discovery.js';
 import { creatorToolDiagnostic, type CreatorToolDiagnostic } from './tool-errors.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import type { ExampleTopic } from './example-files.js';
+import {summarizeCharacterContinuity} from '../../apps/three-creator-playground/character-continuity.js';
+import {humanAuthoringGuidance} from './character-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
@@ -111,6 +113,7 @@ export class ThreeCreatorTools {
       assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createHumanoidWorld loads the supplied humanoid and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
+      humanAuthoring: humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: createHumanoidWorld','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
@@ -199,7 +202,7 @@ export class ThreeCreatorTools {
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
   async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
-  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash, profile: this.profile, observation, feedback:{water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
+  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash, profile: this.profile, observation, feedback:{characterContinuity:observation.characterContinuity,water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
   async executeCommand(command: WorldCommand, creatorOperationId: string = randomUUID()) {
     if (!checkCommand(command)) throw new Error(`THREE_WORLD_COMMAND_INVALID: ${JSON.stringify(checkCommand.errors)}`);
     if (this.profile !== 'three-sdk') throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED: raw profile has no SDK command capability');
@@ -342,7 +345,7 @@ export class ThreeCreatorTools {
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={water:buildWaterFeedback(lastObservation?.snapshot?.training?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.training?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
     const report = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     await json(path.join(root, 'trace.json'), trace); await json(path.join(root, 'playtest.json'), report); await writeFile(path.join(root, 'episode.json'), input.bytes);
     this.playtestEvidence = { root, files: await hashTree(root), report }; return report;

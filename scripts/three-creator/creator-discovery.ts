@@ -9,12 +9,12 @@ import { RAW_EXAMPLE, sdkExample } from './examples.js';
 import { readExampleFiles, type ExampleTopic } from './example-files.js';
 import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
-import { characterUsage } from './character-guidance.js';
+import { characterUsage, humanAuthoringGuidance } from './character-guidance.js';
 
 export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'observation', 'commands', 'training', 'all'] as const;
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
-  guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource'],
+  guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
   training: ['trainingSourceContracts', 'trainingExampleTopic', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
@@ -50,7 +50,7 @@ export class CreatorDiscovery {
           (_match, ids: string, body: string) => ids.split(',').every(id => policy.allowedAssetIds.includes(id)) ? body : ''),
     } : {};
     return {
-      topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance,
+      topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance, humanAuthoring:humanAuthoringGuidance(policy,this.profile),
       project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       ...(isSdk ? {
         entryPoint: { module: '@worldkit/three', name: 'createHumanoidWorld', optionsType: 'HumanoidWorldOptions', mapType: 'TrainingMap' },
@@ -68,7 +68,7 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
-    const folder = topic === 'mounted-interaction' ? 'horse-riding' :
+    const folder = topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
       topic === 'character-actions' ? 'character-actions' :
       topic === 'independent-world' ? 'training-independent' : 'sdk-capabilities';
     return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
@@ -145,6 +145,7 @@ export class CreatorDiscovery {
     });
     return {
       schemaVersion: 1, runtimeGuidance:guidance.provenance,
+      humanAuthoring:humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
       assets: selected.map(row => row.asset),
       mountUsage: selected.flatMap(row => row.mount ? [row.mount] : []),
       characterUsage: selected.flatMap(row => row.usage ? [row.usage] : []),

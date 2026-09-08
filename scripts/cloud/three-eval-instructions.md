@@ -8,9 +8,14 @@ accessories, atmospheric effects, reflections and elaborate shadows.
 Read creator_describe_environment, the getting-started schema and examples. Write
 ordinary index.html and local JS/TS. Native Three geometry is freely editable.
 Use assets_search/assets_describe for reusable models and motions; project.json
-selects permitted resources. Default humans to humanoid.source-101 and
-createHumanoidWorld, keeping the supplied visible model, rig and actions. Reuse
-other supplied subjects when suitable; otherwise draw simple Mesh/Group geometry
+selects permitted resources. All humans, including NPCs and riders, must use the
+permitted preset (currently humanoid.source-101), with its visible model, rig and
+motions kept together. For the SDK profile use createHumanoidWorld. Each person
+keeps the same instance through walking, mounting, riding, dismounting and reset.
+Never hide that person or draw a replacement rider as part of a vehicle. Missing
+vehicle geometry permits building only the vehicle, not redrawing its human. In
+the SDK profile, read creator_get_examples with topic custom-vehicle for that composition. Reuse other
+supplied nonhuman subjects when suitable; otherwise, if policy allows, draw simple Mesh/Group geometry
 and bind it through addCharacter({object,body,movement}), registerMovement, or a
 TrainingVehicleInstance {object,spec}. The raw profile uses normal Three and
 implements its own movement, physics and observation.
@@ -40,7 +45,13 @@ verify actions. Never infer successful movement from an accepted request alone.
 Check the opening preview for broad composition and readable routes. Use real
 inputs and world_inspect to verify the requested core functions: movement,
 applicable actions, collisions, camera and reset. Build enough connected space and
-real scene conditions for those functions. Repair observed functional problems.
+real scene conditions for those functions. For riding tasks, include walking,
+entering, driving, exiting, walking again and reset. Check characterContinuity in
+world_inspect and world_playtest feedback; inspect opening, mounted, dismounted
+and reset frames for the same visible person, no extra rider and seat/hand/foot
+fit. This structural diagnostic is advisory and cannot certify preset provenance
+or identify an extra human mesh by shape. Report unsupported poses instead of
+substituting a primitive rider. Repair observed functional problems.
 After the final source change, complete an input episode covering the core actions
 and their outcomes, then capture the opening and selected object three-views.
 Choose the episode length by functional coverage. A truncated debug run is not a

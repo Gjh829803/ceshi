@@ -84,12 +84,30 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
 
-Default human characters to the supplied visible model, skeleton and motions;
-omit added clothing, accessories and decorative visual children. Reuse other
-supplied subjects when suitable. When none fits, draw simple Mesh/Group geometry
+For Creator generation, every human (including NPCs and riders) must use the
+permitted preset visible model, skeleton and motions; omit added clothing,
+accessories and decorative visual children. Keep each person as the same instance
+through walking, mounting, riding, dismounting and reset. Never hide the preset
+person or include a replacement human in a vehicle model. Reuse other supplied
+nonhuman subjects when suitable. When none fits and policy permits, draw simple Mesh/Group geometry
 and bind its abilities. The catalog supports reuse without restricting Three
 geometry; custom subjects and compatible external assets follow the task's
 effective asset policy.
+
+For a custom vehicle, see the [preset rider + custom motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
+(`creator_get_examples({topic:'custom-vehicle'})`). Supply only vehicle geometry
+as `TrainingVehicleInstance.object`, with a matching `spec` controller family,
+collision envelope and local pelvis seat position. `createHumanoidWorld` keeps
+its preset character and applies the supported mounted pose on that skeleton.
+This does not provide universal hand/foot IK; inspect contact and seat fit.
+The Creator requirement does not restrict the SDK's general custom-character API.
+
+During Creator self-check, exercise walk → enter → ride → exit → walk → reset.
+`characterContinuity` in inspect/playtest feedback tracks the Training character's
+root, mesh, geometry and bone identities plus scene/material visibility. It is
+advisory: it cannot prove asset provenance, screen visibility, animation ownership
+or the absence of an extra rider. Check key frames as well as state. The existing
+asset-policy snapshot format and technical delivery contract remain unchanged.
 
 An instance belongs to one live character. For asynchronous changes:
 

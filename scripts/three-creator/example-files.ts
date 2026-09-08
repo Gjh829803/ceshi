@@ -1,7 +1,7 @@
 import { readFile, readdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-export const EXAMPLE_TOPICS = ['getting-started','extensions','training-assets','training-maps','training-ui','independent-world','character-actions','mounted-interaction'] as const;
+export const EXAMPLE_TOPICS = ['getting-started','extensions','training-assets','training-maps','training-ui','independent-world','character-actions','mounted-interaction','custom-vehicle'] as const;
 export type ExampleTopic = typeof EXAMPLE_TOPICS[number];
 export async function readExampleFiles(root:string, topic:ExampleTopic, selected?:readonly string[]) {
   const entries:{path:string;byteLength:number;sha256:string;readable:boolean}[]=[];

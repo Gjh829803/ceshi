@@ -70,7 +70,7 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
-      for (const example of ['sdk-capabilities','character-actions','horse-riding']) {
+      for (const example of ['sdk-capabilities','character-actions','horse-riding','custom-vehicle']) {
         const relative = `examples/three-creator/${example}/${name}`;
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }
@@ -79,6 +79,8 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
       const relative = `scripts/three-creator/${name}`;
       assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
     }
+    const observerPath='apps/three-creator-playground/character-continuity.ts';
+    assert.deepEqual(readFileSync(path.join(sourceRoot,observerPath)),readFileSync(path.join(repositoryRoot,observerPath)));
     const policyPath = 'config/three-creator/asset-policy.json';
     assert(existsSync(path.join(sourceRoot, policyPath)), 'Capsule must include Host policy at its default config path');
     const policyBytes = readFileSync(path.join(sourceRoot, policyPath));

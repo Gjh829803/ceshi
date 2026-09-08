@@ -1,0 +1,18 @@
+{
+ "schemaVersion":2,
+ "steps":[
+  {"keysDown":["w"],"durationSeconds":0.2},
+  {"keysUp":["w"],"durationSeconds":0.4},
+  {"keysDown":["f"],"durationSeconds":0.1},
+  {"keysUp":["f"],"durationSeconds":1.2},
+  {"keysDown":["w"],"durationSeconds":1.5},
+  {"keysUp":["w"],"keysDown":["Space"],"durationSeconds":2},
+  {"keysUp":["Space"],"keysDown":["f"],"durationSeconds":0.1},
+  {"keysUp":["f"],"durationSeconds":1.2},
+  {"keysDown":["w"],"durationSeconds":1},
+  {"keysUp":["w"],"durationSeconds":0.5},
+  {"lifecycle":"reset","durationSeconds":0.2},
+  {"lifecycle":"start","durationSeconds":0.5}
+ ],
+ "targets":[]
+}

@@ -176,6 +176,25 @@ shorter duration for debugging. The Host executes full steps in real wall time
 and records the native canvas. Input and video frame timestamps bind that video
 to the run. Paused/reset time is excluded from active play.
 
+## Preset humans and custom vehicles
+
+Creator requires the permitted preset model, rig and motions for every human,
+including NPCs and riders. Keep each person as one instance across walking,
+mounting, riding, dismounting and reset; custom vehicle geometry never includes a
+replacement rider. `humanAuthoring` in environment/schema/asset detail responses
+states this requirement independently of the project's editable SDK source.
+`creator_get_examples({topic:'custom-vehicle'})` provides a complete motorcycle
+composition with only the preset human asset selected. It remains usable when
+custom external asset files are disabled: procedural Three geometry is allowed.
+
+Inspect/playtest `characterContinuity` feedback observes the Training character's
+visual identity and renderability. The playtest timeline preserves intermediate
+changes even if the author restores the person before the last frame. It is
+advisory, with no change to v0.2 technical admission. It cannot prove preset
+provenance, detect every extra rider, or measure seat/hand/foot fit; inspect the
+opening, mounted, dismounted and reset images. Legacy/raw worlds without Training
+telemetry are explicitly unobserved, not passed.
+
 ## Verify and deliver
 
 Choose an episode that exercises the requested core movement and actions and
