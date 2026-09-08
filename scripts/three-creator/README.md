@@ -24,6 +24,13 @@ for example `{"id":1,"name":"world_validate","arguments":{}}`. Poll asynchronous
 `operationId` values with `operations_get`. Use one persistent session through
 playtest and submission so the Host can verify its own browser evidence.
 
+Failed MCP calls retain `isError: true` and return JSON text with the original
+`error` plus `errorDetails: {code, message, details?, nextSteps}`. CLI errors use
+the same envelope and preserve request `id` in JSON-lines mode. Failed operations
+persist both fields with their original ID. Input errors include AJV field
+locations; recovery steps never execute retries or relax validation. Reconcile
+unknown operations through the original session/journal before any new submission.
+
 ## Four levels for an Agent
 
 | Level | Tools / source | Use |
@@ -39,13 +46,22 @@ otherwise draw and bind them to existing ground/vehicle controllers. Compatible 
 explicit requirement. See the [SDK guide](../../packages/three-world/README.md)
 for exact calls and action cards.
 
-`creator_get_authoring_schema({topic})` returns a dependency closure of actual
-public types and matching SDK README guidance. Read the topic needed for the next
-step; `all` is available for deliberate full inspection. Examples return local
-HTML/main.ts, project.json and an input episode; they are integration starting
-points. Asset `characterUsage` exposes the contextual kit, six discrete skills,
-input controls and scene requirements. Search terms such as `滑铲`, `游泳` and
-`pickup` discover those capabilities.
+`creator_get_authoring_schema({topic})` returns the matching SDK README guide
+by default, with `availableSections`. Select `sections` from guide, contracts,
+project, episode, observation, commands or training; `["all"]` returns the complete
+selected topic. For example, `{topic:"mounted-interaction", sections:["training"]}`
+returns actual Training source contracts. Public type declarations use an
+AST-selected dependency closure, not a separate handwritten API definition.
+Examples include a complete file manifest and support selected files per topic.
+
+`assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
+20 maximum. Empty query lists permitted assets; continue with `nextOffset` until
+null. Search by name, action or scene need such as `滑铲`, `游泳` or `pickup`.
+Use each result's `assets_describe` link for complete resources, action conditions,
+controls and source entry points. Missing mount dependencies remain explicit and
+never expand permissions. Search does not index private paths or resource hashes.
+Direct in-process `ThreeCreatorTools.schema()` and `.assets()` retain full responses;
+MCP and CLI use progressive discovery.
 
 ## Project runtime source
 

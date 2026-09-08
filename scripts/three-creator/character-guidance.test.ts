@@ -35,7 +35,7 @@ it('discovers the full kit by Chinese skill names and exposes actual skill condi
 it('provides a character-only example and the actual interaction/input contracts',async()=>{
  const service=new ThreeCreatorTools(await root(),'three-sdk');
  try{
-  const schema:any=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'character-actions'});
+  const schema:any=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['training']});
   expect(schema.trainingSourceContracts['humanoid/action-schema.ts']).toContain('interface SkillRequest');
   expect(schema.trainingSourceContracts['environment/types.ts']).toContain('interface MapClimbSurface');
   const example:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'character-actions'});
