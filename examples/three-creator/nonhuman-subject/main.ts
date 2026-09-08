@@ -36,11 +36,11 @@ for(const x of [-.19,.19])for(const z of [-.27,.27]){
 world.addCharacter({id:'fox',name:'狐狸',object:fox,body:{heightMeters:1.15,radiusMeters:.45},
  movement:{kind:'ground',walkSpeedMetersPerSecond:2.5,runSpeedMetersPerSecond:4,jumpSpeedMetersPerSecond:3}});
 world.setControlledEntity('fox');
-world.setCameraFollow({targetEntityId:'fox'});
+world.setCameraFollow({targetEntityId:'fox',view:{eyeOffsetLocalMetersXYZ:[0,.82,-.5],defaultPerspective:'third-person',keyboardToggleEnabled:true}});
 world.setCaptureTargets(['fox','wall']);
 const presentation=world.createPresentation(),hud=document.createElement('div');
 hud.style.cssText='position:absolute;left:16px;top:16px;background:#333c;color:white;padding:12px;font:14px sans-serif;white-space:pre';
-hud.textContent='狐狸主体\nWASD 移动 · Shift 奔跑 · Space 跳跃\n前方矮墙具有真实碰撞';
+hud.textContent='狐狸主体\nWASD 移动 · Shift 奔跑 · Space 跳跃\nT 第一 / 第三人称 · 前方矮墙具有真实碰撞';
 presentation.ui.mount(hud);
 // Visual limb motion reads the SDK clock and measured speed; it never moves the root.
 world.onUpdate(({simulationSeconds})=>{

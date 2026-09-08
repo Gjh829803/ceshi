@@ -77,7 +77,7 @@ export const ACTION_GOAL_SCHEMA = object({
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
 export const SEGMENT_SCHEMA = object({
   id: { enum: SEGMENT_IDS },
-  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },training:object({
+  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
     vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
   },[]) },['positionWorldMetersXYZ','facingYawRadians']),

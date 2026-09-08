@@ -52,7 +52,18 @@ export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMoveme
  | {readonly asset:AssetInstance;readonly object?:never;readonly body?:CharacterBody}
  | {readonly object:THREE.Object3D;readonly asset?:never;readonly body:CharacterBody}
 );
+export type CameraPerspective='first-person'|'third-person';
+export interface CameraFollowViewOptions {
+ /** Target-local metres, transformed by the target's world rotation and scale. */
+ readonly eyeOffsetLocalMetersXYZ:Vec3;
+ /** Defaults to third-person. First-person applies immediately rather than waiting for movement. */
+ readonly defaultPerspective?:CameraPerspective;
+ /** Defaults to false; programmatic switching is independent of this shortcut permission. */
+ readonly keyboardToggleEnabled?:boolean;
+}
 export interface CameraFollowOptions {
+ /** Optional first-person eye in the target object's local coordinates. */
+ readonly view?:CameraFollowViewOptions;
  readonly targetEntityId?:string;
  /** With no orbit override, continue the authored pose and framing. */
  readonly framingMode?:'preserve-opening'|'target';
@@ -166,7 +177,7 @@ export interface WorldInput {
  readonly cameraYawRatio?:number; readonly cameraPitchRatio?:number;
  readonly run?:boolean; readonly jump?:boolean; readonly jumpPressed?:boolean;
  readonly interact?:boolean; readonly interactPressed?:boolean;
- /** One-shot Training first/third-person toggle, subject to profile.view.keyboardToggleEnabled. */
+ /** One-shot first/third-person toggle, subject to the active camera's shortcut permission. */
  readonly cameraTogglePressed?:boolean;
 }
 export interface MovementContext<T extends JsonValue> {
@@ -240,6 +251,8 @@ export interface WorldDescription {
  readonly actions:readonly {readonly id:string;readonly description:string;readonly inputSchema:ObjectSchema;readonly writes:readonly WriteClaim[];readonly isAvailable:boolean;readonly unavailableReason?:RuntimeError}[];
 }
 export interface CameraState {
+ readonly perspective?:CameraPerspective;
+ readonly view?:Required<CameraFollowViewOptions>;
  readonly mode:'authored'|'follow-pending'|'follow';
  readonly framingMode?:'preserve-opening'|'target';
  readonly positionWorldMetersXYZ:Vec3;
@@ -356,6 +369,8 @@ export interface World {
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
  setCameraFollow(options?:CameraFollowOptions):void;
+ /** Switch an existing follow camera; does not change its configured reset default. */
+ setCameraPerspective(perspective:CameraPerspective):void;
  /** Releases SDK following without disposing/replacing the camera. */
  useAuthoredCamera():THREE.Camera;
  setCaptureTargets(targets:readonly CaptureTargetSelection[]):void;

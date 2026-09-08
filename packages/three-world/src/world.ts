@@ -143,6 +143,7 @@ export class ThreeWorld implements API.World {
  }
  setControlledEntity(id:string):void{this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
  setCameraFollow(options:API.CameraFollowOptions={}):void{this.engine.setCameraFollow(options);}
+ setCameraPerspective(perspective:API.CameraPerspective):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraPerspective(perspective);}
  useAuthoredCamera():THREE.Camera{this.training?.useAuthoredCamera();return this.engine.cameraRig.useAuthoredCamera();}
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
@@ -612,7 +613,7 @@ export class ThreeWorld implements API.World {
  private episodePort():EpisodeRuntimePort{
   const world=this;
   const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
-  const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');};
+  const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');if(start.cameraPerspective!==undefined&&!['first-person','third-person'].includes(start.cameraPerspective))throw failure('EPISODE_START_CAMERA_INVALID');};
   const requirePrepared=()=>{world.alive();if(world.engine.isRunning)throw failure('EPISODE_LIVE_CLOCK_ACTIVE');if(world.episodeLease?.state!=='prepared')throw failure('EPISODE_SEGMENT_NOT_PREPARED');};
   const release=()=>{const lease=world.episodeLease;if(!lease)return;
    const host=world.training?trainingHost(world.training):undefined;
@@ -649,6 +650,10 @@ export class ThreeWorld implements API.World {
      if(!probe.isValid)throw failure(probe.diagnostics[0]!.code,probe.diagnostics[0]!.message,'content',probe.diagnostics[0]!.entityIds);
      renderer.setPixelRatio(1);world.engine.resize(viewport.widthPixels,viewport.heightPixels);
      if(world.training)trainingHost(world.training).prepareEpisodeStart({...start,positionWorldMetersXYZ:probe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
+     if(start.cameraPerspective!==undefined){
+      if(world.training)trainingHost(world.training).command({type:'training.camera',mode:start.cameraPerspective==='first-person'?1:0});
+      else world.engine.cameraRig.setPerspective(start.cameraPerspective);
+     }
      world.engine.step({},1);world.engine.render();
      if(world.snapshot().errors.length)throw failure('EPISODE_PREPARATION_RUNTIME_ERROR');
      lease.state='prepared';return world.snapshot();

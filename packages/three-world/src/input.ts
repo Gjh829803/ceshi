@@ -29,6 +29,7 @@ export class WorldKeyboard {
   readonly held = new Set<string>();
   private jumpQueued = false;
   private interactQueued = false;
+  private cameraToggleQueued=false;
   private abort: AbortController | undefined;
   private admitEvent: ((event: KeyboardEvent) => boolean) | undefined;
   enabled = false;
@@ -55,6 +56,7 @@ export class WorldKeyboard {
     if (repeat && !this.held.has(code)) return;
     if (!this.held.has(code)) {
       if(this.trainingMounted){const action=actionForKey(code,this.trainingMounted(),this.held,this.bindings);if(action)this.trainingPressed.push(action);}
+      if(!this.trainingMounted&&this.bound('cameraToggle',code))this.cameraToggleQueued=true;
       if (this.bound('jump',code)) this.jumpQueued = true;
       if (this.bound('interact',code)) this.interactQueued = true;
     }
@@ -83,10 +85,11 @@ export class WorldKeyboard {
       jumpPressed: this.jumpQueued,
       interact: this.interactQueued || has('interact'),
       interactPressed: this.interactQueued,
+      cameraTogglePressed:this.cameraToggleQueued,
     };
-    this.jumpQueued = false; this.interactQueued = false; return result;
+    this.jumpQueued = false; this.interactQueued = false;this.cameraToggleQueued=false; return result;
   }
-  clear(): void { this.held.clear(); this.trainingPressed.length=0;this.jumpQueued = false; this.interactQueued = false; }
+  clear(): void { this.held.clear(); this.trainingPressed.length=0;this.jumpQueued = false; this.interactQueued = false;this.cameraToggleQueued=false; }
   detach(): void { this.abort?.abort(); this.abort = undefined; this.clear(); }
 }
 

@@ -14,7 +14,7 @@ import type { EpisodeStart } from '@worldkit/three';
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object' as const, properties, required, additionalProperties: false });
 const string = { type: 'string', minLength: 1, maxLength: 512 };
 const vec3 = { type: 'array', items: { type: 'number', minimum: -100_000, maximum: 100_000 }, minItems: 3, maxItems: 3 };
-const startSchema = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' } }, ['positionWorldMetersXYZ', 'facingYawRadians']);
+const startSchema = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']} }, ['positionWorldMetersXYZ', 'facingYawRadians']);
 export const EPISODE_TOOLS = [
  { name: 'episode_observe', description: 'Read a frozen source file or see an actual opening/current/top-down/local browser view with entity and camera facts. Source filenames come from sourceFiles in observation results. Views and probes are optional planning aids, not a mandatory scouting or rehearsal stage. A screenshot viewId can be used for point picking. Does not change or compile the world.', inputSchema: { type: 'object' as const, oneOf: [
   object({ view: { enum: ['opening', 'current', 'top-down'] }, cameraPositionWorldMetersXYZ: vec3, lookAtWorldMetersXYZ: vec3, entityIds: { type: 'array', items: string, maxItems: 64, uniqueItems: true } }),
