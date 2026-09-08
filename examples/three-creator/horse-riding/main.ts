@@ -21,7 +21,7 @@ const vehicles=horses.map((horse,index)=>({instanceId:`horse-${index+1}`,assetId
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,training:{map,vehicles,character:{instanceId:'person',object:character.root,animation:character}}});
 // Unit identity group preserves both SDK-owned roots and their world-space transforms.
 const assembly=new THREE.Group();assembly.add(horses[0]!.root,character.root);
-world.addEntity({id:'horse-rider-assembly',object:assembly,role:'decoration',frontYawRadians:0});
+world.addEntity({id:'horse-rider-assembly',object:assembly,role:'decoration',frontYawRadians:Math.PI});
 world.setCaptureTargets([{entityId:'horse-rider-assembly'},{entityId:'horse-2'}]);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#19352ddb;color:white;padding:12px;font:14px sans-serif;white-space:pre';
