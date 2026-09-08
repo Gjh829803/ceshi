@@ -41,6 +41,8 @@ try{
   const samples=trace.samples;
   const mounted=samples.filter((s:any)=>s.training?.mountedInstanceId==='horse-1');
   if(!mounted.length||!samples.some((s:any)=>s.training?.transition.kind==='enter')||!samples.some((s:any)=>s.training?.transition.kind==='exit')||!mounted.some((s:any)=>s.training.vehicleDynamics.some((v:any)=>v.instanceId==='horse-1'&&v.creature?.gait==='gallop')))throw new Error('MOUNTED_ROUTE_NOT_OBSERVED');
+  const gallop=mounted.filter((s:any)=>s.training.vehicleDynamics.some((v:any)=>v.instanceId==='horse-1'&&v.creature?.gait==='gallop'));
+  if(gallop.at(-1).wallSeconds-gallop[0].wallSeconds<3)throw new Error('SUSTAINED_GALLOP_NOT_OBSERVED');
   const lastMounted=mounted.at(-1).wallSeconds;
   const walking=samples.filter((s:any)=>s.wallSeconds>lastMounted&&s.training?.mountedInstanceId===null);
   if(!walking.some((s:any)=>Math.hypot(...s.velocityMetersPerSecondXYZ)>1))throw new Error('POST_EXIT_WALK_NOT_OBSERVED');
@@ -84,7 +86,9 @@ try{
    const second=await session.prepareSegment(start,{widthPixels:1280,heightPixels:720});
    const secondFrame=await session.frame('image/png');
    if(second.training?.transition.remainingSeconds!==0||second.training?.mountedInstanceId!=='horse-1'||secondFrame.imageDataUrl!==first.imageDataUrl)throw new Error('EPISODE_SECOND_PREPARE_CHANGED');
-   await json('episode-trace.json',{kind:'three-episode-trace',schemaVersion:1,worldBuildHash:source.worldBuildHash,before,terminal,second,frames});
+   const settled=await session.advance({training:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},60);
+   if(settled.training?.vehicles.some(vehicle=>vehicle.speedMetersPerSecond>.01)||settled.training?.transition.remainingSeconds!==0)throw new Error('EPISODE_OLD_INPUT_RETAINED');
+   await json('episode-trace.json' ,{kind:'three-episode-trace',schemaVersion:1,worldBuildHash:source.worldBuildHash,before,terminal,second,frames});
    await json('episode-health.json',{media:await inspectRenderedVideo(path.join(output,'episode.mp4')),repeatedFrameIdentity:hash(first.imageDataUrl),simulationTicks:terminal.simulationTick-before.simulationTick,errors:session.errors,lease,reinitialized:true});
   }finally{await encoder?.abort();await session.release().catch(()=>undefined);await session.close();}
  }
