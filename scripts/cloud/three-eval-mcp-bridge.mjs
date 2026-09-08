@@ -24,14 +24,14 @@ export async function freezeRunAssetPolicy({toolkitRoot, previousPlan}) {
     return policyFields(previousPlan, path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
   }
   const {createAssetPolicySnapshot, assetPolicyHash} = await policyModule(toolkitRoot);
-  const policy = JSON.parse(await readFile(path.join(toolkitRoot, "scripts/three-creator/asset-policy.json"), "utf8"));
-  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "scripts/three-creator/asset-catalog.json"), "utf8"));
+  const policy = JSON.parse(await readFile(path.join(toolkitRoot, "config/three-creator/asset-policy.json"), "utf8"));
+  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "assets/three-creator/asset-catalog.json"), "utf8"));
   const assetPolicySnapshot = createAssetPolicySnapshot(policy, catalog.assets);
   return {assetPolicySnapshot, assetPolicySha256: assetPolicyHash(assetPolicySnapshot)};
 }
 async function verifyInstalledPolicy(snapshot, toolkitRoot) {
   const {createAssetPolicySnapshot, assetPolicyHash} = await policyModule(toolkitRoot);
-  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "scripts/three-creator/asset-catalog.json"), "utf8"));
+  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "assets/three-creator/asset-catalog.json"), "utf8"));
   if (assetPolicyHash(createAssetPolicySnapshot(snapshot.policy, catalog.assets)) !== assetPolicyHash(snapshot)) throw new Error("THREE_ASSET_POLICY_CATALOG_MISMATCH");
   // The locked capsule already verifies its complete file inventory. Also bind
   // the catalog's resource claims to the actual bytes used by this task.

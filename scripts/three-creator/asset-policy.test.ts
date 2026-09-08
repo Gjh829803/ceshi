@@ -6,8 +6,8 @@ import { afterEach, expect, it } from 'vitest';
 import { ThreeCreatorTools } from './tools';
 import { ThreeCompiler, hashTree } from './compiler';
 import {sha256} from './contracts';
-import catalog from './asset-catalog.json';
-import defaultPolicy from './asset-policy.json';
+import catalog from '../../assets/three-creator/asset-catalog.json';
+import defaultPolicy from '../../config/three-creator/asset-policy.json';
 import {createAssetPolicySnapshot,assetPolicyHash,verifyAssetPolicySources} from './asset-policy.mjs';
 
 async function pin(overrides:Record<string,unknown>={}) {

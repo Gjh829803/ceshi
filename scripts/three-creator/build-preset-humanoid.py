@@ -129,7 +129,7 @@ def main():
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     model, provenance = build()
-    catalog_path = ROOT / 'scripts/three-creator/asset-catalog.json'
+    catalog_path = ROOT / 'assets/three-creator/asset-catalog.json'
     catalog = json.loads(catalog_path.read_bytes())
     source = next(a for a in catalog['assets'] if a['id'] == 'humanoid.source-101')
     # Preserve source notices in every Creator delivery, with exact catalog hashes.

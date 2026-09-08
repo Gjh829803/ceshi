@@ -29,7 +29,7 @@ describe('training family route input',()=>{
 });
 
 describe('actual player capture controller and training physics integration',()=>{
- const assets=JSON.parse(readFileSync(new URL('../three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;training?:{spec:VehicleSpec}}[];
+ const assets=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;training?:{spec:VehicleSpec}}[];
  for(const family of ['wheeled','plane','glider','sub','space'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
    const asset=assets.find(a=>a.training?.spec.mode===family)!,spec=structuredClone(asset.training!.spec);

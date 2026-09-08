@@ -6,7 +6,7 @@ import { createWorld, training, type EpisodeStart, type TrainingMap as MapDefini
 // Headless physical integration evidence, not rendered Creator self-check or Episode
 // video acceptance. Starts use the Episode runtime initializer; subsequent motion
 // uses only the SDK fixed input path, with no renderer or campus imports.
-const catalog = JSON.parse(readFileSync(new URL('./asset-catalog.json', import.meta.url), 'utf8'));
+const catalog = JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
 const assets = (catalog.assets as { id: string; training?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; training: { spec: VehicleSpec } } => !!asset.training?.spec);
 const families = ['wheeled', 'bike', 'slide', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;

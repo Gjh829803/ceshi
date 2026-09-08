@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it } from 'vitest';
 import * as THREE from 'three';
-import catalog from '../../../scripts/three-creator/asset-catalog.json';
+import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, cloneAsset, playLocomotion } from './assets';
 import { createWorld } from './engine';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';

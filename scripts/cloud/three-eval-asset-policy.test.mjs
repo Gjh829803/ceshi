@@ -5,6 +5,23 @@ import path from 'node:path';
 import {tmpdir} from 'node:os';
 import {freezeRunAssetPolicy, freezeTaskAssetPolicy, readPinnedAssetPolicy} from './three-eval-mcp-bridge.mjs';
 const toolkitRoot = path.resolve('.');
+test('new runs load Host policy from config and catalog from assets with validation code in scripts', async t => {
+ const isolated = await realpath(await mkdtemp(path.join(tmpdir(), 'three-policy-config-')));
+ t.after(() => rm(isolated, {recursive: true, force: true}));
+ await mkdir(path.join(isolated, 'scripts/three-creator'), {recursive: true});
+ await mkdir(path.join(isolated, 'config/three-creator'), {recursive: true});
+ await cp(path.join(toolkitRoot, 'scripts/three-creator/asset-policy.mjs'), path.join(isolated, 'scripts/three-creator/asset-policy.mjs'));
+ await mkdir(path.join(isolated, 'assets/three-creator'), {recursive: true});
+ await cp(path.join(toolkitRoot, 'assets/three-creator/asset-catalog.json'), path.join(isolated, 'assets/three-creator/asset-catalog.json'));
+ const policy = {schemaVersion: 1, allowedAssetIds: ['humanoid.preset-101'], defaultHumanoidAssetId: 'humanoid.preset-101', allowCustomAssets: false};
+ const configPath = path.join(isolated, 'config/three-creator/asset-policy.json');
+ await writeFile(configPath, JSON.stringify(policy));
+ const frozen = await freezeRunAssetPolicy({toolkitRoot: isolated});
+ assert.deepEqual(frozen.assetPolicySnapshot.policy, policy);
+ await rm(configPath);
+ assert.deepEqual(await freezeRunAssetPolicy({toolkitRoot: isolated, previousPlan: frozen}), frozen);
+ await assert.rejects(freezeRunAssetPolicy({toolkitRoot: isolated}), {code: 'ENOENT'});
+});
 async function fixture(t) {
  const root=await realpath(await mkdtemp(path.join(tmpdir(),'three-policy-')));
  t.after(()=>rm(root,{recursive:true,force:true}));
@@ -65,8 +82,10 @@ test('pinned bridge rejects workspace policy, symlinks and incomplete pins',asyn
 test('installed catalog drift or resource-byte drift rejects before a task can freeze',async t=>{
  const f=await fixture(t), isolated=path.join(f.root,'toolkit');
  await mkdir(path.join(isolated,'scripts/three-creator'),{recursive:true});
- for(const name of ['asset-policy.mjs','asset-catalog.json'])await cp(path.join(toolkitRoot,'scripts/three-creator',name),path.join(isolated,'scripts/three-creator',name));
- const catalogPath=path.join(isolated,'scripts/three-creator/asset-catalog.json'),catalog=JSON.parse(await readFile(catalogPath,'utf8'));
+ await cp(path.join(toolkitRoot,'scripts/three-creator/asset-policy.mjs'),path.join(isolated,'scripts/three-creator/asset-policy.mjs'));
+ await mkdir(path.join(isolated,'assets/three-creator'),{recursive:true});
+ await cp(path.join(toolkitRoot,'assets/three-creator/asset-catalog.json'),path.join(isolated,'assets/three-creator/asset-catalog.json'));
+ const catalogPath=path.join(isolated,'assets/three-creator/asset-catalog.json'),catalog=JSON.parse(await readFile(catalogPath,'utf8'));
  const original=catalog.assets[0].displayName;catalog.assets[0].displayName+=' drift';
  await writeFile(catalogPath,JSON.stringify(catalog));
  await assert.rejects(freezeTaskAssetPolicy({...f,lock:{...f.lock,toolkitRoot:isolated}}),/POLICY_CATALOG/);

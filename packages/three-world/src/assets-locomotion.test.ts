@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, LoopOnce, Mesh, MeshBasicMaterial, Quaternion, type Object3D } from 'three';
-import catalog from '../../../scripts/three-creator/asset-catalog.json';
+import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, playLocomotion } from './assets';
 import { WorldAssets } from './assets-library';
 import { createWorld } from './world';

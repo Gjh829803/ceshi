@@ -11,7 +11,7 @@ import { withAdmissionDirectoryLock, admissionIsClosed } from "./three-eval-admi
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
-import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from "./three-account-routing.mjs";
+import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,readCreatorAccountPolicy} from "./three-account-routing.mjs";
 import {freezeRunAssetPolicy} from "./three-eval-mcp-bridge.mjs";
 import {runWithExecutionSlots} from "./three-execution-slots.mjs";
 
@@ -93,10 +93,8 @@ if (sourceManifest.genericInstructionsSha256 && sourceManifest.genericInstructio
 const evaluationPolicyPath = sourceManifest.evaluationPolicyPath ? path.resolve(repo, sourceManifest.evaluationPolicyPath) : null;
 if (evaluationPolicyPath && !evaluationPolicyPath.startsWith(`${repo}${path.sep}`)) throw new Error("Host evaluation policy must stay in this checkout.");
 const acceptancePolicy = evaluationPolicyPath ? {scope: "host-only", documents: [{path: path.relative(repo, evaluationPolicyPath), sha256: await fileSha256(evaluationPolicyPath)}]} : null;
-const accountPolicyPath=path.resolve(options["--account-policy-file"]??previousPlan?.accountPolicyPath??path.join(repo,"scripts/cloud/creator-account-policy.json"));
+const {accountPolicyPath,accountPolicyBytes}=await readCreatorAccountPolicy({repoRoot:repo,policyFile:options["--account-policy-file"],previousPlan});
 const accountInventoryPath=path.resolve(options["--account-inventory-file"]??previousPlan?.accountInventoryPath??path.join(repo,".codex-tmp/account-performance/account-id-map.json"));
-const accountPolicyBytes=await readFile(accountPolicyPath);
-if(previousPlan?.accountPolicySha256&&previousPlan.accountPolicySha256!==sha256(accountPolicyBytes))throw Error("CREATOR_FROZEN_ACCOUNT_POLICY_CHANGED");
 const accountPolicy=JSON.parse(accountPolicyBytes);
 const accountInventory=JSON.parse(await readFile(accountInventoryPath,"utf8"));
 const frozenAssetPolicy = await freezeRunAssetPolicy({toolkitRoot: repo, previousPlan});

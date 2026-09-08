@@ -2,7 +2,7 @@
 
 These are the exact raw GLB bytes previously stored under the retired Playground.
 Their asset IDs, public metadata, SHA-256 values and byte lengths remain in
-[`asset-catalog.json`](../../scripts/three-creator/asset-catalog.json).
+[`asset-catalog.json`](asset-catalog.json).
 Only the Host source path changed; the public asset URI and animation metadata
 are unchanged. Existing subject provenance and license records remain under
 `assets/subjects` and `assets/licenses`.

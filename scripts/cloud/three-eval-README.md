@@ -200,3 +200,20 @@ separate acceptance gates. Publishing is not performed by these new scripts.
 Validation: `node --test scripts/cloud/three-eval.test.mjs` plus capsule tests.
 Tests, Linux dependency import doctor, full browser doctor and model execution
 are reported separately; passing one is never used to claim another occurred.
+
+
+### Account policy location and frozen runs
+
+The Host default account-routing policy is
+[`config/three-creator/account-policy.json`](../../config/three-creator/account-policy.json).
+The executable selection rules stay in `three-account-routing.mjs`; the policy is
+not included in Creator authoring capsules.
+
+A saved run retains its `accountPolicyPath` and `accountPolicySha256`. If that path
+is the removed `scripts/cloud/creator-account-policy.json` default in this exact
+checkout, the Host may read the new default only when the old file is absent and
+the new bytes match the saved SHA-256. It does not rewrite the saved identity.
+Missing hash pins, changed bytes and unrelated missing paths fail closed.
+An explicit `--account-policy-file` uses that exact file and still checks the
+saved hash. Existing external runs, source worktrees and provider archives are
+not migrated or restarted by this repository change.

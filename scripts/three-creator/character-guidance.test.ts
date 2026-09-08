@@ -5,7 +5,7 @@ import {afterEach,expect,it} from 'vitest';
 import {ThreeCreatorTools} from './tools';
 import {executeThreeCreatorTool} from './mcp';
 import {createAssetPolicySnapshot,assetPolicyHash} from './asset-policy.mjs';
-import catalog from './asset-catalog.json';
+import catalog from '../../assets/three-creator/asset-catalog.json';
 import Ajv from 'ajv';
 import {EPISODE_SCHEMA} from './contracts';
 const roots:string[]=[];

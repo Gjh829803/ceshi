@@ -106,8 +106,10 @@ export function stageContext(repositoryRoot, outputRoot) {
   source('patches/@recast-navigation__generators@0.43.1.patch', true);
   // Tool execution gets a small standalone tsconfig, without Native workspace globals.
   put('tsconfig.json', jsonBytes({ compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', strict: true, skipLibCheck: true, resolveJsonModule: true, useDefineForClassFields: true, noEmit: true, lib: ['ESNext', 'DOM', 'DOM.Iterable'] } }));
+  source('config/three-creator/asset-policy.json');
+  source('assets/three-creator/asset-catalog.json');
   for (const relative of SOURCE_TREES) tree(relative);
-  const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json'), 'utf8'));
+  const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'assets/three-creator/asset-catalog.json'), 'utf8'));
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
     for (const resource of [asset, ...(asset.resources ?? [])]) {

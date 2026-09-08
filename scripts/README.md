@@ -10,7 +10,7 @@ Current Three production entry points:
 | `cloud/three-episode*` | Three Episode scheduling and infrastructure |
 | `production/` | Explicit campaign operations; existing runs retain their own identities |
 | `testing/` | Test census and repository boundaries |
-| `lib/`, `assets/`, `fixtures/` | Shared helpers and assets; check direct consumers before removal |
+| `lib/` | Shared helpers; check direct consumers before removal |
 
 Use the commands in the [branch guide](../docs/three-sdk-data-production.md),
 [Creator README](three-creator/README.md) and [Episode README](three-episode/README.md).

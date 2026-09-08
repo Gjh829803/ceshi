@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectLock, auditCapsule, sha256, stageContext } from '../../scripts/cloud/three-capsule.mjs';
+import { freezeRunAssetPolicy } from '../../scripts/cloud/three-eval-mcp-bridge.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const rootManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json')));
@@ -61,7 +62,7 @@ test('ELF audit rejects wrong architecture and glibc requirements above Jammy', 
 });
 
 
-test('staged assets are independent of retired applications and preserve catalog bytes', () => {
+test('staged assets preserve catalog bytes and new runs freeze the packaged Host config', async () => {
   const temporaryParent = path.join(repositoryRoot, '.codex-tmp');
   mkdirSync(temporaryParent, { recursive: true });
   const outputRoot = mkdtempSync(path.join(temporaryParent, 'three-asset-closure-'));
@@ -74,11 +75,27 @@ test('staged assets are independent of retired applications and preserve catalog
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }
     }
-    for (const name of ['asset-policy.mjs', 'asset-policy.d.mts', 'asset-policy.json']) {
+    for (const name of ['asset-policy.mjs', 'asset-policy.d.mts']) {
       const relative = `scripts/three-creator/${name}`;
       assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
     }
-    const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));
+    const policyPath = 'config/three-creator/asset-policy.json';
+    assert(existsSync(path.join(sourceRoot, policyPath)), 'Capsule must include Host policy at its default config path');
+    const policyBytes = readFileSync(path.join(sourceRoot, policyPath));
+    assert.deepEqual(policyBytes, readFileSync(path.join(repositoryRoot, policyPath)));
+    const manifest = JSON.parse(readFileSync(path.join(sourceRoot, 'source-manifest.json')));
+    assert.equal(manifest.files.find(file => file.path === policyPath)?.sha256, sha256(policyBytes));
+    assert(!existsSync(path.join(sourceRoot, 'scripts/three-creator/asset-policy.json')));
+    const frozen = await freezeRunAssetPolicy({toolkitRoot: sourceRoot});
+    assert.deepEqual(frozen.assetPolicySnapshot.policy, JSON.parse(policyBytes));
+    assert.deepEqual(frozen, await freezeRunAssetPolicy({toolkitRoot: repositoryRoot}));
+    const catalogPath = 'assets/three-creator/asset-catalog.json';
+    const catalogBytes = readFileSync(path.join(sourceRoot, catalogPath));
+    assert.deepEqual(catalogBytes, readFileSync(path.join(repositoryRoot, catalogPath)));
+    assert.equal(manifest.files.find(file => file.path === catalogPath)?.sha256, sha256(catalogBytes));
+    assert(!existsSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));
+    assert(!existsSync(path.join(sourceRoot, 'config/three-creator/account-policy.json')), 'Account routing is Host-only');
+    const catalog = JSON.parse(catalogBytes);
     for (const asset of catalog.assets) {
       assert(asset.sourcePath.startsWith('assets/three-creator/'), 'Three assets must not depend on an application directory');
       const bytes = readFileSync(path.join(sourceRoot, asset.sourcePath));

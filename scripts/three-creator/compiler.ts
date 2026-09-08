@@ -45,7 +45,7 @@ export async function verifyFiles(root: string, expected: Record<string, string>
 }
 export async function readCatalog(): Promise<AssetCatalogEntry[]> {
   try {
-    const catalog = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'scripts/three-creator/asset-catalog.json'), 'utf8'));
+    const catalog = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json'), 'utf8'));
     if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.assets)) throw new Error('THREE_CATALOG_INVALID');
     return catalog.assets;
   } catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
@@ -75,7 +75,7 @@ export class ThreeCompiler {
     if(this.policyContext)return this.policyContext;
     const options=this.policyOptions;
     let frozenPolicy:AssetPolicySnapshot;
-    const catalog = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'scripts/three-creator/asset-catalog.json'),'utf8'));
+    const catalog = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'assets/three-creator/asset-catalog.json'),'utf8'));
     if(catalog.schemaVersion!==1||!Array.isArray(catalog.assets))throw new Error('THREE_CATALOG_INVALID');
     const frozenCatalog:AssetCatalogEntry[]=catalog.assets;
     const hasPin=options.assetPolicySnapshotPath!==undefined||options.assetPolicySha256!==undefined;
@@ -87,7 +87,7 @@ export class ThreeCompiler {
       if(assetPolicyHash(frozenPolicy)!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_HASH_MISMATCH');
       if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
     }else{
-      frozenPolicy=createAssetPolicySnapshot(JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'scripts/three-creator/asset-policy.json'),'utf8')),frozenCatalog);
+      frozenPolicy=createAssetPolicySnapshot(JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'config/three-creator/asset-policy.json'),'utf8')),frozenCatalog);
     }
     return this.policyContext={snapshot:frozenPolicy,catalog:frozenCatalog,hash:assetPolicyHash(frozenPolicy)};
   }

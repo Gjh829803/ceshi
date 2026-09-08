@@ -60,7 +60,7 @@ Object.assign(globalThis, { document: { createElement: () => ({ width: 768, heig
   FileReader: class { result: unknown; onloadend?: () => void; readAsArrayBuffer(blob: Blob) { void blob.arrayBuffer().then(value => { this.result = value; this.onloadend?.(); }); } } });
 const { SPECS } = await import(pathToFileURL(path.join(donor, 'src/config.ts')).href);
 const { buildVehicle } = await import(pathToFileURL(path.join(donor, 'src/models.ts')).href);
-const catalogFile = path.join(REPOSITORY_ROOT, 'scripts/three-creator/asset-catalog.json');
+const catalogFile = path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json');
 const catalog = JSON.parse(await readFile(catalogFile, 'utf8'));
 catalog.assets = catalog.assets.filter((asset: any) => !asset.id.startsWith('training.') && asset.id !== 'humanoid.source-101');
 const provenance = { repository: 'vehicle-training-ground', commit: expected, notices: 'resources', importedWithoutChangingAssetBytes: true };

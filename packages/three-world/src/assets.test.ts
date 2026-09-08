@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, LoopOnce, LoopRepeat, Vector3, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
-import catalog from '../../../scripts/three-creator/asset-catalog.json';
+import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 

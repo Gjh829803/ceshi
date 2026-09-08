@@ -31,11 +31,13 @@ An unrelated fresh process cannot trust a model-written saved playtest receipt.
 
 ## Host asset policy
 
-[`asset-policy.json`](asset-policy.json) is the Host-owned source of allowed
+[`config/three-creator/asset-policy.json`](../../config/three-creator/asset-policy.json) is the Host-owned source of allowed
 catalog IDs, `defaultHumanoidAssetId` and `allowCustomAssets`. The default excludes
 the retired default character, selects `humanoid.preset-101`, and permits custom
 assets. It does not require every character to use a preset or restrict ordinary
-Three geometry. AI-owned `project.json` selects assets; it never grants permission.
+Three geometry. The asset catalog lives in [`assets/three-creator/asset-catalog.json`](../../assets/three-creator/asset-catalog.json);
+`scripts/three-creator` owns policy loading, validation and task freezing. AI-owned
+`project.json` selects assets; it never grants permission.
 
 Read `creator_describe_environment.assetPolicy` for the effective task settings
 and snapshot hash. Search and exact descriptions return only allowed entries;

@@ -21,6 +21,10 @@ test('GPU direct-case launch is forbidden without a batch capability', () => {
 test('only the CPU batch reconciler receives the remote cancellation credential',async()=>{
  const {batchInfrastructure}=await import('./three-episode-batch-infrastructure.mjs');
  const items=batchInfrastructure({image:base.image}).items;
+ const devicePlugin=items.find(i=>i.kind==='DaemonSet');
+ assert.equal(devicePlugin.metadata.name,'worldkit-three-nvidia-device-plugin');
+ assert.equal(devicePlugin.metadata.namespace,'kube-system');
+ assert.equal(devicePlugin.spec.template.spec.nodeSelector['karpenter.sh/nodepool'],'worldkit-episode-graphics');
  const batch=items.find(i=>i.metadata.name==='three-episode-batch-reconciler');
  const cleanup=items.find(i=>i.metadata.name==='three-episode-resource-reconciler');
  assert(batch.spec.jobTemplate.spec.template.spec.containers[0].env.some(e=>e.name==='LWDP_GENERATION_API_TOKEN'&&e.valueFrom.secretKeyRef.name==='lwdp-generation-token'));

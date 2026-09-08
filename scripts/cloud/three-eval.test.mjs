@@ -10,6 +10,7 @@ import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInst
 import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
 import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
 import {stopOwnedThreeJob} from './three-eval-stop.mjs';
+import * as accountRouting from './three-account-routing.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlX8AAAAASUVORK5CYII=','base64');
@@ -101,7 +102,14 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   // transport is replaced; no production credential files or cloud API exist.
   const isolated=path.join(dir,'isolated'),cloud=path.join(isolated,'scripts/cloud');await mkdir(cloud,{recursive:true});await mkdir(path.join(isolated,'scripts/lib'));
   await mkdir(path.join(isolated,'scripts/three-creator'),{recursive:true});
-  for(const name of ['asset-policy.mjs','asset-policy.json','asset-catalog.json'])await cp(path.join('scripts/three-creator',name),path.join(isolated,'scripts/three-creator',name));
+  await cp('scripts/three-creator/asset-policy.mjs',path.join(isolated,'scripts/three-creator/asset-policy.mjs'));
+  await mkdir(path.join(isolated,'assets/three-creator'),{recursive:true});
+  await cp('assets/three-creator/asset-catalog.json',path.join(isolated,'assets/three-creator/asset-catalog.json'));
+  await mkdir(path.join(isolated,'config/three-creator'),{recursive:true});
+  await cp('config/three-creator/asset-policy.json',path.join(isolated,'config/three-creator/asset-policy.json'));
+  const isolatedAccountPolicy=path.join(isolated,'config/three-creator/account-policy.json');
+  await cp(accountPolicyFile,isolatedAccountPolicy);
+  const isolatedAccountArgs=['--account-inventory-file',accountInventoryFile];
   const isolatedPolicy=path.join(isolated,'host-policy.md');await cp(policyFile,isolatedPolicy);
   for(const name of await readdir('scripts/cloud'))if(name.startsWith('three-eval-')||['creator-eval-diagnostics.mjs','creator-eval-runtime.mjs','three-account-routing.mjs','three-execution-slots.mjs'].includes(name))await cp(path.join('scripts/cloud',name),path.join(cloud,name));
   await mkdir(path.join(isolated,'.codex-tmp/runtime-config'),{recursive:true});for(const name of ['aws-config','aws-credentials'])await writeFile(path.join(isolated,'.codex-tmp/runtime-config',name),'synthetic test only');
@@ -122,13 +130,68 @@ export async function pollGenerationJob(){const until=Date.now()+800;while(calls
 export async function cancelGenerationJob(){throw Error('unexpected cancel');}
 `;
   await writeFile(path.join(isolated,'scripts/lib/lwdp-generation-client.mjs'),stub);
-  const invoke=(extra=[])=>spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-five-sdk',...extra],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});
+  const invoke=(extra=[])=>spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...isolatedAccountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-five-sdk',...extra],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});
   const ran=invoke();assert.equal(ran.status,1,ran.stderr);assert.match(ran.stdout,/CREATOR_EVAL_/,ran.stderr);const recorded=(await readFile(callsFile,'utf8')).trim().split('\n').map(JSON.parse);assert.equal(recorded.length,5,ran.stdout+ran.stderr);assert.equal(new Set(recorded.map(c=>c.payload.request_id)).size,5);
   const admissions=path.join(isolated,'.codex-tmp/three-creator-eval/admissions');assert.equal((await readdir(admissions)).filter(name=>name.endsWith('.json')).length,5);
+  const savedPlanPath=path.join(isolated,'.codex-tmp/three-creator-eval/runs/mock-five-sdk/evaluation-plan.json');
+  const savedPlan=JSON.parse(await readFile(savedPlanPath,'utf8'));
+  assert.equal(savedPlan.accountPolicyPath,isolatedAccountPolicy,'new run must use the relocated default without a CLI policy override');
+  assert.equal(savedPlan.accountPolicySha256,hash(await readFile(accountPolicyFile)));
+  const requestIdentity=savedPlan.cases.map(({requestId,payloadHash,caseHash,outputS3Prefix})=>({requestId,payloadHash,caseHash,outputS3Prefix}));
+  const payloadBytes=await Promise.all(savedPlan.cases.map(item=>readFile(path.join(path.dirname(savedPlanPath),item.taskId,'payload.json'))));
+  // Simulate a previously frozen plan from this exact checkout. The removed
+  // source path survives as provenance; only equal pinned bytes may relocate.
+  const legacyAccountPolicy=path.join(cloud,'creator-account-policy.json');
+  await assert.rejects(readFile(legacyAccountPolicy),{code:'ENOENT'});
+  await writeFile(savedPlanPath,JSON.stringify({...savedPlan,accountPolicyPath:legacyAccountPolicy}));
   const isolatedBridge=path.join(cloud,'three-eval-mcp-bridge.mjs'),originalBridge=await readFile(isolatedBridge,'utf8');await writeFile(isolatedBridge,originalBridge+'\n// Later local revision; original deployed lock stays frozen.\n');
-  const logBefore=await readFile(callsFile,'utf8');const recovered=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','resume','--runtime-lock',readyPath,'--run-id','mock-five-sdk'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(recovered.status,1,recovered.stderr);assert.match(recovered.stdout,/CREATOR_EVAL_SUMMARY/);const recoveredSummary=JSON.parse(await readFile(path.join(isolated,'.codex-tmp/three-creator-eval/runs/mock-five-sdk/summary.json'),'utf8'));assert.equal(recoveredSummary.pendingCount,5);assert.equal(await readFile(callsFile,'utf8'),logBefore,'known pending requests must never POST again');
+  const logBefore=await readFile(callsFile,'utf8');const recovered=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','resume','--runtime-lock',readyPath,'--run-id','mock-five-sdk'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(recovered.status,1,recovered.stderr);assert.match(recovered.stdout,/CREATOR_EVAL_SUMMARY/);const recoveredSummary=JSON.parse(await readFile(path.join(isolated,'.codex-tmp/three-creator-eval/runs/mock-five-sdk/summary.json'),'utf8'));assert.equal(recoveredSummary.pendingCount,5);assert.equal(await readFile(callsFile,'utf8'),logBefore,'known pending requests must never POST again');
+  const resumedPlan=JSON.parse(await readFile(savedPlanPath,'utf8'));
+  assert.equal(resumedPlan.accountPolicyPath,legacyAccountPolicy);
+  assert.equal(resumedPlan.accountPolicySha256,savedPlan.accountPolicySha256);
+  assert.deepEqual(resumedPlan.cases.map(({requestId,payloadHash,caseHash,outputS3Prefix})=>({requestId,payloadHash,caseHash,outputS3Prefix})),requestIdentity);
+  assert.deepEqual(await Promise.all(resumedPlan.cases.map(item=>readFile(path.join(path.dirname(savedPlanPath),item.taskId,'payload.json')))),payloadBytes);
   await writeFile(isolatedBridge,originalBridge);
-  const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...accountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
+  const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs',...isolatedAccountArgs,'--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
 
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('account policy relocation preserves a frozen legacy path only for identical bytes', async t => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), 'three-account-policy-'));
+  t.after(() => rm(repoRoot, {recursive: true, force: true}));
+  const newPath = path.join(repoRoot, 'config/three-creator/account-policy.json');
+  const legacyPath = path.join(repoRoot, 'scripts/cloud/creator-account-policy.json');
+  await mkdir(path.dirname(newPath), {recursive: true});
+  const bytes = Buffer.from('{"schemaVersion":1}\n');
+  await writeFile(newPath, bytes);
+  const previousPlan = {accountPolicyPath: legacyPath, accountPolicySha256: hash(bytes)};
+  const originalPlan = structuredClone(previousPlan);
+  const migrated = await accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan});
+  assert.equal(migrated.accountPolicyPath, legacyPath);
+  assert.deepEqual(migrated.accountPolicyBytes, bytes);
+  assert.deepEqual(previousPlan, originalPlan);
+  assert.equal((await accountRouting.readCreatorAccountPolicy({repoRoot})).accountPolicyPath, newPath);
+  const explicit = await accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan, policyFile: newPath});
+  assert.equal(explicit.accountPolicyPath, newPath);
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan, policyFile: legacyPath}), {code: 'ENOENT'});
+  await mkdir(path.dirname(legacyPath), {recursive: true});
+  await writeFile(legacyPath, bytes);
+  await writeFile(newPath, 'different default');
+  assert.deepEqual((await accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan})).accountPolicyBytes, bytes);
+});
+
+test('account policy relocation rejects changed bytes, missing pins and unrelated missing paths', async t => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), 'three-account-policy-'));
+  t.after(() => rm(repoRoot, {recursive: true, force: true}));
+  const newPath = path.join(repoRoot, 'config/three-creator/account-policy.json');
+  const legacyPath = path.join(repoRoot, 'scripts/cloud/creator-account-policy.json');
+  await mkdir(path.dirname(newPath), {recursive: true});
+  await writeFile(newPath, 'changed bytes');
+  const previousPlan = {accountPolicyPath: legacyPath, accountPolicySha256: hash('original bytes')};
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan}), /CREATOR_FROZEN_ACCOUNT_POLICY_CHANGED/);
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan, policyFile: newPath}), /CREATOR_FROZEN_ACCOUNT_POLICY_CHANGED/);
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {accountPolicyPath: legacyPath}}), {code: 'ENOENT'});
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {...previousPlan, accountPolicyPath: path.join(repoRoot, 'external-policy.json')}}), {code: 'ENOENT'});
+  await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {...previousPlan, accountPolicyPath: path.join(repoRoot, 'other-checkout/scripts/cloud/creator-account-policy.json')}}), {code: 'ENOENT'});
 });
