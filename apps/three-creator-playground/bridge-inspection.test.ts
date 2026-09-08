@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {afterEach,expect,it,vi} from 'vitest';
-import {createWorld,DEFAULT_KEY_BINDINGS,type ThreeWorld} from '@worldkit/three';
-import type {WorldDescription,WorldObservation} from '@worldkit/three';
+import {createWorld,type ThreeWorld} from '@worldkit/three';
+import type {WorldObservation} from '@worldkit/three';
 
 const worlds:ThreeWorld[]=[];
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();vi.restoreAllMocks();});
@@ -41,55 +41,39 @@ it('reads a snapshot without hierarchy traversal or optional diagnostics and lea
  expect(world.snapshot()).toEqual(before);
 });
 
-it('preserves descriptor-text search while applying entity filters to the real SDK description',async()=>{
- const {host}=await fixture();
- const result=host.inspect({entityIds:['npc'],query:'actor.move-to',sections:['description']});
- expect(result.description!.entities.map(entity=>entity.state.id)).toEqual(['npc']);
- expect(result.description!.parameters.map(parameter=>parameter.id)).toEqual(['npc.visible']);
+it('passes the complete selection to the SDK and returns its description unchanged',async()=>{
+ const {observer,host}=await fixture();
+ const query={entityIds:['npc'],query:'npc'};
+ const expected=observer.capabilities!(query),capabilities=vi.spyOn(observer,'capabilities');
+ const result=host.inspect({...query,sections:['description']});
+ expect(capabilities).toHaveBeenCalledWith(query);
+ expect(result.description).toEqual(expected);
  expect(result).not.toHaveProperty('snapshot');expect(result).not.toHaveProperty('diagnostics');expect(result).not.toHaveProperty('objects');
 });
 
-it('keeps the omitted-sections full response and empty entity selection compatible',async()=>{
- const {host}=await fixture(),result=host.inspect({entityIds:[]});
+it('uses the SDK empty-selection and text-search semantics without Host reinterpretation',async()=>{
+ const {observer,host}=await fixture();
+ for(const query of [{entityIds:[]},{entityIds:['npc'],query:'actor.move-to'}]){
+  const expected=observer.capabilities!(query);
+  expect(expected.entities).toEqual([]);
+  expect(host.inspect({...query,sections:['description']}).description).toEqual(expected);
+ }
+});
+
+it('returns the full inspection when sections are omitted',async()=>{
+ const {host}=await fixture(),result=host.inspect();
  expect(result.description!.entities.map(entity=>entity.state.id)).toEqual(['hero','npc']);
  for(const key of ['player','camera','targets','snapshot','characterContinuity','description','commandsSupported','diagnostics','objects','renderer'])expect(result).toHaveProperty(key);
  expect((result.diagnostics as {snapshot:unknown}).snapshot).toEqual(result.snapshot);
 });
 
-it('filters legacy callbacks that ignore query arguments and reports unavailable raw samples as null',async()=>{
- const {observer,host}=await fixture(),description=observer.capabilities!();
- const {snapshot:_snapshot,inspect:_inspect,...legacy}=observer;
- const raw:WorldObservation={...legacy,capabilities:()=>description};
+it('reports unavailable raw telemetry as null',async()=>{
+ const {observer,host}=await fixture();
+ const {snapshot:_snapshot,inspect:_inspect,capabilities:_capabilities,...required}=observer;
+ const raw:WorldObservation=required;
  window.__WORLDKIT_EVAL__=raw;
- const result=host.inspect({entityIds:['npc'],sections:['snapshot','description','diagnostics']});
- expect(result.description!.entities.map(entity=>entity.state.id)).toEqual(['npc']);
- expect(result.description!.parameters.map(parameter=>parameter.id)).toEqual(['npc.visible']);
+ const result=host.inspect({sections:['snapshot','description','diagnostics']});
  expect(result.sample).toEqual({worldRevision:null,simulationTick:null,simulationSeconds:null,isRunning:null});
- expect(result.snapshot).toBeNull();expect(result.diagnostics).toBeNull();
+ expect(result.snapshot).toBeNull();expect(result.description).toBeNull();expect(result.diagnostics).toBeNull();
  expect(result.characterContinuity).toMatchObject({status:'unavailable'});
-});
-
-it('retains only related boarding observations for selected entities without altering legacy full output',async()=>{
- const {observer,host}=await fixture();
- const description:WorldDescription={...observer.capabilities!(),training:{
-  inputGuide:{family:'character',fields:{}},controlState:{override:null,lastApplied:null,livePaused:true,clockOwner:'live'},characterCapabilities:[],keyBindings:DEFAULT_KEY_BINDINGS,
-  boarding:{hero:{approachPositionWorldMetersXYZ:[0,0,0],eligible:true,reason:'ready',message:'Ready'},npc:{approachPositionWorldMetersXYZ:[4,0,0],eligible:false,reason:'out-of-reach',message:'Too far'}},
- }};
- // Legacy observer callbacks may return complete descriptions regardless of query.
- observer.capabilities=()=>description;
- expect(Object.keys(host.inspect().description!.training!.boarding)).toEqual(['hero','npc']);
- const selected=host.inspect({entityIds:['npc'],sections:['description']});
- expect(selected.description!.training!.boarding).toEqual({npc:{approachPositionWorldMetersXYZ:[4,0,0],eligible:false,reason:'out-of-reach',message:'Too far'}});
- expect(Object.keys(description.training!.boarding)).toEqual(['hero','npc']);
-});
-
-it('keeps absent boarding telemetry unknown when inspecting an older v2 runtime with an empty query',async()=>{
- const {observer,host}=await fixture();
- // Older workspace SDK v2 runtimes expose Training without boarding/controlState.
- const legacyDescription={...observer.capabilities!(),training:{inputGuide:{family:'character',fields:{}},characterCapabilities:[],keyBindings:DEFAULT_KEY_BINDINGS}} as unknown as WorldDescription;
- observer.capabilities=()=>legacyDescription;
- const result=host.inspect({});
- expect(result.description!.entities.map(entity=>entity.state.id)).toEqual(['hero','npc']);
- expect(result.description!.training).not.toHaveProperty('boarding');
- expect(result.description!.parameters.map(parameter=>parameter.id)).toEqual(['hero.visible','npc.visible']);
 });

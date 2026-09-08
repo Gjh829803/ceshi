@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { WorldCommand, WorldDescription, WorldObservation } from '@worldkit/three';
+import type { WorldCommand, WorldObservation } from '@worldkit/three';
 import {captureObjectViews, captureTargets, withCapturePresentation} from './capture.js';
 import {CharacterContinuityMonitor} from './character-continuity.js';
 export {targetTriviewBasis} from './capture.js';
@@ -15,7 +15,7 @@ export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diag
 export interface InspectionQuery {
   query?: string;
   entityIds?: string[];
-  /** Omit to retain the complete legacy response. */
+  /** Omit to inspect all sections. */
   sections?: InspectionSection[];
 }
 function observation(): WorldObservation {
@@ -28,26 +28,6 @@ function describe(object: THREE.Object3D) {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   return { uuid: object.uuid, name: object.name, type: object.type, parentUuid: object.parent?.uuid ?? null, positionMetersXYZ: position(object), visible: object.visible, childCount: object.children.length, bounds: box.isEmpty() ? null : { minimumMetersXYZ: box.min.toArray(), maximumMetersXYZ: box.max.toArray() } };
-}
-export function filterDescription(value: WorldDescription | null, query?: { query?: string; entityIds?: string[] }): WorldDescription | null {
-  if (!value || !query) return value;
-  const words = query.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
-  const entityIds = query.entityIds;
-  const entities = value.entities.filter(entity =>
-    (!entityIds?.length || entityIds.includes(entity.state.id)) &&
-    words.every(word => JSON.stringify(entity).toLowerCase().includes(word)));
-  const selected = new Set(entities.map(entity => entity.state.id));
-  return {
-    ...value, entities,
-    // Older workspace SDKs may not expose boarding; keep that absence truthful.
-    ...(value.training?.boarding ? {training: {
-      ...value.training,
-      boarding: Object.fromEntries(Object.entries(value.training.boarding).filter(([id]) => selected.has(id))),
-    }} : {}),
-    parameters: entityIds?.length
-      ? value.parameters.filter(parameter => parameter.writes.some(claim => claim.kind === 'entity' && entityIds.includes(claim.entityId)))
-      : value.parameters,
-  };
 }
 function createBridge() {
   const characterContinuity=new CharacterContinuityMonitor();
@@ -113,7 +93,8 @@ function createBridge() {
     ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
     inspect(query?: InspectionQuery) {
       const world = observation();
-      const includes = (section: InspectionSection) => !query?.sections || query.sections.includes(section);
+      const {sections, ...selection} = query ?? {};
+      const includes = (section: InspectionSection) => !sections || sections.includes(section);
       const snapshot = world.snapshot?.() ?? null;
       const hierarchy = () => {
         world.scene.updateMatrixWorld(true);
@@ -138,11 +119,7 @@ function createBridge() {
         commandsSupported: typeof world.execute === 'function',
         ...(includes('hierarchy') ? hierarchy() : {}),
         ...(includes('snapshot') ? {snapshot, characterContinuity: characterContinuity.read(world, snapshot)} : {}),
-        // Keep Host descriptor-text search while applying entity selection before
-        // SDK boarding/parameter inspection. Legacy callbacks may ignore arguments.
-        ...(includes('description') ? {description: filterDescription(
-          world.capabilities?.(query?.entityIds?.length ? {entityIds: query.entityIds} : undefined) ?? null, query,
-        )} : {}),
+        ...(includes('description') ? {description: world.capabilities?.(selection) ?? null} : {}),
         ...(includes('diagnostics') ? {diagnostics: world.inspect?.() ?? null} : {}),
       };
     },

@@ -159,9 +159,11 @@ update a running job.
 `sections:['snapshot']` for current actor/camera state, or `['description']` with
 `entityIds` for selected entities, parameters and boarding eligibility. `hierarchy`
 adds object bounds and renderer details; `diagnostics` adds physics/input audit.
-Omitting sections preserves the full response. Select sections to avoid unrelated
-hierarchy traversal and duplicate diagnostics. `query` searches entity descriptor
-text; `entityIds` limits description queries, not snapshot or hierarchy contents.
+Omitting sections inspects all sections. Select sections to avoid unrelated
+hierarchy traversal and duplicate diagnostics. `query` uses the SDK case-insensitive
+substring match on entity id/name/tags. Omit `entityIds` to select all entities;
+`entityIds:[]` selects none. These filters affect description queries, not snapshot
+or hierarchy contents. The Host returns the current SDK description directly.
 Every response includes sample revision/tick/time; unavailable values are null.
 Water/continuity feedback is populated only with the snapshot section.
 
