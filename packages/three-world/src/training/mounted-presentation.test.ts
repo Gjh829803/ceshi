@@ -86,7 +86,7 @@ it('keeps one interaction edge and canonical camera/actors identical at 30, 60 a
       }
       expect(entered).toHaveBeenCalledTimes(1);
       expect(runtime.simulation.vehicle?.spec.id).toBe('horse-1');
-      results.push({ tick: world.simulationTick, horse: runtime.simulation.vehicle!.position.toArray(), rider: runtime.simulation.player.position.toArray(), yaw: runtime.followCamera.yaw });
+      results.push({ tick: world.simulationTick, horse: runtime.simulation.vehicle!.position.toArray(), rider: runtime.simulation.player.position.toArray(), yaw: runtime.followCamera.yaw, collision:runtime.followCamera.collisionState });
     } finally { world.dispose(); }
   }
   expect(results[1]).toEqual(results[0]);
@@ -99,7 +99,9 @@ it('renders without changing canonical camera orbit, timers, or the following fi
     for (const world of [a,b]) {world.training!.enter('horse-1');world.step({},31);world.step({training:{...emptyInput(),forward:1},cameraYawRatio:.3},20);}
     const camera=a.training!.followCamera;
     const state={yaw:camera.yaw,pitch:camera.pitch,lastOrbit:camera.lastOrbit,distance:camera.distance,target:camera.target.clone()};
+    const collision=camera.collisionState;
     engineOf(a).render(.4);engineOf(a).render(.4);
+    expect(camera.collisionState).toEqual(collision);
     expect({yaw:camera.yaw,pitch:camera.pitch,lastOrbit:camera.lastOrbit,distance:camera.distance,target:camera.target}).toEqual(state);
     for (const world of [a,b])world.step({training:{...emptyInput(),forward:1}},1);
     expect(a.training!.camera.position).toEqual(b.training!.camera.position);

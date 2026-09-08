@@ -15,6 +15,10 @@ Mesh/Group subjects.
 
 One world owns one fixed clock, physics backend, controller per actor, animation
 owner and active camera writer. Creator compiles and validates; Episode records.
+Ordinary and Training cameras keep their framing and visibility policies while
+sharing the [collision solver](../camera-collision/README.md). Each controller owns
+independent recovery state. Display interpolation and repeated captures do not
+advance that state; fallback positions come from fixed snapshots.
 
 <!-- topic:getting-started -->
 ## Start with a complete humanoid

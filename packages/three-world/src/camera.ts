@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CameraHardDecolliderV1, type CameraGeometryHitV2, type CameraHardDecolliderTransactionStateV1 } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver, type CameraHardDecolliderTransactionStateV1 } from '@whitebox-world/camera-collision';
 import type { CameraArmHit, PhysicsPort, Vec3 } from './engine-contracts.js';
 
 export type CameraRigFollowOptions = Readonly<{
@@ -77,7 +77,7 @@ function copyMemory(m: RigMemory): RigMemory {
 /** The sole optional pose writer. World owns input, physics and the fixed clock. */
 export class ThreeCameraRig {
   private memory: RigMemory = initialMemory();
-  private readonly decollider = new CameraHardDecolliderV1();
+  private readonly decollider = new CameraCollisionSolver((from,to,radius) => this.castCameraArm(from,to,radius));
   private solveTick = 0;
   private initial: { camera: THREE.Camera; parent: THREE.Object3D | null; memory: RigMemory; collision: CameraHardDecolliderTransactionStateV1; solveTick: number } | undefined;
   constructor(
@@ -211,54 +211,20 @@ export class ThreeCameraRig {
     this.memory.collisionPhase = solved.phase;
   }
   private solveCollision(target: THREE.Vector3, desiredEye: THREE.Vector3, follow: Follow, dt: number): { eye: THREE.Vector3; target: THREE.Vector3; safeDistance: number; entityId: string | undefined; phase: CameraRigState['collisionPhase'] } {
-    let pivot = target.clone(), hit = this.probe(pivot, desiredEye, follow.collisionRadiusMeters);
-    const overlapId = hit.startedOverlapping ? hit.colliderEntityId : undefined;
-    // Resolve a deeply intersecting visual pivot by native separation normals.
-    // Each candidate is re-queried, including corners with multiple surfaces.
-    for (let attempt = 0; hit.startedOverlapping && attempt < 8; attempt++) {
-      if (!hit.normalWorldXYZ || !Number.isFinite(hit.penetrationDepthMeters)) break;
-      pivot.addScaledVector(new THREE.Vector3(...hit.normalWorldXYZ).normalize(), hit.penetrationDepthMeters! + CONTACT_MARGIN_METERS);
-      hit = this.probe(pivot, desiredEye, follow.collisionRadiusMeters);
+    try {
+      const solved=this.decollider.solve({ target:tuple(target),eye:tuple(desiredEye),
+        current:tuple(this.camera.getWorldPosition(new THREE.Vector3())),radius:follow.collisionRadiusMeters },{
+        authorityTick:++this.solveTick,deltaSeconds:dt,clearHoldSeconds:RELEASE_DELAY_SECONDS,
+        recoveryHalfLifeSeconds:follow.recoveryHalfLifeSeconds,maximumRecoveryMetersPerSecond:follow.maximumRecoveryMetersPerSecond,
+        releaseDeadbandMeters:RELEASE_DEADBAND_METERS,
+      });
+      return {eye:new THREE.Vector3(...solved.position),target:new THREE.Vector3(...solved.target),
+        safeDistance:solved.safeDistance,entityId:solved.entityId,phase:solved.phase};
+    } catch(error) {
+      if(error instanceof Error && error.message==='CAMERA_COLLISION_PROBE_INVALID')throw new Error('WORLD_CAMERA_PROBE_INVALID');
+      if(error instanceof Error && error.message==='CAMERA_COLLISION_NO_SAFE_POSE')throw new Error('WORLD_CAMERA_NO_SAFE_POSE');
+      throw error;
     }
-    if (hit.startedOverlapping) {
-      const currentEye = this.camera.getWorldPosition(new THREE.Vector3());
-      if (!this.probe(currentEye, currentEye, follow.collisionRadiusMeters).startedOverlapping) {
-        // No bounded separating pivot was found, but the previous eye is still
-        // physically valid. Hold it until a clear pivot is available.
-        return { eye: currentEye, target: pivot, safeDistance: 0, entityId: hit.colliderEntityId ?? overlapId, phase: 'emergency-inside' };
-      }
-    }
-    const previous = this.decollider.captureTransactionState();
-    // Free orbit/zoom/entry trajectories must not impersonate recovery from a wall.
-    if (previous.phase === 'clear' && !hit.startedOverlapping) this.decollider.reset();
-    const armLength = pivot.distanceTo(desiredEye);
-    let safeDistance = hit.distanceMeters;
-    if (hit.colliderEntityId && previous.constrainedArmLengthMeters !== undefined && safeDistance > previous.constrainedArmLengthMeters && safeDistance - previous.constrainedArmLengthMeters < RELEASE_DEADBAND_METERS) safeDistance = previous.constrainedArmLengthMeters;
-    const geometryHit: CameraGeometryHitV2 | undefined = hit.colliderEntityId !== undefined || safeDistance < armLength - 1e-8 ? {
-      schemaVersion: 2, travelDistanceMeters: safeDistance, travelFraction: armLength === 0 ? 0 : safeDistance / armLength,
-      hitPointMetersXYZ: hit.hitPositionWorldMetersXYZ ?? tuple(pivot),
-      hitNormalXYZ: hit.normalWorldXYZ ?? tuple(pivot.clone().sub(desiredEye).normalize()),
-      ...(hit.colliderEntityId ? { hitEntityId: hit.colliderEntityId } : {}),
-      startedOverlapping: hit.startedOverlapping ?? false, penetrationDepthMeters: hit.penetrationDepthMeters ?? 0, obstructionClass: 'hard',
-    } : undefined;
-    const request = { authorityTick: ++this.solveTick, desiredTargetPositionMetersXYZ: tuple(pivot), desiredPositionMetersXYZ: tuple(desiredEye),
-      currentCommittedPositionMetersXYZ: tuple(this.camera.getWorldPosition(new THREE.Vector3())), minimumUsableArmLengthMeters: Math.min(.3, armLength),
-      clearHoldSeconds: RELEASE_DELAY_SECONDS, recoveryHalfLifeSeconds: follow.recoveryHalfLifeSeconds,
-      maximumRecoveryMetersPerSecond: follow.maximumRecoveryMetersPerSecond, deltaSeconds: dt, ...(geometryHit ? { geometryHit } : {}) };
-    const result = this.decollider.solve(request);
-    let eye = new THREE.Vector3(...result.positionMetersXYZ), resolved = new THREE.Vector3(...result.resolvedTargetPositionMetersXYZ);
-    if (hit.startedOverlapping) {
-      // The shared emergency solver proposes a previous safe pose. Validate the
-      // entire segment; if needed use the separating side rather than crossing a wall.
-      const validate = (p: THREE.Vector3) => { const q = this.probe(resolved, p, follow.collisionRadiusMeters); return !q.startedOverlapping && q.distanceMeters >= resolved.distanceTo(p) - 1e-6; };
-      if (!validate(eye)) {
-        const candidate = resolved.clone().addScaledVector(new THREE.Vector3(...geometryHit!.hitNormalXYZ), Math.max(.3, follow.collisionRadiusMeters));
-        if (!validate(candidate)) throw new Error('WORLD_CAMERA_NO_SAFE_POSE');
-        eye = candidate;
-      }
-    }
-    return { eye, target: resolved, safeDistance: result.safeArmLengthMeters, entityId: result.stableHitEntityId ?? overlapId,
-      phase: overlapId ? 'emergency-inside' : result.phase };
   }
   useAuthoredCamera(): THREE.Camera { this.memory = initialMemory(); this.decollider.reset(); this.solveTick = 0; return this.camera; }
   sealInitialState(): void {

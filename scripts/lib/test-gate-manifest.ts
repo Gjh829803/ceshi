@@ -15,6 +15,7 @@ export interface TestGateManifestEntryV1 {
 }
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
+  { path: "packages/camera-collision/src/camera-collision-solver.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-library.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-locomotion.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/assets.test.ts", lane: "contract" },

@@ -497,7 +497,7 @@ export class TrainingRuntime implements PhysicsPort {
     const safe=this.environment.safeSpawn(new THREE.Vector3(...position),HUMANOID_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35;
     return {isValid:valid,requestedPositionWorldMetersXYZ:position,resolvedPositionWorldMetersXYZ:safe?tuple(safe):position,diagnostics:valid?[]:[{code:'TRAINING_START_BLOCKED',message:'No safe character start within alignment tolerance.'}]};
   }
-  castCameraArm(target:Vec3,eye:Vec3,radius:number){const t=new THREE.Vector3(...target);return {distanceMeters:t.distanceTo(this.environment.cameraCast(t,new THREE.Vector3(...eye),radius))};}
+  castCameraArm(target:Vec3,eye:Vec3,radius:number){return this.environment.cameraProbe(target,eye,radius);}
   probe(origin:Vec3,direction:Vec3,distance:number){const result=this.environment.raycast(new THREE.Vector3(...origin),new THREE.Vector3(...direction),distance);return result?{entityId:result.id,distanceMeters:result.distance,normalWorldXYZ:tuple(result.normal)}:null;}
   audit():PhysicsAudit{return {engine:'rapier',entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:id===this.options.character.instanceId?'character':'training-vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};}
   private resetOwned():void{
