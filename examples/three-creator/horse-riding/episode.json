@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 2,
+  "steps": [
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 0.7
+    },
+    {
+      "keysUp": [
+        "w"
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysDown": [
+        "d"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "d"
+      ],
+      "keysDown": [
+        "Shift"
+      ],
+      "durationSeconds": 5
+    },
+    {
+      "keysUp": [
+        "w",
+        "Shift"
+      ],
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "w"
+      ],
+      "durationSeconds": 162
+    },
+    {
+      "lifecycle": "reset",
+      "durationSeconds": 0
+    },
+    {
+      "lifecycle": "start",
+      "durationSeconds": 2
+    }
+  ],
+  "targets": []
+}

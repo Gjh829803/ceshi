@@ -549,6 +549,8 @@ Read the real exports from contracts.ts using the Creator schema tool by topic.
 Types describe the API; browser validation is still required for first-frame
 fidelity, route support, continuous input, physical changes and 3–5 minute play.
 
+<!-- topic:mounted-interaction -->
+<!-- asset-info:training.horse,humanoid.source-101 -->
 ### Imported horse and rider anchors
 
 `TrainingHorse` owns the real `creatures/horse.glb` skeleton, cloned clips and
@@ -590,8 +592,7 @@ an animated root-local transform and rejects missing, invalid or out-of-bounds
 anchors. The limits above round upward from 8192 intervals plus exact source key times
 (maximum 0.145578694707 metres and 0.122950402397 radians), after normalization
 includes intermediate blend geometry. A 64-interval-only limit missed key extrema. They apply to this
-normalized horse, not arbitrary assets. The catalog's legacy `seat.driver` label
-is not a bone in this GLB; use `Body` for its animated anchor.
+normalized horse, not arbitrary assets. `seat.driver` is not a bone in this GLB; use `Body` for its animated anchor.
 
 Runtime samples the horse before aligning the actual Source101 pelvis under
 `TrainingCharacter.actor`, then restores the fixed pose after display. It does
@@ -601,3 +602,5 @@ across the measured fixed and animated seats; maximum measured height is
 2.520854 metres. The rider remains a procedural seated overlay, with no authored
 mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
+
+<!-- /asset-info -->

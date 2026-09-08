@@ -20,7 +20,7 @@ export type Episode = {
   steps: EpisodeStep[];
   targets: { id: string; positionMetersXYZ: [number, number, number]; toleranceMeters: number }[];
 };
-export const KEY_NAMES = ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', 'ShiftLeft', 'ShiftRight', 'Space', 'e', 'E', 'r', 'R'];
+export const KEY_NAMES = ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', 'ShiftLeft', 'ShiftRight', 'Space', 'e', 'E', 'r', 'R', 'f', 'F'];
 const number = { type: 'number' };
 const keys = { type: 'array', items: { type: 'string', enum: KEY_NAMES }, maxItems: 20 };
 export const PROJECT_SCHEMA = objectSchema({ schemaVersion: { const: 1 }, assetIds: { type: 'array', items: { type: 'string', minLength: 1 }, uniqueItems: true, maxItems: 64 } }, ['schemaVersion', 'assetIds']);

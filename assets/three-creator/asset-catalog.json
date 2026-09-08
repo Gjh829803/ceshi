@@ -2946,7 +2946,10 @@
         ]
       },
       "actions": {},
-      "limitations": [],
+      "limitations": [
+        "Walk also serves trot; no distinct trot clip.",
+        "Source101 uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection."
+      ],
       "provenance": {
         "repository": "vehicle-training-ground",
         "commit": "c293622a63716b8473cc2a95cb485c515265945e",
@@ -2960,13 +2963,6 @@
           "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
           "byteLength": 2215736,
           "sourcePath": "assets/three-creator/training/creatures/horse.glb"
-        },
-        {
-          "path": "creatures/dragon.glb",
-          "uri": "./assets/resources/347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1.glb",
-          "sha256": "347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1",
-          "byteLength": 555856,
-          "sourcePath": "assets/three-creator/training/creatures/dragon.glb"
         },
         {
           "path": "creatures/manifest.json",
@@ -3037,17 +3033,7 @@
           }
         }
       },
-      "sockets": [
-        {
-          "id": "driver",
-          "node": "seat.driver",
-          "positionMetersXYZ": [
-            0,
-            1.65,
-            0
-          ]
-        }
-      ],
+      "sockets": [],
       "collision": {
         "kind": "box",
         "halfExtents": [
@@ -3060,6 +3046,20 @@
           1.65,
           0
         ]
+      },
+      "integrationMetadata": {
+        "classification": "ground-mount",
+        "useWhen": "骑马、地面骑乘、双马实例、上下马交互；TrainingHorse 原始骨骼动画与 Source101 骑手。",
+        "requiredAssetIds": [
+          "humanoid.source-101",
+          "training.horse"
+        ],
+        "clips": [
+          "Idle",
+          "Walk",
+          "Gallop"
+        ],
+        "seatSource": "training.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node."
       }
     },
     {
