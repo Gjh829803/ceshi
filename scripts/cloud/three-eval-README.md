@@ -140,6 +140,13 @@ Fixed-output recovery can retrieve the four formal files and two stderr logs;
 result/archive bytes must match the delivered launcher's hashes. Recovery and
 independent verification use this same workspace identity.
 
+Account policy defaults to one selected account. An optional `codexAccountRoot`
+uses one prepared subdirectory per selected identity hash. `selection: "pool"`
+requires that root and requests every eligible preferred account, up to 64,
+using the shared root directly. Its physical members, preferred policy and
+requested account IDs must agree; actual execution must belong to that requested
+set. Account basenames and the provider's global slot limits remain shared.
+
 A new run requires an explicit selection manifest. Resume uses the saved manifest
 path and verifies its unchanged bytes. Model input contains the original reference,
 the uniformly normalized source request, frozen general instructions and technical

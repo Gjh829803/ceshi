@@ -23,6 +23,19 @@ test('optional account roots are scoped to project experiments and bind exactly 
  assert.throws(()=>creatorAccountRoot(['A','B'],restricted),/REQUIRES_SINGLE_ID/);assert.throws(()=>creatorAccountRoot(['D'],restricted),/DENIED/);
  for(const codexAccountRoot of [null,'','relative','/var/run/lwdp/secrets/codex-accounts/current','/fsx/pipeline/worldkit-three-creator-experiments','/fsx/pipeline/worldkit-three-creator-experiments/','/fsx/pipeline/worldkit-three-creator-experiments/../outside',root+'/',root+'//child',root+'/./child',root+'/../child',root+'/%2e%2e',root+'/link\\escape',root+'\0'])assert.throws(()=>validateCreatorAccountPolicy({...policy,codexAccountRoot}),/ROOT_INVALID/);
 });
+test('pool selection requests the whole eligible preferred cohort and accepts only its actual members',()=>{
+ const root='/fsx/pipeline/worldkit-three-creator-experiments/shared-known-pool',pool={...policy,selection:'pool',codexAccountRoot:root};
+ const ids=selectCreatorAccount({policy:pool,inventory,slot:100});assert.deepEqual(ids,['A','B']);assert.equal(creatorAccountRoot(ids,pool),root);
+ assert.deepEqual(selectCreatorAccount({policy:pool,inventory:inventory.map(row=>({...row,eligible:row.codexAccountId==='B'}))}),['B']);
+ assert.deepEqual(selectCreatorAccount({policy:pool,inventory,requestedIds:['B','A']}),['B','A']);
+ assert.equal(actualCreatorAccountEvidence(ids,'B',pool).verified,true);assert.equal(actualCreatorAccountEvidence(ids,'unrated',pool).verified,false);assert.equal(actualCreatorAccountEvidence(ids,'D',pool).denied,true);
+ assert.throws(()=>selectCreatorAccount({policy:pool,inventory,requestedIds:['unrated']}),/POOL_SELECTION_INVALID/);
+ assert.throws(()=>validateCreatorAccountPolicy({...pool,codexAccountRoot:undefined}),/POOL_POLICY_INVALID/);
+ assert.throws(()=>validateCreatorAccountPolicy({...pool,selection:'all'}),/SELECTION_MODE_INVALID/);
+ const sixtyFour=Array.from({length:64},(_,index)=>'account-'+index),wide={...pool,preferred:sixtyFour.map(label=>({label,identitySha256:hash(label)}))};
+ assert.equal(selectCreatorAccount({policy:wide,inventory:sixtyFour.map(codexAccountId=>({codexAccountId,eligible:true,healthStatus:'active'}))}).length,64);
+ assert.throws(()=>validateCreatorAccountPolicy({...wide,preferred:[...wide.preferred,{label:'extra',identitySha256:hash('extra')}]}),/POOL_POLICY_INVALID/);
+});
 test('probation accounts require explicit selection and never become automatic fallback',()=>{
  const trial={...policy,probation:[{label:'U01',identitySha256:hash('unrated')}]};
  assert.deepEqual(selectCreatorAccount({policy:trial,inventory,requestedIds:['unrated']}),['unrated']);
