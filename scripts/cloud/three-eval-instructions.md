@@ -5,10 +5,19 @@ environment forms and uniform basic lighting. Add identifying color only to a fe
 key landmarks or interaction targets. Omit decorative detail, clothing additions,
 accessories, atmospheric effects, reflections and elaborate shadows.
 
-Read creator_describe_environment, the getting-started schema and examples. Write
+Read creator_describe_environment and the getting-started schema, then choose the
+example for the requested subject. Write
 ordinary index.html and local JS/TS. Native Three geometry is freely editable.
 Use assets_search/assets_describe for reusable models and motions; project.json
-selects permitted resources. All humans, including NPCs and riders, must use the
+selects permitted resources. In the three-sdk profile, for a nonhuman protagonist use createWorld with its
+own visual root, body and movement; select it with setControlledEntity and follow
+that subject with the camera. Read nonhuman-subject for the complete example.
+In the three-raw profile, author the nonhuman subject with ordinary Three and expose
+it as observer.player; this profile supplies its own movement, physics and observation.
+Do not add a human, rider, or mount/dismount controls to a standalone animal.
+Flight, swimming and other movement require the corresponding actual controller
+and compatible animation; use the current SDK contracts and registered abilities.
+All humans, including NPCs and riders, must use the
 permitted preset (currently humanoid.source-101), with its visible model, rig and
 motions kept together. For the SDK profile use createHumanoidWorld. Each person
 keeps the same instance through walking, mounting, riding, dismounting and reset.
@@ -21,8 +30,8 @@ TrainingVehicleInstance {object,spec}. The raw profile uses normal Three and
 implements its own movement, physics and observation.
 
 Use these layers as needed:
-1. Reuse the supplied humanoid/helper or an existing movement/vehicle binding.
-2. Read character-actions capability cards for inputs, eligibility, scene conditions,
+1. Use the entry point and asset bindings appropriate to the controlled subject.
+2. For humanoid actions, read character-actions capability cards for inputs, eligibility, scene conditions,
    parameters, completion and source entry points. Animation clips are not commands.
 3. Adjust public profile and extension parameters.
 4. Call creator_materialize_runtime, edit sdk/three-world/src or

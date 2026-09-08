@@ -9,12 +9,13 @@ import { RAW_EXAMPLE, sdkExample } from './examples.js';
 import { readExampleFiles, type ExampleTopic } from './example-files.js';
 import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
+import {subjectAuthoringGuidance} from './subject-guidance.js';
 import { characterUsage, humanAuthoringGuidance } from './character-guidance.js';
 
 export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'observation', 'commands', 'training', 'all'] as const;
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
-  guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring'],
+  guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
   training: ['trainingSourceContracts', 'trainingExampleTopic', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
@@ -29,6 +30,8 @@ export class CreatorDiscovery {
     const guidance=await readRuntimeGuidance(this.compiler);
     const policy = this.compiler.assetPolicy().policy;
     const isSdk = this.profile === 'three-sdk';
+    const nonhuman=topic==='nonhuman-subject';
+    const humanoidTopic=['training','character-actions','mounted-interaction'].includes(topic);
     const includesTraining = isSdk && ['training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const includesCommands = isSdk && ['control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const suggestedExample = topic === 'mounted-interaction' ? 'mounted-interaction' :
@@ -40,9 +43,9 @@ export class CreatorDiscovery {
     const trainingSourceContracts = includesTraining ? Object.fromEntries(await Promise.all(
       sourceFiles.map(async name => [name, trainingContractSource(await guidance.source(`training/${name}`))]),
     )) : undefined;
-    const sdk = isSdk ? {
+    const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
       sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace}),
-      sdkFactoryContracts: humanoidContractSource(await guidance.source('humanoid.ts')),
+      ...(!nonhuman?{sdkFactoryContracts: humanoidContractSource(await guidance.source('humanoid.ts'))}:{}),
       sdkGuide: guidance.isWorkspace
         ? 'This project uses workspace SDK source. Request contracts/training sections for current declarations and runtimeDefinitions. Capability conditions and bindings must come from this source or world_inspect, not Host baseline examples. Host command transport and admission rules stay fixed.'
         : guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic)
@@ -50,10 +53,15 @@ export class CreatorDiscovery {
           (_match, ids: string, body: string) => ids.split(',').every(id => policy.allowedAssetIds.includes(id)) ? body : ''),
     } : {};
     return {
-      topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance, humanAuthoring:humanAuthoringGuidance(policy,this.profile),
+      topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance,
+      ...(!nonhuman?{humanAuthoring:humanAuthoringGuidance(policy,this.profile)}:{}),
+      ...(['getting-started','all'].includes(topic)?{subjectAuthoring:subjectAuthoringGuidance(this.profile)}:{}),
+      ...(nonhuman&&isSdk?{exampleTopic:'nonhuman-subject'}:{}),
       project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       ...(isSdk ? {
-        entryPoint: { module: '@worldkit/three', name: 'createHumanoidWorld', optionsType: 'HumanoidWorldOptions', mapType: 'TrainingMap' },
+        entryPoint: humanoidTopic
+          ? { module: '@worldkit/three', name: 'createHumanoidWorld', optionsType: 'HumanoidWorldOptions', mapType: 'TrainingMap' }
+          : { module: '@worldkit/three', name: 'createWorld', optionsType: 'WorldOptions' },
         ...(!guidance.isWorkspace&&['character-actions', 'control', 'all'].includes(topic) ? { characterCapabilities: training.CHARACTER_CAPABILITIES, controlBindings: training.INPUT_BINDINGS } : {}),
         ...(['extensions', 'all'].includes(topic) ? { runtimeSource: { tool: 'creator_materialize_runtime', sourceRoot: 'sdk', buildTool: 'world_validate', entry: 'sdk/three-world/src/index.ts' } } : {}),
       } : {}),
@@ -68,7 +76,7 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
-    const folder = topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
+    const folder = topic === 'nonhuman-subject' ? 'nonhuman-subject' : topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
       topic === 'character-actions' ? 'character-actions' :
       topic === 'independent-world' ? 'training-independent' : 'sdk-capabilities';
     return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
@@ -94,13 +102,14 @@ export class CreatorDiscovery {
       return {
         ...authority, profile: this.profile, topic,
         ...await readExampleFiles(this.exampleRoot(topic), topic, selectedFiles),
-        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+'Whitebox training runtime: one SDK clock, supplied humanoid and reusable vehicle families. Compilation is not behavioral acceptance.',
+        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox training runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
       };
     }
     const isSdk = this.profile === 'three-sdk';
     const defaultHumanoid = this.compiler.assetPolicy().policy.defaultHumanoidAssetId;
     return {
-      ...authority, profile: this.profile,
+      ...authority, profile: this.profile, subjectAuthoring:subjectAuthoringGuidance(this.profile),
+      exampleUse:isSdk?'getting-started demonstrates a human. Choose nonhuman-subject when the protagonist is an animal or creature.':'Raw input/observation example; adapt the visual subject and controls to the request.',
       files: {
         'main.ts': isSdk ? sdkExample(defaultHumanoid) : RAW_EXAMPLE,
         'index.html': '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>',

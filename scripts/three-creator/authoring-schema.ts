@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'nonhuman-subject', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -17,6 +17,7 @@ export interface WorldObservation {
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
  'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','useAuthoredCamera','setCaptureTargets','onUpdate','getEntityState','start','stop','reset','dispose'],
+ 'nonhuman-subject': ['scene','camera','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCaptureTargets','onUpdate','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
@@ -45,7 +46,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic, optio
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${topic==='getting-started'&&options.includeHostFactory!==false?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;

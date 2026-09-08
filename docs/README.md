@@ -3,7 +3,7 @@
 | 目的 | 入口 |
 | --- | --- |
 | 理解创作自由、四层能力与执行职责 | [Three SDK 架构](three-sdk-architecture.md) |
-| 创建人物、绑定自制 Mesh、查询动作条件 | [SDK 用法](../packages/three-world/README.md) |
+| 选择主体入口、绑定自制 Mesh、查询动作条件 | [SDK 用法](../packages/three-world/README.md) · [入口与封装边界](three-sdk-architecture.md#入口与封装边界) |
 | 生产新资产、接入行动模式并提交 PR | [资产包提交与 Agent 接入规范](asset-production-integration.md) |
 | 读取真实接口 | [公共类型](../packages/three-world/src/contracts.ts) |
 | 使用 Agent 工具、编译、验证和交付 | [Creator](../scripts/three-creator/README.md) |

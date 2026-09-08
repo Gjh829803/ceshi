@@ -15,6 +15,7 @@ import { creatorToolDiagnostic, type CreatorToolDiagnostic } from './tool-errors
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import type { ExampleTopic } from './example-files.js';
 import {summarizeCharacterContinuity} from '../../apps/three-creator-playground/character-continuity.js';
+import {subjectAuthoringGuidance} from './subject-guidance.js';
 import {humanAuthoringGuidance} from './character-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
@@ -112,10 +113,11 @@ export class ThreeCreatorTools {
     return {runtimeGuidance, kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
       assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
-      authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createHumanoidWorld loads the supplied humanoid and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
+      authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createWorld binds an independently controlled subject, while createHumanoidWorld loads the supplied human and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
+      subjectAuthoring:subjectAuthoringGuidance(this.profile),
       humanAuthoring: humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
-      authoringLayers:['reuse: createHumanoidWorld','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
+      authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
       observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',

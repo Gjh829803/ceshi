@@ -2,13 +2,14 @@
 
 Author ordinary Three.js geometry, materials and cameras. The SDK binds physics,
 movement, animation, input, camera follow and observable commands to that content.
-Keep the supplied humanoid's visible model, skeleton and motions by default.
+When humans appear, keep the supplied humanoid's visible model, skeleton and motions.
+Choose the controlled subject from the request; animal protagonists need no extra human.
 Reuse other supplied subjects when suitable; otherwise create and bind simple
 Mesh/Group subjects.
 
 | Layer | Read or change |
 | --- | --- |
-| Reuse | `createHumanoidWorld`, starter example and selected asset |
+| Reuse | `createWorld` or the complete `createHumanoidWorld` helper, subject example and selected asset |
 | Bind scene and abilities | Collision map, interaction anchors, water, climb surfaces; custom subject body/movement |
 | Configure | Movement/profile parameters, units, input bindings |
 | Implement | Relevant SDK source module, project runtime build and affected tests |
@@ -21,7 +22,28 @@ independent recovery state. Display interpolation and repeated captures do not
 advance that state; fallback positions come from fixed snapshots.
 
 <!-- topic:getting-started -->
-## Start with a complete humanoid
+## Choose the controlled subject
+
+`createWorld` is the general world entry point for human or nonhuman actors.
+`createHumanoidWorld` is a convenience wrapper that loads or receives the supplied
+human and binds its complete controller and actions, optionally with vehicles.
+It calls `createWorld` internally and returns the same `ThreeWorld`; both entries
+use the same runtime ownership and lifecycle.
+
+Choose the helper when its complete human kit matches the task. Otherwise bind
+the required subject and abilities through the general world API. Subject routes
+guide this choice; they are not mutually exclusive SDK entity classes.
+
+| Subject | Schema / example | Entry |
+| --- | --- | --- |
+| Human | `character-actions` | `createHumanoidWorld` |
+| Human riding | `mounted-interaction` / `custom-vehicle` | Human helper + separate vehicle |
+| Animal or other nonhuman protagonist | `nonhuman-subject` | `createWorld` + `addCharacter` |
+
+A human model requirement applies to humans present in the scene, not to every
+possible protagonist. Existing `getting-started` example files demonstrate a human.
+
+### Human setup
 
 Build white/light-gray primitive environment forms with uniform basic lighting.
 Use identifying color for a few landmarks or interaction targets. Preserve broad
@@ -73,6 +95,34 @@ keeps its sizing policy. Create HTML HUD through `world.createPresentation()`.
 `start()` prepares resources and publishes `window.__WORLDKIT_EVAL__`; `stop()`
 pauses, `reset()` restores the baseline, and `dispose()` releases resources.
 Do not install an additional simulation timer or mixer.
+
+<!-- topic:nonhuman-subject -->
+## Independently controlled nonhuman subject
+
+Create the requested animal or creature as the actor itself. Do not add a hidden
+human or rider. Use `createWorld`, register collision geometry with `addEntity`,
+bind the model through `addCharacter({object,body,movement})`, then select it with
+`setControlledEntity` and `setCameraFollow`. `setCaptureTargets` identifies complete
+subjects for Creator and Episode.
+
+The [fox example](../../examples/three-creator/nonhuman-subject/main.ts), available
+through `creator_get_examples({topic:'nonhuman-subject'})`, includes ground movement,
+a collision obstacle, camera follow, visual leg motion and reset. Its project
+selects no catalog assets; use permitted models when they fit the requested subject.
+Ordinary Three geometry remains allowed even if custom external asset files are disabled.
+
+Movement comes from actual SDK bindings. The built-in ground movement supports
+walking/running/jumping with a capsule body. Other modes can use `registerMovement`
+through the extensions contracts; a visual wing or fish tail supplies no physics,
+pathfinding or compatible skeletal animation. A catalog creature documented as a
+Training mount does not automatically provide standalone flight or swimming.
+Keep visual limb animation on SDK update callbacks without moving the owned root.
+
+This route has no human mount/dismount controller. Show controls for its actual
+abilities, exercise movement/collision/camera/reset, and use the same Creator
+playtest/submit and Episode capture interfaces. Training-specific character
+continuity reports `not-applicable` when the ordinary SDK snapshot has no Training
+controller; unavailable telemetry remains distinct from this result.
 
 <!-- topic:assets -->
 ## Select, load and reuse assets

@@ -33,10 +33,34 @@ unknown operations through the original session/journal before any new submissio
 
 ## Four levels for an Agent
 
+Choose the controlled subject from the request and reference. Environment and
+`getting-started` schema responses expose `subjectAuthoring` routes: ordinary
+humans use `character-actions`, human riding uses `mounted-interaction` with a
+vehicle example, and independent animals use `nonhuman-subject`. Generic schema
+topics identify `createWorld`; human/Training topics identify `createHumanoidWorld`.
+The existing default example still demonstrates a human and labels its use.
+`createWorld` is the general foundation, including custom human integrations;
+`createHumanoidWorld` wraps it with the complete supplied human kit. Both return
+the same world type. Choose by the required ready-to-use abilities rather than
+treating the two functions as separate human/nonhuman engines.
+
+`nonhuman-subject` provides a standalone fox with no humanoid assets, using SDK
+ground movement, camera, collision and capture. Read the current movement and
+asset contracts for other forms and abilities. The same actor must remain the
+controlled/captured subject; do not create a rider for an animal protagonist.
+In an ordinary SDK world without Training, character continuity is
+`not-applicable`; loss of telemetry after a Training baseline remains `unavailable`.
+Training first-person view temporarily clips head geometry. Continuity reports
+`partial` with `geometryIdentity: deferred-first-person` while still checking the
+same root, skinned meshes, skeleton and bones. Empty indexed meshes are excluded
+from visibility checks in that view; remaining body meshes must be renderable.
+Returning to a normal view restores geometry identity checks. This is advisory
+coverage information, not an additional delivery gate.
+
 | Level | Tools / source | Use |
 | --- | --- | --- |
-| Reuse | Environment, asset search/describe, `getting-started` example | `createHumanoidWorld` with `humanoid.source-101` |
-| Bind | `character-actions`, `training` schemas/examples | Author a Mesh and its body/movement, collision map, water or interaction anchors |
+| Reuse | Environment, asset search/describe, subject-specific example | General `createWorld` or complete human kit through `createHumanoidWorld` |
+| Bind | `nonhuman-subject`, `character-actions`, `training` schemas/examples | Author a Mesh and its body/movement, collision map, water or interaction anchors |
 | Configure | Runtime commands and profiles | Change actual parameters with units; export effective values into the project |
 | Implement | `creator_materialize_runtime`, then edit `sdk/` | Modify a controller/module and rebuild with `world_validate` |
 
