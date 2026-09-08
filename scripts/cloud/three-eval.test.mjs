@@ -51,7 +51,16 @@ test('Installed doctor uses the live MCP input schema and short recordings canno
 });
 import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInstalledClosure,prepareBrowserRegistry} from './three-eval-runtime.mjs';
 import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
-import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
+import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches,providerItemSucceeded} from './three-eval-policy.mjs';
+test('completed jobs need a succeeded item before delivery evidence can qualify',()=>{
+ for(const status of ['succeeded','completed'])assert.equal(providerItemSucceeded({status},{status:'succeeded'}),true);
+ for(const jobStatus of ['succeeded','completed','running','failed','cancelled',undefined])for(const itemStatus of ['succeeded','failed','running',undefined])assert.equal(providerItemSucceeded({status:jobStatus},{status:itemStatus}),['succeeded','completed'].includes(jobStatus)&&itemStatus==='succeeded');
+ assert.equal(providerItemSucceeded(null,null),false);
+ const payload={request_id:'owned',options:{codex_bin:'/pinned',codex_account_root:'/fsx/pipeline/worldkit-three-creator-experiments/pools/'+hash('account')},defaults:{model:'gpt-6-astra',reasoning_effort:'xhigh',sandbox:'workspace-write',timeout_seconds:5520,account_concurrency:2,pod_concurrency:1}};
+ const config={request_id:payload.request_id,options:{...payload.options,...payload.defaults}};assert(effectiveConfigMatches(config,payload));
+ assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_root:undefined}},payload),false);
+ assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_root:'/different'}},payload),false);
+});
 import {stopOwnedThreeJob} from './three-eval-stop.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
@@ -112,6 +121,18 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   assert.equal(sdkPlan.kind,'three-creator-sdk-plan');assert.equal(sdkPlan.suite,'sdk-only');assert.equal(sdkPlan.experimentRevision,'three-sdk-v2');assert.equal(sdkPlan.cases.length,5);assert.equal(sdkPlan.selectedTaskIds.length,5);assert.equal(sdkPlan.maxConcurrency,5);assert.equal(sdkPlan.accountConcurrency,5);
   assert.equal(sdkPlan.acceptancePolicy.scope,'host-only');assert.equal(sdkPlan.acceptancePolicy.documents.length,1);for(const document of sdkPlan.acceptancePolicy.documents)assert.equal(document.sha256,hash(await readFile(document.path)));
   assert.equal((await readdir(sdkOut)).filter(name=>name.endsWith('--three-raw')).length,0);
+  const defaultPayloadPath=path.join(sdkOut,sdkPlan.selectedTaskIds[0],'payload.json'),defaultPayloadBytes=await readFile(defaultPayloadPath,'utf8');
+  const defaultPayload=JSON.parse(defaultPayloadBytes);assert.deepEqual(defaultPayload.options,{codex_bin:input.launcherPath,codex_account_ids:['fixture-account-first']});
+  execFileSync(process.execPath,sdkArgs);assert.equal(await readFile(defaultPayloadPath,'utf8'),defaultPayloadBytes,'omitted optional account root preserves existing payload bytes');
+  const restrictedPolicyFile=path.join(dir,'restricted-policy.json'),restrictedOut=path.join(dir,'restricted-run'),accountPoolRoot='/fsx/pipeline/worldkit-three-creator-experiments/fixture-account-pools';
+  const restrictedPolicy={...JSON.parse(await readFile(accountPolicyFile,'utf8')),codexAccountRoot:accountPoolRoot};await writeFile(restrictedPolicyFile,JSON.stringify(restrictedPolicy));
+  const restrictedArgs=sdkArgs.map(arg=>arg===accountPolicyFile?restrictedPolicyFile:arg===sdkOut?restrictedOut:arg==='test-three-sdk'?'test-restricted-sdk':arg);
+  execFileSync(process.execPath,restrictedArgs);
+  const restrictedPath=path.join(restrictedOut,sdkPlan.selectedTaskIds[0],'payload.json'),restrictedBytes=await readFile(restrictedPath,'utf8'),restrictedPayload=JSON.parse(restrictedBytes);
+  assert.deepEqual(restrictedPayload.options,{...defaultPayload.options,codex_account_root:accountPoolRoot+'/'+hash('fixture-account-first')});
+  assert(!restrictedPayload.tasks[0].instruction.includes(accountPoolRoot));assert(!Object.hasOwn(restrictedPayload.options,'codex_account_roots'));
+  await writeFile(restrictedPolicyFile,JSON.stringify({...restrictedPolicy,codexAccountRoot:accountPoolRoot+'-changed'}));
+  const changedPool=spawnSync(process.execPath,restrictedArgs,{encoding:'utf8'});assert.notEqual(changedPool.status,0);assert.match(changedPool.stderr,/FROZEN_ACCOUNT_POLICY_CHANGED/);assert.equal(await readFile(restrictedPath,'utf8'),restrictedBytes);
   for(const item of sdkPlan.cases){const payload=JSON.parse(await readFile(path.join(sdkOut,item.taskId,'payload.json'),'utf8')),input=JSON.parse(await readFile(path.join(sdkOut,item.taskId,'case-input.json'),'utf8'));assert.equal(item.profile,'three-sdk');assert.equal(payload.defaults.account_concurrency,5);assert.equal(payload.defaults.pod_concurrency,1);assert.equal(input.experimentRevision,'three-sdk-v2');assert.equal(input.assetPolicySha256,sdkPlan.assetPolicySha256);assert.deepEqual(input.assetPolicySnapshot,sdkPlan.assetPolicySnapshot);for(const key of ['acceptanceFocus','expectedSubjectCategory','acceptancePolicy','evaluationPolicyPath','title'])assert(!(key in input));assert(!JSON.stringify(payload).includes('retain meaningful path'));assert(!JSON.stringify(input).includes('HOST_ONLY_SECRET_REVIEW_RULE'));assert(!JSON.stringify(payload).includes('HOST_ONLY_SECRET_REVIEW_RULE'));assert(!payload.tasks[0].instruction.includes('Host acceptance focus'));assert.equal(payload.defaults.model,'gpt-6-astra');assert.equal(payload.defaults.reasoning_effort,'xhigh');assert(!payload.runtime_profile);}
   for(const invalid of [['--max-concurrency','65'],['--account-concurrency','21'],['--profile','three-raw'],['--suite','paired'],['--experiment-revision','different-revision']])assert.throws(()=>execFileSync(process.execPath,[...sdkArgs,...invalid],{stdio:'pipe'}),/Command failed/);
   const wideOut=path.join(dir,'wide-sdk-run');

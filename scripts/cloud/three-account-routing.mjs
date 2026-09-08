@@ -4,9 +4,17 @@ const identity=id=>createHash('sha256').update(id).digest('hex');
 export function validateCreatorAccountPolicy(policy) {
   if(policy?.schemaVersion!==1||policy.scope!=='worldkit-creator'||!Array.isArray(policy.preferred)||!Array.isArray(policy.denied)||policy.allowUnratedFallback!==false)throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
   if(policy.probation!==undefined&&!Array.isArray(policy.probation))throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
+  if(policy.codexAccountRoot!==undefined&&(typeof policy.codexAccountRoot!=='string'||!policy.codexAccountRoot.startsWith('/fsx/pipeline/worldkit-three-creator-experiments/')||policy.codexAccountRoot.split('/').slice(1).some(part=>! /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(part)||part==='.'||part==='..')))throw Error('CREATOR_ACCOUNT_ROOT_INVALID');
   const all=[...policy.preferred,...policy.denied,...(policy.probation??[])];
   if(!policy.preferred.length||all.some(row=>typeof row.label!=='string'||!/^[a-f0-9]{64}$/.test(row.identitySha256??''))||new Set(all.map(row=>row.identitySha256)).size!==all.length)throw Error('CREATOR_ACCOUNT_POLICY_INVALID');
   return policy;
+}
+/** Each prepared pool contains exactly the selected account's original basename. */
+export function creatorAccountRoot(ids,policy) {
+  assertCreatorAccountSelection(ids,policy);
+  if(policy.codexAccountRoot===undefined)return undefined;
+  if(ids.length!==1)throw Error('CREATOR_ACCOUNT_ROOT_REQUIRES_SINGLE_ID');
+  return `${policy.codexAccountRoot}/${identity(ids[0])}`;
 }
 export function assertCreatorAccountSelection(ids,policy) {
   validateCreatorAccountPolicy(policy);

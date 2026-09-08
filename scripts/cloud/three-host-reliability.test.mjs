@@ -5,7 +5,7 @@ import {mkdtemp,readFile,rm,realpath,mkdir,writeFile,symlink} from 'node:fs/prom
 import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from './three-account-routing.mjs';
+import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,creatorAccountRoot,validateCreatorAccountPolicy} from './three-account-routing.mjs';
 import {admissionIsClosed} from './three-eval-admission.mjs';
 import {selectThreeLiveHead,threeLiveReaderPython} from './three-eval-live.mjs';
 import {retrieveThreeDeliveryArtifacts} from './three-eval-delivery-recovery.mjs';
@@ -15,6 +15,13 @@ import {runWithExecutionSlots} from './three-execution-slots.mjs';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const policy={schemaVersion:1,scope:'worldkit-creator',preferred:['A','B'].map(label=>({label,identitySha256:hash(label)})),denied:[{label:'D',identitySha256:hash('D')}],allowUnratedFallback:false};
 const inventory=['A','B','D','unrated'].map(codexAccountId=>({codexAccountId,eligible:true,healthStatus:'active'}));
+test('optional account roots are scoped to project experiments and bind exactly one selected identity',()=>{
+ const root='/fsx/pipeline/worldkit-three-creator-experiments/owned-account-pools',restricted={...policy,codexAccountRoot:root};
+ assert.equal(creatorAccountRoot(['A'],policy),undefined);
+ assert.equal(creatorAccountRoot(['A'],restricted),root+'/'+hash('A'));
+ assert.throws(()=>creatorAccountRoot(['A','B'],restricted),/REQUIRES_SINGLE_ID/);assert.throws(()=>creatorAccountRoot(['D'],restricted),/DENIED/);
+ for(const codexAccountRoot of [null,'','relative','/var/run/lwdp/secrets/codex-accounts/current','/fsx/pipeline/worldkit-three-creator-experiments','/fsx/pipeline/worldkit-three-creator-experiments/','/fsx/pipeline/worldkit-three-creator-experiments/../outside',root+'/',root+'//child',root+'/./child',root+'/../child',root+'/%2e%2e',root+'/link\\escape',root+'\0'])assert.throws(()=>validateCreatorAccountPolicy({...policy,codexAccountRoot}),/ROOT_INVALID/);
+});
 test('probation accounts require explicit selection and never become automatic fallback',()=>{
  const trial={...policy,probation:[{label:'U01',identitySha256:hash('unrated')}]};
  assert.deepEqual(selectCreatorAccount({policy:trial,inventory,requestedIds:['unrated']}),['unrated']);

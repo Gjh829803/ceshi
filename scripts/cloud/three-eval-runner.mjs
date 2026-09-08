@@ -6,12 +6,12 @@ import { downloadS3FileAtomic, fetchGenerationItems, findGenerationJobByRequestI
 import { fileSha256, readRuntimeLock, resolveCreatorSubmission, sha256, writeJson } from "./three-eval-runtime.mjs";
 import { eventStatistics, failureClass, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs";
-import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
+import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, providerItemSucceeded, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
 import { withAdmissionDirectoryLock, admissionIsClosed } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
-import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from "./three-account-routing.mjs";
+import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,creatorAccountRoot} from "./three-account-routing.mjs";
 import {freezeRunAssetPolicy} from "./three-eval-mcp-bridge.mjs";
 import {runWithExecutionSlots} from "./three-execution-slots.mjs";
 
@@ -129,7 +129,8 @@ for (const item of manifest.cases) {
     ?assertCreatorAccountSelection(frozenPayload.options.codex_account_ids,accountPolicy)
     :selectCreatorAccount({policy:accountPolicy,inventory:accountInventory,requestedIds:item.codexAccountIds,slot:Math.floor(plans.length/profiles.length)});
   if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length !== 1 || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
-  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
+  const codexAccountRoot=creatorAccountRoot(codexAccountIds,accountPolicy);
+  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {}),...(codexAccountRoot?{codex_account_root:codexAccountRoot}:{})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
   const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
   if (intent && intent.payloadHash !== plan.payloadHash) throw new Error(`Submission payload changed for ${item.id}; use a deliberate new run ID.`);
@@ -289,7 +290,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     state.toolVersion = result?.toolVersion;
     state.sdkVersion = result?.sdkVersion;
     state.browserObservationContract = result?.browserObservationContract;
-    if (job.status !== "succeeded" || item?.status !== "succeeded") throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
+    if (!providerItemSucceeded(job,item)) throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
     if(state.accountRouting.identitySha256&&!state.accountRouting.verified)throw Error("CREATOR_ACCOUNT_ROUTING_MISMATCH");
