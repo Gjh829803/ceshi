@@ -1,0 +1,13 @@
+{
+  "kind": "three-episode-seedance-provider",
+  "schemaVersion": 1,
+  "apiBaseUrl": "https://provider.example/contents/generations/tasks",
+  "modelEndpoint": "REPLACE_WITH_DEPLOYED_SEEDANCE_MODEL_ID",
+  "referenceUpload": {
+    "bucket": "example-private-bucket",
+    "prefix": "owned-run/seedance/inputs",
+    "region": "us-west-2",
+    "presignSeconds": 3600
+  },
+  "allowFrameNormalization": false
+}

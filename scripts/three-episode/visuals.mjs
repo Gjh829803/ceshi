@@ -391,7 +391,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
             const review=await codexJson('partial-style-review',input,[...whites.map((r,i)=>imageAsset('whitebox-'+ids[i],r)),...refs.map((r,i)=>imageAsset('styled-'+ids[i],r))],reviewPrompt,(result,inputHash)=>assertThreeEpisodeVisualReview(result,{worldId:source.worldId,episodeId,inputHash,styleVariantId:variant.id,mode:'style',imageIds:ids}));
             if(review.verdict!=='passed')return;
             const events=await eventsFor(variant,anchor,lockedAppearance);await assertCandidate(variant.id,anchor);
-            const result=await publishFastClipPackage({source,capture,variant,openings:capture.segments.map(s=>snapshotRefs.get(s.id)),styledTriviews:targetIds.map((id,i)=>({...snapshotRefs.get('target-'+id),targetId:id,name:variant.targetInterpretations[i].finalIdentity})),events:events.events,review,prepareRequests:prepareThreeEpisodeRenderRequests,outputRoot,publishS3Prefix,cloud});
+            const result=await publishFastClipPackage({source,capture,episodeId,variant,openings:capture.segments.map(s=>snapshotRefs.get(s.id)),styledTriviews:targetIds.map((id,i)=>({...snapshotRefs.get('target-'+id),targetId:id,name:variant.targetInterpretations[i].finalIdentity})),events:events.events,review,prepareRequests:prepareThreeEpisodeRenderRequests,outputRoot,publishS3Prefix,cloud});
             await update(state.variants.find(v=>v.id===variant.id).stage,variant.id,{fastPreparedRequestCount:result.preparedRequestCount});
           };
           await update('style-images', variant.id, {attempt});

@@ -17,20 +17,18 @@ outside Git under ignored `.codex-tmp` or in deployment Secrets.
 | `three-episode-review-calibration.json` | User-confirmed image review calibration |
 | `three-episode-runtime.example.json` | Host runtime configuration template |
 | `three-episode-launcher-runtime.example.json` | Capsule launcher configuration template |
+| `three-episode-seedance-provider.example.json` | Seedance endpoint, private inputs and output policy |
+| `three-episode-seedance-admission.example.json` | Registered requests, shared capacity and production budget |
 | `workspace-boundary-debt.json` | Workspace-boundary verification |
 
 Asset metadata belongs in [`assets/three-creator`](../assets/three-creator/README.md).
 The Kubernetes device-plugin manifest belongs in
 [`deploy/three-episode`](../deploy/three-episode/README.md); its generator stays in `scripts/cloud`.
 
-The templates require actual deployment values before use. Episode entry points
-still require `--stop-before-seedance`; configuration does not enable video
-submission or automatic Creator delivery subscription.
-
-Unused earlier scene/Episode/video-provider configs, migration ledgers, old env
-examples and the old capture public key were removed. Historical records may name
-those former paths; retrieve their original contents from Git history rather than
-using them as current production instructions.
+The templates require actual deployment values before use. Episode preparation
+requires `--stop-before-seedance`; the separate
+[Seedance cloud lane](../docs/three-episode-seedance.md) has explicit submission
+and delivery commands. Automatic Creator delivery subscription is not implemented.
 
 See the [production guide](../docs/three-sdk-data-production.md) for entry points
 and configuration ownership.
