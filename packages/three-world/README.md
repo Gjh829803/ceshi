@@ -617,3 +617,23 @@ mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
 
 <!-- /asset-info -->
+
+## Training camera perspectives
+
+
+Training camera modes are `0` (third-person follow), `1` (first person) and `2`
+(immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
+2 m right-shoulder boom (wheel: 1.3–3.2 m), collision retraction and up to 4°
+speed FOV expansion. Mode 1 has zero arm length and a 0.035 m near plane; zoom and framing
+offsets do not move the eye. On foot it follows physical posture with a stable
+horizon; mounted it uses the animated rider's eye and the vehicle's orientation,
+with independent seat-local look (±150° yaw). Steering still comes from vehicle
+input. It uses the existing single camera/input owner, including Episode stepping.
+The capabilities playground uses **T** to cycle all three camera modes. Click the
+view in first person to lock the mouse; **Esc** releases/pauses, and dragging
+remains available when locking is unavailable. Character action bindings retain their configured values.
+Local head/neck triangles are excluded from an instance-private geometry while
+first person is active; original geometry and all bone transforms are preserved
+and restored for third person/authored views. Current training supports one
+controlled rider/driver, not a multiplayer passenger system. Existing mounted
+poses remain procedural approximations rather than imported PUBG animations.

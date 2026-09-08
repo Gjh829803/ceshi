@@ -12,6 +12,7 @@ type TestWorld = {
   resets: number;
   running: boolean;
   canZoom: boolean;
+  firstPerson: boolean;
   focus(): void;
   bind(id: string): number;
   release(index: number): void;
@@ -28,12 +29,13 @@ describe('world input follows the presented surface and UI focus', () => {
       stdin: { resolveDir: process.cwd(), contents: `
         import { WorldKeyboard, WorldInputRouter } from './packages/three-world/src/input.ts';
         const worlds = [0, 1].map(index => {
-          const state = { events: [], releases: 0, resets: 0, running: true, canZoom: true };
+          const state = { events: [], releases: 0, resets: 0, running: true, canZoom: true, firstPerson: false };
           const keyboard = new WorldKeyboard(() => 0, () => state.resets++);
           keyboard.enabled = true;
           keyboard.attach(window);
           const router = new WorldInputRouter(keyboard, {
             isRunning: () => state.running, canZoom: () => state.canZoom,
+            wantsPointerLock: () => state.firstPerson,
             onPointer: input => state.events.push(input), onRelease: () => state.releases++
           });
           const releases = [router.bind(document.getElementById('world' + index), document.getElementById('ui' + index))];
@@ -66,6 +68,25 @@ describe('world input follows the presented surface and UI focus', () => {
   });
   afterEach(async () => { await page.close(); });
   afterAll(async () => { await browser?.close(); });
+
+  it('locks first-person look on click, uses relative movement and clears held input on release',async()=>{
+    const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+    await page.evaluate(()=>{window.inputTest.worlds[0]!.firstPerson=true;});
+    await page.mouse.click(150,155);
+    await page.waitForFunction(()=>document.pointerLockElement?.id==='world0');
+    await page.mouse.click(150,155);expect(errors).toEqual([]);
+    await page.keyboard.down('w');
+    await page.evaluate(()=>document.dispatchEvent(new MouseEvent('mousemove',{movementX:20,movementY:10})));
+    const result=await page.evaluate(()=>({events:window.inputTest.worlds[0]!.events,input:window.inputTest.worlds[0]!.sample()}));
+    expect(result.events.at(-1)).toMatchObject({yawDeltaRadians:-.08,pitchDeltaRadians:.04});
+    expect(result.input.moveZRatio).toBe(-1);
+    const releases=await page.evaluate(()=>window.inputTest.worlds[0]!.releases);
+    await page.evaluate(()=>document.exitPointerLock());await page.waitForFunction(n=>!document.pointerLockElement&&window.inputTest.worlds[0]!.releases>n,releases);
+    expect((await page.evaluate(()=>window.inputTest.worlds[0]!.sample())).moveZRatio).toBe(0);
+    await page.keyboard.up('w');
+    await page.evaluate(()=>{window.inputTest.worlds[0]!.firstPerson=false;});
+    await page.mouse.click(150,155);expect(await page.evaluate(()=>!!document.pointerLockElement)).toBe(false);
+  });
 
   it('keeps Shift held and arrows independent, then releases all movement when UI takes focus', async () => {
     await page.mouse.click(120, 140);

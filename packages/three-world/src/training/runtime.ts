@@ -131,6 +131,7 @@ export class TrainingRuntime implements PhysicsPort {
     this.environment=new EnvironmentQueries(this.instanceMap(options.map));
     this.simulation=new Simulation(this.environment,this.specs);
     this.followCamera=new FollowCamera(camera,this.environment);
+    this.followCamera.eyePosition=target=>options.character.animation?.eyePosition(target)??false;
     this.followCamera.tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...options.cameraTuning});this.baseTuning={...this.followCamera.tuning};this.initialCamera=camera.clone();
     this.profile={character:{...this.simulation.characterControl},camera:{...this.baseTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
     this.objects.set(options.character.instanceId,options.character.object);
@@ -239,8 +240,8 @@ export class TrainingRuntime implements PhysicsPort {
   actionIds(id:string):readonly string[]{return id===this.options.character.instanceId?[...this.options.character.animation?.availableHumanoidClips??[]]:[];}
   animationState(id:string):import('../contracts').EntityState['animation']{if(id!==this.options.character.instanceId)return;const source=this.options.character.animation?.sourceCharacter;if(!source)return;const key=Object.keys(source.weights).sort((a,b)=>(source.weights[b]??0)-(source.weights[a]??0))[0];if(!key||!source.actions[key])return;const action=source.actions[key];return {actionId:key,clipName:action.getClip().name,timeSeconds:action.time};}
   cameraSnapshot():import('../contracts').CameraState{const c=this.followCamera,q=this.camera.quaternion;return {mode:this.cameraMode,positionWorldMetersXYZ:tuple(this.camera.position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w],desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.distance,actualArmDistanceMeters:c.presentationTarget.distanceTo(this.camera.position),collisionPhase:c.collisionLimited?'constrained':'clear'};}
-  useAuthoredCamera():void{this.assertExternalMutation();this.authored=true;}
-  private setCameraModeOwned(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('TRAINING_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.initialized=false;}
+  useAuthoredCamera():void{this.assertExternalMutation();this.authored=true;this.options.character.animation?.setFirstPerson(false);}
+  private setCameraModeOwned(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('TRAINING_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.reset(this.simulation);this.options.character.animation?.setFirstPerson(mode===1);this.followCamera.update(this.simulation,0);this.followCamera.capturePresentationPose(this.simulation,true);}
   validateInput(input:Input):void{
     if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('TRAINING_INPUT_INVALID');
     for(const key of ['forward','steer','lift','roll','pitch','strafe'] as const)if(typeof input[key]!=='number'||!Number.isFinite(input[key])||Math.abs(input[key])>1)throw new Error('TRAINING_INPUT_INVALID');
@@ -368,6 +369,7 @@ export class TrainingRuntime implements PhysicsPort {
   private sync(dt:number,snapCamera=true):void {
     for(const v of this.simulation.vehicles){const object=this.objects.get(v.spec.id)!;object.position.copy(v.position);object.quaternion.copy(v.rotation);object.visible=this.simulation.available(v);}
     const p=this.simulation.player,object=this.options.character.object;
+    this.options.character.animation?.setFirstPerson(!this.authored&&this.followCamera.mode===1);
     object.position.copy(p.position);object.rotation.set(0,p.yaw,0);
     const mounted=this.simulation.vehicle;
     if(mounted){object.position.copy(mounted.position).add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation));object.quaternion.copy(mounted.rotation);}

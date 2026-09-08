@@ -49,7 +49,7 @@ try{
   const saved=await page.evaluate(id=>JSON.parse(localStorage.getItem(`vehicle-training-ground.profile.v1.${id}`)!),id);assert.equal(saved.control.speed,12);
   if(id==='rover')assert.deepEqual([saved.control.coastDeceleration,saved.control.maxSpeed,saved.control.brakeDeceleration],[2,24,30]);
   await page.screenshot({path:path.join(output,`${id}-motion.png`)});
-  await page.getByRole('tab',{name:'相机模式'}).click();await page.getByRole('button',{name:'俯视',exact:true}).click();assert.equal((await state()).camera.mode,2);
+  await page.getByRole('tab',{name:'相机模式'}).click();await page.getByRole('button',{name:'沉浸越肩',exact:true}).click();assert.equal((await state()).camera.mode,2);
   await page.getByRole('tab',{name:'运动属性'}).click();
  }
  assert.deepEqual(errors,[]);await page.setViewportSize({width:390,height:844});

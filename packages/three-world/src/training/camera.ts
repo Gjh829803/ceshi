@@ -49,7 +49,7 @@ export class FollowCamera {
     const eye=a.position.clone().lerp(b.position,alpha).add(offset);
     let resolved=eye;
     const humanoid=this.presentationHumanoid;
-    if(this.tuning.collisionEnabled&&!this.globalOverview&&alpha!==1){
+    if(this.tuning.collisionEnabled&&this.mode!==1&&alpha!==1){
       const input=humanoid
         ? this.humanoidCollisionRequest(humanoid,pose.position,
           pose.position.clone().add(new T.Vector3(0,pose.cameraHeight??(humanoid.swimming?1.4:humanoid.capsuleHeight*.655),0)),target,eye,a.position,b.position)
@@ -72,7 +72,11 @@ export class FollowCamera {
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;
   up=new T.Vector3(0,1,0);collisionLimited=false;
   private sourceCharacter=false;
-  private globalOverview=false;
+  /** 座位局部观察角，与车体偏航独立；相机仍是唯一写入者。 */
+  private seatLookYaw=0;
+  private previousMode=-1;
+  eyePosition:((target:T.Vector3)=>boolean)|undefined;
+  private shoulderDistance=2;
   private readonly originalNear:number;
   private collisionHumanoid:Simulation['humanoid']|undefined;
   private collisionTick=0;
@@ -87,25 +91,31 @@ export class FollowCamera {
   constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries){this.originalNear=camera.near;}
   get desiredPosition():T.Vector3{return this.desired.clone();}
   orbit(dx:number,dy:number,time:number,sim?:Simulation){
+    if(this.mode===1||this.mode===2){
+      if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw-dx*.004,-Math.PI*5/6,Math.PI*5/6);
+      else this.yaw-=dx*.004;
+      this.pitch=clamp(this.pitch+dy*.004,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);this.lastOrbit=time;return;
+    }
     const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
     this.yaw-=dx*.004;this.pitch=character?clamp(this.pitch+dy*.004,.12,1.1):clamp(this.pitch+dy*.003,-.6,1.25);this.lastOrbit=time;
   }
   scroll(deltaY:number,sim:Simulation){
+    if(this.mode===1)return;
+    if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+deltaY*.003,1.3,3.2);return;}
     if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+deltaY*.007,3.2,12)/base;}
     else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
   }
-  reset(sim:Simulation){this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.sourceCharacter?.35:.3;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
+  reset(sim:Simulation){this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
   update(sim:Simulation,dt:number,pose?:MotionPose){
     this.collisionHumanoid=sim.vehicle?undefined:sim.humanoid;
     const v=sim.vehicle,body=pose??v??sim.player,speed=body.velocity.length(),position=body.position,yaw=pose?.yaw??v?.yaw??sim.player.yaw,rotation=pose?.rotation??v?.rotation;
     if(this.revision!==sim.teleportRevision){this.revision=sim.teleportRevision;this.reset(sim);}
-    const globalOverview=!v&&!!sim.humanoid&&this.mode===2;
-    // A map-centred observation camera and an actor camera have different
-    // origins and arm scales. Never damp a kilometre-wide overview into a seat.
-    if(globalOverview!==this.globalOverview){this.globalOverview=globalOverview;this.initialized=false;}
+    if(this.previousMode!==this.mode){this.previousMode=this.mode;this.reset(sim);}
     const subjectChanged=this.lastActive!==sim.active;
-    if(subjectChanged){this.lastActive=sim.active;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=!v&&sim.humanoid?.35:.3;this.initialized=false;}
+    if(subjectChanged){this.lastActive=sim.active;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=this.mode===1?0:this.mode===2?.12:!v&&sim.humanoid?.35:.3;this.seatLookYaw=0;this.initialized=false;}
     if(!this.initialized||subjectChanged)this.collision.reset();
+    if(this.mode===1){this.updateFirstPerson(sim,pose);return;}
+    if(this.mode===2){this.updateShoulder(sim,dt,pose);return;}
     if(!v&&sim.humanoid){
       if(!this.sourceCharacter||subjectChanged){this.zoom=1;this.initialized=false;}
       this.sourceCharacter=true;this.updateHumanoid(sim,dt,pose);return;
@@ -120,16 +130,11 @@ export class FollowCamera {
     this.up.lerp(this.targetUp,1-Math.exp(-5*dt)).normalize();
     const idealDistance=(this.baseDistance??(v?v.spec.camera:5.5))*this.zoom+Math.min(speed*.075,4);
     this.distance=this.initialized?damp(this.distance,idealDistance,idealDistance>this.distance?3:1.2,dt):idealDistance;
-    if(this.mode===1&&v&&rotation){
-      this.offset.set(...v.spec.seat).add(this.localLook.set(this.tuning.horizontalOffset,.65+this.tuning.targetHeightOffset,.6)).applyQuaternion(rotation);this.desired.copy(position).add(this.offset);
-      this.localRotation.set(clamp(this.pitch-.3,-.7,.7),clamp(angleDelta(yaw,this.yaw),-1.3,1.3),0,'YXZ');
-      this.localLook.set(0,0,12).applyEuler(this.localRotation).applyQuaternion(rotation);this.aim.copy(this.desired).add(this.localLook);
-    }else if(this.mode===2){this.desired.copy(this.anchor).add(this.offset.set(0,this.distance*2,-this.distance*.25));}
-    else {
-      const distance=this.mode===1?3.2:this.distance,orbit=v?.spec.mode==='space'?angleDelta(yaw,this.yaw):this.yaw;
+    {
+      const distance=this.distance,orbit=v?.spec.mode==='space'?angleDelta(yaw,this.yaw):this.yaw;
       this.offset.set(-Math.sin(orbit)*Math.cos(this.pitch)*distance,Math.sin(this.pitch)*distance,-Math.cos(orbit)*Math.cos(this.pitch)*distance);
       if(v?.spec.mode==='space'&&rotation)this.offset.applyQuaternion(rotation);
-      this.desired.copy(this.anchor).add(this.offset);if(this.mode===1)this.desired.x+=.6;
+      this.desired.copy(this.anchor).add(this.offset);
     }
     if(!this.initialized){this.camera.position.copy(this.desired);this.target.copy(this.aim);this.lastAnchor.copy(this.anchor);this.initialized=true;}
     else if(!subjectChanged){
@@ -155,6 +160,72 @@ export class FollowCamera {
     // Preserve the source's indoor default even when the UI supplies the
     // unchanged 8.8 m asset baseline; non-default user tuning takes precedence.
     return configured===8.8?this.environment.map.characterCameraDistanceMeters??configured:configured;
+  }
+  private updateShoulder(sim:Simulation,dt:number,pose?:MotionPose):void {
+    const v=sim.vehicle,h=sim.humanoid,position=pose?.position??v?.position??sim.player.position;
+    const speed=(pose?.velocity??v?.velocity??sim.player.velocity).length();
+    const pace=clamp(speed/(v?Math.max(8,v.spec.speed):5.8),0,1);
+    const rotation=pose?.rotation??v?.rotation;
+    if(v&&rotation){
+      if(sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8)this.seatLookYaw=damp(this.seatLookYaw,0,this.tuning.recenterResponsePerSecond,dt);
+      this.yaw=(pose?.yaw??v.yaw)+this.seatLookYaw;
+      if(!this.eyePosition?.(this.origin))this.origin.set(...v.spec.seat).add(this.offset.set(0,v.spec.characterPose==='stand'?1.55:.72,0)).applyQuaternion(rotation).add(position);
+      this.localRotation.set(this.pitch,this.seatLookYaw,0,'YXZ');
+      this.direction.set(0,0,-1).applyEuler(this.localRotation).applyQuaternion(rotation);
+      this.offset.set(-1,0,0).applyAxisAngle(this.targetUp.set(0,1,0),this.seatLookYaw).applyQuaternion(rotation);
+      this.up.set(0,1,0).applyQuaternion(rotation);
+    }else{
+      const height=h?(h.swimming?1.35:Math.max(.25,h.capsuleHeight-.2)):1.5;
+      this.origin.copy(position).add(this.offset.set(0,height,0));
+      this.direction.set(-Math.sin(this.yaw)*Math.cos(this.pitch),Math.sin(this.pitch),-Math.cos(this.yaw)*Math.cos(this.pitch));
+      this.offset.set(-Math.cos(this.yaw),0,Math.sin(this.yaw));this.up.set(0,1,0);
+    }
+    // 镜头右肩偏移；位置立即继承主体运动，仅柔化肩位/姿态变化。
+    this.anchor.copy(this.origin).addScaledVector(this.offset,.48+this.tuning.horizontalOffset).addScaledVector(this.up,(v?.22:.08)+this.tuning.targetHeightOffset);
+    if(!this.initialized)this.target.copy(this.anchor);
+    else {this.target.add(this.delta.subVectors(position,this.lastCharacterPosition));this.target.lerp(this.anchor,1-Math.exp(-this.tuning.followResponsePerSecond*Math.max(0,dt)));}
+    this.lastCharacterPosition.copy(position);
+    const radius=Math.min(.2,this.tuning.collisionRadiusMeters);
+    const ideal=this.shoulderDistance+pace*.3;
+    this.desired.copy(this.target).addScaledVector(this.direction,ideal);
+    const solved=this.collision.solve({target:this.target.toArray(),eye:this.desired.toArray(),
+      current:this.camera.position.toArray(),pivotOrigin:this.origin.toArray(),radius,
+      preserveArmDirection:true,armClearance:.025,
+      ...(this.initialized?{sweepFrom:this.camera.position.toArray()}:{}),
+    },{authorityTick:++this.collisionTick,deltaSeconds:Math.max(0,dt),clearHoldSeconds:0,
+      recoveryHalfLifeSeconds:Math.LN2/5,maximumRecoveryMetersPerSecond:Number.MAX_VALUE,resetWhenClear:false});
+    this.target.fromArray(solved.target);this.desired.fromArray(solved.desiredPosition);
+    this.candidate.fromArray(solved.position);this.collisionLimited=solved.limited;
+    this.camera.position.copy(this.candidate);this.camera.up.copy(this.up);this.camera.lookAt(this.target);
+    this.distance=this.camera.position.distanceTo(this.target);this.initialized=true;
+    // 克制的速度反馈，不把逐帧头骨摆动传给相机。
+    const fov=damp(this.camera.fov,this.tuning.baseFovDegrees+pace*4,5,dt);
+    this.camera.fov=fov;this.camera.near=.05;this.camera.updateProjectionMatrix();
+  }
+  private updateFirstPerson(sim:Simulation,pose?:MotionPose):void {
+    const v=sim.vehicle,rotation=pose?.rotation??v?.rotation;
+    if(v&&rotation){
+      // 眼位来自驾驶员，缺少人物骨架时才使用明确的座位姿态回退。
+      if(!this.eyePosition?.(this.desired))this.desired.set(...v.spec.seat).add(this.offset.set(0,v.spec.characterPose==='stand'?1.55:.72,.08)).applyQuaternion(rotation).add(pose?.position??v.position);
+      this.yaw=(pose?.yaw??v.yaw)+this.seatLookYaw;
+      this.localRotation.set(this.pitch,this.seatLookYaw,0,'YXZ');
+      this.direction.set(0,0,1).applyEuler(this.localRotation).applyQuaternion(rotation);
+      this.up.set(0,1,0).applyQuaternion(rotation);
+    }else{
+      const h=sim.humanoid;
+      // 稳定眼位随真实胶囊蹲伏/匍匐变化，不继承翻滚动画的旋转或头部摆动。
+      const eyeHeight=h?(h.swimming?1.35:Math.max(.18,h.capsuleHeight-.12)):1.55;
+      this.desired.copy(pose?.position??sim.player.position).add(this.offset.set(0,eyeHeight,0));
+      this.direction.set(Math.sin(this.yaw)*Math.cos(this.pitch),-Math.sin(this.pitch),Math.cos(this.yaw)*Math.cos(this.pitch));
+      this.up.set(0,1,0);
+    }
+    this.anchor.copy(this.desired);this.target.copy(this.desired);
+    this.aim.copy(this.desired).add(this.direction);
+    this.camera.position.copy(this.desired);this.camera.up.copy(this.up);this.camera.lookAt(this.aim);
+    this.distance=0;this.collisionLimited=false;this.initialized=true;
+    // 角色胶囊/载具接触负责位置约束；不把包含驾驶员的整车包围盒当墙推开眼睛。
+    const fov=this.tuning.baseFovDegrees;
+    if(this.camera.near!==.035||this.camera.fov!==fov){this.camera.near=.035;this.camera.fov=fov;this.camera.updateProjectionMatrix();}
   }
   private capsuleVisible(eye:T.Vector3,position:T.Vector3,height:number,capsule:RAPIER.Collider,world:RAPIER.World):boolean{
     // Test visibility on the actual capsule independently of the spring arm.
@@ -193,25 +264,23 @@ export class FollowCamera {
     const position=pose?.position??sim.player.position;
     this.origin.copy(position).add(this.offset.set(0,height,0));
     this.anchor.copy(this.origin).add(this.offset.set(Math.cos(this.yaw)*this.tuning.horizontalOffset,this.tuning.targetHeightOffset,-Math.sin(this.yaw)*this.tuning.horizontalOffset));
-    const overview=this.mode===2,bounds=this.environment.map.bounds;
-    if(overview&&bounds)this.anchor.set((bounds.min[0]+bounds.max[0])/2,2,(bounds.min[2]+bounds.max[2])/2);
     const response=this.baseDistance===undefined?7:this.tuning.followResponsePerSecond;
     if(!this.initialized)this.target.copy(this.anchor);
     else {
       // Inherit locomotion, damping only posture/shoulder changes. World-space
       // follow lag stretches the arm and can leave its pivot behind a wall.
-      if(!overview)this.target.add(this.delta.subVectors(position,this.lastCharacterPosition));
+      this.target.add(this.delta.subVectors(position,this.lastCharacterPosition));
       this.target.lerp(this.anchor,1-Math.exp(-Math.max(0,dt)*response));
     }
     this.lastCharacterPosition.copy(position);
-    const pitch=overview?.92:this.pitch;
+    const pitch=this.pitch;
     // Source forward is -Z. Negating the horizontal boom keeps the host's +Z
     // yaw contract, so camera-relative movement needs no second conversion.
     this.direction.set(-Math.sin(this.yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(this.yaw)*Math.cos(pitch));
-    const desiredDistance=overview&&bounds?Math.max(bounds.max[0]-bounds.min[0],bounds.max[2]-bounds.min[2])*.94:this.mode===1?3.2:clamp(this.characterDistance()*this.zoom,3.2,12);
+    const desiredDistance=clamp(this.characterDistance()*this.zoom,3.2,12);
     this.desired.copy(this.target).addScaledVector(this.direction,desiredDistance);
     this.collisionLimited=false;
-    if(!overview){
+    {
       const solved=this.collision.solve(this.humanoidCollisionRequest(humanoid,position,this.origin,this.target,this.desired,
         this.initialized?this.camera.position:undefined),{
         authorityTick:++this.collisionTick,deltaSeconds:Math.max(0,dt),clearHoldSeconds:0,
@@ -220,8 +289,6 @@ export class FollowCamera {
       this.target.fromArray(solved.target);this.desired.fromArray(solved.desiredPosition);
       // Keep the configured free arm exact; constrained length comes from geometry.
       this.distance=solved.limited?solved.effectiveDistance:desiredDistance;this.candidate.fromArray(solved.position);this.collisionLimited=solved.limited;
-    }else {
-      this.collision.reset();this.distance=desiredDistance;this.candidate.copy(this.desired);
     }
     this.camera.position.copy(this.candidate);
     this.up.set(0,1,0);this.camera.up.copy(this.up);this.camera.lookAt(this.target);

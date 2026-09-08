@@ -107,6 +107,7 @@ export class WorldInputRouter {
   constructor(private readonly keyboard: WorldKeyboard, private readonly options: {
     isRunning: () => boolean;
     canZoom: () => boolean;
+    wantsPointerLock?: () => boolean;
     onPointer: (input: CameraRigInput) => void;
     onRelease: () => void;
   }) {
@@ -142,7 +143,7 @@ export class WorldInputRouter {
     this.activate(false);
     binding.surface.focus({ preventScroll: true });
   }
-  clear(): void { this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
+  clear(): void { const surface=this.current?.surface;if(surface&&surface.ownerDocument.pointerLockElement===surface)surface.ownerDocument.exitPointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
   dispose(): void {
     if (this.disposed) return;
     this.suspend(); this.bindings.length = 0; this.disposed = true;
@@ -205,10 +206,16 @@ export class WorldInputRouter {
       if (!this.options.isRunning()) return;
       event.preventDefault();
       this.releasePointer();
+      if(doc.pointerLockElement===surface)return;
       this.pointer = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       surface.setPointerCapture(event.pointerId);
+      if(this.options.wantsPointerLock?.()&&event.pointerType==='mouse'&&surface.requestPointerLock){
+        // 先设置拖动捕获，再申请锁定；锁定后的重复点击不能再次捕获指针。
+        void surface.requestPointerLock()?.catch(()=>{});
+      }
     }, options);
     surface.addEventListener('pointermove', event => {
+      if(doc.pointerLockElement===surface)return;
       const drag = this.pointer;
       if (!drag || event.pointerId !== drag.pointerId) return;
       if (!isActive() || !this.options.isRunning()) { this.clear(); return; }
@@ -216,6 +223,12 @@ export class WorldInputRouter {
       if (x !== drag.x || y !== drag.y) this.options.onPointer({ yawDeltaRadians: -(x - drag.x) * .004, pitchDeltaRadians: (y - drag.y) * .004, activate: true });
       drag.x = x; drag.y = y;
     }, options);
+    doc.addEventListener('mousemove',event=>{
+      if(doc.pointerLockElement!==surface)return;
+      if(!isActive()||!this.options.isRunning()||!this.options.wantsPointerLock?.()){this.clear();return;}
+      this.options.onPointer({yawDeltaRadians:-event.movementX*.004,pitchDeltaRadians:event.movementY*.004,activate:true});
+    },options);
+    doc.addEventListener('pointerlockchange',()=>{if(doc.pointerLockElement!==surface&&activeRouterByDocument.get(doc)===this){this.releasePointer();this.keyboard.clear();this.options.onRelease();}},options);
     surface.addEventListener('pointerup', event => { if (this.pointer?.pointerId === event.pointerId) this.releasePointer(); }, options);
     surface.addEventListener('pointercancel', event => { if (this.pointer?.pointerId === event.pointerId) this.clear(); }, options);
     surface.addEventListener('lostpointercapture', event => { if (this.pointer?.pointerId === event.pointerId) this.clear(); }, options);
