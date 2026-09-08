@@ -5,7 +5,7 @@ import {createWorld,type EpisodeFrame,type WorldSnapshot,type TrainingVehicleSpe
 import {PlayerCaptureController,summarizePlayerBehavior} from './player-controller.js';
 import type {EpisodeSegmentPlan} from './contracts.js';
 import type {RouteDecision} from './route-controller.js';
-import {trainingDirectionInput,TRAINING_FAMILIES} from './training-route.js';
+import {trainingDirectionInput,TRAINING_FAMILIES,TrainingRouteController} from './training-route.js';
 describe('training family route input',()=>{
  it('drives every family through bounded input without position commands',()=>{
   for(const family of TRAINING_FAMILIES){const value=trainingDirectionInput(family,[0,0,0],[0,0,0],[0,0,0],[5,3,20]);
@@ -73,4 +73,22 @@ describe('actual player capture controller and training physics integration',()=
    }finally{world.dispose();}
   },20_000);
  }
+});
+
+it('holds mounted action waypoints without route timeout, then synchronizes segment indices', () => {
+ const segment: EpisodeSegmentPlan = { id: 'segment-00', start: { positionWorldMetersXYZ: [-5, 0, 0], facingYawRadians: 0 },
+  waypoints: [{ positionWorldMetersXYZ: [0, 0, 0], gait: 'walk' }, { positionWorldMetersXYZ: [0, 0, 10], gait: 'walk' }], endBehavior: 'reverse', purpose: 'mounted actions' };
+ const controller = new TrainingRouteController(segment);
+ const snapshot = { training: { mountedInstanceId: 'car', vehicles: [{ instanceId: 'car', mode: 'wheeled' }] },
+  entities: [{ id: 'car', positionWorldMetersXYZ: [0, 0, 0], rotationLocalRadiansXYZ: [0, 0, 0] }] } as unknown as WorldSnapshot;
+ controller.holdWaypoint({ waypointIndex: 0, radiusMeters: .6 });
+ expect(controller.step(snapshot, 0)).toMatchObject({ mode: 'action', waypointIndex: 0, input: { training: { forward: 0, brake: true } } });
+ expect(controller.step(snapshot, 10).mode).toBe('action');
+ controller.completeHeldWaypoint(0); controller.holdWaypoint(undefined);
+ expect(controller.cursor.waypointIndex).toBe(1);
+ expect(controller.step(snapshot, 11)).toMatchObject({ mode: 'travel', waypointIndex: 1 });
+ controller.seekCursor({ waypointIndex: 0, direction: 1, finished: false });
+ expect(controller.cursor.waypointIndex).toBe(0);
+ controller.holdWaypoint({ waypointIndex: 0, radiusMeters: .6 });
+ expect(controller.step(snapshot, 20).mode).toBe('action');
 });

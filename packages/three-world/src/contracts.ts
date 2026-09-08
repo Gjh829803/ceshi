@@ -136,7 +136,7 @@ export interface RuntimeError {
  readonly suggestedAction?:string;
 }
 export type CommandReceipt =
- | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number}
+ | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number;readonly result?:{readonly kind:'relocation';readonly entityId:string;readonly vehicleInstanceId:string;readonly positionWorldMetersXYZ:Vec3}}
  | {readonly status:'accepted';readonly commandId:string;readonly worldRevision:number;readonly operationId:string}
  | {readonly status:'rejected';readonly commandId:string;readonly worldRevision:number;readonly error:RuntimeError};
 export interface OperationStatus {
@@ -190,10 +190,17 @@ export interface MovementResult<T extends JsonValue> {
  readonly state:T; readonly velocityWorldMetersPerSecondXYZ:Vec3; readonly applyGravity:boolean;
  readonly facingDirectionWorldXYZ?:Vec3; readonly actionId?:string;
 }
+export interface MovementEpisodeAdapter {
+ /** Ground starts align to nearby support; free starts only check the real body envelope. */
+ readonly startSupport?:'ground'|'free';
+ /** Pure, synchronous input calculation. Reading it never advances movement or writes transforms. */
+ readonly input:(context:{readonly body:EntityState;readonly targetPositionWorldMetersXYZ:Vec3;readonly gait:'walk'|'run';readonly mode:'travel'|'stop';readonly controlForwardWorldXYZ:Vec3;readonly simulationTick:number})=>WorldInput;
+}
 export interface MovementDefinition<T extends JsonValue> {
  readonly id:string; readonly version:number; readonly description:string; readonly initialState:T;
  /** Pure intent calculation. SDK owns fixed time, KCC, support and collision resolution. */
  readonly update:(context:MovementContext<T>)=>MovementResult<T>;
+ readonly episode?:MovementEpisodeAdapter;
 }
 export interface GeometryDefinition {readonly id:string; readonly geometry:THREE.BufferGeometry; readonly description:string}
 export interface ActionDefinition<S extends ObjectSchema> {
@@ -238,12 +245,12 @@ export interface CommandDescriptor {
  readonly unavailableReason?:RuntimeError;
 }
 export interface WorldDescription {
- readonly training?:{readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
+ readonly training?:{readonly inputGuide:import('./training/input-guidance').TrainingInputGuide;readonly boarding:Readonly<Record<string,import('./training/runtime').TrainingBoardingObservation>>;readonly controlState:import('./training/runtime').TrainingInputObservation & {readonly livePaused:boolean;readonly clockOwner:'live'|'episode'};readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;
  readonly supportedMovementKinds:readonly string[];
- readonly movements:readonly {readonly id:string;readonly version:number;readonly description:string}[];
+ readonly movements:readonly {readonly id:string;readonly version:number;readonly description:string;readonly episodeInput?:'custom'|'unsupported'}[];
  readonly geometries:readonly {readonly id:string;readonly description:string;readonly status:'ready'}[];
  readonly entities:readonly {readonly state:EntityState;readonly commands:readonly CommandDescriptor[];readonly actionIds:readonly string[]}[];
  readonly prototypes:readonly {readonly id:string;readonly description:string;readonly status:'preparing'|'ready'|'failed';readonly error?:RuntimeError}[];

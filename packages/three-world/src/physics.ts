@@ -302,7 +302,7 @@ export class ThreePhysics implements PhysicsPort {
       radiusMeters: character.settings.radiusMeters * Math.max(character.scale.x, character.scale.z) };
   }
   /** Pure local native shape queries: no teleport, controller solve, tick or navigation scan. */
-  probeCharacterStart(id: string, positionWorldMetersXYZ: Vec3): EpisodeStartProbe {
+  probeCharacterStart(id: string, positionWorldMetersXYZ: Vec3, supportMode:'ground'|'free'='ground'): EpisodeStartProbe {
     const entry = this.entry(id), character = entry.character;
     validateVec(positionWorldMetersXYZ, 'episode start');
     if (!character) throw new Error('EPISODE_CONTROL_REQUIRES_CHARACTER');
@@ -318,26 +318,32 @@ export class ThreePhysics implements PhysicsPort {
       const owner = this.colliderOwners.get(collider.handle), candidate = owner ? this.entries.get(owner) : undefined;
       return Boolean(candidate && owner !== id && candidate.enabled && candidate.body.isEnabled() && !collider.isSensor());
     };
-    const maximumDistance = alignment * 2;
-    const hit = this.world.castShape(origin, rotation, velocity, shape, skin, maximumDistance, false,
-      RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
-    let support = hit ? { distanceMeters: hit.time_of_impact, normal: new THREE.Vector3().copy(hit.normal1), entityId: this.colliderOwners.get(hit.collider.handle)! } : undefined;
-    // Newly created or reset colliders have not reached Rapier's broad phase yet.
-    for (const dirtyId of this.queryDirty) for (const collider of this.entries.get(dirtyId)?.colliders ?? []) if (include(collider)) {
-      const direct = collider.castShape({ x: 0, y: 0, z: 0 }, shape, origin, rotation, velocity, skin, support?.distanceMeters ?? maximumDistance, false);
-      if (direct && (!support || direct.time_of_impact < support.distanceMeters)) support = {
-        distanceMeters: direct.time_of_impact, normal: new THREE.Vector3().copy(direct.normal1).applyQuaternion(collider.rotation()), entityId: dirtyId };
+    const resolved: [number,number,number]=[...requested];
+    if(supportMode==='ground'){
+      const maximumDistance = alignment * 2;
+      const hit = this.world.castShape(origin, rotation, velocity, shape, skin, maximumDistance, false,
+        RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
+      let support = hit ? { distanceMeters: hit.time_of_impact, normal: new THREE.Vector3().copy(hit.normal1), entityId: this.colliderOwners.get(hit.collider.handle)! } : undefined;
+      // Newly created or reset colliders have not reached Rapier's broad phase yet.
+      for (const dirtyId of this.queryDirty) for (const collider of this.entries.get(dirtyId)?.colliders ?? []) if (include(collider)) {
+        const direct = collider.castShape({ x: 0, y: 0, z: 0 }, shape, origin, rotation, velocity, skin, support?.distanceMeters ?? maximumDistance, false);
+        if (direct && (!support || direct.time_of_impact < support.distanceMeters)) support = {
+          distanceMeters: direct.time_of_impact, normal: new THREE.Vector3().copy(direct.normal1).applyQuaternion(collider.rotation()), entityId: dirtyId };
+      }
+      if (!support) return invalid('EPISODE_START_UNSUPPORTED', 'No character support exists within 0.35 metres vertically of the requested start.');
+      if (this.entries.get(support.entityId)?.kind === 'character') return invalid('EPISODE_START_ACTOR_SUPPORT', 'Another actor cannot provide the start support.', support.entityId);
+      if (support.normal.y < Math.cos(settings.maximumSlopeRadians) - 1e-5) return invalid('EPISODE_START_SLOPE_OR_OBSTRUCTION', 'The local shape sweep reached a wall, ceiling or unsupported slope.', support.entityId);
+      resolved[1] += alignment - support.distanceMeters;
     }
-    if (!support) return invalid('EPISODE_START_UNSUPPORTED', 'No character support exists within 0.35 metres vertically of the requested start.');
-    if (this.entries.get(support.entityId)?.kind === 'character') return invalid('EPISODE_START_ACTOR_SUPPORT', 'Another actor cannot provide the start support.', support.entityId);
-    if (support.normal.y < Math.cos(settings.maximumSlopeRadians) - 1e-5) return invalid('EPISODE_START_SLOPE_OR_OBSTRUCTION', 'The local shape sweep reached a wall, ceiling or unsupported slope.', support.entityId);
-    const resolved: [number, number, number] = [requested[0], requested[1] + alignment - support.distanceMeters, requested[2]];
     const center = new THREE.Vector3(...resolved).add(new THREE.Vector3(0, height / 2, 0));
+    // Triangle seams can report zero contact depth even across a capsule.
+    // For free starts, intersect a slightly inset body so touching remains valid.
+    const interior=supportMode==='free'?new RAPIER.Capsule((height-2*settings.radiusMeters)/2,Math.max(settings.radiusMeters-.001,settings.radiusMeters*.99)):undefined;
     let overlapping: string | undefined;
     const inspect = (collider: Collider): boolean => {
       if (!include(collider)) return true;
       const contact = collider.contactShape(shape, center, rotation, 0);
-      if ((contact && contact.distance < -.001) || collider.containsPoint(center)) overlapping = this.colliderOwners.get(collider.handle)!;
+      if ((contact && contact.distance < -.001) || collider.containsPoint(center) || (interior&&collider.intersectsShape(interior,center,rotation))) overlapping = this.colliderOwners.get(collider.handle)!;
       return true;
     };
     this.world.intersectionsWithShape(center, rotation, shape, inspect, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);

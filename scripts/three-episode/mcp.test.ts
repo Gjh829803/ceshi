@@ -1,3 +1,4 @@
+import Ajv from 'ajv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -8,7 +9,7 @@ import os from 'node:os';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { ThreeCompiler, hashTree, type Candidate } from '../three-creator/compiler.js';
-import { canonicalHash, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
+import { canonicalHash, SEGMENT_SCHEMA, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
 import { EpisodePlannerTools, EPISODE_TOOLS } from './mcp.js';
 import { loadEpisodeSource, saveEpisodeSource } from './source.js';
 import { createHash } from 'node:crypto';
@@ -46,6 +47,15 @@ world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:
 afterAll(async()=>{await rm(root,{recursive:true,force:true});});
 
 describe('Three Episode planner MCP boundary',()=>{
+ it('accepts the same full vehicle start for probing and plan submission',()=>{
+  const schema=EPISODE_TOOLS.find(tool=>tool.name==='episode_probe')!.inputSchema;
+  const check=new Ajv({strict:false}).compile(schema);
+  const start={positionWorldMetersXYZ:[0,15,0],facingYawRadians:.4,cameraPerspective:'first-person',training:{vehicleInstanceId:'plane',mounted:true,cameraMode:1,velocityWorldMetersPerSecondXYZ:[0,0,20],pitchRadians:.2,rollRadians:.1,throttle:.7,launched:true}};
+  expect(check({kind:'start',start})).toBe(true);
+  expect((schema as any).oneOf[0].properties.start).toBe(SEGMENT_SCHEMA.properties.start);
+  expect(check({kind:'start',start:{...start,training:{...start.training,throttle:2}}})).toBe(false);
+ });
+
  it('keeps the original image portable and rejects its changed bytes',async()=>{
   const referencePath=path.join(candidate.root,'user-original.png');await writeFile(referencePath,await readFile(source.opening.path));
   const manifest=path.join(candidate.root,'with-reference.json');

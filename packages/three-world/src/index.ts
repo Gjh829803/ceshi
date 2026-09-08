@@ -4,7 +4,7 @@ export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
 export { createHumanoidWorld, DEFAULT_HUMANOID_ASSET_ID, type HumanoidWorldOptions, type HumanoidAssetDefinition, type HumanoidResource } from './humanoid.js';
 export { Character as TrainingCharacter } from './training/character.js';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './training/character.js';
-export type { TrainingOptions, TrainingVehicleInstance, TrainingProfile, TrainingRuntime } from './training/runtime.js';
+export type { TrainingOptions, TrainingVehicleInstance, TrainingProfile, TrainingRuntime, TrainingBoardingObservation, TrainingInputObservation } from './training/runtime.js';
 export type {TrainingViewSettings} from './training/runtime.js';
 export type { MapDefinition as TrainingMap, MapSpawn as TrainingSpawn } from './training/environment/types.js';
 export type { VehicleSpec as TrainingVehicleSpec } from './training/config.js';

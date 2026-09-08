@@ -17,7 +17,9 @@ export type EpisodeActionIntent =
   | { kind: 'skill'; action: 'roll' | 'slide' | 'pickup' | 'putDown' | 'sit' | 'standUp' }
   | { kind: 'posture'; stance: 'stand' | 'crouch' | 'prone' }
   | { kind: 'climb'; direction: 'enter' | 'exit' | 'up' | 'down' | 'left' | 'right' }
-  | { kind: 'swim-style'; style: 'freestyle' | 'breaststroke' };
+  | { kind: 'swim-style'; style: 'freestyle' | 'breaststroke' }
+  | { kind: 'mount'; action: 'enter' | 'exit' }
+  | { kind: 'view'; perspective: 'first-person' | 'third-person' };
 export interface EpisodeActionGoal {
   id: string;
   trigger: { waypointIndex: number; radiusMeters: number };
@@ -32,6 +34,7 @@ export interface EpisodeSegmentPlan {
   start: EpisodeStart;
   waypoints: EpisodeWaypoint[];
   endBehavior: 'stop' | 'reverse' | 'loop';
+  /** Legacy annotation only; does not steer or measure visibility. */
   coverageTargetIds?: string[];
   purpose: string;
   actionGoals?: EpisodeActionGoal[];
@@ -68,6 +71,8 @@ export const ACTION_GOAL_SCHEMA = object({
     object({ kind: { const: 'posture' }, stance: { enum: ['stand', 'crouch', 'prone'] } }),
     object({ kind: { const: 'climb' }, direction: { enum: ['enter', 'exit', 'up', 'down', 'left', 'right'] } }),
     object({ kind: { const: 'swim-style' }, style: { enum: ['freestyle', 'breaststroke'] } }),
+    object({ kind: { const: 'mount' }, action: { enum: ['enter', 'exit'] } }),
+    object({ kind: { const: 'view' }, perspective: { enum: ['first-person', 'third-person'] } }),
   ] },
   completion: { oneOf: [
     object({ kind: { const: 'settled' }, holdSeconds: { type: 'number', minimum: 0, maximum: 20 } }),
@@ -75,15 +80,16 @@ export const ACTION_GOAL_SCHEMA = object({
   ] },
   timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
-export const SEGMENT_SCHEMA = object({
-  id: { enum: SEGMENT_IDS },
-  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
+export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
     vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
-  },[]) },['positionWorldMetersXYZ','facingYawRadians']),
+  },[]) },['positionWorldMetersXYZ','facingYawRadians']);
+export const SEGMENT_SCHEMA = object({
+  id: { enum: SEGMENT_IDS },
+  start: EPISODE_START_SCHEMA,
   waypoints: { type: 'array', minItems: 1, maxItems: 256, items: object({ positionWorldMetersXYZ: vec3, gait: { enum: ['walk', 'run'] } }) },
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
-  coverageTargetIds: { type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
+  coverageTargetIds: { description: 'Optional annotation only; does not steer the camera or validate target visibility.', type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
   purpose: { type: 'string', minLength: 1, maxLength: 2000 },
   actionGoals: { type: 'array', minItems: 1, maxItems: 32, items: ACTION_GOAL_SCHEMA },
 }, ['id', 'start', 'waypoints', 'endBehavior', 'purpose']);
@@ -109,6 +115,8 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
     goals.forEach((goal, index) => {
       if (goal.trigger.waypointIndex >= segment.waypoints.length || (index && goal.trigger.waypointIndex < goals[index - 1]!.trigger.waypointIndex)) throw new Error('EPISODE_ACTION_GOAL_ORDER_INVALID');
       if (goal.intent.kind === 'skill' && ['pickup', 'sit'].includes(goal.intent.action) && !goal.targetId) throw new Error('EPISODE_ACTION_TARGET_REQUIRED');
+      if (goal.intent.kind === 'mount' && goal.intent.action === 'enter' && !goal.targetId) throw new Error('EPISODE_ACTION_TARGET_REQUIRED');
+      if (['mount', 'view'].includes(goal.intent.kind) && goal.completion.kind !== 'settled') throw new Error('EPISODE_ACTION_DISPLACEMENT_UNSUPPORTED');
       if (goal.intent.kind === 'climb' && !['enter', 'exit'].includes(goal.intent.direction) && goal.completion.kind !== 'displacement') throw new Error('EPISODE_CLIMB_DISPLACEMENT_REQUIRED');
       if (goal.intent.kind === 'skill' && !['roll', 'slide'].includes(goal.intent.action) && goal.completion.kind === 'displacement') throw new Error('EPISODE_ACTION_DISPLACEMENT_UNSUPPORTED');
       if (goal.completion.kind === 'settled' && goal.completion.holdSeconds >= goal.timeoutSeconds) throw new Error('EPISODE_ACTION_TIMEOUT_TOO_SHORT');

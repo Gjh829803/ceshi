@@ -16,6 +16,7 @@ export interface PlayerDecision extends RouteDecision {
 export class PlayerCaptureController {
   private readonly route: RouteController;
   private readonly trainingRoute:TrainingRouteController;
+  private mounted=false;
   private readonly ordinal: number;
   private activeSeconds = 0;
   private previousTime = 0;
@@ -33,26 +34,35 @@ export class PlayerCaptureController {
   private landedAt?: number;
   private pace = 0.8;
   constructor(private readonly segment: EpisodeSegmentPlan, private readonly movement: RouteMovement,
-    private readonly cameraMode: EpisodeCapabilities['camera']['mode'], private readonly probe: EpisodeCaptureSession['probeStart']) {
+    private readonly cameraMode: EpisodeCapabilities['camera']['mode'], private readonly probe: EpisodeCaptureSession['probeStart'], private readonly customInput?:EpisodeCaptureSession['routeInput']) {
     this.route = new RouteController(segment, movement);
     this.trainingRoute=new TrainingRouteController(segment);
     this.ordinal = Number(segment.id.slice(-2));
     this.jumpState = segment.actionGoals?.length ? 'not-scheduled' : (movement.jumpSpeedMetersPerSecond ?? 0) <= 0 ? 'unsupported' : this.ordinal % 2 === 0 ? 'pending' : 'not-scheduled';
     this.nextJumpAt = 14 + this.ordinal * 0.4;
   }
-  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger); }
-  completeHeldWaypoint(index: number) { this.route.completeHeldWaypoint(index); }
+  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger);this.trainingRoute.holdWaypoint(trigger); }
+  completeHeldWaypoint(index: number) { if(this.mounted){this.trainingRoute.completeHeldWaypoint(index);this.route.seekCursor(this.trainingRoute.cursor);}else{this.route.completeHeldWaypoint(index);this.trainingRoute.seekCursor(this.route.cursor);} }
   pause(time: number) { this.previousTime = time; this.paused = true; this.previousCamera = undefined; }
   async step(snapshot: WorldSnapshot, forward: Vec3, time: number): Promise<PlayerDecision> {
-    if(snapshot.training?.mountedInstanceId){
+    const mounted=Boolean(snapshot.training?.mountedInstanceId);
+    if(mounted!==this.mounted){if(mounted)this.trainingRoute.seekCursor(this.route.cursor);else this.route.seekCursor(this.trainingRoute.cursor);this.mounted=mounted;}
+    if(mounted){
+      this.previousTime=time;
       const decision=this.trainingRoute.step(snapshot,time);
-      return {...decision,input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
+      return {...decision,input:decision.mode==='action'||this.cameraMode==='authored'?decision.input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
         behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
     }
     const dt = Math.max(0, time - this.previousTime);
     if (!this.paused) this.activeSeconds += dt;
     this.previousTime = time;
     const decision = this.route.step(snapshot, forward, this.activeSeconds);
+    if(this.customInput&&this.movement.kind==='custom'){
+      this.paused=decision.mode==='action';
+      const target=decision.targetPositionWorldMetersXYZ??decision.positionWorldMetersXYZ;
+      const input=await this.customInput({targetPositionWorldMetersXYZ:target,gait:decision.mode==='backtrack'?'walk':this.segment.waypoints[decision.waypointIndex]?.gait??'walk',mode:decision.mode==='travel'||decision.mode==='backtrack'?'travel':'stop'});
+      return {...decision,input,behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
+    }
     if (decision.mode === 'action') {
       this.paused = true;
       return { ...decision, behavior: { phase: 'observe', paceRatio: 0, plannedJump: this.jumpState, cameraSupported: this.cameraMode !== 'authored' } };
@@ -89,10 +99,9 @@ export class PlayerCaptureController {
     const settling = this.landedAt !== undefined && time - this.landedAt < 0.45;
     if (jumpActive) phase = 'jump'; else if (settling) phase = 'landing';
     if (decision.mode === 'travel') {
-      const sprint = !this.segment.actionGoals?.length && (pulse(time, 9 + this.ordinal * 0.2, 3) > 0.12 || pulse(time, 22 + this.ordinal * 0.15, 2.8) > 0.12);
       const walkBreak = this.segment.actionGoals?.length ? false : time < 1.1 || observe || jumpActive || settling || (time > 18 && time < 20) || (decision.distanceToTargetMeters ?? 0) < 1.4;
-      input.run = !walkBreak && (input.run || sprint);
-      // Prevent modest sprint bursts exhausting a valid stop route prematurely.
+      input.run = !walkBreak && Boolean(input.run);
+      // Pace the requested gait so a valid stop route is not exhausted prematurely.
       // A minimum pace preserves the existing too-short-route failure.
       let desiredPace = 1;
       if (this.segment.endBehavior === 'stop' && decision.targetPositionWorldMetersXYZ) {
@@ -177,18 +186,15 @@ export function summarizePlayerBehavior(frames: readonly { snapshot: WorldSnapsh
     renderedPitchRangeDegrees: pitches.length ? (Math.max(...pitches)-Math.min(...pitches))*180/Math.PI : 0 };
 }
 
-export function assertPlayerBehavior(frames: readonly { snapshot: WorldSnapshot; camera: EpisodeFrame['camera']; decision: RouteDecision }[], capabilities: EpisodeCapabilities, hasActionGoals = false) {
-  const evidence = summarizePlayerBehavior(frames);
-  // Action recordings are checked against each requested state/operation and displacement.
-  if (hasActionGoals) return;
-  if(frames.some(f=>!!f.snapshot.training?.mountedInstanceId)){
-    const positions=frames.map(f=>{const id=f.snapshot.training?.mountedInstanceId;return f.snapshot.entities.find(e=>e.id===id)?.positionWorldMetersXYZ;}).filter((p):p is Vec3=>!!p);
-    const travelled=positions.slice(1).reduce((sum,p,i)=>sum+Math.hypot(...p.map((v,j)=>v-positions[i]![j]!)),0);
-    if(travelled<2||!frames.some(f=>!!f.decision.input.training))throw new Error('EPISODE_TRAINING_MOTION_MISSING');
-    if(capabilities.camera.mode!=='authored'&&evidence.renderedYawTravelDegrees<10)throw new Error('EPISODE_CAMERA_VARIATION_MISSING');
-    return;
+/** Optional enrichment diagnostics; explicit requested actions are checked by EpisodeActionController. */
+export function playerBehaviorFeedback(frames: readonly {snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[],capabilities:EpisodeCapabilities,hasActionGoals=false){
+  const evidence=summarizePlayerBehavior(frames),diagnostics:{code:string;message:string}[]=[];
+  if(!hasActionGoals){
+    const mounted=frames.some(f=>!!f.snapshot.training?.mountedInstanceId);
+    if(capabilities.camera.mode!=='authored'&&(mounted?evidence.renderedYawTravelDegrees<10:evidence.renderedYawRangeDegrees<20||evidence.renderedYawTravelDegrees<40))diagnostics.push({code:'CAMERA_VARIATION_LOW',message:'Recorded camera variation was limited; compare the actual framing with the requested composition.'});
+    if(evidence.plannedJumps.some(j=>j.takeoffAtSeconds===null||j.landedAtSeconds===null))diagnostics.push({code:'OPTIONAL_JUMP_INCOMPLETE',message:'An automatically suggested jump lacked observed takeoff/landing; this is not an explicitly requested action failure.'});
   }
-  if (capabilities.camera.mode !== 'authored' && (evidence.renderedYawRangeDegrees < 20 || evidence.renderedYawTravelDegrees < 40)) throw new Error('EPISODE_CAMERA_VARIATION_MISSING: supported camera did not visibly turn');
-  if (evidence.walkSeconds < 2 || (capabilities.movement.runSpeedMetersPerSecond > capabilities.movement.walkSpeedMetersPerSecond && evidence.runSeconds < 2)) throw new Error('EPISODE_GAIT_VARIATION_MISSING: actual travel must include walking and running');
-  if (evidence.plannedJumps.some(jump => jump.takeoffAtSeconds === null || jump.landedAtSeconds === null)) throw new Error('EPISODE_PLANNED_JUMP_INCOMPLETE: requested jump lacks observed upward takeoff and landing');
+  return {evidence,diagnostics};
 }
+/** @deprecated Use playerBehaviorFeedback; enrichment does not reject valid recordings. */
+export function assertPlayerBehavior(frames: readonly {snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[],capabilities:EpisodeCapabilities,hasActionGoals=false){playerBehaviorFeedback(frames,capabilities,hasActionGoals);}

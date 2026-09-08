@@ -313,6 +313,26 @@ export class Simulation {
       mountedInstanceId: this.vehicle?.spec.id ?? null,
     };
   }
+  private boardingDecision(id:string):MountDecision {
+    const v=this.vehicles.find(v=>v.spec.id===id);
+    if(v?.spec.mode==='mount'||!v||this.vehicle?.spec.mode==='mount')return evaluateMount(this.mountContext(),id);
+    const fail=(code:MountFailureCode,message:string):MountDecision=>({ok:false,code,message});
+    if(this.transition>0)return fail('TRAINING_TRANSITION_ACTIVE','骑乘切换尚未完成');
+    if(this.vehicle)return fail('TRAINING_ALREADY_MOUNTED','人物已经骑乘');
+    if(!this.humanoid.canBoard)return fail('TRAINING_CHARACTER_BUSY',this.humanoid.boardingReason);
+    if(!this.available(v))return fail('TRAINING_TARGET_UNAVAILABLE','当前地图不支持该载具');
+    if(v.velocity.length()>=3)return fail('TRAINING_MOUNT_TOO_FAST','载具速度过快');
+    const body=vehicleBody(v.spec),range=Math.max(5.3,body.kind==='box'?body.halfExtents[0]+2:0);
+    if(v.position.distanceTo(this.player.position)>=range)return fail('TRAINING_MOUNT_OUT_OF_REACH','靠近载具，按 F 进入驾驶位');
+    return {ok:true,instanceId:id,position:new Vector3(...v.spec.seat).applyQuaternion(v.rotation).add(v.position),yaw:v.yaw,velocity:new Vector3()};
+  }
+  /** On-demand read of existing boarding geometry and the execution admission decision. */
+  inspectBoarding(id:string):{approachPositionWorldMetersXYZ:[number,number,number]|null;eligible:boolean;reason:string;message:string} {
+    const v=this.vehicles.find(v=>v.spec.id===id),decision=this.boardingDecision(id);
+    const approach=v&&this.available(v)&&v.velocity.length()<3?this.boardingPoint(v):null;
+    return {approachPositionWorldMetersXYZ:approach?approach.toArray():null,eligible:decision.ok,
+      reason:decision.ok?'ELIGIBLE':decision.code,message:decision.ok?'可以登乘':decision.message};
+  }
   private commitInteraction(decision: MountDecision, entering: boolean): boolean {
     if (!decision.ok) {
       this.failureCode = decision.code;
@@ -345,7 +365,7 @@ export class Simulation {
     this.syncActorBodies();
     const target = this.vehicles.find(v => v.spec.id === id);
     if (target?.spec.mode === 'mount' || !target || this.vehicle?.spec.mode === 'mount')
-      return this.commitInteraction(evaluateMount(this.mountContext(), id), true);
+      return this.commitInteraction(this.boardingDecision(id), true);
     if (this.vehicle) {
       this.failureCode = 'TRAINING_ALREADY_MOUNTED';
       return false;
@@ -401,10 +421,11 @@ export class Simulation {
       return true;
     }
     if (!this.humanoid.canBoard) { this.message = this.humanoid.boardingReason; return false; }
-    const n = targetId ? this.vehicles.findIndex(v => v.spec.id === targetId && this.available(v) &&
-      v.velocity.length() < 3 && v.position.distanceTo(this.player.position) < Math.max(5.3,
-        vehicleBody(v.spec).kind === 'box' ? (vehicleBody(v.spec) as {halfExtents: readonly number[]}).halfExtents[0]! + 2 : 0)) : this.nearest();
+    const n = targetId ? this.vehicles.findIndex(v => v.spec.id === targetId) : this.nearest();
     if (n < 0) { this.message = '靠近载具，按 F 进入驾驶位'; return false; }
+    if(targetId){const decision=this.boardingDecision(targetId);
+      if(!decision.ok){this.failureCode=decision.code;this.message=decision.message;return false;}
+    }
     if (!this.humanoid.setMounted(true)) return false;
     this.active = n; this.player.velocity.set(0, 0, 0); this.player.animation = 'Sitting_Enter';
     this.transition = .5; this.transitionKind = 'enter'; this.message = '控制权已交给载具';

@@ -14,9 +14,11 @@ export { SKILL_DEFINITIONS } from './humanoid/action-schema';
 export { ACTION_TUNING } from './humanoid/action-schema';
 export { CHARACTER_CAPABILITIES, ANIMATION_ONLY_CLIP_IDS, characterCapabilities, type CharacterCapability, type CharacterCapabilityState, type CharacterCapabilityAvailability } from './character-capabilities';
 export { readInteractionTargets } from './humanoid/render-state';
-export { updateVehicleWheels, resetVehicleWheels } from './vehicle-animation';
-export type { TrainingOptions, TrainingProfile, TrainingRuntime, TrainingVehicleInstance, TrainingSnapshot } from './runtime';
+export { updateVehicleWheels, resetVehicleWheels, type WheelPose, type WheelFrame } from './vehicle-animation';
+export type { TrainingOptions, TrainingProfile, TrainingRuntime, TrainingVehicleInstance, TrainingSnapshot, TrainingInputObservation, TrainingBoardingObservation } from './runtime';
 export type { TrainingCommand } from './runtime';
 export {DEFAULT_TRAINING_VIEW,TRAINING_VIEW_SCHEMA_PROPERTIES,type TrainingViewSettings} from './runtime';
 export { TrainingHorse } from './horse';
 export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './horse';
+
+export * from './input-guidance';

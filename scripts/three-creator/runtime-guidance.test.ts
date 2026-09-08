@@ -48,6 +48,22 @@ it('exposes edited skill definitions as source and never advertises host thresho
  expect(example.exampleAuthority).toBe('host-baseline');
 });
 
+it('reads edited vehicle input guidance from the workspace instead of advertising the Host baseline',async()=>{
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/input-guidance.ts');
+ await writeFile(file,(await readFile(file,'utf8')).replace('Brakes velocity through damping','Workspace-specific braking'));
+ const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['training']});
+ expect(schema).not.toHaveProperty('trainingInputGuides');
+ expect(schema.runtimeDefinitions['training/input-guidance.ts']).toContain('Workspace-specific braking');
+});
+
+it('keeps older workspace discovery available when the optional input guide is absent',async()=>{
+ const service=await fixture();await rm(path.join(service.workspace,'sdk/three-world/src/training/input-guidance.ts'));
+ const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['training']});
+ expect(schema.runtimeDefinitions['training/input-guidance.ts']).toContain('unavailable in this workspace SDK');
+ expect(schema).not.toHaveProperty('trainingInputGuides');
+ expect((await call(service,'assets_describe',{assetId:'humanoid.source-101'})).characterUsage[0].runtimeAuthority).toBe('workspace-sdk-source');
+});
+
 it('parses authored source without executing initializers and never silently falls back to Host files',async()=>{
  const service=await fixture(),marker=path.join(service.workspace,'host-executed');
  const file=path.join(service.workspace,'sdk/three-world/src/training/humanoid/action-schema.ts');

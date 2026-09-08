@@ -104,8 +104,9 @@ and delivery code are outside the exported runtime.
 Discovery reads a validated snapshot of the current `sdk/` sources when present.
 `runtimeGuidance.runtimeSourceHash` identifies that snapshot; compare it with
 `world_validate` or `world_inspect.runtimeSourceHash`. Subsequent source edits get
-a new hash. Missing or invalid workspace files fail explicitly instead of falling
-back to Host declarations.
+a new hash. Missing required or invalid workspace files fail explicitly instead of falling
+back to Host declarations. An older workspace without the optional vehicle input
+guide reports that guidance as unavailable while keeping other discovery usable.
 
 For a workspace SDK, `contracts`/`training` sections use its declarations.
 `runtimeDefinitions` (training/commands sections and asset details) contains current

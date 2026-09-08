@@ -16,6 +16,19 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('activates pending follow from the same jump edge used by locomotion',async()=>{
+    const world=await createWorld({navigation:false});try{
+      const ground=new THREE.Mesh(new THREE.BoxGeometry(20,1,20));ground.position.y=-.5;
+      world.addEntity({id:'ground',object:ground,role:'terrain'});
+      world.addCharacter({id:'hero',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
+      world.setControlledEntity('hero');world.setCameraFollow({activateOnInput:true});world.step({},60);
+      expect(world.cameraMode).toBe('follow-pending');
+      world.step({jump:true,jumpPressed:false});expect(world.cameraMode).toBe('follow-pending');
+      world.step({jumpPressed:true});expect(world.cameraMode).toBe('follow');
+      expect(world.getEntityState('hero').motion!.velocityWorldMetersPerSecondXYZ[1]).toBeGreaterThan(0);
+    }finally{world.dispose();}
+  });
+
   it('restores only the near plane owned by first person and keeps pending author edits',()=>{
     const {camera,rig}=fixture();rig.setFollow({targetEntityId:'wolf'});camera.near=.7;
     rig.useAuthoredCamera();expect(camera.near).toBe(.7);

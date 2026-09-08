@@ -17,8 +17,8 @@ export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
   guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
-  observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
-  training: ['trainingSourceContracts', 'trainingExampleTopic', 'characterCapabilities', 'controlBindings', 'runtimeDefinitions'],
+  observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
+  training: ['trainingSourceContracts', 'trainingExampleTopic', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
 } as const;
 
 /** Read-only guidance over the compiler's frozen catalog; no browser/evidence ownership. */
@@ -62,7 +62,7 @@ export class CreatorDiscovery {
         entryPoint: humanoidTopic
           ? { module: '@worldkit/three', name: 'createHumanoidWorld', optionsType: 'HumanoidWorldOptions', mapType: 'TrainingMap' }
           : { module: '@worldkit/three', name: 'createWorld', optionsType: 'WorldOptions' },
-        ...(!guidance.isWorkspace&&['character-actions', 'control', 'all'].includes(topic) ? { characterCapabilities: training.CHARACTER_CAPABILITIES, controlBindings: training.INPUT_BINDINGS } : {}),
+        ...(!guidance.isWorkspace&&['character-actions', 'control', 'all'].includes(topic) ? { characterCapabilities: training.CHARACTER_CAPABILITIES, controlBindings: training.INPUT_BINDINGS, trainingInputGuides: training.TRAINING_INPUT_GUIDES } : {}),
         ...(['extensions', 'all'].includes(topic) ? { runtimeSource: { tool: 'creator_materialize_runtime', sourceRoot: 'sdk', buildTool: 'world_validate', entry: 'sdk/three-world/src/index.ts' } } : {}),
       } : {}),
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.',

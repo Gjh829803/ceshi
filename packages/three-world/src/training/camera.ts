@@ -4,8 +4,9 @@ import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-wo
 import { probeTrainingCamera } from './camera-queries';
 import { Simulation, angleDelta, clamp, damp } from './simulation';
 import type { MotionPose } from './presentation';
-import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './platform/session';
+import { DEFAULT_CAMERA_TUNING, parseCameraTuning, type CameraTuning } from './platform/session';
 import type { EnvironmentQueries } from './environment/queries';
+const HUMANOID_CAMERA_DEFAULTS={...DEFAULT_CAMERA_TUNING,followResponsePerSecond:7,baseFovDegrees:58,collisionRadiusMeters:.2};
 interface CameraPresentationPose {
   position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
   up:T.Vector3; fov:number; near:number;
@@ -68,6 +69,13 @@ export class FollowCamera {
   }
 
   tuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
+  private humanoidTuning:CameraTuning={...HUMANOID_CAMERA_DEFAULTS};
+  /** Explicit overrides apply independently; distance never selects unrelated defaults. */
+  configureTuning(overrides:Partial<CameraTuning>):void {
+    const tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...overrides});
+    const humanoid=parseCameraTuning({...HUMANOID_CAMERA_DEFAULTS,...overrides});
+    this.tuning=tuning;this.humanoidTuning=humanoid;
+  }
   baseDistance?:number;
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;
   up=new T.Vector3(0,1,0);collisionLimited=false;
@@ -90,19 +98,38 @@ export class FollowCamera {
   private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private revision=-1;
   constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries){this.originalNear=camera.near;}
   get desiredPosition():T.Vector3{return this.desired.clone();}
-  orbit(dx:number,dy:number,time:number,sim?:Simulation){
+  /** Canonical angular input. Pixel adapters keep their own sensitivity. */
+  orbitRadians(yawDelta:number,pitchDelta:number,time:number,sim?:Simulation){
     if(this.mode===1||this.mode===2){
-      if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw-dx*.004,-Math.PI*5/6,Math.PI*5/6);
-      else this.yaw-=dx*.004;
-      this.pitch=clamp(this.pitch+dy*.004,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);this.lastOrbit=time;return;
+      if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw+yawDelta,-Math.PI*5/6,Math.PI*5/6);
+      else this.yaw+=yawDelta;
+      this.pitch=clamp(this.pitch+pitchDelta,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);
+    }else{
+      const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
+      this.yaw+=yawDelta;this.pitch=clamp(this.pitch+pitchDelta,character ? .12 : -.6,character ? 1.1 : 1.25);
     }
+    this.lastOrbit=time;
+  }
+  /** Changes the nominal arm in meters; collision, speed pullback and smoothing remain separate. */
+  zoomByMeters(delta:number,sim:Simulation){
+    if(this.mode===1)return;
+    if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+delta,1.3,3.2);return;}
+    if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+delta,3.2,12)/base;}
+    else{
+      const base=this.baseDistance??sim.vehicle?.spec.camera??5.5;
+      // A configured zero arm stays collapsed; never divide by zero.
+      if(base>0)this.zoom=clamp(this.zoom+delta/base,.45,2.5);
+    }
+  }
+  /** Legacy pointer pixels, retained for direct integrations. */
+  orbit(dx:number,dy:number,time:number,sim?:Simulation){
     const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
-    this.yaw-=dx*.004;this.pitch=character?clamp(this.pitch+dy*.004,.12,1.1):clamp(this.pitch+dy*.003,-.6,1.25);this.lastOrbit=time;
+    this.orbitRadians(-dx*.004,dy*((this.mode===1||this.mode===2||character) ? .004 : .003),time,sim);
   }
   scroll(deltaY:number,sim:Simulation){
     if(this.mode===1)return;
-    if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+deltaY*.003,1.3,3.2);return;}
-    if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+deltaY*.007,3.2,12)/base;}
+    if(this.mode===2){this.zoomByMeters(deltaY*.003,sim);return;}
+    if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
     else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
   }
   reset(sim:Simulation){this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
@@ -250,7 +277,7 @@ export class FollowCamera {
   }
   private humanoidCollisionRequest(humanoid:NonNullable<Simulation['humanoid']>,position:T.Vector3,origin:T.Vector3,target:T.Vector3,eye:T.Vector3,sweepFrom?:T.Vector3,current=this.camera.position):CameraCollisionRequest {
     return {target:target.toArray(),eye:eye.toArray(),current:current.toArray(),
-      radius:this.baseDistance===undefined?.2:this.tuning.collisionRadiusMeters,
+      radius:this.humanoidTuning.collisionRadiusMeters,
       pivotOrigin:origin.toArray(),preserveArmDirection:true,armClearance:.04,
       canIgnoreArmObstruction:eye=>this.capsuleVisible(new T.Vector3(...eye),position,humanoid.capsuleHeight,humanoid.capsule,humanoid.world),
       ...(sweepFrom?{sweepFrom:sweepFrom.toArray()}:{}),
@@ -264,7 +291,7 @@ export class FollowCamera {
     const position=pose?.position??sim.player.position;
     this.origin.copy(position).add(this.offset.set(0,height,0));
     this.anchor.copy(this.origin).add(this.offset.set(Math.cos(this.yaw)*this.tuning.horizontalOffset,this.tuning.targetHeightOffset,-Math.sin(this.yaw)*this.tuning.horizontalOffset));
-    const response=this.baseDistance===undefined?7:this.tuning.followResponsePerSecond;
+    const response=this.humanoidTuning.followResponsePerSecond;
     if(!this.initialized)this.target.copy(this.anchor);
     else {
       // Inherit locomotion, damping only posture/shoulder changes. World-space
@@ -292,7 +319,7 @@ export class FollowCamera {
     }
     this.camera.position.copy(this.candidate);
     this.up.set(0,1,0);this.camera.up.copy(this.up);this.camera.lookAt(this.target);
-    const fov=this.baseDistance===undefined?58:this.tuning.baseFovDegrees;
+    const fov=this.humanoidTuning.baseFovDegrees;
     if(this.camera.fov!==fov||this.camera.near!==.08){this.camera.fov=fov;this.camera.near=.08;this.camera.updateProjectionMatrix();}
     this.lastAnchor.copy(this.anchor);this.initialized=true;
   }

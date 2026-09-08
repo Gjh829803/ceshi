@@ -31,6 +31,7 @@ export function routeDirectionInput(position: Vec3, target: Vec3, forward: Vec3,
     moveZRatio: Math.max(-1, Math.min(1, -(dx * fx + dz * fz))), run };
 }
 
+export interface RouteCursor {readonly waypointIndex:number;readonly direction:number;readonly finished:boolean}
 export class RouteController {
   private readonly route: { positionWorldMetersXYZ: Vec3; gait: 'walk' | 'run' }[];
   private index = 0;
@@ -45,6 +46,11 @@ export class RouteController {
   private readonly breadcrumbs: Vec3[] = [];
   private failure: RouteDecision['diagnostic'];
   private waypointHold: { waypointIndex: number; radiusMeters: number } | undefined;
+  get cursor():RouteCursor{return {waypointIndex:this.index-(this.segment.endBehavior==='reverse'?1:0),direction:this.direction,finished:this.arrived};}
+  seekCursor(cursor:RouteCursor){
+    this.index=cursor.waypointIndex+(this.segment.endBehavior==='reverse'?1:0);this.direction=cursor.direction;this.arrived=cursor.finished;
+    this.anchor=undefined;this.stationarySince=undefined;this.recoveryTarget=undefined;this.recoveredAtWaypoint=false;this.jumpAttempted=false;this.failure=undefined;
+  }
   holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.waypointHold = trigger; }
   completeHeldWaypoint(index: number) {
     if (Math.max(0, this.index - (this.segment.endBehavior === 'reverse' ? 1 : 0)) !== index) throw new Error('EPISODE_ACTION_ROUTE_INDEX_CHANGED');
@@ -115,6 +121,7 @@ export class RouteController {
     if (horizontalDistance <= horizontalTolerance && Math.abs(position[1] - target[1]) > verticalTolerance && isGrounded && stationarySeconds > 1) {
       return fail('ROUTE_VERTICAL_MISMATCH', 'The actor reached the waypoint XZ coordinates on a different elevation; provide a route to the intended floor.');
     }
+    if(this.movement.kind==='custom'&&stationarySeconds>=2.5)return fail('ROUTE_BLOCKED','The custom movement input made no progress toward the actual target.');
     if (stationarySeconds >= 2.5) {
       if (this.recoveredAtWaypoint || this.recoveryTarget) return fail('ROUTE_BLOCKED', 'Movement toward the requested waypoint remains blocked after bounded recovery.');
       const previous = [...this.breadcrumbs].reverse().find(point => distance(position, point) >= 0.8 && distance(position, point) <= 2);
@@ -124,7 +131,7 @@ export class RouteController {
     }
     const requestedTarget = this.recoveryTarget ?? target;
     const input = routeDirectionInput(position, requestedTarget, controlForwardWorldXYZ, !this.recoveryTarget && this.route[this.index]?.gait === 'run');
-    if (!this.recoveryTarget && stationarySeconds > 1 && !this.jumpAttempted && isGrounded && (this.movement.jumpSpeedMetersPerSecond ?? 0) > 0 && horizontalDistance > horizontalTolerance) {
+    if (this.movement.kind!=='custom' && !this.recoveryTarget && stationarySeconds > 1 && !this.jumpAttempted && isGrounded && (this.movement.jumpSpeedMetersPerSecond ?? 0) > 0 && horizontalDistance > horizontalTolerance) {
       this.jumpAttempted = true;
       return { ...base, targetPositionWorldMetersXYZ: requestedTarget, distanceToTargetMeters, mode: 'travel', input: { ...input, jumpPressed: true } };
     }

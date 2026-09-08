@@ -40,11 +40,14 @@ Use these layers as needed:
    clock, physics world, animation owner and camera writer. Host tools and evidence
    validators remain outside the authored runtime.
 
-Read the shared controlBindings in the schema. WASD moves, Shift runs/accelerates,
-Space jumps/traverses/rises, C or Ctrl crouches, Shift plus a new C/Ctrl press slides,
-Z goes prone, Q rolls, E interacts, G puts down, F mounts/dismounts. Mouse/arrow keys
-control the camera. A slide also needs actual speed >= 2.5 m/s, grounded empty hands,
-run-up and body clearance; a tunnel is optional. Standing exits need headroom.
+Read current controlBindings and character capability conditions from the schema
+or world_inspect. For Training vehicle input, use the active family's inputGuide
+in the world description: boost and axes have different meanings for cars,
+aircraft, spacecraft and underwater vehicles. Use emptyTrainingInput() and change
+only the relevant channels. After editing sdk/, read its current definitions and
+rebuilt state instead of assuming Host defaults. A slide needs the current
+controller's actual minimum speed, grounded empty hands, run-up and body clearance;
+a tunnel is optional. Standing exits need headroom.
 Climbing needs a declared climb surface attached to a real collider. Swimming needs
 a declared water volume and pool floor/shore collision at appropriate depths.
 Pickup and sitting require reachable interaction anchors. Show the current target

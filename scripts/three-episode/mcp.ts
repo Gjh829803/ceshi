@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalHash, EPISODE_PLAN_SCHEMA, validateEpisodePlan, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
+import { canonicalHash, EPISODE_PLAN_SCHEMA, EPISODE_START_SCHEMA, validateEpisodePlan, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
 import { closedPath, loadEpisodeSource, resolveEpisodeSourcePaths, verifyFile } from './source.js';
 import { openEpisodeBrowser, type BrowserSession, type EpisodeObserveOptions } from './browser.js';
 import type { EpisodeStart } from '@worldkit/three';
@@ -14,14 +14,13 @@ import type { EpisodeStart } from '@worldkit/three';
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object' as const, properties, required, additionalProperties: false });
 const string = { type: 'string', minLength: 1, maxLength: 512 };
 const vec3 = { type: 'array', items: { type: 'number', minimum: -100_000, maximum: 100_000 }, minItems: 3, maxItems: 3 };
-const startSchema = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']} }, ['positionWorldMetersXYZ', 'facingYawRadians']);
 export const EPISODE_TOOLS = [
  { name: 'episode_observe', description: 'Read a frozen source file or see an actual opening/current/top-down/local browser view with entity and camera facts. Source filenames come from sourceFiles in observation results. Views and probes are optional planning aids, not a mandatory scouting or rehearsal stage. A screenshot viewId can be used for point picking. Does not change or compile the world.', inputSchema: { type: 'object' as const, oneOf: [
   object({ view: { enum: ['opening', 'current', 'top-down'] }, cameraPositionWorldMetersXYZ: vec3, lookAtWorldMetersXYZ: vec3, entityIds: { type: 'array', items: string, maxItems: 64, uniqueItems: true } }),
   object({ sourceFile: string, offsetCharacters: { type: 'integer', minimum: 0, maximum: 1_048_576 }, maximumCharacters: { type: 'integer', minimum: 1, maximum: 32_000 } }, ['sourceFile']),
  ] } },
- { name: 'episode_probe', description: 'Inspect one requested start using real local Rapier queries, or pick a point from a previous actual view. Keeps requested XZ and only aligns support height locally; reports unsupported/overlapping starts without selecting another room or route. Point hits distinguish visible geometry from actual support.', inputSchema: { type: 'object' as const, oneOf: [
-  object({ kind: { const: 'start' }, start: startSchema }, ['kind', 'start']),
+ { name: 'episode_probe', description: 'Inspect one requested start (including the full optional Training vehicle state) using real local Rapier queries, or pick a point from a previous actual view. Keeps requested XZ and only aligns support height locally; reports unsupported/overlapping starts without selecting another room or route. Point hits distinguish visible geometry from actual support.', inputSchema: { type: 'object' as const, oneOf: [
+  object({ kind: { const: 'start' }, start: EPISODE_START_SCHEMA }, ['kind', 'start']),
   object({ kind: { const: 'view-point' }, viewId: string, pixelUv: { type: 'array', items: { type: 'number', minimum: 0, maximum: 1 }, minItems: 2, maxItems: 2 } }, ['kind', 'viewId', 'pixelUv']),
  ] } },
  { name: 'episode_submit_plan', description: 'Deliver the six ordered independent 30-second route intentions as plan.json. Host starts actual recording from this plan; this tool does not pretend routes have passed recording. A repair submission must preserve every passing segment exactly. Use this tool for final delivery; writing a JSON file manually is insufficient. No Seedance submission.', inputSchema: object({ plan: EPISODE_PLAN_SCHEMA }, ['plan']) },

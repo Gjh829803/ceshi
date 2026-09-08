@@ -154,6 +154,39 @@ playtest/submit and Episode capture interfaces. Training-specific character
 continuity reports `not-applicable` when the ordinary SDK snapshot has no Training
 controller; unavailable telemetry remains distinct from this result.
 
+### Recording custom movement
+
+A movement can provide a small optional Episode input adapter alongside `update`:
+
+```ts
+world.registerMovement({
+  id: 'flight', version: 1, description: 'Vertical flight', initialState: null,
+  update: ({input, state}) => ({state,
+    velocityWorldMetersPerSecondXYZ: [0, (input.moveYRatio ?? 0) * 3, 0],
+    applyGravity: false}),
+  episode: {
+    startSupport: 'free',
+    input: ({body, targetPositionWorldMetersXYZ}) => ({
+      moveYRatio: Math.max(-1, Math.min(1,
+        targetPositionWorldMetersXYZ[1] - body.positionWorldMetersXYZ[1])),
+    }),
+  },
+});
+```
+
+Bind it with `movement:{kind:'custom',movementId:'flight'}`. The adapter returns
+ordinary WorldInput, never a position or its own simulation loop. It is synchronous
+and pure; it also receives gait, control-forward direction, simulation tick and
+`mode:'travel'|'stop'`. For a stop/view hold, return inputs that maintain or settle
+the current position, including any controller-specific braking or buoyancy.
+`startSupport:'free'` keeps the exact start and still tests the real body against
+colliders; the default `ground` mode also requires nearby support.
+
+Episode capabilities explicitly report `movement.episodeInput` as custom or
+unsupported. An absent adapter leaves manual Creator play available and does not
+pretend that the Host knows how to steer arbitrary custom movement. Existing
+ordinary ground and Training vehicles keep their built-in recording paths.
+
 <!-- topic:assets -->
 ## Select, load and reuse assets
 
@@ -327,6 +360,14 @@ Presentation UI focus releases held gameplay keys. Programmatic
 override; release it when the interaction ends. `setInput(undefined)` clears the
 active override. `WorldInput.training` uses the same input in deterministic ticks;
 action edges execute once in a multi-tick step.
+Read `world.describe().training.inputGuide` for the active control family, or
+`training.TRAINING_INPUT_GUIDES` when authoring a vehicle. Start with
+`emptyTrainingInput()` and change only relevant channels. For example, `boost`
+increases car speed, adjusts plane throttle, launches a glider, and brakes a
+spaceship or submarine. Aircraft pitch uses `forward`; spaceship pitch uses
+`pitch`. Omitted guide channels are ignored and should stay neutral.
+Camera angular deltas use radians and distance deltas change the nominal arm in
+meters; collision response, speed pullback and smoothing still affect the final view.
 
 `world.training` provides prepare, approach/enter/exit, map switching, camera
 modes and profile methods. These preparation helpers may relocate; normal
@@ -334,6 +375,10 @@ movement uses real input. Generic navigation, impulse and root-edit commands are
 unavailable for contextual actors. Commands are `training.prepare`,
 `training.approach`, `training.enter`, `training.exit`, `training.camera`,
 `training.input`, `training.profile` and `training.action`.
+`training.approach` is a preparation relocation to a safe boarding position,
+with velocity cleared. It does not walk there. Its applied command receipt
+includes `result.kind:"relocation"`, the character/vehicle IDs and actual position;
+use ordinary input for visible travel, then `training.enter` when eligible.
 
 ```ts
 await world.execute({type:'training.profile',profile:{character:{
@@ -459,6 +504,23 @@ NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
 Player input owns the controlled actor. Single animations return to locomotion;
 loop playback requires stop-action. set-visible only affects rendering; despawn
 removes the entity/collision/tasks. Capability rejection is not SDK success.
+
+### Effective input and camera settings
+
+`world.describe().training.controlState` reports the current override, its source,
+the last input actually consumed with simulation time, `livePaused`, and the clock
+owner (`live` or `episode`). It is an on-demand observation. Release/reset clears
+obsolete input samples. `training.boarding[instanceId]` in the same description
+reports the actual boarding approach and eligibility; select `entityIds` to query
+only the relevant vehicle. These spatial queries are not repeated in every frame
+snapshot. `world.training.inspectBoarding(id)` provides the same targeted query.
+
+`profile.camera` is a partial set of explicit overrides. Each field takes effect
+independently of `cameraDistanceMeters`; `exportProfile().camera` retains those
+explicit fields. Unset fields keep the mode's default (humanoid third person uses
+FOV 58, response 7, collision radius .2; vehicle defaults remain unchanged).
+The SDK and Creator command transport share the same `(0,100]` meter range for
+`cameraDistanceMeters`; null returns to the subject's default distance.
 
 <!-- topic:extensions -->
 ## Configure or implement a behavior
