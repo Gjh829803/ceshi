@@ -38,6 +38,10 @@ do not prove that the engine or browser implements it.
   single-tick speed/contact changes, jump/fall, manual playback and reset.
 - Camera: original pose/FOV/roll, first-input follow activation, orbit/drag,
   obstruction retraction/recovery and a complete target with rotated parents.
+  Apply the [camera ownership and handoff rules](../three-sdk-architecture.md#相机控制权与交接)
+  to the actual render/capture consumer, not only fixed-step observations. Check
+  exact and interpolated frames for partial-subject visibility, full occlusion
+  and eye-sphere collision; display must preserve canonical camera control state.
 - Time/lifecycle: varied render intervals, pause/start, zero-tick frame reads,
   reset with held keys, cancellation and stale async completion.
 - Geometry/assets: asymmetric shapes and transforms, collision updates,
