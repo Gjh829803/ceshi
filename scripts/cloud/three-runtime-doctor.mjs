@@ -15,6 +15,12 @@ export function createDoctorBrowserPlan(durationSeconds=4) {
   episode:{schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:durationSeconds+1},{keysUp:['w'],durationSeconds:180-durationSeconds}],targets:[]},
  };
 }
+export function createDoctorCommands(entityId) {
+ return {
+  supported:[{type:'training.camera',mode:1},{type:'training.camera',mode:0}],
+  forbidden:{type:'actor.move-to',entityId,targetPositionWorldMetersXYZ:[99,0,99]},
+ };
+}
 async function main() {
 const options={},argv=process.argv.slice(2);
 for(let i=0;i<argv.length;i+=2){if(!['--runtime-lock','--output-root','--profile','--duration-seconds'].includes(argv[i])||!argv[i+1]||options[argv[i]])throw new Error('Invalid doctor argument');options[argv[i]]=argv[i+1];}
@@ -58,10 +64,13 @@ try{
    entry.inspection=(await operation('world_inspect')).value.result;
    if(profile==='three-sdk'){
     const initial=entry.inspection.observation.snapshot,entityId=initial.controlledEntityId;assert.equal(initial.schemaVersion,2);assert.equal(initial.isRunning,false);assert.equal(typeof entityId,'string');entry.commandChecks=[];
-    for(const isVisible of [false,true]){
-     const command=(await operation('world_execute_command',{command:{type:'entity.set-visible',entityId,isVisible}})).value.result;
-     assert.equal(command.worldCommandReceipt.status,'applied');assert.equal(typeof command.worldCommandReceipt.commandId,'string');assert(command.worldCommandReceipt.commandId.length>0);assert.equal(command.sourceHash,validation.sourceHash);assert.equal(command.worldBuildHash,validation.worldBuildHash);assert.equal(command.after.isRunning,false);assert.equal(command.after.simulationTick,initial.simulationTick);assert.equal(command.after.entities.find(entity=>entity.id===entityId).isVisibleLocal,isVisible);entry.commandChecks.push(command);
+    const requests=createDoctorCommands(entityId);
+    for(const request of requests.supported){
+     const command=(await operation('world_execute_command',{command:request})).value.result;
+     assert.equal(command.worldCommandReceipt.status,'applied');assert.equal(typeof command.worldCommandReceipt.commandId,'string');assert(command.worldCommandReceipt.commandId.length>0);assert.equal(command.sourceHash,validation.sourceHash);assert.equal(command.worldBuildHash,validation.worldBuildHash);assert.equal(command.after.isRunning,false);assert.equal(command.after.simulationTick,initial.simulationTick);assert.notEqual(command.before.training.cameraMode,request.mode);assert.equal(command.after.training.cameraMode,request.mode);entry.commandChecks.push(command);
     }
+    const forbidden=(await operation('world_execute_command',{command:requests.forbidden})).value.result;
+    assert.equal(forbidden.worldCommandReceipt.status,'rejected');assert.equal(forbidden.worldCommandReceipt.error.code,'TRAINING_USE_RUNTIME_COMMANDS');assert.equal(forbidden.sourceHash,validation.sourceHash);assert.equal(forbidden.worldBuildHash,validation.worldBuildHash);assert.equal(forbidden.after.isRunning,false);assert.equal(forbidden.after.simulationTick,initial.simulationTick);assert.deepEqual(forbidden.after.entities.find(entity=>entity.id===entityId).positionWorldMetersXYZ,forbidden.before.entities.find(entity=>entity.id===entityId).positionWorldMetersXYZ);entry.commandChecks.push(forbidden);
    }
    entry.playtest=(await operation('world_playtest',browserPlan.playtest)).value.result;
    assert.equal(entry.playtest.status,'passed');assert.equal(entry.playtest.executionMode,'debug');assert.equal(entry.playtest.isCompleteEpisode,false);assert.equal(entry.playtest.capturedInput,true);

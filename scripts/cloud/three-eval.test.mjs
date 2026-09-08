@@ -13,7 +13,10 @@ test('Installed doctor uses the live MCP input schema and short recordings canno
     import {THREE_CREATOR_TOOLS} from './scripts/three-creator/mcp.ts';
     import {EPISODE_SCHEMA} from './scripts/three-creator/contracts.ts';
     import {resolvePlaytestBudget,playtestSubmissionReadiness} from './scripts/three-creator/tools.ts';
-    import {createDoctorBrowserPlan} from './scripts/cloud/three-runtime-doctor.mjs';
+    import {createDoctorBrowserPlan,createDoctorCommands} from './scripts/cloud/three-runtime-doctor.mjs';
+    import {Scene,PerspectiveCamera} from 'three';
+    import {createHumanoidWorld} from './packages/three-world/src/humanoid.ts';
+    import {Character} from './packages/three-world/src/training/character.ts';
     const ajv=new Ajv({strict:false,strictNumbers:true});
     for(const duration of [3,4,15]) {
       const plan=createDoctorBrowserPlan(duration);
@@ -29,6 +32,21 @@ test('Installed doctor uses the live MCP input schema and short recordings canno
     const preview=ajv.compile(THREE_CREATOR_TOOLS.find(tool=>tool.name==='world_preview').inputSchema);
     assert.equal(preview({view:'current',input:{keys:['w'],durationSeconds:4}}),false);
     assert.throws(()=>createDoctorBrowserPlan(180));
+    const character=new Character();character.loaded=true;
+    const world=await createHumanoidWorld({scene:new Scene(),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},character,characterId:'person',map:{id:'doctor-test',name:'Doctor',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]}});
+    try {
+      const initial=world.snapshot(),commands=createDoctorCommands(initial.controlledEntityId);
+      assert.equal(initial.isRunning,false);assert.equal(initial.training.cameraMode,0);
+      for(const [index,command] of commands.supported.entries()) {
+        const before=world.snapshot(),receipt=await world.execute(command,{commandId:'doctor-camera-'+index});
+        assert.equal(receipt.status,'applied');assert.notEqual(before.training.cameraMode,command.mode);
+        const after=world.snapshot();assert.equal(after.training.cameraMode,command.mode);assert.equal(after.isRunning,false);assert.equal(after.simulationTick,initial.simulationTick);
+      }
+      const before=world.getEntityState('person').positionWorldMetersXYZ;
+      const rejection=await world.execute(commands.forbidden,{commandId:'doctor-forbidden-move'});
+      assert.equal(rejection.status,'rejected');assert.equal(rejection.error.code,'TRAINING_USE_RUNTIME_COMMANDS');
+      assert.deepEqual(world.getEntityState('person').positionWorldMetersXYZ,before);assert.equal(world.snapshot().simulationTick,initial.simulationTick);assert.equal(world.snapshot().isRunning,false);
+    } finally {world.dispose();}
   `],{stdio:'pipe',timeout:30000});
 });
 import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInstalledClosure,prepareBrowserRegistry} from './three-eval-runtime.mjs';
