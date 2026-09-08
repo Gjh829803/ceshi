@@ -7,7 +7,7 @@ import { fileSha256, readRuntimeLock, resolveCreatorSubmission, sha256, writeJso
 import { eventStatistics, failureClass, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs";
 import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, providerItemSucceeded, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
-import { withAdmissionDirectoryLock, admissionIsClosed } from "./three-eval-admission.mjs";
+import { withAdmissionDirectoryLock, admissionIsClosed,isAdmissionBlockError,recoverBeforePostAdmissionFailure } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
@@ -126,6 +126,8 @@ for (const item of manifest.cases) {
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
   const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
   const frozenPayload=previousPlan?await optionalJson(path.join(caseRoot,"payload.json")):null;
+  const previousPlanCase=previousPlan?.cases.find(entry=>entry.taskId===item.id);
+  const observedPayloadHash=frozenPayload?sha256(JSON.stringify(frozenPayload)):null;
   const codexAccountIds=frozenPayload?.options?.codex_account_ids
     ?assertCreatorAccountSelection(frozenPayload.options.codex_account_ids,accountPolicy)
     :selectCreatorAccount({policy:accountPolicy,inventory:accountInventory,requestedIds:item.codexAccountIds,slot:Math.floor(plans.length/profiles.length)});
@@ -133,7 +135,8 @@ for (const item of manifest.cases) {
   if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length < 1 || codexAccountIds.length > maximumAccountIds || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
   const codexAccountRoot=creatorAccountRoot(codexAccountIds,accountPolicy);
   const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {}),...(codexAccountRoot?{codex_account_root:codexAccountRoot}:{})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
-  const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
+  const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix,previousPlanCase,observedPayloadHash};
+  if(previousPlan&&(!previousPlanCase||previousPlanCase.requestId!==requestId||previousPlanCase.caseHash!==caseHash||previousPlanCase.payloadHash!==plan.payloadHash||observedPayloadHash!==plan.payloadHash))throw Error('CREATOR_FROZEN_PAYLOAD_CHANGED');
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
   if (intent && intent.payloadHash !== plan.payloadHash) throw new Error(`Submission payload changed for ${item.id}; use a deliberate new run ID.`);
   await writeJson(inputFile, caseInput);
@@ -164,7 +167,7 @@ async function reserveCase(plan, state) {
   await withAdmissionLock("__capacity", async () => withAdmissionLock(plan.item.id, async file => {
     const existing = await optionalJson(file);
     if (existing && existing.requestId !== plan.requestId && !admissionIsClosed(existing)) throw new Error(`CREATOR_CASE_ALREADY_ACTIVE: ${plan.item.id} belongs to run ${existing.runId}, request ${existing.requestId}, job ${existing.jobId ?? "unresolved"}; resume that request before creating another run`);
-    if (existing?.requestId !== plan.requestId) {
+    if (existing?.requestId !== plan.requestId||admissionIsClosed(existing)) {
       const records = await Promise.all((await readdir(admissionRoot)).filter(name => name.endsWith('.json')).map(name => optionalJson(path.join(admissionRoot, name))));
       if (records.filter(record => record && !admissionIsClosed(record)).length >= maxConcurrency) throw new Error("CREATOR_CASE_ADMISSION_BUSY: configured maximum of Three requests remain in flight; resume them before admitting another");
     }
@@ -174,8 +177,12 @@ async function reserveCase(plan, state) {
   }));
 }
 async function execute(plan,releaseExecutionSlot=()=>{}) {
-  const previous = await optionalJson(statePath(plan.item.id));
-  if (["delivered", "failed"].includes(previous?.phase)) return;
+  let previous = await optionalJson(statePath(plan.item.id));
+  if(previous?.phase==='failed'){
+    const recovered=recoverBeforePostAdmissionFailure({state:previous,hasSubmissionIntent:Boolean(await optionalJson(path.join(plan.caseRoot,'submission-intent.json'))),expectedIdentity:{caseId:plan.item.baseCaseId,taskId:plan.item.id,profile:plan.item.profile,caseHash:plan.caseHash,runtimeHash:lock.runtimeHash,requestId:plan.requestId,outputS3Prefix:plan.outputS3Prefix},payloadHash:plan.payloadHash,plannedPayloadHash:plan.previousPlanCase?.payloadHash,observedPayloadHash:plan.observedPayloadHash,at:new Date().toISOString()});
+    if(!recovered)return;previous=recovered;await writeJson(statePath(plan.item.id),previous);
+  }
+  if (previous?.phase==='delivered') return;
   const state = {...previous, caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, sourceTestSetId: plan.item.sourceTestSetId, sourceCaseId: plan.item.sourceCaseId, caseHash: plan.caseHash, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix};
   let admissionReserved = false;
   const save = async () => {
@@ -191,7 +198,9 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     const intent = await optionalJson(intentFile);
     if (mode === "resume" && !state.jobId && !intent) { state.phase = "not-started"; await save(); return; }
     if (!state.jobId && !intent && await optionalJson(haltPath)) throw new Error("CREATOR_CASE_ADMISSION_BUSY: this run was halted; existing requests may be reconciled but no new jobs are admitted");
+    if(!state.jobId&&!intent)state.phase='reserved';
     await reserveCase(plan, state); admissionReserved = true;
+    if(state.failure?.category==='admission'){delete state.failure;await save();}
     if (!state.jobId) {
       state.jobId = await resolveCreatorSubmission({existingJobId: state.jobId, hasDurableIntent: Boolean(intent), mode,
         findExisting: async () => submittedJobId(await findGenerationJobByRequestId(plan.requestId)),
@@ -327,10 +336,9 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
       }
       await save(); console.log(`THREE_EVAL_STOP ${plan.item.id} ${state.phase} ${reason}`); return;
     }
-    if (/^CREATOR_CASE_(?:ALREADY_ACTIVE|ADMISSION_BUSY)(?::|$)/.test(error.message)) {
-      // A competing coordinator/unknown request is still the admission owner.
-      // Persist only this run's recoverable state, never rewrite that owner.
-      admissionReserved = false;
+    if (isAdmissionBlockError(error,{hasJobId:Boolean(state.jobId),hasSubmissionIntent:Boolean(await optionalJson(path.join(plan.caseRoot,'submission-intent.json')))})) {
+      // Update only a reservation this invocation actually acquired. An owned
+      // reservation without a POST intent can release its logical capacity.
       state.phase = "admission-blocked";
       state.failure = {category: "admission", message: error.message};
       stopAdmission = true;

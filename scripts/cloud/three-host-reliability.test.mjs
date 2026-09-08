@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,creatorAccountRoot,validateCreatorAccountPolicy} from './three-account-routing.mjs';
-import {admissionIsClosed} from './three-eval-admission.mjs';
+import {admissionIsClosed,isAdmissionBlockError,recoverBeforePostAdmissionFailure} from './three-eval-admission.mjs';
 import {selectThreeLiveHead,threeLiveReaderPython} from './three-eval-live.mjs';
 import {retrieveThreeDeliveryArtifacts,DELIVERY_READ_PYTHON} from './three-eval-delivery-recovery.mjs';
 import {resolveProviderWorkspace,validateProviderLauncher} from './three-eval-workspace.mjs';
@@ -75,6 +75,21 @@ test('terminal execution frees admission during downloads while unknown and unco
  assert.equal(admissionIsClosed({phase:'submission-unknown',hasSubmissionIntent:true}),false);
  assert.equal(admissionIsClosed({providerStatus:'cancelled',phase:'failed',rayCleanupConfirmed:false}),false);
  assert.equal(admissionIsClosed({providerStatus:'cancelled',rayCleanupConfirmed:true}),true);
+ assert.equal(admissionIsClosed({phase:'admission-blocked',hasSubmissionIntent:false}),true);
+ assert.equal(admissionIsClosed({phase:'admission-blocked',hasSubmissionIntent:true}),false);
+ assert.equal(admissionIsClosed({phase:'admission-blocked',jobId:'gen_1234',hasSubmissionIntent:false}),false);
+});
+test('before-POST Host failures recover only without any submission evidence and with exact frozen identity',()=>{
+ const expectedIdentity={caseId:'example',taskId:'example--three-sdk',profile:'three-sdk',caseHash:hash('case'),runtimeHash:hash('runtime'),requestId:'request-example',outputS3Prefix:'s3://owned/example'};
+ const state={...expectedIdentity,phase:'failed',failure:{category:'unknown',message:'CREATOR_RUN_HALTED_BEFORE_POST'}};
+ const args={state,hasSubmissionIntent:false,expectedIdentity,payloadHash:hash('payload'),plannedPayloadHash:hash('payload'),observedPayloadHash:hash('payload'),at:'2026-09-08T06:00:00Z'};
+ const next=recoverBeforePostAdmissionFailure(args);assert.equal(next.phase,'admission-blocked');assert.equal(next.failure.category,'admission');assert.equal(next.hostAdmissionRecoveries.length,1);assert.deepEqual(next.hostAdmissionRecoveries[0].previousFailure,state.failure);assert.equal(state.phase,'failed');
+ for(const change of [{jobId:'gen_12345678'},{submittedAt:'2026-09-08T05:59:00Z'},{providerStatus:'failed'},{submissionRejected:true},{cliActivityEvidence:{}},{artifacts:{'creator-events.jsonl':{}}},{failure:{message:'MODEL_CAPACITY'}},{phase:'cancelled'}])assert.equal(recoverBeforePostAdmissionFailure({...args,state:{...state,...change}}),null);
+ assert.equal(recoverBeforePostAdmissionFailure({...args,hasSubmissionIntent:true}),null);
+ for(const change of [{requestId:'another-request'},{caseHash:hash('different')},{runtimeHash:hash('different')}])assert.throws(()=>recoverBeforePostAdmissionFailure({...args,state:{...state,...change}}),/IDENTITY_MISMATCH/);
+ for(const key of ['plannedPayloadHash','observedPayloadHash'])assert.throws(()=>recoverBeforePostAdmissionFailure({...args,[key]:hash('changed')}),/IDENTITY_MISMATCH/);
+ assert.equal(isAdmissionBlockError('CREATOR_RUN_HALTED_BEFORE_POST'),true);assert.equal(isAdmissionBlockError('CREATOR_CASE_ADMISSION_BUSY: full'),true);
+ assert.equal(isAdmissionBlockError('CREATOR_RUN_HALTED_BEFORE_POST',{hasSubmissionIntent:true}),false);assert.equal(isAdmissionBlockError('CREATOR_RUN_HALTED_BEFORE_POST',{hasJobId:true}),false);
 });
 test('replacement head selection ignores terminating nodes and refuses ambiguous/unready infrastructure',()=>{
  const ready=name=>({metadata:{name},spec:{containers:[{name:'ray-head'}]},status:{phase:'Running',conditions:[{type:'Ready',status:'True'}]}});
