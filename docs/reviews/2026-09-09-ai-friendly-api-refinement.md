@@ -44,3 +44,23 @@ operation 状态分别保留。队列或长动作仍可能需要额外 Host 查�
 
 使用说明见 [Creator](../../scripts/three-creator/README.md#inspect-and-execute) 与
 [SDK](../../packages/three-world/README.md)。
+
+
+## 合入前本地 case
+
+在 `33b21f60` 上使用仓库 `custom-vehicle` 示例，复用预设人物与自绘摩托，无云端
+模型调用。先确认 description 的文本/实体筛选与空集合语义、按需 snapshot、第一/
+第三人称命令反馈，再执行示例的 12 步真实输入计划，覆盖步行、上车、驾驶、刹车、
+下车与重置。
+
+- Creator 输入实际持续 9.05 秒，观察到 47 个骑乘采样，浏览器与运行时无错误，
+  完整自检、三视图与提交均通过。已检查真实录像中的骑乘画面。
+- Episode 从交付归档准备独立副本，执行 180 个固定步进；重复 PNG 相同，重新
+  准备同一起点后首帧相同，无运行错误。
+- worldBuildHash：`e72cf6a1499b4137a1bc5d845f9a7bb06c14cdbc4e452b67976a817726b67a1f`。
+  runtimeHash 与上节一致。
+
+验证脚本的临时目录先经 realpath 规范化，满足 Episode 的规范文件路径要求；
+没有为通过 case 修改 SDK 或 Host 校验。按用户要求，检查后清理本地场景、截图、
+录像和临时脚本；这里记录结果，不保留媒体归档。本次是简单本地链路验证，不是
+新一轮图片模型生成或正式六段视频生产。
