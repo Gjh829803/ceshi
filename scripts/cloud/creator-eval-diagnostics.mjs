@@ -1,15 +1,17 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createWriteStream } from "node:fs";
-import { lstat, rename, unlink } from "node:fs/promises";
+import { lstat, rename, unlink, readFile } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import path from "node:path";
 import { fileSha256, writeJson } from "./three-eval-runtime.mjs";
 import { uploadS3File } from "../lib/lwdp-generation-client.mjs";
+import {resolveProviderWorkspace,validateProviderWorkspace,validateProviderLauncher} from './three-eval-workspace.mjs';
+import {readThreeLiveStatus} from './three-eval-live.mjs';
 
 const exec = promisify(execFile);
-const files = ["creator-events.jsonl", "creator-launcher-report.json", "creator-stderr.log", "creator-mcp-stderr.log"];
+const files = ["creator-launcher-report.json", "creator-events.jsonl", "creator-stderr.log", "creator-mcp-stderr.log"];
 const maximumDiagnosticBytes = 512 * 1024 * 1024;
 
 // Open every directory and the final file without following symlinks. Holding
@@ -75,14 +77,19 @@ async function copyClosedDiagnostic({pod, sourceRoot, name, temporary}) {
 // Trusted Host recovery only. LWDP returns before declared-output upload when
 // Codex exits nonzero. Never traverse task scratch/account homes or synthesize
 // creator-result.json / creator-delivery.tar.gz to obtain provider success.
-export async function recoverFailedCreatorDiagnostics({jobId, caseId, workDirectory, localCaseRoot, outputS3Prefix}) {
+export async function recoverFailedCreatorDiagnostics({jobId, caseId, workDirectory, localCaseRoot, outputS3Prefix,workspaceBinding,runtimeHash}) {
   if (!/^gen_[a-f0-9]+$/.test(jobId) || !/^[a-z0-9][a-z0-9-]{2,79}$/.test(caseId) || workDirectory !== `/fsx/pipeline/lwdp_generation/${jobId}`) throw new Error("CREATOR_DIAGNOSTIC_SCOPE_INVALID");
   if (!outputS3Prefix.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/")) throw new Error("CREATOR_DIAGNOSTIC_S3_SCOPE_INVALID");
-  const sourceRoot = `${workDirectory}/tasks/${caseId}/outputs`;
+  if(!workspaceBinding){
+    const live=await readThreeLiveStatus([{jobId,taskId:caseId,workDir:workDirectory,runtimeHash}],{cacheMilliseconds:0});
+    workspaceBinding=resolveProviderWorkspace({jobId,taskId:caseId,workDirectory,runtimeHash,live:live.jobs[0]});
+  }
+  if(workspaceBinding.jobId!==jobId||workspaceBinding.taskId!==caseId||workspaceBinding.runtimeHash!==runtimeHash)throw Error('CREATOR_DIAGNOSTIC_WORKSPACE_IDENTITY_INVALID');
+  const sourceRoot = `${validateProviderWorkspace(workspaceBinding)}/outputs`;
   const inventory = await exec("kubectl", ["-n", "ray", "get", "pods", "-l", "ray.io/cluster=ray-cluster,ray.io/node-type=head", "-o", "json"], {timeout: 30_000, maxBuffer: 2 * 1024 * 1024});
   const pod = JSON.parse(inventory.stdout).items.find(item => item.status?.phase === "Running" && item.spec?.containers?.some(container => container.name === "ray-head"))?.metadata?.name;
   if (!pod || !/^[a-z0-9-]+$/.test(pod)) throw new Error("CREATOR_DIAGNOSTIC_SHARED_FSX_READER_UNAVAILABLE");
-  const report = {schemaVersion: 1, kind: "trusted-host-failed-creator-diagnostic-recovery", jobId, caseId, sourceRoot, readerPod: pod, recoveredAt: new Date().toISOString(), qualification: "Failure diagnostics only; no successful creator artifacts are synthesized.", files: {}, errors: []};
+  const report = {schemaVersion: 1, kind: "trusted-host-failed-creator-diagnostic-recovery", jobId, caseId, sourceRoot,workspaceBinding, readerPod: pod, recoveredAt: new Date().toISOString(), qualification: "Failure diagnostics only; no successful creator artifacts are synthesized.", files: {}, errors: []};
   for (const name of files) {
     const target = path.join(localCaseRoot, name);
     const temporary = `${target}.fsx-recovery-${process.pid}.part`;
@@ -90,12 +97,13 @@ export async function recoverFailedCreatorDiagnostics({jobId, caseId, workDirect
       const remote = await copyClosedDiagnostic({pod, sourceRoot, name, temporary});
       const metadata = await lstat(temporary);
       if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error("Recovered diagnostic is not a regular file");
+      if(name==='creator-launcher-report.json')validateProviderLauncher(workspaceBinding,JSON.parse(await readFile(temporary,'utf8')));
       await rename(temporary, target);
       const record = {bytes: metadata.size, sha256: await fileSha256(target), sourcePath: remote.sourcePath, pathResolution: remote.pathResolution, s3Uri: `${outputS3Prefix}/diagnostics/${name}`};
       report.files[name] = record;
       try { await uploadS3File(target, record.s3Uri); record.uploaded = true; }
       catch (error) { record.uploaded = false; report.errors.push({name, stage: "upload", message: error.message.slice(0, 2000)}); }
-    } catch (error) { report.errors.push({name, stage: "recovery", message: error.message.slice(0, 2000)}); }
+    } catch (error) { if(name==='creator-launcher-report.json')throw error;report.errors.push({name, stage: "recovery", message: error.message.slice(0, 2000)}); }
   }
   const reportPath = path.join(localCaseRoot, "diagnostic-recovery.json");
   await writeJson(reportPath, report);

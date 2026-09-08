@@ -8,7 +8,8 @@ import path from 'node:path';
 import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,creatorAccountRoot,validateCreatorAccountPolicy} from './three-account-routing.mjs';
 import {admissionIsClosed} from './three-eval-admission.mjs';
 import {selectThreeLiveHead,threeLiveReaderPython} from './three-eval-live.mjs';
-import {retrieveThreeDeliveryArtifacts} from './three-eval-delivery-recovery.mjs';
+import {retrieveThreeDeliveryArtifacts,DELIVERY_READ_PYTHON} from './three-eval-delivery-recovery.mjs';
+import {resolveProviderWorkspace,validateProviderLauncher} from './three-eval-workspace.mjs';
 import {resolveCreatorSubmission} from './three-eval-runtime.mjs';
 import {runWithExecutionSlots} from './three-execution-slots.mjs';
 
@@ -112,12 +113,45 @@ test('same-job artifact recovery survives a transport retry without model submis
   assert(args.includes('gen_12345678')===false); // job identity is passed in the closed JSON row
   const row=JSON.parse(args.at(-1));assert.equal(row.jobId,'gen_12345678');assert.equal(row.taskId,'case-example--three-sdk');
   if(++attempts===1)throw Error('head connection lost');
-  return {stdout:Buffer.concat([Buffer.from(JSON.stringify({name:row.name,sha256:hash(body),bytes:body.length})+'\n'),body])};
+  return {stdout:Buffer.concat([Buffer.from(JSON.stringify({name:row.name,sha256:hash(body),bytes:body.length,jobId:row.jobId,taskId:row.taskId,workspace:row.workspace,runtimeHash:row.runtimeHash,sourcePath:row.workspace+'/outputs/'+row.name,launcherSha256:hash('launcher'),pathResolution:'directory-fd-no-follow'})+'\n'),body])};
  };
  try {
-  const input={jobId:'gen_12345678',taskId:'case-example--three-sdk',caseRoot:root,names:['creator-result.json']};
+  const input={jobId:'gen_12345678',taskId:'case-example--three-sdk',caseRoot:root,names:['creator-result.json'],workspaceBinding:resolveProviderWorkspace({jobId:'gen_12345678',taskId:'case-example--three-sdk',runtimeHash:hash('runtime')})};
   await assert.rejects(retrieveThreeDeliveryArtifacts(input,{pod:'replacement',transport}));
   const result=await retrieveThreeDeliveryArtifacts(input,{pod:'replacement',transport});assert.equal(result['creator-result.json'].sha256,hash(body));assert.deepEqual(await readFile(path.join(root,'creator-result.json')),body);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test('provider workspace binding requires matching job, task, runtime and unambiguous provider evidence',()=>{
+ const jobId='gen_12345678',taskId='case-example--three-sdk',runtimeHash=hash('runtime'),workDirectory='/fsx/pipeline/lwdp_generation/'+jobId;
+ const workspace=workDirectory+'/tasks/account_attempts/'+taskId+'_abcdefgh/'+taskId;
+ const providerItem={item_id:taskId,metadata:{log_path:workspace+'/logs/codex_attempt.json'}},providerAttempt={item_id:taskId,workdir:workspace};
+ const input={jobId,taskId,runtimeHash,providerItem,providerAttempt},binding=resolveProviderWorkspace(input),launcher={kind:'three-creator-launcher-report',taskId,workspace,runtimeHash};
+ assert.equal(binding.workspace,workspace);assert.equal(validateProviderLauncher(binding,launcher),workspace);
+ for(const change of [{jobId:'gen_87654321'},{taskId:'different-task'},{workDirectory:workDirectory+'/..'},{providerAttempt:{...providerAttempt,workdir:workDirectory+'/tasks/'+taskId}},{providerAttempt:{...providerAttempt,item_id:'another-task'}}])assert.throws(()=>resolveProviderWorkspace({...input,...change}),/WORKSPACE|IDENTITY/);
+ for(const change of [{taskId:'other-task'},{runtimeHash:hash('foreign')},{workspace:workDirectory+'/tasks/'+taskId},{kind:'author-created-report'}])assert.throws(()=>validateProviderLauncher(binding,{...launcher,...change}),/IDENTITY/);
+ const live={jobId,taskId,workDir:workDirectory,resolvedWorkspace:workspace,launcher:{runtimeHash}};
+ assert.equal(resolveProviderWorkspace({jobId,taskId,runtimeHash,live}).workspace,workspace);
+ assert.throws(()=>resolveProviderWorkspace({jobId,taskId,runtimeHash,live:{...live,jobId:'gen_87654321'}}),/IDENTITY/);
+ assert.throws(()=>resolveProviderWorkspace({jobId,taskId,runtimeHash,live:{...live,launcher:{runtimeHash:hash('foreign')}}}),/IDENTITY/);
+});
+test('closed delivery reader transports six bound attempt files and rejects swapped archives, identities and links',async()=>{
+ const root=await realpath(await mkdtemp(path.join(tmpdir(),'three-provider-files-'))),jobId='gen_12345678',taskId='case-example--three-sdk',runtimeHash=hash('runtime');
+ const workspace=path.join(root,jobId,'tasks/account_attempts',taskId+'_abcdefgh',taskId),out=path.join(workspace,'outputs');
+ // A temporary fixture mount substitutes the fixed FSx prefix; the complete
+ // production reader still performs its directory-fd, identity and hash checks.
+ const reader=DELIVERY_READ_PYTHON.replace("'/fsx/pipeline/lwdp_generation/'",JSON.stringify(root+'/'));
+ const files={'creator-result.json':Buffer.from('{"actual":"receipt"}'),'creator-delivery.tar.gz':Buffer.from('archive bytes'),'creator-events.jsonl':Buffer.from('{"type":"turn.started"}\n'),'creator-stderr.log':Buffer.from(''),'creator-mcp-stderr.log':Buffer.from('')};
+ let launcher={kind:'three-creator-launcher-report',status:'delivered',taskId,workspace,runtimeHash,eventsSha256:hash(files['creator-events.jsonl']),stderrSha256:hash(''),artifacts:Object.fromEntries(['creator-result.json','creator-delivery.tar.gz'].map(name=>[name,{sha256:hash(files[name]),bytes:files[name].length}]))};
+ const writeLauncher=()=>writeFile(path.join(out,'creator-launcher-report.json'),JSON.stringify(launcher));
+ const read=(name,extra={})=>{const bytes=execFileSync('python3',['-c',reader,JSON.stringify({jobId,taskId,workspace,runtimeHash,name,...extra})],{stdio:'pipe'});const at=bytes.indexOf(10);return {header:JSON.parse(bytes.subarray(0,at)),body:bytes.subarray(at+1)};};
+ try{
+  await mkdir(out,{recursive:true});for(const [name,bytes] of Object.entries(files))await writeFile(path.join(out,name),bytes);await writeLauncher();
+  for(const name of [...Object.keys(files),'creator-launcher-report.json']){const result=read(name);assert.equal(result.header.workspace,workspace);assert.equal(result.header.runtimeHash,runtimeHash);assert.equal(result.header.sha256,hash(result.body));assert.equal(result.header.pathResolution,'directory-fd-no-follow');assert.deepEqual(result.body,await readFile(path.join(out,name)));}
+  await writeFile(path.join(out,'creator-delivery.tar.gz'),'different archive');assert.equal(read('creator-delivery.tar.gz').header.unavailable,true);
+  launcher={...launcher,runtimeHash:hash('foreign')};await writeLauncher();assert.equal(read('creator-events.jsonl').header.unavailable,true);
+  launcher={...launcher,runtimeHash,taskId:'foreign-task'};await writeLauncher();assert.equal(read('creator-launcher-report.json').header.unavailable,true);
+  assert.throws(()=>read('creator-events.jsonl',{jobId:'gen_87654321'}));
+  await rm(out,{recursive:true});await mkdir(path.join(root,'other'));await symlink(path.join(root,'other'),out);assert.equal(read('creator-events.jsonl').header.unavailable,true);
  }finally{await rm(root,{recursive:true,force:true});}
 });
 test('slow downloads do not hold model slots, but completion still waits for their artifacts',async()=>{

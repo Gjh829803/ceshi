@@ -14,6 +14,7 @@ import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs
 import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,creatorAccountRoot} from "./three-account-routing.mjs";
 import {freezeRunAssetPolicy} from "./three-eval-mcp-bridge.mjs";
 import {runWithExecutionSlots} from "./three-execution-slots.mjs";
+import {resolveProviderWorkspace,validateProviderLauncher} from './three-eval-workspace.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -259,17 +260,22 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
       try { const target = path.join(plan.caseRoot, output.name); await downloadS3FileAtomic(`${plan.outputS3Prefix}/${output.remote}`, target); state.artifacts[output.name] = {bytes: (await stat(target)).size, sha256: await fileSha256(target)}; }
       catch (error) { downloadFailures.push({name: output.name, required: output.required, error: error.message}); }
     }
-    const missingFormal=downloadFailures.filter(output=>output.required).map(output=>output.name);
+    const providerAttempt=await optionalJson(path.join(plan.caseRoot,'codex-attempt.json'));
+    let workspaceLive;
+    if(!providerAttempt&&!item?.metadata?.log_path){try{workspaceLive=(await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,runtimeHash:lock.runtimeHash,workDir:echo.config.options.work_dir}],{cacheMilliseconds:0})).jobs[0];}catch{}}
+    const workspaceBinding=resolveProviderWorkspace({jobId:state.jobId,taskId:plan.item.id,workDirectory:echo.config.options.work_dir,runtimeHash:lock.runtimeHash,providerItem:item,providerAttempt,live:workspaceLive});
+    state.workspaceBinding=workspaceBinding;await writeJson(path.join(plan.caseRoot,'provider-workspace.json'),workspaceBinding);
+    const missingFormal=downloadFailures.filter(output=>outputs.some(declared=>declared.path===output.name)).map(output=>output.name);
     if(missingFormal.length){
-      try{const recovered=await retrieveThreeDeliveryArtifacts({jobId:state.jobId,taskId:plan.item.id,caseRoot:plan.caseRoot,names:missingFormal});Object.assign(state.artifacts,recovered);
+      try{const recovered=await retrieveThreeDeliveryArtifacts({jobId:state.jobId,taskId:plan.item.id,caseRoot:plan.caseRoot,workspaceBinding,names:missingFormal});Object.assign(state.artifacts,recovered);
         for(let index=downloadFailures.length-1;index>=0;index--)if(recovered[downloadFailures[index].name])downloadFailures.splice(index,1);
       }catch(error){state.deliveryRecoveryWarning=error.message;}
     }
     state.deliverySeconds = (Date.now() - downloadStarted) / 1000;
     state.downloadFailures = downloadFailures;
-    if (job.status !== "succeeded" || item?.status !== "succeeded") {
+    if (!providerItemSucceeded(job,item)) {
       try {
-        state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: echo.config.options.work_dir, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix});
+        state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: echo.config.options.work_dir, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix,workspaceBinding,runtimeHash:lock.runtimeHash});
         for (const [name, recovered] of Object.entries(state.diagnosticsRecovery.files)) state.artifacts[name] = {bytes: recovered.bytes, sha256: recovered.sha256, source: "trusted-host-fsx-recovery"};
       } catch (error) { state.diagnosticsRecoveryError = error.message; }
     }
@@ -293,9 +299,10 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     if (!providerItemSucceeded(job,item)) throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
+    const actualWorkspace=validateProviderLauncher(workspaceBinding,launcher);
     if(state.accountRouting.identitySha256&&!state.accountRouting.verified)throw Error("CREATOR_ACCOUNT_ROUTING_MISMATCH");
     if (frozenAssetPolicy.assetPolicySha256 && (result.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256 || launcher.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256)) throw new Error("THREE_ASSET_POLICY_DELIVERY_MISMATCH");
-    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id), expectedReasoningEffort: reasoningEffort});
+    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace:actualWorkspace, expectedReasoningEffort: reasoningEffort});
     state.phase = "delivered"; delete state.failure; await save();
   } catch (error) {
     const hardDeadline = error.code === "LWDP_JOB_PENDING" && error.reason === "timeout";
@@ -312,7 +319,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
       state.phase = state.rayCleanupConfirmed ? (["succeeded", "completed"].includes(state.providerStatus) ? "delivery-pending" : "failed") : "stop-pending";
       state.failure = {category: "execution-guard", message: error.message};
       if (state.rayCleanupConfirmed) {
-        try { state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: `/fsx/pipeline/lwdp_generation/${state.jobId}`, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix}); }
+        try { state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: `/fsx/pipeline/lwdp_generation/${state.jobId}`, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix,workspaceBinding:state.workspaceBinding,runtimeHash:lock.runtimeHash}); }
         catch (recoveryError) { state.diagnosticsRecoveryError = recoveryError.message; }
       }
       await save(); console.log(`THREE_EVAL_STOP ${plan.item.id} ${state.phase} ${reason}`); return;

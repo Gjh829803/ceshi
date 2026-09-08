@@ -134,6 +134,11 @@ S3 prefix `.../agent-whitebox-world-sdk/three-creator/sdk-eval` (`paired-eval` f
 the explicit paired suite). Changing a
 durable payload is rejected. Failure diagnostics use the existing trusted Host
 reader of four exact files, with directory-FD/no-follow and size/hash checks.
+Provider attempt workspaces are selected from the exact task's provider metadata
+or verified live launcher. Their job, task, workspace and runtime must agree.
+Fixed-output recovery can retrieve the four formal files and two stderr logs;
+result/archive bytes must match the delivered launcher's hashes. Recovery and
+independent verification use this same workspace identity.
 
 A new run requires an explicit selection manifest. Resume uses the saved manifest
 path and verifies its unchanged bytes. Model input contains the original reference,
