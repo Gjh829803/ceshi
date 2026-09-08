@@ -12,6 +12,56 @@ function fixture(){
  return {world,snapshot,root,mesh,bone,monitor:new CharacterContinuityMonitor()};
 }
 
+function firstPerson(snapshot:WorldSnapshot):WorldSnapshot{
+ return {...snapshot,camera:{...snapshot.camera,mode:'follow'},training:{...snapshot.training!,cameraMode:1}};
+}
+
+it('defers temporary first-person geometry and verifies the original geometry on return',()=>{
+ const f=fixture(),original=f.mesh.geometry,fp=firstPerson(f.snapshot);
+ f.monitor.read(f.world,f.snapshot);f.mesh.geometry=original.clone();
+ expect(f.monitor.read(f.world,fp)).toMatchObject({status:'partial',issues:[],evidence:{geometryIdentity:'deferred-first-person'}});
+ f.mesh.geometry=original;
+ expect(f.monitor.read(f.world,f.snapshot)).toMatchObject({status:'observed',evidence:{geometryIdentity:'checked'}});
+ f.mesh.geometry=original.clone();f.monitor.read(f.world,fp);
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
+});
+
+it('establishes geometry only after leaving an initially first-person view',()=>{
+ const f=fixture(),original=f.mesh.geometry;f.mesh.geometry=original.clone();
+ expect(f.monitor.read(f.world,firstPerson(f.snapshot)).status).toBe('partial');
+ f.mesh.geometry=original;
+ expect(f.monitor.read(f.world,f.snapshot).status).toBe('observed');
+ f.mesh.geometry=original.clone();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
+});
+
+it.each(['mesh','skeleton','bones'] as const)('retains %s identity when first observed in first person',kind=>{
+ const f=fixture(),fp=firstPerson(f.snapshot);f.monitor.read(f.world,fp);
+ if(kind==='mesh'){f.root.remove(f.mesh);f.root.add(f.mesh.clone());}
+ if(kind==='skeleton')f.mesh.bind(new THREE.Skeleton([f.bone]));
+ if(kind==='bones')f.mesh.skeleton.bones[0]=new THREE.Bone();
+ expect(f.monitor.read(f.world,fp).issues).toContain('CHARACTER_VISUAL_REPLACED');
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
+});
+
+it('permits empty head geometry in first person but detects hidden remaining body meshes',()=>{
+ const f=fixture(),head=f.mesh.clone();f.root.add(head);f.monitor.read(f.world,f.snapshot);
+ head.geometry=head.geometry.clone();head.geometry.setIndex([]);
+ const fp=firstPerson(f.snapshot);
+ expect(f.monitor.read(f.world,fp)).toMatchObject({status:'partial',issues:[]});
+ f.mesh.visible=false;
+ expect(f.monitor.read(f.world,fp).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+ f.mesh.visible=true;const body=f.mesh.clone();f.root.add(body);
+ const monitor=new CharacterContinuityMonitor();monitor.read(f.world,fp);body.visible=false;
+ expect(monitor.read(f.world,fp).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
+
+it('fully checks authored cameras even when the saved Training perspective is first person',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);f.mesh.geometry=f.mesh.geometry.clone();
+ const fp=firstPerson(f.snapshot),snapshot={...fp,camera:{...fp.camera,mode:'authored' as const}};
+ expect(f.monitor.read(f.world,snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
+});
+
 it('keeps the same visual through seated bone motion, vehicle grouping and reset',()=>{
  const f=fixture(),initial=f.monitor.read(f.world,f.snapshot);
  const assembly=new THREE.Group();f.world.scene.add(assembly);assembly.add(f.root);

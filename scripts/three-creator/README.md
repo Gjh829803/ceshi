@@ -50,6 +50,12 @@ asset contracts for other forms and abilities. The same actor must remain the
 controlled/captured subject; do not create a rider for an animal protagonist.
 In an ordinary SDK world without Training, character continuity is
 `not-applicable`; loss of telemetry after a Training baseline remains `unavailable`.
+Training first-person view temporarily clips head geometry. Continuity reports
+`partial` with `geometryIdentity: deferred-first-person` while still checking the
+same root, skinned meshes, skeleton and bones. Empty indexed meshes are excluded
+from visibility checks in that view; remaining body meshes must be renderable.
+Returning to a normal view restores geometry identity checks. This is advisory
+coverage information, not an additional delivery gate.
 
 | Level | Tools / source | Use |
 | --- | --- | --- |

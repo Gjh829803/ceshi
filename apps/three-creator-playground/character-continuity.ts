@@ -7,18 +7,19 @@ interface VisualBinding {
  skeleton:Skeleton|undefined;
  bones:readonly Bone[];
 }
-interface Baseline {root:Object3D;instanceId:string;visuals:readonly VisualBinding[]}
+interface Baseline {root:Object3D;instanceId:string;visuals:readonly VisualBinding[];geometryInitialized:boolean}
 export interface CharacterContinuity {
  readonly advisory:true;
- readonly status:'observed'|'issues'|'unavailable'|'not-applicable';
+ readonly status:'observed'|'partial'|'issues'|'unavailable'|'not-applicable';
  readonly issues:readonly string[];
  readonly evidence:{
   readonly instanceId:string;readonly rootUuid:string;readonly baselineRootUuid:string;
   readonly mountedInstanceId:string|null;readonly meshCount:number;readonly renderableMeshCount:number;
+  readonly geometryIdentity:'checked'|'deferred-first-person'|'unobserved';
  }|null;
  readonly scope:string;
 }
-const scope='Training skinned character continuity from the first ready observation. Rigid equipment is outside the identity comparison. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
+const scope='Training skinned character continuity from the first ready observation. First-person geometry identity is deferred because the SDK temporarily clips head geometry; empty indexed meshes are excluded from visibility checks in that view. Rigid equipment is outside the identity comparison. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
 function visuals(root:Object3D):VisualBinding[]{
  const result:VisualBinding[]=[];
  root.traverse(object=>{
@@ -61,10 +62,10 @@ function renderable(mesh:Mesh,world:WorldObservation,matrices:Map<Object3D,Matri
  }
  return attached&&mesh.layers.test(world.camera.layers)&&hasSurfaceTransform(effectiveWorldMatrix(mesh,matrices))&&hasVisibleDraw(mesh);
 }
-function sameVisuals(before:readonly VisualBinding[],after:readonly VisualBinding[]):boolean{
+function sameVisuals(before:readonly VisualBinding[],after:readonly VisualBinding[],checkGeometry:boolean):boolean{
  return before.length===after.length&&before.every(binding=>{
   const current=after.find(value=>value.mesh===binding.mesh);
-  return current?.geometry===binding.geometry&&current.skeleton===binding.skeleton
+  return !!current&&(!checkGeometry||current.geometry===binding.geometry)&&current.skeleton===binding.skeleton
    &&current.bones.length===binding.bones.length&&current.bones.every((bone,index)=>bone===binding.bones[index]);
  });
 }
@@ -89,21 +90,27 @@ export class CharacterContinuityMonitor {
    snapshot.controlledEntityId===character.instanceId?world.player:undefined;
   if(!root)return unavailable('CHARACTER_ROOT_UNOBSERVED');
   const current=visuals(root);
+  const firstPerson=snapshot.training!.cameraMode===1&&snapshot.camera?.mode==='follow';
   let baseline=this.baselines.get(world.scene);
   if(!baseline){
    if(!current.some(value=>value.bones.length>0))return unavailable('CHARACTER_RIG_UNOBSERVED');
-   baseline={root,instanceId:character.instanceId,visuals:current};
+   baseline={root,instanceId:character.instanceId,visuals:current,geometryInitialized:!firstPerson};
   }
   const issues:string[]=[];
   if(root!==baseline.root||character.instanceId!==baseline.instanceId)issues.push('CHARACTER_ROOT_REPLACED');
-  if(!sameVisuals(baseline.visuals,current))issues.push('CHARACTER_VISUAL_REPLACED');
+  if(!sameVisuals(baseline.visuals,current,!firstPerson&&baseline.geometryInitialized))issues.push('CHARACTER_VISUAL_REPLACED');
   const matrices=new Map<Object3D,Matrix4>();
   const renderableMeshCount=current.filter(value=>renderable(value.mesh,world,matrices)).length;
-  if(!current.length||renderableMeshCount<current.length)issues.push('CHARACTER_VISUAL_HIDDEN');
+  const expectedVisible=firstPerson?current.filter(value=>value.geometry.index?.count!==0):current;
+  if(!renderableMeshCount||renderableMeshCount<expectedVisible.length)issues.push('CHARACTER_VISUAL_HIDDEN');
+  // Initial first-person geometry is temporary. Capture canonical geometry only
+  // in a normal view with the original root, meshes and rig still present.
+  if(!firstPerson&&!baseline.geometryInitialized&&!issues.length)baseline={...baseline,visuals:current,geometryInitialized:true};
   this.baselines.set(world.scene,baseline);
-  return {advisory:true,status:issues.length?'issues':'observed',issues,scope,evidence:{
+  return {advisory:true,status:issues.length?'issues':firstPerson?'partial':'observed',issues,scope,evidence:{
    instanceId:character.instanceId,rootUuid:root.uuid,baselineRootUuid:baseline.root.uuid,
    mountedInstanceId:snapshot.training!.mountedInstanceId,meshCount:current.length,renderableMeshCount,
+   geometryIdentity:firstPerson?'deferred-first-person':baseline.geometryInitialized?'checked':'unobserved',
   }};
  }
 }

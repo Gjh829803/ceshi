@@ -20,12 +20,12 @@ export function deterministicCaptureBrowserLaunchOptions(
 }
 
 export async function launchChromiumWithSystemFallback(
-  options: { headless?: boolean; args?: readonly string[] } = {},
+  options: { headless?: boolean; args?: readonly string[]; channel?: 'chromium' } = {},
 ): Promise<Browser> {
   const headless = options.headless ?? true;
   const args = [...(options.args ?? [])];
   try {
-    return await chromium.launch({ headless, args });
+    return await chromium.launch({ headless, args, ...(options.channel ? { channel: options.channel } : {}) });
   } catch (bundledError) {
     try {
       return await chromium.launch({ headless, channel: "chrome", args });

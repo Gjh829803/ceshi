@@ -8,6 +8,35 @@ import {executeThreeCreatorTool} from './mcp';
 import {createAssetPolicySnapshot,assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
 
+it('observes SDK first-person clipping as partial and restores full rider checks on return',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'rider-perspectives-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-vehicle');
+  for(const [name,content]of Object.entries(example.files))await writeFile(path.join(root,name),content);
+  await service.inspect();const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(async()=>{
+   const host=window.__THREE_CREATOR_HOST__!,world=window.__WORLDKIT_EVAL__!;
+   await host.stop();const initial=host.read().characterContinuity;
+   const meshes:import('three').SkinnedMesh[]=[];
+   world.player.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
+   const geometries=meshes.map(mesh=>mesh.geometry);
+   const enter=await world.execute!({type:'training.camera',mode:1});
+   const firstPerson=host.read().characterContinuity,clipped=meshes.some((mesh,i)=>mesh.geometry!==geometries[i]);
+   const firstImage=host.capture('opening',[],null).image;
+   const repeatedImage=host.capture('opening',[],null).image;
+   world.player.visible=false;const hidden=host.read().characterContinuity;world.player.visible=true;
+   const exit=await world.execute!({type:'training.camera',mode:0});
+   const restored=host.read().characterContinuity,originalGeometry=meshes.every((mesh,i)=>mesh.geometry===geometries[i]);
+   return {initial,enter,firstPerson,clipped,repeatedCaptureIdentical:firstImage===repeatedImage,hidden,exit,restored,originalGeometry};
+  });
+  expect(result.enter.status).toBe('applied');expect(result.exit.status).toBe('applied');
+  expect(result.clipped).toBe(true);expect(result.originalGeometry).toBe(true);expect(result.repeatedCaptureIdentical).toBe(true);
+  expect(result.firstPerson).toMatchObject({status:'partial',issues:[],evidence:{geometryIdentity:'deferred-first-person',rootUuid:result.initial.evidence!.rootUuid}});
+  expect(result.hidden.issues).toContain('CHARACTER_VISUAL_HIDDEN');
+  expect(result.restored).toMatchObject({status:'observed',issues:[],evidence:{geometryIdentity:'checked'}});
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);
+
 it('runs a custom vehicle with only the preset human asset and exposes hidden-rider evidence',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'custom-vehicle-'));
  const service=new ThreeCreatorTools(root,'three-sdk');

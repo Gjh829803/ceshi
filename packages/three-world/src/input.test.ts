@@ -52,18 +52,22 @@ describe('world input follows the presented surface and UI focus', () => {
       ` }, bundle: true, write: false, format: 'iife', platform: 'browser', logLevel: 'silent',
     });
     script = result.outputFiles[0]!.text;
-    browser = await launchChromiumWithSystemFallback();
+    // Exercise native pointer lock in the full browser, not macOS headless shell.
+    browser = await launchChromiumWithSystemFallback({channel:'chromium'});
   });
   beforeEach(async () => {
     page = await browser.newPage({ viewport: { width: 1000, height: 600 } });
-    await page.setContent(`<style>
+    const html=`<style>
       .world { width: 240px; height: 180px; position: absolute; top: 20px; background: #789; }
       #world0 { left:20px; } #world1 { left:300px; }
       .ui { position:absolute; top:0; left:0; } #temporary { position:absolute; top:240px; width:240px; height:160px; }
     </style>
     <div id="world0" class="world"><div id="ui0" class="ui"><button id="button">Menu</button><input id="prompt"><div id="shadow"></div></div></div>
     <div id="world1" class="world"><div id="ui1" class="ui"><button>Other menu</button></div></div>
-    <div id="temporary" tabindex="3" style="touch-action:pan-y"></div><div id="next"></div>`);
+    <div id="temporary" tabindex="3" style="touch-action:pan-y"></div><div id="next"></div>`;
+    // Pointer lock requires a valid document URL; about:blank is rejected by Chromium on macOS.
+    await page.route('http://worldkit-input.test/',route=>route.fulfill({contentType:'text/html',body:html}));
+    await page.goto('http://worldkit-input.test/');
     await page.addScriptTag({ content: script });
   });
   afterEach(async () => { await page.close(); });
