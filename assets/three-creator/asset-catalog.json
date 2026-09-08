@@ -2846,13 +2846,6 @@
           "sourcePath": "assets/three-creator/training/creatures/horse.glb"
         },
         {
-          "path": "creatures/dragon.glb",
-          "uri": "./assets/resources/347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1.glb",
-          "sha256": "347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1",
-          "byteLength": 555856,
-          "sourcePath": "assets/three-creator/training/creatures/dragon.glb"
-        },
-        {
           "path": "creatures/manifest.json",
           "uri": "./assets/resources/7bccbd5906a1d1993ab730b07510c6e4bd828baaa19556d4a6aabac2abecd535.json",
           "sha256": "7bccbd5906a1d1993ab730b07510c6e4bd828baaa19556d4a6aabac2abecd535",
@@ -2981,13 +2974,6 @@
       },
       "resources": [
         {
-          "path": "creatures/horse.glb",
-          "uri": "./assets/resources/6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae.glb",
-          "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
-          "byteLength": 2215736,
-          "sourcePath": "assets/three-creator/training/creatures/horse.glb"
-        },
-        {
           "path": "creatures/dragon.glb",
           "uri": "./assets/resources/347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1.glb",
           "sha256": "347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1",
@@ -3063,17 +3049,7 @@
           }
         }
       },
-      "sockets": [
-        {
-          "id": "driver",
-          "node": "seat.driver",
-          "positionMetersXYZ": [
-            0,
-            2.1,
-            0.4
-          ]
-        }
-      ],
+      "sockets": [],
       "collision": {
         "kind": "box",
         "halfExtents": [

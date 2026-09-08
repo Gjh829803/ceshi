@@ -42,10 +42,16 @@ describe('Agent presentation contract',()=>{
   expect(members).not.toContain('registerMovement');
  });
 
- it('typechecks the runnable default UI example against only the default public topic',()=>{
+ it('typechecks the default humanoid example against the actual SDK entry point',()=>{
   const filename=fileURLToPath(new URL('./.authoring-example-typecheck.ts',import.meta.url));
-  const publicTypes=publicContractTopic(contracts,'getting-started').replace("import type * as THREE from 'three';",'');
-  const source=publicTypes+'\n'+SDK_EXAMPLE.replace("import {createWorld} from '@worldkit/three';",'');
+  const source=SDK_EXAMPLE+`
+// @ts-expect-error The actual humanoid factory requires a collision map.
+createHumanoidWorld({scene,camera,canvas});
+// @ts-expect-error The actual map uses numeric XYZ spawn coordinates.
+const invalidSpawn:TrainingMap['playerSpawn']=['x',0,0];
+// @ts-expect-error The returned world accepts entity IDs as capture targets.
+world.setCaptureTargets([1]);
+`;
   const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,
    moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
   const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
@@ -53,10 +59,15 @@ describe('Agent presentation contract',()=>{
    ? ts.createSourceFile(fileName,source,languageVersion,true)
    : readSource(fileName,languageVersion,onError,shouldCreateNewSourceFile);
   const program=ts.createProgram([filename],options,host);
-  const diagnostics=ts.getPreEmitDiagnostics(program).map(diagnostic=>
+  const example=program.getSourceFile(filename);
+  if(!example) throw new Error('Default example source is missing from the TypeScript program');
+  // Resolve real SDK types, but check this consumer rather than every runtime
+  // implementation body. The workspace typecheck owns those implementation checks.
+  const diagnostics=ts.getPreEmitDiagnostics(program,example).map(diagnostic=>
    ts.flattenDiagnosticMessageText(diagnostic.messageText,'\n'));
   expect(diagnostics).toEqual([]);
- });
+ // Allow cold TypeScript initialization on CI without changing other test budgets.
+ },20_000);
 
  it('gives the presentation topic its usage boundary without unrelated movement recipes',()=>{
   const selected=guideTopic(guide,'presentation');

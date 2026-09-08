@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { catalogResources, publicCatalogValue, readCatalogResource } from './asset-resources.js';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, realpath, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import catalog from '../../assets/three-creator/asset-catalog.json';
 
 describe('catalog dependency closure', () => {
   const sha256 = 'a'.repeat(64);
@@ -27,5 +28,29 @@ describe('catalog dependency closure', () => {
       await expect(readCatalogResource(root, { ...entry, byteLength: 3 })).rejects.toThrow('THREE_ASSET_HASH_MISMATCH');
       await expect(readCatalogResource(root, { ...entry, sourcePath: '../clip.json' })).rejects.toThrow('THREE_ASSET_SOURCE_ESCAPE');
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+});
+
+describe('committed training resource declarations', () => {
+  it.each([
+    ['training.horse', ['creatures/horse.glb']],
+    ['training.carriage', ['creatures/horse.glb']],
+    ['training.dragon', ['creatures/dragon.glb']],
+  ] as const)('%s ships only the creature models its loader uses', (id, expected) => {
+    const asset = catalog.assets.find(asset => asset.id === id)!;
+    const models = asset.resources?.filter(resource => resource.path.endsWith('.glb')).map(resource => resource.path);
+    expect(models).toEqual(expected);
+  });
+
+  it('every declared socket exists in the actual primary GLB', async () => {
+    const missing: string[] = [];
+    for (const asset of catalog.assets) {
+      if (!('sockets' in asset) || !asset.sockets?.length) continue;
+      const bytes = await readFile(new URL(`../../${asset.sourcePath}`, import.meta.url));
+      const document = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString('utf8')) as { nodes: { name?: string }[] };
+      const names = new Set(document.nodes.map(node => node.name));
+      for (const socket of asset.sockets) if (!names.has(socket.node)) missing.push(`${asset.id}:${socket.node}`);
+    }
+    expect(missing).toEqual([]);
   });
 });

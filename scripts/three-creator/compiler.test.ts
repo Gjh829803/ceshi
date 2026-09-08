@@ -37,6 +37,25 @@ async function platformScratch(root: string) {
 }
 afterEach(async () => { audit.forbiddenRoots.length = 0; audit.calls.length = 0; await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
+it.each([
+  ['training.carriage', ['creatures/horse.glb']],
+  ['training.dragon', ['creatures/dragon.glb']],
+] as const)('packages %s with only its required creature models', async (id, expected) => {
+  const root = await fixture();
+  await writeFile(path.join(root, 'project.json'), JSON.stringify({ schemaVersion: 1, assetIds: [id] }));
+  const candidate = await new ThreeCompiler(root, 'three-raw').prepare();
+  const definitions = JSON.parse(await readFile(path.join(candidate.playableRoot, 'asset-definitions.json'), 'utf8')) as {
+    assets: { id: string; resources: { path: string; uri: string; byteLength: number }[] }[];
+  };
+  expect(definitions.assets.map(asset => asset.id)).toEqual([id]);
+  const models = definitions.assets[0]!.resources.filter(resource => resource.path.endsWith('.glb'));
+  expect(models.map(resource => resource.path)).toEqual(expected);
+  for (const model of models) {
+    const bytes = await readFile(path.resolve(candidate.playableRoot, model.uri));
+    expect(bytes.length).toBe(model.byteLength);
+  }
+});
+
 describe('Host-owned task root boundary', () => {
   it('never stats, traverses, resolves or reads platform scratch before collecting normal author sources', async () => {
     const root = await fixture(); const scratch = await platformScratch(root);
