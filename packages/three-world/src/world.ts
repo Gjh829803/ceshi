@@ -193,6 +193,7 @@ export class ThreeWorld implements API.World {
  registerMovement<T extends API.JsonValue>(definition:API.MovementDefinition<T>):void;
  registerMovement<T extends API.JsonValue>(definition:API.MovementDefinition<T>):void{
   this.alive();requireId(definition.id);if(definition.id==='ground'||this.movements.has(definition.id)||!Number.isSafeInteger(definition.version)||definition.version<1||typeof definition.update!=='function')throw failure('MOVEMENT_DEFINITION_INVALID');
+  if(definition.episode&&(typeof definition.episode.input!=='function'||!['ground','free'].includes(definition.episode.startSupport??'ground')))throw failure('MOVEMENT_EPISODE_ADAPTER_INVALID');
   cloneJson(definition.initialState);this.movements.set(definition.id,definition as unknown as API.MovementDefinition<API.JsonValue>);this.touch();
  }
  private movementDrive(id:string,input:API.WorldInput,direction:API.Vec3,deltaSeconds:number){
@@ -592,7 +593,7 @@ export class ThreeWorld implements API.World {
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
-  return {...(this.training?{training:{inputGuide:this.training.inputGuide(),characterCapabilities:this.training.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description})=>({id,version,description}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
+  return {...(this.training?{training:{boarding:Object.fromEntries(selected.filter(entry=>entry.id!==this.training!.options.character.instanceId&&this.training!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.training!.inspectBoarding(entry.id)])),controlState:{...this.training.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.training.inputGuide(),characterCapabilities:this.training.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
    entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
     if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');
@@ -620,6 +621,8 @@ export class ThreeWorld implements API.World {
   const world=this;
   const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
   const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');if(start.cameraPerspective!==undefined&&!['first-person','third-person'].includes(start.cameraPerspective))throw failure('EPISODE_START_CAMERA_INVALID');};
+  const adapter=()=>world.movements.get(controlled().movementId)?.episode;
+  const probe=(start:EpisodeStart)=>world.training?world.training.probeEpisodeStart(start):world.engine.physics.probeCharacterStart(controlled().id,start.positionWorldMetersXYZ,adapter()?.startSupport??'ground');
   const requirePrepared=()=>{world.alive();if(world.engine.isRunning)throw failure('EPISODE_LIVE_CLOCK_ACTIVE');if(world.episodeLease?.state!=='prepared')throw failure('EPISODE_SEGMENT_NOT_PREPARED');};
   const release=()=>{const lease=world.episodeLease;if(!lease)return;
    const host=world.training?trainingHost(world.training):undefined;
@@ -635,9 +638,9 @@ export class ThreeWorld implements API.World {
     if(bounds.isEmpty())bounds.expandByPoint(worldPose(entry.object).position);
     if(world.training){bounds.min.set(...world.training.environment.map.bounds.min);bounds.max.set(...world.training.environment.map.bounds.max);}
     return {...(world.training?{training:world.training.episodeCapabilities()}:{}),schemaVersion:1,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
-    movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
+    movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,episodeInput:world.training?'training':entry.movementId==='ground'?'ground':adapter()?'custom':'unsupported',startSupport:adapter()?.startSupport??'ground',walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
     camera:{mode:world.cameraMode,segmentInitialization:'relative-authored-pose'},maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
-   probeStart(start){validateStart(start);return world.training?world.training.probeEpisodeStart(start):world.engine.physics.probeCharacterStart(controlled().id,start.positionWorldMetersXYZ);},
+   probeStart(start){validateStart(start);return probe(start);},
    async prepareSegment(start,viewport){
     world.alive();validateStart(start);
     if(!viewport||![viewport.widthPixels,viewport.heightPixels].every(n=>Number.isSafeInteger(n)&&n>0&&n<=8192))throw failure('EPISODE_VIEWPORT_INVALID');
@@ -652,10 +655,10 @@ export class ThreeWorld implements API.World {
     world.episodeLease=lease;if(world.training)trainingHost(world.training).setEpisodeOwned(true);world.engine.stop();
     try{
      await world.resetState();if(world.disposed||world.episodeLease!==lease)throw failure('EPISODE_PREPARATION_CANCELLED');
-     const entry=controlled(),probe=world.training?world.training.probeEpisodeStart(start):world.engine.physics.probeCharacterStart(entry.id,start.positionWorldMetersXYZ);
-     if(!probe.isValid)throw failure(probe.diagnostics[0]!.code,probe.diagnostics[0]!.message,'content',probe.diagnostics[0]!.entityIds);
+     const entry=controlled(),startProbe=probe(start);
+     if(!startProbe.isValid)throw failure(startProbe.diagnostics[0]!.code,startProbe.diagnostics[0]!.message,'content',startProbe.diagnostics[0]!.entityIds);
      renderer.setPixelRatio(1);world.engine.resize(viewport.widthPixels,viewport.heightPixels);
-     if(world.training)trainingHost(world.training).prepareEpisodeStart({...start,positionWorldMetersXYZ:probe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
+     if(world.training)trainingHost(world.training).prepareEpisodeStart({...start,positionWorldMetersXYZ:startProbe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(startProbe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
      if(start.cameraPerspective!==undefined){
       if(world.training)trainingHost(world.training).command({type:'training.camera',mode:start.cameraPerspective==='first-person'?1:0});
       else world.engine.cameraRig.setPerspective(start.cameraPerspective);
@@ -665,7 +668,28 @@ export class ThreeWorld implements API.World {
      lease.state='prepared';return world.snapshot();
     }catch(error){if(world.episodeLease===lease)release();throw error;}
    },
-   execute(command){requirePrepared();if(!command||!['training.action','training.input','training.enter','training.exit'].includes(command.type))return Promise.resolve({status:'rejected',commandId:`episode-command-${++world.nextCommand}`,worldRevision:world.revision,error:failure('EPISODE_COMMAND_UNSUPPORTED')});return world.executeTraining(command,{},world.episodeLease);},
+   boarding(instanceId){world.alive();if(!world.training)throw failure('TRAINING_RUNTIME_REQUIRED');return world.training.inspectBoarding(instanceId);},
+   routeInput(request){
+    requirePrepared();vec(request.targetPositionWorldMetersXYZ);
+    if(!['walk','run'].includes(request.gait)||!['travel','stop'].includes(request.mode??'travel'))throw failure('EPISODE_ROUTE_INPUT_INVALID');
+    const owner=adapter();if(!owner)throw failure('EPISODE_MOVEMENT_ADAPTER_UNAVAILABLE');
+    const input=world.guarded(()=>synchronous(()=>owner.input({body:world.getEntityState(controlled().id),targetPositionWorldMetersXYZ:[...request.targetPositionWorldMetersXYZ],gait:request.gait,mode:request.mode??'travel',controlForwardWorldXYZ:world.engine.controlForwardWorldXYZ(),simulationTick:world.simulationTick})));
+    world.engine.validateInput(input);return cloneJson(input);
+   },
+   execute(command){
+    requirePrepared();
+    if(command?.type==='camera.set-perspective'){
+     const commandId=`episode-command-${++world.nextCommand}`;
+     try{
+      if(!['first-person','third-person'].includes(command.perspective))throw failure('CAMERA_PERSPECTIVE_INVALID');
+      if(world.training)trainingHost(world.training).command({type:'training.camera',mode:command.perspective==='first-person'?1:0});
+      else world.engine.setCameraPerspective(command.perspective);
+      world.touch();return Promise.resolve({status:'applied',commandId,worldRevision:world.revision});
+     }catch(error){return Promise.resolve({status:'rejected',commandId,worldRevision:world.revision,error:runtimeError(error)});}
+    }
+    if(!command||!['training.action','training.input','training.enter','training.exit'].includes(command.type))return Promise.resolve({status:'rejected',commandId:`episode-command-${++world.nextCommand}`,worldRevision:world.revision,error:failure('EPISODE_COMMAND_UNSUPPORTED')});
+    return world.executeTraining(command,{},world.episodeLease);
+   },
    operation(operationId){requirePrepared();return world.operations.get(operationId);},
    advance(input,ticks){requirePrepared();world.engine.step(input,ticks);return world.snapshot();},
    frame(mimeType){requirePrepared();if(mimeType!=='image/jpeg'&&mimeType!=='image/png')throw failure('EPISODE_FRAME_TYPE_INVALID');

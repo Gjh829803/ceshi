@@ -30,6 +30,7 @@ export interface EpisodeCapabilities {
  readonly fixedTimeStepSeconds: number;
  readonly movement: {
   readonly kind: 'ground' | 'custom'; readonly movementId: string;
+  readonly episodeInput?:'ground'|'training'|'custom'|'unsupported';readonly startSupport?:'ground'|'free';
   readonly walkSpeedMetersPerSecond: number; readonly runSpeedMetersPerSecond: number; readonly jumpSpeedMetersPerSecond: number;
   readonly heightMeters: number; readonly radiusMeters: number;
   readonly maximumStepHeightMeters: number; readonly maximumSlopeRadians: number;
@@ -48,10 +49,13 @@ export interface EpisodeFrame {
   readonly controlForwardWorldXYZ: Vec3;
  };
 }
-export type EpisodeCommand=Extract<import('./training/runtime').TrainingCommand,{readonly type:'training.action'|'training.input'|'training.exit'}>|{readonly type:'training.enter';readonly instanceId:string};
+export type EpisodeCommand=Extract<import('./training/runtime').TrainingCommand,{readonly type:'training.action'|'training.input'|'training.exit'}>|{readonly type:'training.enter';readonly instanceId:string}|{readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
+export interface EpisodeRouteInputRequest {readonly targetPositionWorldMetersXYZ:Vec3;readonly gait:'walk'|'run';readonly mode?:'travel'|'stop'}
 export interface EpisodeRuntimePort {
  readonly schemaVersion: 1;
  capabilities(): EpisodeCapabilities;
+ boarding?(instanceId:string):import('./training/runtime').TrainingBoardingObservation;
+ routeInput?(request:EpisodeRouteInputRequest):WorldInput;
  probeStart(start: EpisodeStart): EpisodeStartProbe;
  prepareSegment(start: EpisodeStart, viewport: { readonly widthPixels: number; readonly heightPixels: number }): Promise<WorldSnapshot>;
  /** Commands share the live dispatcher and are admitted only while this segment owns the clock. */

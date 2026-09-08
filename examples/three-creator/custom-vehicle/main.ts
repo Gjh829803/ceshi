@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createHumanoidWorld,type TrainingMap,type TrainingVehicleSpec} from '@worldkit/three';
+import {createHumanoidWorld,training,type TrainingMap,type TrainingVehicleSpec} from '@worldkit/three';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
 scene.add(new THREE.HemisphereLight(0xffffff,0xbbbbbb,2));
@@ -27,9 +27,11 @@ const darkMaterial=new THREE.MeshStandardMaterial({color:'#777777',roughness:1})
 function part(size:[number,number,number],position:[number,number,number],material=frameMaterial){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);mesh.position.set(...position);bike.add(mesh);return mesh;
 }
+const wheelRigs:{steering:THREE.Group;spin:THREE.Group;radius:number}[]=[];
 for(const z of [-.85,.85]){
  const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.4,.4,.16,16),darkMaterial);
- wheel.rotation.z=Math.PI/2;wheel.position.set(0,.4,z);bike.add(wheel);
+ wheel.rotation.z=Math.PI/2;
+ const steering=new THREE.Group(),spin=new THREE.Group();steering.position.set(0,.4,z);spin.add(wheel);steering.add(spin);bike.add(steering);wheelRigs.push({steering,spin,radius:.4});
  part([.12,.65,.12],[0,.72,z]);
 }
 part([.4,.3,1.3],[0,.62,0]);
@@ -47,6 +49,9 @@ const spec:TrainingVehicleSpec={id:'custom-bike',name:'自建摩托',en:'CUSTOM 
  envelope:{kind:'box',halfExtents:[.55,1.2,1.3],offset:[0,1.2,0]}};
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person',
  vehicles:[{instanceId:'custom-bike',assetId:'custom.motorcycle',object:bike,spec}]});
+// Optional mechanical presentation; the SDK still owns chassis movement and time.
+const mechanical={wheelRigs,steering:[wheelRigs[1]!.steering]};
+world.training!.onVisualUpdate(dt=>{const runtime=world.training!,state=runtime.simulation.vehicles[0]!;training.updateVehicleWheels(mechanical,state,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision,active:runtime.simulation.vehicle===state});});
 // createHumanoidWorld owns the one preset character for walking, riding and reset.
 // Never hide/recreate it when mounted; vehicle and character keep separate SDK-owned roots.
 world.setCaptureTargets(['person','custom-bike']);

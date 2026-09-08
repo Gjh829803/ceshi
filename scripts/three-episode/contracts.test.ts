@@ -49,3 +49,18 @@ describe('Three Episode agent plan and production boundary', () => {
     expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('DISPLACEMENT_REQUIRED');
   });
 });
+
+it('accepts mount and view settled goals and requires a boarding instance target', () => {
+  const input = plan(), segment = input.segments[0]!;
+  segment.actionGoals = [
+    { id: 'board', trigger: { waypointIndex: 0, radiusMeters: .6 }, targetId: 'car', intent: { kind: 'mount', action: 'enter' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
+    { id: 'view', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'view', perspective: 'first-person' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
+    { id: 'exit', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'mount', action: 'exit' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
+  ];
+  expect(validateEpisodePlan(input, { worldBuildHash: hash }).segments[0]!.actionGoals).toEqual(segment.actionGoals);
+  delete segment.actionGoals[0]!.targetId;
+  expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('TARGET_REQUIRED');
+  segment.actionGoals.shift();
+  segment.actionGoals[0]!.completion = { kind: 'displacement', minimumMeters: 1 };
+  expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('DISPLACEMENT_UNSUPPORTED');
+});

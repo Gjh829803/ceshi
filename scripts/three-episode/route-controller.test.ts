@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Vec3, WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
-import { PlayerCaptureController } from './player-controller.js';
+import { assertPlayerBehavior, PlayerCaptureController } from './player-controller.js';
 import { RouteController, routeDirectionInput } from './route-controller.js';
 
 const movement = { kind: 'ground', walkSpeedMetersPerSecond: 4, runSpeedMetersPerSecond: 7, heightMeters: 1.8, radiusMeters: 0.3, jumpSpeedMetersPerSecond: 5 };
@@ -80,4 +80,22 @@ it('does not treat the deliberate observation pause as a blocked route', async (
     expect(decision.mode).toBe('travel'); expect(decision.input.jumpPressed).not.toBe(true);
     z += (decision.input.moveZRatio ?? 0)*2/24;
   }
+});
+
+it('keeps optional camera and generated jump evidence advisory',()=>{
+ expect(()=>assertPlayerBehavior([], {camera:{mode:'follow'},movement:{walkSpeedMetersPerSecond:2,runSpeedMetersPerSecond:5}} as any)).not.toThrow();
+});
+
+it('passes the requested gait to custom vertical movement independently of ground input axes',async()=>{
+ const requests:any[]=[];
+ const controller=new PlayerCaptureController(segment({waypoints:[{positionWorldMetersXYZ:[0,6,0],gait:'run'}]}),{...movement,kind:'custom'},'authored',async start=>({isValid:true,requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,diagnostics:[]}),async request=>{requests.push(request);return {moveYRatio:1};});
+ const decision=await controller.step(snapshot([0,3,0]),[0,0,-1],0);
+ expect(requests[0]).toMatchObject({targetPositionWorldMetersXYZ:[0,6,0],gait:'run'});expect(decision.input.moveYRatio).toBe(1);
+});
+
+it('resumes custom route progress timing after an action pause',async()=>{
+ const controller=new PlayerCaptureController(segment({waypoints:[{positionWorldMetersXYZ:[0,6,0],gait:'walk'}]}),{...movement,kind:'custom'},'authored',async start=>({isValid:true,requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,diagnostics:[]}),async()=>({moveYRatio:1}));
+ controller.pause(1);let decision;
+ for(let time=1;time<=6;time+=.25)decision=await controller.step(snapshot([0,3,0]),[0,0,-1],time);
+ expect(decision?.mode).toBe('failed');
 });

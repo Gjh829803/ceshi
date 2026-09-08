@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { chromium, type Page } from 'playwright';
 import type { Vec3, WorldInput, WorldSnapshot } from '@worldkit/three';
-import type { EpisodeRuntimePort, EpisodeCapabilities, EpisodeStart, EpisodeStartProbe, EpisodeFrame, CommandReceipt, OperationStatus } from '@worldkit/three';
+import type { EpisodeRuntimePort, EpisodeRouteInputRequest, EpisodeCapabilities, EpisodeStart, EpisodeStartProbe, EpisodeFrame, CommandReceipt, OperationStatus } from '@worldkit/three';
 
 export interface EpisodeBrowserOptions {
   playableRoot: string; executablePath?: string; headless?: boolean;
@@ -25,6 +25,8 @@ export interface EpisodeCaptureSession {
   readonly customMovementAdapterId?: string;
   readonly errors: readonly string[];
   capabilities(): Promise<EpisodeCapabilities>;
+  boarding?(instanceId:string):Promise<import('@worldkit/three').training.TrainingBoardingObservation>;
+  routeInput?(request:EpisodeRouteInputRequest):Promise<WorldInput>;
   probeStart(start: EpisodeStart): Promise<EpisodeStartProbe>;
   prepareSegment(start: EpisodeStart, viewport: { widthPixels: number; heightPixels: number }): Promise<WorldSnapshot>;
   advance(input: WorldInput, ticks: number): Promise<WorldSnapshot>;
@@ -112,11 +114,11 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
       return await port[method](...args);
     }, { method, args });
     const initialCapabilities:EpisodeCapabilities=await call('capabilities');
-    const adapterId=await customMovementAdapter(root,initialCapabilities.movement.movementId);
+    const adapterId=initialCapabilities.movement.episodeInput==='custom'?undefined:await customMovementAdapter(root,initialCapabilities.movement.movementId);
     const session: BrowserSession = {
       ...(adapterId?{customMovementAdapterId:adapterId}:{}),
       page, errors,
-      capabilities: () => call('capabilities'), probeStart: start => call('probeStart', [start]),
+      capabilities: () => call('capabilities'), boarding:id=>call('boarding',[id]), routeInput:request=>call('routeInput',[request]), probeStart: start => call('probeStart', [start]),
       prepareSegment: (start, viewport) => call('prepareSegment', [start, viewport]),
       execute: command => call('execute', [command]), operation: id => call('operation', [id]),
       advance: async (input, ticks) => {

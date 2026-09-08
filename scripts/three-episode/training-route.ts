@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import type { Vec3, WorldInput, WorldSnapshot } from '@worldkit/three';
+import { emptyTrainingInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
-import type { RouteDecision } from './route-controller.js';
+import type { RouteCursor, RouteDecision } from './route-controller.js';
 export const TRAINING_FAMILIES=['wheeled','bike','slide','hover','boat','sub','glider','plane','space','mount','carriage','dragon'] as const;
 export type TrainingFamily=typeof TRAINING_FAMILIES[number];
 const clamp=(n:number)=>Math.max(-1,Math.min(1,n));
@@ -30,6 +30,24 @@ export function trainingDirectionInput(family:TrainingFamily,position:Vec3,rotat
 export class TrainingRouteController {
   private index=0;private direction=1;private finished=false;private anchor:Vec3|undefined;private lastProgress=0;
   private readonly route:Vec3[];
+  private waypointHold: { waypointIndex: number; radiusMeters: number } | undefined;
+  get cursor(): RouteCursor { return { waypointIndex: this.index - (this.segment.endBehavior === 'reverse' ? 1 : 0), direction: this.direction, finished: this.finished }; }
+  seekCursor(cursor: RouteCursor) {
+    this.index = cursor.waypointIndex + (this.segment.endBehavior === 'reverse' ? 1 : 0);
+    this.direction = cursor.direction; this.finished = cursor.finished; this.anchor = undefined;
+  }
+  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.waypointHold = trigger; }
+  completeHeldWaypoint(index: number) {
+    if (Math.max(0, this.cursor.waypointIndex) !== index) throw new Error('EPISODE_ACTION_ROUTE_INDEX_CHANGED');
+    this.anchor = undefined; this.advanceWaypoint();
+  }
+  private advanceWaypoint() {
+    const next = this.index + this.direction;
+    if (next >= 0 && next < this.route.length) this.index = next;
+    else if (this.segment.endBehavior === 'loop') this.index = 0;
+    else if (this.segment.endBehavior === 'reverse') { this.direction *= -1; this.index += this.direction; }
+    else this.finished = true;
+  }
   constructor(private readonly segment:EpisodeSegmentPlan){this.route=segment.waypoints.map(w=>w.positionWorldMetersXYZ);if(segment.endBehavior==='reverse'){this.route.unshift(segment.start.positionWorldMetersXYZ);this.index=1;}}
   step(snapshot:WorldSnapshot,time:number):RouteDecision {
     const mounted=snapshot.training?.mountedInstanceId;
@@ -38,15 +56,19 @@ export class TrainingRouteController {
     if(!vehicle||!actor||!TRAINING_FAMILIES.includes(vehicle.mode))throw new Error('EPISODE_TRAINING_VEHICLE_UNAVAILABLE');
     const position=actor.positionWorldMetersXYZ,target=this.route[this.index]!,velocity=actor.motion?.velocityWorldMetersPerSecondXYZ??[0,0,0];
     const distance=Math.hypot(...position.map((v,i)=>v-target[i]!));
-    const base={waypointIndex:this.index,positionWorldMetersXYZ:position,targetPositionWorldMetersXYZ:target,distanceToTargetMeters:distance};
+    const base={waypointIndex:Math.max(0,this.cursor.waypointIndex),positionWorldMetersXYZ:position,targetPositionWorldMetersXYZ:target,distanceToTargetMeters:distance};
     if(this.finished)return {...base,mode:'finished',input:{training:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:true,slow:true,jump:false}}};
+    const held = this.waypointHold?.waypointIndex === base.waypointIndex ? this.waypointHold : undefined;
+    if (held && distance <= held.radiusMeters) {
+      this.anchor = position; this.lastProgress = time;
+      return { ...base, mode: 'action', input: { training: { ...emptyTrainingInput(), brake: true, slow: true } } };
+    }
     if(!this.anchor||Math.hypot(...position.map((v,i)=>v-this.anchor![i]!))>.25){this.anchor=position;this.lastProgress=time;}
     if(time-this.lastProgress>5)return {...base,mode:'failed',input:{},diagnostic:{code:'EPISODE_TRAINING_ROUTE_BLOCKED',message:'Real vehicle input made no progress for five seconds.',collisionEntityIds:actor.motion?.collisionEntityIds??[]}};
     const airborne=['space','sub','plane','glider','dragon'].includes(vehicle.mode);
-    const tolerance=airborne?2:1;
+    const tolerance=held?.radiusMeters ?? (airborne?2:1);
     // All axes remain checked: a bridge below a waypoint is never counted as arrival.
-    if(distance<=tolerance){const next=this.index+this.direction;if(next>=0&&next<this.route.length)this.index=next;
-      else if(this.segment.endBehavior==='loop')this.index=0;else if(this.segment.endBehavior==='reverse'){this.direction*=-1;this.index+=this.direction;}else this.finished=true;}
+    if(distance<=tolerance)this.advanceWaypoint();
     return {...base,mode:'travel',input:trainingDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,this.route[this.index]!)};
   }
 }

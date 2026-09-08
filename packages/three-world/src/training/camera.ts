@@ -4,8 +4,9 @@ import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-wo
 import { probeTrainingCamera } from './camera-queries';
 import { Simulation, angleDelta, clamp, damp } from './simulation';
 import type { MotionPose } from './presentation';
-import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './platform/session';
+import { DEFAULT_CAMERA_TUNING, parseCameraTuning, type CameraTuning } from './platform/session';
 import type { EnvironmentQueries } from './environment/queries';
+const HUMANOID_CAMERA_DEFAULTS={...DEFAULT_CAMERA_TUNING,followResponsePerSecond:7,baseFovDegrees:58,collisionRadiusMeters:.2};
 interface CameraPresentationPose {
   position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
   up:T.Vector3; fov:number; near:number;
@@ -68,6 +69,13 @@ export class FollowCamera {
   }
 
   tuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
+  private humanoidTuning:CameraTuning={...HUMANOID_CAMERA_DEFAULTS};
+  /** Explicit overrides apply independently; distance never selects unrelated defaults. */
+  configureTuning(overrides:Partial<CameraTuning>):void {
+    const tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...overrides});
+    const humanoid=parseCameraTuning({...HUMANOID_CAMERA_DEFAULTS,...overrides});
+    this.tuning=tuning;this.humanoidTuning=humanoid;
+  }
   baseDistance?:number;
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;
   up=new T.Vector3(0,1,0);collisionLimited=false;
@@ -269,7 +277,7 @@ export class FollowCamera {
   }
   private humanoidCollisionRequest(humanoid:NonNullable<Simulation['humanoid']>,position:T.Vector3,origin:T.Vector3,target:T.Vector3,eye:T.Vector3,sweepFrom?:T.Vector3,current=this.camera.position):CameraCollisionRequest {
     return {target:target.toArray(),eye:eye.toArray(),current:current.toArray(),
-      radius:this.baseDistance===undefined?.2:this.tuning.collisionRadiusMeters,
+      radius:this.humanoidTuning.collisionRadiusMeters,
       pivotOrigin:origin.toArray(),preserveArmDirection:true,armClearance:.04,
       canIgnoreArmObstruction:eye=>this.capsuleVisible(new T.Vector3(...eye),position,humanoid.capsuleHeight,humanoid.capsule,humanoid.world),
       ...(sweepFrom?{sweepFrom:sweepFrom.toArray()}:{}),
@@ -283,7 +291,7 @@ export class FollowCamera {
     const position=pose?.position??sim.player.position;
     this.origin.copy(position).add(this.offset.set(0,height,0));
     this.anchor.copy(this.origin).add(this.offset.set(Math.cos(this.yaw)*this.tuning.horizontalOffset,this.tuning.targetHeightOffset,-Math.sin(this.yaw)*this.tuning.horizontalOffset));
-    const response=this.baseDistance===undefined?7:this.tuning.followResponsePerSecond;
+    const response=this.humanoidTuning.followResponsePerSecond;
     if(!this.initialized)this.target.copy(this.anchor);
     else {
       // Inherit locomotion, damping only posture/shoulder changes. World-space
@@ -311,7 +319,7 @@ export class FollowCamera {
     }
     this.camera.position.copy(this.candidate);
     this.up.set(0,1,0);this.camera.up.copy(this.up);this.camera.lookAt(this.target);
-    const fov=this.baseDistance===undefined?58:this.tuning.baseFovDegrees;
+    const fov=this.humanoidTuning.baseFovDegrees;
     if(this.camera.fov!==fov||this.camera.near!==.08){this.camera.fov=fov;this.camera.near=.08;this.camera.updateProjectionMatrix();}
     this.lastAnchor.copy(this.anchor);this.initialized=true;
   }

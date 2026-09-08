@@ -203,3 +203,27 @@ pnpm test:census
 
 Local contract tests mock cloud services. Browser capture, source verification,
 real provider execution and final video inspection have separate evidence scopes.
+
+
+## Mounting and view goals
+
+Existing actionGoals also accept `{kind:"mount",action:"enter"|"exit"}` and
+`{kind:"view",perspective:"first-person"|"third-person"}`, with settled completion.
+Enter uses `targetId` as the vehicle instance ID. Place its trigger close to the
+actual boarding approach. Host input walks to an eligible entry and uses the SDK
+enter command; it never uses the preparation relocation as recorded travel.
+Exit brakes until the actor has stopped and waits for the actual handoff transition.
+Aircraft that cannot stop/exit in the requested situation report the real timeout.
+View goals work for both Training and ordinary subjects; nonhuman first-person
+still requires the authored eye position. Walking/riding route progress survives
+these transitions, including loop/reverse routes.
+
+Custom movement may provide `MovementDefinition.episode.input`; the SDK observer
+invokes it with the actual body, target, gait and travel/stop mode. The normal fixed
+clock advances the returned inputs. Support and collider checks are still real;
+no additional mandatory rehearsal is introduced.
+
+Camera richness and automatically suggested jump outcomes are now advisory
+`health.json.advisoryDiagnostics`. Media, actual runtime errors and explicitly
+requested action outcomes retain their existing execution contracts. A valid
+static or restrained camera recording is not rejected for missing angular variety.

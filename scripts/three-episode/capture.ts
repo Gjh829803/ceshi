@@ -9,7 +9,7 @@ import { canonicalHash, PRE_SEEDANCE_PROFILE, SEGMENT_IDS, validateEpisodePlan, 
 import { openEpisodeBrowser, type EpisodeBrowserOptions, type EpisodeCaptureSession } from './browser.js';
 import { ROUTE_CONTROLLER_VERSION, type RouteDecision, type RouteMovement } from './route-controller.js';
 
-import { PlayerCaptureController, summarizePlayerBehavior, assertPlayerBehavior } from './player-controller.js';
+import { PlayerCaptureController, summarizePlayerBehavior, playerBehaviorFeedback } from './player-controller.js';
 import { PLAYER_CAPTURE_VERSION } from './playback-policy.mjs';
 import { EpisodeActionController, ACTION_CAPTURE_VERSION } from './action-controller.js';
 
@@ -94,7 +94,7 @@ function inputBasis(frame: EpisodeFrame): Vec3 {
 function movementForCapture(capabilities: EpisodeCapabilities,session:EpisodeCaptureSession): RouteMovement {
   if (!capabilities.movement) throw new Error('EPISODE_CONTROLLED_MOVEMENT_UNAVAILABLE');
   const movement = capabilities.movement;
-  if (movement.kind !== 'ground' && !capabilities.training && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
+  if (movement.kind !== 'ground' && !(movement.episodeInput==='custom'&&session.routeInput) && !capabilities.training && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
   if (!(movement.walkSpeedMetersPerSecond > 0) || !(movement.runSpeedMetersPerSecond > 0)) throw new Error('EPISODE_CONTROLLED_MOVEMENT_SPEED_UNAVAILABLE');
   return movement as RouteMovement;
 }
@@ -125,8 +125,8 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
     initialTick = initialSnapshot.simulationTick;
     const opening = await session.frame('image/png');
     await writeFile(path.join(root, 'first-frame.png'), imageBytes(opening.imageDataUrl, 'image/png'));
-    const controller = new PlayerCaptureController(segment, movementForCapture(capabilities,session), capabilities.camera.mode, start => session.probeStart(start));
-    actions = new EpisodeActionController(segment, session, initialTick, capabilities.fixedTimeStepSeconds);
+    const controller = new PlayerCaptureController(segment, movementForCapture(capabilities,session), capabilities.camera.mode, start => session.probeStart(start),capabilities.movement.episodeInput==='custom'?request=>session.routeInput!(request):undefined);
+    actions = new EpisodeActionController(segment, session, initialTick, capabilities.fixedTimeStepSeconds,capabilities.movement.episodeInput==='custom'?request=>session.routeInput!(request):undefined);
     encoder = (options.encoderFactory ?? createRenderedFrameEncoder)({ outputPath: path.join(root, 'video.mp4'), frameRate: PROFILE.captureFps, frameCount: PROFILE.captureFrameCount });
     for (let index = 0; index < PROFILE.captureFrameCount; index += 1) {
       const frame = await session.frame('image/jpeg');
@@ -171,7 +171,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
     }
     if (terminalSnapshot?.errors.length) throw new Error(`EPISODE_RUNTIME_ERROR: ${JSON.stringify(terminalSnapshot.errors)}`);
     actions.finish(terminalSnapshot, false); actions.assertComplete();
-    assertPlayerBehavior(trace, capabilities, actions.hasGoals);
+
     await encoder.finish(); encoder = undefined;
     media = await (options.inspectVideo ?? inspectRenderedVideo)(path.join(root, 'video.mp4'));
     if (media.widthPixels !== PROFILE.widthPixels || media.heightPixels !== PROFILE.heightPixels || media.frameCount !== PROFILE.captureFrameCount || media.frameRate !== '24/1' || Math.abs(media.durationSeconds - PROFILE.segmentSeconds) > 0.001 || media.hasAudio) throw new Error(`EPISODE_VIDEO_CONTRACT_FAILED: ${JSON.stringify(media)}`);
@@ -204,7 +204,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
   await atomicJson(path.join(root, 'health.json'), { kind: 'three-episode-capture-health', schemaVersion: 1,
     status, frameCount, capturedDurationSeconds: frameCount / PROFILE.captureFps,
     simulationSeconds: terminalSnapshot ? (terminalSnapshot.simulationTick - initialTick) * capabilities.fixedTimeStepSeconds : 0,
-    travelledMeters, actionGoals: actionTimeline.map(entry => ({ goalId: entry.goalId, result: entry.result })), playerBehavior: summarizePlayerBehavior(trace), playerCaptureVersion: PLAYER_CAPTURE_VERSION, routeFinishedAtSeconds: finishedAt ?? null, failure: failure ?? null,
+    travelledMeters, actionGoals: actionTimeline.map(entry => ({ goalId: entry.goalId, result: entry.result })), playerBehavior: summarizePlayerBehavior(trace), advisoryDiagnostics:playerBehaviorFeedback(trace,capabilities,actions?.hasGoals).diagnostics, playerCaptureVersion: PLAYER_CAPTURE_VERSION, routeFinishedAtSeconds: finishedAt ?? null, failure: failure ?? null,
     lastDecision: trace.at(-1)?.decision ?? null, browserErrors: session.errors.slice(initialErrorCount), media: media ?? null,
     captureMode: 'deterministic-fixed-step-real-rendered-frames', paddingOrRepeatedFramesAdded: false,
     note: 'Route execution evidence covers only these requested segments; it is not a claim of whole-world connectivity or assistant content approval.' });

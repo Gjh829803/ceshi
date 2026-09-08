@@ -10,6 +10,20 @@ function box(x: number, y: number, z: number, size = [2, 2, 2]) { const mesh = n
 
 afterEach(() => { vi.unstubAllGlobals(); });
 describe('Episode local Rapier start probes', () => {
+ it('keeps free starts exact while rejecting actual capsule overlap before and after broad-phase sync',async()=>{
+  const physics=await ThreePhysics.create();try{
+   physics.addCharacter('player',root());physics.addRigid('floating-block',box(2,4,2),{kind:'fixed',shape:'box'});physics.addRigid('floating-shell',box(8,4,2),{kind:'fixed',shape:'trimesh'});
+   for(const synchronized of [false,true]){
+    if(synchronized)physics.step(1/60,{});const before=physics.state('player');
+    expect(physics.probeCharacterStart('player',[-2,3,2],'free')).toMatchObject({isValid:true,resolvedPositionWorldMetersXYZ:[-2,3,2]});
+    expect(physics.probeCharacterStart('player',[2,3,2],'free')).toMatchObject({isValid:false,diagnostics:[{code:'EPISODE_START_BODY_OVERLAP'}]});
+    expect(physics.probeCharacterStart('player',[8,4.5,2],'free').isValid).toBe(false);
+    expect(physics.probeCharacterStart('player',[8,5,2],'free').isValid).toBe(true);
+    expect(physics.state('player')).toEqual(before);
+   }
+  }finally{physics.dispose();}
+ });
+
  it('resolves the requested level without touching simulation or searching adjacent XZ', async () => {
   const physics = await ThreePhysics.create();
   try {
@@ -40,7 +54,7 @@ describe('Episode local Rapier start probes', () => {
  });
 });
 
-async function fixture(parentedCamera = false) {
+async function fixture(parentedCamera = false,custom=false) {
  const windowTarget = new EventTarget();const documentTarget=Object.assign(new EventTarget(),{defaultView:windowTarget,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(windowTarget,{document:documentTarget});vi.stubGlobal('window',windowTarget);
  const frames:FrameRequestCallback[]=[];vi.stubGlobal('requestAnimationFrame',(fn:FrameRequestCallback)=>{frames.push(fn);return frames.length;});vi.stubGlobal('cancelAnimationFrame',vi.fn());
  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:documentTarget,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:vi.fn(()=> 'data:image/png;base64,dGVzdA==')});
@@ -51,12 +65,26 @@ async function fixture(parentedCamera = false) {
  world.addEntity({id:'floor',object:plane(),role:'terrain'});
  const actor=root();actor.rotation.y=.3;
  if(parentedCamera){actor.add(camera);camera.position.set(3,3,6);camera.lookAt(0,1,0);}
- world.addCharacter({id:'player',object:actor,body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
+ if(custom)world.registerMovement({id:'flight',version:1,description:'Direct flight',initialState:null,update:({input,state})=>({state,velocityWorldMetersPerSecondXYZ:[0,(input.moveYRatio??0)*3,0],applyGravity:false}),episode:{startSupport:'free',input:({body,targetPositionWorldMetersXYZ})=>({moveYRatio:Math.max(-1,Math.min(1,targetPositionWorldMetersXYZ[1]-body.positionWorldMetersXYZ[1]))})}});
+ world.addCharacter({id:'player',object:actor,...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{}),body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
  world.setControlledEntity('player');world.setCameraFollow({targetEntityId:'player'});await world.start();
  const observer=(windowTarget as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__;
  return {world,actor,camera,renderer,canvas,frames,observer,port:observer.episode!};
 }
 describe('Episode observer ownership and relative opening',()=>{
+ it('records custom flight through a pure input adapter and admits free starts',async()=>{
+  const {world,port}=await fixture(false,true);try{
+   expect(port.capabilities().movement.episodeInput).toBe('custom');
+   expect(port.probeStart({positionWorldMetersXYZ:[0,3,0],facingYawRadians:0}).isValid).toBe(true);
+   await port.prepareSegment({positionWorldMetersXYZ:[0,3,0],facingYawRadians:0},{widthPixels:320,heightPixels:180});
+   const before=world.snapshot(),request={targetPositionWorldMetersXYZ:[0,6,0] as const,gait:'walk' as const};
+   const input=port.routeInput!(request);expect(input).toEqual({moveYRatio:1});expect(world.snapshot()).toEqual(before);
+   port.advance(input,30);expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeGreaterThan(4);
+   await expect(port.execute({type:'camera.set-perspective',perspective:'third-person'})).resolves.toMatchObject({status:'applied'});
+   port.release();expect(()=>port.routeInput!(request)).toThrow('EPISODE_SEGMENT_NOT_PREPARED');
+  }finally{world.dispose();}
+ });
+
  it('installs automatically and keeps fixed time, actor facing and camera memory at each new start',async()=>{
   const {world,port,actor,camera,frames,canvas}=await fixture();
   try{

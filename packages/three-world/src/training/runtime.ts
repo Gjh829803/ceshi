@@ -15,7 +15,7 @@ import type { MapDefinition, MapSpawn } from './environment/types';
 import type { VehicleSpec } from './config';
 import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseTrainingControl,readTrainingControl,type TrainingControl} from './control-tuning';
 import type { CameraTuning } from './platform/session';
-import { parseCameraTuning, DEFAULT_CAMERA_TUNING } from './platform/session';
+import { parseCameraTuning, DEFAULT_CAMERA_TUNING, CAMERA_DISTANCE_METERS_SCHEMA } from './platform/session';
 import { validateTrainingMap } from './map-validation';
 import { DEFAULT_CHARACTER_OPTIONS } from '../physics';
 import type { PhysicsPort, PhysicsCandidate, CharacterOptions, RigidPhysics, Vec3, WorldInput, PhysicsEntityState, PhysicsAudit } from '../engine-contracts';
@@ -65,6 +65,17 @@ export interface TrainingProfile {
   readonly camera?:Partial<CameraTuning>;
   readonly vehicles?:Readonly<Record<string,Partial<TrainingControl & {camera:number}>>>;
 }
+export interface TrainingBoardingObservation {
+  readonly approachPositionWorldMetersXYZ:Vec3|null;
+  readonly eligible:boolean;
+  readonly reason:string;
+  readonly message:string;
+}
+export interface TrainingInputObservation {
+  readonly override:{readonly source:'training.input'|'setInput';readonly input:Input}|null;
+  /** Last successful controller step; cleared when its input authority is released or replaced. */
+  readonly lastApplied:{readonly source:'training.input'|'setInput'|'world.training'|'world-input';readonly input:Input;readonly simulationSeconds:number}|null;
+}
 export interface TrainingSnapshot {
   readonly view:TrainingViewSettings;
   readonly controls:{readonly character:TrainingControl;readonly vehicles:Readonly<Record<string,TrainingControl>>};
@@ -95,6 +106,8 @@ export class TrainingRuntime implements PhysicsPort {
   readonly followCamera:FollowCamera;
   private input:Input|undefined;
   private inputGeneration=0;
+  private inputSource:'training.input'|'setInput'='setInput';
+  private lastApplied:TrainingInputObservation['lastApplied']=null;
   private readonly objects=new Map<string,THREE.Object3D>();
   private readonly specs:VehicleSpec[];
   private disposed=false;
@@ -109,7 +122,6 @@ export class TrainingRuntime implements PhysicsPort {
   private baselineProfile:TrainingProfile={};
   private profile:TrainingProfile & {view:TrainingViewSettings}={view:{...DEFAULT_TRAINING_VIEW}};
   private readonly initialCamera:THREE.PerspectiveCamera;
-  private readonly baseTuning:CameraTuning;
   private currentMap:MapDefinition;
   private readonly visualUpdates=new Set<(deltaSeconds:number)=>void>();
   private readonly simulationReplacements=new Set<()=>void>();
@@ -144,8 +156,8 @@ export class TrainingRuntime implements PhysicsPort {
     this.simulation=new Simulation(this.environment,this.specs);
     this.followCamera=new FollowCamera(camera,this.environment);
     this.followCamera.eyePosition=target=>options.character.animation?.eyePosition(target)??false;
-    this.followCamera.tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...options.cameraTuning});this.baseTuning={...this.followCamera.tuning};this.initialCamera=camera.clone();
-    this.profile={view:{...DEFAULT_TRAINING_VIEW},character:{...this.simulation.characterControl},camera:{...this.baseTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
+    this.followCamera.configureTuning(options.cameraTuning??{});this.initialCamera=camera.clone();
+    this.profile={view:{...DEFAULT_TRAINING_VIEW},character:{...this.simulation.characterControl},camera:{...options.cameraTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
     this.objects.set(options.character.instanceId,options.character.object);
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     const animation=options.character.animation;
@@ -194,7 +206,7 @@ export class TrainingRuntime implements PhysicsPort {
       case 'training.enter':accepted=this.enterOwned(command.instanceId);break;
       case 'training.exit':accepted=this.exitOwned();break;
       case 'training.camera':this.setCameraModeOwned(command.mode);break;
-      case 'training.input':this.setInputOwned(command.input??undefined);break;
+      case 'training.input':this.setInputOwned(command.input??undefined,'training.input');break;
       case 'training.profile':this.applyProfileOwned(command.profile);break;
       case 'training.action': {
         // A command must obey the same restriction as per-tick humanoid input.
@@ -224,7 +236,7 @@ export class TrainingRuntime implements PhysicsPort {
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='training.approach'?{description:TRAINING_APPROACH_DESCRIPTION}:{})}});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
-    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[{type:'number',exclusiveMinimum:0,maximum:100},{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
+    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
     return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():TrainingSnapshot{
@@ -272,8 +284,19 @@ export class TrainingRuntime implements PhysicsPort {
   setInput(input:undefined):void;
   setInput(input:Input|undefined):(()=>void)|void;
   setInput(input:Input|undefined):(()=>void)|void{this.assertExternalMutation();return this.setInputOwned(input);}
-  private setInputOwned(input:Input|undefined):(()=>void)|void{if(input===undefined){this.input=undefined;this.inputGeneration++;return;}this.validateInput(input);const generation=++this.inputGeneration;this.input={...input,humanoid:{...input.humanoid}};return()=>{this.assertExternalMutation();if(this.inputGeneration===generation){this.input=undefined;this.inputGeneration++;}};}
-  private clearInputOwned():void{this.input=undefined;this.inputGeneration++;this.previousJump=false;this.previousInteract=false;}
+  inspectBoarding(instanceId:string):TrainingBoardingObservation {
+    this.assertLive();this.index(instanceId);return this.simulation.inspectBoarding(instanceId);
+  }
+  inspectControls():TrainingInputObservation {
+    return structuredClone({override:this.input?{source:this.inputSource,input:this.input}:null,lastApplied:this.lastApplied});
+  }
+  private setInputOwned(input:Input|undefined,source:'training.input'|'setInput'='setInput'):(()=>void)|void{
+    if(input===undefined){this.input=undefined;this.inputGeneration++;this.lastApplied=null;return;}
+    this.validateInput(input);const generation=++this.inputGeneration;
+    this.input=structuredClone(input);this.inputSource=source;this.lastApplied=null;
+    return()=>{this.assertExternalMutation();if(this.inputGeneration===generation){this.input=undefined;this.inputGeneration++;this.lastApplied=null;}};
+  }
+  private clearInputOwned():void{this.input=undefined;this.inputGeneration++;this.lastApplied=null;this.previousJump=false;this.previousInteract=false;}
   private index(id:string):number{const n=this.options.vehicles.findIndex(v=>v.instanceId===id);if(n<0)throw new Error(`TRAINING_INSTANCE_UNKNOWN: ${id}`);return n;}
   prepare(id:string,spawn:MapSpawn):boolean{this.assertExternalMutation();return this.prepareOwned(id,spawn);}
   private prepareOwned(id:string,spawn:MapSpawn):boolean{const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
@@ -289,7 +312,7 @@ export class TrainingRuntime implements PhysicsPort {
     if(this.authored){this.followCamera.mode=this.defaultCameraMode();this.followCamera.reset(this.simulation);}
     else this.setCameraModeOwned(this.defaultCameraMode());
   }
-  private prepareProfile(profile:TrainingProfile):TrainingProfile & {view:TrainingViewSettings;camera:CameraTuning;character:TrainingControl;vehicles:Record<string,TrainingControl & {camera:number}>;cameraDistanceMeters:number|null}{
+  private prepareProfile(profile:TrainingProfile):TrainingProfile & {view:TrainingViewSettings;camera:Partial<CameraTuning>;character:TrainingControl;vehicles:Record<string,TrainingControl & {camera:number}>;cameraDistanceMeters:number|null}{
     const object=(value:unknown)=>!!value&&typeof value==='object'&&!Array.isArray(value);
     if(!object(profile)||Object.keys(profile).some(k=>!['view','character','camera','vehicles','cameraDistanceMeters'].includes(k)))throw new Error('TRAINING_PROFILE_INVALID');
     for(const section of [profile.view,profile.character,profile.camera,profile.vehicles])if(section!==undefined&&!object(section))throw new Error('TRAINING_PROFILE_INVALID');
@@ -298,13 +321,14 @@ export class TrainingRuntime implements PhysicsPort {
     if(!['first-person','third-person'].includes(view.defaultPerspective)||typeof view.keyboardToggleEnabled!=='boolean')throw new Error('TRAINING_PROFILE_INVALID');
     if(Object.keys(profile.camera??{}).some(k=>!Object.hasOwn(DEFAULT_CAMERA_TUNING,k)))throw new Error('TRAINING_PROFILE_INVALID');
     for(const [id,values] of Object.entries(profile.vehicles??{})){this.index(id);if(!object(values)||Object.keys(values).some(k=>k!=='camera'&&!Object.hasOwn(CONTROL_RANGES,k)))throw new Error('TRAINING_PROFILE_INVALID');}
-    const camera=parseCameraTuning({...this.followCamera.tuning,...profile.camera});
+    const camera={...this.profile.camera,...profile.camera};
+    parseCameraTuning({...DEFAULT_CAMERA_TUNING,...camera});
     const character=parseTrainingControl(profile.character??{},this.simulation.characterControl);
     const vehicles=Object.fromEntries(this.simulation.vehicles.map(v=>{const {camera=v.spec.camera,...control}=profile.vehicles?.[v.spec.id]??{};return [v.spec.id,{...parseTrainingControl(control,readTrainingControl(v.spec)),camera}];}));
     const numbers=[...Object.values(character),...Object.values(vehicles).flatMap(v=>Object.values(v))];
     if(numbers.some(v=>typeof v!=='number'||!Number.isFinite(v)||v<0))throw new Error('TRAINING_PROFILE_INVALID');
     const cameraDistanceMeters=profile.cameraDistanceMeters===undefined?this.followCamera.baseDistance??null:profile.cameraDistanceMeters;
-    if(cameraDistanceMeters!==null&&(!Number.isFinite(cameraDistanceMeters)||cameraDistanceMeters<=0||cameraDistanceMeters>100))throw new Error('TRAINING_PROFILE_INVALID');
+    if(cameraDistanceMeters!==null&&(!Number.isFinite(cameraDistanceMeters)||cameraDistanceMeters<=CAMERA_DISTANCE_METERS_SCHEMA.exclusiveMinimum||cameraDistanceMeters>CAMERA_DISTANCE_METERS_SCHEMA.maximum))throw new Error('TRAINING_PROFILE_INVALID');
     return {view,cameraDistanceMeters,character,camera,vehicles};
   }
   private configureSimulation(simulation:Simulation,profile:ReturnType<TrainingRuntime['prepareProfile']>):void{
@@ -313,7 +337,7 @@ export class TrainingRuntime implements PhysicsPort {
     for(const v of simulation.vehicles)Object.assign(v.spec,profile.vehicles[v.spec.id]);
   }
   private commitProfile(profile:ReturnType<TrainingRuntime['prepareProfile']>):void{
-    this.configureSimulation(this.simulation,profile);this.followCamera.tuning={...profile.camera};
+    this.configureSimulation(this.simulation,profile);this.followCamera.configureTuning(profile.camera);
     if(profile.cameraDistanceMeters===null)delete this.followCamera.baseDistance;else this.followCamera.baseDistance=profile.cameraDistanceMeters;
     this.profile=structuredClone(profile);this.baselineProfile=structuredClone(profile);
   }
@@ -386,7 +410,9 @@ export class TrainingRuntime implements PhysicsPort {
     if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbitRadians(pointer.yawDeltaRadians??0,pointer.pitchDeltaRadians??0,this.simulation.time,this.simulation);
     if(pointer.distanceDeltaMeters)this.followCamera.zoomByMeters(pointer.distanceDeltaMeters,this.simulation);
     if(input.cameraYawRatio||input.cameraPitchRatio)this.followCamera.orbitRadians((input.cameraYawRatio??0)*dt*1.2,(input.cameraPitchRatio??0)*dt,this.simulation.time,this.simulation);
-    this.simulation.step(controls,dt,this.followCamera.yaw);this.presentation.afterStep(this.simulation);this.sync(dt);
+    this.simulation.step(controls,dt,this.followCamera.yaw);
+    this.lastApplied={source:this.input?this.inputSource:input.training?'world.training':'world-input',input:structuredClone(controls),simulationSeconds:this.simulation.time};
+    this.presentation.afterStep(this.simulation);this.sync(dt);
     if(!this.authored){this.followCamera.update(this.simulation,dt);this.followCamera.capturePresentationPose(this.simulation,previousBinding!==this.simulation.active||previousRevision!==this.simulation.teleportRevision);}
     this.previousJump=!!input.jump;this.previousInteract=!!input.interact;
     // One-shot commands are consumed exactly once even during multi-tick frames.

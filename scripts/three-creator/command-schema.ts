@@ -11,7 +11,7 @@ const trainingInputShape=objectSchema({forward:axis,steer:axis,roll:axis,lift:ax
 const trainingInput={...trainingInputShape,description:'Use emptyTrainingInput(), change channels described by world.describe().training.inputGuide for the active family, and release overrides after use. boost is not universally acceleration.'};
 const trainingProfile=objectSchema({character:objectSchema(training.CONTROL_SCHEMA_PROPERTIES,[]),
  view:objectSchema(training.TRAINING_VIEW_SCHEMA_PROPERTIES,[]),
- cameraDistanceMeters:{anyOf:[{type:'number',minimum:1,maximum:40},{type:'null'}]},
+ cameraDistanceMeters:{anyOf:[training.CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},
  camera:objectSchema({recenterDelaySeconds:number,recenterResponsePerSecond:number,followResponsePerSecond:number,baseFovDegrees:number,targetHeightOffset:number,horizontalOffset:number,collisionEnabled:boolean,collisionRadiusMeters:number},[]),
  vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:number},[])}},[]);
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);

@@ -24,6 +24,8 @@ async function fixture(source = `import * as THREE from 'three'; window.authorSc
 }
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 describe('Three semantic target views', () => {
+
+
   it('packages a runnable animated humanoid in the SDK starter', async () => {
     const root = await fixture(), service = new ThreeCreatorTools(root, 'three-sdk');
     try {
@@ -209,6 +211,11 @@ describe('Three tool operations and truthful submission', () => {
 
 
 describe('v2 command and discovery boundary', () => {
+  it('accepts the SDK camera distance interval through Host command transport', () => {
+    const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
+    for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'training.profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(true);
+    for(const value of [0,-.1,100.1,Infinity])expect(check({type:'training.profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(false);
+  });
   it('accepts expanded handling controls in Creator commands and rejects out-of-range or unknown controls',()=>{
     const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
     expect(check({type:'training.profile',profile:{vehicles:{rover:{maxSpeed:40,coastDeceleration:2,brakeDeceleration:30}},character:{jumpSpeed:7,slowSpeed:2}}})).toBe(true);

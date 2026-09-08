@@ -1,6 +1,7 @@
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
 import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,type WebGLRenderer} from 'three';
+import {createMountedFixture} from './mounted-test-fixture';
 import {FirstPersonBody} from './first-person-body';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type {WorldEngine} from '../engine';
@@ -19,6 +20,74 @@ const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it('reports a real boarding approach and the same enter eligibility without moving or clearing failure state',async()=>{
+  const world=await fixture();try{const r=world.training!,s=r.simulation;
+   world.step({});const before=world.getEntityState('player');const time=s.time;s.message='preserve observation state';
+   const far=r.inspectBoarding('car-1');expect(far).toMatchObject({eligible:false,reason:'TRAINING_MOUNT_OUT_OF_REACH'});expect(far.approachPositionWorldMetersXYZ).not.toBeNull();
+   expect(world.getEntityState('player')).toEqual(before);expect(s.time).toBe(time);expect(s.message).toBe('preserve observation state');
+   r.approach('car-1');expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(far.approachPositionWorldMetersXYZ);
+   expect(r.inspectBoarding('car-1').eligible).toBe(true);expect(r.enter('car-1')).toBe(true);
+   expect(r.inspectBoarding('car-2')).toMatchObject({eligible:false,reason:'TRAINING_TRANSITION_ACTIVE'});
+   world.step({},31);expect(r.inspectBoarding('car-2')).toMatchObject({eligible:false,reason:'TRAINING_ALREADY_MOUNTED'});
+  }finally{world.dispose();}
+ });
+
+ it('shares mounted boarding eligibility with execution and keeps the query read-only',async()=>{
+  const world=await createMountedFixture();try{const r=world.training!,s=r.simulation;
+   expect(r.inspectBoarding('horse-1').eligible).toBe(true);
+   s.humanoid.position.set(0,.025,2.4);const before=world.snapshot();
+   expect(r.inspectBoarding('horse-1')).toMatchObject({eligible:false,reason:'TRAINING_MOUNT_SIDE_REQUIRED'});
+   expect(world.snapshot()).toEqual(before);expect(r.enter('horse-1')).toBe(false);expect(s.failureCode).toBe('TRAINING_MOUNT_SIDE_REQUIRED');
+  }finally{world.dispose();}
+ });
+ it('applies explicit humanoid response and collision radius independently of distance',async()=>{
+  const world=await fixture();try{const r=world.training!,c=r.followCamera;
+   world.step({});c.reset(r.simulation);c.update(r.simulation,0);const target=c.target.y;
+   r.applyProfile({camera:{targetHeightOffset:.5,followResponsePerSecond:11}});c.update(r.simulation,.1);
+   expect(c.target.y-target).toBeCloseTo(.5*(1-Math.exp(-1.1)),8);
+   r.applyProfile({camera:{targetHeightOffset:0,collisionRadiusMeters:.7}});
+   r.switchMap({...map,boxes:[map.boxes[0]!,{id:'eye-block',position:[0,2.5,-8],size:[1,5,1]}]});world.step({});
+   const h=r.simulation.humanoid!;
+   expect(h.world.intersectionWithShape(c.camera.position,new Quaternion(),new RAPIER.Ball(.69),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+  }finally{world.dispose();}
+ });
+ it.each([80,55])('applies explicit humanoid FOV %s without a distance override and preserves it across reset/map',async fov=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({camera:{baseFovDegrees:fov}});world.step({});expect(r.camera.fov).toBe(fov);
+   expect(r.followCamera.baseDistance).toBeUndefined();
+   r.applyProfile({character:{speed:5}});await world.reset();expect(r.camera.fov).toBe(fov);
+   r.switchMap(map);expect(r.camera.fov).toBe(fov);
+  }finally{world.dispose();}
+ });
+ it('preserves humanoid and vehicle camera defaults after unrelated profiles, distance, reset and map replacement',async()=>{
+  const world=await fixture();try{const r=world.training!;world.step({});expect(r.camera.fov).toBe(58);
+   r.applyProfile({character:{speed:5},cameraDistanceMeters:9});world.step({});expect(r.camera.fov).toBe(58);
+   await world.reset();expect(r.camera.fov).toBe(58);r.switchMap(map);expect(r.camera.fov).toBe(58);
+   r.approach('car-1');r.enter('car-1');world.step({},180);expect(r.camera.fov).toBeCloseTo(55,2);
+  }finally{world.dispose();}
+ });
+ it('observes input precedence, consumed one-shots and source time without advancing or exposing mutable inputs',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+   const release=r.setInput({...emptyInput(),forward:.4,jump:true,humanoid:{toggleCrouch:true}}) as ()=>void;
+   r.command({type:'training.input',input:{...emptyInput(),forward:.8,jump:true,humanoid:{toggleCrouch:true}}});release();
+   expect(r.inspectControls().override).toMatchObject({source:'training.input',input:{forward:.8,jump:true}});
+   const before=world.snapshot();r.inspectControls();expect(world.snapshot()).toEqual(before);
+   world.step({training:{...emptyInput(),forward:-1}});
+   const observed=r.inspectControls();expect(observed.lastApplied).toMatchObject({source:'training.input',simulationSeconds:1/60,input:{forward:.8,jump:true,humanoid:{toggleCrouch:true}}});
+   expect(observed.override).toMatchObject({input:{forward:.8,jump:false,humanoid:{}}});
+   observed.override!.input.forward=-1;observed.lastApplied!.input.humanoid!.toggleCrouch=false;
+   expect(r.inspectControls().override!.input.forward).toBe(.8);expect(r.inspectControls().lastApplied!.input.humanoid!.toggleCrouch).toBe(true);
+   r.command({type:'training.input',input:null});expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+   world.step({training:{...emptyInput(),forward:-.3}});expect(r.inspectControls().lastApplied).toMatchObject({source:'world.training',input:{forward:-.3}});
+   world.step({moveZRatio:-.5});expect(r.inspectControls().lastApplied).toMatchObject({source:'world-input',input:{forward:.5}});
+   r.clearInput();expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+   const releaseCurrent=r.setInput({...emptyInput(),steer:.6}) as ()=>void;world.step({});expect(r.inspectControls().lastApplied!.source).toBe('setInput');releaseCurrent();expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+   r.setInput(emptyInput());world.step({});await world.reset();expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+   world.step({});r.switchMap(map);expect(r.inspectControls()).toEqual({override:null,lastApplied:null});
+  }finally{world.dispose();}
+ });
+
  it('describes the active input family without advancing or mutating the simulation',async()=>{
   const world=await fixture();try{const r=world.training!,before=world.snapshot();
    expect(world.describe().training!.inputGuide).toMatchObject({family:'character',fields:{boost:expect.stringContaining('sprint')}});

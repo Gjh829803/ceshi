@@ -1,3 +1,5 @@
+/** Nominal follow arm; framing clamps and collision remain camera-owner policies. */
+export const CAMERA_DISTANCE_METERS_SCHEMA=Object.freeze({type:'number',exclusiveMinimum:0,maximum:100});
 export interface CameraTuning {
   recenterDelaySeconds:number;
   recenterResponsePerSecond:number;

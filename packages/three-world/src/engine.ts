@@ -213,7 +213,7 @@ export class WorldEngine {
     for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.training?{training:{...input.training,jump:false,humanoid:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) });
     return this.snapshot();
   }
-  private validateInput(input: WorldInput): void {
+  validateInput(input: WorldInput): void {
     if (!input || typeof input !== 'object') throw new Error('WORLD_INPUT_INVALID');
     if(input.training){if(!this.training)throw new Error('TRAINING_INPUT_REQUIRES_RUNTIME');this.training.validateInput(input.training);}
     for (const key of ['moveXRatio', 'moveZRatio', 'moveYRatio', 'cameraYawRatio', 'cameraPitchRatio'] as const) if (input[key] !== undefined && (!Number.isFinite(input[key]) || Math.abs(input[key]) > 1)) throw new Error('WORLD_INPUT_INVALID');
@@ -264,7 +264,7 @@ export class WorldEngine {
       }
       if(input.cameraTogglePressed&&this.cameraRig.keyboardToggleEnabled)this.setCameraPerspective(this.cameraRig.perspective==='first-person'?'third-person':'first-person');
       const jumpPressed = input.jumpPressed ?? Boolean(input.jump && !this.previousJump);
-      this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||jumpPressed)},dt);this.pointerInput={};
+      this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.moveYRatio||jumpPressed)},dt);this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
       const customActions=new Map<string,string>();
       let desiredDirection:Vec3=[0,0,0];
