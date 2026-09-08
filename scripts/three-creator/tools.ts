@@ -9,6 +9,7 @@ import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assert
 import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
 import { training, type WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, type AuthoringTopic } from './authoring-schema.js';
+import { readRuntimeGuidance } from './runtime-guidance.js';
 import { CreatorDiscovery, type SchemaSection } from './creator-discovery.js';
 import { creatorToolDiagnostic, type CreatorToolDiagnostic } from './tool-errors.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
@@ -105,7 +106,8 @@ export class ThreeCreatorTools {
   }
   async environment() {
     const snapshot=this.compiler.assetPolicy();
-    return { kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
+    const runtimeGuidance=(await readRuntimeGuidance(this.compiler)).provenance;
+    return {runtimeGuidance, kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
       assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createHumanoidWorld loads the supplied humanoid and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
@@ -197,7 +199,7 @@ export class ThreeCreatorTools {
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
   async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
-  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, profile: this.profile, observation, feedback:{water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
+  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash, profile: this.profile, observation, feedback:{water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
   async executeCommand(command: WorldCommand, creatorOperationId: string = randomUUID()) {
     if (!checkCommand(command)) throw new Error(`THREE_WORLD_COMMAND_INVALID: ${JSON.stringify(checkCommand.errors)}`);
     if (this.profile !== 'three-sdk') throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED: raw profile has no SDK command capability');

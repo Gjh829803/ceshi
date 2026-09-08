@@ -26,7 +26,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  'character-actions':['training','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
-export function publicContractTopic(source: string, topic: AuthoringTopic): string {
+export function publicContractTopic(source: string, topic: AuthoringTopic, options:{includeHostFactory?:boolean}={}): string {
  if (topic === 'all') return source;
  const file = ts.createSourceFile('contracts.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
  const declarations = new Map<string, ts.InterfaceDeclaration|ts.TypeAliasDeclaration>();
@@ -45,7 +45,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic): stri
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${topic==='getting-started'?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${topic==='getting-started'&&options.includeHostFactory!==false?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;
