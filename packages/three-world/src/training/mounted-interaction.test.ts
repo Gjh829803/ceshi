@@ -321,3 +321,72 @@ it("retains the parked non-mount motion policy", async () => {
     world.dispose();
   }
 });
+
+it("hands off the full solved world velocity on a supported upward step", async () => {
+  const world = await createMountedFixture({
+    boxes: [{ id: "step", position: [0, 0.02, 4], size: [8, 0.04, 4] }],
+  });
+  try {
+    const runtime = world.training!;
+    expect(runtime.enter("horse-1")).toBe(true);
+    world.step({}, 31);
+    const horse = runtime.simulation.vehicle!;
+    let upwardVelocity: Vector3 | undefined;
+    for (let tick = 0; tick < 60; tick++) {
+      const before = horse.position.clone();
+      world.step({ moveZRatio: -1 }, 1);
+      const solved = horse.position.clone().sub(before).multiplyScalar(60);
+      if (horse.grounded && solved.y > 0.1) {
+        upwardVelocity = solved;
+        break;
+      }
+    }
+    expect(upwardVelocity).toBeDefined();
+    expect(horse.velocity.y).toBeCloseTo(upwardVelocity!.y, 6);
+    expect(runtime.exit()).toBe(true);
+    expect(runtime.simulation.humanoid!.vertical).toBeCloseTo(
+      upwardVelocity!.y,
+      6,
+    );
+    expect(runtime.simulation.humanoid!.velocity.x).toBeCloseTo(
+      upwardVelocity!.x,
+      6,
+    );
+    expect(runtime.simulation.humanoid!.velocity.z).toBeCloseTo(
+      upwardVelocity!.z,
+      6,
+    );
+  } finally {
+    world.dispose();
+  }
+});
+
+it("rejects command-driven roll during exit without storing or advancing an action", async () => {
+  const world = await createMountedFixture();
+  try {
+    const runtime = world.training!;
+    expect(runtime.enter("horse-1")).toBe(true);
+    world.step({}, 31);
+    expect(runtime.exit()).toBe(true);
+    world.step({}, 3);
+    const human = runtime.simulation.humanoid!;
+    human.skills.availableClips.add("roll");
+    expect(human.grounded).toBe(true);
+    expect(runtime.simulation.transition).toBeGreaterThan(0);
+    const request = { requestId: "exit-roll", action: "roll" as const };
+    expect(() => runtime.command({ type: "training.action", request })).toThrow(
+      "TRAINING_TRANSITION_ACTIVE",
+    );
+    expect(human.skills.active).toBeNull();
+    expect(human.skills.status(request.requestId)).toBeNull();
+    world.step({}, 1);
+    expect(human.skills.active).toBeNull();
+    world.step({}, 24);
+    expect(human.skills.active).toBeNull();
+    expect(runtime.command({ type: "training.action", request })).toMatchObject(
+      { status: "running", code: "STARTED" },
+    );
+  } finally {
+    world.dispose();
+  }
+});

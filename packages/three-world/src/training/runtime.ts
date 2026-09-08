@@ -131,7 +131,15 @@ export class TrainingRuntime implements PhysicsPort {
       case 'training.camera':this.setCameraMode(command.mode);break;
       case 'training.input':this.setInput(command.input??undefined);break;
       case 'training.profile':this.applyProfile(command.profile);break;
-      case 'training.action':{const result=this.simulation.humanoid?.skills.request(command.request);if(!result)throw new Error('TRAINING_CHARACTER_UNAVAILABLE');return result;}
+      case 'training.action': {
+        // A command must obey the same restriction as per-tick humanoid input.
+        // Reject before request() so no action or request identity gets queued.
+        if (this.simulation.transition > 0) throw new Error('TRAINING_TRANSITION_ACTIVE');
+        if (this.simulation.vehicle?.spec.mode === 'mount') throw new Error('TRAINING_ALREADY_MOUNTED');
+        const result = this.simulation.humanoid?.skills.request(command.request);
+        if (!result) throw new Error('TRAINING_CHARACTER_UNAVAILABLE');
+        return result;
+      }
     }
     if (!accepted) {
       const interaction = command.type === 'training.enter' || command.type === 'training.exit';
