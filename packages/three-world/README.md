@@ -43,6 +43,9 @@ guide this choice; they are not mutually exclusive SDK entity classes.
 A human model requirement applies to humans present in the scene, not to every
 possible protagonist. Existing `getting-started` example files demonstrate a human.
 
+For persistent first/third-person defaults and an optional switching key, use
+`profile.view`; the `training` topic contains the configuration example.
+
 ### Human setup
 
 Build white/light-gray primitive environment forms with uniform basic lighting.
@@ -327,6 +330,60 @@ mounting, medium, speed, actions and effective controls. Reset clears movement,
 held input, actions, object attachments and animation history. Episode uses the
 same solver; its start may initialize a validated position/mount state and all
 following actions must execute through actual input.
+
+### Default view and keyboard switching
+
+Set the view in the existing profile when creating a humanoid world:
+
+```ts
+const world = await createHumanoidWorld({scene, camera, canvas, map,
+  profile: {view: {defaultPerspective: 'first-person', keyboardToggleEnabled: true}},
+});
+// Optional remapping; omit to use T.
+world.setKeyBindings({cameraToggle: ['KeyV']});
+```
+
+Defaults are `third-person` and `keyboardToggleEnabled: false`. The switch toggles
+only first/third person; it works on foot and while driving. If the current view
+is shoulder, the first press selects first person. Held-key repeats, paused worlds
+and focused UI controls do not toggle. Authored camera ownership is preserved.
+Read effective configuration from `world.snapshot().training.view` or
+`world.training.exportProfile()`. Reset and map replacement restore the configured
+default. Episode starts inherit it unless `start.training.cameraMode` explicitly
+selects a view for that segment; the override does not change the saved default.
+
+Use `world.training.applyProfile({view: {...}})` or `training.profile` to update
+settings. Setting `defaultPerspective` also selects it immediately; updating only
+`keyboardToggleEnabled` preserves the current view. Disabling the shortcut does
+not disable programmatic `world.training.setCameraMode(0 | 1 | 2)` or
+`training.camera` commands. `cameraTogglePressed` is the corresponding one-shot
+Training input and respects the same permission. Inspect the actual scene before
+claiming recording or visual acceptance.
+
+First-person driving inherits the vehicle controller's existing tilt, including
+for custom vehicle geometry bound to that controller. Keep this default feedback;
+scene code does not add another camera sway loop or a separate tilt setting.
+These view presets require Training and do not supply a generic nonhuman eye rig.
+
+### Training camera perspectives
+
+
+Training camera modes are `0` (third-person follow), `1` (first person) and `2`
+(immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
+2 m right-shoulder boom (wheel: 1.3–3.2 m), collision retraction and up to 4°
+speed FOV expansion. Mode 1 has zero arm length and a 0.035 m near plane; zoom and framing
+offsets do not move the eye. On foot it follows physical posture with a stable
+horizon; mounted it uses the animated rider's eye and the vehicle's orientation,
+with independent seat-local look (±150° yaw). Steering still comes from vehicle
+input. It uses the existing single camera/input owner, including Episode stepping.
+The capabilities playground enables **T** for first/third-person switching; its camera menu also selects the shoulder view. Click the
+view in first person to lock the mouse; **Esc** releases/pauses, and dragging
+remains available when locking is unavailable. Character action bindings retain their configured values.
+Local head/neck triangles are excluded from an instance-private geometry while
+first person is active; original geometry and all bone transforms are preserved
+and restored for third person/authored views. Current training supports one
+controlled rider/driver, not a multiplayer passenger system. Existing mounted
+poses remain procedural approximations rather than imported PUBG animations.
 
 <!-- topic:control -->
 ## One state for gameplay and text commands
@@ -617,23 +674,3 @@ mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
 
 <!-- /asset-info -->
-
-## Training camera perspectives
-
-
-Training camera modes are `0` (third-person follow), `1` (first person) and `2`
-(immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
-2 m right-shoulder boom (wheel: 1.3–3.2 m), collision retraction and up to 4°
-speed FOV expansion. Mode 1 has zero arm length and a 0.035 m near plane; zoom and framing
-offsets do not move the eye. On foot it follows physical posture with a stable
-horizon; mounted it uses the animated rider's eye and the vehicle's orientation,
-with independent seat-local look (±150° yaw). Steering still comes from vehicle
-input. It uses the existing single camera/input owner, including Episode stepping.
-The capabilities playground uses **T** to cycle all three camera modes. Click the
-view in first person to lock the mouse; **Esc** releases/pauses, and dragging
-remains available when locking is unavailable. Character action bindings retain their configured values.
-Local head/neck triangles are excluded from an instance-private geometry while
-first person is active; original geometry and all bone transforms are preserved
-and restored for third person/authored views. Current training supports one
-controlled rider/driver, not a multiplayer passenger system. Existing mounted
-poses remain procedural approximations rather than imported PUBG animations.

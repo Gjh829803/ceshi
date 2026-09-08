@@ -34,6 +34,7 @@ for(const box of map.boxes){
 }
 // Select humanoid.source-101 in project.json; the helper loads all supplied actions.
 // Reuse the visible supplied model. Use accent colors only for key landmarks.
+// Optional first-person opening and T switching: add profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}.
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player'});
 world.setCaptureTargets(['player']);
 await world.start();

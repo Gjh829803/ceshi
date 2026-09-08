@@ -124,6 +124,7 @@ export type WorldInput = Readonly<{
   jumpPressed?: boolean;
   interact?: boolean;
   interactPressed?: boolean;
+  cameraTogglePressed?: boolean;
 }>;
 export type EntityState = Readonly<{
   id: string;
@@ -152,7 +153,7 @@ export type WorldSnapshot = Readonly<{
 /** Minimal common observer for raw Three and SDK worlds. Host owns evaluation. */
 export interface WorldObservation {
  /** Host-only synchronous capture transaction at the exact current fixed sample. */
- withPresentation?<T>(work:()=>T):T;
+ withPresentation?<T>(work:()=>T,options?:{readonly view?:'world'|'object'}):T;
   readonly ready: boolean;
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;

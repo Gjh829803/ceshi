@@ -601,7 +601,7 @@ export class ThreeWorld implements API.World {
  }
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
-  const observer:API.WorldObservation={withPresentation:work=>world.engine.withPresentation(work),ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
+  const observer:API.WorldObservation={withPresentation:(work,options)=>world.engine.withPresentation(work,1,options?.view),ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
    get presentation(){return world.presentation;},
    get player(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},

@@ -66,10 +66,10 @@ export class WorldKeyboard {
   }
   sample(): WorldInput {
     if(this.trainingMounted){
-      const mounted=this.trainingMounted(),humanoid:import('./training/simulation').HumanoidInput={};let interact=false;
-      for(const action of this.trainingPressed){if(action.kind==='vehicle')interact=true;else if(!mounted)Object.assign(humanoid,action.input);}
+      const mounted=this.trainingMounted(),humanoid:import('./training/simulation').HumanoidInput={};let interact=false,cameraTogglePressed=false;
+      for(const action of this.trainingPressed){if(action.kind==='vehicle')interact=true;else if(action.kind==='camera-toggle')cameraTogglePressed=true;else if(!mounted)Object.assign(humanoid,action.input);}
       const training=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings);
-      const result:WorldInput={training,interactPressed:interact,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
+      const result:WorldInput={training,interactPressed:interact,cameraTogglePressed,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
       this.trainingPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
     }
     const has = (action:ControlAction) => this.bindings[action].some(code => this.held.has(code));
@@ -143,7 +143,8 @@ export class WorldInputRouter {
     this.activate(false);
     binding.surface.focus({ preventScroll: true });
   }
-  clear(): void { const surface=this.current?.surface;if(surface&&surface.ownerDocument.pointerLockElement===surface)surface.ownerDocument.exitPointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
+  releasePointerLock(): void { const surface=this.current?.surface;if(surface&&surface.ownerDocument.pointerLockElement===surface)surface.ownerDocument.exitPointerLock(); }
+  clear(): void { this.releasePointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
   dispose(): void {
     if (this.disposed) return;
     this.suspend(); this.bindings.length = 0; this.disposed = true;

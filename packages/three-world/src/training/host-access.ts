@@ -13,7 +13,7 @@ export interface TrainingHostAccess {
   reset(): void;
   clearInput(): void;
   prepareEpisodeStart(start: EpisodeStart): void;
-  present(alpha: number, tick: number): () => void;
+  present(alpha: number, tick: number, view?:'world'|'object'): () => void;
 }
 const hosts = new WeakMap<TrainingRuntime, TrainingHostAccess>();
 export function registerTrainingHost(runtime: TrainingRuntime, host: TrainingHostAccess): void {

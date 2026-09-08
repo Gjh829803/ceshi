@@ -115,11 +115,21 @@ function instanceProxy(selection:Selection,scene:THREE.Scene){
 
 /** Capture only: no second scene, simulation clock, physics world or fabricated mesh. */
 export function captureObjectViews(world:CaptureWorld,view:'top-down'|'entity-triview',entityIds:string[]=[],frontYawRadians:number|null=null){
-  return withCapturePresentation(world,()=>capturePresentedObjectViews(world,view,entityIds,frontYawRadians));
+  let renderPrimary=false,failed=false;
+  try{return withCapturePresentation(world,()=>{
+    if(view==='entity-triview'&&entityIds.length>1)fail('SINGLE_TARGET_REQUIRED');
+    renderPrimary=world.renderer.getRenderTarget()===null;
+    return capturePresentedObjectViews(world,view,entityIds,frontYawRadians);
+  },{view:'object'});}
+  catch(error){failed=true;throw error;}
+  finally{
+    // The object-view override must end before restoring the primary framebuffer.
+    if(renderPrimary)try{withCapturePresentation(world,()=>world.renderer.render(world.scene,world.camera));}catch(error){if(!failed)throw error;}
+  }
 }
 /** Raw Three observers retain their direct capture behavior. */
-export function withCapturePresentation<T>(world:Pick<WorldObservation,'withPresentation'>,work:()=>T):T {
-  return world.withPresentation?world.withPresentation(work):work();
+export function withCapturePresentation<T>(world:Pick<WorldObservation,'withPresentation'>,work:()=>T,options?:{readonly view?:'world'|'object'}):T {
+  return world.withPresentation?world.withPresentation(work,options):work();
 }
 function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-triview',entityIds:string[],frontYawRadians:number|null){
   const {scene,renderer}=world;scene.updateMatrixWorld(true);
@@ -169,7 +179,6 @@ function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-
     for(const [object,state] of objectState)restore(()=>{object.visible=state.visible;object.layers.mask=state.layers;if(state.lodAutoUpdate!==undefined)(object as THREE.LOD).autoUpdate=state.lodAutoUpdate;});
     restore(()=>{scene.background=old.background;scene.fog=old.fog;renderer.autoClear=old.autoClear;renderer.xr.enabled=old.xr;renderer.shadowMap.enabled=old.shadows;});
     restore(()=>renderer.setPixelRatio(old.pixelRatio));restore(()=>renderer.setSize(old.size.x,old.size.y,false));restore(()=>renderer.setRenderTarget(old.renderTarget,old.cubeFace,old.mipmapLevel));restore(()=>renderer.setViewport(old.viewport));restore(()=>renderer.setScissor(old.scissor));restore(()=>renderer.setScissorTest(old.scissorTest));
-    if(!old.renderTarget)restore(()=>renderer.render(scene,world.camera));
     if(!hasPrimaryFailure&&cleanupErrors.length)throw cleanupErrors[0];
   }
 }

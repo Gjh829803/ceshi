@@ -12,6 +12,7 @@ export const INPUT_BINDINGS = {
   putDown:{codes:['KeyG'],label:'放下物件'}, vehicle:{codes:['KeyF'],label:'上下载具 / 坐骑'},
   swimStyle:{codes:[],label:'切换泳姿（动作菜单，可自定义按键）'},
   slow:{codes:[],label:'慢走（可自定义按键）'},
+  cameraToggle:{codes:['KeyT'],label:'第一 / 第三人称切换（需启用）'},
   cameraLeft:{codes:['ArrowLeft'],label:'视角左转 / 飞行左移'},
   cameraRight:{codes:['ArrowRight'],label:'视角右转 / 飞行右移'},
   cameraUp:{codes:['ArrowUp'],label:'视角向上 / 飞行俯仰'},
@@ -52,10 +53,11 @@ export const HUMANOID_BINDINGS = {
   toggleSwimStyle:{code:'',key:'动作菜单',label:'切换泳姿'},
 } as const;
 export const HUMANOID_INPUT_FIELDS=Object.freeze(['toggleCrouch','roll','slide','interact','putDown','prone','climb','releaseClimb','toggleSwimStyle','cancel'] as const);
-export type KeyAction={kind:'vehicle'}|{kind:'humanoid';input:HumanoidInput};
+export type KeyAction={kind:'vehicle'}|{kind:'camera-toggle'}|{kind:'humanoid';input:HumanoidInput};
 export function actionForKey(code:string,mounted:boolean,held:ReadonlySet<string>=new Set(),bindings:KeyBindings=DEFAULT_KEY_BINDINGS):KeyAction|undefined {
   const bound=(action:ControlAction)=>bindings[action].includes(code);
   if(bound('vehicle'))return {kind:'vehicle'};
+  if(bound('cameraToggle'))return {kind:'camera-toggle'};
   if(mounted)return;
   if(bound('crouch'))return {kind:'humanoid',input:bindings.sprint.some(code=>held.has(code))?{slide:true}:{toggleCrouch:true}};
   for(const [action,field] of [['roll','roll'],['interact','interact'],['putDown','putDown'],['prone','prone'],['swimStyle','toggleSwimStyle']] as const)if(bound(action))return {kind:'humanoid',input:{[field]:true}};

@@ -19,6 +19,49 @@ const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it('persists the configured default view while keyboard permission leaves programmatic modes available',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});
+   expect(r.snapshot()).toMatchObject({cameraMode:1,view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});
+   world.step({cameraTogglePressed:true},3);expect(r.snapshot().cameraMode).toBe(0);
+   r.applyProfile({view:{keyboardToggleEnabled:false}});
+   world.step({cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
+   r.setCameraMode(2);expect(r.snapshot().cameraMode).toBe(2);
+   await world.reset();expect(r.snapshot().cameraMode).toBe(1);
+   expect(r.exportProfile().view).toEqual({defaultPerspective:'first-person',keyboardToggleEnabled:false});
+   r.setCameraMode(0);r.switchMap(map);expect(r.snapshot().cameraMode).toBe(1);
+   r.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:0});expect(r.snapshot().cameraMode).toBe(1);
+   r.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:0,training:{cameraMode:0}});expect(r.snapshot().cameraMode).toBe(0);
+   expect(r.exportProfile().view?.defaultPerspective).toBe('first-person');
+  }finally{world.dispose();}
+ });
+ it('keeps camera toggle edges across short frames and consumes them once in multi-tick frames',async()=>{
+  const world=await fixture();try{const r=world.training!,engine=(world as unknown as {engine:WorldEngine}).engine;
+   r.applyProfile({view:{keyboardToggleEnabled:true}});
+   engine.advance(1/120,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
+   engine.advance(1/120,{});expect(r.snapshot().cameraMode).toBe(1);
+   engine.advance(3/60,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
+   engine.advance(1/120,{cameraTogglePressed:true});world.stop();world.step({});expect(r.snapshot().cameraMode).toBe(0);
+   world.useAuthoredCamera();world.step({cameraTogglePressed:true});expect(r.cameraMode).toBe('authored');
+  }finally{world.dispose();}
+ });
+ it('maps one configurable camera key edge without toggling on repeat or after clearing',()=>{
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setTrainingMode(()=>false);keyboard.enabled=true;
+  keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(true);
+  keyboard.keyDown('KeyT',true);expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.keyUp('KeyT');keyboard.keyDown('KeyT');keyboard.clear();expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.setKeyBindings({cameraToggle:['KeyV']});keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.keyDown('KeyV');expect(keyboard.sample().cameraTogglePressed).toBe(true);
+ });
+ it('preserves authored camera ownership across map replacement and reset with a saved first-person preference',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});world.useAuthoredCamera();
+   r.switchMap(map);expect(r.cameraMode).toBe('authored');
+   world.step({cameraTogglePressed:true});expect(r.cameraMode).toBe('authored');
+   await world.reset();expect(r.cameraMode).toBe('authored');
+   expect(r.exportProfile().view?.defaultPerspective).toBe('first-person');
+  }finally{world.dispose();}
+ });
  it('uses a fresh sprint+crouch edge for slide and remaps movement, HUD and action admission together',()=>{
   const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setTrainingMode(()=>false);keyboard.enabled=true;
   keyboard.keyDown('KeyC');keyboard.keyDown('ShiftLeft');expect(keyboard.sample().training?.humanoid).toEqual({toggleCrouch:true});

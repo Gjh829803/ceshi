@@ -122,6 +122,7 @@ export class Character {
   get phase() { return this.source?.phase ?? 0; }
   get hip() { return this.source?.bones.pelvis; }
   setFirstPerson(active: boolean): void { this.firstPersonBody?.setActive(active); }
+  presentFirstPerson(active:boolean):(()=>void)|undefined{return this.firstPersonBody?.present(active);}
   /** 使用动画求值后的头部位置，方向仍由相机负责，避免翻滚动画强制翻转视线。 */
   eyePosition(target: T.Vector3): boolean {
     const head = this.source?.bones.head;
