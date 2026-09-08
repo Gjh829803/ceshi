@@ -30,4 +30,14 @@ world.onUpdate(()=>{const s=world.snapshot().training;hud.textContent=`骑马 ·
 const controls=document.createElement('div');presentation.ui.mount(controls);
 const button=document.createElement('button');button.textContent='请求上第一匹马';button.onclick=async()=>{const receipt=await world.execute({type:'training.enter',instanceId:'horse-1'});result.textContent=JSON.stringify(receipt,null,2);presentation.focus();};controls.append(button);
 const result=document.createElement('pre');controls.append(result);
+// Read-only acceptance diagnostics. These never advance animation or alter logical state.
+(window as any).__MOUNTED_DIAGNOSTICS__=()=>{
+ const snapshot=world.snapshot(),id=snapshot.training?.mountedInstanceId,index=vehicles.findIndex(v=>v.instanceId===id);
+ if(index<0)return {mountedInstanceId:null,pelvisErrorMeters:null};
+ const horse=horses[index]!,vehicle=vehicles[index]!;
+ horse.root.updateWorldMatrix(true,true);
+ const anchor=horse.root.matrixWorld.clone().multiply(horse.readSeatAnchor(vehicle.spec.seat,vehicle.seatAnchor));
+ const actual=character.hip?.getWorldPosition(new THREE.Vector3());
+ return {mountedInstanceId:id,pelvisErrorMeters:actual?actual.distanceTo(new THREE.Vector3().setFromMatrixPosition(anchor)):null,logicalRootScales:horses.map(h=>h.root.scale.toArray()),loaded:horses.map(h=>h.loaded)};
+};
 await world.start();presentation.focus();

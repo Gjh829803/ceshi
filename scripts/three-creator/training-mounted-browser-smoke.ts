@@ -30,7 +30,7 @@ try{
  await json('creator-playtest.json',report);
  const tracePath=path.join(path.dirname(report.videoPath),'trace.json');const trace=JSON.parse(await readFile(tracePath,'utf8'));
  await json('creator-trace.json',trace);
- for(const [name,seconds]of Object.entries({side:1.5,front:4,turning:8,exit:21,reset:186})){
+ for(const [name,seconds]of Object.entries({side:1.5,front:4,turning:8,exit:21,reset:183})){
   if(seconds>=report.actualWallSeconds)continue;
   await exec('ffmpeg',['-hide_banner','-loglevel','error','-ss',String(seconds),'-i',report.videoPath,'-frames:v','1',path.join(output,`${name}.png`)]);
  }
@@ -61,7 +61,7 @@ try{
    const lease=await session.page.evaluate(async()=>{const observer=(window as any).__WORLDKIT_EVAL__;return {receipt:await observer.execute({type:'training.exit'}),snapshot:observer.snapshot()};});
    await json('episode-lease.json',lease);
    if(lease.receipt.status!=='rejected')throw new Error('EPISODE_LEASE_BYPASSED');
-   for(const [name,eye]of Object.entries({side:[7,3,0],front:[0,3,7]})){
+   for(const [name,eye]of Object.entries({side:[7,3,0],front:[0,3,-7]})){
     const observed=await session.observe({cameraPositionWorldMetersXYZ:eye as [number,number,number],lookAtWorldMetersXYZ:[0,1.5,0]});
     await writeFile(path.join(output,`mounted-${name}.png`),Buffer.from(observed.imageDataUrl.split(',')[1]!,'base64'));
    }
@@ -73,7 +73,9 @@ try{
     const frame=await session.frame('image/jpeg'),tick=before.simulationTick+frameSimulationTick(index,capabilities.fixedTimeStepSeconds);
     if(frame.snapshot.simulationTick!==tick||frame.snapshot.errors.length||session.errors.length)throw new Error('EPISODE_CLOCK_OR_RUNTIME_ERROR');
     const input={training:{forward:index<600?1:0,steer:index>=240&&index<360?.2:0,roll:0,lift:0,pitch:0,strafe:0,boost:index>=360&&index<600,brake:index>=600,slow:false,jump:false}};
-    frames.push({frameIndex:index,simulationTick:tick,snapshot:frame.snapshot,input,imageSha256:hash(Buffer.from(frame.imageDataUrl.split(',')[1]!,'base64'))});
+    const posture=await session.page.evaluate(()=>(window as any).__MOUNTED_DIAGNOSTICS__());
+    if(posture.pelvisErrorMeters===null||posture.pelvisErrorMeters>1e-5||posture.logicalRootScales.some((scale:number[])=>scale.some(v=>v!==1)))throw new Error('MOUNTED_POSTURE_DRIFT');
+    frames.push({posture,frameIndex:index,simulationTick:tick,snapshot:frame.snapshot,input,imageSha256:hash(Buffer.from(frame.imageDataUrl.split(',')[1]!,'base64'))});
     await encoder.write(Buffer.from(frame.imageDataUrl.split(',')[1]!,'base64'));
     terminal=await session.advance(input,frameSimulationTick(index+1,capabilities.fixedTimeStepSeconds)-frameSimulationTick(index,capabilities.fixedTimeStepSeconds));
     if(index%120===0)console.log(JSON.stringify({stage:'episode',frame:index,output}));
