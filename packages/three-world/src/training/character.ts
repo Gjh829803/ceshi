@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {CharacterAttachments,type CharacterAttachmentPoint,type CharacterAttachmentTransform} from './character-attachments';
+export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './character-attachments';
 import { Character as SourceCharacter } from './humanoid/source-character';
 import type { HumanoidRenderState, SourceCharacterFrame } from './humanoid/animation';
 export type { HumanoidRenderState } from './humanoid/animation';
@@ -71,6 +73,7 @@ export class Character {
   loaded = false;
   carriedAttachment: { id: string; position: T.Vector3 } | null = null;
   private source?: SourceCharacter;
+  private attachments?: CharacterAttachments;
   private overlay?: MountedRiderPose;
   private frame = emptyFrame();
   private localPosition = new T.Vector3();
@@ -103,6 +106,12 @@ export class Character {
     this.root.name = 'Host_Character'; this.root.add(this.actor);
     if (source) this.adopt(source);
   }
+  get attachmentPoints():readonly CharacterAttachmentPoint[]{return this.attachments?.points??[];}
+  /** Caller owns the object's geometry/materials; detach before reusing it elsewhere. */
+  attach(point:CharacterAttachmentPoint,object:T.Object3D,transform?:CharacterAttachmentTransform):()=>void {
+    if(!this.attachments)throw new Error('CHARACTER_ATTACHMENT_NOT_READY');
+    return this.attachments.attach(point,object,transform);
+  }
   get sourceCharacter() { return this.source; }
   get motionSources() { return this.source?.motionSources ?? []; }
   get availableHumanoidClips() { return new Set(Object.keys(this.source?.actions ?? {})); }
@@ -113,11 +122,12 @@ export class Character {
     this.source = source; this.actor.add(source.root);
     this.presentationNodes=new Set([this.actor]);
     source.root.traverse(node=>this.presentationNodes.add(node));
+    this.attachments=new CharacterAttachments(source.root);
     this.previousPose=[];this.currentPose=[];this.snapPose=true;
     this.overlay = new MountedRiderPose(source.root); this.loaded = true;
   }
   async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
-  dispose():void{this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+  dispose():void{this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.attachments?.dispose();delete this.attachments;this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
 
   /** Internal presentation correction. Physics and the managed root stay untouched. */
   alignMountedPelvis(anchorWorld: T.Matrix4): void {
