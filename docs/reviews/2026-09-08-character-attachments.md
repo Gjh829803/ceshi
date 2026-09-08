@@ -43,14 +43,15 @@ Three 0.185.1 的安装源码已核对：`SkeletonUtils.clone`、`Skeleton.clone
 ## 验证证据
 
 工作树：`.worktrees/character-attachments`，分支 `codex/character-attachments-playground-20260908`。
-审查对象是基于 `691b10e0ad1abec85ec723cc4513146751e4e834` 的未提交功能变更；未合入主分支。
+功能提交：`3eeb257f`。集成基线：目标分支 `codex/three-sdk-data-production-20260907` 的 `abc1816a`。
+以下门禁验证的是已合入该基线的功能分支；SDK 与 Playground 源码相对审查版本未改变。
 
 | 验证 | 结果 |
 | --- | --- |
-| `pnpm exec vitest run packages/three-world scripts/three-creator scripts/three-episode --maxWorkers=1 --minWorkers=1` | 56 文件、690 测试通过；包括 6 项装备预览浏览器回归和真实 Source101 步行/骑乘/姿态恢复挂载验证。 |
-| `node --test scripts/three-episode/*.test.mjs scripts/cloud/three-episode-scheduling.test.mjs scripts/lib/cloud-production-run.test.mjs` | 105 测试通过，外部云传输保持模拟。 |
+| `pnpm test` | 64 文件、736 测试通过（209 contract、527 resource-heavy）；包括 6 项装备预览浏览器回归和真实 Source101 步行/骑乘/姿态恢复挂载验证。 |
+| `node --test scripts/three-episode/*.test.mjs scripts/cloud/three-episode-scheduling.test.mjs scripts/lib/cloud-production-run.test.mjs` | 140 测试通过，包含 Seedance Python 契约桥接；外部云传输保持模拟。 |
 | `pnpm typecheck` | 通过；另对根 tsconfig 未收录的装备面板、文档示例直接运行严格类型检查，通过。 |
-| `pnpm test:census` | 63 文件已纳入测试门禁：24 contract、39 resource-heavy。 |
+| `pnpm test:census` | 64 文件已纳入测试门禁：24 contract、40 resource-heavy。 |
 | `pnpm verify:workspace-boundaries` | 通过，0 已登记边界债务。 |
 | `pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/attachments-runtime` | 通过。 |
 | 真实 Playground | 打开预览前后，Source101 骨骼、主相机、模拟时间和纯世界像素相同；穿戴六件样件后源画面改变，原骨骼、主相机与模拟时间保持不变。已查看最终截图。 |
@@ -66,5 +67,5 @@ Playground 构建哈希：`96972849d7f15ef256e1d782f71ba97fb71653280e183070a9d98
 - 这是刚性视觉挂载。布料模拟、抓握/双手 IK、脚底贴合、装备碰撞和能力加成均未实现；滑板仍由载具系统驱动。
 - Source101 是已验证骨架。自定义骨架需要验证骨骼映射、初始姿态和缩放，不能根据名称相同推断兼容。
 - 预览借用原材质，不能直接修改借用材质做染色或高亮；以后若新增此类功能，应明确克隆和释放所需材质。
-- 浏览器证据来自本机 Chromium；未做 Safari/Firefox、不同 GPU 的兼容认证。未运行远端 CI、独立第三方复审或云端生成。
-- 本审查覆盖当前独立工作树。与后续主分支集成时仍需检查共享所有者和最终合并结果。
+- 浏览器证据来自本机 Chromium；未做 Safari/Firefox、不同 GPU 的兼容认证。未验收远端 CI，未进行独立第三方复审或云端生成。
+- 已核对目标分支新增的运行时指导与 Seedance 交付：未修改人物、动画、相机和预览实现，测试清单保留双方新增项。后续基线变动仍需另行核验。
