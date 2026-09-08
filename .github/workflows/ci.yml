@@ -47,8 +47,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test independent Node and Python lanes
+      - name: Test independent Node lane
         run: pnpm test:independent
+
+      - name: Test Seedance dispatch and delivery contracts
+        run: |
+          python3 scripts/three-episode/seedance-dispatch.test.py
+          python3 scripts/three-episode/seedance-delivery.test.py
 
       - name: Run full Vitest suite
         run: pnpm test

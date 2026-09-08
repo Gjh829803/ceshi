@@ -1,0 +1,11 @@
+{
+  "name": "three-seedance-example",
+  "namespace": "lwdp",
+  "host": "127.0.0.1",
+  "port": 53871,
+  "maximumActive": 4,
+  "limitUnits": 120,
+  "sourceProof": {"releaseCommit": "REPLACE_WITH_FROZEN_RELEASE_COMMIT", "authorizationRef": "REPLACE_WITH_RUN_AUTHORIZATION"},
+  "manifestPaths": ["/work/run/batch/seedance-requests.json"],
+  "snapshotPath": "/work/run/control/seedance-budget.json"
+}

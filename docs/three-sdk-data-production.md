@@ -1,7 +1,7 @@
 # Three 数据生产
 
 生产链路使用同一份世界与运行时：**Agent 创作 → Creator 自检交付 → Episode
-动作规划与真实录制 → 样式素材 → 视频请求准备**。动作、碰撞和状态由 SDK 执行，
+动作规划与真实录制 → 样式素材 → 视频请求 → Seedance 云端生成与 S3 回收**。动作、碰撞和状态由 SDK 执行，
 视频 Prompt 使用实际记录的动作证据。
 
 | 阶段 | 入口 | 输入与产物 |
@@ -12,10 +12,12 @@
 | 规划与录制 | `workflow.ts`、`capture.ts` | 路线和动作计划 → 6×30 秒、1280×720、24fps，60Hz 模拟与 trace |
 | 风格制作 | `visuals.mjs` | 1 套原图风格与 9 套重设计 → 锚点、各段首帧和目标三视图 |
 | 事件与请求 | `event-prefetch.mjs`、`visuals.mjs` | 真实动作/视觉资料 → Prompt、单样式请求和最多 60 条汇总 |
+| 视频生成与回收 | `seedance-preflight.mjs`、`seedance-dispatch.py`、`seedance-delivery.py` | 已审核请求 → 真实任务、原片、规格证据与私有 S3 交付 |
 | 展示与恢复 | `report.ts`、`preview-server.mjs`、`resume.ts` | 真实产物、检查点、请求身份与人工反馈 |
 
-当前所有可执行 Episode 工作流要求 `--stop-before-seedance`。视频提供商提交、
-Creator 交付自动订阅和最终视频验收尚未实现。
+Episode 素材准备使用 `--stop-before-seedance`；[Seedance 云端入口](three-episode-seedance.md)
+独立执行准入、提交和回收。Creator 交付自动订阅尚未实现。媒体规格和持久化通过后，
+最终内容质量仍需检查。
 
 ## 本地准备和执行入口
 
