@@ -119,3 +119,31 @@ it('matches actual rider pixels for manual transforms and material groups withou
   expect(result.recovered.issues).toEqual([]);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },30000);
+
+it('keeps the preset identity when the integrated SDK equips and removes rigid accessories',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'rider-attachments-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-vehicle');
+  for(const [name,content]of Object.entries(example.files)){
+   const source=name==='main.ts'?content.replace('type TrainingMap','TrainingCharacter,type TrainingMap').replace(
+    'const world=await createHumanoidWorld({',
+    "const character=new TrainingCharacter();(window as any).__attachmentFixture={character,hat:new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.3),new THREE.MeshBasicMaterial())};\nconst world=await createHumanoidWorld({character,"):content;
+   await writeFile(path.join(root,name),source);
+  }
+  await service.inspect();const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(async()=>{
+   const host=window.__THREE_CREATOR_HOST__!,world=window.__WORLDKIT_EVAL__!;
+   const fixture=(window as unknown as {__attachmentFixture:{character:import('@worldkit/three').TrainingCharacter;hat:import('three').Mesh}}).__attachmentFixture;
+   await host.stop();const before=host.read().characterContinuity;
+   const detach=fixture.character.attach('head',fixture.hat),equipped=host.read().characterContinuity;
+   await host.reset();const reset=host.read().characterContinuity,retained=fixture.hat.parent!==null;
+   detach();const removed=host.read().characterContinuity;
+   world.player.visible=false;const hidden=host.read().characterContinuity;world.player.visible=true;
+   return {before,equipped,reset,retained,removed,hidden};
+  });
+  for(const state of [result.equipped,result.reset,result.removed]){
+   expect(state.issues).toEqual([]);expect(state.evidence?.rootUuid).toBe(result.before.evidence?.rootUuid);
+  }
+  expect(result.retained).toBe(true);expect(result.hidden.issues).toContain('CHARACTER_VISUAL_HIDDEN');
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);

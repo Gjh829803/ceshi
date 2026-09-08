@@ -88,3 +88,21 @@ Episode 骑乘推进 120 tick，同帧重复和重置后的 PNG 一致。
 - worldBuildHash: `52e014717c86ee93df5b52e7a8949197939e67e38dca236affdb89f40a4d7019`
 
 保持辅助诊断范围；本轮没有修改 SDK 控制权、技术交付准入或云部署。
+
+## 与工作分支装备功能集成
+
+合入前发现工作分支已前进至 `30cd30da`，新增 Source101 刚性挂点和装备预览。
+集成时保留双方测试清单，并修复语义冲突：刚性装备的穿脱不等于人物替换。
+连续性检查限定为 Training 人物的蒙皮网格、几何、骨架和根身份；Source101
+两个人体网格均为 SkinnedMesh。刚性装备不参与比较，隐藏/删除/替换人体本身
+仍会被检出。SDK 可选装备功能与 Creator 默认生成要求分别维持原有职责。
+
+新增装备装卸单元回归及真实 SDK attach → reset → detach 浏览器回归。
+集成树的完整 `pnpm test` 通过（66 个文件），typecheck、6 项胶囊 Node
+检查和 runtime prebuild 通过；独立静态复审无新可操作问题。
+石化森林自绘坐骑案例重新完成 9.422 秒 Creator 自检和技术交付，人物连续性
+问题列表为空；独立 Episode 骑乘 120 tick、重复截图和重置 PNG 一致。
+
+- 本地证据：`.codex-tmp/preset-human/run-1788871311800/`
+- runtimeHash: `68573e17d5a32ad0ab806c31f923c152d14ae65b415d1ad140750217b7c13b15`
+- worldBuildHash: `4c1cc2c155f6a70319b6121ee49201fd1dc51710731dbc3af0d160597b622532`

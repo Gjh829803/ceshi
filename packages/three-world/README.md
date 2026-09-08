@@ -104,7 +104,8 @@ The Creator requirement does not restrict the SDK's general custom-character API
 
 During Creator self-check, exercise walk → enter → ride → exit → walk → reset.
 `characterContinuity` in inspect/playtest feedback tracks the Training character's
-root, mesh, geometry and bone identities plus scene/material visibility. It is
+root, skinned mesh, geometry and bone identities plus scene/material visibility.
+Rigid equipment is outside this identity comparison. It is
 advisory: it cannot prove asset provenance, screen visibility, animation ownership
 or the absence of an extra rider. Check key frames as well as state. The existing
 asset-policy snapshot format and technical delivery contract remain unchanged.

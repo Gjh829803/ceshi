@@ -12,6 +12,7 @@ export const workspaceMarkup=`
     <button id="exploreButton" class="rail-button" aria-pressed="true"><span data-icon="explore" data-size="25"></span><span>探索</span></button>
     <button id="libraryButton" class="rail-button" aria-pressed="false"><span data-icon="assets" data-size="25"></span><span>资产库</span></button>
     <button id="humanButton" class="rail-button"><span data-icon="character" data-size="25"></span><span>人物动作</span></button>
+    <button id="equipmentButton" class="rail-button"><span data-icon="t-shirt" data-size="25"></span><span>人物装备</span></button>
     <button id="scenesButton" class="rail-button"><span data-icon="scenes" data-size="25"></span><span>测试场景</span></button>
     <button id="debugButton" class="rail-button" aria-pressed="true"><span data-icon="camera" data-size="25"></span><span>3C 调试</span></button>
     <div class="rail-spacer"></div><button id="performanceButton" class="rail-button" aria-expanded="false"><span data-icon="chart" data-size="23"></span><span>性能</span></button>

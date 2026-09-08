@@ -17,6 +17,8 @@ import { mountAssetLibrary } from './platform/library';
 import { mountWorkbench } from './platform/workbench';
 import { defaultRegion, prepareCourse } from './platform/scenarios';
 import { buildInteractionVisuals } from './humanoid/interaction-visuals';
+import {createAccessoryPreview} from './humanoid/accessories';
+import {mountEquipmentPanel} from './humanoid/equipment-panel';
 import { mountHumanoidLab } from './humanoid/panel';
 import { createCollisionDebug,type CollisionDebugMode } from './humanoid/capsule-debug';
 import { HumanoidDemo, humanoidTraversalReady } from './humanoid/demo';
@@ -46,6 +48,7 @@ catch(error){document.getElementById('loadText')!.textContent='资源加载失�
 const sdk=await createWorld({scene,camera,renderer,canvas,assetDefinitions:definitions,
   training:{map:getMap('campus'),vehicles:SPECS.map((spec,n)=>({instanceId:spec.id,assetId:'training.'+spec.id,spec,object:visuals[n]!.root})),character:{instanceId:'person',object:character.root,animation:character}}});
 const runtime=sdk.training!,sim=runtime.simulation,follow=runtime.followCamera;
+const accessories=createAccessoryPreview(character);
 let currentMap=getMap('campus'),world=buildWorld(scene,currentMap);
 const session={get map(){return currentMap;},get world(){return world;},get queries(){return runtime.environment;},
   switchMap(id:string){if(id===currentMap.id)return;const next=getMap(id),visual=buildWorld(scene,next);try{runtime.switchMap(next);}catch(error){visual.dispose();throw error;}world.dispose();world=visual;currentMap=next;},dispose(){world.dispose();sdk.dispose();}};
@@ -136,7 +139,7 @@ function prepareSelection(mapId:string,regionId:string,assetId:string){
   session.switchMap(mapId);world=session.world;follow.environment=session.queries;
   prepareCourse(sim,map,regionId,assetId);pause(false,false);syncTeleport();resetFPS('采样中');
 }
-function humanoidState(){const h=sim.humanoid;return {地图:session.map.name,操控权:sim.vehicle?sim.vehicle.spec.name:'人物',状态:h?.state,动画:character.clipLabel,骨骼:character.sourceCharacter?.rigTargets,已载入动作:character.availableHumanoidClips.size,速度:h?.speed,着地:h?.grounded,姿态:h?.stance,胶囊高度:h?.capsuleHeight,水中:h?.swimming,泳姿:h?.swimStyle,动作:h?.skills.pose??h?.surface.pose,探测:h?.probe?{类型:h.probe.kind,高度:h.probe.height,厚度:h.probe.depth,原因:h.probe.reason}:null,提示:h?.lastResult,携带:h?.skills.carrying,座椅:h?.skills.seated,自动演示:humanDemo?.trial.name??null};}
+function humanoidState(){const h=sim.humanoid;return {佩戴:accessories.snapshot(),地图:session.map.name,操控权:sim.vehicle?sim.vehicle.spec.name:'人物',状态:h?.state,动画:character.clipLabel,骨骼:character.sourceCharacter?.rigTargets,已载入动作:character.availableHumanoidClips.size,速度:h?.speed,着地:h?.grounded,姿态:h?.stance,胶囊高度:h?.capsuleHeight,水中:h?.swimming,泳姿:h?.swimStyle,动作:h?.skills.pose??h?.surface.pose,探测:h?.probe?{类型:h.probe.kind,高度:h.probe.height,厚度:h.probe.depth,原因:h.probe.reason}:null,提示:h?.lastResult,携带:h?.skills.carrying,座椅:h?.skills.seated,自动演示:humanDemo?.trial.name??null};}
 function prepareHumanTrial(mapId:string,trial:CharacterTrial,demo=false){
   if(!ready)throw new Error('人物动作仍在加载');
   session.switchMap(mapId);world=session.world;follow.environment=session.queries;
@@ -152,6 +155,7 @@ const humanPanel=mountHumanoidLab(document.body,{
   getSmoothing:()=>character.sourceCharacter?.smoothing??true,setSmoothing:value=>{if(character.sourceCharacter)character.sourceCharacter.smoothing=value;},
   getDebug:()=>collisionMode,setDebug:setCollisionMode,
 });
+const equipmentPanel=mountEquipmentPanel(document.body,character,accessories,onPanelChange);
 const workbench=mountWorkbench(document.body,{
   onOpenChange:onPanelChange,onPrepare:prepareSelection,getMapId:()=>session.map.id,getAssetId:()=>sim.vehicle?.spec.id??'person',
   getProfile:id=>readEffectiveControlProfile(runtime,profiles.get(id)!),
@@ -185,6 +189,7 @@ el('exploreButton').onclick=()=>{library.close();el('quickPanel').hidden=true;sd
 el('scenesButton').onclick=el('sceneTopButton').onclick=()=>{library.close();workbench.open('scenes');};
 el('debugButton').onclick=()=>toggleInspector(library.isOpen()||el('workspace').classList.contains('inspector-closed')||innerWidth<=720&&!el('workspace').classList.contains('inspector-mobile-open'));
 el('inspectorClose').onclick=()=>toggleInspector(false);
+el('equipmentButton').onclick=()=>{library.close();equipmentPanel.open();};
 el('advancedButton').onclick=()=>workbench.open('camera');el('humanButton').onclick=()=>{library.close();humanPanel.open();};
 el('quickButton').onclick=()=>{clearInput();const panel=el('quickPanel');panel.hidden=!panel.hidden;el('quickButton').setAttribute('aria-expanded',String(!panel.hidden));};
 el('mapExpandButton').onclick=()=>{const expanded=el('minimap').classList.toggle('expanded');el('mapExpandButton').setAttribute('aria-expanded',String(expanded));el('mapExpandButton').setAttribute('aria-label',expanded?'缩小小地图':'展开小地图');};
@@ -198,7 +203,7 @@ el('downloadManifest').onclick=()=>{const template={schema:'vector.asset-contrib
 // Delegation also covers rows and quick slots rebuilt after search/favorites.
 const releaseUIInput=(event:Event)=>{const target=event.target instanceof HTMLElement?event.target.closest('button,input,select,textarea'):null;if(target&&!target.hasAttribute('data-key'))clearInput();};
 document.addEventListener('pointerdown',releaseUIInput);document.addEventListener('focusin',releaseUIInput);
-window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();collisionDebug.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
+window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();equipmentPanel.dispose();accessories.dispose();collisionDebug.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
 document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);const code=b.dataset.key!,bindings=sdk.getKeyBindings();if(!pressed.has(code)){const action=actionForKey(code,!!sim.vehicle,pressed,bindings);if(action?.kind==='humanoid')humanCommands={...humanCommands,...action.input};if(bindings.jump.includes(code))jumpPressed=true;}pressed.add(code);};const release=()=>pressed.delete(b.dataset.key!);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;});
 const resizeStage=()=>{const width=canvas.clientWidth,height=canvas.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(ready&&(paused||panelOpen))renderPausedState();};
 const stageObserver=new ResizeObserver(resizeStage);stageObserver.observe(el('stage'));

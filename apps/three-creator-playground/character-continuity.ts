@@ -1,5 +1,5 @@
 import type {WorldObservation,WorldSnapshot} from '@worldkit/three';
-import {Matrix4,Vector3,type Mesh,type Object3D,type Skeleton,type Bone,type BufferGeometry,type Material} from 'three';
+import {Matrix4,Vector3,type Mesh,type Object3D,type Skeleton,type Bone,type BufferGeometry,type Material,type SkinnedMesh} from 'three';
 
 interface VisualBinding {
  mesh:Mesh;
@@ -18,12 +18,12 @@ export interface CharacterContinuity {
  }|null;
  readonly scope:string;
 }
-const scope='Training character visual continuity from the first ready observation. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
+const scope='Training skinned character continuity from the first ready observation. Rigid equipment is outside the identity comparison. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
 function visuals(root:Object3D):VisualBinding[]{
  const result:VisualBinding[]=[];
  root.traverse(object=>{
-  const mesh=object as Mesh & {skeleton?:Skeleton};
-  if(mesh.isMesh)result.push({mesh,geometry:mesh.geometry,skeleton:mesh.skeleton,bones:[...(mesh.skeleton?.bones??[])]});
+  const mesh=object as SkinnedMesh;
+  if(mesh.isSkinnedMesh)result.push({mesh,geometry:mesh.geometry,skeleton:mesh.skeleton,bones:[...(mesh.skeleton?.bones??[])]});
  });
  return result;
 }

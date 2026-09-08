@@ -188,7 +188,7 @@ composition with only the preset human asset selected. It remains usable when
 custom external asset files are disabled: procedural Three geometry is allowed.
 
 Inspect/playtest `characterContinuity` feedback observes the Training character's
-visual identity and renderability. The playtest timeline preserves intermediate
+skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate
 changes even if the author restores the person before the last frame. It is
 advisory, with no change to v0.2 technical admission. It cannot prove preset
 provenance, detect every extra rider, or measure seat/hand/foot fit; inspect the

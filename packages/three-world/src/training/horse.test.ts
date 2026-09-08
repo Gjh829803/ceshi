@@ -262,3 +262,29 @@ it('checks off-grid and source-key anchors beyond the 64-point geometry census',
     console.log('HORSE_DENSE_CALIBRATION',JSON.stringify({scale:horse.content.scale.x,results}));
   }finally{horse.dispose();}
 },60000);
+
+it('keeps head/back/hand/foot attachments bound to actual Source101 bones across walking, riding and pose reset',async()=>{
+ const {Character}=await import('./character');
+ const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
+ const rider=new Character();
+ try {
+  await rider.load(logical=>new URL(`../../../../assets/three-creator/training/${logical}`,import.meta.url).href);
+  const points=['head','back','handLeft','handRight','footLeft','footRight'] as const;
+  const bones=['head','spine_05','hand_l','hand_r','foot_l','foot_r'];
+  expect(rider.attachmentPoints).toEqual(points);
+  const attachments=points.map((point,index)=>{const object=new T.Group();rider.attach(point,object);expect(object.parent!.parent!.parent!.name).toBe(bones[index]);return object;});
+  rider.root.updateMatrixWorld(true);
+  const relatives=attachments.map(object=>object.parent!.parent!.parent!.matrixWorld.clone().invert().multiply(object.matrixWorld));
+  for(const pose of [{...riderPose(),speed:3.1},riderPose('ride'),riderPose()]){
+   rider.update(1/60,pose);rider.capturePresentationPose();
+   for(const alpha of [.3,1,.3,1]){
+    rider.applyPresentationPose(alpha);rider.root.updateMatrixWorld(true);
+    attachments.forEach((object,index)=>{
+     const actual=object.parent!.parent!.parent!.matrixWorld.clone().invert().multiply(object.matrixWorld);
+     actual.elements.forEach((value,i)=>expect(value).toBeCloseTo(relatives[index]!.elements[i]!,9));
+    });
+   }
+  }
+  rider.dispose();expect(attachments.every(object=>object.parent===null)).toBe(true);
+ }finally{rider.dispose();fetchTransport.mockRestore();}
+},30000);

@@ -132,3 +132,15 @@ it('does not commit a partial baseline when the first diagnostic read fails',()=
  f.mesh.matrix.clone=clone;f.mesh.geometry=f.mesh.geometry.clone();
  expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
 });
+
+it('does not interpret rigid equipment changes as replacement of the skinned person',()=>{
+ const f=fixture(),hat=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
+ f.bone.add(hat);
+ f.monitor.read(f.world,f.snapshot);
+ hat.removeFromParent();
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.bone.add(hat);hat.visible=false;
+ expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
+ f.mesh.visible=false;
+ expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
+});
