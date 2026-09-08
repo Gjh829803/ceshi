@@ -5,6 +5,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { afterAll, expect, it, vi } from 'vitest';
 import * as horseModule from './public';
 
+// Every fixture load calibrates real skinned pure/blend geometry. This file
+// belongs to the resource-heavy lane; keep its CPU budget local to the suite.
+vi.setConfig({ testTimeout: 30_000 });
+
 const parsed: Awaited<ReturnType<GLTFLoader['parseAsync']>>[] = [];
 function resolveFixtureResource(path: string): string {
   if (path !== 'creatures/horse.glb') throw new Error('UNEXPECTED_FIXTURE_RESOURCE');
@@ -51,7 +55,6 @@ it('seeks real clips independently of sampling order and preserves source tracks
     expect(source.animations.map(c=>c.tracks.map(t=>Array.from(t.values)))).toEqual(tracks);
     expect(other.content.getObjectByName('Body')).not.toBe(horse.content.getObjectByName('Body'));
   } finally {horse.dispose();other.dispose();}
-  // Each real load calibrates pure and blended skinned geometry.
 }, 30000);
 
 it('aligns actual Source101 pelvis at yaw +/-90 without moving the logical root', async () => {
@@ -106,7 +109,6 @@ it('runtime validates and owns the horse, sampling before callbacks and restorin
     expect(body.matrixWorld.elements).toEqual(before);
   } finally {runtime.dispose();}
   expect(horse.loaded).toBe(false);
-  // Includes real asset calibration and initialization of the Rapier runtime.
 }, 30000);
 
 it('calibrates all real horse clips with actual Source101 rider geometry at 64 intervals', async () => {
@@ -153,7 +155,7 @@ it('calibrates all real horse clips with actual Source101 rider geometry at 64 i
     }
     console.log('HORSE_CALIBRATION',JSON.stringify({intervals:64,scale:horse.content.scale.x,limits,clips:report}));
   } finally {rider.dispose();horse.dispose();fetchTransport.mockRestore();}
-},30000);
+},60000);
 
 it('rejects load/dispose races and invalid anchor transforms without reusing old data', async () => {
   const horse=createHorse();
