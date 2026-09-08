@@ -36,6 +36,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/cloud/three-eval-progress.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-eval.test.mjs", lane: "node" },
     { path: "scripts/cloud/three-host-reliability.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-ray-cleanup.test.mjs", lane: "node" },
     { path: "scripts/lib/canonical-json.test.mjs", lane: "node" },
     { path: "scripts/lib/cloud-production-run.test.mjs", lane: "node" },
     { path: "scripts/lib/episode-style-variants.test.mjs", lane: "node" },

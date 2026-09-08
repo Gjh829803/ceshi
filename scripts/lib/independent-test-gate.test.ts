@@ -134,6 +134,7 @@ describe("independent test repository census", () => {
         "scripts/cloud/three-eval-progress.test.mjs",
         "scripts/cloud/three-eval.test.mjs",
         "scripts/cloud/three-host-reliability.test.mjs",
+        "scripts/cloud/three-ray-cleanup.test.mjs",
         "scripts/lib/canonical-json.test.mjs",
         "scripts/lib/cloud-production-run.test.mjs",
         "scripts/lib/episode-style-variants.test.mjs",
