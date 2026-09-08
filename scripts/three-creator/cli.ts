@@ -3,7 +3,8 @@ import { createInterface } from 'node:readline';
 import { readFile } from 'node:fs/promises';
 import { ThreeCreatorTools } from './tools.js';
 import { executeThreeCreatorTool } from './mcp.js';
-import { profileFrom, errorMessage } from './contracts.js';
+import { creatorToolErrorResponse } from './tool-errors.js';
+import { profileFrom } from './contracts.js';
 
 const args = process.argv.slice(2), value = (name: string) => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
 const policyPath=value('--asset-policy-snapshot'),policyHash=value('--asset-policy-sha256');
@@ -14,8 +15,9 @@ try {
     // JSON-lines mode keeps operation/evidence authority in this one process, just like MCP.
     for await (const line of createInterface({ input: process.stdin, terminal: false })) {
       if (!line.trim()) continue;
-      try { const request = JSON.parse(line); const result = await executeThreeCreatorTool(service, request.name, request.arguments ?? {}); process.stdout.write(`${JSON.stringify({ id: request.id ?? null, result })}\n`); }
-      catch (error) { process.stdout.write(`${JSON.stringify({ error: errorMessage(error) })}\n`); }
+      let requestId: unknown = null;
+      try { const request = JSON.parse(line); requestId = request.id ?? null; const result = await executeThreeCreatorTool(service, request.name, request.arguments ?? {}); process.stdout.write(`${JSON.stringify({ id: request.id ?? null, result })}\n`); }
+      catch (error) { process.stdout.write(`${JSON.stringify({ id: requestId, ...creatorToolErrorResponse(error) })}\n`); }
     }
   } else {
     const name = value('--tool') ?? 'creator_describe_environment'; const file = value('--arguments-file');
@@ -24,5 +26,5 @@ try {
     if (result.operationId) { do { result = await service.getOperation(result.operationId ?? result.id, 25); } while (['queued', 'running'].includes(result.status)); }
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (result.status === 'failed' || result.status === 'cancelled') process.exitCode = 1;
   }
-} catch (error) { process.stderr.write(`${errorMessage(error)}\n`); process.exitCode = 1; }
+} catch (error) { process.stderr.write(`${JSON.stringify(creatorToolErrorResponse(error))}\n`); process.exitCode = 1; }
 finally { await service.close(); }

@@ -6,7 +6,9 @@ import path from 'node:path';
 import Ajv from 'ajv';
 import { fileURLToPath } from 'node:url';
 import { ThreeCreatorTools } from './tools.js';
-import { objectSchema, profileFrom, THREE_CREATOR_VERSION, sha256, errorMessage, type CreatorProfile } from './contracts.js';
+import { objectSchema, profileFrom, THREE_CREATOR_VERSION, sha256, type CreatorProfile } from './contracts.js';
+import { CreatorToolInputError, creatorToolErrorResponse } from './tool-errors.js';
+import { SCHEMA_SECTIONS } from './creator-discovery.js';
 import { AUTHORING_TOPICS } from './authoring-schema.js';
 import { EXAMPLE_TOPICS } from './example-files.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
@@ -14,11 +16,11 @@ import type { AssetPolicyOptions } from './compiler.js';
 const string = { type: 'string', minLength: 1 };
 export const THREE_CREATOR_TOOLS = [
   { name: 'creator_describe_environment', description: 'Read the selected Three raw/SDK profile, actual capabilities and limitations. Call first.', inputSchema: objectSchema({}) },
-  { name: 'creator_get_authoring_schema', description: 'Read the selected public SDK topic, shared observer and independent episode schema. Default is getting-started; use control/extensions when needed.', inputSchema: objectSchema({ topic: { enum: AUTHORING_TOPICS } }) },
+  { name: 'creator_get_authoring_schema', description: 'Read a source-backed topic guide first. Default sections is [guide]. Request contracts, project, episode, observation, commands or training only when needed; [all] returns the full topic. Default topic is getting-started.', inputSchema: objectSchema({ topic: { enum: AUTHORING_TOPICS }, sections: { type: 'array', items: { enum: SCHEMA_SECTIONS }, minItems: 1, maxItems: 8, uniqueItems: true } }) },
   { name: 'creator_get_examples', description: 'Get source examples with the complete file manifest. Read by training topic or explicit files; independent-world avoids workspace UI and campus layout.', inputSchema: objectSchema({ topic: { enum: EXAMPLE_TOPICS }, files:{type:'array',items:string,maxItems:32,uniqueItems:true} }) },
   { name: 'creator_materialize_runtime', description: 'Copy the browser SDK into sdk/ for this workspace. Edit its physics, actions, animation or camera source, then world_validate compiles it with locked dependencies. Source hashes and files ship in delivery. Existing sdk/ files are preserved.', inputSchema: objectSchema({}) },
-  { name: 'assets_search', description: 'Search allowed reusable assets by appearance or action (including Chinese skill names). characterUsage gives layered reuse, scene conditions, controls, parameters and source entry points. Does not expose private Host source paths.', inputSchema: objectSchema({ query: string }) },
-  { name: 'assets_describe', description: 'Describe an allowed asset, exact animation mapping and characterUsage conditions/control bindings. Select its id in project.json; use createHumanoidWorld for the supplied human; custom meshes can bind existing movement or vehicle controls.', inputSchema: objectSchema({ assetId: string }, ['assetId']) },
+  { name: 'assets_search', description: 'Search allowed assets by name or action, including Chinese skills. Returns ranked summaries, default 5 (max 20), with nextOffset pagination. Empty query lists allowed assets. Read assets_describe for complete resources and conditions; mountUsage reports missing dependencies without expanding permissions.', inputSchema: objectSchema({ query: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 20 }, offset: { type: 'integer', minimum: 0 } }) },
+  { name: 'assets_describe', description: 'Read complete permitted asset resources, exact animation mapping, characterUsage and mountUsage conditions/control bindings. Select its id in project.json; use createHumanoidWorld for the supplied human, and follow binding conditions for custom subjects.', inputSchema: objectSchema({ assetId: string }, ['assetId']) },
   { name: 'world_validate', description: 'Compile a browser candidate without executing author code/config on the Host. Uses shared Three and the selected default or workspace SDK source. Episode-only changes do not rebuild the world. Returns operationId; compilation alone is not runtime acceptance.', inputSchema: objectSchema({}) },
   { name: 'world_preview', description: 'Render actual opening/top-down/object front-right-back PNGs. entity-triview selects one complete object or representative (one entityId, subject by default); top-down may select multiple targets. Compare with the user reference.', inputSchema: {...objectSchema({ view: { enum: ['opening', 'top-down', 'entity-triview'] }, entityIds: { type: 'array', items: string, maxItems: 16 }, frontYawRadians: { type: 'number' } }),allOf:[{if:{properties:{view:{const:'entity-triview'}},required:['view']},then:{properties:{entityIds:{maxItems:1}}}}]} },
   { name: 'world_inspect', description: 'Inspect actual hierarchy, player/camera/bounds and SDK physics/animation. feedback.water gives advisory measured water-contact causes and next checks; it does not change acceptance. Returns Creator operationId.', inputSchema: objectSchema({ query: string, entityIds: { type: 'array', items: string, maxItems: 64 } }) },
@@ -33,15 +35,15 @@ export const THREE_CREATOR_TOOLS = [
 const ajv = new Ajv({ allErrors: true, strict: false, strictNumbers: true });
 const checks = new Map(THREE_CREATOR_TOOLS.map(tool => [tool.name, ajv.compile(tool.inputSchema)]));
 export async function executeThreeCreatorTool(service: ThreeCreatorTools, name: string, args: Record<string, any> = {}) {
-  const check = checks.get(name); const valid = check?.(args); if (!check || !valid) throw new Error(`THREE_TOOL_INPUT_INVALID: ${name} ${JSON.stringify(check?.errors ?? [])}`);
+  const check = checks.get(name); const valid = check?.(args); if (!check || !valid) throw new CreatorToolInputError(name, check?.errors ?? []);
   const input = args as Record<string, any>;
   switch (name) {
     case 'creator_describe_environment': return service.environment();
-    case 'creator_get_authoring_schema': return service.schema(input.topic);
+    case 'creator_get_authoring_schema': return service.authoringSchema(input.topic, input.sections);
     case 'creator_get_examples': return service.examples(input.topic,input.files);
     case 'creator_materialize_runtime': return service.materializeRuntime();
-    case 'assets_search': return service.assets(input.query);
-    case 'assets_describe': return service.assets('', input.assetId);
+    case 'assets_search': return service.searchAssets(input.query, input.limit, input.offset);
+    case 'assets_describe': return service.describeAsset(input.assetId);
     case 'world_validate': return service.start('world.validate', () => service.validate());
     case 'world_preview': return service.start('world.preview', () => service.preview(input.view, input.entityIds, input.frontYawRadians));
     case 'world_inspect': return service.start('world.inspect', () => service.inspect({ query: input.query, entityIds: input.entityIds }));
@@ -68,7 +70,7 @@ export async function serveThreeCreatorMcp(workspace: string, profile: CreatorPr
   const service = new ThreeCreatorTools(workspace, profile, policyOptions);
   const server = new Server({ name: 'worldkit_three_creator', version: THREE_CREATOR_VERSION }, { capabilities: { tools: {} }, instructions: 'Use ordinary Three scene code in the selected raw/SDK profile. Read environment, schema and examples. Inspect real screenshots and real input playtests, repair the same project, and preserve fixed external task goals. Long tools return operation IDs. Delivery technical success is separate from semantic/reference review.' });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: THREE_CREATOR_TOOLS }));
-  server.setRequestHandler(CallToolRequestSchema, async request => { try { return { content: await toolContent(service, await executeThreeCreatorTool(service, request.params.name, request.params.arguments ?? {})) }; } catch (error) { return { isError: true, content: [{ type: 'text', text: errorMessage(error) }] }; } });
+  server.setRequestHandler(CallToolRequestSchema, async request => { try { return { content: await toolContent(service, await executeThreeCreatorTool(service, request.params.name, request.params.arguments ?? {})) }; } catch (error) { return { isError: true, content: [{ type: 'text', text: JSON.stringify(creatorToolErrorResponse(error)) }] }; } });
   const close = async () => { await service.close(); await server.close(); };
   process.once('SIGTERM', () => void close()); process.once('SIGINT', () => void close()); await server.connect(new StdioServerTransport());
 }
