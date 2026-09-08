@@ -13,7 +13,7 @@
 | walk 被自动提升为 run | walk 保持步行；run 可因观察、跳跃、落地而降速；不强制每段同时走和跑 | Episode player/capture |
 | approach 名称暗示走近 | 兼容原名，明确准备性重新定位；成功回执包含主体、载具与实际位置 | Training command/Creator |
 | coverageTargetIds 被误认为执行目标 | 旧字段仍可读取，仅作 annotation；不控制镜头或判定可见性 | Episode schema/guide |
-| 不同载具的 boost/轴意义不透明 | 按控制族提供说明；当前世界按需返回有效输入指南，未使用轴保持中性 | Training describe/Creator discovery |
+| 不同载具的 boost/轴意义不透明 | 按控制族提供说明；当前世界按需返回有效输入指南，未使用轴保持中性；云入口也读取当前绑定与指南 | Training describe/Creator discovery |
 
 ## 兼容性与反馈
 
@@ -29,7 +29,7 @@
 
 独立复审发现并复验了纯 walk 末尾仍被旧门禁拒绝、resume 错误优先级覆盖、旧 workspace 缺少新增指导文件三个关联问题；没有遗留 P1/P2。
 
-实际验收使用自制摩托与预设人物，通过 Creator 自检、交付归档、Episode 源适配、完整 Training 起点探测和独立录制。测试资产和视频保留在忽略的 `.codex-tmp/control-contract/`，不进入 Git。此次没有云调用或视频供应商提交。
+实际验收使用自制摩托与预设人物，通过 Creator 自检、交付归档、Episode 源适配、完整 Training 起点探测和独立录制。测试资产和视频保留在忽略的 `.codex-tmp/control-contract/`，不进入 Git。此次没有云调用或视频供应商提交。全链路审查发现的额外缺口单独记录在[能力对照报告](2026-09-08-agent-playground-capability-audit.md)，不混作这 8 项已修复内容。
 
 最终验证：
 

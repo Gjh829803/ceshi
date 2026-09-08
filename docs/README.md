@@ -14,6 +14,7 @@
 | 生成 Seedance 视频、恢复任务和回收成片 | [Seedance 云端链路](three-episode-seedance.md) |
 | 共享相机避障与验证证据 | [职责原则](three-sdk-architecture.md#相机控制权与交接) · [验证记录](reviews/2026-09-08-shared-camera-collision.md) |
 | 骑乘接入、马动画与实现记录 | [SDK 骑乘](../packages/three-world/README.md#imported-horse-and-rider-anchors) · [设计](superpowers/specs/2026-09-08-three-mounted-interaction-design.md) · [实现记录](reviews/2026-09-08-three-mounted-interaction.md) |
+| 对照 Agent 链路与 Playground 的能力和剩余缺口 | [能力闭环审查](reviews/2026-09-08-agent-playground-capability-audit.md) |
 | 查看输入、导航、起点探测与载具指导的契约修复 | [8 项修复记录](reviews/2026-09-08-control-contract-fixes.md) |
 | 验证源码和跨组件行为 | [审查协议](reviews/full-dimension-review-protocol.md) · [Runtime 检查表](reviews/runtime-deep-review-checklist.md) |
 
