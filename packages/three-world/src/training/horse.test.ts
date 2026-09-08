@@ -51,7 +51,8 @@ it('seeks real clips independently of sampling order and preserves source tracks
     expect(source.animations.map(c=>c.tracks.map(t=>Array.from(t.values)))).toEqual(tracks);
     expect(other.content.getObjectByName('Body')).not.toBe(horse.content.getObjectByName('Body'));
   } finally {horse.dispose();other.dispose();}
-});
+  // Each real load calibrates pure and blended skinned geometry.
+}, 30000);
 
 it('aligns actual Source101 pelvis at yaw +/-90 without moving the logical root', async () => {
   const { Character } = await import('./character');
@@ -105,7 +106,8 @@ it('runtime validates and owns the horse, sampling before callbacks and restorin
     expect(body.matrixWorld.elements).toEqual(before);
   } finally {runtime.dispose();}
   expect(horse.loaded).toBe(false);
-});
+  // Includes real asset calibration and initialization of the Rapier runtime.
+}, 30000);
 
 it('calibrates all real horse clips with actual Source101 rider geometry at 64 intervals', async () => {
   const { Character }=await import('./character');
