@@ -9,7 +9,7 @@ Mesh/Group subjects.
 
 | Layer | Read or change |
 | --- | --- |
-| Reuse | `createHumanoidWorld`, starter example and selected asset |
+| Reuse | `createWorld` or the complete `createHumanoidWorld` helper, subject example and selected asset |
 | Bind scene and abilities | Collision map, interaction anchors, water, climb surfaces; custom subject body/movement |
 | Configure | Movement/profile parameters, units, input bindings |
 | Implement | Relevant SDK source module, project runtime build and affected tests |
@@ -24,8 +24,15 @@ advance that state; fallback positions come from fixed snapshots.
 <!-- topic:getting-started -->
 ## Choose the controlled subject
 
-Use `createWorld` for an independently controlled subject. `createHumanoidWorld`
-adds the complete supplied human controller when the task calls for a human.
+`createWorld` is the general world entry point for human or nonhuman actors.
+`createHumanoidWorld` is a convenience wrapper that loads or receives the supplied
+human and binds its complete controller and actions, optionally with vehicles.
+It calls `createWorld` internally and returns the same `ThreeWorld`; both entries
+use the same runtime ownership and lifecycle.
+
+Choose the helper when its complete human kit matches the task. Otherwise bind
+the required subject and abilities through the general world API. Subject routes
+guide this choice; they are not mutually exclusive SDK entity classes.
 
 | Subject | Schema / example | Entry |
 | --- | --- | --- |
