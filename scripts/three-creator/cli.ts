@@ -23,7 +23,7 @@ try {
     const name = value('--tool') ?? 'creator_describe_environment'; const file = value('--arguments-file');
     const input = file ? JSON.parse(await readFile(file, 'utf8')) : JSON.parse(value('--arguments') ?? '{}');
     let result: any = await executeThreeCreatorTool(service, name, input);
-    if (result.operationId) { do { result = await service.getOperation(result.operationId ?? result.id, 25); } while (['queued', 'running'].includes(result.status)); }
+    while (result.operationId && ['queued', 'running'].includes(result.status)) { result = await executeThreeCreatorTool(service, 'operations_get', {operationId: result.operationId, waitSeconds: 25}); }
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (result.status === 'failed' || result.status === 'cancelled') process.exitCode = 1;
   }
 } catch (error) { process.stderr.write(`${JSON.stringify(creatorToolErrorResponse(error))}\n`); process.exitCode = 1; }

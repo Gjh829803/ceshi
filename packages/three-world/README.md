@@ -21,6 +21,10 @@ sharing the [collision solver](../camera-collision/README.md). Each controller o
 independent recovery state. Display interpolation and repeated captures do not
 advance that state; fallback positions come from fixed snapshots.
 
+Positions and dimensions use metres, with **+Y** up. Ordinary actor/capture semantic
+front defaults to local **-Z**; Training map headings, vehicles and interaction yaw use **+Z**.
+Keep the supplied skeleton orientation unchanged when connecting these conventions.
+
 <!-- topic:getting-started -->
 ## Choose the controlled subject
 
@@ -95,8 +99,12 @@ Choose the controller family and collision envelope for the shape you created.
 
 An SDK-owned renderer sizes to the stage and follows resizing; a supplied renderer
 keeps its sizing policy. Create HTML HUD through `world.createPresentation()`.
-`start()` prepares resources and publishes `window.__WORLDKIT_EVAL__`; `stop()`
-pauses, `reset()` restores the baseline, and `dispose()` releases resources.
+Finish registration and configuration before the first `await world.start()`, which
+prepares resources, seals initial state and publishes `window.__WORLDKIT_EVAL__`.
+`stop()` pauses; `await world.reset()` restores the baseline and preserves the
+previous running/paused state. Use `onReset` for author-owned visual state and
+`onDispose` for external cleanup; `dispose()` releases the world. Each hook returns
+an unsubscribe function.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:nonhuman-subject -->
@@ -113,6 +121,10 @@ through `creator_get_examples({topic:'nonhuman-subject'})`, includes ground move
 a collision obstacle, camera follow, visual leg motion and reset. Its project
 selects no catalog assets; use permitted models when they fit the requested subject.
 Ordinary Three geometry remains allowed even if custom external asset files are disabled.
+
+Place the visual root at the subject's feet and author the body above local Y=0.
+The capsule extends upward from that root; `heightMeters` is its total height,
+including both end caps, and must be at least twice `radiusMeters`.
 
 Movement comes from actual SDK bindings. The built-in ground movement supports
 walking/running/jumping with a capsule body. Other modes can use `registerMovement`
@@ -236,10 +248,8 @@ Reset/dispose invalidates the scope. Use its methods after `await` so an earlier
 load cannot mutate a different world epoch. Asset metadata supplies locomotion
 bindings and body recommendations; otherwise specify the body explicitly.
 
-The ordinary SDK semantic front is **-Z**, up **+Y**. The contextual humanoid map
-and interaction headings use **+Z**. Follow each contract's coordinates; do not
-rotate the source skeleton to compensate. Check rendered knees, elbows, facing,
-foot contact, speed, jump and landing after changing a rig or motion binding.
+Check rendered knees, elbows, facing, foot contact, speed, jump and landing after
+changing a rig or motion binding.
 
 <!-- topic:character-actions -->
 ## Humanoid action cards
@@ -325,7 +335,9 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 It is the world's single solver, driven by the SDK 60 Hz clock and shared by
 Presentation and Episode. Author a `TrainingMap` with collision `boxes`, optional
 `interactions`, `climbSurfaces`, water bounds, player spawn and scene bounds.
-Scene geometry renders that same geometry; a visual surface is not a collider.
+Box `position` is its world-space centre; `size` is the full XYZ extent. Box rotations
+are XYZ Euler radians; map yaw zero faces +Z. Render the same geometry in Three;
+a visual surface is not a collider.
 
 For explicit composition, create a `TrainingCharacter`, `await character.load`
 with a resource resolver, then pass

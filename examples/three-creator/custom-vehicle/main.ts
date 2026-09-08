@@ -6,6 +6,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xbbbbbb,2));
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,300);
 camera.position.set(7,4,-8);camera.lookAt(0,1,0);
 const canvas=document.createElement('canvas');canvas.style.cssText='display:block;width:100vw;height:100vh';document.body.append(canvas);
+// Map boxes use world-space metres: position is the centre, size is the full XYZ extent.
 const map:TrainingMap={id:'custom-bike-course',name:'自建摩托',description:'预设人物上下车，载具只包含机械结构',
  bounds:{min:[-60,-5,-60],max:[60,30,60]},
  boxes:[{id:'ground',position:[0,-.1,0],size:[120,.2,120],color:'#dddddd'}],

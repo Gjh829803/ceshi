@@ -614,7 +614,7 @@ export class ThreeWorld implements API.World {
    get player(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
-   startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:()=>world.describe(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
+   startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
   const target=window as unknown as Record<string,unknown>;target.__WORLDKIT_EVAL__=observer;target.__WORLDKIT_CREATOR__=observer;this.observer=observer;
  }
  private episodePort():EpisodeRuntimePort{

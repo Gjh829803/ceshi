@@ -1,3 +1,4 @@
+import type {InspectionQuery} from '../../apps/three-creator-playground/bridge.js';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { createServer, type Server } from 'node:http';
 import { readFile, writeFile, mkdir, copyFile, readdir, lstat, realpath, rename } from 'node:fs/promises';
@@ -123,7 +124,7 @@ export class ThreeCreatorTools {
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
       delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a complete nonempty real episode with captured keydown and keyup, valid video and no browser/SDK errors, and real player/target front-right-back captures. Choose the episode length needed to demonstrate the requested behavior. Route success is a measurement, not semantic or visual acceptance.',
       discovery: 'Asset search returns ranked, paginated summaries; assets_describe supplies complete details. Schema defaults to guide; request sections for contracts as needed.',
-      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode, which has a bounded overhead allowance. For targeted diagnosis, a durationSeconds below the plan selects truncated debug.',
+      operations: 'Long operations are serialized. Commands and World-operation queries support an optional waitSeconds (max 25) for an inline reply. Follow next when pending; keep the original operationId. worldExecution reports the sampled action result separately from Host status; accepted is not completed. Never resubmit an action to poll or replace an unknown operation. Omit durationSeconds for the full episode, which has a bounded overhead allowance. For targeted diagnosis, a durationSeconds below the plan selects truncated debug.',
       limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate.'],
     };
   }
@@ -204,7 +205,20 @@ export class ThreeCreatorTools {
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
   async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
-  async inspect(query?: { query?: string; entityIds?: string[] }) { const candidate = await this.compiler.prepare(), session = await this.open(candidate); const observation=await this.bridge(session,'inspect',[query??null]);return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash, profile: this.profile, observation, feedback:{characterContinuity:observation.characterContinuity,water:buildWaterFeedback(observation.snapshot?.training?.water)}, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors] }; }
+  async inspect(query?: InspectionQuery) {
+    const candidate = await this.compiler.prepare(), session = await this.open(candidate);
+    const observation = await this.bridge(session, 'inspect', [query ?? null]);
+    return {
+      sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash,
+      runtimeHash: candidate.runtimeHash, runtimeSourceHash: candidate.runtimeSourceHash, profile: this.profile,
+      observation,
+      feedback: {
+        characterContinuity: observation.characterContinuity,
+        water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.training?.water) : undefined,
+      },
+      pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors],
+    };
+  }
   async executeCommand(command: WorldCommand, creatorOperationId: string = randomUUID()) {
     if (!checkCommand(command)) throw new Error(`THREE_WORLD_COMMAND_INVALID: ${JSON.stringify(checkCommand.errors)}`);
     if (this.profile !== 'three-sdk') throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED: raw profile has no SDK command capability');

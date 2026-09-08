@@ -11,6 +11,13 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
+export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics';
+export interface InspectionQuery {
+  query?: string;
+  entityIds?: string[];
+  /** Omit to retain the complete legacy response. */
+  sections?: InspectionSection[];
+}
 function observation(): WorldObservation {
   const value = window.__WORLDKIT_EVAL__;
   if (!value?.ready || !value.scene?.isScene || !value.camera?.isCamera || !value.renderer?.domElement || typeof value.renderer.render !== 'function' || !value.player?.isObject3D || !value.targets) throw new Error('THREE_OBSERVER_NOT_READY: expose scene, camera, renderer, player, targets and lifecycle methods');
@@ -25,7 +32,22 @@ function describe(object: THREE.Object3D) {
 export function filterDescription(value: WorldDescription | null, query?: { query?: string; entityIds?: string[] }): WorldDescription | null {
   if (!value || !query) return value;
   const words = query.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
-  return { ...value, entities: value.entities.filter(entity => (!query.entityIds?.length || query.entityIds.includes(entity.state.id)) && words.every(word => JSON.stringify(entity).toLowerCase().includes(word))) };
+  const entityIds = query.entityIds;
+  const entities = value.entities.filter(entity =>
+    (!entityIds?.length || entityIds.includes(entity.state.id)) &&
+    words.every(word => JSON.stringify(entity).toLowerCase().includes(word)));
+  const selected = new Set(entities.map(entity => entity.state.id));
+  return {
+    ...value, entities,
+    // Older workspace SDKs may not expose boarding; keep that absence truthful.
+    ...(value.training?.boarding ? {training: {
+      ...value.training,
+      boarding: Object.fromEntries(Object.entries(value.training.boarding).filter(([id]) => selected.has(id))),
+    }} : {}),
+    parameters: entityIds?.length
+      ? value.parameters.filter(parameter => parameter.writes.some(claim => claim.kind === 'entity' && entityIds.includes(claim.entityId)))
+      : value.parameters,
+  };
 }
 function createBridge() {
   const characterContinuity=new CharacterContinuityMonitor();
@@ -89,11 +111,40 @@ function createBridge() {
   }
   return {
     ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
-    inspect(query?: { query?: string; entityIds?: string[] }) {
-      const world = observation(); world.scene.updateMatrixWorld(true);
-      const snapshot=world.snapshot?.()??null;
-      const objects: ReturnType<typeof describe>[] = []; world.scene.traverse(object => { if (objects.length < 1000) objects.push(describe(object)); });
-      return { player: describe(world.player), camera: { ...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray() }, targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])), snapshot, characterContinuity:characterContinuity.read(world,snapshot), description: filterDescription(world.capabilities?.() ?? null, query), commandsSupported: typeof world.execute === 'function', diagnostics: world.inspect?.() ?? null, objects, renderer: { widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height, memory: { ...world.renderer.info.memory }, render: { ...world.renderer.info.render } } };
+    inspect(query?: InspectionQuery) {
+      const world = observation();
+      const includes = (section: InspectionSection) => !query?.sections || query.sections.includes(section);
+      const snapshot = world.snapshot?.() ?? null;
+      const hierarchy = () => {
+        world.scene.updateMatrixWorld(true);
+        const objects: ReturnType<typeof describe>[] = [];
+        world.scene.traverse(object => { if (objects.length < 1000) objects.push(describe(object)); });
+        return {
+          player: describe(world.player),
+          camera: {...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray()},
+          targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])),
+          objects,
+          renderer: {
+            widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height,
+            memory: {...world.renderer.info.memory}, render: {...world.renderer.info.render},
+          },
+        };
+      };
+      return {
+        sample: {
+          worldRevision: snapshot?.worldRevision ?? null, simulationTick: snapshot?.simulationTick ?? null,
+          simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null,
+        },
+        commandsSupported: typeof world.execute === 'function',
+        ...(includes('hierarchy') ? hierarchy() : {}),
+        ...(includes('snapshot') ? {snapshot, characterContinuity: characterContinuity.read(world, snapshot)} : {}),
+        // Keep Host descriptor-text search while applying entity selection before
+        // SDK boarding/parameter inspection. Legacy callbacks may ignore arguments.
+        ...(includes('description') ? {description: filterDescription(
+          world.capabilities?.(query?.entityIds?.length ? {entityIds: query.entityIds} : undefined) ?? null, query,
+        )} : {}),
+        ...(includes('diagnostics') ? {diagnostics: world.inspect?.() ?? null} : {}),
+      };
     },
     async executeCommand(command: WorldCommand, commandId: string) {
       const world = observation(); if (!world.execute) throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED');

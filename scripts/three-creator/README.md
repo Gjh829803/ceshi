@@ -155,12 +155,33 @@ update a running job.
 
 ## Inspect and execute
 
-`world_inspect({query,entityIds})` returns actual description, command availability,
-interaction targets and state. `world_execute_command({command})` runs a command
-in that browser. Its Creator operation contains a `worldCommandReceipt`.
-If accepted, pass the separate World operation ID to
-`world_get_operation({worldOperationId,waitSeconds})`, then poll the resulting
-Creator operation. Do not resubmit an action to poll it.
+`world_inspect({query,entityIds,sections})` reads the actual world. Request
+`sections:['snapshot']` for current actor/camera state, or `['description']` with
+`entityIds` for selected entities, parameters and boarding eligibility. `hierarchy`
+adds object bounds and renderer details; `diagnostics` adds physics/input audit.
+Omitting sections preserves the full response. Select sections to avoid unrelated
+hierarchy traversal and duplicate diagnostics. `query` searches entity descriptor
+text; `entityIds` limits description queries, not snapshot or hierarchy contents.
+Every response includes sample revision/tick/time; unavailable values are null.
+Water/continuity feedback is populated only with the snapshot section.
+
+`world_execute_command({command,waitSeconds:1})` runs a command
+in that browser and can return its result in the same call. Omit the wait for the
+existing asynchronous behavior. Command replies and `operations_get` provide
+`worldExecution` (the sampled action outcome) and `next` (the exact follow-up tool
+and arguments). Follow `next` while work remains; do not resubmit the command.
+
+Creator `status:'succeeded'` means the Host request finished. Check
+`worldExecution.status` for applied, accepted, rejected, or the queried action's
+queued/running/succeeded/failed/cancelled state. The original `worldCommandReceipt`
+and `worldOperation` remain in `result`. For accepted work,
+`world_get_operation({worldOperationId,waitSeconds:1})` can also return inline.
+The optional reply wait is bounded at 25 seconds; if it expires, query the same
+Creator `operationId`. A still-running World action or queued browser work can
+therefore still require that extra Host query. Waiting does not start simulation,
+cancel work, or advance physics. Returned state is an observation at the recorded operation time, not a
+continuous subscription. `next:null` means no further status polling, not visual
+or task acceptance; rejection and failure still require reading the error.
 
 Paused instant commands apply at the boundary; ongoing actions wait until start.
 An accepted receipt is not completion. Runtime capability eligibility and rejection

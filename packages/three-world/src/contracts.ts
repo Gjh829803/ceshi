@@ -423,7 +423,7 @@ export interface WorldObservation {
  readonly captureTargetIds?:readonly string[];
  readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;
- snapshot?():WorldSnapshot; inspect?():unknown; capabilities?():WorldDescription;
+ snapshot?():WorldSnapshot; inspect?():unknown; capabilities?(query?:{readonly query?:string;readonly entityIds?:readonly string[]}):WorldDescription;
  execute?(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;
  operation?(operationId:string):OperationStatus;
 }

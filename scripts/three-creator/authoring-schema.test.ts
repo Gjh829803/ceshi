@@ -15,6 +15,20 @@ function declarations(source:string) {
    ? [[statement.name.text,statement] as const] : []))};
 }
 
+it.each(['getting-started','nonhuman-subject','extensions'] as const)('exposes existing lifecycle hooks to the %s authoring consumer',topic=>{
+ const original=declarations(contracts),selected=declarations(publicContractTopic(contracts,topic));
+ const methods=({file,byName}:ReturnType<typeof declarations>)=>{
+  const world=byName.get('World');
+  if(!world||!ts.isInterfaceDeclaration(world))throw new Error('World interface is missing');
+  return new Map(world.members.map(member=>[member.name?.getText(file),member.getText(file)]));
+ };
+ const actual=methods(original),published=methods(selected);
+ for(const name of ['onReset','onDispose']){
+  expect(actual.has(name)).toBe(true);
+  expect(published.get(name)).toBe(actual.get(name));
+ }
+});
+
 describe('Agent presentation contract',()=>{
  it('publishes the real presentation port with all source identity and binding dependencies',()=>{
   expect(AUTHORING_TOPICS).toContain('presentation');

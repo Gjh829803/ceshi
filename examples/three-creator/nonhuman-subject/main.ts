@@ -15,6 +15,7 @@ const wall=new THREE.Mesh(new THREE.BoxGeometry(8,2,.5),new THREE.MeshStandardMa
 wall.position.set(0,1,-4);world.addEntity({id:'wall',object:wall,role:'obstacle'});
 
 // The fox is the sole controlled actor. There is no hidden human or riding controller.
+// Its root is at the feet, with visuals above local Y=0 and its nose toward local -Z.
 const fox=new THREE.Group();
 function part(size:[number,number,number],position:[number,number,number],material=white,parent:THREE.Object3D=fox){
  const object=new THREE.Mesh(new THREE.BoxGeometry(...size),material);object.position.set(...position);parent.add(object);return object;
@@ -33,6 +34,7 @@ for(const x of [-.19,.19])for(const z of [-.27,.27]){
  const leg=new THREE.Group();leg.position.set(x,.45,z);fox.add(leg);
  part([.12,.4,.13],[0,-.2,0],dark,leg);legs.push(leg);
 }
+// Capsule height includes both end caps and extends upward from the root.
 world.addCharacter({id:'fox',name:'狐狸',object:fox,body:{heightMeters:1.15,radiusMeters:.45},
  movement:{kind:'ground',walkSpeedMetersPerSecond:2.5,runSpeedMetersPerSecond:4,jumpSpeedMetersPerSecond:3}});
 world.setControlledEntity('fox');
@@ -48,4 +50,5 @@ world.onUpdate(({simulationSeconds})=>{
  const amplitude=state.motion?.isGrounded?Math.min(.45,Math.hypot(velocity[0],velocity[2])*.12):0;
  legs.forEach((leg,index)=>{leg.rotation.x=Math.sin(simulationSeconds*10+(index===0||index===3?0:Math.PI))*amplitude;});
 });
+// First start seals registered actors, camera defaults and capture targets for reset.
 await world.start();presentation.focus();
