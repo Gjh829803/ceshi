@@ -38,7 +38,14 @@ try{
  if(debug){if(report.pageErrors.length||report.runtimeErrors.length)throw new Error('MOUNTED_DEBUG_ERRORS');returnDebug();}
  else {
   if(report.status!=='passed')throw new Error(report.failure??'MOUNTED_PLAYTEST_FAILED');
-  const samples=trace.samples;await json('creator-mount-summary.json',samples.map((s:any)=>({time:s.timeSeconds,position:s.positionMetersXYZ,training:s.snapshot?.training??s.training})));
+  const samples=trace.samples;
+  const mounted=samples.filter((s:any)=>s.training?.mountedInstanceId==='horse-1');
+  if(!mounted.length||!samples.some((s:any)=>s.training?.transition.kind==='enter')||!samples.some((s:any)=>s.training?.transition.kind==='exit')||!mounted.some((s:any)=>s.training.vehicleDynamics.some((v:any)=>v.instanceId==='horse-1'&&v.creature?.gait==='gallop')))throw new Error('MOUNTED_ROUTE_NOT_OBSERVED');
+  const lastMounted=mounted.at(-1).wallSeconds;
+  const walking=samples.filter((s:any)=>s.wallSeconds>lastMounted&&s.training?.mountedInstanceId===null);
+  if(!walking.some((s:any)=>Math.hypot(...s.velocityMetersPerSecondXYZ)>1))throw new Error('POST_EXIT_WALK_NOT_OBSERVED');
+  if(!report.hostActionEvents.some((e:any)=>e.type==='lifecycle'&&e.action==='reset'))throw new Error('RESET_NOT_OBSERVED');
+  await json('creator-mount-summary.json',samples.map((s:any)=>({time:s.wallSeconds,position:s.positionMetersXYZ,training:s.snapshot?.training??s.training})));
   await service.triviews();const receipt=await service.submit();await json('creator-receipt.json',receipt);await service.close();
   const unpacked=path.join(output,'unpacked');await mkdir(unpacked);await exec('tar',['-xzf',receipt.archivePath,'-C',unpacked]);
   const source=await prepareEpisodeSource({payloadRoot:path.join(unpacked,'payload'),outputRoot:path.join(output,'episode-source'),worldId:'mounted-horse-local-acceptance'});
@@ -49,11 +56,16 @@ try{
    const probe=await session.probeStart(start);if(!probe.isValid)throw new Error(JSON.stringify(probe));
    const before=await session.prepareSegment(start,{widthPixels:1280,heightPixels:720});
    const first=await session.frame('image/png'),repeat=await session.frame('image/png');
-   if(first.imageDataUrl!==repeat.imageDataUrl||first.snapshot.simulationTick!==repeat.snapshot.simulationTick)throw new Error('EPISODE_REPEAT_CHANGED');
+   if(first.snapshot.isRunning||first.imageDataUrl!==repeat.imageDataUrl||first.snapshot.simulationTick!==repeat.snapshot.simulationTick)throw new Error('EPISODE_REPEAT_CHANGED');
    await writeFile(path.join(output,'episode-first.png'),Buffer.from(first.imageDataUrl.split(',')[1]!,'base64'));
    const lease=await session.page.evaluate(async()=>{const observer=(window as any).__WORLDKIT_EVAL__;return {receipt:await observer.execute({type:'training.exit'}),snapshot:observer.snapshot()};});
    await json('episode-lease.json',lease);
    if(lease.receipt.status!=='rejected')throw new Error('EPISODE_LEASE_BYPASSED');
+   for(const [name,eye]of Object.entries({side:[7,3,0],front:[0,3,7]})){
+    const observed=await session.observe({cameraPositionWorldMetersXYZ:eye as [number,number,number],lookAtWorldMetersXYZ:[0,1.5,0]});
+    await writeFile(path.join(output,`mounted-${name}.png`),Buffer.from(observed.imageDataUrl.split(',')[1]!,'base64'));
+   }
+   console.log(JSON.stringify({stage:'mounted-views',output}));
    const capabilities=await session.capabilities(),frames:any[]=[];
    encoder=createRenderedFrameEncoder({outputPath:path.join(output,'episode.mp4'),frameRate:24,frameCount:720});
    let terminal=before;
