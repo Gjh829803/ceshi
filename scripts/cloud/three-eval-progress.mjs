@@ -222,6 +222,28 @@ function counterState(job, item) {
   const queued = itemStatus === 'queued' || itemStatus === 'pending' || counters.queued>0 && !(counters.running>0);
   return {itemStatus,counters,queued};
 }
+function admittedWorkspace(workspace,jobId,taskId) {
+  if(typeof workspace!=='string' || !jobPattern.test(jobId??''))return false;
+  const base=`/fsx/pipeline/lwdp_generation/${jobId}/tasks/`;
+  if(workspace===base+taskId)return true;
+  const prefix=base+'account_attempts/'+taskId+'_',suffix='/'+taskId;
+  return workspace.startsWith(prefix) && workspace.endsWith(suffix) && /^[A-Za-z0-9_-]{4,64}$/.test(workspace.slice(prefix.length,-suffix.length));
+}
+async function verifyRetrievedWorkspace(caseRoot,workspace,identity,jobId) {
+  const [attempt,receipt]=await Promise.all(['codex-attempt.json','provider-attempt-diagnostic-retrieval.json'].map(name=>readJson(path.join(caseRoot,name))));
+  if(attempt?.item_id!==identity.taskId || attempt?.workdir!==workspace || receipt?.kind!=='owned-provider-attempt-diagnostic-retrieval' || receipt?.schemaVersion!==1 || receipt?.workspace!==workspace)fail('IDENTITY_MISMATCH');
+  checkIdentity(receipt,{...identity,jobId},['jobId','taskId','requestId','runtimeHash']);
+  for(const name of ['creator-launcher-report.json','creator-events.jsonl']) {
+    const records=Array.isArray(receipt.files) ? receipt.files.filter(file=>file?.name===name) : [];
+    const record=records[0];
+    if(records.length!==1 || record.path!==workspace+'/outputs/'+name || !hashPattern.test(record.sha256??'') || !Number.isSafeInteger(record.bytes))fail('IDENTITY_MISMATCH');
+    const handle=await openedFile(path.join(caseRoot,name),name.endsWith('.jsonl')?MAX_EVENT_BYTES:MAX_JSON_BYTES,false);
+    try {
+      const bytes=await handle.readFile();
+      if(bytes.length!==record.bytes || createHash('sha256').update(bytes).digest('hex')!==record.sha256)fail('IDENTITY_MISMATCH');
+    } finally {await handle.close();}
+  }
+}
 async function loadAttempt(runRoot, plan, task, live, now) {
   const caseRoot = path.join(runRoot,task.taskId);
   const [state,intent,config,localLauncher,job,items,caseInput] = await Promise.all(['state.json','submission-intent.json','config-echo.json','creator-launcher-report.json','job-final.json','items.json','case-input.json'].map(name=>readJson(path.join(caseRoot,name))));
@@ -236,13 +258,16 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   const jobId = state?.jobId ?? live?.jobId ?? null;
   if (jobId !== null && !jobPattern.test(jobId)) fail('IDENTITY_MISMATCH');
   if (live && live.jobId !== jobId) fail('IDENTITY_MISMATCH');
+  if(live?.resolvedWorkspace!==undefined && !admittedWorkspace(live.resolvedWorkspace,jobId,task.taskId))fail('IDENTITY_MISMATCH');
   if (config) {
     if (config.job_id !== jobId || config.config?.request_id !== task.requestId) fail('IDENTITY_MISMATCH');
   }
   if (job && ((job.job_id ?? job.id) !== jobId || job.request_id !== task.requestId)) fail('IDENTITY_MISMATCH');
   if (localLauncher) {
     checkIdentity(localLauncher,identity,['taskId','caseId','profile','runtimeHash']);
-    if(localLauncher.kind!=='three-creator-launcher-report' || localLauncher.workspace!==`/fsx/pipeline/lwdp_generation/${jobId}/tasks/${task.taskId}`)fail('IDENTITY_MISMATCH');
+    if(localLauncher.kind!=='three-creator-launcher-report' || !admittedWorkspace(localLauncher.workspace,jobId,task.taskId))fail('IDENTITY_MISMATCH');
+    if(live?.resolvedWorkspace!==undefined && live.resolvedWorkspace!==localLauncher.workspace)fail('IDENTITY_MISMATCH');
+    if(localLauncher.workspace!==`/fsx/pipeline/lwdp_generation/${jobId}/tasks/${task.taskId}` && live?.resolvedWorkspace!==localLauncher.workspace)await verifyRetrievedWorkspace(caseRoot,localLauncher.workspace,identity,jobId);
   }
   const launcher = localLauncher ?? live?.launcher;
   if (launcher?.runtimeHash && launcher.runtimeHash !== plan.runtimeHash) fail('IDENTITY_MISMATCH');

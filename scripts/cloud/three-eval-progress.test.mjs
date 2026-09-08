@@ -150,6 +150,44 @@ test('rejects foreign live job/request/launcher identity and linked evidence pat
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
+test('provider account-attempt workspaces require an exact same-job/task live observation',async()=>{
+ const f=await fixture();try{
+  await f.saveState();
+  const workspace=`/fsx/pipeline/lwdp_generation/${f.state.jobId}/tasks/account_attempts/${taskId}_abc12345/${taskId}`;
+  f.launcher.workspace=workspace;await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  const live={...f.live,resolvedWorkspace:workspace};
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(live),now})).cases[0];
+  assert.equal(row.phase,'running');assert.equal(row.stage,'preview');assert.equal(row.jobId,f.state.jobId);
+  assert(!JSON.stringify(row).includes('account_attempts'),'provider paths remain private');
+  for(const resolvedWorkspace of [workspace.replace(f.state.jobId,'gen_ffffffffffffffff'),workspace.replace('_abc12345/','_abc/'),workspace.replace('_abc12345/','_abc12345/../'),workspace.replace('/account_attempts/','/arbitrary/'),workspace.replace('_abc12345/','_anotherattempt/')]){
+   await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot({...live,resolvedWorkspace}),now}),/IDENTITY_MISMATCH/);
+  }
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/,'unverified nested path alone is not admitted');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('a retrieved provider attempt is independently bound to its receipt and actual diagnostic bytes',async()=>{
+ const f=await fixture();try{
+  f.state.phase='failed';await f.saveState();
+  const workspace=`/fsx/pipeline/lwdp_generation/${f.state.jobId}/tasks/account_attempts/${taskId}_abc12345/${taskId}`;
+  Object.assign(f.launcher,{workspace,status:'failed',childExitCode:1,finishedAt:observedAt});
+  await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),JSON.stringify({type:'error',message:'Selected model is at capacity. PRIVATE_DETAILS'})+'\n');
+  await json(path.join(f.caseRoot,'codex-attempt.json'),{item_id:taskId,workdir:workspace,command:'PRIVATE_COMMAND'});
+  const files=await Promise.all(['creator-launcher-report.json','creator-events.jsonl'].map(async name=>{const bytes=await readFile(path.join(f.caseRoot,name));return{name,path:workspace+'/outputs/'+name,bytes:bytes.length,sha256:hash(bytes)};}));
+  const receipt={kind:'owned-provider-attempt-diagnostic-retrieval',schemaVersion:1,jobId:f.state.jobId,taskId,requestId:f.state.requestId,runtimeHash,workspace,files};
+  const receiptPath=path.join(f.caseRoot,'provider-attempt-diagnostic-retrieval.json');await json(receiptPath,receipt);
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(result.cases[0].failure.code,'MODEL_AT_CAPACITY');
+  assert(!JSON.stringify(result).includes('PRIVATE_'));assert(!JSON.stringify(result).includes(workspace));
+  for(const edit of [{jobId:'gen_ffffffffffffffff'},{requestId:'foreign-request'},{taskId:'other-task--three-sdk'},{runtimeHash:hash('other-runtime')}]){
+   await json(receiptPath,{...receipt,...edit});await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
+  }
+  await json(receiptPath,receipt);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),'tampered diagnostic bytes');
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
 test('tool failures and a finished CLI do not become a completed Host delivery',async()=>{
  const f=await fixture();try{
   await f.saveState();f.live.events.latestOperation.status='failed';f.live.events.latestOperation.error='THREE_BROWSER_STARTUP_FAILED: PRIVATE_DETAILS';
