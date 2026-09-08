@@ -14,6 +14,7 @@ import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
+import {recordedVideoEncodingArgs} from './video.js';
 
 const roots: string[] = [];
 async function fixture(source = `import * as THREE from 'three'; window.authorScene = new THREE.Scene(); document.title = 'ordinary browser APIs work';`) {
@@ -235,6 +236,20 @@ describe('v2 command and discovery boundary', () => {
 
 
 describe('real episode and video timing boundaries', () => {
+ it('preserves irregular browser frame timestamps and frame count in the actual MP4 encoder',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'three-video-timing-'));roots.push(root);
+  const input=path.join(root,'irregular.webm'),output=path.join(root,'recorded.mp4'),execFile=promisify(execFileCallback);
+  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=64x64:rate=10:duration=1','-vf',"select='eq(n,0)+eq(n,1)+eq(n,4)+eq(n,9)'",'-vsync','passthrough','-c:v','libvpx-vp9','-enc_time_base','1:1000',input]);
+  await execFile('ffmpeg',recordedVideoEncodingArgs(input,output));
+  const probe=async(file:string)=>JSON.parse((await execFile('ffprobe',['-v','error','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time:format=duration','-of','json',file])).stdout);
+  const source=await probe(input),encoded=await probe(output);
+  const times=(value:any):number[]=>value.frames.map((frame:any)=>Number(frame.best_effort_timestamp_time));
+  const sourceTimes=times(source),encodedTimes=times(encoded);
+  expect(sourceTimes).toHaveLength(4);expect(new Set(sourceTimes.slice(1).map((t,index)=>Math.round((t-sourceTimes[index]!)*1000))).size).toBeGreaterThan(1);
+  expect(encodedTimes).toHaveLength(sourceTimes.length);
+  for(let i=0;i<sourceTimes.length;i++)expect(Math.abs((encodedTimes[i]!-encodedTimes[0]!)-(sourceTimes[i]!-sourceTimes[0]!))).toBeLessThanOrEqual(.0011);
+  expect(Number(encoded.format.duration)).toBeGreaterThanOrEqual(sourceTimes.at(-1)!-sourceTimes[0]!);
+ });
  it('reserves bounded overhead for complete episodes instead of cutting off their final steps', () => {
   const full=resolvePlaytestBudget(180,180,91); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(180); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(300);
   expect(resolvePlaytestBudget(180,undefined,91).mode).toBe('full-episode');

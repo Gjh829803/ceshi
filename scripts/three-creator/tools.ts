@@ -15,6 +15,7 @@ import { readExampleFiles, type ExampleTopic } from './example-files.js';
 import {characterUsage} from './character-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
+import {recordedVideoEncodingArgs} from './video.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -355,7 +356,7 @@ export class ThreeCreatorTools {
       if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
       const raw = path.join(root, 'playtest.webm');
       await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-fps_mode', 'passthrough', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
+      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', recordedVideoEncodingArgs(raw, videoFile));
       videoMetadata = await probeVideo(videoFile);
       validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }
