@@ -10,3 +10,9 @@ This directory retains the current documentation-cleanup checklist and optional
 plans, superseded engine designs and duplicate API sketches are available from
 Git history. Remaining JSON source-baseline records are historical evidence, not
 active plans or deployment authorization.
+
+## Active enhancements
+
+- [Single-rider mounted interaction](specs/2026-09-08-three-mounted-interaction-design.md)
+  — reviewed design; implementation and acceptance are tracked in the [implementation plan](plans/2026-09-08-three-mounted-interaction.md).
+  It does not replace the actual public contracts or constitute deployment evidence.

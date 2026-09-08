@@ -11,6 +11,7 @@
 | 场景创作工具与交付契约 | [Creator](../scripts/three-creator/README.md) · [云生成](../scripts/cloud/three-eval-README.md) |
 | 路线、六段录制、样式与恢复 | [Episode](../scripts/three-episode/README.md) |
 | 变更审查与运行时验证 | [审查协议](reviews/full-dimension-review-protocol.md) · [Runtime 检查表](reviews/runtime-deep-review-checklist.md) |
+| 骑乘增强设计与实施 | [单人骑乘增强设计](superpowers/specs/2026-09-08-three-mounted-interaction-design.md) |
 
 ## 历史材料的用途
 
@@ -18,7 +19,7 @@
 [evaluations](evaluations/README.md) 保存固定案例、评测政策、原始身份和部署记录。
 它们只证明记录中的源码、时间与产物，不能充当当前 HEAD 或线上状态的验证。
 
-[superpowers](superpowers/README.md) 只保留维护工作清单与可复用审查模板。
+[superpowers](superpowers/README.md) 保存维护工作清单、可复用审查模板和明确标记状态的增强提案。
 当前公共 API 不再有另一份设计目录下的独立声明。
 
 删除前的完整文档可从 Git 提交
