@@ -144,3 +144,16 @@ it('does not interpret rigid equipment changes as replacement of the skinned per
  f.mesh.visible=false;
  expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
 });
+
+it('marks valid ordinary SDK worlds as outside Training diagnosis without inventing human failures',()=>{
+ const f=fixture();
+ const snapshot={schemaVersion:2,controlledEntityId:'fox',entities:[]} as unknown as WorldSnapshot;
+ expect(f.monitor.read(f.world,snapshot)).toMatchObject({status:'not-applicable',issues:[],evidence:null});
+ expect(f.monitor.read(f.world,null).status).toBe('unavailable');
+});
+
+it('does not relabel lost Training telemetry as a nonhuman world after observing a person',()=>{
+ const f=fixture();f.monitor.read(f.world,f.snapshot);
+ const snapshot={schemaVersion:2,controlledEntityId:'person',entities:[]} as unknown as WorldSnapshot;
+ expect(f.monitor.read(f.world,snapshot)).toMatchObject({status:'unavailable',issues:['CHARACTER_TELEMETRY_UNAVAILABLE']});
+});

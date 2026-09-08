@@ -8,13 +8,13 @@ const {SKILL_DEFINITIONS,HUMANOID_BINDINGS,HUMANOID_CONTROL_HINTS,CHARACTER_CAPA
 export function humanAuthoringGuidance(policy:AssetPolicy,profile:CreatorProfile){
  return {
   authority:'host-authoring-requirement',humanAssetId:policy.defaultHumanoidAssetId,
-  requirement:'Every human, including NPCs and riders, must use the permitted preset visible model, compatible skeleton and supplied motions. Each person keeps one instance across walking, entering, riding, exiting and reset. Never hide or replace that person with a primitive rider or a combined vehicle-and-human model.',
+  requirement:'This requirement applies when humans appear; do not add a human to a nonhuman protagonist scene. Every human, including NPCs and riders, must use the permitted preset visible model, compatible skeleton and supplied motions. Each person keeps one instance across walking, entering, riding, exiting and reset. Never hide or replace that person with a primitive rider or a combined vehicle-and-human model.',
   vehicleComposition:profile==='three-raw'
    ? 'Keep the preset model/rig and implement its attachment, movement and observation in the raw profile. The SDK helper and custom-vehicle example require three-sdk.'
    : 'Reuse a suitable permitted vehicle first. Otherwise build only the vehicle Mesh/Group and supply its object/spec through TrainingVehicleInstance to createHumanoidWorld. Keep the preset person separate; the SDK attaches and poses that same person. Custom geometry permission is not permission to redraw a human.',
   customAssetScope:policy.allowCustomAssets?'Custom external nonhuman resources are allowed by this policy.':'Custom external asset files are disabled; ordinary authored Three geometry remains allowed.',
   poseLimits:'Seat anchors and supported mounted poses use the same skeleton. Do not invent a supported action from a clip name or replace the rider to hide a pose limitation. Report unsupported hand/foot contact or fit; consult the current SDK contracts before adapting parameters.',
-  verification:'Record walking → enter → ride → exit → walk → reset with real inputs. Inspect characterContinuity feedback and opening/mounted/dismounted/reset frames for the same person, visible body, no extra rider and seat fit. Structural continuity is advisory, not asset-provenance or visual acceptance.',
+  verification:'For a human riding task, record walking → enter → ride → exit → walk → reset with real inputs. Inspect characterContinuity feedback and opening/mounted/dismounted/reset frames for the same person, visible body, no extra rider and seat fit. Structural continuity is advisory, not asset-provenance or visual acceptance.',
   ...(profile==='three-sdk'?{exampleTopic:'custom-vehicle'}:{}),
  };
 }

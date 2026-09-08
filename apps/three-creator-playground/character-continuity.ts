@@ -10,7 +10,7 @@ interface VisualBinding {
 interface Baseline {root:Object3D;instanceId:string;visuals:readonly VisualBinding[]}
 export interface CharacterContinuity {
  readonly advisory:true;
- readonly status:'observed'|'issues'|'unavailable';
+ readonly status:'observed'|'issues'|'unavailable'|'not-applicable';
  readonly issues:readonly string[];
  readonly evidence:{
   readonly instanceId:string;readonly rootUuid:string;readonly baselineRootUuid:string;
@@ -82,6 +82,7 @@ export class CharacterContinuityMonitor {
   catch{return unavailable('CHARACTER_DIAGNOSTICS_UNAVAILABLE');}
  }
  private observe(world:WorldObservation,snapshot:WorldSnapshot|null):CharacterContinuity {
+  if(snapshot?.schemaVersion===2&&!snapshot.training&&!this.baselines.has(world.scene))return {advisory:true,status:'not-applicable',issues:[],evidence:null,scope};
   const character=snapshot?.training?.character;
   if(!character)return unavailable('CHARACTER_TELEMETRY_UNAVAILABLE');
   const root=Object.hasOwn(world.targets,character.instanceId)?world.targets[character.instanceId]:

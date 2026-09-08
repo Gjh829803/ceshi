@@ -33,6 +33,20 @@ unknown operations through the original session/journal before any new submissio
 
 ## Four levels for an Agent
 
+Choose the controlled subject from the request and reference. Environment and
+`getting-started` schema responses expose `subjectAuthoring` routes: ordinary
+humans use `character-actions`, human riding uses `mounted-interaction` with a
+vehicle example, and independent animals use `nonhuman-subject`. Generic schema
+topics identify `createWorld`; human/Training topics identify `createHumanoidWorld`.
+The existing default example still demonstrates a human and labels its use.
+
+`nonhuman-subject` provides a standalone fox with no humanoid assets, using SDK
+ground movement, camera, collision and capture. Read the current movement and
+asset contracts for other forms and abilities. The same actor must remain the
+controlled/captured subject; do not create a rider for an animal protagonist.
+In an ordinary SDK world without Training, character continuity is
+`not-applicable`; loss of telemetry after a Training baseline remains `unavailable`.
+
 | Level | Tools / source | Use |
 | --- | --- | --- |
 | Reuse | Environment, asset search/describe, `getting-started` example | `createHumanoidWorld` with `humanoid.source-101` |

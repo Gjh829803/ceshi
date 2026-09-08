@@ -1,0 +1,12 @@
+{
+ "schemaVersion":2,
+ "steps":[
+  {"keysDown":["w"],"durationSeconds":2},
+  {"keysUp":["w"],"keysDown":["d"],"durationSeconds":1},
+  {"keysUp":["d"],"keysDown":["Space"],"durationSeconds":0.1},
+  {"keysUp":["Space"],"durationSeconds":0.9},
+  {"lifecycle":"reset","durationSeconds":0.2},
+  {"lifecycle":"start","durationSeconds":0.4}
+ ],
+ "targets":[]
+}

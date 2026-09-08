@@ -69,7 +69,7 @@ it('allows procedural vehicle geometry when the frozen policy forbids custom ext
   for(const [name,content]of Object.entries(example.files))await writeFile(path.join(service.workspace,name),content);
   const candidate=await service.compiler.prepare();
   expect(candidate.profile).toBe('three-sdk');
-  const schema=await service.schema();expect(schema.humanAuthoring.exampleTopic).toBe('custom-vehicle');
+  const schema=await service.schema();expect(schema.humanAuthoring?.exampleTopic).toBe('custom-vehicle');
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 });
 
