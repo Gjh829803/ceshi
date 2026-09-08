@@ -10,6 +10,7 @@ These records do not authorize a campaign, retry or provider submission.
 
 Useful records:
 
+- [Mounted interaction implementation and verification](2026-09-08-three-mounted-interaction.md).
 - [Integrated Three SDK / Creator / Episode verification](2026-09-07-three-sdk-data-production-integration.md).
 - [Gait phase continuity](2026-09-07-gait-phase-continuity.md).
 - [Episode small-tail validation](2026-09-06-three-episode-small-tail-validation.md).
