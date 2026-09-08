@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { REPOSITORY_ROOT } from './compiler.js';
+import { trainingImportDetails } from './training-import-catalog.js';
 
 const donor = path.resolve(process.argv[2] ?? '');
 const expected = 'c293622a63716b8473cc2a95cb485c515265945e';
@@ -62,6 +63,9 @@ const { SPECS } = await import(pathToFileURL(path.join(donor, 'src/config.ts')).
 const { buildVehicle } = await import(pathToFileURL(path.join(donor, 'src/models.ts')).href);
 const catalogFile = path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json');
 const catalog = JSON.parse(await readFile(catalogFile, 'utf8'));
+const previousAssets = new Map<string, Parameters<typeof trainingImportDetails>[1]>(
+  catalog.assets.map((asset: { id: string }) => [asset.id, asset]),
+);
 catalog.assets = catalog.assets.filter((asset: any) => !asset.id.startsWith('training.') && asset.id !== 'humanoid.source-101');
 const provenance = { repository: 'vehicle-training-ground', commit: expected, notices: 'resources', importedWithoutChangingAssetBytes: true };
 const transform = { positionMetersXYZ: [0,0,0], rotationEulerRadiansXYZ: [0,0,0], scaleXYZ: [1,1,1] };
@@ -85,10 +89,10 @@ for (const spec of SPECS) {
     primary = `vehicles/${spec.id}.glb`; await mkdir(path.join(destination, 'vehicles'), { recursive: true });
     await writeFile(path.join(destination, primary), Buffer.from(bytes));
   }
-  const dependencies = ['horse','carriage','dragon'].includes(spec.id) ? imports.filter(file => file.startsWith('creatures/')) : [];
-  catalog.assets.push(await definition(`training.${spec.id}`, `${spec.name} / ${spec.en}`, primary, dependencies, {
+  const { dependencyPaths, ...details } = trainingImportDetails(spec, previousAssets.get(`training.${spec.id}`));
+  catalog.assets.push(await definition(`training.${spec.id}`, `${spec.name} / ${spec.en}`, primary, dependencyPaths, {
     locomotionBindingIds: [`training.${spec.mode}`], training: { schemaVersion: 1, spec },
-    sockets: [{ id: 'driver', node: 'seat.driver', positionMetersXYZ: spec.seat }], collision: spec.envelope,
+    ...details, collision: spec.envelope,
   }));
 }
 await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n');
