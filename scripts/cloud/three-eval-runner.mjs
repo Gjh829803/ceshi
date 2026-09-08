@@ -230,7 +230,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
         if (!state.cliActivityEvidence) {
           let observed = await optionalJson(path.join(repo, ".codex-tmp/three-creator-eval/live-cache", state.jobId + ".json"));
           if (!observed?.job?.cliActivityObserved && Date.now()-Date.parse(state.submittedAt)>(MAXIMUM_QUEUE_SECONDS-30)*1000) {
-            try {const snapshot=await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,workDir:echo.config.options.work_dir}]);observed={observedAt:snapshot.observedAt,job:snapshot.jobs[0]};}
+            try {const snapshot=await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,runtimeHash:lock.runtimeHash,workDir:echo.config.options.work_dir}]);observed={observedAt:snapshot.observedAt,job:snapshot.jobs[0]};}
             catch (error) {state.liveObservationError=error.name;}
           }
           if (observed?.job?.jobId===state.jobId && observed.job.taskId===plan.item.id && observed.job.requestId===plan.requestId && observed.job.cliActivityObserved===true && observed.job.launcher?.runtimeHash===lock.runtimeHash) state.cliActivityEvidence={source:"host-fixed-output-cli-events",observedAt:observed.observedAt,launcherStartedAt:observed.job.launcher.startedAt??null};

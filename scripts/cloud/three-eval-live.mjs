@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const exec = promisify(execFile);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const python = String.raw`import pathlib,json,os,stat,datetime,sys,math,re
+export const threeLiveReaderPython = String.raw`import pathlib,json,os,stat,datetime,sys,math,re
 rows=json.loads(sys.argv[1]); results=[]
 def safe_error(value):
     text=str(value or '')
@@ -46,22 +46,64 @@ def result_summary(value):
     return summary or None
 def read_public(p):
     if p.resolve()!=p: raise ValueError('LIVE_PATH_CHANGED')
-    fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW); s=os.fstat(fd)
+    directory=os.open('/',os.O_RDONLY|os.O_DIRECTORY)
+    try:
+        for part in p.parent.parts[1:]:
+            following=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=directory)
+            os.close(directory); directory=following
+        fd=os.open(p.name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=directory)
+    finally: os.close(directory)
+    s=os.fstat(fd)
     if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_size>134217728:
         os.close(fd); raise ValueError('LIVE_FILE_NOT_ADMITTED')
     with os.fdopen(fd) as f: data=f.read()
     return data,s
+def locate_outputs(row):
+    base=pathlib.Path(row['workDir'])/'tasks'; task=row['taskId']; direct=base/task
+    candidates=[]; pending=[]
+    def inspect(workspace):
+        out=workspace/'outputs'
+        if not os.path.lexists(out): return
+        if out.resolve()!=out or not out.is_dir(): raise ValueError('LIVE_OUTPUT_PATH_CHANGED')
+        report_file=out/'creator-launcher-report.json'
+        if not os.path.lexists(report_file): pending.append(out); return
+        data,_=read_public(report_file); report=json.loads(data)
+        if report.get('taskId')!=task or report.get('workspace')!=str(workspace) or not re.fullmatch(r'[a-f0-9]{64}',str(report.get('runtimeHash') or '')) or (row.get('runtimeHash') and report.get('runtimeHash')!=row['runtimeHash']): raise ValueError('LIVE_REPORT_IDENTITY_CHANGED')
+        candidates.append((out,report))
+    explicit=row.get('providerWorkspace')
+    if explicit:
+        workspace=pathlib.Path(explicit)
+        attempt=workspace.parent
+        if workspace!=direct and not (workspace.name==task and attempt.parent==base/'account_attempts' and re.fullmatch(re.escape(task)+r'_[A-Za-z0-9_-]{4,64}',attempt.name)): raise ValueError('LIVE_PROVIDER_WORKSPACE_INVALID')
+        inspect(workspace)
+    else:
+        inspect(direct)
+        attempts=base/'account_attempts'
+        if os.path.lexists(attempts):
+            if attempts.resolve()!=attempts or not attempts.is_dir(): raise ValueError('LIVE_ATTEMPT_PATH_CHANGED')
+            matches=[entry for entry in attempts.iterdir() if re.fullmatch(re.escape(task)+r'_[A-Za-z0-9_-]{4,64}',entry.name)]
+            if len(matches)>64: raise ValueError('LIVE_ATTEMPT_LIMIT')
+            for entry in matches:
+                if entry.is_symlink() or not entry.is_dir(): raise ValueError('LIVE_ATTEMPT_PATH_CHANGED')
+                inspect(entry/task)
+    if len(candidates)>1:
+        active=[entry for entry in candidates if entry[1].get('status') in ['starting','running']]
+        if len(active)!=1: raise ValueError('LIVE_ATTEMPT_AMBIGUOUS')
+        candidates=active
+    if candidates: return candidates[0]
+    if len(pending)>1: raise ValueError('LIVE_ATTEMPT_AMBIGUOUS')
+    return (pending[0] if pending else direct/'outputs'),None
 for row in rows:
-    r=dict(row); out=pathlib.Path(row['workDir'])/'tasks'/row['taskId']/'outputs'
-    r['outputsExist']=out.exists()
+    r=dict(row); r['outputsExist']=False
     try:
+        out,report=locate_outputs(row); r['outputsExist']=out.exists()
+        r['resolvedWorkspace']=str(out.parent); r['outputPathSource']='provider-workspace' if row.get('providerWorkspace') else ('provider-account-attempt' if out.parent.parent.parent.name=='account_attempts' else 'task-workspace')
         if out.exists():
             if out.resolve()!=out: raise ValueError('LIVE_OUTPUT_PATH_CHANGED')
-            p=out/'creator-launcher-report.json'
-            if p.exists():
-                data,_=read_public(p); report=json.loads(data)
-                if report.get('taskId')!=row['taskId'] or report.get('workspace')!=str(out.parent): raise ValueError('LIVE_REPORT_IDENTITY_CHANGED')
+            if report:
                 r['launcher']={k:report.get(k) for k in ['status','startedAt','finishedAt','runtimeHash','childExitCode']}; r['launcher']['error']=safe_error(report.get('error'))
+            else:
+                r['observationPending']='launcher-identity-pending'; results.append(r); continue
             p=out/'creator-checkpoint.json'
             if p.exists():
                 data,_=read_public(p); checkpoint=json.loads(data)
@@ -134,17 +176,18 @@ export async function readThreeLiveStatus(jobs, {cacheMilliseconds=15000, namesp
   const fresh=[], pending=[];
   for (const job of jobs) {
     if (!/^gen_[a-f0-9]+$/.test(job.jobId??'') || !/^[a-z0-9][a-z0-9-]{2,99}$/.test(job.taskId??'') || job.workDir!==`/fsx/pipeline/lwdp_generation/${job.jobId}`) throw new Error('THREE_LIVE_IDENTITY_INVALID');
-    try {const saved=JSON.parse(await readFile(path.join(cacheRoot,job.jobId+'.json'),'utf8'));if(saved.job.taskId===job.taskId&&(!saved.job.events||Array.isArray(saved.job.events.operations))&&Date.now()-Date.parse(saved.observedAt)<cacheMilliseconds){fresh.push({...saved.job,observedAt:saved.observedAt});continue;}}catch(error){if(error.code!=='ENOENT'&&!(error instanceof SyntaxError))throw error;}
-    pending.push({jobId:job.jobId,taskId:job.taskId,requestId:job.requestId??null,workDir:job.workDir});
+    if(job.runtimeHash!==undefined&&!/^[a-f0-9]{64}$/.test(job.runtimeHash))throw new Error('THREE_LIVE_IDENTITY_INVALID');
+    try {const saved=JSON.parse(await readFile(path.join(cacheRoot,job.jobId+'.json'),'utf8'));if(saved.readerVersion===2&&saved.job.taskId===job.taskId&&saved.job.requestId===(job.requestId??null)&&saved.job.runtimeHash===(job.runtimeHash??null)&&saved.job.providerWorkspace===(job.providerWorkspace??null)&&(!saved.job.events||Array.isArray(saved.job.events.operations))&&Date.now()-Date.parse(saved.observedAt)<cacheMilliseconds){fresh.push({...saved.job,observedAt:saved.observedAt});continue;}}catch(error){if(error.code!=='ENOENT'&&!(error instanceof SyntaxError))throw error;}
+    pending.push({jobId:job.jobId,taskId:job.taskId,requestId:job.requestId??null,workDir:job.workDir,runtimeHash:job.runtimeHash??null,providerWorkspace:job.providerWorkspace??null});
   }
   if (pending.length) {
     if (!pod) {
       const inventory=await exec('kubectl',['-n',namespace,'get','pods','-l','ray.io/cluster=ray-cluster,ray.io/node-type=head','-o','json'],{encoding:'utf8',timeout:25000,maxBuffer:2*1024*1024});
       pod=selectThreeLiveHead(JSON.parse(inventory.stdout),container);
     }
-    const {stdout}=await exec('kubectl',['-n',namespace,'exec',pod,'-c',container,'--','python3','-c',python,JSON.stringify(pending)],{encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024});
+    const {stdout}=await exec('kubectl',['-n',namespace,'exec',pod,'-c',container,'--','python3','-c',threeLiveReaderPython,JSON.stringify(pending)],{encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024});
     const result=JSON.parse(stdout);
-    for(const job of result.jobs){const file=path.join(cacheRoot,job.jobId+'.json'),temp=file+`.${process.pid}.part`;await writeFile(temp,JSON.stringify({observedAt:result.observedAt,job}));const {rename}=await import('node:fs/promises');await rename(temp,file);fresh.push({...job,observedAt:result.observedAt});}
+    for(const job of result.jobs){const file=path.join(cacheRoot,job.jobId+'.json'),temp=file+`.${process.pid}.part`;await writeFile(temp,JSON.stringify({readerVersion:2,observedAt:result.observedAt,job}));const {rename}=await import('node:fs/promises');await rename(temp,file);fresh.push({...job,observedAt:result.observedAt});}
   }
   return {observedAt:new Date().toISOString(),jobs:jobs.map(job=>fresh.find(item=>item.jobId===job.jobId))};
 }

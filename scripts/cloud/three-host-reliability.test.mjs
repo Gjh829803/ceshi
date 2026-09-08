@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtemp,readFile,rm,realpath} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,realpath,mkdir,writeFile,symlink} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence} from './three-account-routing.mjs';
 import {admissionIsClosed} from './three-eval-admission.mjs';
-import {selectThreeLiveHead} from './three-eval-live.mjs';
+import {selectThreeLiveHead,threeLiveReaderPython} from './three-eval-live.mjs';
 import {retrieveThreeDeliveryArtifacts} from './three-eval-delivery-recovery.mjs';
 import {resolveCreatorSubmission} from './three-eval-runtime.mjs';
 import {runWithExecutionSlots} from './three-execution-slots.mjs';
@@ -54,6 +55,34 @@ test('replacement head selection ignores terminating nodes and refuses ambiguous
  assert.equal(selectThreeLiveHead({items:[{...ready('old'),metadata:{name:'old',deletionTimestamp:'now'}},ready('replacement')]}),'replacement');
  assert.throws(()=>selectThreeLiveHead({items:[ready('a'),ready('b')]}),/UNAVAILABLE/);
  assert.throws(()=>selectThreeLiveHead({items:[]}),/UNAVAILABLE/);
+});
+test('safe live reads only identity-bound direct or provider attempt outputs and rejects ambiguous paths',async()=>{
+ const root=await realpath(await mkdtemp(path.join(tmpdir(),'three-live-attempt-'))),task='current-case--three-sdk',runtimeHash=hash('runtime');
+ const row={jobId:'gen_123abc',taskId:task,requestId:'request-current',workDir:root,runtimeHash};
+ const direct=path.join(root,'tasks',task),attempt=suffix=>path.join(root,'tasks/account_attempts',task+'_'+suffix,task);
+ const read=overrides=>JSON.parse(execFileSync('python3',['-c',threeLiveReaderPython,JSON.stringify([{...row,...overrides}])],{encoding:'utf8'})).jobs[0];
+ const write=async(workspace,status='running',overrides={})=>{
+  await mkdir(path.join(workspace,'outputs'),{recursive:true});
+  await writeFile(path.join(workspace,'outputs/creator-launcher-report.json'),JSON.stringify({taskId:task,workspace,runtimeHash,status,...overrides}));
+  await writeFile(path.join(workspace,'outputs/creator-events.jsonl'),[{type:'thread.started'},{type:'turn.started'},{type:'error',message:'Selected model is at capacity.'}].map(JSON.stringify).join('\n'));
+ };
+ try{
+  await write(direct);let result=read();assert.equal(result.cliActivityObserved,true);assert.equal(result.resolvedWorkspace,direct);assert.equal(result.outputPathSource,'task-workspace');
+  await rm(direct,{recursive:true});const first=attempt('abcdefgh');await write(first);
+  await symlink(root,path.join(first,'scratch'));
+  result=read();assert.equal(result.cliActivityObserved,true);assert.equal(result.resolvedWorkspace,first);assert.equal(result.outputPathSource,'provider-account-attempt');assert.deepEqual(result.failureFacts,[{layer:'model-service',code:'MODEL_CAPACITY'}]);
+  await write(first,'running',{runtimeHash:hash('foreign')});assert.equal(read().observationError,'LIVE_REPORT_IDENTITY_CHANGED');
+  await write(first,'running',{workspace:direct});assert.equal(read().observationError,'LIVE_REPORT_IDENTITY_CHANGED');await write(first);
+  const second=attempt('ijklmnop');await write(second);assert.equal(read().observationError,'LIVE_ATTEMPT_AMBIGUOUS');
+  result=read({providerWorkspace:first});assert.equal(result.resolvedWorkspace,first);assert.equal(result.cliActivityObserved,true);
+  assert.equal(read({providerWorkspace:root}).observationError,'LIVE_PROVIDER_WORKSPACE_INVALID');
+  await write(first,'failed');result=read();assert.equal(result.resolvedWorkspace,second);
+  await rm(path.join(second,'outputs/creator-launcher-report.json'));await rm(first,{recursive:true});
+  result=read();assert.equal(result.observationPending,'launcher-identity-pending');assert.equal(result.cliActivityObserved,undefined);assert.equal(result.events,undefined);
+  await write(second);await rm(path.join(second,'outputs/creator-launcher-report.json'));await symlink(path.join(second,'outputs/creator-events.jsonl'),path.join(second,'outputs/creator-launcher-report.json'));
+  assert.equal(read().observationError,'LIVE_PATH_CHANGED');
+  await rm(path.join(root,'tasks/account_attempts'),{recursive:true});await symlink(root,path.join(root,'tasks/account_attempts'));assert.equal(read().observationError,'LIVE_ATTEMPT_PATH_CHANGED');
+ }finally{await rm(root,{recursive:true,force:true});}
 });
 test('unknown submission resumes by exact identity without another create call',async()=>{
  let creates=0,reads=0;
