@@ -4,7 +4,7 @@
 public asset IDs, resource paths, SHA-256 hashes, byte lengths and capabilities.
 The compiler verifies and packages the selected resource closure.
 
-Asset producers should follow the [asset submission and merge guide](../../docs/asset-production-integration.md).
+Asset producers should follow the [asset submission and Agent integration guide](../../docs/asset-production-integration.md).
 
 `humanoid.source-101` is the default humanoid. Keep its supplied visible model,
 skeleton and actions. `createHumanoidWorld` loads its complete action resources
