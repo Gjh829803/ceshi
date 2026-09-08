@@ -20,3 +20,5 @@ export type { TrainingCommand } from './runtime';
 export {DEFAULT_TRAINING_VIEW,TRAINING_VIEW_SCHEMA_PROPERTIES,type TrainingViewSettings} from './runtime';
 export { TrainingHorse } from './horse';
 export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './horse';
+
+export * from './input-guidance';

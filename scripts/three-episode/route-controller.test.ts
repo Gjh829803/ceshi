@@ -59,6 +59,7 @@ it('includes visible looking and a deliberate jump during healthy traversal', as
   for (let i = 0; i < 720; i++) decisions.push(await controller.step(snapshot([0,0,-i/24*2]), [0,0,-1], i/24));
   expect(decisions.some(d => Math.abs(d.input.cameraYawRatio ?? 0) >= 0.01)).toBe(true);
   expect(decisions.some(d => d.input.jumpPressed)).toBe(true);
+  expect(decisions.some(d => d.input.run)).toBe(false);
 });
 
 it('does not jump on rejected local support, and skips camera commands for an authored camera', async () => {

@@ -19,6 +19,50 @@ const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it('describes the active input family without advancing or mutating the simulation',async()=>{
+  const world=await fixture();try{const r=world.training!,before=world.snapshot();
+   expect(world.describe().training!.inputGuide).toMatchObject({family:'character',fields:{boost:expect.stringContaining('sprint')}});
+   expect(world.snapshot()).toEqual(before);
+   r.approach('car-1');r.enter('car-1');
+   expect(world.describe().training!.inputGuide).toMatchObject({family:'wheeled',fields:{boost:expect.stringContaining('maxSpeed')}});
+   const guide=r.inputGuide();(guide.fields as Record<string,string>).boost='changed';expect(r.inputGuide().fields.boost).toContain('maxSpeed');
+   const schema=r.commandDescriptors('player').find(c=>c.type==='training.input')!.schema as any;
+   expect(schema.properties.input.anyOf[0].properties.pitch.description).toContain('Ignored');
+   expect(schema.properties.input.anyOf[0].properties.boost.description).toContain('maxSpeed');
+   world.step({},90);expect(r.exit()).toBe(true);expect(r.inputGuide().family).toBe('character');
+  }finally{world.dispose();}
+ });
+
+ it.each([0,1,2] as const)('uses radians for pointer pitch in camera mode %s on foot and mounted',async mode=>{
+  const world=await fixture();try{const r=world.training!;
+   for(const mounted of [false,true]){
+    if(mounted){r.approach('car-1');r.enter('car-1');}
+    r.setCameraMode(mode);r.advance({},1/60);const before=r.followCamera.pitch;
+    r.advance({},1/60,{pitchDeltaRadians:.1});expect(r.followCamera.pitch-before).toBeCloseTo(.1,8);
+   }
+  }finally{world.dispose();}
+ });
+ it('keeps a configured zero vehicle arm finite for canonical and legacy zoom',async()=>{
+  const world=await fixture();try{const r=world.training!;r.applyProfile({vehicles:{'car-1':{camera:0}}});r.approach('car-1');r.enter('car-1');r.advance({},1/60);
+   r.advance({},1/60,{distanceDeltaMeters:1});expect(r.followCamera.zoom).toBe(1);
+   r.followCamera.scroll(100,r.simulation);expect(r.followCamera.zoom).toBeCloseTo(1.07);
+  }finally{world.dispose();}
+ });
+ it('uses meters for the mounted nominal arm distance',async()=>{
+  const world=await fixture();try{const r=world.training!;r.approach('car-1');r.enter('car-1');r.advance({},1/60);
+   const before=r.followCamera.zoom*spec.camera;r.advance({},1/60,{distanceDeltaMeters:1});
+   expect(r.followCamera.zoom*spec.camera-before).toBeCloseTo(1,8);
+  }finally{world.dispose();}
+ });
+ it('returns truthful relocation feedback and replays approach receipts without moving twice',async()=>{
+  const world=await fixture();try{
+   const receipt=await world.execute({type:'training.approach',instanceId:'car-1'},{commandId:'approach-once'});
+   expect(receipt).toMatchObject({status:'applied',result:{kind:'relocation',entityId:'player',vehicleInstanceId:'car-1',positionWorldMetersXYZ:world.getEntityState('player').positionWorldMetersXYZ}});
+   const before=world.snapshot();expect(await world.execute({type:'training.approach',instanceId:'car-1'},{commandId:'approach-once'})).toEqual(receipt);expect(world.snapshot()).toEqual(before);
+   expect(await world.execute({type:'training.approach',instanceId:'missing'})).toMatchObject({status:'rejected'});
+  }finally{world.dispose();}
+ });
+
  it('persists the configured default view while keyboard permission leaves programmatic modes available',async()=>{
   const world=await fixture();try{const r=world.training!;
    r.applyProfile({view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});
@@ -294,7 +338,7 @@ describe('SDK training runtime',()=>{
    r.advance({cameraPitchRatio:-1},1/60);expect(c.pitch).toBe(.12);
    expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);world.step({},1);
    const yaw=c.yaw;r.advance({},1/60,{yawDeltaRadians:-.4,pitchDeltaRadians:.2});
-   expect(c.yaw).toBeCloseTo(yaw-.4);expect(c.pitch).toBeCloseTo(.45);
+   expect(c.yaw).toBeCloseTo(yaw-.4);expect(c.pitch).toBeCloseTo(.5);
   }finally{world.dispose();}
  });
  it('inherits character translation without stretching the follow arm or changing FOV',async()=>{

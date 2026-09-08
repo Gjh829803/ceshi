@@ -74,7 +74,10 @@ describe('Three episode deterministic production capture', () => {
   it('records on the first execution, preserves opening/terminal ticks, and reuses an intact segment after another route changes', async () => {
     const setup = await fixture();
     const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
-    expect(result.status).toBe('completed'); expect(setup.encoded).toBe(720); expect(setup.fake.preparations).toBe(1);
+    expect(result.status).toBe('completed'); expect(setup.encoded).toBe(720);
+    const health=JSON.parse(await readFile(path.join(result.segments[0]!.outputRoot,'health.json'),'utf8'));
+    expect(health.playerBehavior.runSeconds).toBe(0);expect(health.playerBehavior.walkSeconds).toBeGreaterThan(2);
+    expect(setup.fake.preparations).toBe(1);
     expect(setup.fake.advances.reduce((sum, ticks) => sum + ticks, 0)).toBe(1800);
     expect(setup.fake.session.close).toHaveBeenCalledOnce();
     const output = result.segments[0]!;

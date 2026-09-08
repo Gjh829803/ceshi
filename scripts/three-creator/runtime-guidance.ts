@@ -5,7 +5,7 @@ import type {CreatorProfile} from './contracts.js';
 import {REPOSITORY_ROOT,type ThreeCompiler} from './compiler.js';
 import {readWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 
-const DEFINITION_FILES = ['training/humanoid/action-schema.ts','training/input.ts','training/character-capabilities.ts','training/runtime.ts'] as const;
+const DEFINITION_FILES = ['training/humanoid/action-schema.ts','training/input.ts','training/input-guidance.ts','training/character-capabilities.ts','training/runtime.ts'] as const;
 
 /** One validated source snapshot per discovery call; never import author modules. */
 export class RuntimeGuidance {
@@ -31,6 +31,8 @@ export class RuntimeGuidance {
   }
   async definitions(includeTraining=true){
     return Object.fromEntries(await Promise.all(['world.ts',...(includeTraining?DEFINITION_FILES:[])].map(async name=>{
+      // Older materialized SDKs predate this optional guide. Never substitute Host semantics.
+      if(name==='training/input-guidance.ts'&&this.runtime&&!this.runtime.files.has(`three-world/src/${name}`))return [name,'// Input guidance is unavailable in this workspace SDK. Inspect its controller source and current world state.'];
       const source=await this.source(name);
       const file=ts.createSourceFile(name,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
       // Keep imports so references are traceable. Initializers are displayed as

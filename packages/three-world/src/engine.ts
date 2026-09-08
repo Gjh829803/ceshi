@@ -43,6 +43,7 @@ export class WorldEngine {
   readonly keyboard: WorldKeyboard;
   readonly fixedTimeStepSeconds: number;
   private readonly navigation: ThreeNavigation | undefined;
+  get navigationEnabled(): boolean { return this.navigation !== undefined; }
   private readonly entities = new Map<string, Entity>();
   private readonly prototypes = new Map<string, () => EntityOptions | CharacterEntityOptions>();
   private readonly goals = new Map<string, ActorGoal>();
@@ -262,7 +263,8 @@ export class WorldEngine {
         this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;
       }
       if(input.cameraTogglePressed&&this.cameraRig.keyboardToggleEnabled)this.setCameraPerspective(this.cameraRig.perspective==='first-person'?'third-person':'first-person');
-      this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.jump)},dt);this.pointerInput={};
+      const jumpPressed = input.jumpPressed ?? Boolean(input.jump && !this.previousJump);
+      this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||jumpPressed)},dt);this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
       const customActions=new Map<string,string>();
       let desiredDirection:Vec3=[0,0,0];
@@ -270,7 +272,7 @@ export class WorldEngine {
         const actor = this.entity(this.controlled); const forward = new THREE.Vector3(...this.controlForwardWorldXYZ());
         const right = forward.clone().cross(new THREE.Vector3(0, 1, 0)); const move = right.multiplyScalar(input.moveXRatio ?? 0).addScaledVector(forward, -(input.moveZRatio ?? 0)); if (move.lengthSq() > 1) move.normalize();
         const speed = input.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4;
-        drives[this.controlled] = { velocityMetersPerSecondXZ: [move.x * speed, move.z * speed], jumpPressed: input.jumpPressed ?? Boolean(input.jump && !this.previousJump) };
+        drives[this.controlled] = { velocityMetersPerSecondXZ: [move.x * speed, move.z * speed], jumpPressed };
         desiredDirection=tuple(move); if (move.lengthSq() > 0.0001) this.faceDirection(actor, move);
         const controlledDrive=drives[this.controlled];if(controlledDrive && "jumpPressed" in controlledDrive && controlledDrive.jumpPressed && this.physics.state(this.controlled)?.isGrounded)this.jumped.add(this.controlled);
         if (input.interactPressed ?? Boolean(input.interact && !this.previousInteract)) this.interactNearest();

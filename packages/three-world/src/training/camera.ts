@@ -90,19 +90,38 @@ export class FollowCamera {
   private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private revision=-1;
   constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries){this.originalNear=camera.near;}
   get desiredPosition():T.Vector3{return this.desired.clone();}
-  orbit(dx:number,dy:number,time:number,sim?:Simulation){
+  /** Canonical angular input. Pixel adapters keep their own sensitivity. */
+  orbitRadians(yawDelta:number,pitchDelta:number,time:number,sim?:Simulation){
     if(this.mode===1||this.mode===2){
-      if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw-dx*.004,-Math.PI*5/6,Math.PI*5/6);
-      else this.yaw-=dx*.004;
-      this.pitch=clamp(this.pitch+dy*.004,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);this.lastOrbit=time;return;
+      if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw+yawDelta,-Math.PI*5/6,Math.PI*5/6);
+      else this.yaw+=yawDelta;
+      this.pitch=clamp(this.pitch+pitchDelta,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);
+    }else{
+      const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
+      this.yaw+=yawDelta;this.pitch=clamp(this.pitch+pitchDelta,character ? .12 : -.6,character ? 1.1 : 1.25);
     }
+    this.lastOrbit=time;
+  }
+  /** Changes the nominal arm in meters; collision, speed pullback and smoothing remain separate. */
+  zoomByMeters(delta:number,sim:Simulation){
+    if(this.mode===1)return;
+    if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+delta,1.3,3.2);return;}
+    if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+delta,3.2,12)/base;}
+    else{
+      const base=this.baseDistance??sim.vehicle?.spec.camera??5.5;
+      // A configured zero arm stays collapsed; never divide by zero.
+      if(base>0)this.zoom=clamp(this.zoom+delta/base,.45,2.5);
+    }
+  }
+  /** Legacy pointer pixels, retained for direct integrations. */
+  orbit(dx:number,dy:number,time:number,sim?:Simulation){
     const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
-    this.yaw-=dx*.004;this.pitch=character?clamp(this.pitch+dy*.004,.12,1.1):clamp(this.pitch+dy*.003,-.6,1.25);this.lastOrbit=time;
+    this.orbitRadians(-dx*.004,dy*((this.mode===1||this.mode===2||character) ? .004 : .003),time,sim);
   }
   scroll(deltaY:number,sim:Simulation){
     if(this.mode===1)return;
-    if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+deltaY*.003,1.3,3.2);return;}
-    if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+deltaY*.007,3.2,12)/base;}
+    if(this.mode===2){this.zoomByMeters(deltaY*.003,sim);return;}
+    if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
     else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
   }
   reset(sim:Simulation){this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}

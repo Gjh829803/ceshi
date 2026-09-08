@@ -32,6 +32,7 @@ export interface EpisodeSegmentPlan {
   start: EpisodeStart;
   waypoints: EpisodeWaypoint[];
   endBehavior: 'stop' | 'reverse' | 'loop';
+  /** Legacy annotation only; does not steer or measure visibility. */
   coverageTargetIds?: string[];
   purpose: string;
   actionGoals?: EpisodeActionGoal[];
@@ -75,15 +76,16 @@ export const ACTION_GOAL_SCHEMA = object({
   ] },
   timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
-export const SEGMENT_SCHEMA = object({
-  id: { enum: SEGMENT_IDS },
-  start: object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
+export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
     vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
-  },[]) },['positionWorldMetersXYZ','facingYawRadians']),
+  },[]) },['positionWorldMetersXYZ','facingYawRadians']);
+export const SEGMENT_SCHEMA = object({
+  id: { enum: SEGMENT_IDS },
+  start: EPISODE_START_SCHEMA,
   waypoints: { type: 'array', minItems: 1, maxItems: 256, items: object({ positionWorldMetersXYZ: vec3, gait: { enum: ['walk', 'run'] } }) },
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
-  coverageTargetIds: { type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
+  coverageTargetIds: { description: 'Optional annotation only; does not steer the camera or validate target visibility.', type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
   purpose: { type: 'string', minLength: 1, maxLength: 2000 },
   actionGoals: { type: 'array', minItems: 1, maxItems: 32, items: ACTION_GOAL_SCHEMA },
 }, ['id', 'start', 'waypoints', 'endBehavior', 'purpose']);

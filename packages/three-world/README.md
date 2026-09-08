@@ -327,6 +327,14 @@ Presentation UI focus releases held gameplay keys. Programmatic
 override; release it when the interaction ends. `setInput(undefined)` clears the
 active override. `WorldInput.training` uses the same input in deterministic ticks;
 action edges execute once in a multi-tick step.
+Read `world.describe().training.inputGuide` for the active control family, or
+`training.TRAINING_INPUT_GUIDES` when authoring a vehicle. Start with
+`emptyTrainingInput()` and change only relevant channels. For example, `boost`
+increases car speed, adjusts plane throttle, launches a glider, and brakes a
+spaceship or submarine. Aircraft pitch uses `forward`; spaceship pitch uses
+`pitch`. Omitted guide channels are ignored and should stay neutral.
+Camera angular deltas use radians and distance deltas change the nominal arm in
+meters; collision response, speed pullback and smoothing still affect the final view.
 
 `world.training` provides prepare, approach/enter/exit, map switching, camera
 modes and profile methods. These preparation helpers may relocate; normal
@@ -334,6 +342,10 @@ movement uses real input. Generic navigation, impulse and root-edit commands are
 unavailable for contextual actors. Commands are `training.prepare`,
 `training.approach`, `training.enter`, `training.exit`, `training.camera`,
 `training.input`, `training.profile` and `training.action`.
+`training.approach` is a preparation relocation to a safe boarding position,
+with velocity cleared. It does not walk there. Its applied command receipt
+includes `result.kind:"relocation"`, the character/vehicle IDs and actual position;
+use ordinary input for visible travel, then `training.enter` when eligible.
 
 ```ts
 await world.execute({type:'training.profile',profile:{character:{

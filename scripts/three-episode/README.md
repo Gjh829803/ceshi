@@ -36,9 +36,13 @@ approaches, collision and water before planning. The plan schema is
 `kind:"worldkit-three-episode-plan", schemaVersion:2`, with the actual
 `worldBuildHash` and six ordered, distinct-start segments `segment-00`–`segment-05`.
 Each segment has `start`, `waypoints`, `endBehavior`, `purpose` and optional
-`coverageTargetIds` / `actionGoals`; see [contracts.ts](contracts.ts).
+`actionGoals`; see [contracts.ts](contracts.ts). Historical `coverageTargetIds`
+remains accepted as annotation only: it does not steer the camera or measure visibility.
 
 Each waypoint supplies `positionWorldMetersXYZ` and `gait:"walk"|"run"`.
+Walk is never promoted to running; run may downshift during observation, jumps
+or settling. Optional `episode_probe` accepts the same full `start` as submission,
+including Training vehicle state. It checks local placement, not route or visual quality.
 `actionGoals` is an ordered list, triggered near a waypoint using real position.
 It contains semantic intent, never a hard-coded keyboard chord. For example,
 this segment fragment rolls at waypoint 0 and picks up at waypoint 1:

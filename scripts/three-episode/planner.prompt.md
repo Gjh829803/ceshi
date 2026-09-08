@@ -21,7 +21,7 @@ Starts inherit the world's saved camera view. Optional `start.cameraPerspective`
 an ordinary subject requires an authored eye in `setCameraFollow({view})`.
 If also supplied, this named perspective takes precedence over `start.training.cameraMode`.
 
-Plan deliberate changes of direction and pacing appropriate to the terrain and landmarks. When this world has authored action affordances, include useful actionGoals along the route. Allow space for brief pauses to look around and, when the actual subject can jump, a grounded jump on locally clear supported travel. For routes without actionGoals the Host adds observations, camera variation and bounded jumps. Routes with actionGoals keep the planned gait and pause route progression while actual actions execute. The Host never chooses new route waypoints. Leave ample route length for these pace changes.
+Plan deliberate changes of direction and pacing appropriate to the terrain and landmarks. When this world has authored action affordances, include useful actionGoals along the route. Allow space for brief pauses to look around and, when the actual subject can jump, a grounded jump on locally clear supported travel. `gait:"walk"` is never promoted to running; `run` may downshift during observations, jumps or settling. For routes without actionGoals the Host adds observations, camera variation and bounded jumps. Routes with actionGoals keep the planned gait and pause route progression while actual actions execute. The Host never chooses new route waypoints. Leave ample route length for these pace changes.
 
 Provide enough useful travel for approximately 30 seconds at the actual speed. A longer route may be cut at the segment duration. `endBehavior:"stop"` is suitable when the route lasts long enough. Use `"reverse"` only for an intentionally reversible route, or `"loop"` for a genuine continuous loop including its closing edge. Do not default to repeating a tiny safe circuit or six barely shifted copies of the same start. Do not invent content the delivered world does not contain. Select coverage and viewpoints within its actual limits.
 
@@ -50,7 +50,6 @@ The plan object has this structure (the coordinates below are explanatory placeh
       "start": {"positionWorldMetersXYZ": [0, 0, 0], "facingYawRadians": 0},
       "waypoints": [{"positionWorldMetersXYZ": [0, 0, -1], "gait": "walk"}],
       "endBehavior": "stop",
-      "coverageTargetIds": ["an actual registered entity id, if useful"],
       "purpose": "Explain the actual spatial or visual coverage of this route."
     }
   ]

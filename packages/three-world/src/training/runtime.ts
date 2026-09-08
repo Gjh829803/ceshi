@@ -1,3 +1,4 @@
+import {TRAINING_INPUT_GUIDES,TRAINING_APPROACH_DESCRIPTION,type TrainingInputGuide} from './input-guidance';
 import * as THREE from 'three';
 import { registerTrainingHost } from './host-access';
 import { PresentationState, type TrainingDisplaySample } from './presentation';
@@ -211,11 +212,17 @@ export class TrainingRuntime implements PhysicsPort {
       throw new Error(`${code}: ${this.simulation.message}`);
     }
   }
+  inputGuide():TrainingInputGuide{
+    const family=this.simulation.vehicle?.spec.mode??'character';
+    return {family,fields:{...TRAINING_INPUT_GUIDES[family]}};
+  }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
     const object=(properties:Record<string,import('../contracts').JsonValue>,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false});
-    const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean'}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
-    const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:object({type:{const:type},...properties})});
+    const guide=this.inputGuide();
+    const meaning=(key:string)=>guide.fields[key as keyof Input]??'Ignored for this control family; leave neutral.';
+    const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
+    const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='training.approach'?{description:TRAINING_APPROACH_DESCRIPTION}:{})}});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
     const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[{type:'number',exclusiveMinimum:0,maximum:100},{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
     return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
@@ -376,14 +383,9 @@ export class TrainingRuntime implements PhysicsPort {
     this.presentation.beforeStep(this.simulation);
     const controls=this.input??input.training??{...emptyInput(),forward:-(input.moveZRatio??0),steer:input.moveXRatio??0,lift:input.moveYRatio??0,boost:!!input.run,jump:input.jumpPressed??!!(input.jump&&!this.previousJump)};
     if(!this.input&&(input.interactPressed??!!(input.interact&&!this.previousInteract))){if(this.simulation.interact())this.sync(0);}
-    // WorldKeyboard already expresses yaw as a signed angle. Convert back to
-    // source orbit units once so drag limits and manual-recenter grace agree.
-    if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbit(-(pointer.yawDeltaRadians??0)/.004,(pointer.pitchDeltaRadians??0)/.004,this.simulation.time,this.simulation);
-    if(pointer.distanceDeltaMeters)this.followCamera.scroll(pointer.distanceDeltaMeters/.007,this.simulation);
-    if(input.cameraYawRatio||input.cameraPitchRatio){
-      const pitchScale=this.simulation.vehicle?.003:.004;
-      this.followCamera.orbit(-(input.cameraYawRatio??0)*dt*1.2/.004,(input.cameraPitchRatio??0)*dt/pitchScale,this.simulation.time,this.simulation);
-    }
+    if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbitRadians(pointer.yawDeltaRadians??0,pointer.pitchDeltaRadians??0,this.simulation.time,this.simulation);
+    if(pointer.distanceDeltaMeters)this.followCamera.zoomByMeters(pointer.distanceDeltaMeters,this.simulation);
+    if(input.cameraYawRatio||input.cameraPitchRatio)this.followCamera.orbitRadians((input.cameraYawRatio??0)*dt*1.2,(input.cameraPitchRatio??0)*dt,this.simulation.time,this.simulation);
     this.simulation.step(controls,dt,this.followCamera.yaw);this.presentation.afterStep(this.simulation);this.sync(dt);
     if(!this.authored){this.followCamera.update(this.simulation,dt);this.followCamera.capturePresentationPose(this.simulation,previousBinding!==this.simulation.active||previousRevision!==this.simulation.teleportRevision);}
     this.previousJump=!!input.jump;this.previousInteract=!!input.interact;

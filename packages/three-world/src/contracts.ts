@@ -136,7 +136,7 @@ export interface RuntimeError {
  readonly suggestedAction?:string;
 }
 export type CommandReceipt =
- | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number}
+ | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number;readonly result?:{readonly kind:'relocation';readonly entityId:string;readonly vehicleInstanceId:string;readonly positionWorldMetersXYZ:Vec3}}
  | {readonly status:'accepted';readonly commandId:string;readonly worldRevision:number;readonly operationId:string}
  | {readonly status:'rejected';readonly commandId:string;readonly worldRevision:number;readonly error:RuntimeError};
 export interface OperationStatus {
@@ -238,7 +238,7 @@ export interface CommandDescriptor {
  readonly unavailableReason?:RuntimeError;
 }
 export interface WorldDescription {
- readonly training?:{readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
+ readonly training?:{readonly inputGuide:import('./training/input-guidance').TrainingInputGuide;readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;

@@ -89,10 +89,9 @@ export class PlayerCaptureController {
     const settling = this.landedAt !== undefined && time - this.landedAt < 0.45;
     if (jumpActive) phase = 'jump'; else if (settling) phase = 'landing';
     if (decision.mode === 'travel') {
-      const sprint = !this.segment.actionGoals?.length && (pulse(time, 9 + this.ordinal * 0.2, 3) > 0.12 || pulse(time, 22 + this.ordinal * 0.15, 2.8) > 0.12);
       const walkBreak = this.segment.actionGoals?.length ? false : time < 1.1 || observe || jumpActive || settling || (time > 18 && time < 20) || (decision.distanceToTargetMeters ?? 0) < 1.4;
-      input.run = !walkBreak && (input.run || sprint);
-      // Prevent modest sprint bursts exhausting a valid stop route prematurely.
+      input.run = !walkBreak && Boolean(input.run);
+      // Pace the requested gait so a valid stop route is not exhausted prematurely.
       // A minimum pace preserves the existing too-short-route failure.
       let desiredPace = 1;
       if (this.segment.endBehavior === 'stop' && decision.targetPositionWorldMetersXYZ) {
@@ -189,6 +188,6 @@ export function assertPlayerBehavior(frames: readonly { snapshot: WorldSnapshot;
     return;
   }
   if (capabilities.camera.mode !== 'authored' && (evidence.renderedYawRangeDegrees < 20 || evidence.renderedYawTravelDegrees < 40)) throw new Error('EPISODE_CAMERA_VARIATION_MISSING: supported camera did not visibly turn');
-  if (evidence.walkSeconds < 2 || (capabilities.movement.runSpeedMetersPerSecond > capabilities.movement.walkSpeedMetersPerSecond && evidence.runSeconds < 2)) throw new Error('EPISODE_GAIT_VARIATION_MISSING: actual travel must include walking and running');
+  // Gait statistics are feedback: a route need not request both walking and running.
   if (evidence.plannedJumps.some(jump => jump.takeoffAtSeconds === null || jump.landedAtSeconds === null)) throw new Error('EPISODE_PLANNED_JUMP_INCOMPLETE: requested jump lacks observed upward takeoff and landing');
 }

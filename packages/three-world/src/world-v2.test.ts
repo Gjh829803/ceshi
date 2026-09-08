@@ -42,6 +42,22 @@ function deferred() {
 const emptyInput = { type: 'object', properties: {}, required: [], additionalProperties: false } as const;
 
 describe('public Three SDK v2 authoring and control contracts', () => {
+  it('reports disabled navigation consistently before accepting an NPC operation',async()=>{
+    const {world}=await fixture();world.addCharacter({id:'npc',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
+    const descriptor=world.describe({entityIds:['npc']}).entities[0]!.commands.find(c=>c.type==='actor.move-to')!;
+    expect(descriptor.isAvailable).toBe(false);
+    const receipt=await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[2,0,0]});
+    expect(receipt).toMatchObject({status:'rejected',error:{code:'WORLD_NAVIGATION_DISABLED',category:'unsupported-capability'}});
+    if(receipt.status==='rejected')expect(receipt.error).toEqual(descriptor.unavailableReason);
+    expect(world.describe({entityIds:['npc']}).entities[0]!.commands.find(c=>c.type==='actor.stop')!.isAvailable).toBe(true);
+    for(const command of [{type:'actor.follow',entityId:'npc',targetEntityId:'hero'},{type:'actor.resume-autonomy',entityId:'npc'}] as const){
+      const description=world.describe({entityIds:['npc']}).entities[0]!.commands.find(c=>c.type===command.type)!;
+      const result=await world.execute(command);expect(result.status).toBe('rejected');
+      if(result.status==='rejected')expect(result.error).toEqual(description.unavailableReason);
+    }
+
+  });
+
   it('shares one parameter value between nearby player interaction and external control', async () => {
     const { world } = await fixture();
     const gate = box(); gate.position.set(1, .5, 0);

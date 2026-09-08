@@ -340,7 +340,7 @@ export class ThreeWorld implements API.World {
     if(command.type==='entity.apply-impulse'&&entry.physicsKind!=='dynamic')throw failure('IMPULSE_REQUIRES_DYNAMIC');
     if(command.type.startsWith('actor.')&&!entry.body)throw failure('ACTOR_REQUIRED');
     if(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(command.type)&&entry.id===this.engine.controlledEntityId)throw failure('PLAYER_INPUT_OWNS_ACTOR');
-    if(['actor.move-to','actor.follow','actor.resume-autonomy'].includes(command.type)&&entry.movementId!=='ground')throw failure('GROUND_NAVIGATION_REQUIRED','Custom movement can compute intent; built-in navigation currently supports ground.','unsupported-capability');
+    const navigationRestriction=this.navigationRestriction(command.type,entry);if(navigationRestriction)throw navigationRestriction;
     if(command.type==='actor.follow'){entity(command.targetEntityId);if(command.targetEntityId===command.entityId)throw failure('FOLLOW_SELF');}
     if(command.type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))throw failure('AUTONOMY_NOT_REGISTERED');
     if(command.type==='actor.set-movement'&&command.movementId!=='ground'&&!this.movements.has(command.movementId))throw failure('MOVEMENT_NOT_REGISTERED');
@@ -368,7 +368,8 @@ export class ThreeWorld implements API.World {
    const result=lease?trainingHost(this.training).command(cloneJson(command)):this.training.command(cloneJson(command));
    if(result?.status==='rejected')throw failure(result.code,result.message);this.touch();
    if(result?.status==='running'){const requestId=result.requestId;const operationId=this.operations.create('training-action',()=>{const cancelled=this.training?.simulation.humanoid?.skills.cancel(requestId);if(cancelled?.status==='running')throw failure(cancelled.code,cancelled.message);this.trainingActivities.delete(operationId);});this.trainingActivities.set(operationId,requestId);this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
-   return {status:'applied',commandId,worldRevision:this.revision};
+   const resultInfo=command.type==='training.approach'?{kind:'relocation' as const,entityId:this.training.options.character.instanceId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(this.training.options.character.instanceId).positionWorldMetersXYZ}:undefined;
+   return {status:'applied',commandId,worldRevision:this.revision,...(resultInfo?{result:resultInfo}:{})};
   }catch(error){return {status:'rejected',commandId,worldRevision:this.revision,error:runtimeError(error)};}});
   this.requests.set(commandId,{body,promise});return promise;
  }
@@ -570,6 +571,11 @@ export class ThreeWorld implements API.World {
    ...(physics&&entry.body?{motion:{phase:physics.isGrounded?'grounded' as const:physics.velocityMetersPerSecondXYZ[1]>0?'jumping' as const:'falling' as const,velocityWorldMetersPerSecondXYZ:physics.velocityMetersPerSecondXYZ,isGrounded:physics.isGrounded,collisionEntityIds:physics.collisionEntityIds}}:{}),
    ...(trainingAnimation?{animation:trainingAnimation}:internal?.currentActionId&&internal.currentClipName?{animation:{actionId:internal.currentActionId,clipName:internal.currentClipName,timeSeconds:internal.timeSeconds}}:{}),controlOwners:owners};
  }
+ private navigationRestriction(type:API.PrimitiveCommand['type'],entry:Registration):API.RuntimeError|undefined{
+  if(!['actor.move-to','actor.follow','actor.resume-autonomy'].includes(type))return;
+  if(entry.movementId!=='ground')return failure('GROUND_NAVIGATION_REQUIRED','Custom movement can compute intent; built-in navigation currently supports ground.','unsupported-capability');
+  if(!this.engine.navigationEnabled)return failure('WORLD_NAVIGATION_DISABLED','Built-in navigation is disabled in this world.','unsupported-capability');
+ }
  private commandDescriptor(type:API.PrimitiveCommand['type'],entry:Registration):API.CommandDescriptor{
   const fields=commandFields[type];const properties:Record<string,API.JsonValue>={type:{const:type}};
   for(const field of fields)properties[field]=field.endsWith('XYZ')?{type:'array',items:{type:'number'},minItems:3,maxItems:3}:field==='isVisible'||field==='run'?{type:'boolean'}:field.endsWith('Seconds')||field.endsWith('Meters')?{type:'number',minimum:0}:{type:'string'};
@@ -580,13 +586,13 @@ export class ThreeWorld implements API.World {
   if(parameter)reason=failure('CHANNEL_OWNED_BY_PARAMETER',`Use parameter ${parameter}.`);
   if(type==='entity.set-rotation'&&entry.body)reason=failure('ACTOR_ROTATION_OWNED_BY_MOVEMENT');
   if(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(type)&&entry.id===this.engine.controlledEntityId)reason=failure('PLAYER_INPUT_OWNS_ACTOR');
-  if(['actor.move-to','actor.follow','actor.resume-autonomy'].includes(type)&&entry.movementId!=='ground')reason=failure('GROUND_NAVIGATION_REQUIRED');
-  if(type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))reason=failure('AUTONOMY_NOT_REGISTERED');
+  reason??=this.navigationRestriction(type,entry);
+  if(!reason&&type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))reason=failure('AUTONOMY_NOT_REGISTERED');
   return {type,schema:{type:'object',properties,required:['type',...fields.filter(field=>!optional.has(field))],additionalProperties:false},isAvailable:!reason,...(reason?{unavailableReason:reason}:{})};
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
-  return {...(this.training?{training:{characterCapabilities:this.training.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description})=>({id,version,description}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
+  return {...(this.training?{training:{inputGuide:this.training.inputGuide(),characterCapabilities:this.training.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description})=>({id,version,description}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
    entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
     if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');
