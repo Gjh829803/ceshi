@@ -7,5 +7,5 @@ if (violations.length > 0) {
   process.stderr.write(violations.map(({ code, importer, specifier }) => `${code}: ${importer} -> ${specifier}`).join("\n") + "\n");
   process.exitCode = 2;
 } else {
-  process.stdout.write("Three workspace retirement boundary passed.\n");
+  process.stdout.write("Three workspace boundary passed.\n");
 }

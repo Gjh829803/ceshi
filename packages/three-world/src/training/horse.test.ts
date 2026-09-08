@@ -4,6 +4,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { afterAll, expect, it, vi } from 'vitest';
 import * as horseModule from './public';
+import type { HumanoidRenderState } from './humanoid/animation';
 
 // Every fixture load calibrates real skinned pure/blend geometry. This file
 // belongs to the resource-heavy lane; keep its CPU budget local to the suite.
@@ -26,6 +27,12 @@ const createHorse = () => {
   return new horseModule.TrainingHorse();
 };
 const frame = (phase=0,gait='graze',epoch=1) => ({ epoch, phase, gait, timeSeconds:phase, speedMetersPerSecond:gait==='gallop'?12:4 });
+const riderPose = (mounted: HumanoidRenderState['mounted'] = null): HumanoidRenderState => ({
+  position: new T.Vector3(), facing: new T.Vector3(0,0,1), motionSerial: 0,
+  traversal: null, completedMotion: null, speed: 0, vertical: 0, grounded: true,
+  animationGrounded: true, stance: 'stand', swimming: false, swimStyle: 'freestyle',
+  animationEvent: null, surface: null, skills: null, mounted,
+});
 
 it('loads the actual source skeleton and rejects a declared missing saddle', async () => {
   const horse = createHorse();
@@ -64,7 +71,7 @@ it('aligns actual Source101 pelvis at yaw +/-90 without moving the logical root'
   try {
     await rider.load(path=>new URL(`../../../../assets/three-creator/training/${path}`,import.meta.url).href);
     await horse.load(resolveFixtureResource);
-    rider.update(0,'Idle',0,true,true);
+    rider.update(0,riderPose('ride'));
     for (const yaw of [-Math.PI/2, Math.PI/2]) {
       horse.root.position.set(3,0,2);horse.root.rotation.y=yaw;
       horse.sample(frame(1.1,'gallop'));
@@ -77,7 +84,7 @@ it('aligns actual Source101 pelvis at yaw +/-90 without moving the logical root'
       expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(desired))).toBeLessThan(1e-9);
       expect(rider.root.matrix.elements).toEqual(before.elements);
     }
-    rider.update(0,'Idle',0,false,false);
+    rider.update(0,riderPose());
     expect(rider.actor.quaternion.toArray()).toEqual([0,0,0,1]);
   } finally {rider.dispose();horse.dispose();fetchTransport.mockRestore();}
 }, 30000);
@@ -136,7 +143,7 @@ it('calibrates all real horse clips with actual Source101 rider geometry at 64 i
         for (const declaration of [undefined,limits]) {
           const anchor=horse.readSeatAnchor([0,1.65,0],declaration);
           rider.root.position.set(0,1.65,0);
-          rider.update(0,'Idle',0,true,true);
+          rider.update(0,riderPose('ride'));
           rider.alignMountedPelvis(anchor);
           pelvisError=Math.max(pelvisError,rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(anchor)));
           expect(rider.root.position.toArray()).toEqual([0,1.65,0]);

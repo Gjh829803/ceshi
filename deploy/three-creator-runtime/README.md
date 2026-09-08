@@ -1,7 +1,6 @@
 # Three Creator Linux toolkit capsule
 
-This is the independent Three/Rapier Creator runtime. The old V3 Native capsule,
-its source, launchers, archives and evidence remain unchanged.
+Build an independent Three/Rapier Creator runtime for Linux cloud evaluation.
 
 Run from the repository root:
 
@@ -19,8 +18,8 @@ multiple dependency/build reports. Existing export directories are immutable.
 
 After the integrated SDK/tool source has been reviewed and frozen, pass that
 exact staged source hash to `--build --expected-source-hash sha256:<digest>`.
-This fails if the live source closure differs. The build also fails closed until
-the fixed `scripts/three-creator/prebuild.ts` contract is available. It never
+This fails if the live source closure differs. The build invokes the fixed
+`scripts/three-creator/prebuild.ts` contract. It never
 uploads files, invokes a model, changes shared workers or labels a provisional
 source as cloud-ready. The trusted prebuild/compile doctor has a five-minute
 timeout; Docker dependency/build phases have fifteen/twenty-minute timeouts.
@@ -69,4 +68,4 @@ plain-hex `manifestSha256` and `runtimeHash`. Per-profile MCP launchers must set
 `WORLDKIT_THREE_PREBUILT_RUNTIME_MANIFEST_SHA256` to its plain-hex pin. These two
 environment values are absent during prebuild. The compiler doctor then uses
 the pinned prebuild for the very first author compilation, checks a second
-cache hit, and includes G Bot asset selection in both profiles.
+cache hit, and includes Source101 asset selection in both profiles.

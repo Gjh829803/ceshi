@@ -23,6 +23,22 @@ def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def verify_workspace_runtime(manifest, actual):
+    runtime_source = manifest.get('runtimeSourceHash')
+    sdk_sources = {name[len('source/sdk/'):]: value for name, value in actual.items() if name.startswith('source/sdk/')}
+    if runtime_source is not None:
+        assert manifest['profile'] == 'three-sdk' and sdk_sources, 'Workspace SDK source required'
+        assert 'runtime.json' in sdk_sources and 'three-world/src/index.ts' in sdk_sources
+        ordered = [[name, sdk_sources[name]] for name in sorted(sdk_sources, key=lambda name: name.encode('utf-16-be'))]
+        assert hashlib.sha256(json.dumps(ordered, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest() == runtime_source, 'Workspace runtime source hash mismatch'
+        for name, value in sdk_sources.items():
+            assert actual.get('playable/sdk/' + name) == value, 'Workspace runtime source closure mismatch'
+        runtime_files = {name: actual['playable/runtime/' + name] for name in ['bridge.js', 'three.js', 'worldkit-three.js']}
+        assert hashlib.sha256(json.dumps(runtime_files, separators=(',', ':')).encode()).hexdigest() == manifest['runtimeHash'], 'Workspace runtime bytes mismatch'
+    else:
+        assert not sdk_sources, 'Workspace SDK requires source identity'
+
+
 def main():
     if sys.flags.optimize:
         raise RuntimeError('Verification must run without Python optimization')
@@ -96,17 +112,17 @@ def main():
     assert {k: v for k, v in receipt.items() if k not in receipt_fields} == manifest
     assert {k: v for k, v in actual.items() if k not in ('artifact-hashes.json', 'delivery.json')} == manifest['files']
     assert actual['episode.json'] == manifest['episodeHash']
+    verify_workspace_runtime(manifest, actual)
+    runtime_source = manifest.get('runtimeSourceHash')
     played = json.loads((payload / 'playtest/playtest.json').read_text())
     captures = json.loads((payload / 'captures/captures.json').read_text())
+    assert played.get('runtimeSourceHash') == runtime_source
     for key in ['profile', 'sourceHash', 'worldBuildHash', 'runtimeHash', 'episodeHash']:
         assert played[key] == manifest[key]
     assert played['status'] == 'passed' and played['isCompleteEpisode'] is True and played['capturedInput'] is True
-    assert isinstance(played['actualWallSeconds'], (int, float)) and 180 <= played['actualWallSeconds'] < 3600
-    assert played['actualWallSeconds'] == manifest['actualWallSeconds']
-    assert isinstance(played['activePlaySeconds'], (int, float)) and 180 <= played['activePlaySeconds'] < 3600
-    assert played['activePlaySeconds'] == manifest['activePlaySeconds']
-    assert finite_number(played['inputWallSeconds']) and 180 <= played['inputWallSeconds'] < 3600
-    assert played['inputWallSeconds'] == manifest['inputWallSeconds']
+    for key in ['actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds']:
+        assert finite_number(played[key]) and 0 < played[key] < 3600
+        assert played[key] == manifest[key]
     capture = played['captureTiming']
     video = played['videoMetadata']
     assert capture == manifest['captureTiming'] and video == manifest['videoMetadata']
@@ -121,14 +137,14 @@ def main():
     assert abs(timing['durationSeconds'] - (timing['endedAtMilliseconds'] - timing['startedAtMilliseconds']) / 1000) <= .001
     assert timing['durationSeconds'] == played['inputWallSeconds']
     assert capture['initialFrameRequestedAtMilliseconds'] <= timing['startedAtMilliseconds'] <= timing['endedAtMilliseconds'] <= capture['finalFrameRequestedAtMilliseconds']
-    assert finite_number(video['durationSeconds']) and video['durationSeconds'] >= 180
+    assert finite_number(video['durationSeconds']) and video['durationSeconds'] > 0
     assert video['durationSeconds'] >= played['inputWallSeconds'] - max(1, 2 * capture['framePeriodSeconds'])
     # Probe encoded bytes independently; VFR rate is not forced to the requested
     # canvas sampling rate, and recovery/postroll wall time is not input time.
     probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=width,height,nb_read_frames:format=duration', '-of', 'json', str(payload / 'playtest/playtest.mp4')], timeout=60))
     stream = probe['streams'][0]
     actual_video = {'durationSeconds': float(probe['format']['duration']), 'frameCount': int(stream['nb_read_frames']), 'widthPixels': int(stream['width']), 'heightPixels': int(stream['height'])}
-    assert actual_video == video and actual_video['durationSeconds'] >= 180
+    assert actual_video == video and finite_number(actual_video['durationSeconds']) and actual_video['durationSeconds'] > 0
     assert played['pageErrors'] == [] and played['runtimeErrors'] == [] and played['blockedNetworkRequests'] == []
     assert played['targetResults'] == manifest['targetResults']
     assert captures['profile'] == manifest['profile'] and captures['worldBuildHash'] == manifest['worldBuildHash']

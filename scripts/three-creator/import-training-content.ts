@@ -99,4 +99,5 @@ await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n');
 await writeFile(path.join(destination, 'import-manifest.json'), JSON.stringify({ schemaVersion: 1, provenance,
   character: { boneCount: 101, runtimeClipCount: sourceManifest.runtimeClipCount }, vehicleIds: SPECS.map((s: any) => s.id),
   maps: ['campus','indoor-lab','character-workshop'], resources: await Promise.all(imports.map(resource)) }, null, 2) + '\n');
+execFileSync('python3', [path.join(REPOSITORY_ROOT,'scripts/three-creator/build-humanoid.py')], {cwd:REPOSITORY_ROOT,stdio:'inherit'});
 console.log(JSON.stringify({ importedResources: imports.length, vehicles: SPECS.length, runtimeClips: sourceManifest.runtimeClipCount }));

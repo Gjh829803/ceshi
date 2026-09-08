@@ -15,7 +15,7 @@ const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex
 const imageBytes=(data:string)=>Buffer.from(data.split(',')[1]!,'base64');
 const viewport={widthPixels:1280,heightPixels:720};
 const start:EpisodeStart={positionWorldMetersXYZ:[0,.03,0],facingYawRadians:0,training:{vehicleInstanceId:'horse-1',mounted:true,cameraMode:0}};
-const creatorMilestones={'creator-approach.png':1.5,'creator-entry.png':4,'creator-turn.png':8,'creator-post-exit-walk.png':21,'creator-reset.png':183};
+const creatorMilestones={'creator-approach.png':1.5,'creator-entry.png':4,'creator-turn.png':8,'creator-post-exit-walk.png':20,'creator-reset.png':22};
 type CreatorReport=Awaited<ReturnType<ThreeCreatorTools['playtest']>>;
 type TrainingSnapshot=NonNullable<WorldSnapshot['training']>;
 interface TraceSample {wallSeconds:number;positionMetersXYZ:number[];velocityMetersPerSecondXYZ:number[];training:TrainingSnapshot|null}

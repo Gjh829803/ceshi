@@ -8,7 +8,7 @@ import type { AssetInstance } from './contracts.js';
 import type { AssetDefinition } from './engine-contracts.js';
 
 const definitions = Object.fromEntries(catalog.assets.map(row => [row.id, row])) as unknown as Record<string, AssetDefinition>;
-const humanoid = definitions['humanoid.g-bot']!;
+const humanoid = definitions['humanoid.source-101']!;
 const libraries: WorldAssets[] = [];
 let sequence = 0;
 function fixture(source: Record<string, AssetDefinition> = definitions) {
@@ -31,21 +31,20 @@ afterEach(() => { for (const library of libraries.splice(0)) library.dispose(); 
 describe('WorldAssets', () => {
   it('publishes only grounded catalog metadata and does not infer movement from clips', async () => {
     const { library, fetchBytes } = fixture();
-    const gBot = library.search('g bot')[0]!;
-    const original = JSON.parse(await readFile(resolve('assets/subjects/humanoid/g-bot/asset.manifest.json'), 'utf8'));
-    expect(gBot.recommendedBody).toEqual({ heightMeters: original.collider.height, radiusMeters: original.collider.radius });
-    expect(gBot.actionIds).toContain('fly'); expect(gBot.actionIds).toContain('swim.surface');
-    expect(gBot.locomotionBindingIds).toEqual(['ground.standard']);
+    const subject = library.search('source-101')[0]!;
+    expect(subject.recommendedBody).toEqual({heightMeters:1.8,radiusMeters:.35});
+    expect(subject.actionIds).toEqual(['idle','walk','run','jump','fall']);
+    expect(subject.locomotionBindingIds).toEqual(['ground.standard','training.humanoid']);
     const diagnostic = library.search('quadruped')[0]!;
     expect(diagnostic.recommendedBody).toBeNull(); expect(diagnostic.locomotionBindingIds).toEqual([]);
     expect(library.search('fox')).toEqual([]); expect(fetchBytes).not.toHaveBeenCalled();
-    expect(Object.isFrozen(gBot)).toBe(true); expect(Object.isFrozen(gBot.actionIds)).toBe(true);
+    expect(Object.isFrozen(subject)).toBe(true); expect(Object.isFrozen(subject.actionIds)).toBe(true);
   });
 
   it('returns a minimal owned public instance with idle already evaluated at time zero', async () => {
-    const { library, fetchBytes } = fixture(); const instance = await library.load('humanoid.g-bot');
+    const { library, fetchBytes } = fixture(); const instance = await library.load('humanoid.source-101');
     expect(Object.keys(instance).sort()).toEqual(['actionIds', 'assetId', 'object', 'recommendedBody']);
-    expect(instance.assetId).toBe('humanoid.g-bot'); expect(library.owns(instance)).toBe(true);
+    expect(instance.assetId).toBe('humanoid.source-101'); expect(library.owns(instance)).toBe(true);
     expect(instance.recommendedBody).toEqual({ heightMeters: 1.8, radiusMeters: .35 });
     const engine = library.internal(instance);
     expect(engine.currentActionId).toBe('idle'); expect(engine.timeSeconds).toBe(0); expect(engine.isActionComplete).toBe(false);
@@ -58,7 +57,7 @@ describe('WorldAssets', () => {
   });
 
   it('clones authored roots, materials and attachments without stealing the source or sharing mutable state', async () => {
-    const { library } = fixture(); const source = await library.load('humanoid.g-bot');
+    const { library } = fixture(); const source = await library.load('humanoid.source-101');
     source.object.position.set(4, 0, 3); source.object.scale.setScalar(2);
     const sourceMesh = meshOf(source); (sourceMesh.material as MeshStandardMaterial).color.setHex(0xff0066);
     const decorationGeometry = new BoxGeometry(.2, .3, .4), decorationMaterial = new MeshStandardMaterial({ color: 0x2288ff });
@@ -78,13 +77,13 @@ describe('WorldAssets', () => {
       expect(library.internal(clone).currentActionId).toBe('idle'); expect(library.internal(clone).timeSeconds).toBe(0);
       const disposed = vi.fn(); sourceMesh.geometry.addEventListener('dispose', disposed);
       library.release(source); expect(disposed).not.toHaveBeenCalled();
-      library.internal(clone).play('walk'); library.internal(clone).update(.3); expect(library.internal(clone).timeSeconds).toBeCloseTo(.3);
+      library.internal(clone).play('walk'); library.internal(clone).update(.3); expect(library.internal(clone).timeSeconds).toBeCloseTo(.3*humanoid.actions.walk!.timeScale);
       library.release(clone); expect(disposed).toHaveBeenCalledTimes(1);
     } finally { decorationGeometry.dispose(); decorationMaterial.dispose(); }
   });
 
   it('rejects forged and foreign instances while keeping their original owners live', async () => {
-    const { library } = fixture(); const source = await library.load('humanoid.g-bot');
+    const { library } = fixture(); const source = await library.load('humanoid.source-101');
     const other = new WorldAssets({ definitions }); libraries.push(other);
     expect(other.owns(source)).toBe(false); expect(() => other.internal(source)).toThrow('ASSET_INSTANCE_UNOWNED');
     await expect(other.clone(source)).rejects.toThrow('ASSET_INSTANCE_UNOWNED');
@@ -96,8 +95,8 @@ describe('WorldAssets', () => {
 
   it('snapshots catalog inputs and rejects invalid declared body/binding metadata before loading', async () => {
     const mutable = structuredClone(definitions); const { library } = fixture(mutable);
-    (mutable['humanoid.g-bot']!.actions.idle as { clipName: string }).clipName = 'absent';
-    const instance = await library.load('humanoid.g-bot'); expect(library.internal(instance).currentActionId).toBe('idle');
+    (mutable['humanoid.source-101']!.actions.idle as { clipName: string }).clipName = 'absent';
+    const instance = await library.load('humanoid.source-101'); expect(library.internal(instance).currentActionId).toBe('idle');
     expect(() => new WorldAssets({ definitions: { [humanoid.id]: { ...humanoid, recommendedBody: { heightMeters: 1, radiusMeters: 2 } } } })).toThrow('ASSET_RECOMMENDED_BODY_INVALID');
     const animal = definitions['quadruped.animal.large-static']!;
     expect(() => new WorldAssets({ definitions: { [animal.id]: { ...animal, locomotionBindingIds: ['ground.standard'] } } })).toThrow('ASSET_LOCOMOTION_ACTION_MISSING');
@@ -108,14 +107,14 @@ describe('WorldAssets', () => {
     const { library, fetchBytes } = fixture();
     let finish!: (value: Response) => void;
     fetchBytes.mockImplementationOnce(() => new Promise<Response>(resolvePromise => { finish = resolvePromise; }));
-    const pending = library.load('humanoid.g-bot'); const rejected = expect(pending).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
-    library.dispose(); finish(new Response(await readFile(resolve(catalog.assets.find(asset => asset.id === 'humanoid.g-bot')!.sourcePath)))); await rejected;
+    const pending = library.load('humanoid.source-101'); const rejected = expect(pending).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
+    library.dispose(); finish(new Response(await readFile(resolve(catalog.assets.find(asset => asset.id === 'humanoid.source-101')!.sourcePath)))); await rejected;
     expect(() => library.search('')).toThrow('ASSET_LIBRARY_DISPOSED');
-    await expect(library.load('humanoid.g-bot')).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
+    await expect(library.load('humanoid.source-101')).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
   });
 
   it('releases a clone whose owning World is disposed before preparation finishes', async () => {
-    const { library } = fixture(); const source = await library.load('humanoid.g-bot');
+    const { library } = fixture(); const source = await library.load('humanoid.source-101');
     const disposed = vi.fn(); meshOf(source).geometry.addEventListener('dispose', disposed);
     const pending = library.clone(source); const rejected = expect(pending).rejects.toThrow('ASSET_LIBRARY_DISPOSED');
     library.dispose(); await rejected;
@@ -123,7 +122,7 @@ describe('WorldAssets', () => {
   });
 
   it('disposes every owned instance even when a material listener throws', async () => {
-    const { library } = fixture(); const source = await library.load('humanoid.g-bot'); const clone = await library.clone(source);
+    const { library } = fixture(); const source = await library.load('humanoid.source-101'); const clone = await library.clone(source);
     const sourceMesh = meshOf(source), cloneMesh = meshOf(clone); const disposed = vi.fn(); sourceMesh.geometry.addEventListener('dispose', disposed);
     (sourceMesh.material as MeshStandardMaterial).addEventListener('dispose', () => { throw new Error('disposal-listener'); });
     const cloneDisposed = vi.fn(); (cloneMesh.material as MeshStandardMaterial).addEventListener('dispose', cloneDisposed);

@@ -55,6 +55,19 @@ function physicalState(
     })),
   };
 }
+it("checks an explicit simulation interaction through the atomic mount gate", async () => {
+  const world = await createMountedFixture();
+  try {
+    const simulation = world.training!.simulation;
+    simulation.humanoid.position.set(0, 0.025, 2.4);
+    const before = physicalState(world);
+    expect(simulation.interact("horse-1")).toBe(false);
+    expect(simulation.failureCode).toBe("TRAINING_MOUNT_SIDE_REQUIRED");
+    expect(physicalState(world)).toEqual(before);
+  } finally {
+    world.dispose();
+  }
+});
 it("enters the explicit farther instance and preserves repeated-request state", async () => {
   const world = await createMountedFixture({
     secondHorsePosition: [3, 0.025, 0],

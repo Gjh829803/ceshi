@@ -18,6 +18,7 @@ export async function readExampleFiles(root:string, topic:ExampleTopic, selected
   const defaults=topic==='training-assets'?['config.ts','models.ts','assets/resources.ts','creatures/specs.ts','creatures/manifest.ts']:
     topic==='training-maps'?['environment/maps.ts','environment/modules.ts','humanoid/workshop.ts']:
     topic==='training-ui'?['ui/workspace.ts','platform/workbench.ts','platform/profiles.ts']:
+    topic==='character-actions'?['index.html','main.ts','map.ts','project.json','episode.json']:
     ['index.html','main.ts','project.json','episode.json'];
   const files:Record<string,string>={};
   for(const name of selected??defaults){const entry=entries.find(e=>e.path===name);if(!entry?.readable){if(selected)throw new Error(`THREE_EXAMPLE_FILE_UNKNOWN: ${name}`);continue;}

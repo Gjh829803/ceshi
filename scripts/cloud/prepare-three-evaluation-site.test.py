@@ -196,11 +196,11 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Preview browser errors'):
             fixture.stage('reject-errors')
 
-    def test_five_sdk_only_cases_stage_with_truthful_labels_and_metrics(self):
-        fixture = Fixture(self.root, count=5)
+    def test_ten_sdk_only_cases_stage_with_truthful_labels_and_metrics(self):
+        fixture = Fixture(self.root, count=10)
         report, result = fixture.stage()
         self.assertEqual(report['mountPath'], '/creator-evals/three/')
-        self.assertEqual(report['caseCount'], 5); self.assertEqual(report['playableCount'], 5)
+        self.assertEqual(report['caseCount'], 10); self.assertEqual(report['playableCount'], 10)
         self.assertEqual(result['suite'], 'sdk-only'); self.assertEqual(result['evidenceScope'], 'local-fixture')
         self.assertEqual(site.EVIDENCE_SCOPES['sdk-only'], 'sdk-only-cloud-evaluation')
         self.assertEqual(site.EVIDENCE_SCOPES['paired'], 'paired-cloud-evaluation')
@@ -212,6 +212,46 @@ class EvaluationSiteTests(unittest.TestCase):
             self.assertEqual(row['metrics']['actualWallSeconds'], 200)
             self.assertTrue((self.root / 'staged' / row['playable']).is_file())
         self.assertFalse(any(p.name == 'project.json' or p.suffix == '.ts' for p in (self.root / 'staged').rglob('*')))
+
+    def test_source_and_action_coverage_preserve_real_delivery_and_review_identity(self):
+        fixture = Fixture(self.root)
+        task = fixture.plan['selectedTaskIds'][0]
+        fixture.publication['sourceIdentity'] = {'branch': 'codex/actions', 'commit': 'a' * 40, 'sourceSnapshotSha256': 'b' * 64, 'privatePath': '/not-public'}
+        fixture.publication['cases'][task]['evaluation'] = {'actions': ['滑铲'], 'sceneRequirements': ['落地、空手，速度至少 2.5 m/s'], 'checks': ['低通道出口受阻时保持低姿态']}
+        _, result = fixture.stage()
+        row = result['cases'][0]
+        self.assertEqual(result['sourceIdentity']['creatorRuntimeLockHash'], fixture.lock)
+        self.assertNotIn('privatePath', result['sourceIdentity'])
+        self.assertEqual(row['evaluation']['actions'], ['滑铲'])
+        self.assertEqual(row['reviewIdentity'], {'runId': fixture.run_id, 'taskId': task, 'worldBuildHash': row['worldBuildHash']})
+        self.assertEqual(row['creatorRuntimeLockHash'], fixture.lock)
+        self.assertEqual(len(row['runtimeHash']), 64)
+
+    def test_live_run_destination_is_isolated_and_rejects_incompatible_modes(self):
+        manifest = {'kind': 'three-creator-evaluation-gallery', 'id': 'local-live-run', 'cases': [{'id': 'local-case--three-sdk', 'baseCaseId': 'local-case', 'profile': 'three-sdk'}]}
+        remote, mode = publisher.publication_target(manifest, 'three', run_page=True)
+        self.assertEqual(remote, publisher.REMOTE + '/three/runs/local-live-run')
+        self.assertEqual(mode, 'run-page')
+        self.assertEqual(publisher.publication_target(manifest, 'three', run_page=True, progress_only=True)[1], 'run-page-progress')
+        with self.assertRaises(ValueError): publisher.publication_target(manifest, 'three', run_page=True, archive_run=True)
+
+    def test_live_run_install_updates_own_run_and_refuses_archive_or_other_tasks(self):
+        def install(root, task='local-case--three-sdk', status='queued'):
+            manifest = encoded({'id': 'local-live-run', 'cases': [{'id': task, 'status': status}]})
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode='w') as archive:
+                for name, data in [('index.html', b'LOCAL FIXTURE'), ('results.json', manifest)]:
+                    entry = tarfile.TarInfo(name); entry.size = len(data); archive.addfile(entry, io.BytesIO(data))
+            return subprocess.run([sys.executable, '-c', publisher.INSTALL, str(root), 'run-page', sha(manifest), 'local-live-run', json.dumps([task])], input=buffer.getvalue(), capture_output=True)
+        root = self.root / 'live'
+        self.assertEqual(install(root).returncode, 0)
+        self.assertEqual(install(root, status='running').returncode, 0)
+        original = (root / 'results.json').read_bytes()
+        self.assertNotEqual(install(root, task='another-case--three-sdk').returncode, 0)
+        self.assertEqual((root / 'results.json').read_bytes(), original)
+        archive = self.root / 'archive'; archive.mkdir(); (archive / 'results.json').write_bytes(original)
+        self.assertNotEqual(install(archive).returncode, 0)
+        self.assertEqual((archive / 'results.json').read_bytes(), original)
 
     def test_host_titles_and_history_preserve_case_inputs_and_artifact_paths(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]
@@ -273,30 +313,49 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'activePlaySeconds'):
             fixture.stage()
 
-    def test_active_duration_threshold_and_identity_are_both_enforced(self):
+    def test_positive_active_duration_and_identity_are_both_enforced(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
         played = json.loads((payload / 'playtest/playtest.json').read_text()); delivery = json.loads((payload / 'delivery.json').read_text())
-        for value in (None, True, -1, 179.99, 3600):
+        for value in (None, True, -1, 0, 3600):
             with self.subTest(value=value):
                 played['activePlaySeconds'] = value; delivery['activePlaySeconds'] = value
                 write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
                 with self.assertRaisesRegex(ValueError, 'activePlaySeconds|active duration'):
                     fixture.stage()
-        played['activePlaySeconds'] = 180; delivery['activePlaySeconds'] = 181
+        played['activePlaySeconds'] = 4; delivery['activePlaySeconds'] = 5
         write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'active duration'):
             fixture.stage()
 
-    def test_missing_input_timing_or_short_video_cannot_publish_v2(self):
+    def test_missing_input_timing_or_empty_video_cannot_publish_v2(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
         played = json.loads((payload / 'playtest/playtest.json').read_text())
         played.pop('inputWallSeconds'); write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'inputWallSeconds'):
             fixture.stage()
-        played['inputWallSeconds'] = 185; played['videoMetadata']['durationSeconds'] = 179
+        played['inputWallSeconds'] = 185; played['videoMetadata']['durationSeconds'] = 0
         write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
         with self.assertRaisesRegex(ValueError, 'video duration'):
             fixture.stage()
+
+    def test_short_complete_recording_publishes_but_truncation_and_stale_episode_do_not(self):
+        fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]; payload = fixture.verified / task / 'payload'
+        played = json.loads((payload / 'playtest/playtest.json').read_text()); delivery = json.loads((payload / 'delivery.json').read_text())
+        for field, seconds in [('actualWallSeconds', 4.4), ('inputWallSeconds', 4.1), ('activePlaySeconds', 4)]:
+            played[field] = seconds; delivery[field] = seconds
+        played['videoMetadata'].update(durationSeconds=4.3, frameCount=13)
+        write_json(payload / 'playtest/playtest.json', played); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
+        _, result = fixture.stage('short-complete')
+        self.assertEqual(result['cases'][0]['metrics']['activePlaySeconds'], 4)
+        self.assertEqual(result['cases'][0]['metrics']['videoDurationSeconds'], 4.3)
+        played['isCompleteEpisode'] = False
+        write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
+        with self.assertRaisesRegex(ValueError, 'complete passing recorded episode'):
+            fixture.stage('short-truncated')
+        played['isCompleteEpisode'] = True; played['episodeHash'] = '0' * 64
+        write_json(payload / 'playtest/playtest.json', played); fixture.reclose(task)
+        with self.assertRaisesRegex(ValueError, 'Playtest identity mismatch: episodeHash'):
+            fixture.stage('short-stale')
 
     def test_local_fixture_requires_opt_in_but_no_manual_review_file(self):
         fixture = Fixture(self.root)

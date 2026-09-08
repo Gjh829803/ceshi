@@ -1,15 +1,23 @@
-# Three Creator raw assets
+# Reusable character and vehicle assets
 
-These are the exact raw GLB bytes previously stored under the retired Playground.
-Their asset IDs, public metadata, SHA-256 values and byte lengths remain in
-[`asset-catalog.json`](asset-catalog.json).
-Only the Host source path changed; the public asset URI and animation metadata
-are unchanged. Existing subject provenance and license records remain under
-`assets/subjects` and `assets/licenses`.
+[`asset-catalog.json`](asset-catalog.json) defines
+public asset IDs, resource paths, SHA-256 hashes, byte lengths and capabilities.
+The compiler verifies and packages the selected resource closure.
 
-The Creator compiler and source capsule verify catalog hashes before admitting
-these files. New capsules use this independent asset directory; historical
-capsules and delivered worlds retain their original identities and bytes.
+`humanoid.source-101` is the default humanoid. Keep its supplied visible model,
+skeleton and actions. `createHumanoidWorld` loads its complete action resources
+and contextual controller. Its base model also
+supports ordinary `world.assets.load` / `addCharacter` animation binding.
+Select capabilities and scene requirements using the SDK `character-actions`
+topic; an animation clip alone does not provide movement or interaction physics.
+
+Reuse other supplied subjects when suitable; otherwise author simple Mesh/Group
+geometry and bind its abilities. Vehicle visuals bind to a `TrainingVehicleInstance.spec`; custom ground subjects bind to
+an explicit body and movement. Skeletal clips require a compatible rig.
+
+Source notices and license files accompany the training resources. Preserve them
+when copying or repackaging the resources; mixed-source clips retain their
+individual terms. See [SDK usage](../../packages/three-world/README.md).
 
 Training imports select model dependencies per asset: horse and carriage use the
 horse model, while dragon uses the dragon model. The shared creature manifest and

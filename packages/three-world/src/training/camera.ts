@@ -1,8 +1,6 @@
 import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Simulation, angleDelta, clamp, damp } from './simulation';
-import { groundHeight, wetHeight } from './terrain';
-import { WATER } from './config';
 import type { MotionPose } from './presentation';
 import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './platform/session';
 import type { EnvironmentQueries } from './environment/queries';
@@ -15,7 +13,7 @@ export class FollowCamera {
   get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
   private previousPresentation:CameraPresentationPose|undefined;
   private currentPresentation:CameraPresentationPose|undefined;
-  private presentationHumanoid:Simulation['humanoid'];
+  private presentationHumanoid:Simulation['humanoid']|undefined;
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
     this.displayedTarget=undefined;
@@ -79,16 +77,15 @@ export class FollowCamera {
   tuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
   baseDistance?:number;
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;
-  ray=new T.Raycaster();up=new T.Vector3(0,1,0);collisionLimited=false;
+  up=new T.Vector3(0,1,0);collisionLimited=false;
   private sourceCharacter=false;
   private globalOverview=false;
   private readonly originalNear:number;
   private readonly characterSphere=new RAPIER.Ball(.2);
   private readonly identity=new T.Quaternion();
   private readonly lastCharacterPosition=new T.Vector3();
-  private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private hits:T.Intersection[]=[];private revision=-1;
-  private readonly probeOffsets=[new T.Vector3(),new T.Vector3(.23,0,0),new T.Vector3(-.23,0,0),new T.Vector3(0,.23,0),new T.Vector3(0,-.23,0)];
-  constructor(public camera:T.PerspectiveCamera,public solids:T.Object3D[],public environment?:EnvironmentQueries){this.originalNear=camera.near;}
+  private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private revision=-1;
+  constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries){this.originalNear=camera.near;}
   get desiredPosition():T.Vector3{return this.desired.clone();}
   orbit(dx:number,dy:number,time:number,sim?:Simulation){
     const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
@@ -143,17 +140,10 @@ export class FollowCamera {
     else this.candidate.copy(this.camera.position).lerp(this.desired,1-Math.exp(-this.tuning.followResponsePerSecond*dt));
     this.collisionLimited=false;
     const collisionRadius=this.tuning.collisionRadiusMeters;
-    if(this.tuning.collisionEnabled&&this.environment){
+    if(this.tuning.collisionEnabled){
       const resolved=this.environment.cameraCast(this.anchor,this.candidate,collisionRadius);
       this.collisionLimited=resolved.distanceToSquared(this.candidate)>.000001;
       this.candidate.copy(resolved);
-    }else if(this.tuning.collisionEnabled&&!(this.mode===1&&v)){
-      // Test the smoothed candidate. Only actual ray hits shorten the arm.
-      this.direction.subVectors(this.candidate,this.anchor);const length=this.direction.length();let safe=length;
-      if(length>.001){this.direction.multiplyScalar(1/length);for(const offset of this.probeOffsets){this.origin.copy(this.anchor).addScaledVector(offset,collisionRadius/.25);this.ray.set(this.origin,this.direction);this.ray.far=length;this.hits.length=0;this.ray.intersectObjects(this.solids,false,this.hits);const hit=this.hits[0];if(hit)safe=Math.min(safe,Math.max(collisionRadius+.1,hit.distance-collisionRadius-.05));}
-        this.collisionLimited=safe<length-.001;this.candidate.copy(this.anchor).addScaledVector(this.direction,safe);
-      }
-      this.candidate.y=Math.max(this.candidate.y,groundHeight(this.candidate.x,this.candidate.z)+collisionRadius+.15);
     }
     this.camera.position.copy(this.candidate);this.target.lerp(this.aim,1-Math.exp(-12*dt));this.camera.up.copy(this.up);this.camera.lookAt(this.target);
     const fov=damp(this.camera.fov,this.tuning.baseFovDegrees+Math.min(12,speed*.23),3,dt);if(Math.abs(fov-this.camera.fov)>.0001){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
@@ -162,12 +152,11 @@ export class FollowCamera {
     const configured=this.baseDistance??8.8;
     // Preserve the source's indoor default even when the UI supplies the
     // unchanged 8.8 m asset baseline; non-default user tuning takes precedence.
-    return configured===8.8?this.environment?.map.characterCameraDistanceMeters??configured:configured;
+    return configured===8.8?this.environment.map.characterCameraDistanceMeters??configured:configured;
   }
   private capsuleVisible(eye:T.Vector3,position:T.Vector3,height:number,capsule:RAPIER.Collider,world:RAPIER.World):boolean{
-    // Original Whitebox (12d2445d, native-block-subject-occlusion) tests the
-    // whole subject, independently of the spring arm. Here sample the actual
-    // capsule, without its fade margins: a point outside the body is not proof
+    // Test visibility on the actual capsule independently of the spring arm.
+    // A point outside the body is not proof
     // that the character is visible. Never use the camera's thick sphere as a
     // visibility ray, which hides small but genuinely visible head/side slivers.
     const radius=(capsule.shape as RAPIER.Capsule).radius;
@@ -239,7 +228,7 @@ export class FollowCamera {
     const position=pose?.position??sim.player.position;
     this.origin.copy(position).add(this.offset.set(0,height,0));
     this.anchor.copy(this.origin).add(this.offset.set(Math.cos(this.yaw)*this.tuning.horizontalOffset,this.tuning.targetHeightOffset,-Math.sin(this.yaw)*this.tuning.horizontalOffset));
-    const overview=this.mode===2,bounds=this.environment?.map.bounds;
+    const overview=this.mode===2,bounds=this.environment.map.bounds;
     if(overview&&bounds)this.anchor.set((bounds.min[0]+bounds.max[0])/2,2,(bounds.min[2]+bounds.max[2])/2);
     const response=this.baseDistance===undefined?7:this.tuning.followResponsePerSecond;
     if(!this.initialized)this.target.copy(this.anchor);
@@ -261,7 +250,7 @@ export class FollowCamera {
     }
     this.collisionLimited=safeDistance<desiredDistance-.001;
     this.desired.copy(this.target).addScaledVector(this.direction,desiredDistance);
-    // Preserve source controls.ts: obstruction retracts immediately; release is
+    // Obstruction retracts immediately; release is
     // eased at 5/s. Damping a camera position after collision would cross walls.
     this.distance=!this.initialized||overview||safeDistance<this.distance?safeDistance:this.distance+(safeDistance-this.distance)*(1-Math.exp(-Math.max(0,dt)*5));
     this.candidate.copy(this.target).addScaledVector(this.direction,this.distance);
@@ -280,7 +269,6 @@ export class FollowCamera {
     this.lastAnchor.copy(this.anchor);this.initialized=true;
   }
   get underwater(){
-    if(this.environment){const p=this.camera.position;return this.environment.map.water.some(w=>p.x>=w.min[0]&&p.x<=w.max[0]&&p.z>=w.min[2]&&p.z<=w.max[2]&&p.y>=w.min[1]&&p.y<w.surface-.15);}
-    return wetHeight(this.camera.position.x,this.camera.position.z)&&this.camera.position.y<WATER-.15;
+    const p=this.camera.position;return this.environment.map.water.some(w=>p.x>=w.min[0]&&p.x<=w.max[0]&&p.z>=w.min[2]&&p.z<=w.max[2]&&p.y>=w.min[1]&&p.y<w.surface-.15);
   }
 }

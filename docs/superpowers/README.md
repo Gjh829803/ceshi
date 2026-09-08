@@ -1,18 +1,8 @@
-# Maintenance plans and review templates
+# 骑乘实现资料
 
-Current design lives in [Three SDK architecture](../three-sdk-architecture.md)
-and the [production guide](../three-sdk-data-production.md). Use the
-[actual public API](../../packages/three-world/src/contracts.ts), not a separate
-prototype declaration.
+- [单人骑乘设计](specs/2026-09-08-three-mounted-interaction-design.md)
+- [实施计划](plans/2026-09-08-three-mounted-interaction.md)
+- [实现与验证记录](../reviews/2026-09-08-three-mounted-interaction.md)
 
-This directory retains the current documentation-cleanup checklist and optional
-[Cursor Cloud review templates](skills/cursor-cloud/README.md). Older completed
-plans, superseded engine designs and duplicate API sketches are available from
-Git history. Remaining JSON source-baseline records are historical evidence, not
-active plans or deployment authorization.
-
-## Active enhancements
-
-- [Single-rider mounted interaction](specs/2026-09-08-three-mounted-interaction-design.md)
-  — reviewed design; implementation and acceptance are tracked in the [implementation plan](plans/2026-09-08-three-mounted-interaction.md).
-  It does not replace the actual public contracts or constitute deployment evidence.
+使用方式以 [SDK 指南](../../packages/three-world/README.md) 和
+[公共类型](../../packages/three-world/src/contracts.ts) 为准。

@@ -1,5 +1,6 @@
 import {createCandidateRejectionGuard} from './candidate-policy.mjs';
 import {prefetchThreeEpisodeEvents} from './event-prefetch.mjs';
+import { actionTimelineIdentity, actionEvidenceText, verifyActionEvidence } from './action-evidence.mjs';
 import {publishFastClipPackage} from './fast-clip-package.mjs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -67,20 +68,20 @@ function concurrencyGate(maximum) {
 const identityRef = ref => ({sha256: normalizeVisualHash(ref.sha256)});
 const identityTarget = target => ({id: target.id, name: target.name, role: target.role ?? null, appearancePrompt: target.appearancePrompt ?? null, whiteboxTriview: identityRef(target.whiteboxTriview)});
 
-/** Real videos are used once per style's joint event call, without legacy Scene files. */
+/** Real videos and tick observations drive each style's joint event call. */
 export function buildThreeEpisodeEventRequest({variant, capture, openings, promptTemplate, config}) {
   const indices = config.selectedCaptureIndices;
   if (JSON.stringify(indices) !== '[0,2,4]' || config.videoSamplingFps !== 0.25 || config.model !== 'gemini-3.5-flash') throw new Error('THREE_EPISODE_EVENT_CONFIG_INVALID');
   return {
     model: config.model,
-    instruction: `${variant.geminiEventPrompt}\n\n${promptTemplate.replace('HOST_EVENT_SLOTS_JSON', JSON.stringify(THREE_EPISODE_EVENT_SLOTS))}\n这些是视频后处理事件，不能声称已经改变白模或执行过SDK命令。`,
+    instruction: `${variant.geminiEventPrompt}\n\n${promptTemplate.replace('HOST_EVENT_SLOTS_JSON', JSON.stringify(THREE_EPISODE_EVENT_SLOTS))}\n这些是视频后处理事件，不能声称已经改变白模或执行过SDK命令。\n${actionEvidenceText(indices.map(index => capture.segments[index]))}`,
     videos: indices.map(index => ({path: capture.segments[index].video.path, samplingFps: config.videoSamplingFps})),
     images: indices.map(index => openings[index].path),
     slots: THREE_EPISODE_EVENT_SLOTS,
     inputIdentity: {
       variantHash: hashVisualInput(variant), config,
       templateHash: hashVisualInput(promptTemplate),
-      inputs: indices.map(index => ({segmentId: capture.segments[index].id, video: identityRef(capture.segments[index].video), styledOpening: identityRef(openings[index])})),
+      inputs: indices.map(index => ({segmentId: capture.segments[index].id, ...actionTimelineIdentity(capture.segments[index]), video: identityRef(capture.segments[index].video), styledOpening: identityRef(openings[index])})),
     },
   };
 }
@@ -95,6 +96,7 @@ export function prepareThreeEpisodeRenderRequests({source, capture, variant, ope
       version: THREE_EPISODE_VISUAL_VERSION, worldBuildHash: normalizeVisualHash(source.worldBuildHash),
       runtimeHash: normalizeVisualHash(source.runtimeHash), variantHash: hashVisualInput(variant),
       video: identityRef(segment.video), opening: identityRef(openings[index]),
+      ...actionTimelineIdentity(segment),
       triviews: styledTriviews.map(item => ({targetId: item.targetId, ...identityRef(item)})),
       promptHash: hashVisualInput(prompt),
     };
@@ -124,7 +126,8 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
   for (const name of ['runCodex', 'generateImages', 'generateEvents']) if (typeof cloud?.[name] !== 'function') throw new Error(`THREE_EPISODE_VISUAL_PROVIDER_MISSING: ${name}`);
   outputRoot = path.resolve(outputRoot);
   await mkdir(outputRoot, {recursive: true});
-  await Promise.all([...capture.segments.flatMap(item => [item.video, item.firstFrame]), ...source.targets.map(item => item.whiteboxTriview), ...(source.referenceImage ? [source.referenceImage] : [])].map(verifyRef));
+  await Promise.all([...capture.segments.flatMap(item => [item.video, item.firstFrame, ...(item.actionEvidence ? [item.actionEvidence] : [])]), ...source.targets.map(item => item.whiteboxTriview), ...(source.referenceImage ? [source.referenceImage] : [])].map(verifyRef));
+  await Promise.all(capture.segments.map(verifyActionEvidence));
   const [config, directorPrompt, imagePrompt, reviewPrompt, eventConfig, eventPrompt] = await Promise.all([
     loadEpisodeStyleVariantConfig(repoRoot),
     readFile(path.join(repoRoot, 'config/prompts/three-episode-style-director.md'), 'utf8'),

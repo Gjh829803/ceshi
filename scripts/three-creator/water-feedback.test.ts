@@ -46,7 +46,7 @@ describe('advisory water feedback',()=>{
   expect(summarizeWaterFeedback([{water},{water},{water}]).events).toHaveLength(1);
  });
  it('does not turn an advisory shallow-water observation into a new acceptance gate',()=>{
-  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:180,inputWallSeconds:180,activePlaySeconds:180,videoMetadata:{durationSeconds:180},worldBuildHash:'world',episodeHash:'episode'};
+  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:1,inputWallSeconds:1,activePlaySeconds:1,videoMetadata:{durationSeconds:1},worldBuildHash:'world',episodeHash:'episode'};
   const current={worldBuildHash:'world',episodeHash:'episode'};
   expect(playtestSubmissionReadiness({...report,feedback:buildWaterFeedback({...water,swimming:false,contact:{...contact,depthCheckPassed:false}})},current))
    .toEqual(playtestSubmissionReadiness(report,current));

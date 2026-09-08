@@ -3,10 +3,7 @@ import { Character as SourceCharacter } from './humanoid/source-character';
 import type { HumanoidRenderState, SourceCharacterFrame } from './humanoid/animation';
 export type { HumanoidRenderState } from './humanoid/animation';
 
-/** Temporary vehicle-only overlay, separate from the original authored clips.
- * Source101 uses different local bone axes from the retired UAL65 character.
- * Measure each bone-to-child direction instead of assuming a local axis.
- */
+/** Seat/saddle overlay measures each bone-to-child direction in the Source101 rig. */
 export class MountedRiderPose {
   private entries: { bone: T.Object3D; child: T.Object3D; side: number; joint: string; base: T.Quaternion }[] = [];
   private applied = false;
@@ -64,7 +61,7 @@ const emptyFrame = (): SourceCharacterFrame => ({
   swimStyle: 'breaststroke', animationEvent: null, surface: null, skills: null,
 });
 
-/** Host placement wrapper around the unchanged traversal-lab animation class.
+/** Root placement and action rendering for the provided humanoid.
  * root is set by the host's common interpolated presentation. The inner source
  * root retains its authored swim offset; no model scaling or retargeting occurs.
  */
@@ -78,11 +75,8 @@ export class Character {
   private frame = emptyFrame();
   private localPosition = new T.Vector3();
   private localFacing = new T.Vector3(0, 0, 1);
-  private fallbackIdentity = {};
-  private simulationIdentity: object = this.fallbackIdentity;
+  private simulationIdentity: object | undefined;
   private mountedMode: 'stand' | 'drive' | 'ride' | null = null;
-  private fallbackName = '';
-  private fallbackTime = 0;
   // Source nodes are registered on adoption. Later author-added visual children
   // are not animation-owned, so their evaluated locals survive repeated frames.
   private presentationNodes=new Set<T.Object3D>([this.actor]);
@@ -142,36 +136,25 @@ export class Character {
     this.actor.updateWorldMatrix(false, true);
   }
 
-  private legacyFrame(dt: number, name: string, speed: number) {
-    if (name !== this.fallbackName) { this.fallbackName = name; this.fallbackTime = 0; }
-    this.fallbackTime += Math.max(0, dt);
-    const state = emptyFrame(); state.speed = speed;
-    state.swimming = name.startsWith('Swim'); state.animationGrounded = !state.swimming;
-    const key = ({ Jump_Start: 'jump-stand', Jump_Loop: 'fall-loop', Jump_Land: 'land-light', Sitting_Enter: 'sit-enter', Sitting_Exit: 'sit-exit' } as Record<string,string>)[name];
-    if (key && this.source?.actions[key]) state.surface = { pose: { key, time: Math.min(this.fallbackTime, this.source.actions[key]!.getClip().duration) } };
-    return state;
-  }
-
-  update(dt: number, name: string, speed: number, seated: boolean, riding = false, pose?: HumanoidRenderState) {
+  update(dt: number, pose: HumanoidRenderState) {
     const source = this.source; if (!source) return;
     this.applyPresentationPose(1);
     this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
-    const mode = pose?.mounted !== undefined ? pose.mounted : riding ? 'ride' : seated || name === 'Driving_Loop' ? 'drive' : null;
+    const mode = pose.mounted ?? null;
     const mounted = mode !== null;
-    const identity = pose?.simulationIdentity ?? this.fallbackIdentity;
+    const identity = pose.simulationIdentity;
     if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
-    const input = pose ?? this.legacyFrame(dt, name, speed);
-    Object.assign(this.frame, input);
+    Object.assign(this.frame, pose);
     // Position and heading already belong to the host root. Keep source-local
-    // placement independent while passing every other original field unchanged.
+    // placement independent while passing action state through.
     this.frame.position = this.localPosition; this.frame.facing = this.localFacing;
     if (mounted) {
       Object.assign(this.frame, emptyFrame(), { position: this.localPosition, facing: this.localFacing });
       if (mode !== 'stand') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
-    } else if (input.skills) {
-      const carrying = input.skills.carrying;
-      this.frame.skills = { ...input.skills, syncCarried: position => {
+    } else if (pose.skills) {
+      const carrying = pose.skills.carrying;
+      this.frame.skills = { ...pose.skills, syncCarried: position => {
         if (carrying) this.carriedAttachment = { id: carrying, position: position.clone() };
       } };
     }

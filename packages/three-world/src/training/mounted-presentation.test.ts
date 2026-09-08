@@ -231,7 +231,11 @@ it('starts fresh owned pose history when a source is asynchronously adopted',asy
  const load=vi.spyOn(Source,'load').mockResolvedValue(source);
  try {
   await animation.load();
-  animation.update(1/60,'Idle',0,false);animation.capturePresentationPose();
+  animation.update(1/60,{
+   position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,
+   speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',
+   animationEvent:null,surface:null,skills:null,
+  });animation.capturePresentationPose();
   const canonicalBone=bone.position.x;
   authorChild.position.x=7;
   animation.applyPresentationPose(.5);

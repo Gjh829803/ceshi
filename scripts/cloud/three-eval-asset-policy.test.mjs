@@ -13,7 +13,7 @@ test('new runs load Host policy from config and catalog from assets with validat
  await cp(path.join(toolkitRoot, 'scripts/three-creator/asset-policy.mjs'), path.join(isolated, 'scripts/three-creator/asset-policy.mjs'));
  await mkdir(path.join(isolated, 'assets/three-creator'), {recursive: true});
  await cp(path.join(toolkitRoot, 'assets/three-creator/asset-catalog.json'), path.join(isolated, 'assets/three-creator/asset-catalog.json'));
- const policy = {schemaVersion: 1, allowedAssetIds: ['humanoid.preset-101'], defaultHumanoidAssetId: 'humanoid.preset-101', allowCustomAssets: false};
+ const policy = {schemaVersion: 1, allowedAssetIds: ['humanoid.source-101'], defaultHumanoidAssetId: 'humanoid.source-101', allowCustomAssets: false};
  const configPath = path.join(isolated, 'config/three-creator/asset-policy.json');
  await writeFile(configPath, JSON.stringify(policy));
  const frozen = await freezeRunAssetPolicy({toolkitRoot: isolated});
@@ -39,7 +39,7 @@ async function fixture(t) {
 test('new runs freeze policy and resumes preserve exact persisted policy without reading current config',async()=>{
  const frozen=await freezeRunAssetPolicy({toolkitRoot});
  assert.equal(frozen.assetPolicySha256.length,64);
- assert(!frozen.assetPolicySnapshot.policy.allowedAssetIds.includes('humanoid.g-bot'));
+ assert.equal(frozen.assetPolicySnapshot.policy.defaultHumanoidAssetId,'humanoid.source-101');
  assert.deepEqual(await freezeRunAssetPolicy({toolkitRoot:'/does-not-exist',previousPlan:frozen}),frozen);
  assert.deepEqual(await freezeRunAssetPolicy({toolkitRoot:'/does-not-exist',previousPlan:{schemaVersion:1}}),{});
  await assert.rejects(freezeRunAssetPolicy({toolkitRoot,previousPlan:{...frozen,assetPolicySha256:'b'.repeat(64)}}),/POLICY_HASH/);

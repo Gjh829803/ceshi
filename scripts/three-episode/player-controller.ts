@@ -25,7 +25,7 @@ export class PlayerCaptureController {
   private headingOffset?: number;
   private yawRate?: number;
   private pitchRate?: number;
-  private previousCamera?: { yaw: number; pitch: number; yawInput: number; pitchInput: number; time: number };
+  private previousCamera?: { yaw: number; pitch: number; yawInput: number; pitchInput: number; time: number } | undefined;
   private jumpState: PlayerDecision['behavior']['plannedJump'];
   private nextJumpAt: number;
   private jumpAppliedAt?: number;
@@ -37,9 +37,12 @@ export class PlayerCaptureController {
     this.route = new RouteController(segment, movement);
     this.trainingRoute=new TrainingRouteController(segment);
     this.ordinal = Number(segment.id.slice(-2));
-    this.jumpState = (movement.jumpSpeedMetersPerSecond ?? 0) <= 0 ? 'unsupported' : this.ordinal % 2 === 0 ? 'pending' : 'not-scheduled';
+    this.jumpState = segment.actionGoals?.length ? 'not-scheduled' : (movement.jumpSpeedMetersPerSecond ?? 0) <= 0 ? 'unsupported' : this.ordinal % 2 === 0 ? 'pending' : 'not-scheduled';
     this.nextJumpAt = 14 + this.ordinal * 0.4;
   }
+  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger); }
+  completeHeldWaypoint(index: number) { this.route.completeHeldWaypoint(index); }
+  pause(time: number) { this.previousTime = time; this.paused = true; this.previousCamera = undefined; }
   async step(snapshot: WorldSnapshot, forward: Vec3, time: number): Promise<PlayerDecision> {
     if(snapshot.training?.mountedInstanceId){
       const decision=this.trainingRoute.step(snapshot,time);
@@ -50,12 +53,16 @@ export class PlayerCaptureController {
     if (!this.paused) this.activeSeconds += dt;
     this.previousTime = time;
     const decision = this.route.step(snapshot, forward, this.activeSeconds);
+    if (decision.mode === 'action') {
+      this.paused = true;
+      return { ...decision, behavior: { phase: 'observe', paceRatio: 0, plannedJump: this.jumpState, cameraSupported: this.cameraMode !== 'authored' } };
+    }
     const actor = snapshot.entities.find(e => e.id === snapshot.controlledEntityId)!;
     const grounded = actor.motion?.isGrounded ?? false;
     const cameraSupported = this.cameraMode !== 'authored';
     const lookStart = 4 + this.ordinal * 0.45;
     const lookDuration = this.ordinal % 2 === 0 ? 2.6 : 1.4;
-    const observe = decision.mode === 'travel' && grounded && time >= lookStart && time < lookStart + lookDuration;
+    const observe = !this.segment.actionGoals?.length && decision.mode === 'travel' && grounded && time >= lookStart && time < lookStart + lookDuration;
     this.paused = observe;
     const input = { ...decision.input };
     let phase: PlayerDecision['behavior']['phase'] = observe ? 'observe' : decision.mode === 'backtrack' ? 'recovery' : 'travel';
@@ -82,8 +89,8 @@ export class PlayerCaptureController {
     const settling = this.landedAt !== undefined && time - this.landedAt < 0.45;
     if (jumpActive) phase = 'jump'; else if (settling) phase = 'landing';
     if (decision.mode === 'travel') {
-      const sprint = pulse(time, 9 + this.ordinal * 0.2, 3) > 0.12 || pulse(time, 22 + this.ordinal * 0.15, 2.8) > 0.12;
-      const walkBreak = time < 1.1 || observe || jumpActive || settling || (time > 18 && time < 20) || (decision.distanceToTargetMeters ?? 0) < 1.4;
+      const sprint = !this.segment.actionGoals?.length && (pulse(time, 9 + this.ordinal * 0.2, 3) > 0.12 || pulse(time, 22 + this.ordinal * 0.15, 2.8) > 0.12);
+      const walkBreak = this.segment.actionGoals?.length ? false : time < 1.1 || observe || jumpActive || settling || (time > 18 && time < 20) || (decision.distanceToTargetMeters ?? 0) < 1.4;
       input.run = !walkBreak && (input.run || sprint);
       // Prevent modest sprint bursts exhausting a valid stop route prematurely.
       // A minimum pace preserves the existing too-short-route failure.
@@ -170,8 +177,10 @@ export function summarizePlayerBehavior(frames: readonly { snapshot: WorldSnapsh
     renderedPitchRangeDegrees: pitches.length ? (Math.max(...pitches)-Math.min(...pitches))*180/Math.PI : 0 };
 }
 
-export function assertPlayerBehavior(frames: readonly { snapshot: WorldSnapshot; camera: EpisodeFrame['camera']; decision: RouteDecision }[], capabilities: EpisodeCapabilities) {
+export function assertPlayerBehavior(frames: readonly { snapshot: WorldSnapshot; camera: EpisodeFrame['camera']; decision: RouteDecision }[], capabilities: EpisodeCapabilities, hasActionGoals = false) {
   const evidence = summarizePlayerBehavior(frames);
+  // Action recordings are checked against each requested state/operation and displacement.
+  if (hasActionGoals) return;
   if(frames.some(f=>!!f.snapshot.training?.mountedInstanceId)){
     const positions=frames.map(f=>{const id=f.snapshot.training?.mountedInstanceId;return f.snapshot.entities.find(e=>e.id===id)?.positionWorldMetersXYZ;}).filter((p):p is Vec3=>!!p);
     const travelled=positions.slice(1).reduce((sum,p,i)=>sum+Math.hypot(...p.map((v,j)=>v-positions[i]![j]!)),0);

@@ -21,6 +21,7 @@ async function json(file: string): Promise<any> { try { return JSON.parse(await 
 async function save(file: string, value: unknown) { await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${process.pid}.part`; await writeFile(temporary, JSON.stringify(value, null, 2) + '\n'); await rename(temporary, file); }
 type Cloud = CloudClient;
 export function isRepairableRouteFailure(code: string): boolean {
+  if (/^EPISODE_ACTION_(?:REJECTED|TARGET_MISSING|TARGET_APPROACH_MISSING|APPROACH_TOO_FAR|CLIMB_REQUIRED|WATER_REQUIRED|TIMEOUT|INCOMPLETE|DISPLACEMENT_SHORT)$/.test(code)) return true;
   return /^(?:ROUTE_(?:BLOCKED|BACKTRACK_BLOCKED|VERTICAL_MISMATCH)|EPISODE_(?:START_INVALID|ROUTE_TOO_SHORT|MOVEMENT_BLOCKED|SUBJECT_STATIONARY|UNSUPPORTED_GROUND|CAPTURE_HEALTH))$/.test(code);
 }
 export interface EpisodeWorkflowOptions {

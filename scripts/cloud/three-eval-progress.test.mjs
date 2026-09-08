@@ -5,7 +5,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import test from 'node:test';
-import {buildThreeRunProgress} from './three-eval-progress.mjs';
+import {buildThreeRunProgress,serializeThreeRunProgress} from './three-eval-progress.mjs';
 
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const taskId='new-reference--three-sdk',caseId='new-reference',runtimeHash=hash('runtime'),caseHash=hash('case');
@@ -26,11 +26,30 @@ async function fixture(runId='run-main',jobId='gen_0000000000000001',root) {
 }
 const snapshot=(...attempts)=>({kind:'three-creator-safe-live-status',schemaVersion:1,observedAt,attempts});
 
+test('ten long case histories stay publishable without losing attempts, current status or visited stages',()=>{
+ const stages=['starting','authoring','preview','playtest','capture','packaging','delivered'];
+ const attempt=index=>({jobId:`gen_${index}`,phase:'delivered',toolSummary:{counts:{world_playtest:40}},events:Array.from({length:100},(_,i)=>({id:`${index}-${i}`,stage:stages[Math.min(i,6)],status:i===6?'failed':'succeeded',detail:'实际工具证据。'.repeat(25),at:observedAt}))});
+ const original={schemaVersion:1,runId:'ten-cases',cases:Array.from({length:10},(_,i)=>({...attempt(i),taskId:`case-${i}`,attempts:Array.from({length:8},(_,j)=>attempt(i*8+j))}))};
+ const before=JSON.stringify(original),serialized=serializeThreeRunProgress(original),result=JSON.parse(serialized);
+ assert(Buffer.byteLength(before)>512*1024);assert(Buffer.byteLength(serialized)<=512*1024);assert.equal(JSON.stringify(original),before);
+ assert.equal(result.cases.length,10);
+ for(let i=0;i<10;i++){
+  const row=result.cases[i];assert.equal(row.taskId,`case-${i}`);assert.equal(row.attempts.length,8);
+  for(const value of [row,...row.attempts]){
+   assert.equal(value.phase,'delivered');assert.equal(value.toolSummary.counts.world_playtest,40);
+   assert(value.omittedEventCount>0);assert.equal(value.events.length+value.omittedEventCount,100);
+   assert.deepEqual(new Set(value.events.map(event=>event.stage)),new Set(stages));
+   assert(value.events.at(-1).id.endsWith('-99'));
+  }
+ }
+ const small={cases:[{events:[],attempts:[]}]};assert.deepEqual(JSON.parse(serializeThreeRunProgress(small)),small);
+});
+
 test('real CLI activity and current MCP stage override queued API items/counters',async()=>{
  const f=await fixture();try{
   await f.saveState();await json(path.join(f.caseRoot,'job-final.json'),{job_id:f.state.jobId,request_id:f.state.requestId,status:'running',counters:{total:1,queued:1,running:0}});
   await json(path.join(f.caseRoot,'items.json'),{items:[{item_id:taskId,status:'queued'}]});
-  const queued=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(queued.cases[0].phase,'queued');assert.equal(queued.cases[0].startedAt,null);
+  const queued=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(queued.cases[0].phase,'starting');assert.equal(queued.cases[0].stage,'awaiting-agent');assert.equal(queued.cases[0].startedAt,null);
   const running=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now}),row=running.cases[0];
   assert.equal(row.phase,'running');assert.equal(row.stage,'preview');assert.equal(row.hostPhase,'submitted');assert.equal(row.itemStatus,'queued');assert.equal(row.providerQueueIsStale,true);
   assert.equal(row.startedAt,startedAt);assert.equal(row.queueSeconds,60);assert.equal(row.elapsedSeconds,600);assert.equal(row.completedAt,null);
@@ -41,12 +60,67 @@ test('real CLI activity and current MCP stage override queued API items/counters
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
-test('missing local/live evidence leaves unknown time, model and no fabricated attempts',async()=>{
+test('a selected task without submission waits on the Host without invented execution evidence',async()=>{
  const f=await fixture();try{
   const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
-  assert.equal(row.phase,'unknown');assert.equal(row.stage,'unknown');assert.equal(result.model,null);assert.equal(result.effort,null);
+  assert.equal(row.phase,'queued');assert.equal(row.stage,'queued');assert.equal(row.stageLabel,'等待执行');assert.equal(result.model,null);assert.equal(result.effort,null);
   for(const key of ['submittedAt','startedAt','completedAt','lastObservedAt','queueSeconds','elapsedSeconds'])assert.equal(row[key],null);
   assert.deepEqual(row.attempts,[]);assert.deepEqual(row.events,[]);assert.deepEqual(row.toolSummary.counts,{});
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('provider running and a submitted request do not claim Agent execution before CLI evidence',async()=>{
+ const f=await fixture();try{
+  await f.saveState();
+  for(const launcher of [undefined,{status:'starting',runtimeHash}]){
+   const live={...f.live,cliActivityObserved:false,events:{},launcher};
+   const row=(await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(live),now})).cases[0];
+   assert.equal(row.providerStatus,'running');assert.equal(row.phase,'starting');assert.equal(row.stage,'awaiting-agent');
+   assert.equal(row.stageLabel,'请求已提交 · 等待 Agent 启动');assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);
+   assert(!row.events.some(event=>event.type==='agent-started'));assert.equal(row.queueSeconds,600);
+  }
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('frozen case inputs expose requested model configuration for both submitted and waiting tasks',async()=>{
+ const f=await fixture();try{
+  const input={schemaVersion:1,kind:'three-creator-case-input',caseId,taskId,profile:'three-sdk',runtimeHash,model:'gpt-6-astra',reasoningEffort:'xhigh',effectiveUserPrompt:'PRIVATE_PROMPT'};
+  const inputHash=hash(JSON.stringify(input));f.plan.cases[0].caseHash=inputHash;f.state.caseHash=inputHash;
+  delete f.state.model;delete f.state.reasoningEffort;
+  await json(path.join(f.caseRoot,'case-input.json'),input);await f.saveState();
+  const secondCase='second-reference',secondTask=secondCase+'--three-sdk';
+  const secondInput={...input,caseId:secondCase,taskId:secondTask};
+  f.plan.selectedTaskIds.push(secondTask);f.plan.cases.push({caseId:secondCase,taskId:secondTask,profile:'three-sdk',caseHash:hash(JSON.stringify(secondInput)),requestId:'request-second-reference'});
+  await json(path.join(f.runRoot,secondTask,'case-input.json'),secondInput);await json(path.join(f.runRoot,'evaluation-plan.json'),f.plan);
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now});
+  assert.equal(result.model,'gpt-6-astra');assert.equal(result.effort,'xhigh');
+  assert.deepEqual(result.configuration,{kind:'requested',model:'gpt-6-astra',effort:'xhigh'});
+  assert.deepEqual(result.cases.map(row=>row.phase),['starting','queued']);
+  assert(result.cases.every(row=>row.configuration.source==='frozen-case-input'&&row.configuration.kind==='requested'));
+  assert(result.cases.every(row=>row.startedAt===null&&row.cliActivityObserved===false));
+  assert(!JSON.stringify(result).includes('PRIVATE_PROMPT'));
+  await json(path.join(f.runRoot,secondTask,'case-input.json'),{...secondInput,model:'gpt-5.5'});
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('stopped and cancelled Host outcomes retain their terminal identity',async()=>{
+ const f=await fixture();try{
+  for(const phase of ['cancelled','stopped','stop-pending']){
+   f.state.phase=phase;await f.saveState();
+   const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+   assert.equal(row.phase,phase);assert.equal(row.startedAt,null);
+  }
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('an uncertain submission intent alone cannot claim a confirmed request or Agent startup',async()=>{
+ const f=await fixture();try{
+  f.state.phase='submission-unknown';delete f.state.jobId;delete f.state.submittedAt;delete f.state.providerStatus;await f.saveState();
+  await json(path.join(f.caseRoot,'submission-intent.json'),{requestId:f.state.requestId,createdAt:submittedAt});
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,now})).cases[0];
+  assert.equal(row.phase,'unknown');assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);
+  assert(!row.events.some(event=>['submitted','agent-started'].includes(event.type)));
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
@@ -56,7 +130,7 @@ test('keeps a genuine capacity failure and retry distinct, rejecting changed inp
   f.launcher.status='failed';f.launcher.finishedAt='2026-09-05T09:32:00.000Z';f.launcher.childExitCode=1;await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
   const retry=await fixture('run-retry','gen_0000000000000002',f.container);retry.state.submittedAt='2026-09-05T09:35:00.000Z';retry.state.providerStatus='queued';await retry.saveState();
   const options={runRoot:f.runRoot,attemptRunRoots:[retry.runRoot],now};
-  const result=await buildThreeRunProgress(options),row=result.cases[0];assert.equal(row.phase,'queued');assert.equal(row.attempts.length,2);
+  const result=await buildThreeRunProgress(options),row=result.cases[0];assert.equal(row.phase,'starting');assert.equal(row.stage,'awaiting-agent');assert.equal(row.attempts.length,2);
   assert.equal(row.attempts[0].failure.code,'MODEL_AT_CAPACITY');assert.equal(row.attempts[0].completedAt,f.launcher.finishedAt);assert.equal(row.attempts[1].jobId,retry.state.jobId);
   assert(!JSON.stringify(result).includes('PRIVATE_TOKEN'));assert(row.events.some(event=>event.code==='MODEL_AT_CAPACITY'));
   retry.plan.cases[0].caseHash=hash('different input');await json(path.join(retry.runRoot,'evaluation-plan.json'),retry.plan);
@@ -92,6 +166,44 @@ test('rejects foreign live job/request/launcher identity and linked evidence pat
   await rm(path.join(f.caseRoot,'creator-launcher-report.json'));await rm(path.join(f.caseRoot,'state.json'));
   const target=path.join(f.container,'private.json');await json(target,{token:'PRIVATE_TOKEN'});await symlink(target,path.join(f.caseRoot,'state.json'));
   await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/PATH_INVALID/);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('provider account-attempt workspaces require an exact same-job/task live observation',async()=>{
+ const f=await fixture();try{
+  await f.saveState();
+  const workspace=`/fsx/pipeline/lwdp_generation/${f.state.jobId}/tasks/account_attempts/${taskId}_abc12345/${taskId}`;
+  f.launcher.workspace=workspace;await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  const live={...f.live,resolvedWorkspace:workspace};
+  const row=(await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(live),now})).cases[0];
+  assert.equal(row.phase,'running');assert.equal(row.stage,'preview');assert.equal(row.jobId,f.state.jobId);
+  assert(!JSON.stringify(row).includes('account_attempts'),'provider paths remain private');
+  for(const resolvedWorkspace of [workspace.replace(f.state.jobId,'gen_ffffffffffffffff'),workspace.replace('_abc12345/','_abc/'),workspace.replace('_abc12345/','_abc12345/../'),workspace.replace('/account_attempts/','/arbitrary/'),workspace.replace('_abc12345/','_anotherattempt/')]){
+   await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot({...live,resolvedWorkspace}),now}),/IDENTITY_MISMATCH/);
+  }
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/,'unverified nested path alone is not admitted');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
+test('a retrieved provider attempt is independently bound to its receipt and actual diagnostic bytes',async()=>{
+ const f=await fixture();try{
+  f.state.phase='failed';await f.saveState();
+  const workspace=`/fsx/pipeline/lwdp_generation/${f.state.jobId}/tasks/account_attempts/${taskId}_abc12345/${taskId}`;
+  Object.assign(f.launcher,{workspace,status:'failed',childExitCode:1,finishedAt:observedAt});
+  await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),JSON.stringify({type:'error',message:'Selected model is at capacity. PRIVATE_DETAILS'})+'\n');
+  await json(path.join(f.caseRoot,'codex-attempt.json'),{item_id:taskId,workdir:workspace,command:'PRIVATE_COMMAND'});
+  const files=await Promise.all(['creator-launcher-report.json','creator-events.jsonl'].map(async name=>{const bytes=await readFile(path.join(f.caseRoot,name));return{name,path:workspace+'/outputs/'+name,bytes:bytes.length,sha256:hash(bytes)};}));
+  const receipt={kind:'owned-provider-attempt-diagnostic-retrieval',schemaVersion:1,jobId:f.state.jobId,taskId,requestId:f.state.requestId,runtimeHash,workspace,files};
+  const receiptPath=path.join(f.caseRoot,'provider-attempt-diagnostic-retrieval.json');await json(receiptPath,receipt);
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now});assert.equal(result.cases[0].failure.code,'MODEL_AT_CAPACITY');
+  assert(!JSON.stringify(result).includes('PRIVATE_'));assert(!JSON.stringify(result).includes(workspace));
+  for(const edit of [{jobId:'gen_ffffffffffffffff'},{requestId:'foreign-request'},{taskId:'other-task--three-sdk'},{runtimeHash:hash('other-runtime')}]){
+   await json(receiptPath,{...receipt,...edit});await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
+  }
+  await json(receiptPath,receipt);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),'tampered diagnostic bytes');
+  await assert.rejects(buildThreeRunProgress({runRoot:f.runRoot,now}),/IDENTITY_MISMATCH/);
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
@@ -164,14 +276,15 @@ test('projects actual operation history once per identity in timestamp order wit
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
-test('separates call execution from checks and never calls short or under-duration playtests passed',async()=>{
+test('separates call execution from complete action evidence without a recording length threshold',async()=>{
  const f=await fixture();try{
   await f.saveState();
-  const full={status:'passed',isCompleteEpisode:true,capturedInput:true,activePlaySeconds:181,inputWallSeconds:182,actualWallSeconds:185,videoMetadata:{durationSeconds:184,frameCount:182,widthPixels:960,heightPixels:540,path:'PRIVATE_VIDEO'}};
+  const full={status:'passed',isCompleteEpisode:true,capturedInput:true,activePlaySeconds:2,inputWallSeconds:2.1,actualWallSeconds:3,videoMetadata:{durationSeconds:2.5,frameCount:8,widthPixels:960,heightPixels:540,path:'PRIVATE_VIDEO'}};
   const cases=[
    {result:{...full,status:'failed',failure:'THREE_EPISODE_OPERATION_FAILED',privateDetails:'PRIVATE_DETAILS'},status:'failed',resultStatus:'failed',detail:'调用已完成，检查结果失败。'},
-   {result:{...full,isCompleteEpisode:false},status:'succeeded',resultStatus:'passed',adequacy:'short-test',detail:'调用已完成，仅完成短测，未完成整段自测。'},
-   {result:{...full,activePlaySeconds:126.2},status:'succeeded',resultStatus:'passed',adequacy:'duration-insufficient',detail:'调用已完成，自测时长不足 180 秒。'},
+   {result:{...full,isCompleteEpisode:false},status:'succeeded',resultStatus:'passed',adequacy:'short-test',detail:'调用已完成，仅执行调试片段，未完成动作计划。'},
+   {result:{...full,activePlaySeconds:0},status:'succeeded',resultStatus:'passed',adequacy:'invalid-recording',detail:'调用已完成，缺少有效操作或录像时间。'},
+   {result:{...full,activePlaySeconds:0.01},status:'succeeded',resultStatus:'passed',adequacy:'complete',detail:'检查结果通过。'},
    {result:{status:'passed'},status:'succeeded',resultStatus:'passed',adequacy:'unverified',detail:'调用已完成，完整自测证据尚不足。'},
    {result:full,status:'succeeded',resultStatus:'passed',adequacy:'complete',detail:'检查结果通过。'},
    {result:undefined,status:'succeeded',resultStatus:null,detail:'工具调用已完成，检查结果尚未确认。'},

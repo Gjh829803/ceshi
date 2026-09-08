@@ -8,6 +8,8 @@ import {createAssetPolicySnapshot,assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
 import Ajv from 'ajv';
 import {EPISODE_SCHEMA} from './contracts';
+import {mountUsage} from './mount-guidance';
+import type {AssetCatalogEntry} from './compiler';
 const roots:string[]=[];
 async function root(){const dir=await mkdtemp(path.join(os.tmpdir(),'mount-guide-'));roots.push(dir);return dir;}
 afterEach(async()=>{await Promise.all(roots.splice(0).map(dir=>rm(dir,{recursive:true,force:true})));});
@@ -21,6 +23,7 @@ it('discovers horse integration and only its required example assets',async()=>{
   const ids=JSON.parse(example.files['project.json']).assetIds;
   expect(ids).toEqual(['humanoid.source-101','training.horse']);
   expect(found.mountUsage[0].requiredAssetIds).toEqual(ids);
+  expect(example.files['main.ts']).toContain('await createHumanoidWorld(');
   expect(example.files['main.ts']).toContain('TrainingHorse');
   expect(example.files['main.ts']).not.toContain('training.approach');
   const validate=new Ajv({strict:false}).compile(EPISODE_SCHEMA);
@@ -33,6 +36,8 @@ it('discovers horse integration and only its required example assets',async()=>{
   expect(definitions.assets.map((a:any)=>a.id)).toEqual(ids);
   expect(definitions.assets.flatMap((a:any)=>a.resources??[]).map((r:any)=>r.path)).not.toContain('creatures/dragon.glb');
   const schema:any=await service.schema('mounted-interaction' as any);
+  expect(schema.entryPoint.name).toBe('createHumanoidWorld');
+  expect(schema.sdkFactoryContracts).toContain('export declare function createHumanoidWorld(');
   expect(schema.trainingSourceContracts['horse.ts']).toContain('class TrainingHorse');
   expect(schema.trainingSourceContracts['horse.ts']).toContain('load(resolve: TrainingResourceResolver): Promise<void>');
   expect(schema.trainingSourceContracts['horse.ts']).not.toContain('mixer');
@@ -40,18 +45,23 @@ it('discovers horse integration and only its required example assets',async()=>{
   expect(schema.sdkGuide).toContain('Imported horse');
  }finally{await service.close();}
 });
-it.each(['training.horse','humanoid.source-101'])('reports missing %s without offering executable mounted guidance',async missing=>{
- const allowed=['humanoid.preset-101','humanoid.source-101','training.horse'].filter(id=>id!==missing);
- const snapshot=createAssetPolicySnapshot({schemaVersion:1,allowedAssetIds:allowed,defaultHumanoidAssetId:'humanoid.preset-101',allowCustomAssets:true},catalog.assets);
+it('reports a missing horse without offering executable mounted guidance',async()=>{
+ const snapshot=createAssetPolicySnapshot({schemaVersion:1,allowedAssetIds:['humanoid.source-101'],defaultHumanoidAssetId:'humanoid.source-101',allowCustomAssets:true},catalog.assets);
  const file=path.join(await root(),'policy.json');await writeFile(file,JSON.stringify(snapshot));
  const service=new ThreeCreatorTools(await root(),'three-sdk',{assetPolicySnapshotPath:file,assetPolicySha256:assetPolicyHash(snapshot)});
  try {
-  await expect(service.examples('mounted-interaction' as any)).rejects.toThrow(missing);
+  await expect(service.examples('mounted-interaction' as any)).rejects.toThrow('training.horse');
   const schema:any=await service.schema('mounted-interaction' as any);
   expect(schema.trainingExampleTopic).toBeUndefined();expect(schema.sdkGuide).not.toContain('new TrainingHorse');
-  const detail:any=await service.assets('','training.horse');
-  if(missing==='humanoid.source-101'){expect(detail.assets).toHaveLength(1);expect(detail.mountUsage[0].missingAssetIds).toEqual([missing]);expect(detail.mountUsage[0].exampleTopic).toBeUndefined();}
+  const detail:any=await service.assets('','training.horse');expect(detail.assets).toHaveLength(0);
  }finally{await service.close();}
+});
+it('requires the supplied humanoid for executable mount integration and a valid Host policy',()=>{
+ const horse=catalog.assets.find(asset=>asset.id==='training.horse')! as AssetCatalogEntry;
+ const usage=mountUsage(horse,'three-sdk',['training.horse']);
+ expect(usage?.missingAssetIds).toEqual(['humanoid.source-101']);
+ expect(usage?.integrationReady).toBe(false);expect(usage?.schemaTopic).toBeUndefined();expect(usage?.exampleTopic).toBeUndefined();
+ expect(()=>createAssetPolicySnapshot({schemaVersion:1,allowedAssetIds:['training.horse'],defaultHumanoidAssetId:'humanoid.source-101',allowCustomAssets:true},catalog.assets)).toThrow('THREE_ASSET_POLICY_INVALID');
 });
 it('keeps raw horse discovery truthful',async()=>{
  const service=new ThreeCreatorTools(await root(),'three-raw');

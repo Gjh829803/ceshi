@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import sharp from 'sharp';
-import { runThreeEpisodeVisuals } from './visuals.mjs';
+import { runThreeEpisodeVisuals, buildThreeEpisodeEventRequest, prepareThreeEpisodeRenderRequests } from './visuals.mjs';
+import { buildPrefetchedEventRequest } from './event-prefetch.mjs';
 import { assertThreeEpisodeVisualInputs, assertThreeEpisodeStylePlan, normalizeThreeEpisodeEvents, THREE_EPISODE_STYLE_IDS } from './visual-contracts.mjs';
 
 const temporary = [];
@@ -13,6 +14,28 @@ afterEach(async () => { await Promise.all(temporary.splice(0).map(root => rm(roo
 async function ref(filename) { return { path: filename, sha256: createHash('sha256').update(await readFile(filename)).digest('hex') }; }
 const event = () => ({ targetNames: ['main subject'], eventClass: 'atmospheric-spectacle', magnitude: 'large-scale', frameImpact: { scope: 'sky-dominant', coverage: 'large', contrast: 'dramatic' },
   dominantChange: 'Aurora appears', targetContext: 'Sky behind the subject', beforeState: 'Clear sky', transitionDescription: 'Colored light spreads across the sky', afterState: 'Aurora remains', spatialContinuity: 'Keep camera, terrain, silhouettes and movement unchanged', audioDescription: 'Environmental sound only', negativeConstraints: 'No teleport, cut, camera motion or SDK commands', timing: { transitionDurationSeconds: 2, ending: 'hold', endingDurationSeconds: 2 } });
+test('binds short actual action observations into event and render prompts and input identities', async () => {
+  const setup = await fixture();
+  const { capture, source } = setup;
+  const config = { model: 'gemini-3.5-flash', selectedCaptureIndices: [0, 2, 4], videoSamplingFps: .25 };
+  const variant = { id: 'style-00', geminiEventPrompt: 'Keep recorded actions', worldIdentity: 'world', subjectIdentity: 'traveler', visualPrompt: 'painted', negativeConstraints: 'preserve motion' };
+  const openings = capture.segments.map(segment => segment.firstFrame), anchor = openings[0], appearanceLock = { anchorSha256: anchor.sha256 };
+  const args = { variant, capture, openings, promptTemplate: 'HOST_EVENT_SLOTS_JSON', config };
+  const baseline = buildThreeEpisodeEventRequest(args).inputIdentity;
+  const baselinePrefetch = buildPrefetchedEventRequest({ ...args, anchor, appearanceLock }).inputIdentity;
+  const baselineRender = prepareThreeEpisodeRenderRequests({ source, capture, variant, openings, styledTriviews: [], events: [] })[0].inputHash;
+  capture.segments[0].actionTimeline = [{ goalId: 'slide-under-beam', intent: { kind: 'skill', action: 'slide' }, targetId: null, result: 'succeeded', startTick: 13, endTick: 41, startFrame: 5, endFrame: 16, stateChanges: [{ tick: 14, frame: 5, state: { character: { activeAction: { action: 'slide', phase: 'lower' } } } }] }];
+  const request = buildThreeEpisodeEventRequest(args);
+  assert.match(request.instruction, /slide-under-beam/); assert.match(request.instruction, /"startTick":13/);
+  assert.notDeepEqual(request.inputIdentity, baseline);
+  const prefetched = buildPrefetchedEventRequest({ ...args, anchor, appearanceLock });
+  assert.match(prefetched.instruction, /"endTick":41/); assert.notDeepEqual(prefetched.inputIdentity, baselinePrefetch);
+  const rendered = prepareThreeEpisodeRenderRequests({ source, capture, variant, openings, styledTriviews: [], events: [] })[0];
+  assert.match(rendered.prompt, /slide-under-beam/); assert.notEqual(rendered.inputHash, baselineRender);
+  const before = rendered.inputHash;
+  capture.segments[0].actionTimeline[0].result = 'cancelled';
+  assert.notEqual(prepareThreeEpisodeRenderRequests({ source, capture, variant, openings, styledTriviews: [], events: [] })[0].inputHash, before);
+});
 async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, rejectReplacementAnchors = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'three-episode-visual-test-')); temporary.push(root);
   const openingPath = path.join(root, 'whitebox.png'), triviewPath = path.join(root, 'triview.png'), videoPath = path.join(root, 'whitebox.mp4');

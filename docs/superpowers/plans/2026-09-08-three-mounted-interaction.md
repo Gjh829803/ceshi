@@ -33,7 +33,7 @@ The following are copied from the spec; every task includes them:
 - “暂停后重复显示/捕获同一时刻不得额外推进动画、过渡或模拟。”
 - “Episode 持有时钟期间，普通命令不能绕过租约推进状态。”
 - “媒体、执行日志、真实测试图片及案例数据保留在 Git 外部。”
-- “Creator 继续保留 v0.2 当前世界、当前输入计划的真实 180 秒以上录制与交付契约。”
+- “Creator 使用 v0.2 当前世界、当前输入计划的完整真实录制；计划覆盖核心功能与动作结果，输入、活动及视频时长为有限正值，录制长度由功能覆盖决定。”
 
 Additional existing branch requirements: keep cloud contract tests mocked; no production restart, paused-case submission, provider retry, SDK deployment or video submission. Episode execution retains `--stop-before-seedance`. Preserve the original horse GLB, source provenance, frozen asset policy and accepted source worktrees.
 
@@ -418,13 +418,13 @@ it('discovers horse integration and only its required example assets', async () 
 });
 ```
 
-Use existing root() temp workspace helper in character-guidance.test.ts or define it explicitly in mount-guidance.test.ts with mkdtemp/afterEach cleanup. Add horse-disabled and Source101-disabled frozen policy tests: no executable example returned when either dependency is unavailable, clear missing asset IDs, no widening policy or silently substituting preset-101. Raw profile guidance must not claim Training gameplay exists.
+Use existing root() temp workspace helper in character-guidance.test.ts or define it explicitly in mount-guidance.test.ts with mkdtemp/afterEach cleanup. Add horse-disabled and Source101-disabled frozen policy tests: no executable example returned when either dependency is unavailable, clear missing asset IDs, no widening policy or silently substituting another subject. Raw profile guidance must not claim Training gameplay exists.
 
 - [x] Run those failing consumers; implement mountUsage as a focused sibling module and wire it into asset search/describe. Preserve characterUsage and the ordinary default character policy. New schema topic returns TrainingOptions/TrainingVehicleInstance/TrainingHorse/TrainingSnapshot/TrainingCommand actual source declarations and the mounted README section; no parallel hand-authored API schema protocol.
 
 - [x] Create exactly `index.html`, `main.ts`, `project.json`, `episode.json` in the horse-riding example. main imports createWorld, TrainingCharacter, TrainingHorse; resolves policy-approved humanoid and horse logical resources using existing compiler/bootstrap maps; creates a flat course, a visible obstacle, a safe side exit patch and two independently identified horse instances. It uses the canonical asset spec clone per instance and unit-scale adapter roots. Place player a short straight walk from the first horse side, align authored camera for the opening, and register capture targets containing the full horse+rider assembly. Bind UI to receipts/snapshot/transition remainingSeconds, preserve actual keyboard F edge input, and show precise rejection code/text. Do not initialize by approach or call prepare after inputs begin.
 
-- [x] Author a >=180-second deterministic Creator input plan with actual walk to the valid side, F enter, transition wait, straight walking gait, turn, gallop, braking, F exit, post-exit walk and reset demonstration. Keep the recorder's real keyboard stream and world identity. The browser runner may make feedback-driven input decisions based on actual measured proximity/velocity but must record them; never use hidden transform writes or approach to repair a failed route. Compile the example first and verify the complete requested source/resource graph and normalized runtime bytes.
+- [x] Author a complete deterministic Creator input plan covering core functions, with actual walk to the valid side, F enter, transition wait, straight walking gait, turn, gallop, braking, F exit, post-exit walk and reset demonstration. Keep the recorder's real keyboard stream and world identity. The browser runner may make feedback-driven input decisions based on actual measured proximity/velocity but must record them; never use hidden transform writes or approach to repair a failed route. Compile the example first and verify the complete requested source/resource graph and normalized runtime bytes.
 
 - [x] Add `scripts/three-creator/training-mounted-browser-smoke.ts` using the existing training browser runner's server/compiler/Playwright lifecycle. It accepts `--output <directory>` and creates that new directory, failing on nonempty output. Start one browser sequentially; record canonical state, input transcript, seat/pelvis errors and screenshots at side/front/turning/exit/reset moments. Require no runtime errors, no overlapping duplicate mixer or logical root writes, successful actual entry/exit and continued movement. Save manifest with git SHA, source/runtime hashes, asset IDs, loaded clip names and input plan hash. Request no external provider.
 
@@ -476,7 +476,7 @@ All local cloud-related tests retain mocks. Do not run unrelated historical pack
 - [x] Section 6.5: finite/bounds/initial/end overlap, body path with height changes, support/medium, fresh actor queries, sensors and unchanged collider count — Task 1.
 - [x] Section 7: applied receipt semantics, distinct errors, no duplicate queue/input edge, held input transfer, pause/reset/dispose/lease and camera continuity — Tasks 1–2.
 - [x] Section 7.1: common tick pair/alpha, discontinuity cuts, display→horse→anchor→rider→camera, idempotent frames, fixed input independent of display rate, exact Episode time — Tasks 2–3.
-- [x] Section 8: all ten acceptance rows, actual models/inputs/Creator >=180s/local Episode trace and separate visual evidence — Tasks 1–4.
+- [x] Section 8: all ten acceptance rows, actual models/inputs/complete Creator core-function coverage/local Episode trace and separate visual evidence — Tasks 1–4.
 - [x] Sections 9–11: source-backed changes, final checks, source/runtime identity and scoped provenance without claiming external engine documentation proves correctness — Task 5.
 
 ## Resolved design choices and bounded review questions

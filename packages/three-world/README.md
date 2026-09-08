@@ -1,343 +1,259 @@
-# Three World SDK 0.2 experimental
+# Three World SDK
 
-Create ordinary Three.js geometry and compose the reference camera freely. Import
-`three` and `createWorld` from `@worldkit/three`. The SDK owns one fixed clock,
-physics world, controlled character, animation, follow camera and command state.
-This is the public v2 API; old engine transports are private.
+Author ordinary Three.js geometry, materials and cameras. The SDK binds physics,
+movement, animation, input, camera follow and observable commands to that content.
+Keep the supplied humanoid's visible model, skeleton and motions by default.
+Reuse other supplied subjects when suitable; otherwise create and bind simple
+Mesh/Group subjects.
 
-See the [architecture and responsibilities](../../docs/three-sdk-architecture.md).
-Start with the basic world API below; parameters, actions and tasks are optional
-interfaces for scenes that need them. Creator delivery and Episode scheduling
-remain outside this runtime package.
+| Layer | Read or change |
+| --- | --- |
+| Reuse | `createHumanoidWorld`, starter example and selected asset |
+| Bind scene and abilities | Collision map, interaction anchors, water, climb surfaces; custom subject body/movement |
+| Configure | Movement/profile parameters, units, input bindings |
+| Implement | Relevant SDK source module, project runtime build and affected tests |
 
-<!-- topic:training -->
-## Training runtime
-
-`createWorld({scene, camera, renderer, training})` selects the integrated training
-solver as the world's only physics backend. It runs at 60 Hz using the existing
-SDK clock, Presentation and Episode port. Ordinary worlds retain their existing
-Three/Rapier backend. Training content supplies its map, vehicle specifications,
-instance IDs and Three visual roots; the SDK contains no training map catalog.
-
-```ts
-import {createWorld, TrainingCharacter} from '@worldkit/three';
-const character = new TrainingCharacter();
-await character.load(path => resourceUrls[path]); // e.g. humanoid/source/…
-const world = await createWorld({scene, camera, renderer, training: {
-  map,
-  character: {instanceId:'player', object:character.root, animation:character},
-  vehicles: [{instanceId:'rover-a', assetId:'rover', spec:roverSpec, object:roverRoot}],
-}});
-await world.execute({type:'training.approach', instanceId:'rover-a'});
-await world.execute({type:'training.enter', instanceId:'rover-a'});
-await world.start();
-```
-
-`TrainingCharacter` loads the unchanged original skeleton and runtime actions;
-the optional URL resolver supports hash-addressed, relocated resource bundles.
-Asset identity and scene instance identity are separate, including duplicate
-instances of one vehicle asset. Training vehicles use their supplied collision
-envelopes; generic actor registration does not create additional capsule bodies.
-
-The `training` namespace exports reusable content types and input/visual helpers.
-Use `world.training` for preparation, safe approach/enter/exit, map switching,
-camera mode 0/1/2, and profiles. `onVisualUpdate(dt)` updates pure visual descendants
-after the SDK has placed and animated actors. It must not rewrite actor roots,
-physics, the character mixer or camera. Do not install a second frame clock.
-
-Movement profiles use `training.TrainingControl`. Each instance resolves its own
-numeric defaults, and partial edits merge without deriving new braking or speed
-limits from unrelated fields. `exportProfile()` returns the full effective record;
-snapshots expose `training.controls`. Reset, map replacement and Episode starts
-preserve the effective configuration. Save the exported profile with your source
-and apply it during world initialization; browser local overrides alone are not a
-delivery configuration.
-
-```ts
-await world.execute({type:'training.profile',profile:{vehicles:{'rover-a':{
-  speed:20, maxSpeed:30, reverseSpeed:5, accel:8,
-  coastDeceleration:2, brakeDeceleration:18, brakeDamping:4,
-  steeringResponse:10, steeringReturn:16,
-}}}});
-```
-
-For surface vehicles, `speed` is the normal forward cap and `maxSpeed` the boosted
-cap; `reverseSpeed` is independent. Acceleration/coasting/reverse braking use
-m/s²; handbrake damping and steering response/return use 1/s. Aircraft instead
-use `speed` as their cap, `drag` plus `dragQuadratic * speed²` for air resistance,
-`pitchResponse`/`rollResponse` for attitude, and `throttleResponse` (plane) or
-`launchSpeed`/`minimumSpeed` (glider). Submarines expose `verticalAcceleration`,
-release `linearDamping`/`verticalDamping` and powered horizontal `drag` (1/s).
-Spacecraft use `grip` for uncommanded-axis stabilization and `brakeDamping` for
-Shift braking. Mounts/carriages cruise at `speed * .58`, with independent
-`maxSpeed`, `slowSpeed`, `reverseSpeed` and linear braking. Dragons separate
-`groundSpeed` from flying speed and air coasting.
-
-The existing humanoid calibration remains explicit: normal movement is
-`speed * 3.1 / 3.8`, ground acceleration is `accel * 14 / 12`, air acceleration
-is `grip * 5 / 3`, turning is `steer * 8 / 14`. `maxSpeed` (sprint), `slowSpeed`,
-`coastDeceleration` and `jumpSpeed` are independent actual-unit values. Not every
-family consumes every field; the Playground shows family applicability. These
-parameters do not override collision, gravity, traversal or animation execution.
-
-All normal movement keys use SDK Presentation focus and input release. F enters
-or exits, E interacts with character targets, and the source humanoid and vehicle
-bindings remain available through `training`. `setInput(input)` supplies a
-programmatic override and returns a release callback scoped to that override.
-An older callback cannot release a newer UI or model override. Call that callback
-when a demo or touch interaction ends; idle UI must not force-release model input.
-`setInput(undefined)` explicitly clears any current override. `WorldInput.training`
-supplies the same complete input to deterministic SDK/Episode ticks. Action edges
-are consumed once in a multi-tick step.
-
-The closed model command family is `training.prepare`, `training.approach`,
-`training.enter`, `training.exit`, `training.camera`, `training.input`,
-`training.profile` and `training.action`. Requests use normal command identities,
-receipts and revision checks. Running character actions return an operation whose
-terminal status follows actual controller completion or cancellation. These
-commands are direct executions, not nested authoring action/parameter plans.
-Generic navigation, impulse and root-edit commands are unavailable for training
-actors. Preparation and Episode starts may relocate; ordinary motion uses input.
-
-Profiles merge by instance ID and export the complete effective configuration.
-Configuration persists across reset; actor motion, mounting, interaction objects,
-input, animation history and the active map's physics state reset. Character
-controls scale the original physical controller from source defaults (3.1 m/s
-jog, 5.8 m/s sprint), preserving original action timing. `cameraDistanceMeters`
-overrides arm distance; null restores the map/vehicle default.
-
-`world.snapshot().training` records real map, vehicle identity/family, mounting,
-speed, medium, stance and active character action state. Ordinary entity motion
-and animation observations reflect these same actors. Episode capabilities add
-the training families and instance IDs. `EpisodeStart.training` can select a
-vehicle and initialize mounting, camera mode, velocity, pitch, roll, throttle and
-launch state. The top-level start position then names the vehicle origin; facing
-retains the SDK's semantic -Z convention. The entire body and medium are checked
-before initialization, and subsequent frames advance through the same solver.
-
-<!-- topic:character-actions -->
-## Choosing and triggering character actions
-
-Read the current environment asset policy, then search/describe the selected
-character. Asset tools return `characterUsage`: clip count, integration route,
-guide/example topics, and (for the allowed Training kit in SDK tasks) the actual
-SDK skill summaries and key bindings. Clip counts are not counts of executable
-skills. Ordinary ground characters automatically select idle/walk/run/jump/fall
-when those clips are supplied; extra clips alone do not add physical abilities.
-
-<!-- asset-info:humanoid.source-101 -->
-For contextual character movement, select `humanoid.source-101` and read
-`creator_get_examples({topic:'character-actions'})`. This small example loads all
-48 supplied clips with `TrainingCharacter`, has no vehicle dependency, and shows
-commanded rolling plus automatic deep-water swimming. Its short input episode is
-a debugging example, not a complete Creator delivery or all-action acceptance.
-Interactive key bindings below are not the Creator episode key allowlist. The
-example episode uses supported movement keys to enter water; discrete skill
-requests can use the existing schemaVersion 2 episode `commands` contract.
-
-Initialize `createWorld({training:{map,character,vehicles:[]},...})`; this selects
-the Training solver as the world's only physics backend. Do not layer a second
-controller/mixer on an ordinary `addCharacter` world. Scene visuals are authored
-in Three; Training receives actual collision boxes, water and interaction anchors.
-
-| Motion family | Trigger | Required scene/state |
-| --- | --- | --- |
-| Stand, walk, run, jump, fall, landing | Movement/input and actual support state | Ground/collision geometry; animation follows the controller |
-| Swim idle/forward/freestyle | Automatic deep-water contact; N changes style | Declare `map.water`; provide an actual pool bottom and banks, not a ground collider covering the pool |
-| Roll / slide | V / Q or `training.action` | Land, ground support, standing, free hands, no conflicting action/cooldown; slide also requires speed >= 2.5 m/s |
-| Pickup / carry / put down | E / G or `training.action` | `map.interactions` pickup anchor, reachable approach and clear path; <= 8 kg; source's table-height grasp must fit the actual object; placement needs support/clearance |
-| Sit / stand up | E / E or Space; corresponding skill request | Seat interaction and its collider IDs, clear approach; standing up needs headroom |
-| Prone / crawling | Z, then directional input | Clear low capsule route; enough headroom to stand again |
-| Wall / ladder | B to enter/release; directional input; Space to detach | Registered `map.climbSurfaces` bound to actual colliders, valid proximity/orientation and available space |
-| Hurdle / mantle / climb onto a ledge | Direction toward the obstacle + Space | Actual obstacle probe and compatible source motion, clear top/path/headroom; directional request can catch a ledge during approach |
-
-Water contact uses the declared horizontal bounds and a ray against the actual
-supporting collider to measure local depth. Current entry requires depth > 1.28 m
-and feet > 0.95 m below the surface. Remaining in swim uses depth > 1.16 m and
-feet > 0.5 m below the surface to prevent shoreline flicker. The water controller
-applies vertical velocity/buoyancy through collision movement; it does not simply
-teleport the character to the water plane. Shallow water returns to walking.
-The animation owner then selects swim idle or a moving swim clip from actual
-state/speed/style. A blue material alone never enables swimming.
-
-Only `roll`, `slide`, `pickup`, `putDown`, `sit`, `standUp` are discrete
-`training.action` requests. Crouch, prone, climb and swim-style changes use input;
-walk/run/landing and swim transitions are controller state, not invented action
-commands. There is no dedicated put-down clip. Some clips are transition material.
-
-```ts
-// Approach targets with real input before requesting interaction.
-const receipt = await world.execute({
-  type:'training.action',
-  request:{requestId:'pick-parcel-1',action:'pickup',targetId:'parcel'},
-});
-// Inspect receipt. If accepted, poll its operationId using world.operations.get,
-// or world_get_operation from Creator. Do not repeat an unknown request outcome.
-```
-
-Inspect `world.snapshot().training.character` for state, swimming, stance,
-carrying/seated and active action. Runtime eligibility checks are authoritative:
-a clip existing or a request being accepted does not prove action completion.
-Render pickup objects from the shared Training interaction state so a held object
-does not remain duplicated at its initial position. Test real inputs and scene
-conditions in a short playtest before the full recording; preserve rejections.
-
-For debugging, `world.snapshot().training.water` exposes the declared volume
-count, whether the humanoid water controller is active, and a detached copy of its
-latest contact sample. Contact includes water ID, surface/depth in metres,
-submersion ratio, feet below surface, the existing entry/retention thresholds and
-their recorded pass/fail flags. These are observations, not writable parameters
-or an additional physics query. Mounted/traversing characters suppress stale
-contact; a null contact after initialization/reset is not proof that no water
-was declared.
-
-Creator `world_inspect` returns `feedback.water` with a diagnostic code, measured
-evidence and suggested scene checks. `world_playtest` includes the same advisory
-feedback and `feedback.waterTimeline`: the first sampled state plus changes,
-with actual wall time/simulation tick, retaining the latest 128 events and the
-omitted count. Causes include no declaration, no contact, shallow actual support,
-insufficient immersion and active swimming. Check intended geometry and position
-before changing a scene. Feedback never changes validation, swim thresholds,
-playtest status or submission eligibility; old/raw snapshots without these fields
-report unavailable diagnostics rather than guessed state.
-
-Training map/interaction headings use the source's +Z convention, while normal
-SDK entity facing/capture uses -Z. Follow the actual map types and example anchors;
-do not rotate source skeletons or change SDK physics to fit a scene.
-<!-- /asset-info -->
+One world owns one fixed clock, physics backend, controller per actor, animation
+owner and active camera writer. Creator compiles and validates; Episode records.
 
 <!-- topic:getting-started -->
-## Start a world
+## Start with a complete humanoid
+
+Build white/light-gray primitive environment forms with uniform basic lighting.
+Use identifying color for a few landmarks or interaction targets. Preserve broad
+composition, scale, spatial relationships and actual collision/action conditions.
+Keep the supplied humanoid visible; omit extra clothing, accessories, decoration,
+atmospheric effects, reflections and elaborate shadows.
+
+Select `humanoid.source-101` in `project.json` and obtain the `getting-started`
+example from Creator. Author the visible scene in Three; `map` supplies the actual
+collision geometry and action anchors.
 
 ```ts
-const world = await createWorld({scene, camera, canvas});
-world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
-const hero = await world.assets.load('humanoid.preset-101');
-world.addCharacter({id:'hero', asset:hero});
-world.setControlledEntity('hero');
-world.setCameraFollow(); // continue the camera composition already authored above
-world.setCaptureTargets(['hero','tower']); // register tower first
+import {createHumanoidWorld} from '@worldkit/three';
+const world = await createHumanoidWorld({scene, camera, canvas, map});
+world.setCaptureTargets(['player']);
 await world.start();
 ```
 
-Asset IDs must be selected in project.json. `createWorld` reads the Host-provided
-same-origin './asset-definitions.json'. Humanoid leads use the configured default
-catalog asset above. Clothes, colors and headwear may customize visual descendants
-while retaining its rig and SDK animation ownership. Other characters remain
-available for scenes that need them. `addCharacter({id,object,body})` accepts custom
-subjects but supplies no automatic limb animation; prefer proven humanoid motions.
+The helper loads the selected resource bundle, binds the full humanoid controller,
+and returns a `ThreeWorld`. Options include `characterId` (default `player`),
+`vehicles`, `profile`, explicit `assetDefinitions`, a `resourceUrl(logicalPath)`
+resolver, or a supplied `TrainingCharacter`. The world owns the supplied
+character's lifecycle. `map` follows `TrainingMap`; inspect the actual schema or
+example before authoring it. Contextual actions need the geometry described in
+`character-actions`.
 
-An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
-Create `world.createPresentation()` for game UI and future model-video display.
-HUD, menus and prompt controls belong in its independent HTML layer; read the
-`presentation` schema topic for mounting, bindings and clean world capture.
+For a self-drawn subject, bind its visual root directly:
 
-Terrain/obstacle default to fixed collision; decoration has no collision. Use
-kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
-Register small visual stones as decoration when they should not impede walking.
+```ts
+import {createWorld} from '@worldkit/three';
+const world = await createWorld({scene, camera, canvas});
+world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
+world.addCharacter({id:'fox', object:foxMesh,
+  body:{heightMeters:1, radiusMeters:.3},
+  movement:{kind:'ground', walkSpeedMetersPerSecond:2, runSpeedMetersPerSecond:5}});
+world.setControlledEntity('fox');
+world.setCameraFollow();
+await world.start();
+```
 
-With no orbit overrides, `setCameraFollow()` preserves the current camera pose,
-FOV and framing, then smoothly follows the controlled entity's translation.
-It does not automatically move closer or center the subject. Orbit/zoom input
-persists; `followHalfLifeSeconds` controls translation smoothing (default .08).
-The controlled entity is followed by default; `targetEntityId` selects another.
-Explicit distance/pitch/target-height values retain the legacy target framing;
-use them only for an intentional camera transition. `framingMode:'preserve-opening'`
-can select inherited framing explicitly (without distance/pitch overrides).
-The camera stays at the authored first-frame pose until input. WASD moves, arrows/drag rotate camera, Shift runs,
-Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
-collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
+Geometry is unrestricted. A custom root receives collision and movement, but no
+invented limb animation; skeletal clips require a compatible rig. Pure visual
+children may animate using the SDK update callback. For vehicles, pass a
+`TrainingVehicleInstance` with its own `object` and `spec` to `createHumanoidWorld`.
+Choose the controller family and collision envelope for the shape you created.
 
-The shared collision solver uses the registered character body, retracts away
-from real solids, and limits recovery with `maximumRecoveryMetersPerSecond`
-(default 3) and `recoveryHalfLifeSeconds` (default .18 for preserved opening,
-.24 for target framing). Target framing additionally
-compensates orientation to maintain the subject's angular position during
-retraction. Preserved opening framing retains the authored orientation and roll.
-`targetHalfLifeSeconds` controls target-framing translation damping (default .1);
-an explicit value also remains supported for preserved framing when
-`followHalfLifeSeconds` is omitted. Either damping value may be zero.
-Physical clearance may require immediate movement. Camera snapshots expose the
-collision pivot, arm length, obstruction, phase and transition progress.
-`useAuthoredCamera()` explicitly returns camera control for a cutscene;
-`setCameraFollow()` takes it back from the current pose.
-
-`start()` awaits preparation and publishes `window.__WORLDKIT_EVAL__` automatically.
-Use `stop()` to pause and `await reset()` to restore the baseline. Do not call the
-old expose/render/step methods or create another simulation timer. Query actual
-motion/animation through `getEntityState(id)` and camera state through `snapshot()`.
-
-Ground locomotion keeps its animation across brief small-step departures and
-single-tick contact-speed fluctuations. Fall presentation requires sustained
-airtime and meaningful descent, with a bounded timeout for unsupported actors.
-An accepted jump still starts immediately. This presentation grace does not
-change physical `motion.isGrounded`, gravity, collision or jump eligibility.
-Episode relocation, teleport and reset discard the affected locomotion history;
-Episode input, camera relocation and the single fixed clock retain their behavior.
-Automatic walk/run playback removes a common positive first-key timestamp from
-its private loop copy and preserves normalized gait phase during direct walk/run
-transitions. Raw asset clips and explicit/manual playback keep their authored
-timing. Idle, jumping and reset do not inherit the previous gait phase.
+An SDK-owned renderer sizes to the stage and follows resizing; a supplied renderer
+keeps its sizing policy. Create HTML HUD through `world.createPresentation()`.
+`start()` prepares resources and publishes `window.__WORLDKIT_EVAL__`; `stop()`
+pauses, `reset()` restores the baseline, and `dispose()` releases resources.
+Do not install an additional simulation timer or mixer.
 
 <!-- topic:assets -->
-## Verified assets and lifetime
+## Select, load and reuse assets
 
-Use Creator assets_search/assets_describe, then select IDs in
-`project.json: {schemaVersion:1,assetIds:[...]}`. The compiler copies verified GLBs
-and public metadata to the playable. `world.assets.search(query)` describes the
-packaged selection; `world.assets.load(assetId)` creates an independent instance.
-The SDK initializes available idle pose and owns animation after addCharacter.
-No manual AnimationMixer/update(0), hash entry, retargeting or private file path is
-needed. An actionId in an asset is an animation, not a physical movement ability.
+Use `assets_search` / `assets_describe`, then select IDs in
+`project.json: {schemaVersion:1,assetIds:['humanoid.source-101']}`. The compiler
+packages verified resources. `world.assets.search(query)` describes that selection;
+`world.assets.load(id)` creates an independent instance for ordinary
+`world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
+`createHumanoidWorld`; playback of a named clip alone does not add an ability.
 
-For humanoid leads, read `assetPolicy.defaultHumanoidAssetId` from the Creator
-environment and pass the loaded `asset` to `addCharacter`. Asset search and exact
-descriptions expose only the allowed task catalog. Other assets and custom
-characters remain supported according to that task's policy.
+Default human characters to the supplied visible model, skeleton and motions;
+omit added clothing, accessories and decorative visual children. Reuse other
+supplied subjects when suitable. When none fits, draw simple Mesh/Group geometry
+and bind its abilities. The catalog supports reuse without restricting Three
+geometry; custom subjects and compatible external assets follow the task's
+effective asset policy.
 
-<!-- asset-info:humanoid.preset-101 -->
-`humanoid.preset-101` uses the Playground's original 101-bone model with
-supplied idle/walk/run/jump/fall clips through ordinary `ground.standard` movement.
-Landing returns to idle/walk/run. Clothing and color changes can retain the preset
-body and rig.
-<!-- /asset-info -->
-<!-- asset-info:humanoid.source-101 -->
-The Training Playground body with all 48 contextual actions is available as
-`humanoid.source-101` through `TrainingCharacter`; read the `training` schema and
-`independent-world` example for traversal, swimming and interactions. Those
-abilities also require supported scene geometry/targets. An animation does not
-create their physics.
-<!-- /asset-info -->
-Existing worlds keep their original asset identity; current task permissions do
-not retroactively rewrite historical deliveries.
-
-The actor's default local front is **-Z**, up is **+Y**, and limbs usually extend
-down **-Y**. In that frame a knee flexes backward with **negative X** rotation;
-an elbow flexes forward with **positive X** rotation. A +Z-facing animation recipe
-cannot be copied unchanged. For a differently oriented rig, derive directions
-from its actual bind pose. Inspect walk/run from the side, checking knees, elbows,
-foot contact, facing and speed; also test jumping, landing and reset. A technical
-playtest pass does not assess anatomical motion.
-
-For asynchronous changes in a running world:
+An instance belongs to one live character. For asynchronous changes:
 
 ```ts
 await world.runTask(async scope => {
-  const asset = await scope.assets.load('humanoid.preset-101');
+  const asset = await scope.assets.load('humanoid.source-101');
   scope.addCharacter({id:'guide',asset});
 });
 ```
 
-A reset/dispose invalidates the scope. Use its assets/register/execute/setState
-methods after await; do not allow an old Promise to mutate a new world epoch.
-Loading again creates another instance; one AssetInstance cannot drive two live
-characters. Body recommendations and locomotion bindings come from verified
-metadata. If missing, author an explicit body or report the limitation.
+Reset/dispose invalidates the scope. Use its methods after `await` so an earlier
+load cannot mutate a different world epoch. Asset metadata supplies locomotion
+bindings and body recommendations; otherwise specify the body explicitly.
 
-`await world.registerPrototype({id,description,template:{kind:'character',
-options:{asset}}})` prepares a reusable template; options has no instance ID.
-Spawn through entity.spawn. entity.attach supports a nonphysical child subtree,
-with positionLocalMetersXYZ; physical grabbing/riding is a separate capability.
+The ordinary SDK semantic front is **-Z**, up **+Y**. The contextual humanoid map
+and interaction headings use **+Z**. Follow each contract's coordinates; do not
+rotate the source skeleton to compensate. Check rendered knees, elbows, facing,
+foot contact, speed, jump and landing after changing a rig or motion binding.
+
+<!-- topic:character-actions -->
+## Humanoid action cards
+
+<!-- asset-info:humanoid.source-101 -->
+`humanoid.source-101` supplies 48 animation clips. Six skills accept discrete
+`training.action` requests; posture and surface changes use `training.input`;
+locomotion and transitions follow actual controller state. `characterUsage` in
+asset tools exposes capabilities and controls. `world.training.characterCapabilities()`
+returns live cards with `eligible`,
+`reason`, `message`, `targetId`, requirements, scene conditions, parameters,
+completion and source module. `snapshot().training.characterCapabilities` gives
+compact live availability. `snapshot().training.interactionTargets` exposes
+approach positions, facing and per-target eligibility. Use the `character-actions`
+example and inspect runtime state before requesting an action.
+
+| Ability | Trigger | Character and scene requirements / result |
+| --- | --- | --- |
+| Walk, run, jump, land | WASD, Shift, Space | Real supporting collision. Start/stop/turn/fall/landing clips follow motion automatically. |
+| Crouch | C or Ctrl | Enter low stance; standing requires headroom. |
+| Roll | Q; `roll` | Grounded, standing, empty hands, no conflicting action, cooldown clear. Collision can stop displacement. |
+| Slide | Shift + new C/Ctrl press; `slide` | Grounded, standing, empty hands, free action/cooldown, speed ≥2.5 m/s. See the complete card below. |
+| Pickup and carry | E; `pickup` with `targetId` | Pickup anchor, clear approach/path, empty hands, supported ground, object ≤8 kg; grasp position must fit the supplied table-height pickup. |
+| Put down | G; `putDown` | Carrying, supported ground and a valid clear placement on a supporting surface. No dedicated put-down clip. |
+| Sit / stand | E; `sit` / `standUp`; Space to stand | Seat anchor and its collider IDs, clear approach; standing requires headroom. |
+| Prone and crawl | Z, then WASD | Space for the low capsule and a clear route. Standing requires headroom. |
+| Wall / ladder | E to attach, WASD to climb, Space to attempt top, C/Ctrl to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
+| Hurdle / mantle / high climb | Move toward obstacle + Space | Real obstacle probe, supported height/path/top and adequate headroom; controller chooses the applicable traversal. |
+| Swim | Automatic deep-water contact; style through action menu/input | `map.water` plus actual pool bottom/banks. Deep immersion enables swimming; shallow support returns to walking. |
+
+**Slide `slide`** — useful on open ground or through a low opening. A tunnel is
+not required to start. The user holds Shift while moving and newly presses C or
+Ctrl; pressing crouch during ordinary movement keeps the crouch intent. The Agent
+can directly request `slide`, after accelerating to at least 2.5 m/s. Provide
+run-up distance and actual colliders for a low opening. The character gradually
+lowers its capsule to approximately 0.9 m; collision limits actual travel. At
+exit it stands only if the 1.68 m standing capsule fits; otherwise it remains low
+until it can move clear. Check the approach, lowest clearance and exit with real
+input. Failure such as insufficient speed, occupied hands, cooldown or blocked
+standing space must remain visible to the Agent. Runtime tuning and eligibility
+are authoritative; see `ACTION_TUNING` and the character action module.
+
+**Interactions** — `map.interactions` supplies stable `id`, `kind`, object
+`position`, free `approach`, `yaw`, size/mass and target `colliderIds`. Reach the
+approach within 0.9 m and its vertical tolerance before requesting pickup/sit.
+These commands do not navigate. Render the movable object from the shared
+interaction state so it follows the hand and does not remain duplicated.
+
+**Water** — declare volume bounds and surface height, with a real lower floor.
+A ground collider extending over the pool makes it shallow regardless of the
+visible water. Entry currently requires measured depth >1.28 m and feet >0.95 m
+below the surface; retention uses depth >1.16 m and feet >0.5 m below the surface.
+`world.snapshot().training.water` and Creator `feedback.water` report the actual
+contact and threshold decisions. `feedback.waterTimeline` records state changes
+in a playtest. These diagnostics do not modify the controller or validation.
+
+**Clip availability** — `prone-backward`, `prone-left`, `prone-right` and
+`climb-ledge` are loaded material without a dedicated current controller
+selection. Crawling turns and uses forward crawl; the wall-top transition uses
+traversal. Do not advertise four additional executable skills from these files.
+
+```ts
+const receipt = await world.execute({type:'training.action', request:{
+  requestId:'pickup-parcel-1', action:'pickup', targetId:'parcel',
+}});
+if (receipt.status === 'accepted') {
+  const result = await world.operations.wait(receipt.operationId);
+  // Check terminal status and the resulting carrying/seated/action state.
+}
+```
+
+`accepted` means execution started. Check `operations.get`/`wait` and
+`world.snapshot().training.character` for completion, rejection or cancellation.
+Creator uses `world_get_operation`; polling never resubmits the action. Discrete
+requests are exactly `roll`, `slide`, `pickup`, `putDown`, `sit`, `standUp`.
+Crouch, prone, climb and swim-style changes are humanoid input fields.
+<!-- /asset-info -->
+
+<!-- topic:training -->
+## Bind scene, controls and parameters
+
+`createHumanoidWorld` uses the Training backend through `createWorld({training})`.
+It is the world's single solver, driven by the SDK 60 Hz clock and shared by
+Presentation and Episode. Author a `TrainingMap` with collision `boxes`, optional
+`interactions`, `climbSurfaces`, water bounds, player spawn and scene bounds.
+Scene geometry renders that same geometry; a visual surface is not a collider.
+
+For explicit composition, create a `TrainingCharacter`, `await character.load`
+with a resource resolver, then pass
+`training:{map,character:{instanceId,object:character.root,animation:character},vehicles}`
+to `createWorld`. Vehicle instance IDs differ from asset IDs; multiple instances
+can reuse one visual asset and spec. `onVisualUpdate(dt)` updates visual
+children after the SDK places actors, without writing roots, mixer or camera.
+
+| Default input | Meaning |
+| --- | --- |
+| WASD | Movement; climbing directions |
+| Mouse drag / arrows | Camera; vehicle-specific attitude axes |
+| Shift held | Sprint / acceleration |
+| Space | Jump / traverse / stand; climbing top attempt |
+| C or Ctrl | Crouch / stand; release climbing |
+| Shift + C/Ctrl | Slide after run-up |
+| Z | Prone / stand |
+| Q | Roll |
+| E | Focused interaction / climb attachment |
+| G | Put down |
+| F | Enter / exit vehicle or mount |
+
+Transition clips need no key. Swimming style is a secondary menu/input choice.
+HUD hints and recording admission derive from `training.INPUT_BINDINGS`.
+`world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
+roll:['KeyR']})` rebinds semantic actions and rejects duplicate/invalid codes.
+`training.controlHints(bindings)` formats current labels. Esc belongs to the
+application menu; reset is an explicit menu/button action. Use semantic
+inputs/commands for Agent actions; key remapping need not change a plan.
+Presentation UI focus releases held gameplay keys. Programmatic
+`world.training.setInput(input)` returns a release callback scoped to that
+override; release it when the interaction ends. `setInput(undefined)` clears the
+active override. `WorldInput.training` uses the same input in deterministic ticks;
+action edges execute once in a multi-tick step.
+
+`world.training` provides prepare, approach/enter/exit, map switching, camera
+modes and profile methods. These preparation helpers may relocate; normal
+movement uses real input. Generic navigation, impulse and root-edit commands are
+unavailable for contextual actors. Commands are `training.prepare`,
+`training.approach`, `training.enter`, `training.exit`, `training.camera`,
+`training.input`, `training.profile` and `training.action`.
+
+```ts
+await world.execute({type:'training.profile',profile:{character:{
+  maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
+}}});
+const effective = world.training!.exportProfile();
+```
+
+Profiles merge by instance ID, export full effective values and persist across
+reset/map/Episode initialization. Save the effective configuration in the project
+and apply it during initialization. Browser-local tuning alone is not delivery
+configuration. Humanoid normal movement is `speed * 3.1 / 3.8`; acceleration is
+`accel * 14 / 12`; air acceleration is `grip * 5 / 3`; turning is `steer * 8 / 14`.
+`maxSpeed`, `slowSpeed`, `coastDeceleration` and `jumpSpeed` are independent actual
+unit values. Speeds are m/s; acceleration/braking is m/s²; damping/response is 1/s.
+Vehicle profile applicability depends on controller family; inspect the selected
+spec. Parameters do not replace collision, traversal or animation execution.
+
+`world.snapshot().training` exposes real character state, vehicle instance/family,
+mounting, medium, speed, actions and effective controls. Reset clears movement,
+held input, actions, object attachments and animation history. Episode uses the
+same solver; its start may initialize a validated position/mount state and all
+following actions must execute through actual input.
 
 <!-- topic:control -->
 ## One state for gameplay and text commands
@@ -387,7 +303,31 @@ loop playback requires stop-action. set-visible only affects rendering; despawn
 removes the entity/collision/tasks. Capability rejection is not SDK success.
 
 <!-- topic:extensions -->
-## Small authored extensions
+## Configure or implement a behavior
+
+For a custom subject, `registerMovement` supplies an intent callback and
+`addCharacter({object,body,movement:{kind:'custom',movementId}})` binds it.
+Parameter/action APIs are useful for reusable game behavior, not prerequisites
+for drawing a scene.
+
+For runtime changes, call Creator `creator_materialize_runtime({})`, edit the
+project's `sdk/` sources, and run `world_validate` to rebuild. Module entry points:
+
+| Behavior | Source |
+| --- | --- |
+| Default humanoid setup | [humanoid.ts](src/humanoid.ts) |
+| Bindings and input | [training/input.ts](src/training/input.ts) |
+| Capability cards and action limits | [character-capabilities.ts](src/training/character-capabilities.ts) · [action-schema.ts](src/training/humanoid/action-schema.ts) |
+| Roll, slide, pickup and sitting | [action-system.ts](src/training/humanoid/action-system.ts) |
+| Crawling and wall/ladder movement | [surface-actions.ts](src/training/humanoid/surface-actions.ts) |
+| Map and anchor contracts | [environment/types.ts](src/training/environment/types.ts) |
+| World integration and profiles | [training/runtime.ts](src/training/runtime.ts) |
+| Generic actor and command contracts | [contracts.ts](src/contracts.ts) |
+
+Modify the existing owner, retain its callers/lifecycle, and verify both browser
+play and Episode capture. The resulting runtime source and bytes travel with the
+delivery. Scene code does not install a second physics, animation or camera loop.
+
 
 Movement returns intent; the SDK still performs the actual KCC collision step:
 
@@ -499,7 +439,7 @@ These interfaces do not implement a remote model service or signaling. The
 application can obtain the same active port from the SDK's existing
 `window.__WORLDKIT_EVAL__.presentation` (also available on `__WORLDKIT_CREATOR__`);
 the getter follows presentation disposal/recreation, so reacquire it when needed.
-Raw/legacy worlds may not expose a presentation.
+Worlds without this port may not expose a presentation.
 
 The source world keeps running behind model output. Menus and prompt input use
 `clock:'live'`; gameplay HUD uses `clock:'presented'` (the default). With model
@@ -516,8 +456,7 @@ camera. This is not scene-occlusion testing or tracking of generated geometry:
 the model may change where an object appears. Keep UI requiring exact output
 tracking disabled until the model service provides that capability.
 
-Reset invalidates source keys/history and returns to the world view; discard old
-model responses. `output.showWorld()` switches back explicitly. Dispose releases
+Reset invalidates source keys/history and returns to the world view; discard responses from an invalidated epoch. `output.showWorld()` switches back explicitly. Dispose releases
 owned UI/listeners and input capture tracks, restores mounted elements, and
 detaches external output streams without stopping their caller-owned tracks.
 
@@ -539,15 +478,16 @@ then apply the object's complete world quaternion, including parent rotation.
 Right is front cross up. The Host captures real rendered front/right/back images.
 It does not substitute a display clone or fabricate hidden geometry.
 
-Creator `world_preview` with `view:'current'` shows the full page for Agent/UI
-inspection. Opening and three-view captures read the pure world canvas. Model
-input must use that pure canvas or `presentation.modelInput`, never a whole-page
+Creator `world_preview` supports opening, top-down and entity-triview captures
+from the pure world canvas. Model input must use that pure canvas or
+`presentation.modelInput`, never a whole-page
 screenshot, presentation container or model output. Keep derived reference and
 three-view conditioning images free of baked-in HUD; preserve original inputs.
 
 Read the real exports from contracts.ts using the Creator schema tool by topic.
-Types describe the API; browser validation is still required for first-frame
-fidelity, route support, continuous input, physical changes and 3–5 minute play.
+Types describe the API; use a complete real input plan to check broad opening
+composition, connected routes and the requested core movement/actions and their
+physical results. Choose the recording length by functional coverage.
 
 <!-- topic:mounted-interaction -->
 <!-- asset-info:training.horse,humanoid.source-101 -->

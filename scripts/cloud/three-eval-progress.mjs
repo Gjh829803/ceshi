@@ -7,10 +7,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {THREE_TOOLS} from './three-eval-runtime.mjs';
 
-export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
-const toolStages = {creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
+export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行','awaiting-agent':'请求已提交 · 等待 Agent 启动',starting:'启动 Agent',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
+const toolStages = {creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',creator_materialize_runtime:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
 const operationStages = {'world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
-const toolLabels = {creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
+const toolLabels = {creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',creator_materialize_runtime:'准备作品运行时源码',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
 const phaseSet = new Set(['not-started','submitted','queued','running','delivery-pending','delivered','failed','cancelled','stopped','stop-pending','remote-pending','submission-unknown','admission-blocked']);
 const statusSet = new Set(['queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
 const operationStatusSet = new Set(['queued','running','succeeded','failed','cancelled']);
@@ -126,8 +126,8 @@ function playtestAdequacy(type,summary) {
   if(type!=='world.playtest')return null;
   if(summary?.isCompleteEpisode===false)return 'short-test';
   const times=[summary?.activePlaySeconds,summary?.inputWallSeconds,summary?.actualWallSeconds,summary?.videoMetadata?.durationSeconds];
-  if(times.some(value=>numeric(value)!==null&&value<180))return 'duration-insufficient';
-  return summary?.isCompleteEpisode===true&&summary?.capturedInput===true&&times.every(value=>numeric(value)!==null&&value>=180) ? 'complete' : 'unverified';
+  if(times.some(value=>numeric(value)===0))return 'invalid-recording';
+  return summary?.isCompleteEpisode===true&&summary?.capturedInput===true&&times.every(value=>numeric(value)!==null&&value>0) ? 'complete' : 'unverified';
 }
 function cleanOperation(value) {
   if (!isObject(value) || !Object.hasOwn(operationStages,value.type) || !operationStatusSet.has(value.status)) return null;
@@ -198,8 +198,8 @@ function operationEvent(jobId, operation) {
   let detail=operation.failure?.message;
   if(operation.executionStatus==='succeeded') {
     if(operation.resultStatus==='failed')detail='调用已完成，检查结果失败。';
-    else if(operation.playtestAdequacy==='short-test')detail='调用已完成，仅完成短测，未完成整段自测。';
-    else if(operation.playtestAdequacy==='duration-insufficient')detail='调用已完成，自测时长不足 180 秒。';
+    else if(operation.playtestAdequacy==='short-test')detail='调用已完成，仅执行调试片段，未完成动作计划。';
+    else if(operation.playtestAdequacy==='invalid-recording')detail='调用已完成，缺少有效操作或录像时间。';
     else if(operation.resultStatus==='passed'&&operation.playtestAdequacy==='unverified')detail='调用已完成，完整自测证据尚不足。';
     else if(operation.resultStatus==='passed')detail='检查结果通过。';
     else detail='工具调用已完成，检查结果尚未确认。';
@@ -222,23 +222,52 @@ function counterState(job, item) {
   const queued = itemStatus === 'queued' || itemStatus === 'pending' || counters.queued>0 && !(counters.running>0);
   return {itemStatus,counters,queued};
 }
+function admittedWorkspace(workspace,jobId,taskId) {
+  if(typeof workspace!=='string' || !jobPattern.test(jobId??''))return false;
+  const base=`/fsx/pipeline/lwdp_generation/${jobId}/tasks/`;
+  if(workspace===base+taskId)return true;
+  const prefix=base+'account_attempts/'+taskId+'_',suffix='/'+taskId;
+  return workspace.startsWith(prefix) && workspace.endsWith(suffix) && /^[A-Za-z0-9_-]{4,64}$/.test(workspace.slice(prefix.length,-suffix.length));
+}
+async function verifyRetrievedWorkspace(caseRoot,workspace,identity,jobId) {
+  const [attempt,receipt]=await Promise.all(['codex-attempt.json','provider-attempt-diagnostic-retrieval.json'].map(name=>readJson(path.join(caseRoot,name))));
+  if(attempt?.item_id!==identity.taskId || attempt?.workdir!==workspace || receipt?.kind!=='owned-provider-attempt-diagnostic-retrieval' || receipt?.schemaVersion!==1 || receipt?.workspace!==workspace)fail('IDENTITY_MISMATCH');
+  checkIdentity(receipt,{...identity,jobId},['jobId','taskId','requestId','runtimeHash']);
+  for(const name of ['creator-launcher-report.json','creator-events.jsonl']) {
+    const records=Array.isArray(receipt.files) ? receipt.files.filter(file=>file?.name===name) : [];
+    const record=records[0];
+    if(records.length!==1 || record.path!==workspace+'/outputs/'+name || !hashPattern.test(record.sha256??'') || !Number.isSafeInteger(record.bytes))fail('IDENTITY_MISMATCH');
+    const handle=await openedFile(path.join(caseRoot,name),name.endsWith('.jsonl')?MAX_EVENT_BYTES:MAX_JSON_BYTES,false);
+    try {
+      const bytes=await handle.readFile();
+      if(bytes.length!==record.bytes || createHash('sha256').update(bytes).digest('hex')!==record.sha256)fail('IDENTITY_MISMATCH');
+    } finally {await handle.close();}
+  }
+}
 async function loadAttempt(runRoot, plan, task, live, now) {
   const caseRoot = path.join(runRoot,task.taskId);
-  const [state,intent,config,localLauncher,job,items] = await Promise.all(['state.json','submission-intent.json','config-echo.json','creator-launcher-report.json','job-final.json','items.json'].map(name=>readJson(path.join(caseRoot,name))));
+  const [state,intent,config,localLauncher,job,items,caseInput] = await Promise.all(['state.json','submission-intent.json','config-echo.json','creator-launcher-report.json','job-final.json','items.json','case-input.json'].map(name=>readJson(path.join(caseRoot,name))));
   const identity = {runId:plan.runId,taskId:task.taskId,caseId:task.caseId,requestId:task.requestId,caseHash:task.caseHash,runtimeHash:plan.runtimeHash,profile:task.profile};
+  if (caseInput) {
+    checkIdentity(caseInput,identity,['taskId','caseId','runtimeHash','profile']);
+    if(caseInput.kind!=='three-creator-case-input' || caseInput.schemaVersion!==1 || createHash('sha256').update(JSON.stringify(caseInput)).digest('hex')!==task.caseHash)fail('IDENTITY_MISMATCH');
+  }
   if (state) checkIdentity(state,identity,['taskId','caseId','requestId','caseHash','runtimeHash','profile']);
   if (intent) checkIdentity(intent,identity,['requestId']);
   if (live) checkIdentity(live,identity,['runId','taskId','caseId','requestId','caseHash','runtimeHash']);
   const jobId = state?.jobId ?? live?.jobId ?? null;
   if (jobId !== null && !jobPattern.test(jobId)) fail('IDENTITY_MISMATCH');
   if (live && live.jobId !== jobId) fail('IDENTITY_MISMATCH');
+  if(live?.resolvedWorkspace!==undefined && !admittedWorkspace(live.resolvedWorkspace,jobId,task.taskId))fail('IDENTITY_MISMATCH');
   if (config) {
     if (config.job_id !== jobId || config.config?.request_id !== task.requestId) fail('IDENTITY_MISMATCH');
   }
   if (job && ((job.job_id ?? job.id) !== jobId || job.request_id !== task.requestId)) fail('IDENTITY_MISMATCH');
   if (localLauncher) {
     checkIdentity(localLauncher,identity,['taskId','caseId','profile','runtimeHash']);
-    if(localLauncher.kind!=='three-creator-launcher-report' || localLauncher.workspace!==`/fsx/pipeline/lwdp_generation/${jobId}/tasks/${task.taskId}`)fail('IDENTITY_MISMATCH');
+    if(localLauncher.kind!=='three-creator-launcher-report' || !admittedWorkspace(localLauncher.workspace,jobId,task.taskId))fail('IDENTITY_MISMATCH');
+    if(live?.resolvedWorkspace!==undefined && live.resolvedWorkspace!==localLauncher.workspace)fail('IDENTITY_MISMATCH');
+    if(localLauncher.workspace!==`/fsx/pipeline/lwdp_generation/${jobId}/tasks/${task.taskId}` && live?.resolvedWorkspace!==localLauncher.workspace)await verifyRetrievedWorkspace(caseRoot,localLauncher.workspace,identity,jobId);
   }
   const launcher = localLauncher ?? live?.launcher;
   if (launcher?.runtimeHash && launcher.runtimeHash !== plan.runtimeHash) fail('IDENTITY_MISMATCH');
@@ -257,12 +286,13 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   const providerStatus = statusSet.has(state?.providerStatus) ? state.providerStatus : statusSet.has(job?.status) ? job.status : statusSet.has(live?.providerStatus) ? live.providerStatus : null;
   const hostPhase = phaseSet.has(state?.phase) ? state.phase : phaseSet.has(live?.phase) ? live.phase : 'not-started';
   const cliStarted = summary.cliActivityObserved || ['running','delivered'].includes(launcher?.status) || Number.isInteger(launcher?.childExitCode);
+  const submissionConfirmed = Boolean(jobId || ['submitted','queued','running','delivery-pending','delivered'].includes(hostPhase));
   const submittedAt = date(state?.submittedAt ?? intent?.createdAt ?? live?.submittedAt);
   const startedAt = cliStarted ? date(launcher?.startedAt) : null;
   const recordedFinishedAt = date(launcher?.finishedAt ?? item?.completed_at ?? item?.finished_at ?? job?.completed_at ?? job?.finished_at);
   const lastObservedAt = latestDate([live?.observedAt,state?.lastObservedAt,state?.updatedAt,job?.updated_at]);
   const events = [];
-  if (submittedAt) events.push({id:eventId(jobId ?? task.requestId,'submitted'),at:submittedAt,type:'submitted',stage:'unknown',label:'请求已提交',status:'succeeded'});
+  if (submittedAt && submissionConfirmed) events.push({id:eventId(jobId ?? task.requestId,'submitted'),at:submittedAt,type:'submitted',stage:'unknown',label:'请求已提交',status:'succeeded'});
   if (cliStarted) events.push({id:eventId(jobId,'started'),at:startedAt,type:'agent-started',stage:'starting',label:'Agent 已开始执行',status:'succeeded'});
   events.push(...summary.events);
   if (live) events.push(...summary.operations.map(operation=>operationEvent(jobId,operation)));
@@ -274,8 +304,9 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   else if (hostPhase === 'failed' || launcher?.status === 'failed' || ['failed','submit_failed'].includes(api.itemStatus)) { stage='failed'; phase='failed'; }
   else if (['cancelled','stopped','stop-pending'].includes(hostPhase)) { stage='unknown'; }
   else if (cliStarted) { phase='running'; stage=hostPhase === 'delivery-pending' || launcher?.status==='delivered' ? 'packaging' : summary.latestStage ?? toolStages[summary.latestTool?.name] ?? (operation ? operationStages[operation.type] : undefined) ?? 'starting'; }
+  else if (submissionConfirmed || launcher?.status === 'starting') { stage='awaiting-agent'; phase='starting'; }
   else if (api.queued || providerStatus === 'queued' || providerStatus === 'pending') { stage='queued'; phase='queued'; }
-  else if (launcher?.status === 'starting') { stage='starting'; phase='running'; }
+  else if (hostPhase === 'not-started') { stage='queued'; phase='queued'; }
   const terminal = ['failed','delivered','cancelled','stopped'].includes(phase);
   const completedAt = terminal ? recordedFinishedAt : null;
   const terminalFailure = phase==='failed' ? publicFailure([state?.failure?.message,launcher?.error,item?.error,job?.error,...summary.failureValues]) : undefined;
@@ -291,11 +322,14 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   if (terminal) events.push({id:eventId(jobId,phase),at:completedAt,type:'attempt-finished',stage:phase==='delivered'?'delivered':phase==='failed'?'failed':'unknown',label:phase==='delivered' ? '技术交付已通过 Host 检查' : phase==='failed' ? '本次尝试失败' : '本次尝试已停止',status:phase==='delivered' ? 'succeeded' : phase==='failed' ? 'failed' : 'cancelled',...(failure ? {detail:failure.message,code:failure.code} : {})});
   const counts = Object.fromEntries(Object.entries(summary.counts).sort(([a],[b])=>a.localeCompare(b)));
   const end = completedAt ?? (!terminal ? now : null);
-  phase = ['running','queued','failed','delivered'].includes(phase) ? phase : 'unknown';
+  phase = ['running','starting','queued','failed','delivered','cancelled','stopped','stop-pending'].includes(phase) ? phase : 'unknown';
   const awaitingToolResult=phase==='running'&&summary.awaitingToolResult;
+  const configurationSource = caseInput ? 'frozen-case-input' : config ? 'provider-config-echo' : state?.model || state?.reasoningEffort ? 'host-state' : null;
+  const model = safeModel(caseInput?.model ?? config?.config?.options?.model ?? state?.model);
+  const effort = safeEffort(caseInput?.reasoningEffort ?? config?.config?.options?.reasoning_effort ?? state?.reasoningEffort);
   return {runId:plan.runId,taskId:task.taskId,jobId,phase,hostPhase,stage,stageLabel:awaitingToolResult?'等待工具返回':THREE_PROGRESS_STAGE_LABELS[stage],awaitingToolResult,submittedAt,startedAt,completedAt,lastObservedAt,
-    elapsedSeconds:seconds(submittedAt,end),queueSeconds:startedAt ? seconds(submittedAt,startedAt) : phase==='queued' ? seconds(submittedAt,lastObservedAt) : null,
-    model:safeModel(config?.config?.options?.model ?? state?.model),effort:safeEffort(config?.config?.options?.reasoning_effort ?? state?.reasoningEffort),providerStatus,itemStatus:api.itemStatus,providerCounters:api.counters,
+    elapsedSeconds:seconds(submittedAt,end),queueSeconds:startedAt ? seconds(submittedAt,startedAt) : ['queued','starting'].includes(phase) ? seconds(submittedAt,lastObservedAt) : null,
+    model,effort,configuration:{kind:'requested',source:configurationSource,model,effort},providerStatus,itemStatus:api.itemStatus,providerCounters:api.counters,
     cliActivityObserved:cliStarted,providerQueueIsStale:cliStarted && api.queued,
     ...(failure ? {failure} : {}),failureFacts,toolSummary:{counts,imageResponses:summary.imageResponses,latestTool:summary.latestTool?.name ?? null,...(operation ? {latestOperation:{type:operation.type,status:operation.status,executionStatus:operation.executionStatus,resultStatus:operation.resultStatus,...(operation.resultSummary ? {resultSummary:operation.resultSummary} : {}),...(operation.playtestAdequacy ? {playtestAdequacy:operation.playtestAdequacy} : {}),createdAt:operation.createdAt,updatedAt:operation.updatedAt,...(operation.progress ? {progress:operation.progress} : {})}} : {})},events:orderedEvents(events)};
 }
@@ -331,7 +365,27 @@ export async function buildThreeRunProgress({runRoot,attemptRunRoots=[],liveStat
   }
   for(const run of runs.slice(1))if(run.plan.selectedTaskIds.some(id=>!selected.has(id)))fail('RETRY_IDENTITY_MISMATCH');
   const identical = field => {const values=cases.map(row=>row[field]);return values.every(value=>value!==null&&value===values[0])?values[0]:null;};
-  return {schemaVersion:1,kind:'three-creator-run-progress',runId:primary.plan.runId,updatedAt,model:identical('model'),effort:identical('effort'),cases};
+  return {schemaVersion:1,kind:'three-creator-run-progress',runId:primary.plan.runId,updatedAt,model:identical('model'),effort:identical('effort'),configuration:{kind:'requested',model:identical('model'),effort:identical('effort')},cases};
+}
+
+// The publisher admits 512 KiB. Keep identities and current status intact while
+// bounding repeated history across ten cases and their account attempts.
+export function serializeThreeRunProgress(progress) {
+  const result=structuredClone(progress),rows=result.cases.flatMap(row=>[row,...row.attempts]);
+  const original=rows.map(row=>row.events);
+  for(const limit of [100,50,25,12,6,3,1,0]) {
+    rows.forEach((row,index)=>{
+      const events=original[index],keep=new Set(limit ? events.slice(-limit) : []);
+      // Preserve the latest evidence for each visited stage, including failures.
+      const stages=new Map();for(const event of events)stages.set(event.stage,event);
+      for(const event of stages.values())keep.add(event);
+      row.events=events.filter(event=>keep.has(event));
+      if(row.events.length<events.length)row.omittedEventCount=events.length-row.events.length;
+    });
+    const serialized=JSON.stringify(result)+'\n';
+    if(Buffer.byteLength(serialized)<=512*1024)return serialized;
+  }
+  fail('PUBLIC_SNAPSHOT_TOO_LARGE');
 }
 
 async function main() {
@@ -343,7 +397,7 @@ async function main() {
   const output=path.resolve(options['--output']);if(path.basename(output)!=='progress.json')fail('OUTPUT_INVALID');await rootPath(path.dirname(output));
   const existing=await openedFile(output,MAX_JSON_BYTES);await existing?.close();
   const temporary=`${output}.${randomUUID()}.part`;
-  try {await writeFile(temporary,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o644});await rename(temporary,output);} finally {await unlink(temporary).catch(()=>{});}
+  try {await writeFile(temporary,serializeThreeRunProgress(result),{flag:'wx',mode:0o644});await rename(temporary,output);} finally {await unlink(temporary).catch(()=>{});}
   process.stdout.write(JSON.stringify({kind:result.kind,runId:result.runId,cases:result.cases.length,updatedAt:result.updatedAt})+'\n');
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{process.stderr.write((/^THREE_PROGRESS_[A-Z_]+$/.test(error?.message??'')?error.message:'THREE_PROGRESS_FAILED')+'\n');process.exitCode=1;});

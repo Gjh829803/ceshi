@@ -59,9 +59,9 @@ test("gallery stays read-only, preserves the existing monitor, and confines stat
     await writeFile(path.join(root, "index.html"), "<!doctype html><title>Experimental Creator</title>");
     await writeFile(path.join(root, "video.mp4"), "0123456789");
     await writeFile(path.join(root, "test.wasm"), "wasm");
-    const subjectDirectory = path.join(root,"cases/test-scene/abcdef1234567890/playable/subject-assets/humanoid/g-bot/v2");
+    const subjectDirectory = path.join(root,"cases/test-scene/abcdef1234567890/playable/subject-assets/humanoid/source-101");
     await mkdir(subjectDirectory,{recursive:true});
-    const subjectFile = path.join(subjectDirectory,"g-bot.glb");
+    const subjectFile = path.join(subjectDirectory,"model.glb");
     await writeFile(subjectFile, "verified-subject-bytes");
     await writeFile(path.join(temporary, "outside.txt"), "must-not-be-served");
     await symlink(path.join(temporary, "outside.txt"), path.join(root, "escape.txt"));
@@ -99,12 +99,12 @@ test("gallery stays read-only, preserves the existing monitor, and confines stat
     assert.equal(transform.originalArtifactBytesModified, false);
     assert.match(transform.compatibilityScriptHash, /^sha256:[a-f0-9]{64}$/);
     const referer = `${origin}/creator-evals/cases/test-scene/abcdef1234567890/playable/index.html?play=1`;
-    const aliased = await fetch(`${origin}/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=${subjectHash}`, {redirect:"error",headers:{referer}});
+    const aliased = await fetch(`${origin}/subject-assets/humanoid/source-101/model.glb?worldkit-content-hash=${subjectHash}`, {redirect:"error",headers:{referer}});
     assert.equal(aliased.status,200);
     assert.equal(await aliased.text(),"verified-subject-bytes");
     assert.equal(aliased.headers.get("x-worldkit-artifact-sha256"),subjectHash.slice(7));
     await writeFile(subjectFile,"modified-subject-bytes");
-    const tampered = await fetch(`${origin}/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=${subjectHash}`,{headers:{referer}});
+    const tampered = await fetch(`${origin}/subject-assets/humanoid/source-101/model.glb?worldkit-content-hash=${subjectHash}`,{headers:{referer}});
     assert.equal(tampered.status,503);
     assert.equal(page.headers.get("x-frame-options"), "SAMEORIGIN");
     const redirect = await fetch(`${origin}/creator-evals?play=1`, { redirect: "manual" });
@@ -135,10 +135,10 @@ test("gallery stays read-only, preserves the existing monitor, and confines stat
     const mutation = await fetch(`${origin}/api/worlds`, { method: "POST", body: "{}" });
     assert.equal(mutation.status, 403);
     assert.equal(proxied.length, 1);
-    const unrelated = await fetch(`${origin}/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=${subjectHash}`,{headers:{referer:'https://other.invalid/creator-evals/cases/test-scene/abcdef1234567890/playable/'}});
+    const unrelated = await fetch(`${origin}/subject-assets/humanoid/source-101/model.glb?worldkit-content-hash=${subjectHash}`,{headers:{referer:'https://other.invalid/creator-evals/cases/test-scene/abcdef1234567890/playable/'}});
     assert.equal((await unrelated.json()).originalMonitor,true);
     assert.equal(proxied.length,2);
-    const malformed = await fetch(`${origin}/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=bad`,{headers:{referer}});
+    const malformed = await fetch(`${origin}/subject-assets/humanoid/source-101/model.glb?worldkit-content-hash=bad`,{headers:{referer}});
     assert.equal(malformed.status,400);
   } finally {
     await close(gateway);

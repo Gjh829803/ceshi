@@ -2,11 +2,11 @@ import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } fr
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ThreeCompiler, hashTree } from '../three-creator/compiler.js';
+import { hashTree } from '../three-creator/compiler.js';
 import { validateAssetPolicySnapshot, verifyAssetPolicyBundle } from '../three-creator/asset-policy.mjs';
 import { canonicalHash, type EpisodeFile, type EpisodeSourceManifest } from './contracts.js';
 import { installEpisodePresentation } from './presentation.js';
-import cameraProvenance from './compat/creator-camera-provenance.json';
+import { workspaceRuntimeSourceHash } from '../three-creator/workspace-runtime.js';
 
 const sha = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
 export function closedPath(root: string, relative: string): string {
@@ -82,6 +82,13 @@ export async function saveEpisodeSource(file: string, source: EpisodeSourceManif
     ...(source.worldPlan ? { worldPlan: image(source.worldPlan) } : {}),
     ...(source.contextPath ? { contextPath: relative(source.contextPath) } : {}) });
 }
+async function verifyRuntimeSourceHash(expected: string | null | undefined, root: string, files: Record<string, string>) {
+  const names = Object.keys(files).filter(name => name.startsWith('sdk/'));
+  if (!names.length && expected == null) return;
+  if (!names.length || typeof expected !== 'string') throw new Error('EPISODE_RUNTIME_SOURCE_IDENTITY_MISSING');
+  const bytes = Object.fromEntries(await Promise.all(names.map(async name => [name.slice(4), await readFile(closedPath(root, name))])));
+  if (workspaceRuntimeSourceHash(bytes) !== expected) throw new Error('EPISODE_RUNTIME_SOURCE_CHANGED');
+}
 export async function loadEpisodeSource(file: string): Promise<EpisodeSourceManifest> {
   const header = JSON.parse(await readFile(file, 'utf8')) as EpisodeSourceManifest;
   if (header.kind !== 'three-episode-source' || header.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(header.worldBuildHash) || !header.targets?.length) throw new Error('EPISODE_SOURCE_INVALID');
@@ -90,6 +97,7 @@ export async function loadEpisodeSource(file: string): Promise<EpisodeSourceMani
     playableRoot: source.playableRoot, sourceFiles: source.sourceFiles, playableFiles: source.playableFiles });
   for (const [relative, hash] of Object.entries(source.sourceFiles)) await verifyFile({ path: closedPath(source.sourceRoot, relative), sha256: hash });
   if (canonicalHash(await hashTree(source.playableRoot)) !== canonicalHash(source.playableFiles)) throw new Error('EPISODE_PLAYABLE_CHANGED');
+  await verifyRuntimeSourceHash(source.runtimeSourceHash, source.sourceRoot, source.sourceFiles);
   await verifyFile(source.opening);
   if (source.referenceImage) await verifyFile(source.referenceImage);
   if (source.worldPlan) await verifyFile(source.worldPlan);
@@ -135,31 +143,12 @@ export async function copyEpisodeSourceBundle(sourceManifestPath: string, output
   catch (error) { await rm(manifest, { force: true }); throw error; }
 }
 async function writeJson(file: string, value: unknown) { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, `${JSON.stringify(value, null, 2)}\n`); }
-/**
- * Builds an explicitly derived production playable from a closed old delivery.
- * Author source and compiled scene entry remain byte-identical. Only SDK/bridge
- * runtime files are replaced, with both original and derived identities retained.
- */
+/** Verifies and copies the delivered source/runtime, then selects the world canvas for recording. */
 export async function prepareEpisodeSource(options: { payloadRoot: string; outputRoot: string; worldId: string; sourceUrl?: string; referenceImage?: EpisodeFile }): Promise<EpisodeSourceManifest> {
   const payload = await realpath(options.payloadRoot), output = path.resolve(options.outputRoot);
   const manifestBytes = await readFile(path.join(payload, 'delivery.json'));
   const delivery = JSON.parse(manifestBytes.toString());
-  const delivered = delivery.schemaVersion === 1
-    ? ['ready', 'ready-for-independent-review'].includes(delivery.status)
-    : delivery.schemaVersion === 2 && delivery.status === 'ready';
-  // Historical v1's status name predates direct publication. Only its actual
-  // technical delivery/closed bytes matter; no assistant review is reintroduced.
-  if (!['three-creator-delivery','three-episode-repaired-delivery'].includes(delivery.kind) || delivery.profile !== 'three-sdk' || delivery.technicalStatus !== 'passed' || !delivered || !/^[a-f0-9]{64}$/.test(delivery.worldBuildHash)) throw new Error('EPISODE_REQUIRES_CLOSED_THREE_DELIVERY');
-  if(delivery.kind==='three-episode-repaired-delivery'){
-    const evidenceFile=closedPath(payload,delivery.repairEvidence?.path);
-    await verifyFile({path:evidenceFile,sha256:delivery.repairEvidence?.sha256});
-    const evidence=JSON.parse(await readFile(evidenceFile,'utf8'));
-    if(evidence.kind!=='manual-humanoid-motion-repair'||evidence.worldBuildHash!==delivery.worldBuildHash||evidence.sourceHash!==delivery.sourceHash||evidence.runtimeHash!==delivery.runtimeHash)throw new Error('EPISODE_REPAIR_EVIDENCE_MISMATCH');
-    const regressionFile=closedPath(payload,delivery.regressionEvidence?.path);
-    await verifyFile({path:regressionFile,sha256:delivery.regressionEvidence?.sha256});
-    const regression=JSON.parse(await readFile(regressionFile,'utf8'));
-    if(regression.status!=='succeeded'||regression.result?.status!=='passed'||regression.result?.worldBuildHash!==delivery.worldBuildHash)throw new Error('EPISODE_REPAIR_REGRESSION_REQUIRED');
-  }
+  if (delivery.kind !== 'three-creator-delivery' || delivery.profile !== 'three-sdk' || delivery.technicalStatus !== 'passed' || delivery.status !== 'ready-for-independent-review' || delivery.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(delivery.worldBuildHash)) throw new Error('EPISODE_REQUIRES_CLOSED_THREE_DELIVERY');
   const selected = Object.entries(delivery.files as Record<string, string>).filter(([key]) => /^(source|playable|captures)\//.test(key));
   if (!selected.length || selected.length > 10_000) throw new Error('EPISODE_SOURCE_INVENTORY_INVALID');
   const assetPolicySha256 = await verifyCarriedAssetPolicy({ expectedHash: delivery.assetPolicySha256,
@@ -175,24 +164,16 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     await mkdir(path.dirname(to), { recursive: true }); await copyFile(from, to);
   }
   const sourceFiles = await hashTree(sourceRoot);
-  const runtimeWorkspace = path.join(output, '.runtime-build');
-  await mkdir(runtimeWorkspace, { recursive: true });
-  const cameraCompatibility=[cameraProvenance.deliveryRuntimeHash,...cameraProvenance.compatibleDeliveryRuntimeHashes].includes(delivery.runtimeHash);
-  const runtime = await new ThreeCompiler(runtimeWorkspace, 'three-sdk').prepareRuntime(cameraCompatibility?{cameraModulePath:fileURLToPath(new URL('./compat/creator-camera.ts',import.meta.url))}:{});
-  for (const [relative] of Object.entries(await hashTree(runtime.root))) {
-    const to = closedPath(path.join(playableRoot, 'runtime'), relative);
-    await mkdir(path.dirname(to), { recursive: true }); await copyFile(closedPath(runtime.root, relative), to);
-  }
+  await verifyRuntimeSourceHash(delivery.runtimeSourceHash, sourceRoot, sourceFiles);
   await installEpisodePresentation(playableRoot);
-  // Compiler cache belongs to the host; it never enters the author input closure.
   const originalSourceEntries = Object.fromEntries(selected.filter(([key]) => key.startsWith('source/')).map(([key, hash]) => [key.slice(7), hash]));
   if (canonicalHash(sourceFiles) !== canonicalHash(originalSourceEntries)) throw new Error('EPISODE_AUTHOR_SOURCE_CHANGED');
   const runtimeFiles = await hashTree(path.join(playableRoot, 'runtime'));
-  const runtimeHash = canonicalHash(runtimeFiles), playableFiles = await hashTree(playableRoot);
+  const runtimeHash = delivery.runtimeHash, playableFiles = await hashTree(playableRoot);
   const originalRuntimeFiles = Object.fromEntries(selected.filter(([key]) => key.startsWith('playable/runtime/')).map(([key, hash]) => [key.slice(17), hash]));
-  const runtimeChanged = canonicalHash(originalRuntimeFiles) !== canonicalHash(runtimeFiles);
+  if (canonicalHash(originalRuntimeFiles) !== canonicalHash(runtimeFiles)) throw new Error('EPISODE_DELIVERED_RUNTIME_CHANGED');
   const playableChanged=canonicalHash(playableFiles)!==canonicalHash(Object.fromEntries(selected.filter(([key])=>key.startsWith('playable/')).map(([key,hash])=>[key.slice(9),hash])));
-  const worldBuildHash = runtimeChanged || playableChanged ? canonicalHash({ kind: 'three-episode-runtime-derivation', sourceWorldBuildHash: delivery.worldBuildHash, sourceHash: delivery.sourceHash, runtimeHash, playableFiles }) : delivery.worldBuildHash;
+  const worldBuildHash = playableChanged ? canonicalHash({ kind: 'three-episode-presentation', sourceWorldBuildHash: delivery.worldBuildHash, sourceHash: delivery.sourceHash, runtimeHash, playableFiles }) : delivery.worldBuildHash;
   const captures = JSON.parse(await readFile(path.join(output, 'captures/captures.json'), 'utf8'));
   const imageFile = async (entry: any): Promise<EpisodeFile> => {
     const file = path.join(output, 'captures', path.basename(entry.image.path));
@@ -219,7 +200,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   }
   const source: EpisodeSourceManifest = {
     kind: 'three-episode-source', schemaVersion: 1, worldId: options.worldId,
-    sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash,
+    sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash, runtimeSourceHash: delivery.runtimeSourceHash ?? null,
     sourceWorldBuildHash: delivery.worldBuildHash, sourceRuntimeHash: delivery.runtimeHash,
     sourceDeliveryManifestSha256: sha(manifestBytes), sourceRoot, playableRoot, sourceFiles,
     ...(assetPolicySha256 ? { assetPolicySha256 } : {}),
@@ -236,7 +217,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
   await saveEpisodeSource(path.join(output, 'source.json'), source);
   await writeJson(path.join(output, 'derivation.json'), { schemaVersion: 1, sourceWorldBuildHash: source.sourceWorldBuildHash, worldBuildHash,
     sourceRuntimeHash: source.sourceRuntimeHash, runtimeHash, authorSourceUnchanged: true, authorCompiledEntriesUnchanged: selected.filter(([key]) => key.startsWith('playable/compiled/')).every(([key, hash]) => playableFiles[key.slice(9)] === hash),
-    cameraCompatibility:cameraCompatibility?cameraProvenance:null, presentation:'world-canvas-only-v1', runtimeFiles, originalDeliveryManifestSha256: source.sourceDeliveryManifestSha256 });
+    runtimeSourceHash: source.runtimeSourceHash, presentation:'world-canvas-only-v1', runtimeFiles, originalDeliveryManifestSha256: source.sourceDeliveryManifestSha256 });
   return loadEpisodeSource(path.join(output, 'source.json'));
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

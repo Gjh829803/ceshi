@@ -1,11 +1,13 @@
 import type { CameraRigInput } from '../camera';
 import type { WorldInput } from '../engine-contracts';
 import type { EpisodeStart } from '../episode-contracts';
-import type { TrainingRuntime } from './runtime';
+import type { TrainingRuntime, TrainingCommand } from './runtime';
+import type { SkillResult } from './humanoid/action-schema';
 
 /** Engine/World capability, deliberately absent from the public barrels. */
 export interface TrainingHostAccess {
   isDisposed(): boolean;
+  command(command: TrainingCommand): SkillResult | undefined;
   setEpisodeOwned(owned: boolean): void;
   advance(input: WorldInput, dt: number, pointer?: CameraRigInput): void;
   reset(): void;

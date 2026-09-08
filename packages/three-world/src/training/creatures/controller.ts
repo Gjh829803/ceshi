@@ -1,8 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
-import { WATER, type VehicleSpec } from '../config';
+import type { VehicleSpec } from '../config';
 import { vehicleBody, type EnvironmentQueries, type MoveResult, type QueryBody } from '../environment/queries';
 import type { Input, VehicleState } from '../simulation';
-import { supportHeight, sweepTerrainXZ, wetHeight } from '../terrain';
 import type { CreatureState } from './types';
 
 export const CARRIAGE_TOW_DISTANCE = 4.8;
@@ -46,16 +45,11 @@ function clearBody(position:Vector3,body:QueryBody,rotation:Quaternion,q:Environ
 }
 export function canPlaceCreature(v:VehicleState,q:EnvironmentQueries){return creatureBodies(v).every(p=>clearBody(p.position,p.body,p.rotation,q));}
 
-function touchesWater(v:VehicleState,q?:EnvironmentQueries){
-  if(q&&!q.map.water.length)return false;
-  return creatureBodies(v).some(part=>{
+function touchesWater(v:VehicleState,q:EnvironmentQueries){
+  return q.map.water.length>0&&creatureBodies(v).some(part=>{
     const {center,extent}=bodyBounds(part.position,part.body,part.rotation),bottom=center.y-extent.y;
-    if(q)return q.map.water.some(w=>bottom<w.surface-.01&&center.y+extent.y>w.min[1]&&
+    return q.map.water.some(w=>bottom<w.surface-.01&&center.y+extent.y>w.min[1]&&
       center.x+extent.x>w.min[0]&&center.x-extent.x<w.max[0]&&center.z+extent.z>w.min[2]&&center.z-extent.z<w.max[2]);
-    if(bottom>=WATER-.01)return false;
-    // Match legacy terrain's dry dock as well as its basin footprint.
-    for(const x of [-1,0,1])for(const z of [-1,0,1])if(wetHeight(center.x+x*extent.x,center.z+z*extent.z))return true;
-    return false;
   });
 }
 function stopInWater(v:VehicleState){
@@ -65,71 +59,55 @@ function stopInWater(v:VehicleState){
 }
 
 /** Test the turning volume as well as the final box, so thin walls cannot be crossed by yaw. */
-function turnIsClear(position:Vector3,body:QueryBody,fromYaw:number,toYaw:number,q?:EnvironmentQueries){
-  if(!q)return true;
+function turnIsClear(position:Vector3,body:QueryBody,fromYaw:number,toYaw:number,q:EnvironmentQueries){
   const change=angleDelta(fromYaw,toYaw),samples=Math.max(1,Math.ceil(Math.abs(change)/.02));
   for(let n=1;n<=samples;n++)if(!clearBody(position,body,rotationAt(fromYaw+change*n/samples),q))return false;
   return true;
 }
-function moveBody(position:Vector3,delta:Vector3,body:QueryBody,yaw:number,walking:boolean,q?:EnvironmentQueries):MoveResult{
-  if(q){
-    const rotation=rotationAt(yaw);
-    if(!walking)return q.move(position,delta,body,rotation);
-    // Separate floor support from horizontal control: combined diagonal sweeps can
-    // slowly sink a long, yawed box into a flat floor through Rapier's contact tolerance.
-    const horizontal=new Vector3(delta.x,0,delta.z);
-    const distance=(p:Vector3)=>Math.hypot(p.x-position.x-delta.x,p.z-position.z-delta.z);
-    let across=q.move(position,horizontal,body,rotation);
-    if(distance(across.position)>1e-5){
-      const stepped=q.move(position,horizontal,body,rotation,.45);
-      if(distance(stepped.position)<distance(across.position))across=stepped;
-    }
-    let down=q.move(across.position,new Vector3(0,delta.y,0),body,rotation);
-    if(distance(across.position)>1e-5&&horizontal.lengthSq()>1e-8&&q.support(position,.5,.02)){
-      const raised=q.move(position,new Vector3(0,.45,0),body,rotation);
-      if(raised.position.y-position.y>.449){
-        // A few millimetres of travel can stop in the collision skin before
-        // autostep finds a tread. Probe one hoof-step ahead, then sweep only the
-        // requested distance at that verified step height (including headroom).
-        const look=horizontal.clone().setLength(Math.max(.12,horizontal.length()));
-        const ahead=q.move(raised.position,look,body,rotation);
-        const settled=q.move(ahead.position,new Vector3(0,-.51,0),body,rotation);
-        const complete=Math.hypot(ahead.position.x-raised.position.x-look.x,ahead.position.z-raised.position.z-look.z)<1e-5;
-        const rise=settled.position.y-position.y;
-        if(complete&&settled.grounded&&rise>.01&&rise<=.45){
-          const lifted=q.move(position,new Vector3(0,rise,0),body,rotation);
-          const stepped=q.move(lifted.position,horizontal,body,rotation);
-          if(distance(stepped.position)<distance(across.position)&&clearBody(stepped.position,body,rotation,q)){
-            across=stepped;down={...stepped,grounded:true};
-          }
+function moveBody(position:Vector3,delta:Vector3,body:QueryBody,yaw:number,walking:boolean,q:EnvironmentQueries):MoveResult{
+  const rotation=rotationAt(yaw);
+  if(!walking)return q.move(position,delta,body,rotation);
+  // Separate floor support from horizontal control: combined diagonal sweeps can
+  // slowly sink a long, yawed box into a flat floor through Rapier's contact tolerance.
+  const horizontal=new Vector3(delta.x,0,delta.z);
+  const distance=(p:Vector3)=>Math.hypot(p.x-position.x-delta.x,p.z-position.z-delta.z);
+  let across=q.move(position,horizontal,body,rotation);
+  if(distance(across.position)>1e-5){
+    const stepped=q.move(position,horizontal,body,rotation,.45);
+    if(distance(stepped.position)<distance(across.position))across=stepped;
+  }
+  let down=q.move(across.position,new Vector3(0,delta.y,0),body,rotation);
+  if(distance(across.position)>1e-5&&horizontal.lengthSq()>1e-8&&q.support(position,.5,.02)){
+    const raised=q.move(position,new Vector3(0,.45,0),body,rotation);
+    if(raised.position.y-position.y>.449){
+      // A few millimetres of travel can stop in the collision skin before
+      // autostep finds a tread. Probe one hoof-step ahead, then sweep only the
+      // requested distance at that verified step height (including headroom).
+      const look=horizontal.clone().setLength(Math.max(.12,horizontal.length()));
+      const ahead=q.move(raised.position,look,body,rotation);
+      const settled=q.move(ahead.position,new Vector3(0,-.51,0),body,rotation);
+      const complete=Math.hypot(ahead.position.x-raised.position.x-look.x,ahead.position.z-raised.position.z-look.z)<1e-5;
+      const rise=settled.position.y-position.y;
+      if(complete&&settled.grounded&&rise>.01&&rise<=.45){
+        const lifted=q.move(position,new Vector3(0,rise,0),body,rotation);
+        const stepped=q.move(lifted.position,horizontal,body,rotation);
+        if(distance(stepped.position)<distance(across.position)&&clearBody(stepped.position,body,rotation,q)){
+          across=stepped;down={...stepped,grounded:true};
         }
       }
     }
-    const result={...down,grounded:across.grounded||down.grounded,normals:[...across.normals,...down.normals]};
-    const clearance=q.safeSpawn(result.position,body,rotation);
-    if(clearance&&clearance.y>result.position.y+1e-5&&clearance.y-result.position.y<.08){
-      const lifted=q.move(result.position,clearance.clone().sub(result.position),body,rotation);
-      if(lifted.position.distanceToSquared(clearance)<1e-8&&!q.overlaps(clearance,body,rotation))result.position.copy(clearance);
-    }
-    const exact=result.position.clone();exact.x=position.x+delta.x;exact.z=position.z+delta.z;
-    // Floor normals have small X/Z roundoff; do not let that noise stretch a towbar.
-    if(distance(result.position)<.005&&result.normals.every(normal=>normal.y>.25)&&clearBody(exact,body,rotation,q))result.position.copy(exact);
-    result.blocked=result.position.clone().sub(position).distanceToSquared(delta)>1e-6;
-    return result;
   }
-  // Standalone simulations retain the original terrain API; production always uses q.
-  const next=position.clone().add(delta),radius=body.kind==='box'?Math.max(body.halfExtents[0],body.halfExtents[2]):body.radius;
-  const bottom=body.kind==='box'?body.offset[1]-body.halfExtents[1]:body.offset[1]-body.height/2;
-  const contact=sweepTerrainXZ(position,next,radius,walking?.45:0,false,bottom);
-  next.x=contact.x;next.z=contact.z;
-  const floor=supportHeight(next.x,next.z,radius),grounded=next.y+bottom<=floor+.025;
-  if(grounded)next.y=floor-bottom;
-  next.y=Math.min(next.y,400);
-  const normals:Vector3[]=[];
-  if(contact.hitX)normals.push(new Vector3(-Math.sign(delta.x),0,0));
-  if(contact.hitZ)normals.push(new Vector3(0,0,-Math.sign(delta.z)));
-  if(grounded)normals.push(UP.clone());
-  return {position:next,grounded,normal:normals[0]??UP.clone(),normals,blocked:next.clone().sub(position).distanceToSquared(delta)>1e-6};
+  const result={...down,grounded:across.grounded||down.grounded,normals:[...across.normals,...down.normals]};
+  const clearance=q.safeSpawn(result.position,body,rotation);
+  if(clearance&&clearance.y>result.position.y+1e-5&&clearance.y-result.position.y<.08){
+    const lifted=q.move(result.position,clearance.clone().sub(result.position),body,rotation);
+    if(lifted.position.distanceToSquared(clearance)<1e-8&&!q.overlaps(clearance,body,rotation))result.position.copy(clearance);
+  }
+  const exact=result.position.clone();exact.x=position.x+delta.x;exact.z=position.z+delta.z;
+  // Floor normals have small X/Z roundoff; do not let that noise stretch a towbar.
+  if(distance(result.position)<.005&&result.normals.every(normal=>normal.y>.25)&&clearBody(exact,body,rotation,q))result.position.copy(exact);
+  result.blocked=result.position.clone().sub(position).distanceToSquared(delta)>1e-6;
+  return result;
 }
 function desiredSpeed(v:VehicleState,i:Input,dt:number,dragonAir=false){
   const spec=v.spec,dragon=spec.mode==='dragon',carriage=spec.mode==='carriage';
@@ -149,7 +127,7 @@ function updateGait(v:VehicleState,dt:number){
   state.phase+=rate*dt;
   v.speed=v.velocity.length();v.launched=state.flying;
 }
-function stepMount(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
+function stepMount(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   const body=vehicleBody(v.spec),old=v.position.clone(),speed=desiredSpeed(v,i,dt);
   const turn=v.spec.steer*(.25+.75*Math.min(Math.abs(speed)/3,1));
   const yaw=v.yaw-v.steering*turn*dt*(speed<-.1?-1:1);
@@ -157,7 +135,7 @@ function stepMount(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
   const direction=heading(v.yaw),vertical=v.grounded?-1:v.velocity.y-18*dt;
   v.velocity.copy(direction).multiplyScalar(speed);v.velocity.y=vertical;
   const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,true,q);
-  if(!q||clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
+  if(clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
   v.velocity.copy(v.position).sub(old).divideScalar(dt);
   // Keep the full solved translation for observations and physical dismount.
   // Grounded motion chooses its resting downward probe above, independently of
@@ -165,7 +143,7 @@ function stepMount(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
   v.grounded=moved.grounded;
   v.pitch=0;v.roll=0;v.rotation.copy(rotationAt(v.yaw));
 }
-function stepCarriage(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
+function stepCarriage(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   const state=v.creature!,oldCart=v.position.clone(),oldLead=state.leadPosition!.clone(),oldCartYaw=v.yaw,oldLeadYaw=state.leadYaw!;
   const body=vehicleBody(v.spec),speed=desiredSpeed(v,i,dt);
   let leadYaw=oldLeadYaw-v.steering*v.spec.steer*(.12+.88*Math.min(Math.abs(speed)/3,1))*dt*(speed<-.1?-1:1);
@@ -185,7 +163,7 @@ function stepCarriage(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
   const horizontalError=(a:Vector3,b:Vector3)=>Math.hypot(a.x-b.x,a.z-b.z);
   // A hit on EITHER part cancels the horizontal advance of BOTH; the drawbar never stretches.
   const blocked=horizontalError(lead.position,desiredLead)>1e-5||horizontalError(cart.position,desiredCart)>1e-5||
-    (q&&(!clearBody(lead.position,LEAD_HORSE_BODY,rotationAt(leadYaw),q)||!clearBody(cart.position,body,rotationAt(cartYaw),q)));
+    (!clearBody(lead.position,LEAD_HORSE_BODY,rotationAt(leadYaw),q)||!clearBody(cart.position,body,rotationAt(cartYaw),q));
   if(blocked){v.velocity.set(0,0,0);state.leadVerticalSpeed=0;return;}
   // Remove only harmless sweep rounding after both complete target poses were reached.
   lead.position.x=desiredLead.x;lead.position.z=desiredLead.z;cart.position.x=desiredCart.x;cart.position.z=desiredCart.z;
@@ -194,7 +172,7 @@ function stepCarriage(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
   // Speed is the horse's longitudinal drive speed, while the cart follows the tow geometry.
   v.velocity.copy(heading(leadYaw)).multiplyScalar(speed);v.velocity.y=cart.grounded?0:(cart.position.y-oldCart.y)/dt;v.grounded=cart.grounded;
 }
-function stepDragon(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
+function stepDragon(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   const state=v.creature!,body=vehicleBody(v.spec),old=v.position.clone();
   // Space and Ctrl are an axis, never a toggle. Neutral input keeps an airborne dragon hovering.
   const lift=i.slow&&(i.brake||i.jump)?0:clamp(i.lift||(i.jump?1:0),-1,1);
@@ -205,17 +183,17 @@ function stepDragon(v:VehicleState,i:Input,dt:number,q?:EnvironmentQueries){
   const vertical=state.flying?approach(v.velocity.y,lift*(i.boost?10:7),18*dt):v.grounded?-1:v.velocity.y-18*dt;
   v.velocity.copy(heading(v.yaw)).multiplyScalar(speed);v.velocity.y=vertical;
   const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,!state.flying,q);
-  if(!q||clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
+  if(clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
   v.velocity.copy(v.position).sub(old).divideScalar(dt);
   v.grounded=moved.grounded;
   if(v.grounded&&lift<=0){state.flying=false;v.velocity.y=0;}
   else if(lift>0&&v.velocity.y>0)v.grounded=false;
   v.pitch=0;v.roll=0;v.rotation.copy(rotationAt(v.yaw));
 }
-export function stepCreature(v:VehicleState,i:Input,dt:number,_time=0,q?:EnvironmentQueries){
+export function stepCreature(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   if(!Number.isFinite(dt)||dt<=0)return;
   v.creature??=createCreatureState(v.spec,v.position,v.rotation,v.yaw);
-  // Version 1 has no swimming controller. A water stop stays latched until reset.
+  // These creatures stop on water contact until reset.
   if(v.submerged||touchesWater(v,q)){stopInWater(v);return;}
   const duration=Math.min(dt,.25),steps=Math.max(1,Math.ceil(duration*60)),slice=duration/steps;
   for(let n=0;n<steps;n++){

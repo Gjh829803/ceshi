@@ -58,18 +58,43 @@ def validate_progress(progress, manifest):
     if len(ids) != len(progress['cases']) or len(set(ids)) != len(ids) or set(ids) != {case['id'] for case in manifest['cases']}:
         raise ValueError('Progress task identity mismatch')
 
+
+def publication_target(manifest, gallery, *, run_page=False, archive_run=False, progress_only=False):
+    remote = validate_manifest(manifest, gallery)
+    if run_page and archive_run:
+        raise ValueError('Choose a live run page or a completed archive')
+    if (run_page or archive_run or progress_only) and gallery != 'three':
+        raise ValueError('Run pages and live progress belong to Three evaluations')
+    if archive_run and progress_only:
+        raise ValueError('Archive is a separate Three publication mode')
+    if run_page or archive_run:
+        remote += '/runs/' + manifest['id']
+    mode = 'run-page-progress' if run_page and progress_only else 'run-page' if run_page else 'progress-only' if progress_only else 'archive-run' if archive_run else 'full'
+    return remote, mode
+
 INSTALL = r'''
 import hashlib,json,os,pathlib,sys,tarfile,tempfile,datetime
 root=pathlib.Path(sys.argv[1]);root.mkdir(parents=True,exist_ok=True)
-progress_only=len(sys.argv)>2 and sys.argv[2]=='progress-only'
+progress_only=len(sys.argv)>2 and sys.argv[2] in ('progress-only','run-page-progress')
 archive_run=len(sys.argv)>2 and sys.argv[2]=='archive-run'
+run_page=len(sys.argv)>2 and sys.argv[2] in ('run-page','run-page-progress')
+if run_page:
+ owner=root/'.run-page.json';identity={'runId':sys.argv[4],'taskIds':json.loads(sys.argv[5])}
+ if owner.is_symlink() or any(p.is_symlink() for p in (root,*root.parents)): raise ValueError('Symlink run page')
+ if owner.exists():
+  if json.loads(owner.read_text())!=identity: raise ValueError('Run page source/task identity changed')
+ elif any(root.iterdir()): raise ValueError('Existing gallery is not an owned live run page')
+ else: owner.write_text(json.dumps(identity))
+ if (root/'results.json').exists():
+  prior=json.loads((root/'results.json').read_text())
+  if prior.get('id')!=identity['runId'] or sorted(c['id'] for c in prior['cases'])!=identity['taskIds']: raise ValueError('Run page manifest identity changed')
 existing_archive=archive_run and (root/'results.json').exists()
 if existing_archive and hashlib.sha256((root/'results.json').read_bytes()).hexdigest()!=sys.argv[3]: raise ValueError('Completed run archive already exists with a different manifest')
 count=0;size=0;received=set()
 with tarfile.open(fileobj=sys.stdin.buffer,mode='r|') as archive:
  for member in archive:
   relative=pathlib.PurePosixPath(member.name)
-  if not member.isfile() or relative.is_absolute() or '..' in relative.parts or member.size>128*1024*1024: raise ValueError('Invalid public file')
+  if not member.isfile() or relative.is_absolute() or any(p.startswith('.') for p in relative.parts) or '..' in relative.parts or member.size>128*1024*1024: raise ValueError('Invalid public file')
   target=root.joinpath(*relative.parts)
   if any(p.is_symlink() for p in (target,*target.parents)): raise ValueError('Symlink target')
   contents=archive.extractfile(member).read()
@@ -102,14 +127,11 @@ def main():
     parser.add_argument('--gallery', choices=('legacy-v3', 'three'), default='legacy-v3')
     parser.add_argument('--progress-only', action='store_true', help='Atomically update this Three run status without republishing assets')
     parser.add_argument('--archive-run', action='store_true', help='Preserve a completed Three run under /three/runs/<runId>/')
+    parser.add_argument('--run-page', action='store_true', help='Publish or refresh this isolated run under /three/runs/<runId>/')
     args = parser.parse_args()
     root = args.source.resolve()
     manifest = json.loads((root / 'results.json').read_text())
-    remote = validate_manifest(manifest, args.gallery)
-    if args.archive_run:
-        if args.gallery != 'three' or args.progress_only:
-            raise ValueError('Archive is a separate Three publication mode')
-        remote += '/runs/' + manifest['id']
+    remote, mode = publication_target(manifest, args.gallery, run_page=args.run_page, archive_run=args.archive_run, progress_only=args.progress_only)
     files = sorted(root.rglob('*'), key=lambda p: (p.name == 'results.json', str(p)))
     if args.progress_only:
         if args.gallery != 'three':
@@ -135,8 +157,8 @@ def main():
                 info.mode = 0o644
                 archive.addfile(info, io.BytesIO(contents))
         bundle.seek(0)
-        subprocess.run(['kubectl', '-n', 'ray', 'exec', '-i', args.pod, '-c', 'ray-head', '--', 'python', '-c', INSTALL, remote, 'progress-only' if args.progress_only else 'archive-run' if args.archive_run else 'full', hashlib.sha256((root / 'results.json').read_bytes()).hexdigest()], stdin=bundle, check=True)
-    print(json.dumps({'manifestSha256': hashlib.sha256((root / 'results.json').read_bytes()).hexdigest(), 'publishedCases': sum(c['status'] in ('ready', 'issues') for c in manifest['cases'])}))
+        subprocess.run(['kubectl', '-n', 'ray', 'exec', '-i', args.pod, '-c', 'ray-head', '--', 'python', '-c', INSTALL, remote, mode, hashlib.sha256((root / 'results.json').read_bytes()).hexdigest(), manifest['id'], json.dumps(sorted(c['id'] for c in manifest['cases']))], stdin=bundle, check=True)
+    print(json.dumps({'manifestSha256': hashlib.sha256((root / 'results.json').read_bytes()).hexdigest(), 'remote': remote, 'mode': mode, 'publishedCases': sum(c['status'] in ('ready', 'issues') for c in manifest['cases'])}))
 
 
 if __name__ == '__main__':

@@ -4,13 +4,14 @@ import { training } from '@worldkit/three';
 type HumanoidInput=training.HumanoidInput;
 import type { CharacterTrial } from '../environment/types';
 
-const { HUMANOID_BINDINGS }=training;
+const { bindingLabel, controlHints }=training;
 
 interface Options {
   onOpenChange(open:boolean):void;
   onPrepare(mapId:string,trial:CharacterTrial,demo:boolean):void;
   onAction(command:HumanoidInput|'jump'):void;
   getState():Record<string,unknown>;
+  getKeyBindings():training.KeyBindings;
   getAutoTraverse():boolean;setAutoTraverse(value:boolean):void;
   getSmoothing():boolean;setSmoothing(value:boolean):void;
   getDebug():CollisionDebugMode;setDebug(value:CollisionDebugMode):void;
@@ -22,14 +23,17 @@ export function mountHumanoidLab(host:HTMLElement,o:Options){
   const dialog=make('dialog','','workbench humanoid-lab');dialog.setAttribute('aria-label','人物动作工坊');
   const header=make('header','','wb-header'),close=make('button','关闭 ×','wb-close');close.onclick=()=>dialog.close();
   header.append(make('div','CHARACTER / TRAVERSAL LAB','wb-eyebrow'),close);
-  dialog.append(header,make('h2','人物动作工坊'),make('p','沿用人物场模型、101 骨骼与全部 48 个动作。选择测试点，或在当前位置执行动作。','wb-note'));
+  dialog.append(header,make('h2','人物动作工坊'),make('p','使用提供的 101 骨骼人形与动作。选择测试点，或在当前位置执行动作。','wb-note'));
   const actions=make('div','','wb-actions');
-  const choices:[string,HumanoidInput|'jump'][]=[['站立 / 蹲伏',{toggleCrouch:true}],['普通跳跃（原地）','jump'],['翻滚',{roll:true}],['滑铲',{slide:true}],['匍匐 / 起身',{prone:true}],['进入 / 退出攀爬',{climb:true}],['拾取 / 坐下 / 起身',{interact:true}],['放到台面',{putDown:true}],['切换泳姿',{toggleSwimStyle:true}],['取消离散动作',{cancel:true}]];
+  const choices:[string,HumanoidInput|'jump'][]=[['站立 / 蹲伏',{toggleCrouch:true}],['普通跳跃（原地）','jump'],['翻滚',{roll:true}],['滑铲',{slide:true}],['匍匐 / 起身',{prone:true}],['进入攀爬',{climb:true}],['松开攀爬面',{releaseClimb:true}],['拾取 / 坐下 / 起身',{interact:true}],['放到台面',{putDown:true}],['切换泳姿',{toggleSwimStyle:true}],['取消离散动作',{cancel:true}]];
   for(const [label,command] of choices){
-    const key=command==='jump'?'Space':Object.entries(HUMANOID_BINDINGS).find(([name])=>command[name as keyof HumanoidInput])?.[1].key;
+    const bindings=o.getKeyBindings();
+    const field:training.ControlAction|undefined=command==='jump'?'jump':command.toggleCrouch||command.releaseClimb?'crouch':command.climb||command.interact?'interact':command.roll?'roll':command.prone?'prone':command.putDown?'putDown':command.toggleSwimStyle?'swimStyle':undefined;
+    const key=command!=='jump'&&command.slide?`${bindingLabel('sprint',bindings)} + ${bindingLabel('crouch',bindings)}`:field?bindingLabel(field,bindings):undefined;
     const b=make('button',key?`${key} · ${label}`:label,'wb-button');b.onclick=()=>{pendingAction=command;dialog.close();};actions.append(b);
   }
-  dialog.append(make('p','靠近障碍后，按住 WASD 朝向障碍并按 Space 翻越 / 攀上；游泳上岸也使用这个组合。单按 Space 普通跳跃，壁面 / 梯子攀爬中按 B 或 Space 脱离。F 上下载具 · Q 滑铲（先助跑） · V 翻滚 · C 蹲伏。方向键环绕相机，相机模式使用页面「相机」按钮切换。','wb-note'));
+  dialog.append(make('p',controlHints(o.getKeyBindings()).map(([key,label])=>`${key}：${label}`).join(' · '),'wb-note'));
+  dialog.append(make('p','滑铲需要空手、站立且实际速度达到 2.5 m/s；低通道不是启动条件。头顶受阻时继续移出再起身。攀爬需要声明并绑定碰撞体的墙面或梯子。游泳需要足够深的水体与真实池底。','wb-note'));
   const toggles=make('div','','wb-parameter-grid'),refreshToggles:(()=>void)[]=[];
   for(const [title,get,set] of [['自动翻越 / 攀上（调试，默认关闭）',o.getAutoTraverse,o.setAutoTraverse],['原人物动画平滑混合',o.getSmoothing,o.setSmoothing]] as const){const label=make('label',title,'wb-field'),input=make('input');input.type='checkbox';input.checked=get();input.onchange=()=>set(input.checked);refreshToggles.push(()=>{input.checked=get();});label.append(input);toggles.append(label);}
   const debugLabel=make('label','碰撞体显示','wb-field'),debugSelect=make('select');

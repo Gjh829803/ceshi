@@ -8,7 +8,7 @@ import { WorldAssets } from './assets-library';
 import { createWorld } from './world';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
-const humanoid = catalog.assets.find(asset => asset.id === 'humanoid.g-bot')! as unknown as AssetDefinition & { sourcePath: string };
+const humanoid = catalog.assets.find(asset => asset.id === 'humanoid.source-101')! as unknown as AssetDefinition & { sourcePath: string };
 const instances: AssetInstance[] = [];
 async function load() {
   const instance = await loadAsset(humanoid, { fetchBytes: () => readFile(resolve(humanoid.sourcePath)) });
@@ -18,7 +18,7 @@ async function load() {
 function legBones(instance: AssetInstance): Object3D[] {
   const result: Object3D[] = [];
   instance.object.traverse(object => {
-    if (/^mixamorig(Left|Right)(UpLeg|Leg|Foot)$/.test(object.name.replace(/[^a-zA-Z0-9]/g, ''))) result.push(object);
+    if (/^(thigh|calf|foot)_[lr]$/.test(object.name)) result.push(object);
   });
   expect(result).toHaveLength(6);
   return result;
@@ -32,7 +32,7 @@ function effectiveDuration(instance: AssetInstance, id: 'walk' | 'run') {
 
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); });
 
-describe('automatic G-bot locomotion with the original project GLB', () => {
+describe('automatic humanoid locomotion with the original project GLB', () => {
   it.each([
     ['walk', 60], ['walk', 120], ['run', 60], ['run', 120],
   ] as const)('advances real leg poses across every %s loop at %i Hz', async (id, hz) => {
@@ -49,18 +49,18 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
       if (instance.timeSeconds < previousTime) wraps++;
       previous = current; previousTime = instance.timeSeconds;
     }
-    expect(wraps).toBeGreaterThanOrEqual(4);
+    expect(wraps).toBeGreaterThanOrEqual(Math.floor(4*humanoid.actions[id]!.timeScale/effectiveDuration(instance,id)));
     expect(frozenTicks).toEqual([]);
   });
 
   it('keeps the same stride phase when moving between automatic walk and run', async () => {
     const instance = await load();
     const walkDuration = effectiveDuration(instance, 'walk'), runDuration = effectiveDuration(instance, 'run');
-    playLocomotion(instance, 'walk'); instance.update(walkDuration * 0.7);
+    playLocomotion(instance, 'walk'); instance.update(walkDuration * 0.7 / humanoid.actions.walk!.timeScale);
     playLocomotion(instance, 'run');
     expect(instance.currentActionId).toBe('run');
     expect(instance.timeSeconds / runDuration).toBeCloseTo(0.7, 6);
-    instance.update(runDuration * 0.1);
+    instance.update(runDuration * 0.1 / humanoid.actions.run!.timeScale);
     playLocomotion(instance, 'walk');
     expect(instance.currentActionId).toBe('walk');
     expect(instance.timeSeconds / walkDuration).toBeCloseTo(0.8, 6);
@@ -82,7 +82,7 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
       for (let t = previousTick; t < tick; t++) { playLocomotion(automatic, 'walk'); automatic.update(1 / 60); }
       // Evaluate the original authored movement range directly, excluding its
       // non-animated prefix. Compare bones, not just a reported action clock.
-      sourceAction.time = firstKey + (tick / 60) % cycleSeconds; reference.update(0);
+      sourceAction.time = firstKey + (tick / 60 * humanoid.actions.walk!.timeScale) % cycleSeconds; reference.update(0);
       if (maximumPoseChange(pose(automaticBones), pose(referenceBones)) > 1e-5) mismatchedFrames.push(frame);
       previousTick = tick;
     }
@@ -107,10 +107,10 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
     expect(action).toBeDefined();
     expect(action.loop).toBe(LoopOnce);
     expect(action.getClip()).toBe(walk);
-    expect(walk.duration).toBe(1);
+    expect(walk.duration).toBeGreaterThan(0);
     expect(instance.timeSeconds).toBe(0);
-    instance.update(0.99); expect(instance.isActionComplete).toBe(false);
-    instance.update(0.02); expect(instance.isActionComplete).toBe(true);
+    instance.update(walk.duration/humanoid.actions.walk!.timeScale-.01); expect(instance.isActionComplete).toBe(false);
+    instance.update(.02); expect(instance.isActionComplete).toBe(true);
     expect(instance.timeSeconds).toBe(walk.duration);
   });
 
@@ -124,8 +124,8 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
     instance.mixer.stopAllAction(); instance.play(id);
     const bones = legBones(instance); instance.update(0); const first = pose(bones);
     instance.update(1 / 60);
-    // The original manual clip still includes its source's leading hold.
-    expect(maximumPoseChange(first, pose(bones))).toBeLessThan(1e-6);
+    // The bound source starts at an authored key and moves continuously.
+    expect(maximumPoseChange(first, pose(bones))).toBeGreaterThan(1e-6);
   });
 
   it.each(['idle', 'jump'] as const)('does not carry automatic phase through %s', async action => {
@@ -142,7 +142,7 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
     instance.mixer.stopAllAction();
     playLocomotion(instance, id);
     expect(instance.timeSeconds).toBe(0);
-    instance.update(1 / 60); expect(instance.timeSeconds).toBeCloseTo(1 / 60);
+    instance.update(1 / 60); expect(instance.timeSeconds).toBeCloseTo(humanoid.actions[id]!.timeScale / 60);
   });
 
   it('restores the original idle reset pose and starts a new gait from the beginning', async () => {
@@ -157,8 +157,8 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
   it('keeps gait phase independent between instances sharing the source GLB', async () => {
     const first = await load(), second = await load();
     playLocomotion(first, 'walk'); playLocomotion(second, 'walk');
-    first.update(effectiveDuration(first, 'walk') * 0.2);
-    second.update(effectiveDuration(second, 'walk') * 0.7);
+    first.update(effectiveDuration(first, 'walk') * 0.2 / humanoid.actions.walk!.timeScale);
+    second.update(effectiveDuration(second, 'walk') * 0.7 / humanoid.actions.walk!.timeScale);
     const secondTime = second.timeSeconds;
     playLocomotion(first, 'run');
     expect(first.timeSeconds / effectiveDuration(first, 'run')).toBeCloseTo(0.2, 6);
@@ -166,7 +166,7 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
     playLocomotion(second, 'run');
     expect(second.timeSeconds / effectiveDuration(second, 'run')).toBeCloseTo(0.7, 6);
     first.dispose(); second.update(0.1);
-    expect(second.timeSeconds).toBeCloseTo(effectiveDuration(second, 'run') * 0.7 + 0.1, 6);
+    expect(second.timeSeconds).toBeCloseTo(effectiveDuration(second, 'run') * 0.7 + 0.1 * humanoid.actions.run!.timeScale, 6);
   });
 
   it('uses automatic gait through the managed asset handle supplied to the engine', async () => {
@@ -178,13 +178,13 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
       const bones = legBones(managed), first = pose(bones);
       managed.update(1 / 60);
       expect(maximumPoseChange(first, pose(bones))).toBeGreaterThan(1e-5);
-      managed.update(effectiveDuration(managed, 'walk') * 0.7 - 1 / 60);
+      managed.update(effectiveDuration(managed, 'walk') * 0.7 / humanoid.actions.walk!.timeScale - 1 / 60);
       playLocomotion(managed, 'run');
       expect(managed.timeSeconds / effectiveDuration(managed, 'run')).toBeCloseTo(0.7, 6);
       const cloned = library.internal(await library.clone(handle));
       playLocomotion(cloned, 'walk'); expect(cloned.timeSeconds).toBe(0);
       library.release(handle); cloned.update(0.1);
-      expect(cloned.timeSeconds).toBeCloseTo(0.1);
+      expect(cloned.timeSeconds).toBeCloseTo(.1*humanoid.actions.walk!.timeScale);
     } finally { library.dispose(); vi.unstubAllGlobals(); }
   });
 
@@ -215,7 +215,7 @@ describe('automatic G-bot locomotion with the original project GLB', () => {
       const phase = managed.timeSeconds / effectiveDuration(managed, 'walk');
       world.step({ moveZRatio: -1, run: true });
       expect(world.getEntityState('hero').animation?.actionId).toBe('run');
-      expect(managed.timeSeconds).toBeCloseTo((phase * effectiveDuration(managed, 'run') + 1 / 60) % effectiveDuration(managed, 'run'), 6);
+      expect(managed.timeSeconds).toBeCloseTo((phase * effectiveDuration(managed, 'run') + humanoid.actions.run!.timeScale / 60) % effectiveDuration(managed, 'run'), 6);
       await world.reset();
       expect(world.getEntityState('hero').animation?.actionId).toBe('idle');
       expect(managed.timeSeconds).toBe(0);

@@ -7,16 +7,15 @@ const selected=catalog.assets.find((a:{id:string})=>a.id==='training.rover');
 const resources=new Map<string,string>(catalog.assets.flatMap((a:any)=>a.resources??[]).map((r:any)=>[r.path,r.uri]));
 const character=new TrainingCharacter();
 await character.load((logicalPath:string)=>{const uri=resources.get(logicalPath);if(!uri)throw new Error(`Missing resource ${logicalPath}`);return new URL(uri,document.baseURI).href;});
-const scene=new THREE.Scene();scene.background=new THREE.Color('#93bac6');
-scene.add(new THREE.HemisphereLight('#ffffff','#436155',2.4));
-const sun=new THREE.DirectionalLight('#fff3d4',3);sun.position.set(-30,60,25);scene.add(sun);
+const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
+scene.add(new THREE.HemisphereLight('#ffffff','#aaaaaa',2.4));
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,500);
 const canvas=document.createElement('canvas');canvas.style.cssText='display:block;width:100vw;height:100vh';document.body.append(canvas);
 const map:TrainingMap={id:'independent-course',name:'Independent asset course',description:'Not coupled to the training campus',bounds:{min:[-120,-10,-120],max:[120,100,120]},
-  boxes:[{id:'ground',position:[0,-.5,0],size:[240,1,240],color:'#a8b9ac'},{id:'wall',position:[20,2,20],size:[20,4,1],color:'#c6a17e'}],
+  boxes:[{id:'ground',position:[0,-.5,0],size:[240,1,240],color:'#cccccc'},{id:'wall',position:[20,2,20],size:[20,4,1],color:'#eeeeee'}],
   water:[],regions:[{id:'road',name:'Course',description:'A reusable map module',center:[0,0,0],size:[200,200],color:'#e8be73',modes:['character','wheeled']}],
   spawns:[{id:'rover-start',vehicleId:'rover-instance-1',name:'Rover',position:[7,0,0],yaw:0,regionId:'road'}],playerSpawn:[0,0,0]};
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#a8b9ac'}));mesh.position.set(...box.position);scene.add(mesh);}
+for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);scene.add(mesh);}
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.training.spec) as TrainingVehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,training:{map,vehicles:[{instanceId:'rover-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});
