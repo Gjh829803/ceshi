@@ -4,6 +4,8 @@
 public asset IDs, resource paths, SHA-256 hashes, byte lengths and capabilities.
 The compiler verifies and packages the selected resource closure.
 
+New asset producers should follow the [asset and behavior integration guide](../../docs/asset-production-integration.md), including the aircraft example and branch workflow.
+
 `humanoid.source-101` is the default humanoid. Keep its supplied visible model,
 skeleton and actions. `createHumanoidWorld` loads its complete action resources
 and contextual controller. Its base model also
