@@ -69,6 +69,8 @@ describe('world input follows the presented surface and UI focus', () => {
 
   it('keeps Shift held and arrows independent, then releases all movement when UI takes focus', async () => {
     await page.mouse.click(120, 140);
+    await page.keyboard.press('r');
+    expect(await page.evaluate(() => window.inputTest.worlds[0]!.resets)).toBe(0);
     await page.keyboard.down('w'); await page.keyboard.down('Shift'); await page.keyboard.down('ArrowLeft');
     for (let i = 0; i < 3; i++) {
       expect(await page.evaluate(() => window.inputTest.worlds[0]!.sample())).toMatchObject({ moveZRatio: -1, run: true, cameraYawRatio: 1, moveXRatio: 0 });

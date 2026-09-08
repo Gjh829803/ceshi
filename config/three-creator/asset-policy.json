@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "allowedAssetIds": [
-    "humanoid.preset-101",
     "humanoid.source-101",
     "quadruped.animal.large-static",
     "training.bike",
@@ -24,6 +23,6 @@
     "training.trail-rover",
     "training.trainer-plane"
   ],
-  "defaultHumanoidAssetId": "humanoid.preset-101",
+  "defaultHumanoidAssetId": "humanoid.source-101",
   "allowCustomAssets": true
 }

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ThreeCompiler, hashTree } from '../three-creator/compiler.js';
+import { hashTree } from '../three-creator/compiler.js';
 import { canonicalHash, type EpisodeSourceManifest } from './contracts.js';
 import { copyEpisodeSourceBundle, loadEpisodeSource, prepareEpisodeSource, saveEpisodeSource } from './source.js';
 
@@ -33,7 +33,7 @@ async function fixture() {
     'source/main.js': 'author source', 'source/project.json': { schemaVersion: 1, assetIds: [asset.id] },
     'playable/index.html': '<html><head></head><body></body></html>',
     'playable/asset-policy.json': snapshot, 'playable/asset-definitions.json': { schemaVersion: 1, assets: [asset] },
-    [`playable/${asset.uri.slice(2)}`]: model, 'playable/runtime/worldkit-three.js': 'old runtime',
+    [`playable/${asset.uri.slice(2)}`]: model, 'playable/runtime/worldkit-three.js': 'delivered runtime',
     'captures/opening.png': 'fixture image',
     'captures/captures.json': { images: [{ view: 'opening', image: { path: 'opening.png', sha256: sha('fixture image') } },
       { view: 'entity-triview', entityIds: ['player'], image: { path: 'opening.png', sha256: sha('fixture image') } }] },
@@ -51,28 +51,20 @@ async function fixture() {
   const manifest = path.join(input, 'source.json');
   const save = async () => { source.sourceFiles = await hashTree(source.sourceRoot); source.playableFiles = await hashTree(source.playableRoot); await saveEpisodeSource(manifest, source); };
   const delivery = async () => {
-    await put(input, 'delivery.json', { kind: 'three-creator-delivery', schemaVersion: 2, profile: 'three-sdk',
-      status: 'ready', technicalStatus: 'passed', sourceHash: source.sourceHash, runtimeHash: source.runtimeHash,
+    await put(input, 'delivery.json', { kind: 'three-creator-delivery', schemaVersion: 1, profile: 'three-sdk',
+      status: 'ready-for-independent-review', technicalStatus: 'passed', sourceHash: source.sourceHash, runtimeHash: source.runtimeHash,
       worldBuildHash: source.worldBuildHash, ...(source.assetPolicySha256 === undefined ? {} : { assetPolicySha256: source.assetPolicySha256 }),
       files: Object.fromEntries(Object.entries(await hashTree(input)).filter(([name]) => /^(source|playable|captures)\//.test(name))) });
   };
   await save();
   return { root, input, manifest, source, save, delivery };
 }
-// Runtime bundling is independently tested; the adapter must preserve policy while replacing its files.
-function lightweightRuntime() {
-  vi.spyOn(ThreeCompiler.prototype, 'prepareRuntime').mockImplementation(async function (this: ThreeCompiler) {
-    const root = path.join(this.workspace, 'runtime'); await put(root, 'worldkit-three.js', 'new runtime');
-    return { root, hash: canonicalHash(await hashTree(root)), hit: false, cacheIdentity: 'fixture' };
-  });
-}
-
-it('preserves the pinned policy through runtime derivation, export and relocation', async () => {
-  const f = await fixture(); await f.delivery(); lightweightRuntime();
+it('preserves the pinned policy and runtime through capture preparation, export and relocation', async () => {
+  const f = await fixture(); await f.delivery();
   const output = path.join(f.root, 'derived');
   const derived = await prepareEpisodeSource({ payloadRoot: f.input, outputRoot: output, worldId: 'derived' });
   expect(derived).toHaveProperty('assetPolicySha256', policyHash);
-  expect(derived.runtimeHash).not.toBe(f.source.runtimeHash);
+  expect(derived.runtimeHash).toBe(f.source.runtimeHash);
   const transported = path.join(f.root, 'transported'); await copyEpisodeSourceBundle(path.join(output, 'source.json'), transported);
   const received = path.join(f.root, 'received'); await rename(transported, received);
   await rm(f.input, { recursive: true }); await rm(output, { recursive: true });
@@ -90,26 +82,26 @@ it.each(['hash', 'snapshot', 'inventory'])('rejects delivery with missing policy
     const header = JSON.parse(await readFile(path.join(f.input, 'delivery.json'), 'utf8'));
     delete header.files['playable/asset-policy.json']; await put(f.input, 'delivery.json', header);
   }
-  lightweightRuntime();
+
   await expect(prepareEpisodeSource({ payloadRoot: f.input, outputRoot: path.join(f.root, 'derived'), worldId: 'bad' })).rejects.toThrow(/ASSET_POLICY/);
   await expect(readFile(path.join(f.root, 'derived/source/main.js'))).rejects.toThrow();
 });
 
 it.each(['source', 'playable'])('rejects renamed forbidden bytes in %s even with rewritten delivery file hashes', async tree => {
-  const f = await fixture(); await put(f.input, `${tree}/renamed-character.glb`, denied); await f.delivery(); lightweightRuntime();
+  const f = await fixture(); await put(f.input, `${tree}/renamed-character.glb`, denied); await f.delivery();
   await expect(prepareEpisodeSource({ payloadRoot: f.input, outputRoot: path.join(f.root, 'derived'), worldId: 'bad' })).rejects.toThrow(/ASSET_POLICY/);
 });
 
 it('rejects a rewritten snapshot at import even when its delivery file hash is updated', async () => {
   const f = await fixture();
   await put(f.input, 'playable/asset-policy.json', { ...snapshot, deniedResourceSha256: [] });
-  await f.delivery(); lightweightRuntime();
+  await f.delivery();
   await expect(prepareEpisodeSource({ payloadRoot: f.input, outputRoot: path.join(f.root, 'derived'), worldId: 'bad' })).rejects.toThrow('ASSET_POLICY_HASH_MISMATCH');
 });
 
 it('rejects an undeclared source resource instead of losing it during import', async () => {
   const f = await fixture(); await f.delivery();
-  await put(f.input, 'source/omitted.glb', denied); lightweightRuntime();
+  await put(f.input, 'source/omitted.glb', denied);
   await expect(prepareEpisodeSource({ payloadRoot: f.input, outputRoot: path.join(f.root, 'derived'), worldId: 'bad' })).rejects.toThrow('ASSET_POLICY_INVENTORY_CHANGED');
 });
 
@@ -145,7 +137,7 @@ it('keeps historical policy-less deliveries compatible without applying current 
   const f = await fixture(); delete f.source.assetPolicySha256;
   await rm(path.join(f.source.playableRoot, 'asset-policy.json'));
   await put(f.input, 'source/historical-character.glb', denied);
-  await f.delivery(); lightweightRuntime();
+  await f.delivery();
   const output = path.join(f.root, 'legacy');
   const source = await prepareEpisodeSource({ payloadRoot: f.input, outputRoot: output, worldId: 'legacy' });
   expect(source).not.toHaveProperty('assetPolicySha256');
@@ -155,7 +147,7 @@ it('keeps historical policy-less deliveries compatible without applying current 
 it.each([true, false])('derives policy-aware=%s inputs while current Host policy and catalog are unavailable', async policyAware => {
   const f = await fixture();
   if (!policyAware) { delete f.source.assetPolicySha256; await rm(path.join(f.source.playableRoot, 'asset-policy.json')); }
-  await f.delivery(); lightweightRuntime();
+  await f.delivery();
   const read = fs.readFileSync;
   vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => {
     if (/three-creator\/asset-(policy|catalog)\.json$/.test(String(file))) throw new Error('CURRENT_HOST_ASSET_CONFIG_UNAVAILABLE');

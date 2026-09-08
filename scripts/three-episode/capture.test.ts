@@ -29,6 +29,8 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
     errors: options.shouldFail && tick > 30 ? [{ code: 'FIXTURE_RUNTIME_ERROR', message: 'fixture failure', phase: 'step', category: 'runtime', entityIds: ['actor'] }] : [] });
   const session: EpisodeCaptureSession = {
     errors: [], capabilities: async () => capabilities,
+    execute: async () => { throw new Error('fixture does not expose training actions'); },
+    operation: async () => { throw new Error('fixture operation missing'); },
     probeStart: async start => ({ isValid: true, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: [] }),
     prepareSegment: async start => { tick = 1; yaw = start.facingYawRadians; pitch = 0; velocity = [0,0,0]; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
     advance: async (input: WorldInput, ticks: number) => {
@@ -50,7 +52,7 @@ async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'three-episode-capture-test-')); tempRoots.push(root);
   const playableRoot = path.join(root, 'playable'), outputRoot = path.join(root, 'capture'); await mkdir(playableRoot);
   await writeFile(path.join(playableRoot, 'index.html'), '<canvas></canvas>');
-  const plan: EpisodePlan = { kind: 'worldkit-three-episode-plan', schemaVersion: 1, worldBuildHash: 'a'.repeat(64), segments: Array.from({ length: 6 }, (_, index) => ({ id: `segment-0${index}`, start: { positionWorldMetersXYZ: [index * 10, 0, 0], facingYawRadians: 0 }, waypoints: [{ positionWorldMetersXYZ: [index * 10, 0, -500], gait: 'walk' }], endBehavior: 'stop', purpose: 'long route' })) };
+  const plan: EpisodePlan = { kind: 'worldkit-three-episode-plan', schemaVersion: 2, worldBuildHash: 'a'.repeat(64), segments: Array.from({ length: 6 }, (_, index) => ({ id: `segment-0${index}`, start: { positionWorldMetersXYZ: [index * 10, 0, 0], facingYawRadians: 0 }, waypoints: [{ positionWorldMetersXYZ: [index * 10, 0, -500], gait: 'walk' }], endBehavior: 'stop', purpose: 'long route' })) };
   const fake = fakeSession(), openBrowser = vi.fn(async () => fake.session);
   let encoded = 0;
   const abort = vi.fn(async () => {});
@@ -104,6 +106,44 @@ describe('Three episode deterministic production capture', () => {
     const setup = await fixture(); setup.plan.segments[0]!.waypoints[0]!.positionWorldMetersXYZ = [0, 0, -1];
     const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
     expect(result.segments[0]!.failure?.code).toBe('EPISODE_ROUTE_TOO_SHORT'); expect(result.segments[0]!.status).toBe('failed');
+  });
+  it('captures a seated action and a same-waypoint stand-up through real advancing ticks', async () => {
+    const setup = await fixture(), session = setup.fake.session;
+    const segment = setup.plan.segments[0]!;
+    segment.waypoints = [{ positionWorldMetersXYZ: [0, 0, 0], gait: 'walk' }];
+    segment.actionGoals = [
+      { id: 'sit-at-chair', trigger: { waypointIndex: 0, radiusMeters: .6 }, targetId: 'chair', intent: { kind: 'skill', action: 'sit' }, completion: { kind: 'settled', holdSeconds: 1 }, timeoutSeconds: 4 },
+      { id: 'stand-from-chair', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'skill', action: 'standUp' }, completion: { kind: 'settled', holdSeconds: 0 }, timeoutSeconds: 4 },
+    ];
+    let tick = 1, started = 0, currentAction = '', seated: string | null = null;
+    const commands: string[] = [];
+    const training = (snapshot: WorldSnapshot): WorldSnapshot => {
+      tick = snapshot.simulationTick;
+      if (currentAction && tick >= started + 30) seated = currentAction === 'sit' ? 'chair' : null;
+      return { ...snapshot, training: { character: { instanceId: 'actor', state: seated ? 'seated' : 'idle', stance: 'stand', swimming: false, swimStyle: 'freestyle', carrying: null, seated,
+        activeAction: currentAction && tick < started + 30 ? { requestId: currentAction, action: currentAction, phase: 'animate', elapsedSeconds: (tick - started) / 60 } : null },
+        surface: { mode: 'none', surfaceId: null, pose: null }, water: { swimming: false, contact: null },
+        interactionTargets: [{ id: 'chair', kind: 'seat', eligible: true, reason: 'READY', approachPositionWorldMetersXYZ: [0, 0, 0] }], message: '' } as unknown as NonNullable<WorldSnapshot['training']> };
+    };
+    const originalPrepare = session.prepareSegment, originalAdvance = session.advance, originalFrame = session.frame;
+    session.prepareSegment = async (...args) => training(await originalPrepare(...args));
+    session.advance = async (...args) => training(await originalAdvance(...args));
+    session.frame = async (...args) => { const frame = await originalFrame(...args); return { ...frame, snapshot: training(frame.snapshot) }; };
+    session.execute = async command => {
+      if (command.type !== 'training.action') throw new Error('unexpected fixture command');
+      currentAction = command.request.action; started = tick; commands.push(currentAction);
+      return { status: 'accepted', commandId: currentAction, worldRevision: 0, operationId: currentAction };
+    };
+    session.operation = async id => ({ id, status: tick >= started + 30 ? 'succeeded' : 'running', phase: 'animate' });
+    const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
+    expect(result.status).toBe('completed'); expect(commands).toEqual(['sit', 'standUp']);
+    expect(new Set(setup.fake.advances)).toEqual(new Set([1]));
+    expect(setup.fake.advances).toHaveLength(1800);
+    const evidence = JSON.parse(await readFile(path.join(result.segments[0]!.outputRoot, 'action-timeline.json'), 'utf8'));
+    expect(evidence.actionTimeline.map((item: any) => item.result)).toEqual(['succeeded', 'succeeded']);
+    expect(evidence.actionTimeline[0]).toMatchObject({ startTick: 0, endTick: 90 });
+    expect(evidence.actionTimeline[0].stateChanges.some((item: any) => item.tick === 30 && item.state.character.seated === 'chair')).toBe(true);
+    expect(evidence.actionTimeline[1].startTick).toBeGreaterThanOrEqual(90);
   });
   it('shares a single initialized world across all requested segment resets', async () => {
     const setup = await fixture();

@@ -1,14 +1,15 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import {Vector3} from 'three';
+import {bindingLabel,DEFAULT_KEY_BINDINGS,type KeyBindings} from '../input';
 import type {HumanoidActionContext} from './types';
-import {SKILL_DEFINITIONS,type InteractionTarget,type SkillId,type SkillRequest,type SkillResult} from './action-schema';
+import {ACTION_TUNING,SKILL_DEFINITIONS,type InteractionTarget,type SkillId,type SkillRequest,type SkillResult} from './action-schema';
 
 const DT=1/60,UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1},RADIUS=.28;
 export interface ActionCommands {roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean}
 export interface TargetRuntime {definition:InteractionTarget;position:Vector3;state:'available'|'carried'|'placed'|'occupied'|'dropped';collider?:RAPIER.Collider|undefined;body?:RAPIER.RigidBody|undefined}
 export interface SkillPose {key:string;time:number;phase:string}
 interface ActiveSkill {id:SkillId;requestId:string;targetId?:string|undefined;elapsed:number;phase:string;direction:Vector3;initialSpeed:number;attached?:boolean;alignTime:number}
-const DURATIONS:Record<string,number>={roll:44/30,'slide-start':25/30,'slide-exit':.5,pickup:25/30,'sit-enter':1.3,'sit-exit':31/30};
+const DURATIONS:Record<string,number>={roll:ACTION_TUNING.rollDurationSeconds,'slide-start':ACTION_TUNING.slideEntryDurationSeconds,'slide-exit':ACTION_TUNING.slideExitDurationSeconds,pickup:25/30,'sit-enter':1.3,'sit-exit':31/30};
 
 /** Physical actions and target state. Rendering is optional; no DOM or model calls. */
 export class ActionSystem {
@@ -79,25 +80,26 @@ export class ActionSystem {
   }
   private reason(action:SkillId,target?:TargetRuntime):[string,string]|null{
     const sim=this.sim;
+    if(sim.isMounted)return ['MOUNTED','请先离开载具或坐骑'];
     if(this.active)return ['BUSY','已有动作正在执行'];
     if(sim.surface&&sim.surface.mode!=='none')return ['BUSY_SURFACE','请先退出匍匐或壁面攀爬，再执行这个动作'];
     if(sim.traversal||sim.swimming)return ['INVALID_STATE','需要先回到陆地可站立位置'];
-    if(action==='standUp')return !this.seated?['NOT_SEATED','当前没有坐下']:!this.clearHeight(1.68)?['HEADROOM_BLOCKED','头顶空间不足，暂时不能起身']:null;
+    if(action==='standUp')return !this.seated?['NOT_SEATED','当前没有坐下']:!this.clearHeight(ACTION_TUNING.standingHeightMeters)?['HEADROOM_BLOCKED','头顶空间不足，暂时不能起身']:null;
     if(this.seated)return ['SEATED','请先按 E 起身'];
     if(!sim.grounded)return ['NOT_GROUNDED','动作需要地面支撑'];
-    if(action==='putDown')return this.carrying?null:['EMPTY_HANDS','当前没有搬运物件'];
+    if(action==='putDown')return this.carrying?this.placement().reason:['EMPTY_HANDS','当前没有搬运物件'];
     if(this.carrying)return ['HANDS_OCCUPIED','先把手中的物件放到台面'];
     if(sim.stance!=='stand')return ['STANCE_REQUIRED','请先站起再执行这个动作'];
-    if(action==='slide'&&sim.speed<2.5)return ['SPEED_TOO_LOW','先跑起来，再按 Q 滑铲'];
+    if(action==='slide'&&sim.speed<ACTION_TUNING.slideMinimumSpeedMetersPerSecond)return ['SPEED_TOO_LOW','实际速度不足，请先助跑，再按冲刺 + 蹲伏滑铲'];
     if((action==='slide'||action==='roll')&&this.cooldown>0)return ['COOLDOWN','动作仍在恢复中'];
     if(action==='pickup'||action==='sit'){
       if(!target||target.definition.kind!==(action==='pickup'?'pickup':'seat'))return ['INVALID_TARGET','没有对应类型的交互目标'];
       if(target.state!=='available'&&target.state!=='placed')return ['TARGET_UNAVAILABLE','目标已被占用'];
       const approach=new Vector3(...target.definition.approach),delta=approach.clone().sub(sim.position);
-      if(Math.hypot(delta.x,delta.z)>.9||Math.abs(delta.y)>.16)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
+      if(Math.hypot(delta.x,delta.z)>ACTION_TUNING.approachRadiusMeters||Math.abs(delta.y)>ACTION_TUNING.approachVerticalToleranceMeters)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
       const hit=sim.world.castShape(sim.body.translation(),ROT,delta,new RAPIER.Capsule(sim.capsuleHalf,RADIUS),0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule);
       if(hit&&hit.time_of_impact<.99)return ['PATH_BLOCKED','交互位置被实体挡住'];
-      if(action==='pickup'&&(target.definition.massKg??1)>8)return ['TOO_HEAVY','当前搬运动作支持不超过 8 kg 的物件'];
+      if(action==='pickup'&&(target.definition.massKg??1)>ACTION_TUNING.maximumPickupMassKg)return ['TOO_HEAVY',`当前搬运动作支持不超过 ${ACTION_TUNING.maximumPickupMassKg} kg 的物件`];
       if(action==='pickup'){
         // This is a table-height authored reach, not a general IK pickup.
         // Reject incompatible targets rather than teleporting them to a hand.
@@ -108,16 +110,22 @@ export class ActionSystem {
     }
     return null;
   }
-  listTargets(){return [...this.targets.values()].map(target=>{
-    const action=target.definition.kind==='pickup'?'pickup':'sit';const reason=this.reason(action,target);
-    return {...structuredClone(target.definition),position:target.position.toArray(),state:target.state,action,eligible:!reason,reason:reason?.[0]??'READY',message:reason?.[1]??'可交互'};
-  });}
-  hint(){
-    if(this.seated)return 'E / Space 起身';
-    if(this.carrying)return '搬运中 · WASD 移动 · 靠近台面按 G 放下';
-    const target=this.nearest();return target?`E ${target.definition.kind==='seat'?'坐下':'拾取'} · ${target.definition.label}`:null;
+  eligibility(action:SkillId,targetId?:string){
+    const needed=action==='slide'?['slide-start','slide-loop','slide-exit']:action==='pickup'?['pickup','carry-walk']:action==='sit'?['sit-enter','sit-idle']:action==='standUp'?['sit-exit']:action==='putDown'?[]:['roll'];
+    const missing=needed.find(id=>!this.availableClips.has(id));
+    const reason=this.sim.isMounted?['MOUNTED','请先离开载具或坐骑']:missing?['ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`]:this.reason(action,targetId?this.targets.get(targetId):undefined);
+    return {eligible:!reason,reason:reason?.[0]??'READY',message:reason?.[1]??'可执行'};
   }
-  private nearest(){return [...this.targets.values()].filter(t=>(t.state==='available'||t.state==='placed')&&new Vector3(...t.definition.approach).distanceTo(this.sim.position)<.95)
+  listTargets(){return [...this.targets.values()].map(target=>{
+    const action=target.definition.kind==='pickup'?'pickup':'sit';const status=this.eligibility(action,target.definition.id);
+    return {...structuredClone(target.definition),position:target.position.toArray(),state:target.state,action,...status};
+  });}
+  hint(bindings:KeyBindings=DEFAULT_KEY_BINDINGS){
+    if(this.seated)return `${bindingLabel('interact',bindings)} / ${bindingLabel('jump',bindings)} 起身`;
+    if(this.carrying)return `搬运中 · 靠近台面按 ${bindingLabel('putDown',bindings)} 放下`;
+    const target=this.nearest();return target?`${bindingLabel('interact',bindings)} ${target.definition.kind==='seat'?'坐下':'拾取'} · ${target.definition.label}`:null;
+  }
+  nearest(){return [...this.targets.values()].filter(t=>(t.state==='available'||t.state==='placed')&&new Vector3(...t.definition.approach).distanceTo(this.sim.position)<.95)
     .sort((a,b)=>new Vector3(...a.definition.approach).distanceToSquared(this.sim.position)-new Vector3(...b.definition.approach).distanceToSquared(this.sim.position))[0];}
   request(request:SkillRequest):SkillResult{
     const raw=request as unknown as Record<string,unknown>;
@@ -128,11 +136,9 @@ export class ActionSystem {
     if(this.requests.has(request.requestId))return this.requests.get(request.requestId)===signature?this.status(request.requestId)!
       :{...request,status:'rejected',code:'REQUEST_ID_CONFLICT',message:'相同 requestId 不能用于不同请求'};
     this.requests.set(request.requestId,signature);
-    const needed=request.action==='slide'?['slide-start','slide-loop','slide-exit']:request.action==='pickup'?['pickup','carry-walk']:request.action==='sit'?['sit-enter','sit-idle']:request.action==='standUp'?['sit-exit']:request.action==='putDown'?[]:['roll'];
     const target=request.targetId?this.targets.get(request.targetId):undefined;
-    const missing=needed.find(id=>!this.availableClips.has(id));
-    const reason=missing?['ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`] as [string,string]:this.reason(request.action,target);
-    if(reason)return this.save({...request,status:'rejected',code:reason[0],message:reason[1]});
+    const eligibility=this.eligibility(request.action,request.targetId);
+    if(!eligibility.eligible)return this.save({...request,status:'rejected',code:eligibility.reason,message:eligibility.message});
     if(request.action==='putDown')return this.putDown(request);
     const sim=this.sim;
     this.active={id:request.action,requestId:request.requestId,targetId:request.targetId??this.seated??undefined,elapsed:0,phase:target?'align':'play',direction:sim.velocity.length()>.2?sim.velocity.clone().setY(0).normalize():sim.facing.clone(),initialSpeed:sim.speed,alignTime:0};
@@ -142,21 +148,21 @@ export class ActionSystem {
   }
   cancel(requestId:string){
     if(this.active?.requestId!==requestId)return this.status(requestId);
-    if(this.active.id==='slide'&&!this.clearHeight(1.68))return {...this.status(requestId)!,code:'HEADROOM_BLOCKED',message:'低顶下需先移出，不能强制恢复站姿'};
+    if(this.active.id==='slide'&&!this.clearHeight(ACTION_TUNING.standingHeightMeters))return {...this.status(requestId)!,code:'HEADROOM_BLOCKED',message:'低顶下需先移出，不能强制恢复站姿'};
     if(this.active.id==='sit'||this.active.id==='standUp')return {...this.status(requestId)!,code:'ATOMIC_TRANSITION',message:'请等待坐姿过渡完成，再执行起身'};
     this.finish('cancelled','CANCELLED','动作已取消');return this.status(requestId);
   }
   private finish(status:'completed'|'cancelled',code:string,message:string){
     const active=this.active;if(!active)return;
     this.save({requestId:active.requestId,action:active.id,targetId:active.targetId,status,code,message});
-    this.active=null;this.pose=null;this.cooldown=.22;
-    this.setHeight(1.68);this.sim.velocity.set(0,0,0);this.sim.speed=0;
+    this.active=null;this.pose=null;this.cooldown=ACTION_TUNING.cooldownSeconds;
+    this.setHeight(ACTION_TUNING.standingHeightMeters);this.sim.velocity.set(0,0,0);this.sim.speed=0;
     this.sim.controller.enableAutostep(.27,.2,false);this.sim.controller.enableSnapToGround(.18);
   }
   private setHeight(height:number){
     const half=Math.max(.06,height/2-RADIUS);
     if(Math.abs(this.sim.capsuleHalf-half)<1e-5)return;
-    this.sim.actionCapsuleHalf=Math.abs(height-1.68)<1e-5?null:half;
+    this.sim.actionCapsuleHalf=Math.abs(height-ACTION_TUNING.standingHeightMeters)<1e-5?null:half;
     this.sim.capsule.setShape(new RAPIER.Capsule(half,RADIUS));
     const center=this.sim.position.clone().addScaledVector(UP,half+RADIUS);
     this.sim.body.setTranslation(center,true);this.sim.body.setNextKinematicTranslation(center);
@@ -173,14 +179,20 @@ export class ActionSystem {
     sim.speed=Math.hypot(movement.x,movement.z)/DT;sim.velocity.copy(velocity);
     sim.commitPose();sim.sync();
   }
-  private putDown(request:SkillRequest){
-    const sim=this.sim,target=this.targets.get(this.carrying!)!,size=target.definition.size??[.13,.13,.13];
+  private placement():{reason:[string,string]|null;position?:Vector3}{
+    const sim=this.sim,target=this.targets.get(this.carrying!);if(!target)return {reason:['EMPTY_HANDS','当前没有搬运物件']};
+    const size=target.definition.size??[.13,.13,.13];
     const position=sim.position.clone().addScaledVector(sim.facing,.36).addScaledVector(UP,1.3);
     const floor=sim.ray(position,new Vector3(0,-1,0),.7,undefined);
-    if(!floor||floor.normal.y<.9)return this.save({...request,status:'rejected',code:'NO_PLACEMENT_SURFACE',message:'靠近腰高的平整台面再按 G；当前没有地面放下动画'});
+    if(!floor||floor.normal.y<.9)return {reason:['NO_PLACEMENT_SURFACE','靠近腰高的平整台面再放下']};
     position.y-=floor.timeOfImpact;position.y+=size[1]/2+.008;
     const occupied=sim.world.intersectionWithShape(position,ROT,new RAPIER.Cuboid(size[0]/2,size[1]/2,size[2]/2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule);
-    if(occupied)return this.save({...request,status:'rejected',code:'PLACEMENT_BLOCKED',message:'台面放置位置被占用'});
+    return occupied?{reason:['PLACEMENT_BLOCKED','台面放置位置被占用']}:{reason:null,position};
+  }
+  private putDown(request:SkillRequest){
+    const sim=this.sim,target=this.targets.get(this.carrying!)!,placement=this.placement();
+    if(placement.reason)return this.save({...request,status:'rejected',code:placement.reason[0],message:placement.reason[1]});
+    const position=placement.position!;
     target.position.copy(position);target.state='placed';target.definition.position=position.toArray();
     target.definition.approach=sim.position.toArray();target.definition.yaw=Math.atan2(sim.facing.x,sim.facing.z);
     target.collider?.setTranslation(position);target.collider?.setEnabled(true);this.carrying=null;
@@ -221,17 +233,17 @@ export class ActionSystem {
       if(!sim.grounded||active.elapsed>=DURATIONS.roll!)this.finish('completed','FINISHED','翻滚结束');
     }else if(active.id==='slide'){
       sim.controller.disableAutostep();
-      const start=DURATIONS['slide-start']!,loopEnd=start+1.0;
+      const start=DURATIONS['slide-start']!,loopEnd=start+ACTION_TUNING.slideLoopSeconds;
       if(active.phase==='exit'){
-        this.pose={key:'slide-exit',time:Math.min(active.elapsed,.5),phase:'exit'};this.setHeight(1.68);this.move(new Vector3());
-        if(active.elapsed>=.5)this.finish('completed','FINISHED','滑铲结束');
+        this.pose={key:'slide-exit',time:Math.min(active.elapsed,ACTION_TUNING.slideExitDurationSeconds),phase:'exit'};this.setHeight(ACTION_TUNING.standingHeightMeters);this.move(new Vector3());
+        if(active.elapsed>=ACTION_TUNING.slideExitDurationSeconds)this.finish('completed','FINISHED','滑铲结束');
       }else{
-        const t=active.elapsed;const height=t<.333?1.68-(1.68-.9)*Math.min(1,t/.333):.9;
+        const t=active.elapsed;const height=t<.333?ACTION_TUNING.standingHeightMeters-(ACTION_TUNING.standingHeightMeters-ACTION_TUNING.slideHeightMeters)*Math.min(1,t/.333):ACTION_TUNING.slideHeightMeters;
         this.setHeight(height);this.pose={key:t<start?'slide-start':'slide-loop',time:t<start?t:(t-start)%2,phase:t<loopEnd?'slide':'clearance'};
         const speed=t<loopEnd?Math.max(.6,Math.min(5.8,active.initialSpeed)*Math.exp(-.85*t)):.75;
         const direction=t>=loopEnd&&input.lengthSq()>.01?input:active.direction;
         this.move(direction.clone().multiplyScalar(t>=loopEnd&&input.lengthSq()<.01?0:speed));
-        if(t>=loopEnd){if(this.clearHeight(1.68)){active.phase='exit';active.elapsed=0;}else sim.lastResult='头顶不足：保持滑铲低姿态，WASD 移出后恢复';}
+        if(t>=loopEnd){if(this.clearHeight(ACTION_TUNING.standingHeightMeters)){active.phase='exit';active.elapsed=0;}else sim.lastResult='头顶不足：保持滑铲低姿态，WASD 移出后恢复';}
         if(!sim.grounded){this.finish('cancelled','LEFT_GROUND','滑铲离开地面，恢复下落');}
       }
       sim.state='slide';

@@ -8,12 +8,13 @@ import ts from 'typescript';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { publicContractTopic } from './authoring-schema.js';
 import { EPISODE_SCHEMA, sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
+import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
+import {recordedVideoEncodingArgs} from './video.js';
 
 const roots: string[] = [];
 async function fixture(source = `import * as THREE from 'three'; window.authorScene = new THREE.Scene(); document.title = 'ordinary browser APIs work';`) {
@@ -30,7 +31,7 @@ describe('Three semantic target views', () => {
       for (const [name, source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
       const candidate = await service.compiler.prepare();
       const catalog = JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
-      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.preset-101');
+      const humanoid = catalog.assets.find((asset:any) => asset.id === 'humanoid.source-101');
       expect(humanoid).toBeDefined();
       for (const action of ['idle','walk','run','jump']) expect(humanoid.actions[action].clipName).toBeTruthy();
       expect(sha256(await readFile(path.join(candidate.playableRoot,humanoid.uri)))).toBe(humanoid.sha256);
@@ -107,19 +108,37 @@ describe('Three browser candidate identity and admission', () => {
   });
 });
 describe('Three tool operations and truthful submission', () => {
-  it('identifies source drift separately from a passing complete recording instead of suggesting another identical long test', () => {
-    const report = { status: 'passed', isCompleteEpisode: true, capturedInput: true, actualWallSeconds: 184, inputWallSeconds: 180.008, activePlaySeconds: 180.004, videoMetadata: { durationSeconds: 183.367 }, worldBuildHash: 'recorded-world', episodeHash: 'unchanged-episode' };
+  it('identifies source and episode drift separately from a passing complete recording', () => {
+    const report = { status: 'passed', isCompleteEpisode: true, capturedInput: true, actualWallSeconds: 2.4, inputWallSeconds: 1.008, activePlaySeconds: 1.004, videoMetadata: { durationSeconds: 1.367 }, worldBuildHash: 'recorded-world', episodeHash: 'unchanged-episode' };
     expect(playtestSubmissionReadiness(report, { worldBuildHash: 'recorded-world', episodeHash: 'unchanged-episode' })).toEqual({ eligible: true, issues: [] });
     expect(playtestSubmissionReadiness(report, { worldBuildHash: 'changed-world', episodeHash: 'unchanged-episode' })).toEqual({ eligible: false, issues: [{ code: 'WORLD_SOURCE_CHANGED_AFTER_PLAYTEST', actual: 'recorded-world', required: 'changed-world' }] });
     const changedEpisode = playtestSubmissionReadiness(report, { worldBuildHash: 'recorded-world', episodeHash: 'changed-episode' });
     expect(changedEpisode.issues.map(issue => issue.code)).toEqual(['EPISODE_CHANGED_AFTER_PLAYTEST']);
   });
-  it('keeps actual short, missing and incomplete playtests ineligible and reports the precise missing evidence', () => {
+  it.each([.001, .1, 1, 9.75])('accepts a complete recording of %s seconds without a fixed length threshold', seconds => {
+    const current = { worldBuildHash: 'world', episodeHash: 'episode' };
+    const report = { status: 'passed', isCompleteEpisode: true, capturedInput: true, actualWallSeconds: seconds, inputWallSeconds: seconds, activePlaySeconds: seconds, videoMetadata: { durationSeconds: seconds }, ...current };
+    expect(playtestSubmissionReadiness(report, current)).toEqual({ eligible: true, issues: [] });
+  });
+  it('keeps missing and incomplete playtests ineligible and reports the precise missing evidence', () => {
     const current = { worldBuildHash: 'world', episodeHash: 'episode' };
     expect(playtestSubmissionReadiness(undefined, current).issues).toEqual([{ code: 'NO_PLAYTEST_IN_THIS_SERVICE_SESSION' }]);
-    const result = playtestSubmissionReadiness({ status: 'passed', isCompleteEpisode: false, capturedInput: true, actualWallSeconds: 183, inputWallSeconds: 181, activePlaySeconds: 179.999, videoMetadata: { durationSeconds: 182 }, ...current }, current);
+    const result = playtestSubmissionReadiness({ status: 'passed', isCompleteEpisode: false, capturedInput: true, actualWallSeconds: 2, inputWallSeconds: 1, activePlaySeconds: 0, videoMetadata: { durationSeconds: 1.5 }, ...current }, current);
     expect(result.eligible).toBe(false);
-    expect(result.issues).toEqual([{ code: 'INCOMPLETE_EPISODE', actual: false, required: true }, { code: 'RECORDED_DURATION_INSUFFICIENT', field: 'activePlaySeconds', actual: 179.999, required: 180 }]);
+    expect(result.issues).toEqual([{ code: 'INCOMPLETE_EPISODE', actual: false, required: true }, { code: 'RECORDED_TIME_INVALID', field: 'activePlaySeconds', actual: 0, required: 'finite-positive' }]);
+  });
+  it.each(['actualWallSeconds', 'inputWallSeconds', 'activePlaySeconds', 'videoDurationSeconds'])('requires real finite positive %s evidence', field => {
+    const current = { worldBuildHash: 'world', episodeHash: 'episode' };
+    const report = { status: 'passed', isCompleteEpisode: true, capturedInput: true, actualWallSeconds: .1, inputWallSeconds: .1, activePlaySeconds: .1, videoMetadata: { durationSeconds: .1 }, ...current };
+    for (const value of [0, -1, Infinity, NaN, undefined]) {
+      const invalid = field === 'videoDurationSeconds' ? { ...report, videoMetadata: { durationSeconds: value } } : { ...report, [field]: value };
+      expect(playtestSubmissionReadiness(invalid, current)).toMatchObject({ eligible: false, issues: [{ code: 'RECORDED_TIME_INVALID', field }] });
+    }
+  });
+  it('requires successful execution and trusted keyboard input even for a complete nonempty recording', () => {
+    const current = { worldBuildHash: 'world', episodeHash: 'episode' };
+    const report = { status: 'failed', isCompleteEpisode: true, capturedInput: false, actualWallSeconds: 1, inputWallSeconds: 1, activePlaySeconds: 1, videoMetadata: { durationSeconds: 1 }, ...current };
+    expect(playtestSubmissionReadiness(report, current).issues.map(issue => issue.code)).toEqual(['PLAYTEST_DID_NOT_PASS', 'TRUSTED_KEYBOARD_INPUT_MISSING']);
   });
   it('fails fast when the real SDK snapshot says stopped and retains its original runtime errors', () => {
     expect(() => assertSdkPlaytestRunning('three-sdk', { isRunning: false, simulationTick: 0, errors: [{ code: 'WORLD_FRAME_FAILED', message: 'original clock failure' }] })).toThrow(/THREE_PLAYTEST_RUNTIME_STOPPED.*WORLD_FRAME_FAILED.*original clock failure/);
@@ -138,7 +157,7 @@ describe('Three tool operations and truthful submission', () => {
   it('adds the actual SDK public guide and contracts only to the SDK profile', async () => {
     const root = await fixture(), raw = new ThreeCreatorTools(root, 'three-raw'), sdk = new ThreeCreatorTools(root, 'three-sdk');
     const rawSchema = await raw.schema(), sdkSchema = await sdk.schema();
-    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain("'./asset-definitions.json'"); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
+    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain('createHumanoidWorld'); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
     const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });
@@ -162,9 +181,18 @@ describe('Three tool operations and truthful submission', () => {
     expect((await service.getOperation(first.operationId, 1)).status).toBe('succeeded'); expect((await service.getOperation(second.operationId, 1)).status).toBe('cancelled'); expect(queuedRan).toBe(false); await service.close();
   });
   it('refuses fabricated disk playtest receipts in a fresh service', async () => {
-    const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 180 }], targets: [] }));
-    const service = new ThreeCreatorTools(root, 'three-raw'); await mkdir(service.evidenceRoot, { recursive: true }); await writeFile(path.join(service.evidenceRoot, 'playtest.json'), '{"status":"passed","actualWallSeconds":180,"capturedInput":true}');
+    const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 1 }], targets: [] }));
+    const service = new ThreeCreatorTools(root, 'three-raw'); await mkdir(service.evidenceRoot, { recursive: true }); await writeFile(path.join(service.evidenceRoot, 'playtest.json'), '{"status":"passed","actualWallSeconds":1,"capturedInput":true}');
     await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PLAYTEST_REQUIRED/); await service.close();
+  });
+  it.each([
+    { steps: [], error: 'THREE_EPISODE_INVALID' },
+    { steps: [{ keysDown: ['w'], durationSeconds: 0 }], error: 'THREE_EPISODE_DURATION_INVALID' },
+  ])('rejects an empty episode before opening a browser: $error', async ({ steps, error }) => {
+    const root = await fixture(), service = new ThreeCreatorTools(root, 'three-raw');
+    await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps, targets: [] }));
+    try { await expect(service.playtest('empty-plan')).rejects.toThrow(error); }
+    finally { await service.close(); }
   });
 });
 
@@ -235,27 +263,42 @@ describe('v2 command and discovery boundary', () => {
 
 
 describe('real episode and video timing boundaries', () => {
+ it('preserves irregular browser frame timestamps and frame count in the actual MP4 encoder',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'three-video-timing-'));roots.push(root);
+  const input=path.join(root,'irregular.webm'),output=path.join(root,'recorded.mp4'),execFile=promisify(execFileCallback);
+  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=64x64:rate=10:duration=1','-vf',"select='eq(n,0)+eq(n,1)+eq(n,4)+eq(n,9)'",'-vsync','passthrough','-c:v','libvpx-vp9','-enc_time_base','1:1000',input]);
+  await execFile('ffmpeg',recordedVideoEncodingArgs(input,output));
+  const probe=async(file:string)=>JSON.parse((await execFile('ffprobe',['-v','error','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time:format=duration','-of','json',file])).stdout);
+  const source=await probe(input),encoded=await probe(output);
+  const times=(value:any):number[]=>value.frames.map((frame:any)=>Number(frame.best_effort_timestamp_time));
+  const sourceTimes=times(source),encodedTimes=times(encoded);
+  expect(sourceTimes).toHaveLength(4);expect(new Set(sourceTimes.slice(1).map((t,index)=>Math.round((t-sourceTimes[index]!)*1000))).size).toBeGreaterThan(1);
+  expect(encodedTimes).toHaveLength(sourceTimes.length);
+  for(let i=0;i<sourceTimes.length;i++)expect(Math.abs((encodedTimes[i]!-encodedTimes[0]!)-(sourceTimes[i]!-sourceTimes[0]!))).toBeLessThanOrEqual(.0011);
+  expect(Number(encoded.format.duration)).toBeGreaterThanOrEqual(sourceTimes.at(-1)!-sourceTimes[0]!);
+ });
  it('reserves bounded overhead for complete episodes instead of cutting off their final steps', () => {
-  const full=resolvePlaytestBudget(180,180,91); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(180); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(300);
-  expect(resolvePlaytestBudget(180,undefined,91).mode).toBe('full-episode');
-  expect(resolvePlaytestBudget(180,6,91).mode).toBe('debug');
+  const full=resolvePlaytestBudget(12,12,9); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(12); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(132);
+  expect(resolvePlaytestBudget(12,undefined,9).mode).toBe('full-episode');
+  expect(resolvePlaytestBudget(12,3,9).mode).toBe('debug');
   expect(resolvePlaytestBudget(6.00000000000001,6,121).mode).toBe('full-episode');
-  expect(()=>resolvePlaytestBudget(180,NaN,91)).toThrow('THREE_PLAYTEST_DURATION_INVALID');
+  expect(()=>resolvePlaytestBudget(12,NaN,9)).toThrow('THREE_PLAYTEST_DURATION_INVALID');
  });
  it('checks the browser input clock and actual capture boundaries, independent of report transfer time', () => {
-  const input={clock:'browser-performance',startedAtMilliseconds:1000,endedAtMilliseconds:181000,durationSeconds:180};
-  const capture={clock:'browser-performance',initialFrameRequestedAtMilliseconds:900,finalFrameRequestedAtMilliseconds:181100,framePeriodSeconds:1};
-  expect(()=>validateCaptureTiming(input,capture,180.1)).not.toThrow();
-  expect(()=>validateCaptureTiming(input,{...capture,finalFrameRequestedAtMilliseconds:180999},180.1)).toThrow('THREE_VIDEO_BOUNDARY_INVALID');
-  expect(()=>validateCaptureTiming({...input,durationSeconds:185},capture,180.1)).toThrow('THREE_INPUT_CLOCK_INVALID');
-  expect(()=>validateCaptureTiming(input,capture,177)).toThrow('THREE_VIDEO_DURATION_MISMATCH');
+  const input={clock:'browser-performance',startedAtMilliseconds:1000,endedAtMilliseconds:4000,durationSeconds:3};
+  const capture={clock:'browser-performance',initialFrameRequestedAtMilliseconds:900,finalFrameRequestedAtMilliseconds:4100,framePeriodSeconds:1};
+  expect(()=>validateCaptureTiming(input,capture,3.1)).not.toThrow();
+  expect(()=>validateCaptureTiming(input,{...capture,finalFrameRequestedAtMilliseconds:3999},3.1)).toThrow('THREE_VIDEO_BOUNDARY_INVALID');
+  expect(()=>validateCaptureTiming({...input,durationSeconds:8},capture,3.1)).toThrow('THREE_INPUT_CLOCK_INVALID');
+  expect(()=>validateCaptureTiming(input,capture,.5)).toThrow('THREE_VIDEO_DURATION_MISMATCH');
  });
- it('never accepts 179 seconds of real video or paused-only time for a full submission', () => {
-  const report={actualWallSeconds:183,inputWallSeconds:181,activePlaySeconds:180.2,videoMetadata:{durationSeconds:180}};
-  expect(hasMinimumRecordedPlay(report)).toBe(true);
-  expect(hasMinimumRecordedPlay({...report,videoMetadata:{durationSeconds:179}})).toBe(false);
-  expect(hasMinimumRecordedPlay({...report,activePlaySeconds:179})).toBe(false);
-  expect(hasMinimumRecordedPlay({...report,inputWallSeconds:NaN})).toBe(false);
+ it('accepts nonempty recorded play while rejecting absent video or paused-only time', () => {
+  const report={actualWallSeconds:.3,inputWallSeconds:.1,activePlaySeconds:.08,videoMetadata:{durationSeconds:.2}};
+  expect(hasRecordedPlay(report)).toBe(true);
+  expect(hasRecordedPlay({...report,videoMetadata:{durationSeconds:.001}})).toBe(true);
+  expect(hasRecordedPlay({...report,videoMetadata:null})).toBe(false);
+  expect(hasRecordedPlay({...report,activePlaySeconds:0})).toBe(false);
+  expect(hasRecordedPlay({...report,inputWallSeconds:NaN})).toBe(false);
  });
 });
 

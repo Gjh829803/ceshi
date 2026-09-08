@@ -225,6 +225,7 @@ export interface CommandDescriptor {
  readonly unavailableReason?:RuntimeError;
 }
 export interface WorldDescription {
+ readonly training?:{readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;
@@ -345,6 +346,8 @@ export interface World {
  readonly assets:Assets;
  readonly state:StateStore;
  readonly operations:Operations;
+ getKeyBindings():import('./training/input').KeyBindings;
+ setKeyBindings(overrides:Partial<import('./training/input').KeyBindings>):void;
  /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
  createPresentation(options?:PresentationOptions):WorldPresentation;
  addEntity(options:EntityOptions):THREE.Object3D;

@@ -5,8 +5,23 @@ import path from 'node:path';
 export function admissionIsClosed(record) {
   if(['cancelled','stopped'].includes(record.providerStatus))return record.rayCleanupConfirmed===true;
   if(['succeeded','completed','failed','submit_failed'].includes(record.providerStatus))return true;
-  return ['delivered','failed','cancelled','stopped'].includes(record.phase)&&
+  return ['delivered','failed','cancelled','stopped','admission-blocked'].includes(record.phase)&&
     ((!record.jobId&&record.hasSubmissionIntent===false)||record.submissionRejected===true);
+}
+
+export function isAdmissionBlockError(error,{hasJobId=false,hasSubmissionIntent=false}={}) {
+  const message=typeof error==='string'?error:error?.message;
+  return /^CREATOR_CASE_(?:ALREADY_ACTIVE|ADMISSION_BUSY)(?::|$)/.test(message??'')||
+    (message==='CREATOR_RUN_HALTED_BEFORE_POST'&&!hasJobId&&!hasSubmissionIntent);
+}
+
+/** Recover only a recorded Host refusal which demonstrably preceded any POST. */
+export function recoverBeforePostAdmissionFailure({state,hasSubmissionIntent,expectedIdentity,payloadHash,plannedPayloadHash,observedPayloadHash,at}) {
+  if(state?.phase!=='failed'||state.failure?.message!=='CREATOR_RUN_HALTED_BEFORE_POST'||state.jobId||hasSubmissionIntent||state.submittedAt||state.providerStatus||state.submissionRejected||state.submissionRecovery||state.cliActivityEvidence||Object.keys(state.artifacts??{}).length)return null;
+  if(!/^[a-f0-9]{64}$/.test(payloadHash??'')||payloadHash!==plannedPayloadHash||payloadHash!==observedPayloadHash||
+    ['caseId','taskId','profile','caseHash','runtimeHash','requestId','outputS3Prefix'].some(key=>typeof expectedIdentity?.[key]!=='string'||state[key]!==expectedIdentity[key]))throw Error('CREATOR_ADMISSION_RECOVERY_IDENTITY_MISMATCH');
+  const record={kind:'host-before-post-admission-recovery',at,requestId:state.requestId,caseHash:state.caseHash,runtimeHash:state.runtimeHash,payloadHash,previousPhase:state.phase,previousFailure:state.failure,noProviderJob:true,noSubmissionIntent:true};
+  return {...state,phase:'admission-blocked',failure:{category:'admission',message:state.failure.message},hostAdmissionRecoveries:[...(state.hostAdmissionRecoveries??[]),record]};
 }
 
 // Account/model compatibility survives SDK releases. Source runtime identity is

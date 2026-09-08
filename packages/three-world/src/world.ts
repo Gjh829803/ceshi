@@ -91,6 +91,8 @@ export class ThreeWorld implements API.World {
   }catch(error){engine.dispose();throw error;}
  }
  get training(){return this.engine.training;}
+ getKeyBindings(){return this.engine.keyboard.getKeyBindings();}
+ setKeyBindings(overrides:Partial<import('./training/input').KeyBindings>):void{this.alive();this.engine.keyboard.setKeyBindings(overrides);}
  get cameraMode():API.CameraState['mode']{return this.engine.training?.cameraMode??this.engine.cameraRig.mode;}
  get isRunning():boolean{return this.engine.isRunning;}
  get simulationTick():number{return this.engine.simulationTick;}
@@ -353,12 +355,13 @@ export class ThreeWorld implements API.World {
  private engineCharacter(options:API.CharacterOptions,body:API.CharacterBody):EngineBody{if(options.movement?.kind==='ground'){const {kind:_kind,...settings}=options.movement;return {...body,...settings};}return {...body};}
  private enginePhysics(options:API.EntityOptions){return options.physics?{...options.physics,shape:options.physics.shape==='mesh'?'trimesh' as const:options.physics.shape??'trimesh' as const}:{kind:'fixed' as const};}
  private within(object:THREE.Object3D,root:THREE.Object3D):boolean{for(let current:THREE.Object3D|null=object;current;current=current.parent)if(current===root)return true;return false;}
- execute(command:API.WorldCommand,options:API.ExecutionOptions={}):Promise<API.CommandReceipt>{return isTrainingCommand(command)?this.executeTraining(command,options):this.executePlan([command],options);}
- private executeTraining(command:TrainingCommand,options:API.ExecutionOptions):Promise<API.CommandReceipt>{
+ execute(command:API.WorldCommand,options:API.ExecutionOptions={}):Promise<API.CommandReceipt>{if(this.episodeLease)return Promise.resolve({status:'rejected',commandId:options.commandId??`world-command-${++this.nextCommand}`,worldRevision:this.revision,error:failure('EPISODE_CAPTURE_OWNS_CLOCK')});return isTrainingCommand(command)?this.executeTraining(command,options):this.executePlan([command],options);}
+ private executeTraining(command:TrainingCommand,options:API.ExecutionOptions,lease?:{state:'preparing'|'prepared';restoreViewport:()=>void}):Promise<API.CommandReceipt>{
   const commandId=options.commandId??`world-command-${++this.nextCommand}`,body=JSON.stringify(command),previous=this.requests.get(commandId);
+  if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))return Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('EPISODE_CAPTURE_OWNS_CLOCK')});
   if(previous)return previous.body===body?previous.promise:Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('COMMAND_ID_CONFLICT')});
   const promise=Promise.resolve().then(():API.CommandReceipt=>{try{
-   this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.training)throw failure('TRAINING_RUNTIME_REQUIRED');
+   this.alive();if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.training)throw failure('TRAINING_RUNTIME_REQUIRED');
    if(options.expectedWorldRevision!==undefined&&options.expectedWorldRevision!==this.revision)throw failure('STALE_CONTEXT');
    const result=this.training.command(cloneJson(command));
    if(result?.status==='rejected')throw failure(result.code,result.message);this.touch();
@@ -479,7 +482,7 @@ export class ThreeWorld implements API.World {
  }
  private afterTick():void{
   this.notifyChange();
-  for(const [operationId,requestId] of this.trainingActivities){const result=this.training?.simulation.humanoid?.skills.status(requestId);if(result&&result.status!=='running'){this.operations.update(operationId,{status:result.status==='completed'?'succeeded':result.status==='cancelled'?'cancelled':'failed',phase:result.phase??result.status,...(result.status==='rejected'?{error:failure(result.code,result.message)}:{})});this.trainingActivities.delete(operationId);}}
+  for(const [operationId,requestId] of this.trainingActivities){const result=this.training?.simulation.humanoid?.skills.status(requestId);if(result?.status==='running')this.operations.update(operationId,{status:'running',phase:result.phase??'running'});if(result&&result.status!=='running'){this.operations.update(operationId,{status:result.status==='completed'?'succeeded':result.status==='cancelled'?'cancelled':'failed',phase:result.phase??result.code,...(result.status==='rejected'?{error:failure(result.code,result.message)}:{})});this.trainingActivities.delete(operationId);}}
   for(const [operationId,activity] of [...this.activities]){
    for(const [id,index] of activity.actorSteps){const state=this.engine.actorTaskState(id);if(state?.status==='succeeded')activity.steps[index]!.status='succeeded';if(state?.status==='failed'){activity.steps[index]!.status='failed';activity.steps[index]!.error=failure('ACTOR_TASK_FAILED',state.error??'Actor task failed','content',[id]);}}
    const failed=activity.steps.find(step=>step.status==='failed');
@@ -579,7 +582,7 @@ export class ThreeWorld implements API.World {
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
-  return {schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description})=>({id,version,description}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
+  return {...(this.training?{training:{characterCapabilities:this.training.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description})=>({id,version,description}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
    entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
     if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');
@@ -608,7 +611,10 @@ export class ThreeWorld implements API.World {
   const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
   const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');};
   const requirePrepared=()=>{world.alive();if(world.engine.isRunning)throw failure('EPISODE_LIVE_CLOCK_ACTIVE');if(world.episodeLease?.state!=='prepared')throw failure('EPISODE_SEGMENT_NOT_PREPARED');};
-  const release=()=>{const lease=world.episodeLease;if(!lease)return;world.episodeLease=undefined;world.engine.stop();lease.restoreViewport();};
+  const release=()=>{const lease=world.episodeLease;if(!lease)return;
+   world.training?.clearInput();
+   for(const operationId of world.trainingActivities.keys()){try{world.operations.cancel(operationId);}catch{/* Atomic or clearance-constrained actions retain their truthful state until completion/reset. */}}
+   world.episodeLease=undefined;world.engine.stop();lease.restoreViewport();};
   return {schemaVersion:1,
    capabilities(){const entry=controlled(),settings=world.engine.physics.characterSettings(entry.id),bounds=new THREE.Box3();
     for(const candidate of world.entries.values())if(candidate.role!=='decoration'){
@@ -644,6 +650,8 @@ export class ThreeWorld implements API.World {
      lease.state='prepared';return world.snapshot();
     }catch(error){if(world.episodeLease===lease)release();throw error;}
    },
+   execute(command){requirePrepared();if(!command||!['training.action','training.input','training.enter','training.exit'].includes(command.type))return Promise.resolve({status:'rejected',commandId:`episode-command-${++world.nextCommand}`,worldRevision:world.revision,error:failure('EPISODE_COMMAND_UNSUPPORTED')});return world.executeTraining(command,{},world.episodeLease);},
+   operation(operationId){requirePrepared();return world.operations.get(operationId);},
    advance(input,ticks){requirePrepared();world.engine.step(input,ticks);return world.snapshot();},
    frame(mimeType){requirePrepared();if(mimeType!=='image/jpeg'&&mimeType!=='image/png')throw failure('EPISODE_FRAME_TYPE_INVALID');
     world.engine.render();world.camera.updateWorldMatrix(true,false);const renderer=world.renderer!;

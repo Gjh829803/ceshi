@@ -28,7 +28,7 @@ import { createWorld, training } from '@worldkit/three';
 import { buildWorld } from './world';
 import { resolveTrainingResource, definitions } from './assets/resources';
 import effectiveProfiles from './profiles.json';
-const {emptyInput,actionForKey,readControls,createActionBridge}=training;
+const {emptyInput,actionForKey,readControls}=training;
 type HumanoidInput=training.HumanoidInput;
 type SkillRequest=training.SkillRequest;
 const FIXED_STEP=1/60;
@@ -70,7 +70,7 @@ function syncCameraProfile(force=false){const id=sim.vehicle?.spec.id??'person';
 syncCameraProfile();
 const frameClock={reset(){}};
 const presentation={get vehicles(){return sim.vehicles;},get player(){return sim.player;},get targets(){return training.readInteractionTargets(sim.humanoid);},snap(_sim:unknown){}};
-const pressed=new Set<string>();let dragging=false,lastX=0,lastY=0,jumpPressed=false,paused=false,ready=true,toastUntil=0,lastMessage='',lastActive=-99;
+const pressed=new Set<string>();let jumpPressed=false,paused=false,ready=true,toastUntil=0,lastMessage='',lastActive=-99;
 let humanCommands:HumanoidInput={},humanDemo:HumanoidDemo|null=null;
 let collisionMode:CollisionDebugMode='off';
 let disposeThumbnails:(()=>void)|undefined;
@@ -90,9 +90,9 @@ colliderSelect.onchange=()=>setCollisionMode(colliderSelect.value as CollisionDe
 const fpsMeter=new FrameRateMeter();
 const pacingPanel=new FramePacingPanel(el('performancePanel'));
 function resetFPS(state:string){fpsMeter.reset();pacingPanel.reset();setText('fpsReadout',`渲染回调 —/s · ${state}`);el('fpsReadout').removeAttribute('data-slow');}
-function input(){return panelOpen?emptyInput():readControls(pressed,!!sim.vehicle,jumpPressed,humanCommands);}
+function input(){return panelOpen?emptyInput():readControls(pressed,!!sim.vehicle,jumpPressed,humanCommands,sdk.getKeyBindings());}
 function toast(text:string){el('toast').textContent=text;el('toast').classList.add('show');toastUntil=performance.now()+3300;}
-function clearInput(){runtime.clearInput();pressed.clear();jumpPressed=false;humanCommands={};dragging=false;}
+function clearInput(){runtime.clearInput();pressed.clear();jumpPressed=false;humanCommands={};}
 function syncTeleport(){humanDemo=null;clearInput();runtime.clearInput();presentation.snap(sim);frameClock.reset();lastActive=-99;toast(sim.message);if(paused)renderPausedState();if(!panelOpen)sdkPresentation.focus();}
 function selectAsset(id:string){if(!ready)return;if(id==='person'){if(sim.vehicle){runtime.interact();syncTeleport();}else {sim.message='当前已是人物 · 可前往人物动作测试点';toast(sim.message);}library.setActive(sim.vehicle?.spec.id??'person');return;}const v=sim.vehicles.find(v=>v.spec.id===id);if(v&&!sim.available(v)){toast('这个载具不适配当前地图，请在测试场景中切换到综合园区。');return;}const selected=runtime.approach(id);if(selected)syncTeleport();else toast(sim.message);}
 function visit(n:number){const spec=SPECS[n]!;const spawn=session.map.spawns.find(s=>s.vehicleId===spec.id)??{id:spec.id,vehicleId:spec.id,name:spec.name,position:spec.spawn,yaw:spec.yaw,regionId:'staging'};runtime.prepare(spec.id,spawn);syncTeleport();}
@@ -103,9 +103,9 @@ function interact(){if(!ready||paused||panelOpen)return;humanDemo=null;clearInpu
 window.addEventListener('keydown',e=>{
   if(e.altKey||e.metaKey||panelOpen||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable=true],dialog,.asset-library,.camera-inspector')))return;
   if(e.repeat)return;
-  if(['KeyW','KeyA','KeyS','KeyD','Space'].includes(e.code))humanDemo=null;
-  if(!e.repeat){if(e.code==='Escape'||e.code==='KeyP'){pause();return;}if(paused||!ready)return;
-    if(/^Digit[1-6]$/.test(e.code)){const entry=quickSlots[Number(e.code.slice(-1))-1];if(entry)selectAsset(entry.id);}
+  if(['forward','backward','left','right','jump'].some(action=>sdk.getKeyBindings()[action as training.ControlAction].includes(e.code)))humanDemo=null;
+  if(!e.repeat){if(e.code==='Escape'){pause();return;}if(paused||!ready)return;
+    if(/^Digit[1-6]$/.test(e.code)&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes(e.code))){const entry=quickSlots[Number(e.code.slice(-1))-1];if(entry)selectAsset(entry.id);}
   }
 });
 window.addEventListener('blur',clearInput);
@@ -133,13 +133,13 @@ function prepareSelection(mapId:string,regionId:string,assetId:string){
   const map=getMap(mapId),mode=assetId==='person'?'character':SPECS.find(s=>s.id===assetId)?.mode;
   if(!mode||!map.regions.find(r=>r.id===regionId)?.modes.includes(mode))throw new Error('所选主体不适配这个训练区域');
 
-  session.switchMap(mapId);world=session.world;follow.solids=world.solids;follow.environment=session.queries;
+  session.switchMap(mapId);world=session.world;follow.environment=session.queries;
   prepareCourse(sim,map,regionId,assetId);pause(false,false);syncTeleport();resetFPS('采样中');
 }
 function humanoidState(){const h=sim.humanoid;return {地图:session.map.name,操控权:sim.vehicle?sim.vehicle.spec.name:'人物',状态:h?.state,动画:character.clipLabel,骨骼:character.sourceCharacter?.rigTargets,已载入动作:character.availableHumanoidClips.size,速度:h?.speed,着地:h?.grounded,姿态:h?.stance,胶囊高度:h?.capsuleHeight,水中:h?.swimming,泳姿:h?.swimStyle,动作:h?.skills.pose??h?.surface.pose,探测:h?.probe?{类型:h.probe.kind,高度:h.probe.height,厚度:h.probe.depth,原因:h.probe.reason}:null,提示:h?.lastResult,携带:h?.skills.carrying,座椅:h?.skills.seated,自动演示:humanDemo?.trial.name??null};}
 function prepareHumanTrial(mapId:string,trial:CharacterTrial,demo=false){
   if(!ready)throw new Error('人物动作仍在加载');
-  session.switchMap(mapId);world=session.world;follow.solids=world.solids;follow.environment=session.queries;
+  session.switchMap(mapId);world=session.world;follow.environment=session.queries;
   if(!runtime.prepareCharacter(trial.position,trial.yaw))throw new Error(sim.message);
   sim.message=`${trial.name} · ${trial.description}`;humanDemo=null;pause(false,false);syncTeleport();
   if(demo){humanDemo=new HumanoidDemo(trial,sim.humanoid?.events.length??0);toast(`正在演示：${trial.name} · WASD 可随时接管`);}
@@ -147,6 +147,7 @@ function prepareHumanTrial(mapId:string,trial:CharacterTrial,demo=false){
 const humanPanel=mountHumanoidLab(document.body,{
   onOpenChange:onPanelChange,onPrepare:prepareHumanTrial,getState:humanoidState,
   onAction:command=>{if(sim.vehicle){toast('请先离开载具，再执行人物动作');return;}humanDemo=null;if(paused)pause(false);if(command==='jump')jumpPressed=true;else humanCommands={...humanCommands,...command};sdkPresentation.focus();},
+  getKeyBindings:()=>sdk.getKeyBindings(),
   getAutoTraverse:()=>sim.humanoid?.autoTraverse??false,setAutoTraverse:value=>{if(sim.humanoid)sim.humanoid.autoTraverse=value;},
   getSmoothing:()=>character.sourceCharacter?.smoothing??true,setSmoothing:value=>{if(character.sourceCharacter)character.sourceCharacter.smoothing=value;},
   getDebug:()=>collisionMode,setDebug:setCollisionMode,
@@ -198,7 +199,7 @@ el('downloadManifest').onclick=()=>{const template={schema:'vector.asset-contrib
 const releaseUIInput=(event:Event)=>{const target=event.target instanceof HTMLElement?event.target.closest('button,input,select,textarea'):null;if(target&&!target.hasAttribute('data-key'))clearInput();};
 document.addEventListener('pointerdown',releaseUIInput);document.addEventListener('focusin',releaseUIInput);
 window.addEventListener('pagehide',()=>{disposeThumbnails?.();inspector.dispose();stageObserver.disconnect();footerObserver.disconnect();humanPanel.dispose();collisionDebug.dispose();interactionVisuals.dispose();visuals.forEach(v=>v.creature?.dispose());library.dispose();workbench.dispose();session.dispose();},{once:true});
-document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);pressed.add(b.dataset.key!);if(b.dataset.key==='Space')jumpPressed=true;};const release=()=>pressed.delete(b.dataset.key!);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;});
+document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);const code=b.dataset.key!,bindings=sdk.getKeyBindings();if(!pressed.has(code)){const action=actionForKey(code,!!sim.vehicle,pressed,bindings);if(action?.kind==='humanoid')humanCommands={...humanCommands,...action.input};if(bindings.jump.includes(code))jumpPressed=true;}pressed.add(code);};const release=()=>pressed.delete(b.dataset.key!);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;});
 const resizeStage=()=>{const width=canvas.clientWidth,height=canvas.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(ready&&(paused||panelOpen))renderPausedState();};
 const stageObserver=new ResizeObserver(resizeStage);stageObserver.observe(el('stage'));
 const footerObserver=new ResizeObserver(()=>{document.documentElement.style.setProperty('--footer',`${el('shortcutFooter').offsetHeight}px`);});footerObserver.observe(el('shortcutFooter'));
@@ -221,19 +222,21 @@ function drawMap(){
   const p=sim.vehicle?.position??sim.player.position,[x,y]=mp(p.x,p.z),yaw=sim.vehicle?.yaw??sim.player.yaw;
   ctx.save();ctx.translate(x,y);ctx.rotate(yaw);ctx.fillStyle='#f7fbd9';ctx.shadowColor='#fff';ctx.shadowBlur=7;ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(-5,6);ctx.lineTo(0,3);ctx.lineTo(5,6);ctx.closePath();ctx.fill();ctx.restore();
 }
-let lastUIUpdate=-Infinity;
+let lastUIUpdate=-Infinity,lastBindings='';
 function updateUI(){
   if(performance.now()-lastUIUpdate<100)return;lastUIUpdate=performance.now();
   const v=sim.vehicle,p=sim.player,nearest=sim.nearest(),speed=v?v.velocity.length():Math.hypot(p.velocity.x,p.velocity.z);
   const h=sim.humanoid,traversalPrompt=humanoidTraversalReady(h)?`WASD + Space · 朝向障碍${h!.swimming?'攀上岸边':h!.probe!.kind==='vault'?'翻越':'攀上'}`:null;
-  if(lastActive!==sim.active){
+  const bindingSignature=JSON.stringify(sdk.getKeyBindings());
+  if(lastActive!==sim.active||lastBindings!==bindingSignature){
+    lastBindings=bindingSignature;
     library.setActive(v?.spec.id??'person');
     lastActive=sim.active;el('category').textContent=v?`${['plane','glider','space','dragon'].includes(v.spec.mode)?'FLIGHT':v.spec.mode==='sub'||v.spec.mode==='boat'?'WATER':'GROUND'} / ${v.spec.kernel}`:'ON FOOT / K01';
     el('activeName').textContent=v?.spec.name??'人物动作训练';el('activeEn').textContent=v?`${v.spec.en} / PILOT CONTROL`:'TRAVERSAL LAB / 101 BONES';
     el('stateLabel').textContent=v?v.spec.characterPose==='ride'?'骑乘位已绑定':'驾驶位已绑定':'主体人物';
-    el('controls').innerHTML=controlsFor(v?.spec.mode??'character').map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
+    el('controls').innerHTML=controlsFor(v?.spec.mode??'character',sdk.getKeyBindings()).map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
     setText('shortcutSubject',v?'载具操作':'人物操作');
-    const systemKeys:[string,string][]=[...(v?.spec.mode==='space'?[]:[['↑ ↓ ← →','环绕相机'] as [string,string]]),['鼠标拖动','环绕'],['滚轮','缩放'],['R','复位'],['Esc / P','暂停'],['1–6','快速前往']];
+    const systemKeys:[string,string][]=[...(v?.spec.mode==='space'?[]:[['↑ ↓ ← →','环绕相机'] as [string,string]]),['鼠标拖动','环绕'],['滚轮','缩放'],['Esc','菜单 / 暂停'],['1–6','快速前往']];
     setHTML('systemKeys',systemKeys.map(([keys,title])=>`<span class="shortcut"><kbd>${keys}</kbd><span>${title}</span></span>`).join(''));
     el('cameraNote').textContent=v?v.spec.mode==='space'?'相机随飞行器上方向旋转。拖动鼠标自由观察。':'方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。':'方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。';
     document.querySelectorAll<HTMLElement>('[data-vehicle-id]').forEach(b=>b.classList.toggle('selected',b.dataset.vehicleId===v?.spec.id));
@@ -241,10 +244,10 @@ function updateUI(){
   el('stateValue').textContent=v?(sim.transition>0?'正在入座':v.submerged?'载具涉水，请复位':v.creature?({graze:'休息',walk:'慢走',trot:'快步',gallop:'疾驰',rest:'停驻',flap:'振翅',glide:'滑翔'}[v.creature.gait]):v.spec.mode==='glider'&&!v.launched?'等待释放':v.spec.mode==='plane'?`油门 ${Math.round(v.throttle*100)}%`:'驾驶中'):p.swimming?'游泳':p.grounded?'地面移动':'空中';
   setText('speed',String(Math.round(speed*3.6)));const altitude=(v?.position??p.position).y;setText('heightLabel',altitude<-2?'深度':'海拔');el('height').textContent=`${Math.round(altitude<-2?-altitude-2:altitude)} m`;el('throttle').style.width=`${Math.min(100,v?.spec.mode==='plane'?v.throttle*100:speed/(v?.spec.speed??7.2)*100)}%`;
   el('interaction').classList.toggle('small',!!v||nearest<0);
-  if(v) setHTML('interaction',v.submerged?'<kbd>R</kbd>载具涉水 · 复位后继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
-  else setHTML('interaction',nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索');
-  if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint()??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
-  else setText('bottomHint','方向键 / 鼠标环绕 · 滚轮缩放 · 页面按钮切换相机 · R 返回起点 · Esc 暂停');
+  if(v) setHTML('interaction',v.submerged?'载具涉水 · 使用页面复位按钮继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
+  else setHTML('interaction',h?.skills.hint(sdk.getKeyBindings())??(h?.surface.mode==='climbing'?'Space 尝试翻上 · C 松手':runtime.characterCapabilities().find(c=>c.id==='climb')?.eligible?'E 进入攀爬':null)??(nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索'));
+  if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint(sdk.getKeyBindings())??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
+  else setText('bottomHint','方向键 / 鼠标环绕 · 滚轮缩放 · 页面按钮切换相机 · 页面复位按钮返回起点 · Esc 菜单');
   const pos=v?.position??p.position;let zone=session.map.regions[0]!,distance=Infinity;for(const region of session.map.regions){const inside=Math.abs(pos.x-region.center[0])<=region.size[0]/2&&Math.abs(pos.z-region.center[2])<=region.size[1]/2;const d=inside?region.size[0]*region.size[1]*.00001:1000+Math.hypot(pos.x-region.center[0],pos.z-region.center[2]);if(d<distance){distance=d;zone=region;}}setText('zone',zone.name);setText('mapBadge',session.map.id==='campus'?'综合园区 · 1 km²':session.map.name);
   mapSelect.value=session.map.id;setText('cameraButton',`相机 · ${['跟随',v?'驾驶位':'近距','俯视'][follow.mode]}`);inspector.sync();
   el('debugButton').setAttribute('aria-pressed',String(!el('workspace').classList.contains('inspector-closed')&&(innerWidth>720||el('workspace').classList.contains('inspector-mobile-open'))&&!(innerWidth<=1000&&library.isOpen())));
@@ -284,10 +287,9 @@ const labAPI={
   getState:()=>({mapId:session.map.id,activeVehicle:sim.vehicle?.spec.id??null,mode:sim.vehicle?.spec.mode??'character',position:(sim.vehicle?.position??sim.player.position).toArray(),speed:sim.vehicle?.speed??sim.player.velocity.length(),movement:movementState(),animation:sim.player.animation,ready,paused,simulationTime:sim.time,camera:{mode:follow.mode,yaw:follow.yaw,pitch:follow.pitch,distance:follow.distance,position:camera.position.toArray(),target:follow.target.toArray()},vehicleCount:SPECS.length,creature:sim.vehicle?.creature,creatureSources:visuals.filter(v=>v.creature).map(v=>({id:v.root.name,...v.creature!.sourceStatus}))}),
   selectVehicle:(id:string)=>{const n=SPECS.findIndex(s=>s.id===id);if(n<0)throw new Error('Unknown vehicle');visit(n);return labAPI.getState();},
   reset:async()=>{await sdk.reset();syncTeleport();return labAPI.getState();},
-  humanoidState:()=>({...humanoidState(),events:sim.humanoid?.events.slice(-6),position:sim.humanoid?.position.toArray(),targets:[...sim.humanoid!.skills.targets.values()].map(t=>({id:t.definition.id,state:t.state,position:t.position.toArray()}))}),
+  humanoidState:()=>({...humanoidState(),events:sim.humanoid?.events.slice(-6),position:sim.humanoid?.position.toArray(),targets:runtime.snapshot().interactionTargets,capabilities:runtime.characterCapabilities()}),
 };
-const humanoidActions=createActionBridge(()=>sim.humanoid!,()=>ready&&!paused&&!panelOpen&&sim.active<0);
-Object.assign(window,{trainingGround:labAPI,traversalActions:humanoidActions});
+Object.assign(window,{trainingGround:labAPI});
 type ModelContext={registerTool:(tool:{name:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean};execute:(input:unknown)=>unknown},options:{signal:AbortSignal})=>void|Promise<void>};
 const context=(document as Document&{modelContext?:ModelContext}).modelContext;
 if(context?.registerTool){
@@ -296,13 +298,14 @@ if(context?.registerTool){
     try{void Promise.resolve(context.registerTool({name,description,inputSchema,annotations:{readOnlyHint},execute},{signal:lifecycle.signal})).catch(error=>console.warn('Training tool unavailable',error));}catch(error){console.warn('Training tool unavailable',error);}
   };
   register('inspect_training_ground','Read current vehicle, location, speed and character state.',{type:'object',properties:{},additionalProperties:false},true,()=>labAPI.getState());
-  register('inspect_humanoid_training','Read the original character action, rig, interaction targets and recent traversal events.',{type:'object',properties:{},additionalProperties:false},true,()=>labAPI.humanoidState());
+  register('inspect_humanoid_training','Read the character action, rig, interaction target eligibility and recent traversal events.',{type:'object',properties:{},additionalProperties:false},true,()=>labAPI.humanoidState());
   register('prepare_character_trial','Move the character to an authored action workshop trial; optionally play its interruptible demonstration.',{type:'object',properties:{mapId:{type:'string',enum:MAPS.filter(m=>m.characterTrials?.length).map(m=>m.id)},trialId:{type:'string'},demo:{type:'boolean'}},required:['mapId','trialId'],additionalProperties:false},false,input=>{
     if(!input||typeof input!=='object'||!('mapId'in input)||!('trialId'in input)||typeof input.mapId!=='string'||typeof input.trialId!=='string')throw new Error('mapId and trialId are required');
     const trial=getMap(input.mapId).characterTrials?.find(t=>t.id===input.trialId);if(!trial)throw new Error('Unknown character trial');
     humanPanel.close();prepareHumanTrial(input.mapId,trial,'demo'in input&&input.demo===true);return labAPI.humanoidState();
   });
-  register('perform_character_action','Execute an original character skill with a stable request id and optional interaction target; source state and clip guards apply.',{type:'object',properties:{action:{type:'string',enum:['roll','slide','pickup','putDown','sit','standUp']},requestId:{type:'string'},targetId:{type:'string'}},required:['action','requestId'],additionalProperties:false},false,input=>humanoidActions.execute(input as SkillRequest));
+  register('perform_character_action','Start a character skill with a stable request id and optional target; poll its operation until terminal.',{type:'object',properties:{action:{type:'string',enum:['roll','slide','pickup','putDown','sit','standUp']},requestId:{type:'string'},targetId:{type:'string'}},required:['action','requestId'],additionalProperties:false},false,input=>sdk.execute({type:'training.action',request:input as SkillRequest}));
+  register('get_character_operation','Read the physical action operation without advancing the simulation.',{type:'object',properties:{operationId:{type:'string'}},required:['operationId'],additionalProperties:false},true,input=>{if(!input||typeof input!=='object'||!('operationId' in input)||typeof input.operationId!=='string')throw new Error('operationId is required');return sdk.operations.get(input.operationId);});
   register('prepare_training_vehicle','Restore the selected vehicle at its staging point and move the character next to it. Does not board the vehicle.',{type:'object',properties:{vehicleId:{type:'string',enum:SPECS.map(s=>s.id)}},required:['vehicleId'],additionalProperties:false},false,input=>{
     if(!ready)throw new Error('Training ground is still loading');
     if(!input||typeof input!=='object'||!('vehicleId'in input)||typeof input.vehicleId!=='string')throw new Error('vehicleId is required');

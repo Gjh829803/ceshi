@@ -13,6 +13,9 @@ export function terminalJobHasStopped(job) {
   if (['succeeded','completed','failed','submit_failed'].includes(job?.status)) return true;
   return ['cancelled','stopped'].includes(job?.status) && job.progress?.summary?.ray_cleanup_checked === true && job.progress.summary.ray_cleanup_pending === false;
 }
+export function providerItemSucceeded(job,item) {
+  return ['succeeded','completed'].includes(job?.status)&&item?.status==='succeeded';
+}
 export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximumTaskSeconds,hasObservedCliActivity=false,now=Date.now()}) {
   if (job.request_id !== requestId || job.output_s3_prefix !== outputS3Prefix || job.pipeline !== 'codex') return {action:'halt-unowned',reason:'unexpected-job-identity'};
   if (job.attempt !== undefined && (!Number.isSafeInteger(job.attempt) || job.attempt < 0 || job.attempt > 1)) return {action:'stop',reason:'unexpected-provider-reattempt'};
@@ -29,6 +32,7 @@ export function assessOwnedJob(job,{requestId,outputS3Prefix,submittedAt,maximum
 export function effectiveConfigMatches(config,payload) {
   if(config?.request_id!==payload.request_id||config?.options?.codex_bin!==payload.options.codex_bin)return false;
   if(payload.options.codex_account_ids!==undefined&&JSON.stringify(config.options.codex_account_ids)!==JSON.stringify(payload.options.codex_account_ids))return false;
+  if(payload.options.codex_account_root!==undefined&&config.options.codex_account_root!==payload.options.codex_account_root)return false;
   return ['model','reasoning_effort','sandbox','timeout_seconds','account_concurrency','pod_concurrency'].every(key=>config.options[key]===payload.defaults[key]);
 }
 export async function reportedTokenUsage(file) {

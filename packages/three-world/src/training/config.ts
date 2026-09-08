@@ -9,10 +9,3 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
   archetype: VehicleArchetype; visualVariant?: 'utility' | 'touring' | 'rescue' | 'patrol' | 'trainer' | 'survey';
   envelope: CollisionEnvelope;
 }
-
-// Live worlds supply content; these constants serve private legacy helpers only.
-export const SPECS: VehicleSpec[] = [];
-export const START: [number,number,number] = [0,0,0];
-export const WORLD_LIMIT = 100000;
-export const WATER = 0;
-export const DEPTH = -100000;

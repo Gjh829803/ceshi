@@ -11,5 +11,5 @@ export interface ClimbSurface {
   maxY:number;
 }
 
-export interface SurfaceCommands {prone?:boolean;climb?:boolean}
+export interface SurfaceCommands {prone?:boolean;climb?:boolean;releaseClimb?:boolean}
 export interface SurfacePose {key:string;time:number;phase:string}

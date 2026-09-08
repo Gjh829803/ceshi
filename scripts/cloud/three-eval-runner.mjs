@@ -6,14 +6,15 @@ import { downloadS3FileAtomic, fetchGenerationItems, findGenerationJobByRequestI
 import { fileSha256, readRuntimeLock, resolveCreatorSubmission, sha256, writeJson } from "./three-eval-runtime.mjs";
 import { eventStatistics, failureClass, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs";
-import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
-import { withAdmissionDirectoryLock, admissionIsClosed } from "./three-eval-admission.mjs";
+import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, providerItemSucceeded, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
+import { withAdmissionDirectoryLock, admissionIsClosed,isAdmissionBlockError,recoverBeforePostAdmissionFailure } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 import {retrieveThreeDeliveryArtifacts} from "./three-eval-delivery-recovery.mjs";
-import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,readCreatorAccountPolicy} from "./three-account-routing.mjs";
+import {selectCreatorAccount,assertCreatorAccountSelection,actualCreatorAccountEvidence,readCreatorAccountPolicy,creatorAccountRoot} from "./three-account-routing.mjs";
 import {freezeRunAssetPolicy} from "./three-eval-mcp-bridge.mjs";
 import {runWithExecutionSlots} from "./three-execution-slots.mjs";
+import {resolveProviderWorkspace,validateProviderLauncher} from './three-eval-workspace.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -55,9 +56,9 @@ const maxConcurrency = Number(options["--max-concurrency"] ?? previousPlan?.maxC
 if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > 64) throw new Error("--max-concurrency must be an integer in [1, 64]");
 const accountConcurrency = Number(options["--account-concurrency"] ?? previousPlan?.accountConcurrency ?? (suite === "sdk-only" ? 5 : 4));
 if (!Number.isSafeInteger(accountConcurrency) || accountConcurrency < 1 || accountConcurrency > 20) throw new Error("--account-concurrency must be an integer in [1, 20]");
-const caseLimit = Number(options["--case-limit"] ?? 5);
+const caseLimit = Number(options["--case-limit"] ?? sourceManifest.cases.length);
 if (!Number.isSafeInteger(caseLimit) || caseLimit < 1 || caseLimit > sourceManifest.cases.length) throw new Error("--case-limit must fit the frozen manifest");
-const requestedCaseId = options["--case-id"] ?? (options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");
+const requestedCaseId = options["--case-id"] ?? (previousPlan || options["--case-limit"] || suite === "sdk-only" ? undefined : "gpt6-eval-forest-lookout");
 const requestedProfile = options["--profile"];
 if (requestedProfile && !profiles.includes(requestedProfile)) throw new Error("--profile must belong to the selected suite; sdk-only admits only three-sdk");
 if (requestedCaseId && !sourceManifest.cases.some(item => item.id === requestedCaseId)) throw new Error("--case-id must identify one of the frozen cases");
@@ -123,19 +124,28 @@ for (const item of manifest.cases) {
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
   const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
   const frozenPayload=previousPlan?await optionalJson(path.join(caseRoot,"payload.json")):null;
+  const previousPlanCase=previousPlan?.cases.find(entry=>entry.taskId===item.id);
+  const observedPayloadHash=frozenPayload?sha256(JSON.stringify(frozenPayload)):null;
   const codexAccountIds=frozenPayload?.options?.codex_account_ids
     ?assertCreatorAccountSelection(frozenPayload.options.codex_account_ids,accountPolicy)
     :selectCreatorAccount({policy:accountPolicy,inventory:accountInventory,requestedIds:item.codexAccountIds,slot:Math.floor(plans.length/profiles.length)});
-  if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length !== 1 || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
-  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
-  const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
+  const maximumAccountIds=accountPolicy.selection==='pool'?64:1;
+  if (codexAccountIds !== undefined && (!Array.isArray(codexAccountIds) || codexAccountIds.length < 1 || codexAccountIds.length > maximumAccountIds || codexAccountIds.some(value => typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,159}$/.test(value)))) throw new Error("Invalid fixed case account selection");
+  const codexAccountRoot=creatorAccountRoot(codexAccountIds,accountPolicy);
+  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: reasoningEffort, sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(codexAccountIds ? {codex_account_ids: codexAccountIds} : {}),...(codexAccountRoot?{codex_account_root:codexAccountRoot}:{})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
+  const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix,previousPlanCase,observedPayloadHash};
+  if(previousPlan&&(!previousPlanCase||previousPlanCase.requestId!==requestId||previousPlanCase.caseHash!==caseHash||previousPlanCase.payloadHash!==plan.payloadHash||observedPayloadHash!==plan.payloadHash))throw Error('CREATOR_FROZEN_PAYLOAD_CHANGED');
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
   if (intent && intent.payloadHash !== plan.payloadHash) throw new Error(`Submission payload changed for ${item.id}; use a deliberate new run ID.`);
   await writeJson(inputFile, caseInput);
   await writeJson(path.join(caseRoot, "payload.json"), payload); plans.push(plan);
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
-const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
+const explicitSelection = ["--case-id", "--case-limit", "--profile"].some(key => options[key] !== undefined);
+const executionPlans = previousPlan?.selectedTaskIds && !explicitSelection
+  ? plans.filter(plan => previousPlan.selectedTaskIds.includes(plan.item.id))
+  : plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
+if (previousPlan?.selectedTaskIds && JSON.stringify(executionPlans.map(plan => plan.item.id)) !== JSON.stringify(previousPlan.selectedTaskIds)) throw new Error("CREATOR_FROZEN_CASE_SELECTION_CHANGED: use a deliberate new run ID");
 await writeJson(path.join(outputRoot, "evaluation-plan.json"), {...frozenAssetPolicy, schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, reasoningEffort, runtimeLockPath:lock.runtimeLockPath,accountPolicyPath,accountInventoryPath,accountPolicySha256:sha256(accountPolicyBytes), runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=${sourceManifest.cases.length} profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
@@ -155,7 +165,7 @@ async function reserveCase(plan, state) {
   await withAdmissionLock("__capacity", async () => withAdmissionLock(plan.item.id, async file => {
     const existing = await optionalJson(file);
     if (existing && existing.requestId !== plan.requestId && !admissionIsClosed(existing)) throw new Error(`CREATOR_CASE_ALREADY_ACTIVE: ${plan.item.id} belongs to run ${existing.runId}, request ${existing.requestId}, job ${existing.jobId ?? "unresolved"}; resume that request before creating another run`);
-    if (existing?.requestId !== plan.requestId) {
+    if (existing?.requestId !== plan.requestId||admissionIsClosed(existing)) {
       const records = await Promise.all((await readdir(admissionRoot)).filter(name => name.endsWith('.json')).map(name => optionalJson(path.join(admissionRoot, name))));
       if (records.filter(record => record && !admissionIsClosed(record)).length >= maxConcurrency) throw new Error("CREATOR_CASE_ADMISSION_BUSY: configured maximum of Three requests remain in flight; resume them before admitting another");
     }
@@ -165,8 +175,12 @@ async function reserveCase(plan, state) {
   }));
 }
 async function execute(plan,releaseExecutionSlot=()=>{}) {
-  const previous = await optionalJson(statePath(plan.item.id));
-  if (["delivered", "failed"].includes(previous?.phase)) return;
+  let previous = await optionalJson(statePath(plan.item.id));
+  if(previous?.phase==='failed'){
+    const recovered=recoverBeforePostAdmissionFailure({state:previous,hasSubmissionIntent:Boolean(await optionalJson(path.join(plan.caseRoot,'submission-intent.json'))),expectedIdentity:{caseId:plan.item.baseCaseId,taskId:plan.item.id,profile:plan.item.profile,caseHash:plan.caseHash,runtimeHash:lock.runtimeHash,requestId:plan.requestId,outputS3Prefix:plan.outputS3Prefix},payloadHash:plan.payloadHash,plannedPayloadHash:plan.previousPlanCase?.payloadHash,observedPayloadHash:plan.observedPayloadHash,at:new Date().toISOString()});
+    if(!recovered)return;previous=recovered;await writeJson(statePath(plan.item.id),previous);
+  }
+  if (previous?.phase==='delivered') return;
   const state = {...previous, caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, sourceTestSetId: plan.item.sourceTestSetId, sourceCaseId: plan.item.sourceCaseId, caseHash: plan.caseHash, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort, requestId: plan.requestId, outputS3Prefix: plan.outputS3Prefix};
   let admissionReserved = false;
   const save = async () => {
@@ -182,21 +196,25 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     const intent = await optionalJson(intentFile);
     if (mode === "resume" && !state.jobId && !intent) { state.phase = "not-started"; await save(); return; }
     if (!state.jobId && !intent && await optionalJson(haltPath)) throw new Error("CREATOR_CASE_ADMISSION_BUSY: this run was halted; existing requests may be reconciled but no new jobs are admitted");
+    if(!state.jobId&&!intent)state.phase='reserved';
     await reserveCase(plan, state); admissionReserved = true;
+    if(state.failure?.category==='admission'){delete state.failure;await save();}
     if (!state.jobId) {
       state.jobId = await resolveCreatorSubmission({existingJobId: state.jobId, hasDurableIntent: Boolean(intent), mode,
         findExisting: async () => submittedJobId(await findGenerationJobByRequestId(plan.requestId)),
         replayIntentAndSubmit: async () => {
           const frozen=await optionalJson(intentFile);
           if(frozen?.requestId!==plan.requestId||frozen.payloadHash!==plan.payloadHash)throw Error("CREATOR_SUBMISSION_INTENT_MISMATCH");
-          const config=await loadLwdpGenerationConfig();
-          const response=await withAdmissionLock("__dispatch",async()=>submitCodexGenerationJob(plan.payload,{config,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(30000)})}));
+          const config=await loadLwdpGenerationConfig(accountPolicy.submissionApiBase?{LWDP_API_BASE:accountPolicy.submissionApiBase}:undefined);
+          const recoveryConfig=accountPolicy.submissionApiBase?await loadLwdpGenerationConfig():config;
+          const response=await withAdmissionLock("__dispatch",async()=>submitCodexGenerationJob(plan.payload,{config,recoveryConfig,fetchImplementation:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(30000)})}));
           state.submissionRecovery={kind:"same-idempotency-key-replay",at:new Date().toISOString()};
           return submittedJobId(response);
         },
         createIntentAndSubmit: async () => {
           await uploadS3File(plan.imagePath, plan.imageS3Uri); await uploadS3File(plan.inputFile, plan.inputS3Uri);
-          const config = await loadLwdpGenerationConfig(); // Never serialized or passed to a model/MCP.
+          const config = await loadLwdpGenerationConfig(accountPolicy.submissionApiBase?{LWDP_API_BASE:accountPolicy.submissionApiBase}:undefined); // Never serialized or passed to a model/MCP.
+          const recoveryConfig=accountPolicy.submissionApiBase?await loadLwdpGenerationConfig():config;
           let submission;
           await withAdmissionLock("__dispatch", async () => {
             if (stopAdmission || await optionalJson(haltPath)) throw new Error("CREATOR_RUN_HALTED_BEFORE_POST");
@@ -204,7 +222,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
             state.phase = "submission-unknown"; await save();
             // With config already resolved, the single POST begins inside the
             // same cross-process mutex used to write a durable run halt.
-            submission = submitCodexGenerationJob(plan.payload, {config, fetchImplementation: (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(30000)})});
+            submission = submitCodexGenerationJob(plan.payload, {config,recoveryConfig, fetchImplementation: (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(30000)})});
             submission.catch(() => {}); // Await outside the mutex; preserve the original rejection.
           });
           return submittedJobId(await submission);
@@ -224,7 +242,7 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
         if (!state.cliActivityEvidence) {
           let observed = await optionalJson(path.join(repo, ".codex-tmp/three-creator-eval/live-cache", state.jobId + ".json"));
           if (!observed?.job?.cliActivityObserved && Date.now()-Date.parse(state.submittedAt)>(MAXIMUM_QUEUE_SECONDS-30)*1000) {
-            try {const snapshot=await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,workDir:echo.config.options.work_dir}]);observed={observedAt:snapshot.observedAt,job:snapshot.jobs[0]};}
+            try {const snapshot=await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,runtimeHash:lock.runtimeHash,workDir:echo.config.options.work_dir}]);observed={observedAt:snapshot.observedAt,job:snapshot.jobs[0]};}
             catch (error) {state.liveObservationError=error.name;}
           }
           if (observed?.job?.jobId===state.jobId && observed.job.taskId===plan.item.id && observed.job.requestId===plan.requestId && observed.job.cliActivityObserved===true && observed.job.launcher?.runtimeHash===lock.runtimeHash) state.cliActivityEvidence={source:"host-fixed-output-cli-events",observedAt:observed.observedAt,launcherStartedAt:observed.job.launcher.startedAt??null};
@@ -252,17 +270,22 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
       try { const target = path.join(plan.caseRoot, output.name); await downloadS3FileAtomic(`${plan.outputS3Prefix}/${output.remote}`, target); state.artifacts[output.name] = {bytes: (await stat(target)).size, sha256: await fileSha256(target)}; }
       catch (error) { downloadFailures.push({name: output.name, required: output.required, error: error.message}); }
     }
-    const missingFormal=downloadFailures.filter(output=>output.required).map(output=>output.name);
+    const providerAttempt=await optionalJson(path.join(plan.caseRoot,'codex-attempt.json'));
+    let workspaceLive;
+    if(!providerAttempt&&!item?.metadata?.log_path){try{workspaceLive=(await readThreeLiveStatus([{jobId:state.jobId,taskId:plan.item.id,requestId:plan.requestId,runtimeHash:lock.runtimeHash,workDir:echo.config.options.work_dir}],{cacheMilliseconds:0})).jobs[0];}catch{}}
+    const workspaceBinding=resolveProviderWorkspace({jobId:state.jobId,taskId:plan.item.id,workDirectory:echo.config.options.work_dir,runtimeHash:lock.runtimeHash,providerItem:item,providerAttempt,live:workspaceLive});
+    state.workspaceBinding=workspaceBinding;await writeJson(path.join(plan.caseRoot,'provider-workspace.json'),workspaceBinding);
+    const missingFormal=downloadFailures.filter(output=>outputs.some(declared=>declared.path===output.name)).map(output=>output.name);
     if(missingFormal.length){
-      try{const recovered=await retrieveThreeDeliveryArtifacts({jobId:state.jobId,taskId:plan.item.id,caseRoot:plan.caseRoot,names:missingFormal});Object.assign(state.artifacts,recovered);
+      try{const recovered=await retrieveThreeDeliveryArtifacts({jobId:state.jobId,taskId:plan.item.id,caseRoot:plan.caseRoot,workspaceBinding,names:missingFormal});Object.assign(state.artifacts,recovered);
         for(let index=downloadFailures.length-1;index>=0;index--)if(recovered[downloadFailures[index].name])downloadFailures.splice(index,1);
       }catch(error){state.deliveryRecoveryWarning=error.message;}
     }
     state.deliverySeconds = (Date.now() - downloadStarted) / 1000;
     state.downloadFailures = downloadFailures;
-    if (job.status !== "succeeded" || item?.status !== "succeeded") {
+    if (!providerItemSucceeded(job,item)) {
       try {
-        state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: echo.config.options.work_dir, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix});
+        state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: echo.config.options.work_dir, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix,workspaceBinding,runtimeHash:lock.runtimeHash});
         for (const [name, recovered] of Object.entries(state.diagnosticsRecovery.files)) state.artifacts[name] = {bytes: recovered.bytes, sha256: recovered.sha256, source: "trusted-host-fsx-recovery"};
       } catch (error) { state.diagnosticsRecoveryError = error.message; }
     }
@@ -283,12 +306,13 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
     state.toolVersion = result?.toolVersion;
     state.sdkVersion = result?.sdkVersion;
     state.browserObservationContract = result?.browserObservationContract;
-    if (job.status !== "succeeded" || item?.status !== "succeeded") throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
+    if (!providerItemSucceeded(job,item)) throw new Error(item?.error || job.error || `Provider did not succeed: ${job.status}/${item?.status}`);
     if (downloadFailures.some(output => output.required)) { state.phase = "delivery-pending"; state.failure = {category: "delivery", message: "Required artifacts were not all downloaded; resume the same job."}; await save(); return; }
     if (launcher?.status !== "delivered") throw new Error("CREATOR_DELIVERY_OR_EVENT_IDENTITY_FAILED");
+    const actualWorkspace=validateProviderLauncher(workspaceBinding,launcher);
     if(state.accountRouting.identitySha256&&!state.accountRouting.verified)throw Error("CREATOR_ACCOUNT_ROUTING_MISMATCH");
     if (frozenAssetPolicy.assetPolicySha256 && (result.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256 || launcher.assetPolicySha256 !== frozenAssetPolicy.assetPolicySha256)) throw new Error("THREE_ASSET_POLICY_DELIVERY_MISMATCH");
-    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace: path.join(echo.config.options.work_dir, "tasks", plan.item.id), expectedReasoningEffort: reasoningEffort});
+    state.submitReceipt = validateDeliveryEvidence({result, launcherReport: launcher, events: state.toolEvidence, eventsSha256: state.artifacts["creator-events.jsonl"].sha256, artifacts: state.artifacts, expectedRuntimeHash: lock.runtimeHash, expectedFixedRuntimeHash: lock.prebuiltRuntimes[plan.item.profile].runtimeHash, expectedCaseId: plan.item.baseCaseId, expectedTaskId: plan.item.id, expectedProfile: plan.item.profile, expectedWorkspace:actualWorkspace, expectedReasoningEffort: reasoningEffort});
     state.phase = "delivered"; delete state.failure; await save();
   } catch (error) {
     const hardDeadline = error.code === "LWDP_JOB_PENDING" && error.reason === "timeout";
@@ -305,15 +329,14 @@ async function execute(plan,releaseExecutionSlot=()=>{}) {
       state.phase = state.rayCleanupConfirmed ? (["succeeded", "completed"].includes(state.providerStatus) ? "delivery-pending" : "failed") : "stop-pending";
       state.failure = {category: "execution-guard", message: error.message};
       if (state.rayCleanupConfirmed) {
-        try { state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: `/fsx/pipeline/lwdp_generation/${state.jobId}`, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix}); }
+        try { state.diagnosticsRecovery = await recoverFailedCreatorDiagnostics({jobId: state.jobId, caseId: plan.item.id, workDirectory: `/fsx/pipeline/lwdp_generation/${state.jobId}`, localCaseRoot: plan.caseRoot, outputS3Prefix: plan.outputS3Prefix,workspaceBinding:state.workspaceBinding,runtimeHash:lock.runtimeHash}); }
         catch (recoveryError) { state.diagnosticsRecoveryError = recoveryError.message; }
       }
       await save(); console.log(`THREE_EVAL_STOP ${plan.item.id} ${state.phase} ${reason}`); return;
     }
-    if (/^CREATOR_CASE_(?:ALREADY_ACTIVE|ADMISSION_BUSY)(?::|$)/.test(error.message)) {
-      // A competing coordinator/unknown request is still the admission owner.
-      // Persist only this run's recoverable state, never rewrite that owner.
-      admissionReserved = false;
+    if (isAdmissionBlockError(error,{hasJobId:Boolean(state.jobId),hasSubmissionIntent:Boolean(await optionalJson(path.join(plan.caseRoot,'submission-intent.json')))})) {
+      // Update only a reservation this invocation actually acquired. An owned
+      // reservation without a POST intent can release its logical capacity.
       state.phase = "admission-blocked";
       state.failure = {category: "admission", message: error.message};
       stopAdmission = true;

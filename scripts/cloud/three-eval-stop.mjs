@@ -5,9 +5,11 @@ import {fileURLToPath} from 'node:url';
 import {lwdpRequest,cancelGenerationJob,findGenerationJobByRequestId,submittedJobId} from '../lib/lwdp-generation-client.mjs';
 import {writeJson} from './three-eval-runtime.mjs';
 import {terminalJobHasStopped} from './three-eval-policy.mjs';
+import {confirmRayStop} from './three-ray-cleanup.mjs';
 const boundedFetch=(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(30000)});
 const requestOptions={fetchImplementation:boundedFetch,maxAttempts:1};
-export async function stopOwnedThreeJob({jobId,requestId,outputS3Prefix,evidenceRoot,reason,waitMilliseconds=120000,readJob=async id=>{const data=await lwdpRequest(`/api/v1/generation/jobs/${id}`,requestOptions);return data.job??data;},cancelJob=id=>cancelGenerationJob(id,requestOptions)}) {
+const defaultReadJob=async id=>{const data=await lwdpRequest(`/api/v1/generation/jobs/${id}`,requestOptions);return data.job??data;};
+export async function stopOwnedThreeJob({jobId,requestId,outputS3Prefix,evidenceRoot,reason,waitMilliseconds=120000,readJob=defaultReadJob,cancelJob=id=>cancelGenerationJob(id,requestOptions),probeRayCleanup=readJob===defaultReadJob?confirmRayStop:async()=>null}) {
   if(!/^gen_[a-f0-9]+$/.test(jobId)||!requestId.startsWith('wk3-')||!outputS3Prefix.startsWith('s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/'))throw new Error('THREE_STOP_SCOPE_INVALID');
   const owned=job=>job.job_id===jobId&&job.request_id===requestId&&job.output_s3_prefix===outputS3Prefix&&job.pipeline==='codex';
   let job=await readJob(jobId);if(!owned(job))throw new Error('THREE_STOP_FOREIGN_IDENTITY');
@@ -22,6 +24,10 @@ export async function stopOwnedThreeJob({jobId,requestId,outputS3Prefix,evidence
   for(;;){
     try{job=await readJob(jobId);if(!owned(job))throw new Error('THREE_STOP_FOREIGN_IDENTITY');report.providerStatus=job.status;report.rayCleanup={checked:job.progress?.summary?.ray_cleanup_checked??null,pending:job.progress?.summary?.ray_cleanup_pending??null,stopRequested:job.progress?.summary?.ray_stop_requested??null};if(terminalJobHasStopped(job)){report.status='confirmed-terminal';report.rayCleanupConfirmed=true;break;}}
     catch(error){report.lookupError=error.message;}
+    if(owned(job)&&['cancelled','stopped'].includes(job?.status)){
+      try {const proof=await probeRayCleanup(job);if(proof){report.hostRayCleanup=proof;report.status='confirmed-terminal';report.rayCleanupConfirmed=true;break;}}
+      catch(error){report.rayObservationError=error.name;}
+    }
     if(Date.now()>=deadline){report.status='stop-pending';break;}
     await new Promise(resolve=>setTimeout(resolve,Math.min(5000,deadline-Date.now())));
   }

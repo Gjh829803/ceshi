@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Vector3 } from 'three';
-import {type EnvironmentQueries,type HumanoidRig} from '../environment/queries';
+import {type EnvironmentQueries,type HumanoidRig,type QueryBody} from '../environment/queries';
 import {humanoidLevel,type HumanoidLevel,type LevelBox} from './level-adapter';
 import {createTraversalMotion,type MotionPlan,type MotionSource} from './motion';
 import {SWIM_ROOT_DEPTH,SWIM_SPEED,SWIM_FAST_SPEED,swimVerticalVelocity,type WaterContact} from './water-physics';
@@ -12,6 +12,7 @@ export const FIXED_DT = 1 / 60;
 export const RADIUS = 0.28;
 export const HALF = 0.56;
 export const CENTER = RADIUS + HALF;
+export const HUMANOID_BODY:QueryBody=Object.freeze({kind:'capsule',radius:RADIUS,height:CENTER*2,offset:[0,CENTER,0] as const});
 // Rapier checks free space beyond the capsule after stepping. Requiring .30 m
 // stalls on .36 m treads when the next riser enters that probe; .20 m still
 // requires forward clearance without increasing the .27 m climb height.
@@ -26,8 +27,9 @@ export interface Traversal { probe: Probe; start: Vector3; elapsed: number; dura
 const UP = new Vector3(0,1,0);
 const ROT = {x:0,y:0,z:0,w:1};
 export const ease = (x:number) => { x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
+export const TRAVERSAL_LIMITS=Object.freeze({minimumHeightMeters:.35,maximumHeightMeters:2.75,minimumDepthMeters:.55});
 export function classify(height:number, depth:number):Kind {
-  if (height > 2.75 || height < .35 || depth < .55) return 'blocked';
+  if (height > TRAVERSAL_LIMITS.maximumHeightMeters || height < TRAVERSAL_LIMITS.minimumHeightMeters || depth < TRAVERSAL_LIMITS.minimumDepthMeters) return 'blocked';
   if (height <= 1.05 && depth <= 1.15) return 'vault';
   return height <= 1.65 ? 'mantle' : 'climb';
 }
@@ -175,6 +177,15 @@ export class HumanoidController {
   }
   private emitAnimation(kind:AnimationEvent['kind'],turn=0,heavy=false,moving=this.speed>.2,strength=1,speed=this.speed){
     this.animationEvent={id:++this.animationSerial,kind,elapsed:0,turn,heavy,moving,strength,speed};
+  }
+  crouchEligibility(){
+    const reject=(reason:string,message:string)=>({eligible:false,reason,message});
+    if(this.mounted)return reject('MOUNTED','请先离开载具或坐骑');
+    if(!this.grounded)return reject('NOT_GROUNDED','蹲伏需要地面支撑');
+    if(this.skills.active||this.skills.carrying||this.skills.seated||this.surface.mode!=='none'||this.swimming||this.traversal)return reject('INVALID_STATE','请先回到空手且可自由移动的状态');
+    const half=this.stance==='stand'?CROUCH_HALF:HALF;
+    if(this.world.intersectionWithShape(this.position.clone().addScaledVector(UP,half+RADIUS),ROT,new RAPIER.Capsule(half,RADIUS),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,this.capsule))return reject('HEADROOM_BLOCKED','头顶空间不足');
+    return {eligible:true,reason:'READY',message:'可切换蹲伏姿态'};
   }
   private changeStance(stance:'stand'|'crouch'){
     if(stance===this.stance)return true;
@@ -412,6 +423,11 @@ export class HumanoidController {
   step(input:Vector3,sprint:boolean,walk:boolean,jump:boolean,actions?:{toggleCrouch?:boolean}&ActionCommands&SurfaceCommands){
     if(this.disposed)throw new Error('Humanoid controller disposed');
     if(this.mounted)return;
+    if(actions?.toggleCrouch&&this.surface.mode==='climbing'||actions?.slide&&this.surface.mode==='climbing')actions={...actions,toggleCrouch:false,slide:false,releaseClimb:true};
+    if(actions?.interact&&!this.skills.active&&!this.skills.seated&&!this.skills.carrying&&!this.skills.nearest()){
+      actions={...actions,interact:false};
+      if(this.surface.mode==='none')actions.climb=true;
+    }
     const dt=FIXED_DT;this.elapsed+=dt;this.cooldown-=dt;this.jumpBuffer=jump?.13:Math.max(0,this.jumpBuffer-dt);
     const hasInput=input.lengthSq()>.01;
     const canRequest=!this.traversal&&!this.skills.active&&!this.skills.carrying&&!this.skills.seated&&this.surface.mode==='none';
@@ -459,8 +475,8 @@ export class HumanoidController {
     if(!this.skills.active&&!this.skills.carrying&&!this.skills.seated&&this.surface.step(input,actions,jump)){this.checkBounds();return;}
     if(this.skills.step(input,sprint,actions,jump)){this.checkBounds();return;}
     if(this.skills.carrying){sprint=false;walk=true;this.jumpBuffer=0;}
-    if(actions?.toggleCrouch&&this.grounded)this.changeStance(this.stance==='stand'?'crouch':'stand');
-    if(this.jumpBuffer>0&&this.stance==='crouch'&&this.grounded&&!this.changeStance('stand'))this.jumpBuffer=0;
+    if(actions?.toggleCrouch){const eligibility=this.crouchEligibility();if(eligibility.eligible)this.changeStance(this.stance==='stand'?'crouch':'stand');else this.lastResult=eligibility.message;}
+    if(this.jumpBuffer>0&&this.stance==='crouch'&&this.grounded){this.changeStance('stand');this.jumpBuffer=0;this.traversalRequested=false;}
     // Four actual displacement samples reject a single solver correction;
     // requested velocity alone would falsely qualify running against a wall.
     const previousSpeed=this.recentSpeeds.length?this.recentSpeeds.reduce((a,b)=>a+b,0)/this.recentSpeeds.length:this.speed;

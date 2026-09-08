@@ -4,7 +4,7 @@ import { episodeStyleVariantIds, EPISODE_STYLE_VARIANT_SEGMENT_IDS } from '../li
 
 export const THREE_EPISODE_STYLE_IDS = episodeStyleVariantIds(10);
 export const THREE_EPISODE_SEGMENT_IDS = EPISODE_STYLE_VARIANT_SEGMENT_IDS;
-export const THREE_EPISODE_VISUAL_VERSION = 'three-episode-visual@1';
+export const THREE_EPISODE_VISUAL_VERSION = 'three-episode-visual@2';
 // Same five independent visual-event slots as the existing Episode production policy.
 // These schedule video-only effects; they do not claim SDK commands were executed.
 export const THREE_EPISODE_EVENT_SLOTS = Object.freeze([
@@ -122,7 +122,8 @@ export function assertAnchorHashesUnchanged(before, after) {
 }
 export function buildThreeEpisodeRenderPrompt({variant, segment, styledTriviews, events}) {
   const camera = segment.camera ?? segment.cameraFacts ?? null;
+  const recordedActions = `实际 SDK 动作记录（60Hz tick、24fps 帧，从片段开头计数）：${JSON.stringify(segment.actionTimeline ?? [])}。保留实际动作目标、姿态、起止时间与结果；仅 succeeded 表示完成，不能把 failed/cancelled/missing 补成成功。stateChanges 为逐 tick 实际观测，startTick 为命令发出时间。`;
   const references = styledTriviews.map((target, index) => `@图片${index + 2} = ${target.targetId}（${target.name}）完整正面、右侧面、背面外观。`).join('\n');
   const timeline = events.length ? events.map(event => `第${event.segmentRelativeSeconds}秒开始，${event.timing.transitionDurationSeconds}秒完成：${event.beforeState} → ${event.transitionDescription} → ${event.afterState}。结束方式：${event.timing.ending}，结束持续${event.timing.endingDurationSeconds}秒。空间：${event.spatialContinuity}。声音：${event.audioDescription}。禁止：${event.negativeConstraints}`).join('\n') : '本段没有视觉事件，保持基础外观、天气和灯光连续稳定。';
-  return `@视频1是本片唯一的空间、运动、动作时序和相机路径权威。逐帧保持地形高度、道路边界、物体锚点与数量、近中远景关系、遮挡、开口、运动通道、人物根轨迹、跳跃起落、镜头透视、裁切、占屏比例和首尾构图。不得改变地图或为展示设计移动镜头。\n\n@图片1是该段最终样式首帧，是人物身份、材质、色彩、灯光、天气和风格权威。保留主体当前可见侧，背面不得翻成正面。白模原颜色只用于对象识别，不是不可更改的语义色；简化网格、辅助线、UI和白模材质不得出现在最终成片。允许自然表面和外观细化，保留宏观空间和运动边界。\n\n${references}\n三视图是条件式外观字典，不是场景清单。只在真实视频当前画面存在对应实体时使用；不得新增未出现的目标，也不得为了展示完整外观改变可见比例、遮挡或裁切。\n\n当前世界：${variant.worldIdentity}\n当前主体：${variant.subjectIdentity}\n外观：${variant.visualPrompt}\n禁止：${variant.negativeConstraints}\n\n摄影：严格复现真实视频的投影、机位、俯仰、拍摄侧、跟随距离和速度；不得自行添加切镜、推拉或环绕。${camera ? `录制器提供的相机事实：${JSON.stringify(camera)}。` : '相机参数未额外声明，以实际视频为准。'}不得假定固定焦段或第三人称模式。\n\n视觉事件（只修改视频外观，不代表白模发生了世界命令）：\n${timeline}\n\n动作细节可在原有根运动内部自然补全重量、惯性、步态和衣物滞后，不能新增起跳、移动、转向或改变实际时序。只生成同步的环境音和动作音，无音乐、歌声、对白或旁白。无文字、Logo、水印、时间码、界面、穿模、闪烁、身份漂移。`;
+  return `@视频1是本片唯一的空间、运动、动作时序和相机路径权威。逐帧保持地形高度、道路边界、物体锚点与数量、近中远景关系、遮挡、开口、运动通道、人物根轨迹、跳跃起落、镜头透视、裁切、占屏比例和首尾构图。不得改变地图或为展示设计移动镜头。\n\n@图片1是该段最终样式首帧，是人物身份、材质、色彩、灯光、天气和风格权威。保留主体当前可见侧，背面不得翻成正面。白模原颜色只用于对象识别，不是不可更改的语义色；简化网格、辅助线、UI和白模材质不得出现在最终成片。允许自然表面和外观细化，保留宏观空间和运动边界。\n\n${references}\n三视图是条件式外观字典，不是场景清单。只在真实视频当前画面存在对应实体时使用；不得新增未出现的目标，也不得为了展示完整外观改变可见比例、遮挡或裁切。\n\n当前世界：${variant.worldIdentity}\n当前主体：${variant.subjectIdentity}\n外观：${variant.visualPrompt}\n禁止：${variant.negativeConstraints}\n\n摄影：严格复现真实视频的投影、机位、俯仰、拍摄侧、跟随距离和速度；不得自行添加切镜、推拉或环绕。${camera ? `录制器提供的相机事实：${JSON.stringify(camera)}。` : '相机参数未额外声明，以实际视频为准。'}不得假定固定焦段或第三人称模式。\n\n${recordedActions}\n\n视觉事件（只修改视频外观，不代表白模发生了世界命令）：\n${timeline}\n\n动作细节可在原有根运动内部自然补全重量、惯性、步态和衣物滞后，不能新增起跳、移动、转向或改变实际时序。只生成同步的环境音和动作音，无音乐、歌声、对白或旁白。无文字、Logo、水印、时间码、界面、穿模、闪烁、身份漂移。`;
 }

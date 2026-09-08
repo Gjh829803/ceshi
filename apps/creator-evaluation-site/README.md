@@ -1,97 +1,74 @@
-When a delivered playable contains `planning/world-plan.png`, its original overall
-plan is exposed as a production artifact. Native ImageGen activity is a production
-stage; its prompt, raw image bytes and private saved path are not copied into the
-public event feed. The original image file is published through the closed artifact
-path, without assistant content review.
+# Creator evaluation page
 
-# Production-only gallery (current)
+The gallery shows actual cloud task status, source identity, action coverage,
+playable worlds, opening frames, recorded video, errors and shared human feedback.
+`ready` means verified production artifacts are available. Coverage lists are test
+objectives; tool completion and human evaluation are separate results.
 
-The gallery opens delivered playables without assistant review. `ready` means
-production files are available; it is not a manual quality judgment. The publication
-script does not read review files or require a browser-review document. Existing
-assistant notes/ratings are not part of the public result. "My feedback" is optional
-user-owned local feedback and does not affect access.
+## Run-specific publication
 
-`sync-three-evaluation-site.py` automatically turns delivered run/attempt records
-into gallery files and publication. Combine it with the safe progress bridge; only
-one publication worker should write the site. No scene code runs during syncing.
+Stage with `scripts/cloud/prepare-three-evaluation-site.py`. SDK evaluations select
+up to ten explicit task IDs. References, case inputs and deliveries are validated
+against the plan, runtime lock and their actual file hashes before publication.
 
-Historical implementation notes below describe superseded review gates.
+Keep display configuration in `RUN_ROOT/evaluation-publication.json`:
 
-# WorldKit evaluation center
+```json
+{
+  "schemaVersion": 1,
+  "kind": "three-creator-host-publication",
+  "runId": "three-sdk-actions-ten-20260908",
+  "title": "Three SDK · 动作与主体十例评测",
+  "description": "真实云端生成、动作场景条件与主体绑定验证。",
+  "sourceIdentity": {
+    "branch": "codex/three-sdk-data-production-20260907"
+  },
+  "cases": {}
+}
+```
 
-The read-only evaluation UI combines the existing Studio's task-list,
-observable-trajectory, event-stream and deliverable patterns with the Three
-playable gallery. The original Studio files are already present in this branch;
-its Native/Planner pipeline is not used as the Three status model.
+`sourceIdentity` accepts the full `commit`, `sourceSnapshotSha256`,
+`sdkSourceSha256` and `sdkVersion`. The stager takes `creatorRuntimeLockHash`
+from the actual plan. Each case may define `displayTitle` and
+`evaluation: {actions: [], sceneRequirements: [], checks: []}`; the selected
+case manifest can provide the same evaluation metadata.
 
-Public entry: `/creator-evals/three/`. Header navigation links back to the existing
-Studio and the preserved older five-case gallery. The page provides task search,
-status filters, current activity, elapsed time, attempts and failure causes;
-case details have process, artifacts, play and review tabs. Clicking a task
-reveals its detail. Mobile tables scroll within their container.
-
-## Data ownership
-
-- `results.json` is the curated gallery manifest from
-  `scripts/cloud/prepare-three-evaluation-site.py`. Playable readiness and content
-  review come from that manifest; a runtime event never grants semantic acceptance.
-- `progress.json` is `three-creator-run-progress` v1 from
-  `scripts/cloud/three-eval-progress.mjs`. It is keyed by the same run and task IDs.
-  Actual CLI/MCP observations take precedence over delayed provider queue counters.
-  Retries retain each original job and failure; missing timestamps stay unknown.
-- Only safe operation names, statuses, real times, bounded numeric progress and
-  fixed failure descriptions are public. Raw reasoning, commands, source and
-  account data are not displayed.
-- Each ten-second refresh updates status without reloading a mounted playable,
-  clearing local feedback or changing the selected tab. Event scrolling can follow
-  new entries or preserve the user's position. Source observation age, not merely
-  JSON regeneration time, determines whether live state is stale.
-- Switching away from a playing scene pauses it. Returning resumes only a scene
-  the page itself paused; a user's explicit pause is preserved. The adapter uses
-  the actual Three Host/World observer, with the existing Native observer fallback.
-
-Feedback is saved per evaluation in browser localStorage and can be exported as
-JSON. Videos and full-object views are lazy-loaded. Technical IDs remain in an
-expandable section, separate from the main task status.
-
-Publication may provide a Host-only `displayTitle` for a case and `historyRuns`
-for links to previous rounds. Neither field enters the model's input. The route
-counter is labeled as the author's route goals; it is not an independent finding
-that every destination is reachable. Tool completion and test acceptance retain
-separate labels, including short tests and recordings below the required duration.
-
-## Publication
-
-Stage a new gallery directory with the existing Three stager. Publish through
-`publish-creator-evaluation-site.py --source SITE --pod RAY_HEAD --gallery three`.
-The gateway and other galleries remain unchanged. All files are atomically replaced,
-with the manifest installed last.
-
-To preserve a completed round, publish its staged directory with `--archive-run`.
-It is mounted under `/creator-evals/three/runs/<runId>/`; an existing archive is
-read-only. Identical files may be verified again, while a changed manifest, file,
-or file inventory is rejected. The current run can then be published normally.
-
-While a run is active, generate a fresh safe `progress.json` into SITE and call:
+Publish only the intended run:
 
 ```sh
 python3 scripts/cloud/publish-creator-evaluation-site.py \
-  --source SITE --pod RAY_HEAD --gallery three --progress-only
+  --source SITE --pod RAY_HEAD --gallery three --run-page
 ```
 
-This updates only the small progress snapshot. The publisher rejects a different
-run/task set and rejects stale updates against the installed run. A stopped Host
-observer is shown as stale; public clients never receive API or account credentials.
+Its URL is `/creator-evals/three/runs/<runId>/`. Its files live under the existing
+FSx evaluation root; this command does not change Kubernetes resources, the
+current gallery or another run. The destination records its run/task ownership.
+An existing archive cannot be overwritten as a live run. `--archive-run` creates
+an immutable completed archive instead.
 
-Validation: real local browser fixtures cover filters, task/tab selection,
-automatic-refresh iframe identity, feedback persistence, pause/resume, event
-scrolling, connection failure/recovery and 360/390px layouts. Public deployment is
-also checked in a real browser. See `.codex-tmp/evaluation-center-ui-qa/` and
-`.codex-tmp/three-sdk-v2-holdout/published-ui-check.json` for this implementation's
-actual evidence; fixtures are not model-generated scene results.
+Use `sync-three-evaluation-site.py --run-page` for delivery updates. Add
+`--progress-only` to the publisher for an already initialized run's small progress
+snapshot. Only one publisher should write each run. Progress must match the
+installed run/task set; stale snapshots are rejected. Files are atomically
+installed, with `results.json` last.
 
-New `interactive-preview` deliveries have no video or recorded-play metrics.
-The gallery hides the video requirement and displays preview checks plus the
-independent gameplay-review status. Archived recorded-episode cases retain their
-actual video and timing.
+## Shared feedback
+
+`reviews.mjs` uses the existing same-origin `/creator-evals/api/reviews` service.
+The `gallery` query identifies the exact run page. Reviewer identity uses the
+existing session; each review is keyed by run, task, world build and reviewer.
+The service remains the only shared review store. Source or world changes cannot
+inherit an approval for different bytes.
+
+User edits save automatically, uncertain writes retain the same mutation ID,
+revision conflicts require an explicit choice, and offline drafts stay local.
+An open playable keeps its original build during refresh; feedback targets that
+actual playing build. No feedback is submitted by opening or publishing a page.
+
+## Verification
+
+Run `python3 scripts/cloud/prepare-three-evaluation-site.test.py` for staging,
+artifact closure, source/coverage identity, ten-case selection and isolated
+publication checks. Browser verification should cover desktop and mobile,
+status/action filters, playback preservation on refresh, shared feedback identity,
+and unavailable review/status services. Local fixtures must be visibly labeled.

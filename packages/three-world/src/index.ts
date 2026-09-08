@@ -1,9 +1,12 @@
 export * from './contracts.js';
 export type * from './episode-contracts.js';
 export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
+export { createHumanoidWorld, DEFAULT_HUMANOID_ASSET_ID, type HumanoidWorldOptions, type HumanoidAssetDefinition, type HumanoidResource } from './humanoid.js';
 export { Character as TrainingCharacter } from './training/character.js';
 export type { TrainingOptions, TrainingVehicleInstance, TrainingProfile, TrainingRuntime } from './training/runtime.js';
 export type { MapDefinition as TrainingMap, MapSpawn as TrainingSpawn } from './training/environment/types.js';
 export type { VehicleSpec as TrainingVehicleSpec } from './training/config.js';
 export { emptyInput as emptyTrainingInput } from './training/simulation.js';
 export * as training from './training/public.js';
+export { INPUT_BINDINGS, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type ControlAction } from './training/input.js';
+export { CHARACTER_CAPABILITIES, type CharacterCapability, type CharacterCapabilityState } from './training/character-capabilities.js';

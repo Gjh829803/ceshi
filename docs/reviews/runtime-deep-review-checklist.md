@@ -3,7 +3,7 @@
 Apply this checklist to changes in input, movement, physics, animation, camera,
 render scheduling, assets, lifecycle or runtime protocols. The current design is
 [Three SDK architecture](../three-sdk-architecture.md). Verify installed Three
-and Rapier semantics; earlier engine checklists are not this branch's authority.
+and Rapier semantics against the actual installed source.
 
 ## 1. Map state owners and consumers
 
@@ -32,6 +32,8 @@ do not prove that the engine or browser implements it.
 
 ## 3. Exercise transitions and asymmetric cases
 
+- Actions: eligibility, interaction priority, sprint/crouch edges, constrained slide
+  exits, supported targets, climb detach/top attempts, deep/shallow water, and replay.
 - Motion: steps, slopes, edges, wall sliding, unsupported starts, falling,
   landing, jump hold/release/repress, actor collision and control switching.
 - Animation: real walk/run clips, first-key timestamps, phase transitions,
@@ -88,7 +90,7 @@ Reuse passing evidence only while its relevant inputs and claim remain unchanged
 Do not repeat narrow tests already covered by the broader run. Root `pnpm test`,
 independent Node/Python/Site tests, tracked CI, browser capture, visual inspection
 and manual interaction have different scopes; inspect actual commands before
-claiming aggregate coverage. The old Site build is not a Three runtime gate.
+claiming aggregate coverage. Select gates with actual consumers in the changed code.
 
 ## 6. Report the limits
 

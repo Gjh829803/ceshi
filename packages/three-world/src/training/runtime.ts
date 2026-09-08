@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Simulation, emptyInput, createVehicle, resolveVehicleSpec, type Input } from './simulation';
 import { canPlaceCreature, resetCreatureState } from './creatures/controller';
-import { EnvironmentQueries, initEnvironmentQueries, PLAYER_BODY, vehicleBody } from './environment/queries';
+import { EnvironmentQueries, initEnvironmentQueries, vehicleBody } from './environment/queries';
 import { FollowCamera } from './camera';
 import { Character } from './character';
 import { readHumanoid } from './humanoid/render-state';
 import { readInteractionTargets } from './humanoid/render-state';
+import {characterCapabilities,type CharacterCapabilityState,type CharacterCapabilityAvailability} from './character-capabilities';
 import type { MapDefinition, MapSpawn } from './environment/types';
 import type { VehicleSpec } from './config';
 import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseTrainingControl,readTrainingControl,type TrainingControl} from './control-tuning';
@@ -16,6 +17,8 @@ import { DEFAULT_CHARACTER_OPTIONS } from '../physics';
 import type { PhysicsPort, PhysicsCandidate, CharacterOptions, RigidPhysics, Vec3, WorldInput, PhysicsEntityState, PhysicsAudit } from '../engine-contracts';
 import type { EpisodeStartProbe, EpisodeStart, EpisodeCapabilities } from '../episode-contracts';
 import type { CameraRigInput } from '../camera';
+import {HUMANOID_INPUT_FIELDS} from './input';
+import {HUMANOID_BODY,RADIUS,CENTER} from './humanoid/controller';
 import type { SkillRequest, SkillResult } from './humanoid/action-schema';
 
 export type TrainingCommand =
@@ -57,12 +60,13 @@ export interface TrainingSnapshot {
     readonly depthCheckPassed:boolean;readonly immersionCheckPassed:boolean;readonly wasSwimmingAtSample:boolean;
     readonly entrySpeedMetersPerSecond:number;readonly entrySerial:number;
   }|null};
-  readonly character:{readonly instanceId:string;readonly state:string;readonly swimming:boolean;readonly stance:string;readonly carrying:string|null;readonly seated:string|null;readonly activeAction:{readonly requestId:string;readonly action:string;readonly phase:string;readonly elapsedSeconds:number}|null};
+  readonly characterCapabilities:readonly CharacterCapabilityAvailability[];
+  readonly character:{readonly instanceId:string;readonly state:string;readonly swimming:boolean;readonly swimStyle:'breaststroke'|'freestyle';readonly stance:string;readonly carrying:string|null;readonly seated:string|null;readonly activeAction:{readonly requestId:string;readonly action:string;readonly phase:string;readonly elapsedSeconds:number}|null};
   readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:VehicleSpec['mode'];readonly available:boolean;readonly speedMetersPerSecond:number;readonly throttle:number;readonly steering:number;readonly grounded:boolean;readonly submerged:boolean}[];
   readonly transition:{readonly kind:''|'enter'|'exit';readonly remainingSeconds:number};
   readonly traversal:{readonly kind:string;readonly phase:string;readonly progress:number;readonly elapsedSeconds:number;readonly durationSeconds:number;readonly sourceActionId:string}|null;
   readonly surface:{readonly mode:string;readonly surfaceId:string|null;readonly pose:{readonly actionId:string;readonly timeSeconds:number;readonly phase:string}|null};
-  readonly interactionTargets:readonly {readonly id:string;readonly kind:'pickup'|'seat';readonly state:string;readonly positionWorldMetersXYZ:Vec3;readonly rotationWorldQuaternionXYZW:readonly [number,number,number,number]}[];
+  readonly interactionTargets:readonly {readonly id:string;readonly kind:'pickup'|'seat';readonly state:string;readonly approachPositionWorldMetersXYZ:Vec3;readonly facingYawRadians:number;readonly eligible:boolean;readonly reason:string;readonly message:string;readonly positionWorldMetersXYZ:Vec3;readonly rotationWorldQuaternionXYZW:readonly [number,number,number,number]}[];
   readonly vehicleDynamics:readonly {readonly instanceId:string;readonly launched:boolean;readonly pitchRadians:number;readonly rollRadians:number;readonly creature:{readonly gait:string;readonly phase:number;readonly flying:boolean;readonly leadPositionWorldMetersXYZ:Vec3|null;readonly leadYawRadians:number|null}|null}[];
 }
 const tuple=(v:THREE.Vector3):Vec3=>[v.x,v.y,v.z];
@@ -102,7 +106,7 @@ export class TrainingRuntime implements PhysicsPort {
     this.specs=options.vehicles.map(v=>({...structuredClone(v.spec),id:v.instanceId}));
     this.environment=new EnvironmentQueries(this.instanceMap(options.map));
     this.simulation=new Simulation(this.environment,this.specs);
-    this.followCamera=new FollowCamera(camera,[],this.environment);
+    this.followCamera=new FollowCamera(camera,this.environment);
     this.followCamera.tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...options.cameraTuning});this.baseTuning={...this.followCamera.tuning};this.initialCamera=camera.clone();
     this.profile={character:{...this.simulation.characterControl},camera:{...this.baseTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
     this.objects.set(options.character.instanceId,options.character.object);
@@ -138,7 +142,7 @@ export class TrainingRuntime implements PhysicsPort {
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
     const object=(properties:Record<string,import('../contracts').JsonValue>,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false});
-    const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean'}]),['humanoid',{type:'object',additionalProperties:{type:'boolean'}}]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
+    const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean'}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:object({type:{const:type},...properties})});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
     const profile=object({character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[{type:'number',exclusiveMinimum:0,maximum:100},{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
@@ -146,6 +150,7 @@ export class TrainingRuntime implements PhysicsPort {
   }
   snapshot():TrainingSnapshot{
     const s=this.simulation,h=s.humanoid,tr=h?.traversal,surface=h?.surface;
+    const targets=new Map(h?.skills.listTargets().map(target=>[target.id,target])??[]);
     const waterControllerActive=Boolean(h&&!s.vehicle&&!tr),contact=waterControllerActive?h?.water:null;
     return {
       controls:{character:readTrainingControl(s.characterControl),vehicles:Object.fromEntries(s.vehicles.map(v=>[v.spec.id,readTrainingControl(v.spec)]))},
@@ -155,21 +160,29 @@ export class TrainingRuntime implements PhysicsPort {
           feetBelowSurfaceMeters:contact.feetBelowSurfaceMeters,requiredDepthMeters:contact.requiredDepthMeters,requiredFeetBelowSurfaceMeters:contact.requiredFeetBelowSurfaceMeters,
           depthCheckPassed:contact.depthCheckPassed,immersionCheckPassed:contact.immersionCheckPassed,wasSwimmingAtSample:contact.wasSwimmingAtSample,
           entrySpeedMetersPerSecond:contact.entrySpeed,entrySerial:contact.entrySerial}:null},
-      character:{instanceId:this.options.character.instanceId,state:h?.state??s.player.animation,swimming:!s.vehicle&&s.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
+      characterCapabilities:characterCapabilities(h??undefined).map(({id,eligible,reason,message,targetId})=>({id,eligible,reason,message,...(targetId?{targetId}:{})})),
+      character:{swimStyle:h?.swimStyle??'breaststroke',instanceId:this.options.character.instanceId,state:h?.state??s.player.animation,swimming:!s.vehicle&&s.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
       vehicles:s.vehicles.map((v,i)=>({instanceId:v.spec.id,assetId:this.options.vehicles[i]!.assetId,mode:v.spec.mode,available:s.available(v),speedMetersPerSecond:v.velocity.length(),throttle:v.throttle,steering:v.steering,grounded:v.grounded,submerged:v.submerged})),
       transition:{kind:s.transitionKind,remainingSeconds:s.transition},
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},
-      interactionTargets:readInteractionTargets(h).map(t=>({id:t.id,kind:t.kind,state:t.state,positionWorldMetersXYZ:tuple(t.position),rotationWorldQuaternionXYZW:t.rotation?[t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w]:[0,0,0,1]})),
+      interactionTargets:readInteractionTargets(h).filter(t=>targets.has(t.id)).map(t=>({id:t.id,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:targets.get(t.id)!.approach,facingYawRadians:targets.get(t.id)!.yaw,eligible:targets.get(t.id)!.eligible,reason:targets.get(t.id)!.reason,message:targets.get(t.id)!.message,positionWorldMetersXYZ:tuple(t.position),rotationWorldQuaternionXYZW:t.rotation?[t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w]:[0,0,0,1]})),
       vehicleDynamics:s.vehicles.map(v=>({instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.creature?{gait:v.creature.gait,phase:v.creature.phase,flying:v.creature.flying,leadPositionWorldMetersXYZ:v.creature.leadPosition?tuple(v.creature.leadPosition):null,leadYawRadians:v.creature.leadYaw??null}:null})),
     };
   }
+  characterCapabilities():CharacterCapabilityState[]{return characterCapabilities(this.simulation.humanoid??undefined);}
   actionIds(id:string):readonly string[]{return id===this.options.character.instanceId?[...this.options.character.animation?.availableHumanoidClips??[]]:[];}
   animationState(id:string):import('../contracts').EntityState['animation']{if(id!==this.options.character.instanceId)return;const source=this.options.character.animation?.sourceCharacter;if(!source)return;const key=Object.keys(source.weights).sort((a,b)=>(source.weights[b]??0)-(source.weights[a]??0))[0];if(!key||!source.actions[key])return;const action=source.actions[key];return {actionId:key,clipName:action.getClip().name,timeSeconds:action.time};}
   cameraSnapshot():import('../contracts').CameraState{const c=this.followCamera,q=this.camera.quaternion;return {mode:this.cameraMode,positionWorldMetersXYZ:tuple(this.camera.position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w],desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.distance,actualArmDistanceMeters:c.target.distanceTo(this.camera.position),collisionPhase:c.collisionLimited?'constrained':'clear'};}
   useAuthoredCamera():void{this.authored=true;}
   setCameraMode(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('TRAINING_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.initialized=false;}
-  validateInput(input:Input):void{for(const key of ['forward','steer','lift','roll','pitch','strafe'] as const)if(typeof input[key]!=='number'||!Number.isFinite(input[key])||Math.abs(input[key])>1)throw new Error('TRAINING_INPUT_INVALID');for(const key of ['boost','brake','jump','slow'] as const)if(typeof input[key]!=='boolean')throw new Error('TRAINING_INPUT_INVALID');if(input.humanoid&&Object.values(input.humanoid).some(v=>typeof v!=='boolean'))throw new Error('TRAINING_INPUT_INVALID');}
+  validateInput(input:Input):void{
+    if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('TRAINING_INPUT_INVALID');
+    for(const key of ['forward','steer','lift','roll','pitch','strafe'] as const)if(typeof input[key]!=='number'||!Number.isFinite(input[key])||Math.abs(input[key])>1)throw new Error('TRAINING_INPUT_INVALID');
+    for(const key of ['boost','brake','jump','slow'] as const)if(typeof input[key]!=='boolean')throw new Error('TRAINING_INPUT_INVALID');
+    if(Object.keys(input).some(key=>!['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow','humanoid'].includes(key)))throw new Error('TRAINING_INPUT_INVALID');
+    if(input.humanoid!==undefined&&(!input.humanoid||typeof input.humanoid!=='object'||Array.isArray(input.humanoid)||Object.entries(input.humanoid).some(([key,value])=>!(HUMANOID_INPUT_FIELDS as readonly string[]).includes(key)||typeof value!=='boolean')))throw new Error('TRAINING_INPUT_INVALID');
+  }
   setInput(input:Input):()=>void;
   setInput(input:undefined):void;
   setInput(input:Input|undefined):(()=>void)|void;
@@ -287,7 +300,7 @@ export class TrainingRuntime implements PhysicsPort {
     if(mounted){object.position.copy(mounted.position).add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation));object.quaternion.copy(mounted.rotation);}
     const pose=readHumanoid(this.simulation.humanoid);
     if(pose)pose.mounted=mounted?(mounted.spec.characterPose==='stand'?'stand':mounted.spec.characterPose==='ride'?'ride':'drive'):null;
-    this.options.character.animation?.update(dt,p.animation,p.velocity.length(),!!mounted,mounted?.spec.characterPose==='ride',pose);
+    if(pose)this.options.character.animation?.update(dt,pose);
     for(const object of this.objects.values())object.updateWorldMatrix(true,true);
     for(const update of this.visualUpdates)update(dt);
   }
@@ -305,10 +318,10 @@ export class TrainingRuntime implements PhysicsPort {
   teleport(id:string,position:Vec3):void{if(id!==this.options.character.instanceId||!this.prepareCharacter(position,this.simulation.player.yaw))throw new Error('TRAINING_START_BLOCKED');}
   applyImpulse(_id:string,_impulse:Vec3):void{throw new Error('TRAINING_IMPULSE_UNSUPPORTED');}
   step():void{throw new Error('TRAINING_REQUIRES_ENGINE_INPUT');}
-  characterSettings(_id:string):Required<CharacterOptions>{const c=this.simulation.characterControl;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:1.68,radiusMeters:.28,walkSpeedMetersPerSecond:3.1*c.speed/3.8,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
+  characterSettings(_id:string):Required<CharacterOptions>{const c=this.simulation.characterControl;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speed/3.8,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
   probeCharacterStart(id:string,position:Vec3):EpisodeStartProbe{
     if(id!==this.options.character.instanceId)throw new Error('TRAINING_CHARACTER_REQUIRED');
-    const safe=this.environment.safeSpawn(new THREE.Vector3(...position),PLAYER_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35;
+    const safe=this.environment.safeSpawn(new THREE.Vector3(...position),HUMANOID_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35;
     return {isValid:valid,requestedPositionWorldMetersXYZ:position,resolvedPositionWorldMetersXYZ:safe?tuple(safe):position,diagnostics:valid?[]:[{code:'TRAINING_START_BLOCKED',message:'No safe character start within alignment tolerance.'}]};
   }
   castCameraArm(target:Vec3,eye:Vec3,radius:number){const t=new THREE.Vector3(...target);return {distanceMeters:t.distanceTo(this.environment.cameraCast(t,new THREE.Vector3(...eye),radius))};}

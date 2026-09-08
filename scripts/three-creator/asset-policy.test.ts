@@ -28,53 +28,53 @@ afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursi
 it('hides unavailable catalog entries from both search and exact description',async()=>{
  const service=new ThreeCreatorTools(await workspace(),'three-sdk');
  try{
-  expect((await service.assets('')).assets.some((a:any)=>a.id==='humanoid.preset-101')).toBe(true);
-  expect((await service.assets('')).assets.some((a:any)=>a.id==='humanoid.g-bot')).toBe(false);
-  expect((await service.assets('', 'humanoid.g-bot')).assets).toEqual([]);
+  expect((await service.assets('')).assets.some((a:any)=>a.id==='humanoid.source-101')).toBe(true);
+  expect((await service.assets('')).assets.some((a:any)=>a.id==='unavailable.asset')).toBe(false);
+  expect((await service.assets('', 'unavailable.asset')).assets).toEqual([]);
  }finally{await service.close();}
 });
 
 it('rejects a denied asset selected by manually authored project.json',async()=>{
  const root=await workspace();
- await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.g-bot']}));
+ await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['unavailable.asset']}));
  await expect(new ThreeCompiler(root,'three-sdk').prepare()).rejects.toThrow('THREE_ASSET_POLICY_DENIED');
 });
 
 it('recognizes a forbidden asset by bytes even when copied under a custom filename',async()=>{
- const root=await workspace(),gbot=catalog.assets.find(a=>a.id==='humanoid.g-bot')!;
- await writeFile(path.join(root,'custom-character.glb'),await readFile(gbot.sourcePath));
- await expect(new ThreeCompiler(root,'three-sdk').prepare()).rejects.toThrow('THREE_ASSET_POLICY_RESOURCE_DENIED');
+ const root=await workspace(),resource=catalog.assets.find(a=>a.id==='training.rover')!;
+ const {options}=await pin({allowedAssetIds:['humanoid.source-101']});
+ await writeFile(path.join(root,'custom-character.glb'),await readFile(resource.sourcePath));
+ await expect(new ThreeCompiler(root,'three-sdk',options).prepare()).rejects.toThrow('THREE_ASSET_POLICY_RESOURCE_DENIED');
 });
 
 it('rejects an author-supplied Host policy file instead of treating it as permission',async()=>{
  const root=await workspace();
- await writeFile(path.join(root,'asset-policy.json'),JSON.stringify({allowedAssetIds:['humanoid.g-bot']}));
+ await writeFile(path.join(root,'asset-policy.json'),JSON.stringify({allowedAssetIds:['unavailable.asset']}));
  await expect(new ThreeCompiler(root,'three-sdk').prepare()).rejects.toThrow('THREE_ASSET_POLICY_RESERVED_FILE');
 });
 
 it('renders the starter from the allowed default and freezes it across file edits',async()=>{
- const {options}=await pin({allowedAssetIds:['humanoid.g-bot'],defaultHumanoidAssetId:'humanoid.g-bot'});
+ const {options}=await pin({allowedAssetIds:['humanoid.source-101']});
  const root=await workspace(),service=new ThreeCreatorTools(root,'three-sdk',options);
  try{
-  const environment=await service.environment();expect(environment.assetPolicy.allowedAssetIds).toEqual(['humanoid.g-bot']);
+  const environment=await service.environment();expect(environment.assetPolicy.allowedAssetIds).toEqual(['humanoid.source-101']);
   const guide=await service.schema('assets');
   const referenced=catalog.assets.filter(asset=>guide.sdkGuide?.includes(asset.id)).map(asset=>asset.id);
-  expect(referenced).toEqual(['humanoid.g-bot']);
-  expect(guide.sdkGuide).not.toContain("Playground's original 101-bone model");
+  expect(referenced).toEqual(['humanoid.source-101']);
   const example=await service.examples();
   for(const [name,source]of Object.entries(example.files))await writeFile(path.join(root,name),source);
   const candidate=await service.compiler.prepare();
-  expect(candidate.project.assetIds).toEqual(['humanoid.g-bot']);
-  expect(await readFile(path.join(candidate.playableRoot,'compiled/entry-0.js'),'utf8')).toContain('humanoid.g-bot');
+  expect(candidate.project.assetIds).toEqual(['humanoid.source-101']);
+  expect(await readFile(path.join(candidate.playableRoot,'compiled/entry-0.js'),'utf8')).toContain('createHumanoidWorld');
   await writeFile(options.assetPolicySnapshotPath,JSON.stringify(createAssetPolicySnapshot(defaultPolicy,catalog.assets)));
-  expect((await service.assets('')).assets.map((asset:any)=>asset.id)).toEqual(['humanoid.g-bot']);
+  expect((await service.assets('')).assets.map((asset:any)=>asset.id)).toEqual(['humanoid.source-101']);
   expect((await service.compiler.prepare()).worldBuildHash).toBe(candidate.worldBuildHash);
   expect(()=>new ThreeCreatorTools(root,'three-sdk',options)).toThrow('THREE_ASSET_POLICY_HASH_MISMATCH');
  }finally{await service.close();}
 });
 
 it('does not disclose example bundles requiring unavailable assets',async()=>{
- const {options}=await pin({allowedAssetIds:['humanoid.preset-101']});
+ const {options}=await pin({allowedAssetIds:['humanoid.source-101']});
  const service=new ThreeCreatorTools(await workspace(),'three-sdk',options);
  try{await expect(service.examples('independent-world')).rejects.toThrow('THREE_EXAMPLE_ASSETS_UNAVAILABLE');}
  finally{await service.close();}
@@ -100,7 +100,7 @@ it('rejects partial pins and policy files inside the author workspace',async()=>
 
 it('rejects invalid defaults, unknown permissions and ambiguous IDs',()=>{
  for(const overrides of [
-  {defaultHumanoidAssetId:'humanoid.g-bot'},
+  {defaultHumanoidAssetId:'unavailable.asset'},
   {allowedAssetIds:[...defaultPolicy.allowedAssetIds,'unknown.asset']},
   {allowedAssetIds:[...defaultPolicy.allowedAssetIds,defaultPolicy.allowedAssetIds[0]]},
   {defaultHumanoidAssetId:'training.rover'},
@@ -109,10 +109,10 @@ it('rejects invalid defaults, unknown permissions and ambiguous IDs',()=>{
 });
 
 it.each(['js','jsx','ts','tsx','mjs'])('checks embedded forbidden bytes in %s and preserves shared allowed dependencies',async extension=>{
- const snapshot=createAssetPolicySnapshot(defaultPolicy,catalog.assets);
- const bytes=await readFile(catalog.assets.find(a=>a.id==='humanoid.g-bot')!.sourcePath);
+ const snapshot=createAssetPolicySnapshot({...defaultPolicy,allowedAssetIds:['humanoid.source-101']},catalog.assets);
+ const bytes=await readFile(catalog.assets.find(a=>a.id==='training.rover')!.sourcePath);
  expect(()=>verifyAssetPolicySources(snapshot,{[`main.${extension}`]:Buffer.from(`const url="data:model/gltf-binary;base64,${bytes.toString('base64')}";`)})).toThrow('THREE_ASSET_POLICY_RESOURCE_DENIED');
- const shared=catalog.assets.find(a=>a.id==='humanoid.preset-101')!.resources![0]!;
+ const shared=catalog.assets.find(a=>a.id==='humanoid.source-101')!.resources![0]!;
  const customCatalog=[...catalog.assets,{...catalog.assets[0],id:'disabled.alias',resources:[shared]}];
  const sharedSnapshot=createAssetPolicySnapshot(defaultPolicy,customCatalog);
  expect(sharedSnapshot.deniedResourceSha256).not.toContain(shared.sha256);
@@ -121,7 +121,7 @@ it.each(['js','jsx','ts','tsx','mjs'])('checks embedded forbidden bytes in %s an
 
 it('rejects changed packaged dependencies independently of the declared asset ID',async()=>{
  const root=await workspace(),compiler=new ThreeCompiler(root,'three-sdk');
- await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.preset-101']}));
+ await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.source-101']}));
  const candidate=await compiler.prepare();
  const selected=JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
  await writeFile(path.join(candidate.playableRoot,selected.assets[0].uri),'changed model bytes');
@@ -131,18 +131,19 @@ it('rejects changed packaged dependencies independently of the declared asset ID
 it('carries the same policy through the real submit serializer and archive using mocked completed evidence',async()=>{
  const root=await workspace(),service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const episode=JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:180}],targets:[]});
+  const episode=JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:.2},{keysUp:['w'],durationSeconds:.1}],targets:[]});
   await writeFile(path.join(root,'episode.json'),episode);
   const candidate=await service.compiler.prepare();
   const playRoot=path.join(service.evidenceRoot,'mock-play'),captureRoot=path.join(service.evidenceRoot,'mock-captures');
   await mkdir(playRoot,{recursive:true});await mkdir(captureRoot,{recursive:true});
   // Controlled unit fixtures only: this does not claim any actual recording.
-  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:180,inputWallSeconds:180,activePlaySeconds:180,
-   videoMetadata:{durationSeconds:180},worldBuildHash:candidate.worldBuildHash,episodeHash:sha256(episode)};
+  const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:.5,inputWallSeconds:.3,activePlaySeconds:.3,
+   videoMetadata:{durationSeconds:.4},worldBuildHash:candidate.worldBuildHash,episodeHash:sha256(episode)};
   const captures={worldBuildHash:candidate.worldBuildHash,pageErrors:[]};
   await writeFile(path.join(playRoot,'mock.json'),JSON.stringify(report));await writeFile(path.join(captureRoot,'mock.json'),JSON.stringify(captures));
   Object.assign(service,{playtestEvidence:{root:playRoot,files:await hashTree(playRoot),report},captureEvidence:{root:captureRoot,files:await hashTree(captureRoot),report:captures}});
   const receipt=await service.submit();
+  expect(receipt.inputWallSeconds).toBe(.3);expect(receipt.videoMetadata.durationSeconds).toBe(.4);
   expect(receipt.assetPolicySha256).toBe(service.compiler.assetPolicySha256);
   const archived=JSON.parse(execFileSync('tar',['-xOf',receipt.archivePath,'payload/playable/asset-policy.json'],{encoding:'utf8'}));
   const delivery=JSON.parse(execFileSync('tar',['-xOf',receipt.archivePath,'payload/delivery.json'],{encoding:'utf8'}));

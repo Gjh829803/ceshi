@@ -1,25 +1,25 @@
 import {training} from '@worldkit/three';
 import type {AssetCatalogEntry} from './compiler';
 import type {CreatorProfile} from './contracts';
-const {SKILL_DEFINITIONS,HUMANOID_BINDINGS,HUMANOID_CONTROL_HINTS}=training;
+const {SKILL_DEFINITIONS,HUMANOID_BINDINGS,HUMANOID_CONTROL_HINTS,CHARACTER_CAPABILITIES,ANIMATION_ONLY_CLIP_IDS}=training;
 
-/** Discovery guidance only; asset identity and runtime eligibility stay unchanged. */
-export function characterUsage(asset:AssetCatalogEntry,profile:CreatorProfile,allowedIds:readonly string[]){
- const training=asset.id==='humanoid.source-101';
- if(!training&&!asset.locomotionBindingIds?.includes('ground.standard'))return undefined;
+export function characterUsage(asset:AssetCatalogEntry,profile:CreatorProfile,_allowedIds:readonly string[]){
+ if(asset.id!=='humanoid.source-101')return undefined;
  const sdk=profile==='three-sdk';
  return {
-  assetId:asset.id,
-  integration:training?'training-character':sdk?'ordinary-sdk-character':'three-model-and-clips',
-  clipCount:training?asset.runtimeActions.length:Object.keys(asset.actions).length,
-  useWhen:training?'攀爬、翻越、游泳、翻滚、滑铲、匍匐、拾取搬运与坐姿；需要 Training 控制器和相应场景条件。':'普通地面探索：站立、走路、跑步、跳跃和下落。',
-  ...(sdk?{schemaTopic:'character-actions',exampleTopic:training?'character-actions':'getting-started'}:{}),
-  ...(sdk&&!training&&allowedIds.includes('humanoid.source-101')?{contextualAssetId:'humanoid.source-101'}:{}),
-  ...(sdk&&training?{skillRequests:SKILL_DEFINITIONS,controlBindings:HUMANOID_BINDINGS,controlHints:HUMANOID_CONTROL_HINTS}:{}),
-  limitations:training
-   ?['48 animation clips are not 48 independently callable skills. Only the six declared skill requests use training.action; other motions follow input and controller state.',
-     'Listed conditions summarize eligibility. The actual controller also checks stance, cooldown, occupancy, collision, reach and headroom; inspect the receipt/operation for rejection or completion.',
-     sdk?'Select createWorld({training:...}) during initialization; do not attach a second physics loop or mixer to an ordinary world.':'This raw profile has no Training SDK controller. Loading the files alone does not provide these gameplay abilities.']
-   :['The ordinary preset does not automatically gain swimming, climbing or interactions by loading additional clips.'],
+  assetId:asset.id,integration:sdk?'createHumanoidWorld':'three-model-and-clips',clipCount:asset.runtimeActions.length,
+  useWhen:'推荐人形主体；移动、攀爬、翻越、游泳、翻滚、滑铲、蹲伏、匍匐、拾取、放下、搬运、坐下、起身、切换泳姿。',
+  ...(sdk?{schemaTopic:'character-actions',exampleTopic:'character-actions',skillRequests:SKILL_DEFINITIONS,
+    controlBindings:HUMANOID_BINDINGS,controlHints:HUMANOID_CONTROL_HINTS,capabilities:CHARACTER_CAPABILITIES,
+    animationOnlyClipIds:ANIMATION_ONLY_CLIP_IDS,
+    layers:[{id:'reuse',entry:'createHumanoidWorld({scene,camera,map,...})'},
+      {id:'scene',entry:'TrainingMap: boxes, water, climbSurfaces, interactions'},
+      {id:'parameters',entry:'training.profile + character capability parameters'},
+      {id:'source',entry:'creator_materialize_runtime → sdk/three-world/src/training → world_validate'}]}:{}),
+  mesh:'Reuse supplied subjects where suitable. For humans, keep the supplied visible model, rig and actions together; use it directly without added clothing or accessories. If no suitable subject is provided, draw a simple Mesh/Group and bind via createWorld/addCharacter({object,body,movement}), registerMovement, or TrainingVehicleInstance {object,spec}. Use white/light-gray geometry with accent colors only for key landmarks. Skeletal clips require a compatible rig.',
+  limitations:[
+   'Animation clips are playback assets; executable skills, input-driven states and automatic transitions are listed separately.',
+   sdk?'Use capability scene conditions and current snapshot eligibility. An accepted receipt starts an operation; query its completion and resulting state.':'The raw profile loads models/clips with Three and supplies its own movement/physics implementation.',
+  ],
  };
 }

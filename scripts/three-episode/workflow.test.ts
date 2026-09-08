@@ -34,7 +34,7 @@ it.each(['downstream','producer-cleanup','publication','transient'])('preserves 
   await writeFile(path.join(root,'opening.png'),'fixture');
   const image={path:'opening.png',sha256:createHash('sha256').update('fixture').digest('hex')};
   await writeFile(sourceManifestPath,JSON.stringify({kind:'three-episode-source',schemaVersion:1,worldId:'world-one',worldBuildHash:hash,sourceHash:hash,runtimeHash:hash,sourceRoot:'source',sourceFiles:{},playableRoot:'playable',playableFiles:{},opening:image,targets:[{id:'target-one',whiteboxTriview:image}]}));
-  const plan={kind:'worldkit-three-episode-plan',schemaVersion:1,worldBuildHash:hash,segments:Array.from({length:6},(_,i)=>({id:`segment-0${i}`,start:{positionWorldMetersXYZ:[i,0,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[i,0,-20],gait:'walk'}],endBehavior:'stop',purpose:'fixture'}))};
+  const plan={kind:'worldkit-three-episode-plan',schemaVersion:2,worldBuildHash:hash,segments:Array.from({length:6},(_,i)=>({id:`segment-0${i}`,start:{positionWorldMetersXYZ:[i,0,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[i,0,-20],gait:'walk'}],endBehavior:'stop',purpose:'fixture'}))};
   const planPath=path.join(output,'plan.json');await writeFile(planPath,JSON.stringify(plan));
   await writeFile(path.join(output,'episode.json'),JSON.stringify({episodeId:'case-one',worldBuildHash:hash,profile:PRE_SEEDANCE_PROFILE,planPath,planHash:canonicalHash(plan),segments:[],planRepairsBySegment:{},status:'running'}));
   const queueState:any={cases:{'case-one':{status:'succeeded'}},tasks:{'capture-one':{continuationJob:'cpu-one'}}};

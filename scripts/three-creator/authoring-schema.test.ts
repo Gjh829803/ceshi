@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {describe, expect, it} from 'vitest';
-import {AUTHORING_TOPICS, guideTopic, publicContractTopic} from './authoring-schema.js';
+import {AUTHORING_TOPICS, guideTopic, publicContractTopic,humanoidContractSource} from './authoring-schema.js';
 import {SDK_EXAMPLE} from './examples.js';
 
 const contracts = readFileSync(new URL('../../packages/three-world/src/contracts.ts', import.meta.url), 'utf8');
@@ -66,4 +66,12 @@ describe('Agent presentation contract',()=>{
   expect(selected).toContain('tracking of generated geometry');
   expect(selected).not.toContain("world.registerMovement({id:'hover'");
  });
+});
+
+it('exposes the actual humanoid factory options and signature without runtime implementation',()=>{
+ const source=readFileSync(new URL('../../packages/three-world/src/humanoid.ts',import.meta.url),'utf8');
+ const contract=humanoidContractSource(source);
+ for(const field of ['map:','characterId?:','resourceUrl?:','vehicles?:','profile?:','character?:','assetDefinitions?:'])expect(contract).toContain(field);
+ expect(contract).toContain('export declare function createHumanoidWorld(options:HumanoidWorldOptions):Promise<ThreeWorld>');
+ expect(contract).not.toContain('await character.load');
 });

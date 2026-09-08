@@ -23,12 +23,11 @@ it('discovers the full kit by Chinese skill names and exposes actual skill condi
  try{
   const found:any=await executeThreeCreatorTool(service,'assets_search',{query:'滑铲'});
   expect(found.assets.map((asset:any)=>asset.id)).toContain('humanoid.source-101');
-  expect(found.assets.map((asset:any)=>asset.id)).not.toContain('humanoid.preset-101');
   const detail:any=await executeThreeCreatorTool(service,'assets_describe',{assetId:'humanoid.source-101'});
   const usage=detail.characterUsage[0];
   expect(usage.clipCount).toBe(48);expect(usage.skillRequests).toHaveLength(6);
   expect(usage.skillRequests.find((skill:any)=>skill.id==='slide').requires).toContain('speed>=2.5m/s');
-  expect(usage.controlBindings.roll.code).toBe('KeyV');
+  expect(usage.controlBindings.roll.code).toBe('KeyQ');
   expect(usage.schemaTopic).toBe('character-actions');expect(usage.exampleTopic).toBe('character-actions');
  }finally{await service.close();}
 });
@@ -50,22 +49,12 @@ it('provides a character-only example and the actual interaction/input contracts
  }finally{await service.close();}
 });
 
-it('does not recommend a denied kit or SDK-only integration in a raw task',async()=>{
- const host=await root(),workspace=await root();
- const snapshot=createAssetPolicySnapshot({schemaVersion:1,allowedAssetIds:['humanoid.preset-101'],defaultHumanoidAssetId:'humanoid.preset-101',allowCustomAssets:true},catalog.assets);
- const file=path.join(host,'policy.json');await writeFile(file,JSON.stringify(snapshot));
- const service=new ThreeCreatorTools(workspace,'three-sdk',{assetPolicySnapshotPath:file,assetPolicySha256:assetPolicyHash(snapshot)});
+it('keeps raw model discovery explicit about implementing its own controller',async()=>{
  const raw=new ThreeCreatorTools(await root(),'three-raw');
  try{
-  const detail:any=await service.assets('','humanoid.preset-101');
-  expect(detail.characterUsage[0].clipCount).toBe(5);
-  expect(detail.characterUsage[0].contextualAssetId).toBeUndefined();
-  const schema:any=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'character-actions'});
-  expect(schema.trainingExampleTopic).toBeUndefined();
-  expect((await service.assets('滑铲')).assets).toEqual([]);
-  await expect(executeThreeCreatorTool(service,'creator_get_examples',{topic:'character-actions'})).rejects.toThrow('THREE_EXAMPLE_ASSETS_UNAVAILABLE');
-  const rawDetail:any=await raw.assets('','humanoid.source-101');
-  expect(rawDetail.characterUsage[0].schemaTopic).toBeUndefined();
-  expect(rawDetail.characterUsage[0].skillRequests).toBeUndefined();
- }finally{await service.close();await raw.close();}
+  const detail:any=await raw.assets('','humanoid.source-101');
+  expect(detail.characterUsage[0].schemaTopic).toBeUndefined();
+  expect(detail.characterUsage[0].skillRequests).toBeUndefined();
+  expect(detail.characterUsage[0].integration).toBe('three-model-and-clips');
+ }finally{await raw.close();}
 });

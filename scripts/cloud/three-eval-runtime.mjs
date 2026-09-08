@@ -7,7 +7,7 @@ export const CODEX_BINARY_SHA256 = "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29
 export const THREE_PROFILES = ["three-raw", "three-sdk"];
 export const THREE_ENGINE = "three@0.185.1";
 export const THREE_TOOL_VERSION = "0.2.0-experimental";
-export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_execute_command", "world_get_operation", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
+export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "creator_materialize_runtime", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_execute_command", "world_get_operation", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
 export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "hostCacheRoot", "note", "changeReason", "previousRuntimeLockHash", "reasoningEffort"]);
 export const BROWSER_ENV_KEYS = new Set(["PLAYWRIGHT_BROWSERS_PATH", "WORLDKIT_CHROMIUM_EXECUTABLE", "LD_LIBRARY_PATH", "FONTCONFIG_PATH", "FONTCONFIG_FILE", "LANG"]);
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");

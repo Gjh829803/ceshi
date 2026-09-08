@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { copyEpisodeSourceBundle, loadEpisodeSource, saveEpisodeSource } from './source.js';
 import type { EpisodeSourceManifest } from './contracts.js';
+import { workspaceRuntimeSourceHash } from '../three-creator/workspace-runtime.js';
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -81,4 +82,20 @@ it('does not replace existing output contents', async () => {
   await writeFile(path.join(output, 'keep.txt'), 'keep');
   await expect(copyEpisodeSourceBundle(manifest, output)).rejects.toThrow('EPISODE_SOURCE_OUTPUT_NOT_EMPTY');
   expect(await readFile(path.join(output, 'keep.txt'), 'utf8')).toBe('keep');
+});
+
+it('transports authored SDK source byte-for-byte and verifies its separate identity', async () => {
+  const { root, manifest, source } = await fixture();
+  const files = { 'runtime.json': Buffer.from('{"schemaVersion":1}'), 'three-world/src/index.ts': Buffer.from('export const customSlideDistance = 3;') };
+  for (const [name, bytes] of Object.entries(files)) {
+    const file = path.join(source.sourceRoot, 'sdk', name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, bytes);
+    source.sourceFiles[`sdk/${name}`] = createHash('sha256').update(bytes).digest('hex');
+  }
+  source.runtimeSourceHash = workspaceRuntimeSourceHash(files);
+  await saveEpisodeSource(manifest, source);
+  const copied = await copyEpisodeSourceBundle(manifest, path.join(root, 'sdk-copy'));
+  expect(copied.runtimeSourceHash).toBe(source.runtimeSourceHash);
+  expect(await readFile(path.join(copied.sourceRoot, 'sdk/three-world/src/index.ts'))).toEqual(files['three-world/src/index.ts']);
+  source.runtimeSourceHash = 'a'.repeat(64); await saveEpisodeSource(manifest, source);
+  await expect(loadEpisodeSource(manifest)).rejects.toThrow('RUNTIME_SOURCE_CHANGED');
 });

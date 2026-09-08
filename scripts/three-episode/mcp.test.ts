@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 const sha = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 let root: string, candidate: Candidate, source: EpisodeSourceManifest, sourceManifest: string, portableManifest: string, serial = 0;
-function plan(): EpisodePlan { return { kind:'worldkit-three-episode-plan',schemaVersion:1,worldBuildHash:source.worldBuildHash,
+function plan(): EpisodePlan { return { kind:'worldkit-three-episode-plan',schemaVersion:2,worldBuildHash:source.worldBuildHash,
  segments:Array.from({length:6},(_,index)=>({id:`segment-0${index}`,start:{positionWorldMetersXYZ:[index*2,0,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[index*2,0,-35],gait:'walk'}],endBehavior:'reverse',purpose:`Fixture route ${index}`})) }; }
 const output = () => path.join(root, `outputs-${++serial}`);
 beforeAll(async()=>{

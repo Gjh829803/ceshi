@@ -26,7 +26,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
-def sync(run_root, attempt_roots, inputs_root, gallery_root, pod=None, stage_only=False):
+def sync(run_root, attempt_roots, inputs_root, gallery_root, pod=None, stage_only=False, run_page=False):
     run_root, inputs_root, gallery_root = [Path(x).resolve() for x in (run_root, inputs_root, gallery_root)]
     plan = read(run_root / 'evaluation-plan.json')
     if not plan:
@@ -36,6 +36,9 @@ def sync(run_root, attempt_roots, inputs_root, gallery_root, pod=None, stage_onl
     if any(root.parent != common for root in roots):
         raise ValueError('Attempt roots must share the declared run directory')
     old = read(gallery_root / 'results.json') or {}
+    configured = read(run_root / 'evaluation-publication.json') or {}
+    if configured and (configured.get('runId') != plan['runId'] or configured.get('kind') != 'three-creator-host-publication'):
+        raise ValueError('Publication configuration belongs to another run')
     titles = {row['id']: row.get('title') for row in old.get('cases', [])}
     primary = {row['taskId']: row for row in plan['cases']}
     selected = plan['selectedTaskIds']
@@ -75,20 +78,24 @@ def sync(run_root, attempt_roots, inputs_root, gallery_root, pod=None, stage_onl
         entry['sourceHash'] = read(verified / 'host-artifact-verification.json')['sourceHash']
         entries[task_id] = entry
     for task_id, entry in entries.items():
-        if titles.get(task_id):
-            entry['displayTitle'] = titles[task_id]
-    title = old.get('title', 'GPT-6 · 世界生成')
+        display = configured.get('cases', {}).get(task_id, {})
+        if display.get('displayTitle') or titles.get(task_id):
+            entry['displayTitle'] = display.get('displayTitle') or titles[task_id]
+        if 'evaluation' in display:
+            entry['evaluation'] = display['evaluation']
+    title = configured.get('title', old.get('title', 'GPT-6 · 世界生成'))
     if plan.get('evidenceScope') == 'local-fixture':
         title = title.removeprefix('LOCAL FIXTURE · ')
     publication = {'schemaVersion': 1, 'kind': 'three-creator-host-publication', 'runId': plan['runId'],
-                   'title': title, 'description': '真实生产流程与生成产物；交付完成后直接开放试玩。',
-                   'reviewStorageKey': old.get('reviewStorageKey', 'worldkit-feedback-' + plan['runId']),
-                   'historyRuns': [{'id': x['id'], 'label': x['label']} for x in old.get('historyRuns', [])], 'cases': entries}
-    ui_hashes = {name: hashlib.sha256((HERE.parents[1] / 'apps/creator-evaluation-site' / name).read_bytes()).hexdigest() for name in ['app.mjs', 'index.html', 'styles.css']}
-    fingerprint = digest({'publication': publication, 'ui': ui_hashes})
+                   'title': title, 'description': configured.get('description', old.get('description', '真实生产流程与生成产物；交付完成后直接开放试玩。')),
+                   'reviewStorageKey': configured.get('reviewStorageKey', old.get('reviewStorageKey', 'worldkit-feedback-' + plan['runId'])),
+                   'sourceIdentity': configured.get('sourceIdentity', old.get('sourceIdentity', {})),
+                   'historyRuns': [{'id': x['id'], 'label': x['label']} for x in configured.get('historyRuns', old.get('historyRuns', []))], 'cases': entries}
+    ui_hashes = {name: hashlib.sha256((HERE.parents[1] / 'apps/creator-evaluation-site' / name).read_bytes()).hexdigest() for name in ['app.mjs', 'index.html', 'styles.css', 'reviews.mjs']}
+    fingerprint = digest({'publication': publication, 'ui': ui_hashes, 'runPage': run_page})
     previous = read(run_root / 'production-site-sync.json') or {}
     terminal = all(phase in ['failed', 'delivered'] for phase in states)
-    if previous.get('fingerprint') == fingerprint and (gallery_root / 'results.json').exists():
+    if previous.get('fingerprint') == fingerprint and (stage_only or previous.get('published')) and (gallery_root / 'results.json').exists():
         return {'changed': False, 'terminal': terminal}
     publication_path = run_root / 'production-publication.json'
     publication_path.write_text(json.dumps(publication, ensure_ascii=False, indent=2) + '\n')
@@ -100,8 +107,8 @@ def sync(run_root, attempt_roots, inputs_root, gallery_root, pod=None, stage_onl
     if not stage_only:
         if not pod:
             raise ValueError('Publication requires an explicit pod')
-        subprocess.run([sys.executable, str(HERE / 'publish-creator-evaluation-site.py'), '--source', str(gallery_root), '--pod', pod, '--gallery', 'three'], check=True)
-    (run_root / 'production-site-sync.json').write_text(json.dumps({'fingerprint': fingerprint, 'productionOnly': True, 'manualReviewRequired': False}, indent=2) + '\n')
+        subprocess.run([sys.executable, str(HERE / 'publish-creator-evaluation-site.py'), '--source', str(gallery_root), '--pod', pod, '--gallery', 'three', *(['--run-page'] if run_page else [])], check=True)
+    (run_root / 'production-site-sync.json').write_text(json.dumps({'fingerprint': fingerprint, 'published': not stage_only, 'productionOnly': True, 'manualReviewRequired': False}, indent=2) + '\n')
     return {'changed': True, 'terminal': terminal, 'playableCases': sum(x['status'] == 'ready' for x in entries.values())}
 
 
@@ -113,10 +120,11 @@ def main():
     parser.add_argument('--gallery-root', required=True)
     parser.add_argument('--pod')
     parser.add_argument('--stage-only', action='store_true')
+    parser.add_argument('--run-page', action='store_true', help='Update only this run URL, without replacing the current gallery')
     parser.add_argument('--watch', action='store_true')
     args = parser.parse_args()
     while True:
-        result = sync(args.run_root, args.attempt_run_root, args.inputs_root, args.gallery_root, args.pod, args.stage_only)
+        result = sync(args.run_root, args.attempt_run_root, args.inputs_root, args.gallery_root, args.pod, args.stage_only, args.run_page)
         print(json.dumps(result), flush=True)
         if not args.watch or result['terminal']:
             return
