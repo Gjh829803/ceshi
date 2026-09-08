@@ -15,6 +15,7 @@ export class FollowCamera {
   get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
   private previousPresentation:CameraPresentationPose|undefined;
   private currentPresentation:CameraPresentationPose|undefined;
+  private presentationHumanoid:Simulation['humanoid'];
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
     this.displayedTarget=undefined;
@@ -30,6 +31,7 @@ export class FollowCamera {
     this.previousPresentation=pose;
   }
   capturePresentationPose(sim:Simulation,snap=false):void {
+    this.presentationHumanoid=sim.vehicle?undefined:sim.humanoid;
     this.currentPresentation={
       position:this.camera.position.clone(), rotation:this.camera.quaternion.clone(),
       target:this.target.clone(), subject:(sim.vehicle?.position??sim.player.position).clone(),
@@ -45,8 +47,26 @@ export class FollowCamera {
     const target=a.target.clone().lerp(b.target,alpha).add(offset);
     this.displayedTarget=target;
     const eye=a.position.clone().lerp(b.position,alpha).add(offset);
-    const resolved=this.tuning.collisionEnabled&&this.environment
-      ? this.environment.cameraCast(target,eye,this.tuning.collisionRadiusMeters) : eye;
+    let resolved=eye;
+    const humanoid=this.presentationHumanoid;
+    if(this.tuning.collisionEnabled&&!this.globalOverview){
+      if(humanoid&&alpha!==1){
+        // Exact captures use the fixed owner's already-solved pose unchanged.
+        // Interpolation creates a new eye, so evaluate the same visibility and
+        // sphere-trajectory policy as the fixed camera, without its damping.
+        const direction=eye.clone().sub(target),distance=direction.length();
+        if(distance>1e-5){
+          direction.divideScalar(distance);
+          const height=pose.cameraHeight??(humanoid.swimming?1.4:humanoid.capsuleHeight*.655);
+          const origin=pose.position.clone().add(new T.Vector3(0,height,0));
+          const safe=this.resolveHumanoidArm(humanoid,pose.position,origin,target,direction,distance);
+          resolved=target.clone().addScaledVector(direction,safe);
+          if(safe===distance)this.sweepHumanoidEye(humanoid,a.position,resolved);
+        }
+      }else if(!humanoid&&this.environment){
+        resolved=this.environment.cameraCast(target,eye,this.tuning.collisionRadiusMeters);
+      }
+    }
     this.camera.position.copy(resolved);
     this.camera.quaternion.slerpQuaternions(a.rotation,b.rotation,alpha);
     this.camera.up.copy(a.up).lerp(b.up,alpha).normalize();
@@ -166,6 +186,51 @@ export class FollowCamera {
     }
     return false;
   }
+  /** One humanoid pivot/arm visibility policy for fixed and display poses.
+   * Only the supplied target is resolved; canonical orbit/damping is untouched.
+   */
+  private resolveHumanoidArm(humanoid:NonNullable<Simulation['humanoid']>,position:T.Vector3,origin:T.Vector3,target:T.Vector3,direction:T.Vector3,desiredDistance:number):number {
+    this.characterSphere.radius=this.baseDistance===undefined?.2:this.tuning.collisionRadiusMeters;
+    // Sweep the shoulder offset from the anatomical pivot first. Otherwise a
+    // wall beside the actor produces a zero-distance hit along the whole boom.
+    this.delta.subVectors(target,origin);
+    const pivotTravel=this.delta.length();
+    if(pivotTravel>.00001){
+      this.delta.divideScalar(pivotTravel);
+      const pivotHit=humanoid.world.castShape(origin,this.identity,this.delta,this.characterSphere,0,pivotTravel,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
+      if(pivotHit)target.copy(origin).addScaledVector(this.delta,Math.max(0,pivotHit.time_of_impact-.02));
+    }
+    // Native sensor filtering avoids callbacks into a borrowed Rapier collider
+    // set; exclude only this actor, so parked vehicles and carried props count.
+    // Resolve actual pivot penetration with Rapier contact normals, as in the
+    // main Whitebox rig. Do not mistake an embedded pivot for a wall at the eye.
+    for(let attempt=0;attempt<8;attempt++){
+      const collider=humanoid.world.intersectionWithShape(target,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
+      if(!collider)break;
+      const contact=collider.contactShape(this.characterSphere,target,this.identity,0);
+      if(!contact||contact.distance>0)break;
+      target.addScaledVector(this.delta.copy(contact.normal1),-contact.distance+.02);
+    }
+    const hit=humanoid.world.castShape(target,this.identity,direction,this.characterSphere,0,desiredDistance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
+    if(hit){
+      this.candidate.copy(target).addScaledVector(direction,desiredDistance);
+      const eyeBlocked=humanoid.world.intersectionWithShape(this.candidate,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
+      // A pole or low wall across the arm is not a camera collision. Keep
+      // framing while any sampled part of the physical capsule is visible.
+      if(eyeBlocked||!this.capsuleVisible(this.candidate,position,humanoid.capsuleHeight,humanoid.capsule,humanoid.world))return Math.max(0,hit.time_of_impact-.04);
+    }
+    return desiredDistance;
+  }
+  /** Sweep the actual eye trajectory, not the line through a partly visible actor. */
+  private sweepHumanoidEye(humanoid:NonNullable<Simulation['humanoid']>,from:T.Vector3,eye:T.Vector3):boolean {
+    const direction=eye.clone().sub(from),travel=direction.length();
+    if(travel<=.00001||humanoid.world.intersectionWithShape(from,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule))return false;
+    direction.divideScalar(travel);
+    const hit=humanoid.world.castShape(from,this.identity,direction,this.characterSphere,0,travel,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
+    if(!hit)return false;
+    eye.copy(from).addScaledVector(direction,Math.max(0,hit.time_of_impact-.02));
+    return true;
+  }
   private updateHumanoid(sim:Simulation,dt:number,pose?:MotionPose){
     const humanoid=sim.humanoid!;
     // The source camera follows its posture at 7/s. Feed it the same interpolated
@@ -192,35 +257,7 @@ export class FollowCamera {
     const desiredDistance=overview&&bounds?Math.max(bounds.max[0]-bounds.min[0],bounds.max[2]-bounds.min[2])*.94:this.mode===1?3.2:clamp(this.characterDistance()*this.zoom,3.2,12);
     let safeDistance=desiredDistance;
     if(!overview&&this.tuning.collisionEnabled){
-      this.characterSphere.radius=this.baseDistance===undefined?.2:this.tuning.collisionRadiusMeters;
-      // Sweep the shoulder offset from the anatomical pivot first. Otherwise a
-      // wall beside the actor produces a zero-distance hit along the whole boom.
-      this.delta.subVectors(this.target,this.origin);
-      const pivotTravel=this.delta.length();
-      if(pivotTravel>.00001){
-        this.delta.divideScalar(pivotTravel);
-        const pivotHit=humanoid.world.castShape(this.origin,this.identity,this.delta,this.characterSphere,0,pivotTravel,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
-        if(pivotHit)this.target.copy(this.origin).addScaledVector(this.delta,Math.max(0,pivotHit.time_of_impact-.02));
-      }
-      // Native sensor filtering avoids callbacks into a borrowed Rapier collider
-      // set; exclude only this actor, so parked vehicles and carried props count.
-      // Resolve actual pivot penetration with Rapier contact normals, as in the
-      // main Whitebox rig. Do not mistake an embedded pivot for a wall at the eye.
-      for(let attempt=0;attempt<8;attempt++){
-        const collider=humanoid.world.intersectionWithShape(this.target,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
-        if(!collider)break;
-        const contact=collider.contactShape(this.characterSphere,this.target,this.identity,0);
-        if(!contact||contact.distance>0)break;
-        this.target.addScaledVector(this.delta.copy(contact.normal1),-contact.distance+.02);
-      }
-      const hit=humanoid.world.castShape(this.target,this.identity,this.direction,this.characterSphere,0,desiredDistance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
-      if(hit){
-        this.candidate.copy(this.target).addScaledVector(this.direction,desiredDistance);
-        const eyeBlocked=humanoid.world.intersectionWithShape(this.candidate,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
-        // A pole or low wall across the arm is not a camera collision. Keep
-        // framing while any sampled part of the physical capsule is visible.
-        if(eyeBlocked||!this.capsuleVisible(this.candidate,position,humanoid.capsuleHeight,humanoid.capsule,humanoid.world))safeDistance=Math.max(0,hit.time_of_impact-.04);
-      }
+      safeDistance=this.resolveHumanoidArm(humanoid,position,this.origin,this.target,this.direction,desiredDistance);
     }
     this.collisionLimited=safeDistance<desiredDistance-.001;
     this.desired.copy(this.target).addScaledVector(this.direction,desiredDistance);
@@ -232,11 +269,8 @@ export class FollowCamera {
     // a thin wall during free orbit. A fully blocked arm still uses the inward
     // visibility relocation above; free/partly-visible travel is sphere-swept.
     if(this.initialized&&!overview&&this.tuning.collisionEnabled&&safeDistance===desiredDistance){
-      this.delta.subVectors(this.candidate,this.camera.position);const travel=this.delta.length();
-      if(travel>.00001&&!humanoid.world.intersectionWithShape(this.camera.position,this.identity,this.characterSphere,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule)){
-        this.delta.divideScalar(travel);
-        const motionHit=humanoid.world.castShape(this.camera.position,this.identity,this.delta,this.characterSphere,0,travel,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,humanoid.capsule);
-        if(motionHit){this.candidate.copy(this.camera.position).addScaledVector(this.delta,Math.max(0,motionHit.time_of_impact-.02));this.collisionLimited=true;this.distance=this.candidate.distanceTo(this.target);}
+      if(this.sweepHumanoidEye(humanoid,this.camera.position,this.candidate)){
+        this.collisionLimited=true;this.distance=this.candidate.distanceTo(this.target);
       }
     }
     this.camera.position.copy(this.candidate);

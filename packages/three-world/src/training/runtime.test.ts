@@ -1,5 +1,7 @@
 import {describe,it,expect,vi,beforeAll} from 'vitest';
-import {Group,PerspectiveCamera,Vector2,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Quaternion,Vector2,type WebGLRenderer} from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
+import type {WorldEngine} from '../engine';
 import type {WorldObservation} from '../contracts';
 import {createWorld} from '../world';
 import {ThreePhysics} from '../physics';
@@ -60,13 +62,39 @@ describe('SDK training runtime',()=>{
   const world=await fixture();try{const r=world.training!;
    r.switchMap({...map,id:'partial',boxes:[map.boxes[0]!,{id:'occluder',position:position as [number,number,number],size:size as [number,number,number]}]});
    world.step({},1);expect(r.followCamera.distance).toBeCloseTo(8.8);expect(r.followCamera.collisionLimited).toBe(false);
-   const eye=world.camera.position.clone();world.step({},90);expect(world.camera.position.distanceTo(eye)).toBeLessThan(.03);
+   const eye=world.camera.position.clone();
+   world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-9);
+   expect(r.followCamera.presentationTarget.distanceTo(world.camera.position)).toBeCloseTo(8.8);
+   world.step({},90);world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(.03);
   }finally{world.dispose();}
  });
  it('still keeps the camera sphere out of geometry when the capsule is partly visible',async()=>{
   const world=await fixture();try{const r=world.training!;
    r.switchMap({...map,id:'eye-wall',boxes:[map.boxes[0]!,{id:'eye-post',position:[0,4,-8.25],size:[.1,6,.4]}]});world.step({},1);
    expect(world.camera.position.z).toBeGreaterThan(-7.9);expect(r.followCamera.collisionLimited).toBe(true);
+   const eye=world.camera.position.clone();world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-9);
+   const h=r.simulation.humanoid!;
+   expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+  }finally{world.dispose();}
+ });
+ it.each([
+  {name:'partial thin pole',position:[0,2,-2],size:[.06,4,.2],blocked:false},
+  {name:'full wall',position:[0,2,-2],size:[6,4,.2],blocked:true},
+  {name:'eye collision',position:[0,4,-8.25],size:[.1,6,.4],blocked:true},
+ ])('uses the same camera collision policy for interpolated $name and exact capture',async({position,size,blocked})=>{
+  const world=await fixture();try{
+   const r=world.training!,engine=(world as unknown as {engine:WorldEngine}).engine;
+   r.switchMap({...map,id:'render-policy',boxes:[map.boxes[0]!,{id:'occluder',position:position as [number,number,number],size:size as [number,number,number]}]});
+   world.step({},2);
+   const canonical=world.camera.position.clone(),c=r.followCamera;
+   const controls={yaw:c.yaw,pitch:c.pitch,distance:c.distance,lastOrbit:c.lastOrbit,target:c.target.clone()};
+   engine.render(.5);
+   const distance=c.presentationTarget.distanceTo(world.camera.position);
+   if(blocked)expect(distance).toBeLessThan(8.6);else expect(distance).toBeCloseTo(8.8);
+   const h=r.simulation.humanoid!;
+   expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+   expect({yaw:c.yaw,pitch:c.pitch,distance:c.distance,lastOrbit:c.lastOrbit,target:c.target}).toEqual(controls);
+   world.render();expect(world.camera.position.distanceTo(canonical)).toBeLessThan(1e-9);
   }finally{world.dispose();}
  });
  it('sweeps the actual camera trajectory instead of teleporting through a pillar during orbit',async()=>{
