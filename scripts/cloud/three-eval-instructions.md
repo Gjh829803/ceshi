@@ -1,18 +1,19 @@
-Build the uploaded reference and creative request into an explorable world using
-the selected Three Creator profile. The reference, intended subject, spatial
-relationships and gameplay goals are the creative authority. Match the first-frame
-composition, perspective, subject scale and occlusion. Keep recognizable geometry,
-complete moving subjects, stable colors, real elevation and connected routes.
+Build a playable whitebox from the reference and request using the selected Three
+Creator profile. Preserve the broad opening composition, perspective, subject
+scale, elevation and spatial relationships. Use white or light-gray primitive
+environment forms and uniform basic lighting. Add identifying color only to a few
+key landmarks or interaction targets. Omit decorative detail, clothing additions,
+accessories, atmospheric effects, reflections and elaborate shadows.
 
 Read creator_describe_environment, the getting-started schema and examples. Write
 ordinary index.html and local JS/TS. Native Three geometry is freely editable.
 Use assets_search/assets_describe for reusable models and motions; project.json
-selects permitted resources. Humans should normally use humanoid.source-101 and
-createHumanoidWorld. It loads the supplied rig and complete action controller.
-Customize visual children while retaining compatible animation bindings. Other
-subjects may be drawn freely and bind to addCharacter({object,body,movement}),
-registerMovement, or a TrainingVehicleInstance {object,spec}. The raw profile
-uses normal Three and implements its own movement, physics and observation.
+selects permitted resources. Default humans to humanoid.source-101 and
+createHumanoidWorld, keeping the supplied visible model, rig and actions. Reuse
+other supplied subjects when suitable; otherwise draw simple Mesh/Group geometry
+and bind it through addCharacter({object,body,movement}), registerMovement, or a
+TrainingVehicleInstance {object,spec}. The raw profile uses normal Three and
+implements its own movement, physics and observation.
 
 Use these layers as needed:
 1. Reuse the supplied humanoid/helper or an existing movement/vehicle binding.
@@ -36,22 +37,18 @@ Pickup and sitting require reachable interaction anchors. Show the current targe
 and explain failed conditions. Use world snapshots and operation completion to
 verify actions. Never infer successful movement from an accepted request alone.
 
-Compare actual world_preview images to the reference. Correct composition,
-silhouettes and spatial structure before final recording. Use short real episodes
-and world_inspect to check movement, actions, collisions, camera and reset. Water
-feedback reports measured contact/depth/immersion for scene diagnosis. Inspect
-walking/running from the side for natural joint motion, foot contact and strides
-matching travel speed. Check jump and landing transitions.
-
-Verify connected areas supporting five minutes of meaningful exploration. Repeated
-laps, spawn-reached targets or oversized tolerances do not establish exploration.
-Repair and retest the same world. After the final source change, inspect a fresh
-opening preview, then record a full 180–300-second episode with at least 180 seconds
-of active play and complete object three-views. Paused/loading/reset time is excluded.
-Long tools return operation IDs: poll the same operation through operations_get.
+Check the opening preview for broad composition and readable routes. Use real
+inputs and world_inspect to verify the requested core functions: movement,
+applicable actions, collisions, camera and reset. Build enough connected space and
+real scene conditions for those functions. Repair observed functional problems.
+After the final source change, complete an input episode covering the core actions
+and their outcomes, then capture the opening and selected object three-views.
+Choose the episode length by functional coverage. A truncated debug run is not a
+complete episode. Long tools return operation IDs; poll the same operation through
+operations_get.
 
 Run world_playtest and world_submit in the same MCP service session. Delivery
-technical success is separate from visual and task review. Preserve external goals,
-compare evidence yourself, and report unsupported or failed goals accurately. Do
-not write delivery artifacts or evidence manually. Submit through world_submit,
+technical success is separate from task review. Preserve the requested goals and
+report unsupported or failed functions accurately. Do not write delivery artifacts
+or evidence manually. Submit through world_submit,
 poll until complete, and retain the resulting creator-result.json and archive.

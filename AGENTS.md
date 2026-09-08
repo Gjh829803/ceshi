@@ -7,8 +7,15 @@ actual consumers are authoritative.
 
 ## Authoring and capability layers
 
+Creator worlds use white/light-gray primitive environment forms, uniform basic
+lighting and a few identifying colors for key landmarks or interaction targets.
+Preserve broad reference composition, scale, spatial relationships and real
+collision/action conditions. Keep geometry functional and omit decorative detail,
+extra clothing/accessories, atmospheric effects, reflections and elaborate shadows.
+
 1. Reuse: `createHumanoidWorld` loads `humanoid.source-101` and its contextual
-   controller. This is the recommended humanoid starting point.
+   controller. Keep the supplied visible humanoid model, rig and actions by default.
+   Reuse other supplied subjects when suitable.
 2. Bind: author ordinary Three Mesh/Group geometry freely. Bind custom subjects
    through `addCharacter({object,body,movement})`; bind vehicles through their
    visual root and `TrainingVehicleInstance.spec`. Define actual colliders,
@@ -18,8 +25,8 @@ actual consumers are authoritative.
    and verify its callers. Delivery must identify the actual runtime bytes.
 
 The asset catalog is a reuse library. It is not the limit of what an Agent can
-create. Prefer the supplied humanoid rig and animation set; custom skeletons need
-compatible bone mapping and animation validation. Drawing a mesh alone supplies
+create. When no supplied subject fits, draw simple geometry and bind its abilities.
+Custom skeletons need compatible bone mapping and animation validation. Drawing a mesh alone supplies
 neither collision nor a locomotion or skeletal animation controller.
 
 ## Execution ownership
@@ -30,7 +37,9 @@ neither collision nor a locomotion or skeletal animation controller.
   Runtime source changes belong in the project runtime build; do not install a
   second physics, animation or camera loop in scene code.
 - Creator owns compilation, browser tools, real self-check recording and delivery.
-  Episode independently plans and records real SDK inputs/actions.
+  Complete a real input plan covering the requested core functions and outcomes;
+  choose its length by coverage. Episode independently plans and records real SDK
+  inputs/actions.
 - Keyboard, Agent requests and recordings use the same action contracts and
   controls metadata. Describe preconditions, scene requirements, completion and
   rejection reasons; an available clip is not proof of an executable ability.

@@ -2,8 +2,9 @@
 
 Author ordinary Three.js geometry, materials and cameras. The SDK binds physics,
 movement, animation, input, camera follow and observable commands to that content.
-Use the supplied humanoid for the quickest complete action setup; create custom
-Mesh/Group subjects whenever the scene calls for them.
+Keep the supplied humanoid's visible model, skeleton and motions by default.
+Reuse other supplied subjects when suitable; otherwise create and bind simple
+Mesh/Group subjects.
 
 | Layer | Read or change |
 | --- | --- |
@@ -17,6 +18,12 @@ owner and active camera writer. Creator compiles and validates; Episode records.
 
 <!-- topic:getting-started -->
 ## Start with a complete humanoid
+
+Build white/light-gray primitive environment forms with uniform basic lighting.
+Use identifying color for a few landmarks or interaction targets. Preserve broad
+composition, scale, spatial relationships and actual collision/action conditions.
+Keep the supplied humanoid visible; omit extra clothing, accessories, decoration,
+atmospheric effects, reflections and elaborate shadows.
 
 Select `humanoid.source-101` in `project.json` and obtain the `getting-started`
 example from Creator. Author the visible scene in Three; `map` supplies the actual
@@ -469,12 +476,13 @@ then apply the object's complete world quaternion, including parent rotation.
 Right is front cross up. The Host captures real rendered front/right/back images.
 It does not substitute a display clone or fabricate hidden geometry.
 
-Creator `world_preview` with `view:'current'` shows the full page for Agent/UI
-inspection. Opening and three-view captures read the pure world canvas. Model
-input must use that pure canvas or `presentation.modelInput`, never a whole-page
+Creator `world_preview` supports opening, top-down and entity-triview captures
+from the pure world canvas. Model input must use that pure canvas or
+`presentation.modelInput`, never a whole-page
 screenshot, presentation container or model output. Keep derived reference and
 three-view conditioning images free of baked-in HUD; preserve original inputs.
 
 Read the real exports from contracts.ts using the Creator schema tool by topic.
-Types describe the API; browser validation is still required for first-frame
-fidelity, route support, continuous input, physical changes and 3–5 minute play.
+Types describe the API; use a complete real input plan to check broad opening
+composition, connected routes and the requested core movement/actions and their
+physical results. Choose the recording length by functional coverage.

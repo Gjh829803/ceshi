@@ -110,12 +110,11 @@ node three-runtime-doctor.mjs --runtime-lock /ABS/runtime-lock.json --output-roo
 ```
 
 It verifies the MCP tool list, compiler runtime pins, actual browser images,
-keyboard movement, recorded video, world commands and three views. A real
-`world_playtest` truncates a 181-second fixture to 3–15 seconds, defaulting to
-four. The doctor requires `world_submit` to reject this short proof with
-`THREE_SUBMIT_PLAYTEST_REQUIRED`. It accepts a draft lock; omitting `--profile`
-checks both profiles. This infrastructure check does not establish a production
-delivery or case quality.
+keyboard movement, recorded video, world commands and three views. It verifies
+delivery from a complete real input episode and requires `world_submit` to reject
+a truncated debug episode with `THREE_SUBMIT_PLAYTEST_REQUIRED`. It accepts a
+draft lock; omitting `--profile` checks both profiles. This infrastructure check
+does not establish case quality or coverage of a separate task's goals.
 The installed toolkit/browser closure must pass both before and after browser
 execution. SDK/browser/toolkit changes require the affected doctor again.
 
@@ -185,10 +184,12 @@ requires a real final-world preview PNG whose bytes match the MCP image hash;
 an actual world_submit operation followed by its successful operations_get;
 matching engine/profile/lock/world/runtime/episode identities; complete
 receipt equality; and raw transport hashes matching the downloaded result/tar.
-The schema-version-1 delivery must be `ready-for-independent-review`, with
-complete 180-second-or-longer actual wall time, browser input, active play and
-recorded video, plus captured three-view images. Actual video metadata and
-browser capture timing must agree with the receipt. A project-owned runtime
+The schema-version-1 delivery must be `ready-for-independent-review`, with a
+complete real input episode, finite positive actual wall/input/active/video
+durations and captured three-view images. The episode should cover the requested
+core functions and action outcomes; recording length follows that coverage.
+Actual video metadata and browser capture timing must agree with the receipt.
+A project-owned runtime
 binds its source and manifest hashes to the delivered runtime. Episode schema
 v2 can include structured commands and explicit lifecycle steps.
 
@@ -200,7 +201,7 @@ node scripts/cloud/three-eval-verify.mjs --case-root DOWNLOAD --runtime-lock LOC
 
 The extractor rejects path traversal, links, duplicate paths, special files,
 oversized archives and incomplete manifest/file/video/capture evidence. Real replay,
-reference composition, complete moving subjects and external path goals remain
+whitebox composition, complete moving subjects and external task goals remain
 separate acceptance gates. Run preparation and execution do not publish the site.
 
 Validation: `node --test scripts/cloud/three-eval.test.mjs` plus capsule tests.

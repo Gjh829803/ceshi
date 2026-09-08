@@ -6,6 +6,14 @@ production; `three-raw` supplies basic browser observation. The Host compiles
 browser modules and never executes author package scripts or build configuration
 in Node.
 
+Build a simple playable whitebox: white/light-gray primitive environment forms,
+uniform basic lighting and a few identifying colors for key landmarks or targets.
+Keep broad composition, scale, spatial relationships, real collision and action
+conditions. Keep the supplied humanoid's visible model, rig and motions; reuse
+other supplied subjects when suitable, otherwise draw and bind simple geometry.
+Omit added clothing/accessories, decoration, atmosphere, reflections and elaborate
+shadows. Self-check coverage follows the requested core functions.
+
 ```sh
 pnpm exec tsx scripts/three-creator/mcp.ts --workspace /absolute/author-project --profile three-sdk
 pnpm exec tsx scripts/three-creator/cli.ts --workspace /absolute/author-project --profile three-sdk --session
@@ -101,8 +109,8 @@ Register complete capture targets in priority order with
 `world.setCaptureTargets(['player','tower','bridge'])`. SDK semantic front is
 local **-Z**, up **+Y**; `frontYawRadians` rotates about local Y and parent rotation
 is applied. Contextual map anchors use their documented **+Z** heading convention.
-`world_preview` current view includes UI; opening/three-view captures use pure
-world pixels. Mount HUD through `world.createPresentation()`.
+`world_preview` offers opening, top-down and entity-triview captures of pure world
+pixels. Mount HUD through `world.createPresentation()`.
 
 ## Real input episodes
 
@@ -133,9 +141,11 @@ to the run. Paused/reset time is excluded from active play.
 
 ## Verify and deliver
 
-Submission requires a same-session, current-world/current-episode successful
-recording with at least **180 seconds each of active play, input and actual video**,
-all episode steps completed, plus opening and player/target three views. Encoding
+Choose an episode that exercises the requested core movement and actions and
+records their outcomes. Submission requires a same-session,
+current-world/current-episode successful recording, all episode steps completed,
+finite positive active/input/wall/video durations, plus opening and player/target
+three views. A truncated debug run is incomplete. Encoding
 preserves real timestamps without synthesized frames or FPS padding. The real
 stopped-canvas postroll records a terminal sample and is excluded from input and
 active time.
@@ -143,7 +153,7 @@ active time.
 Submission atomically writes `creator-delivery.tar.gz` and `creator-result.json`.
 The archive contains one hash-closed `payload/` with source, playable, playtest,
 captures, episode.json, delivery.json and artifact-hashes.json. Symlinks fail.
-Technical delivery is `ready-for-independent-review`; visual quality and fixed
+Technical delivery is `ready-for-independent-review`; core functionality and fixed
 external goals need independent review of the actual playable and reference.
 
 `sourceHash` identifies source and selected assets, `runtimeHash` the browser

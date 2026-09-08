@@ -45,11 +45,13 @@ Operation events and `toolSummary.latestOperation` separate `executionStatus`
 A failed check produces a failed event even when execution succeeded. Sanitized
 `resultSummary` retains only known result states, booleans and finite numeric
 measurements. `playtestAdequacy` distinguishes `short-test`,
-`duration-insufficient`, `unverified`, and `complete`; a result marked `passed`
-does not imply a complete 180-second playtest. Only the complete episode with
-captured input and all four recorded active/input/wall/video durations at least
-180 seconds has complete duration evidence. A tool success with no result state
-is described only as a completed call. Host delivery validation stays separate.
+`invalid-recording`, `unverified`, and `complete`. A truncated debug run is
+`short-test`; a complete episode requires captured input and finite positive
+active/input/wall/video durations. Invalid timing evidence, including zero
+duration, is `invalid-recording`. Missing evidence remains `unverified`.
+These states report recording completeness; they do not determine core-function
+coverage. A tool success with no result state is described only as a completed
+call. Host delivery validation stays separate.
 
 `failureFacts` retains only known, correctly paired Host layer/code facts with
 fixed public wording. On terminal failures, verified Host facts take precedence
