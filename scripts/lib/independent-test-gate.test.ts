@@ -151,6 +151,7 @@ describe("independent test repository census", () => {
         "scripts/three-episode/seedance-admission-service.test.mjs",
         "scripts/three-episode/seedance-preflight.test.mjs",
         "scripts/three-episode/seedance-production-budget.test.mjs",
+        "scripts/three-episode/seedance-python.test.mjs",
         "scripts/three-episode/seedance-slot.test.mjs",
         "scripts/three-episode/streaming-overlay.test.mjs",
         "scripts/three-episode/visuals.test.mjs",
