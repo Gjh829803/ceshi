@@ -247,9 +247,9 @@
     max-height: calc(100dvh - 20px);
     overflow: auto;
   }
-  
-  
-  
+
+
+
   .equipment-body {
     grid-template-columns: 128px minmax(180px,1fr);
     height: auto;
