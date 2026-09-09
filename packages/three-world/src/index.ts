@@ -5,7 +5,7 @@ export { createHumanoidWorld, DEFAULT_HUMANOID_ASSET_ID, type HumanoidWorldOptio
 export { Character as TrainingCharacter } from './training/character.js';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './training/character.js';
 export type { TrainingOptions, TrainingVehicleInstance, TrainingProfile, TrainingRuntime, TrainingBoardingObservation, TrainingInputObservation } from './training/runtime.js';
-export type {TrainingViewSettings} from './training/runtime.js';
+export type {TrainingViewSettings} from './config/camera.js';
 export type { MapDefinition as TrainingMap, MapSpawn as TrainingSpawn } from './training/environment/types.js';
 export type { VehicleSpec as TrainingVehicleSpec } from './training/config.js';
 export { emptyInput as emptyTrainingInput } from './training/simulation.js';

@@ -28,10 +28,8 @@ export interface SkillResult {
 export const ACTION_CLIP_IDS = ['roll','slide-start','slide-loop','slide-exit','carry-walk','pickup','sit-enter','sit-idle','sit-exit'] as const;
 export const SURFACE_CLIP_IDS = ['hang-enter','hang-exit','hang-idle','hang-left','hang-right','climb-up','climb-down','climb-ledge',
   'prone-enter','prone-exit','prone-idle','prone-forward','prone-backward','prone-left','prone-right'] as const;
-/** Metres, seconds and kilograms; validation, controller and capability cards share these values. */
-export const ACTION_TUNING = Object.freeze({slideMinimumSpeedMetersPerSecond:2.5,slideHeightMeters:.9,standingHeightMeters:1.68,
-  approachRadiusMeters:.9,approachVerticalToleranceMeters:.16,maximumPickupMassKg:8,cooldownSeconds:.22,
-  rollDurationSeconds:44/30,slideEntryDurationSeconds:25/30,slideLoopSeconds:1,slideExitDurationSeconds:.5});
+import {ACTION_TUNING} from '../../config/actions';
+export {ACTION_TUNING} from '../../config/actions';
 export const SKILL_DEFINITIONS = [
   {id:'roll',label:'翻滚',key:HUMANOID_BINDINGS.roll.key,requires:['grounded','emptyHands','notBusy'],effect:'向当前移动方向翻滚；碰撞可截断位移'},
   {id:'slide',label:'滑铲',key:HUMANOID_BINDINGS.slide.key,requires:['grounded',`speed>=${ACTION_TUNING.slideMinimumSpeedMetersPerSecond}m/s`,'emptyHands','notBusy'],effect:'收低胶囊并减速滑行；出口不足保持低姿态'},

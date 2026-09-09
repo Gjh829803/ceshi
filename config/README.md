@@ -30,5 +30,9 @@ requires `--stop-before-seedance`; the separate
 [Seedance cloud lane](../docs/three-episode-seedance.md) has explicit submission
 and delivery commands. Automatic Creator delivery subscription is not implemented.
 
+SDK runtime defaults and developer effect switches are maintained separately in
+[`packages/three-world/src/config`](../packages/three-world/src/config/README.md).
+The SDK does not import this Host configuration directory.
+
 See the [production guide](../docs/three-sdk-data-production.md) for entry points
 and configuration ownership.

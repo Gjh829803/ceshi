@@ -1,9 +1,9 @@
-import type { AssetProfileV1, ProfileCameraTuning, ControlTuning } from './profiles';
+import type { AssetProfile, ProfileCameraTuning, ControlTuning } from './profiles';
 import { training } from '@worldkit/three';
 const { CAMERA_TUNING_RANGES }=training;
 import { icon } from '../ui/icons';
 import './inspector.css';
-import {controlFields,controlKeys} from './control-fields';
+const {controlFields,controlKeys}=training;
 
 export type InspectorSubject = { name:string; subtitle?:string; state?:string; color?:string };
 export type InspectorCamera = { mode:number; distance:number; fovDegrees:number; yawRadians:number; pitchRadians:number; collisionLimited:boolean };
@@ -13,9 +13,9 @@ export type InspectorMovement = { family:string; control:ControlTuning; velocity
 export type InspectorOptions = {
   getAssetId():string;
   getSubject():InspectorSubject;
-  getProfile(id:string):AssetProfileV1;
-  applyProfile(profile:AssetProfileV1,tab:InspectorTab):void;
-  saveProfile(profile:AssetProfileV1):void;
+  getProfile(id:string):AssetProfile;
+  applyProfile(profile:AssetProfile,tab:InspectorTab):void;
+  saveProfile(profile:AssetProfile):void;
   resetProfile(id:string,tab:InspectorTab):void;
   getMovement():InspectorMovement;
   getCamera():InspectorCamera;
@@ -99,7 +99,7 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     }catch(error){write(status,error instanceof Error?error.message:'无法应用参数');status.dataset.error='true';}
   }
   function field(parent:HTMLElement,key:Field['key'],label:string,unit:string,step:number,description:string,group:Field['group']='camera',controlBounds?:readonly[number,number]){
-    const bounds=controlBounds??(key==='distance'?[1,40] as const:CAMERA_TUNING_RANGES[key as Exclude<NumericCameraKey,'distance'>]);
+    const bounds=controlBounds??(key==='distance'?training.CAMERA_DISTANCE_EDITOR_RANGE:CAMERA_TUNING_RANGES[key as Exclude<NumericCameraKey,'distance'>]);
     const row=create('div','inspector-field');if(group==='control')row.dataset.controlField=key;else row.dataset.cameraField=key;
     const labelRow=create('div','inspector-field-label-row');
     const labelElement=create('label','inspector-field-label',label);labelElement.htmlFor=`${id}-${key}-number`;
@@ -120,22 +120,26 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     number.addEventListener('change',()=>{if(!number.validity.valid||number.value===''){number.value=String(fieldValue(options.getProfile(activeId),item));number.setCustomValidity('');}});
     return item;
   }
+  function cameraField(parent:HTMLElement,key:training.NumericCameraKey,description:string){
+    const definition=training.CAMERA_PARAMETERS[key];
+    return field(parent,key,definition.label,definition.unit,definition.step,description);
+  }
   const distance=field(followGroup,'distance','基础距离','m',.1,'跟随模式的镜头臂长；人物室内默认自动使用 5.6 m。');
-  const response=field(followGroup,'followResponsePerSecond','跟随响应','/s',.1,'数值越大，镜头越快跟上主体。');
-  const vertical=field(followGroup,'targetHeightOffset','垂直偏移','m',.05,'在主体原始注视高度上增加偏移。');
-  const horizontal=field(followGroup,'horizontalOffset','水平偏移','m',.05,'相对镜头右方向偏移；驾驶位相对座位右方向。');
+  const response=cameraField(followGroup,'followResponsePerSecond','数值越大，镜头越快跟上主体。');
+  const vertical=cameraField(followGroup,'targetHeightOffset','在主体原始注视高度上增加偏移。');
+  const horizontal=cameraField(followGroup,'horizontalOffset','相对镜头右方向偏移；驾驶位相对座位右方向。');
   const recenterGroup=group('自动回正','RECENTER');
   const recenterNote=create('p','inspector-group-note');recenterGroup.append(recenterNote);
-  const delay=field(recenterGroup,'recenterDelaySeconds','回正等待','s',.1,'停止环绕后，载具行驶超过此时长开始回正。');
-  const recenter=field(recenterGroup,'recenterResponsePerSecond','回正响应','/s',.1,'回正到载具前进方向的速率；空中模式按原始比例放缓，0 关闭自动回正。');
+  const delay=cameraField(recenterGroup,'recenterDelaySeconds','停止环绕后，载具行驶超过此时长开始回正。');
+  const recenter=cameraField(recenterGroup,'recenterResponsePerSecond','回正到载具前进方向的速率；空中模式按原始比例放缓，0 关闭自动回正。');
   const lensGroup=group('镜头','LENS');
-  field(lensGroup,'baseFovDegrees','基础视野 FOV','°',1,'人物保持设置的视野；载具会按速度额外增加最多 12°。');
+  cameraField(lensGroup,'baseFovDegrees','人物保持设置的视野；载具会按速度额外增加最多 12°。');
   const lensNote=create('p','inspector-group-note');lensGroup.append(lensNote);
   const collisionGroup=group('镜头避障','COLLISION');
   const collisionRow=create('label','inspector-toggle-row'),collisionToggle=create('input','inspector-toggle');collisionToggle.type='checkbox';collisionToggle.setAttribute('role','switch');
   collisionRow.append(create('span','inspector-field-label','启用碰撞检测'),collisionToggle);collisionGroup.append(collisionRow);
   collisionToggle.addEventListener('change',()=>applyValue('collisionEnabled',collisionToggle.checked));
-  const radius=field(collisionGroup,'collisionRadiusMeters','探测半径','m',.01,'镜头球体探测半径；更大半径会更早收回镜头。');
+  const radius=cameraField(collisionGroup,'collisionRadiusMeters','镜头球体探测半径；更大半径会更早收回镜头。');
   const collisionState=create('div','inspector-collision-state');collisionGroup.append(collisionState);
   const interactionNote=create('p','inspector-interaction-note','拖动场景环绕 · 滚轮缩放');tabPanels.camera.append(interactionNote);
 
@@ -165,7 +169,7 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
   panel.addEventListener('focusin',()=>options.onInteract?.());
   panel.addEventListener('keydown',event=>event.stopPropagation());panel.addEventListener('keyup',event=>event.stopPropagation());
 
-  function fieldValue(profile:AssetProfileV1,item:Field){return item.group==='control'?profile.control[item.key as keyof ControlTuning]:profile.camera[item.key as NumericCameraKey];}
+  function fieldValue(profile:AssetProfile,item:Field){return item.group==='control'?profile.control[item.key as keyof ControlTuning]:profile.camera[item.key as NumericCameraKey];}
   function selectTab(tab:InspectorTab,focus=false){
     activeTab=tab;panel.dataset.tab=tab;options.onInteract?.();
     for(const [key,button]of tabButtons){button.setAttribute('aria-selected',String(key===tab));button.tabIndex=key===tab?0:-1;tabPanels[key].hidden=key!==tab;}

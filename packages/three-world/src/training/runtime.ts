@@ -1,3 +1,5 @@
+import {DEFAULT_TRAINING_VIEW,TRAINING_VIEW_SCHEMA_PROPERTIES,type TrainingViewSettings} from '../config/camera';
+import {controlFields,controlSchemaForFamily} from '../config/control-fields';
 import {TRAINING_INPUT_GUIDES,TRAINING_APPROACH_DESCRIPTION,type TrainingInputGuide} from './input-guidance';
 import * as THREE from 'three';
 import { registerTrainingHost } from './host-access';
@@ -13,11 +15,11 @@ import { readInteractionTargets } from './humanoid/render-state';
 import {characterCapabilities,type CharacterCapabilityState,type CharacterCapabilityAvailability} from './character-capabilities';
 import type { MapDefinition, MapSpawn } from './environment/types';
 import type { VehicleSpec } from './config';
-import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseTrainingControl,readTrainingControl,type TrainingControl} from './control-tuning';
-import type { CameraTuning } from './platform/session';
-import { parseCameraTuning, DEFAULT_CAMERA_TUNING, CAMERA_DISTANCE_METERS_SCHEMA } from './platform/session';
+import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseTrainingControl,readTrainingControl,type TrainingControl} from '../config/control';
+import type { CameraTuning } from '../config/camera';
+import { parseCameraTuning, DEFAULT_CAMERA_TUNING, CAMERA_SCHEMA_PROPERTIES, CAMERA_DISTANCE_METERS_SCHEMA, VEHICLE_CAMERA_DISTANCE_SCHEMA } from '../config/camera';
 import { validateTrainingMap } from './map-validation';
-import { DEFAULT_CHARACTER_OPTIONS } from '../physics';
+import { DEFAULT_CHARACTER_OPTIONS } from '../config/physics';
 import type { PhysicsPort, PhysicsCandidate, CharacterOptions, RigidPhysics, Vec3, WorldInput, PhysicsEntityState, PhysicsAudit } from '../engine-contracts';
 import type { EpisodeStartProbe, EpisodeStart, EpisodeCapabilities } from '../episode-contracts';
 import type { CameraRigInput } from '../camera';
@@ -49,14 +51,6 @@ export interface TrainingOptions {
   readonly character:{readonly instanceId:string;readonly object:THREE.Object3D;readonly animation?:Character};
   readonly cameraTuning?:Partial<CameraTuning>;
 }
-export interface TrainingViewSettings {
-  readonly defaultPerspective:'first-person'|'third-person';
-  readonly keyboardToggleEnabled:boolean;
-}
-export const DEFAULT_TRAINING_VIEW:TrainingViewSettings=Object.freeze({defaultPerspective:'third-person',keyboardToggleEnabled:false});
-export const TRAINING_VIEW_SCHEMA_PROPERTIES={
-  defaultPerspective:{enum:['first-person','third-person']},keyboardToggleEnabled:{type:'boolean'},
-};
 export interface TrainingProfile {
   /** Persistent opening/reset view; changing only keyboard permission preserves the current view. */
   readonly view?:Partial<TrainingViewSettings>;
@@ -64,6 +58,16 @@ export interface TrainingProfile {
   readonly character?:Partial<TrainingControl>;
   readonly camera?:Partial<CameraTuning>;
   readonly vehicles?:Readonly<Record<string,Partial<TrainingControl & {camera:number}>>>;
+}
+/** Replayable profile and the active controller's resolved settings. Observation only. */
+export interface TrainingConfiguration {
+  readonly profile:TrainingProfile;
+  readonly effective:{
+    readonly subjectId:string;
+    readonly family:VehicleSpec['mode']|'character';
+    readonly control:Partial<TrainingControl>;
+    readonly camera:{readonly owner:'authored'|'follow';readonly mode:0|1|2;readonly settings:CameraTuning};
+  };
 }
 export interface TrainingBoardingObservation {
   readonly approachPositionWorldMetersXYZ:Vec3|null;
@@ -158,6 +162,7 @@ export class TrainingRuntime implements PhysicsPort {
     this.followCamera.eyePosition=target=>options.character.animation?.eyePosition(target)??false;
     this.followCamera.configureTuning(options.cameraTuning??{});this.initialCamera=camera.clone();
     this.profile={view:{...DEFAULT_TRAINING_VIEW},character:{...this.simulation.characterControl},camera:{...options.cameraTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readTrainingControl(v.spec),camera:v.spec.camera}]))};
+    this.commitProfile(this.prepareProfile({}));
     this.objects.set(options.character.instanceId,options.character.object);
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     const animation=options.character.animation;
@@ -236,7 +241,7 @@ export class TrainingRuntime implements PhysicsPort {
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='training.approach'?{description:TRAINING_APPROACH_DESCRIPTION}:{})}});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
-    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(CONTROL_SCHEMA_PROPERTIES,[]),vehicles:{type:'object',additionalProperties:object({...CONTROL_SCHEMA_PROPERTIES,camera:{type:'number',minimum:0}},[])},cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:{type:'object',description:'Partial CameraTuning; validated by the camera owner.'}},[]);
+    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.spec.mode),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
     return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():TrainingSnapshot{
@@ -346,7 +351,17 @@ export class TrainingRuntime implements PhysicsPort {
     this.commitProfile(this.prepareProfile(profile));
     if(profile.view?.defaultPerspective!==undefined)this.setCameraModeOwned(this.defaultCameraMode());
   }
+  /** Export the replayable profile; camera contains explicit overrides, not mode defaults. */
   exportProfile():TrainingProfile{return structuredClone(this.profile);}
+  inspectConfiguration():TrainingConfiguration{
+    const vehicle=this.simulation.vehicle,family=vehicle?.spec.mode??'character';
+    const controls=vehicle?.spec??this.simulation.characterControl;
+    return {profile:this.exportProfile(),effective:{
+      subjectId:vehicle?.spec.id??this.options.character.instanceId,family,
+      control:Object.fromEntries(controlFields(family).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
+      camera:{owner:this.authored?'authored':'follow',mode:this.followCamera.mode as 0|1|2,settings:this.followCamera.getEffectiveTuning(this.simulation)},
+    }};
+  }
   onVisualUpdate(callback:(deltaSeconds:number)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
   onSimulationReplaced(callback:()=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
   switchMap(map:MapDefinition):void{this.assertExternalMutation();

@@ -15,7 +15,7 @@ import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
 import {DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints} from './input';
 import {ACTION_TUNING} from './humanoid/action-schema';
-import type {TrainingControl} from './control-tuning';
+import type {TrainingControl} from '../config/control';
 const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]},{id:'wall',position:[0,2,10],size:[30,4,1]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'car',name:'Car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],playerSpawn:[0,.03,0]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
@@ -610,5 +610,25 @@ it('uses a committed fallback so an emergency display is independent of earlier 
   c.present(pose(.8),.8);const direct=c.camera.position.clone(),state=c.collisionState;
   c.present(pose(.2),.2);expect(c.camera.position.distanceTo(direct)).toBeGreaterThan(.1);
   c.present(pose(.8),.8);expect(c.camera.position).toEqual(direct);expect(c.collisionState).toEqual(state);
+ }finally{world.dispose();}
+});
+
+
+it('separates the saved profile from active resolved camera settings without mutating runtime state',async()=>{
+ const world=await fixture();try{
+  const r=world.training!;r.applyProfile({camera:{baseFovDegrees:70}});
+  const before=world.snapshot();
+  const config=r.inspectConfiguration();
+  expect(config.profile.camera).toEqual({baseFovDegrees:70});
+  expect(config.effective.camera.settings).toMatchObject({baseFovDegrees:70,followResponsePerSecond:7,collisionRadiusMeters:.2});
+  expect(config.effective.control).toHaveProperty('coastDeceleration');
+  expect(config.effective.control).not.toHaveProperty('rollResponse');
+  expect(world.snapshot()).toEqual(before);
+  r.setCameraMode(1);
+  expect(r.inspectConfiguration().effective.camera.settings.followResponsePerSecond).toBe(7);
+  r.approach('car-1');r.enter('car-1');world.step({},31);
+  expect(r.inspectConfiguration().effective.camera.settings).toMatchObject({baseFovDegrees:70,followResponsePerSecond:8,collisionRadiusMeters:.25});
+  config.profile.character!.speed=999;config.effective.control.speed=999;
+  expect(r.exportProfile().character!.speed).not.toBe(999);
  }finally{world.dispose();}
 });

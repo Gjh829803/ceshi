@@ -1,3 +1,4 @@
+import {FOLLOW_CAMERA_DEFAULTS} from './config/follow-camera';
 import * as THREE from 'three';
 import { CameraCollisionSolver, type CameraHardDecolliderTransactionStateV1 } from '@whitebox-world/camera-collision';
 import type { CameraArmHit, PhysicsPort, Vec3 } from './engine-contracts.js';
@@ -127,17 +128,17 @@ export class ThreeCameraRig {
     const follow: Follow = {
       targetEntityId: options.targetEntityId, framingMode,
       ...(view?{view}:{}),
-      followHalfLifeSeconds: bounded(options.followHalfLifeSeconds ?? options.targetHalfLifeSeconds ?? .08, 0, 10, 'followHalfLifeSeconds'),
-      distanceMeters: bounded(options.distanceMeters ?? 4, .05, 10_000, 'distanceMeters'),
+      followHalfLifeSeconds: bounded(options.followHalfLifeSeconds ?? options.targetHalfLifeSeconds ?? FOLLOW_CAMERA_DEFAULTS.followHalfLifeSeconds, 0, 10, 'followHalfLifeSeconds'),
+      distanceMeters: bounded(options.distanceMeters ?? FOLLOW_CAMERA_DEFAULTS.distanceMeters, .05, 10_000, 'distanceMeters'),
       targetHeightMeters: height,
-      pitchRadians: bounded(options.pitchRadians ?? .25, -Math.PI / 2, Math.PI / 2, 'pitchRadians'),
-      activateOnInput: options.activateOnInput ?? true,
-      transitionSeconds: bounded(options.transitionSeconds ?? .35, 0, 10, 'transitionSeconds'),
-      rotationSpeedRadiansPerSecond: bounded(options.rotationSpeedRadiansPerSecond ?? 1.8, .001, 100, 'rotationSpeedRadiansPerSecond'),
-      collisionRadiusMeters: bounded(options.collisionRadiusMeters ?? .2, .001, 10, 'collisionRadiusMeters'),
-      recoveryHalfLifeSeconds: bounded(options.recoveryHalfLifeSeconds ?? (framingMode === 'preserve-opening' ? .18 : .24), .001, 10, 'recoveryHalfLifeSeconds'),
-      maximumRecoveryMetersPerSecond: bounded(options.maximumRecoveryMetersPerSecond ?? 3, .001, 1000, 'maximumRecoveryMetersPerSecond'),
-      targetHalfLifeSeconds: bounded(options.targetHalfLifeSeconds ?? .1, 0, 10, 'targetHalfLifeSeconds'),
+      pitchRadians: bounded(options.pitchRadians ?? FOLLOW_CAMERA_DEFAULTS.pitchRadians, -Math.PI / 2, Math.PI / 2, 'pitchRadians'),
+      activateOnInput: options.activateOnInput ?? FOLLOW_CAMERA_DEFAULTS.activateOnInput,
+      transitionSeconds: bounded(options.transitionSeconds ?? FOLLOW_CAMERA_DEFAULTS.transitionSeconds, 0, 10, 'transitionSeconds'),
+      rotationSpeedRadiansPerSecond: bounded(options.rotationSpeedRadiansPerSecond ?? FOLLOW_CAMERA_DEFAULTS.rotationSpeedRadiansPerSecond, .001, 100, 'rotationSpeedRadiansPerSecond'),
+      collisionRadiusMeters: bounded(options.collisionRadiusMeters ?? FOLLOW_CAMERA_DEFAULTS.collisionRadiusMeters, .001, 10, 'collisionRadiusMeters'),
+      recoveryHalfLifeSeconds: bounded(options.recoveryHalfLifeSeconds ?? (framingMode === 'preserve-opening' ? FOLLOW_CAMERA_DEFAULTS.openingRecoveryHalfLifeSeconds : FOLLOW_CAMERA_DEFAULTS.targetRecoveryHalfLifeSeconds), .001, 10, 'recoveryHalfLifeSeconds'),
+      maximumRecoveryMetersPerSecond: bounded(options.maximumRecoveryMetersPerSecond ?? FOLLOW_CAMERA_DEFAULTS.maximumRecoveryMetersPerSecond, .001, 1000, 'maximumRecoveryMetersPerSecond'),
+      targetHalfLifeSeconds: bounded(options.targetHalfLifeSeconds ?? FOLLOW_CAMERA_DEFAULTS.targetHalfLifeSeconds, 0, 10, 'targetHalfLifeSeconds'),
     };
     if (typeof follow.activateOnInput !== 'boolean') throw new Error('WORLD_CAMERA_OPTION_INVALID: activateOnInput');
     const opening = framingMode === 'preserve-opening' ? this.readOpening(target) : undefined;

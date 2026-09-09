@@ -245,7 +245,7 @@ export interface CommandDescriptor {
  readonly unavailableReason?:RuntimeError;
 }
 export interface WorldDescription {
- readonly training?:{readonly inputGuide:import('./training/input-guidance').TrainingInputGuide;readonly boarding:Readonly<Record<string,import('./training/runtime').TrainingBoardingObservation>>;readonly controlState:import('./training/runtime').TrainingInputObservation & {readonly livePaused:boolean;readonly clockOwner:'live'|'episode'};readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
+ readonly training?:{readonly configuration:import('./training/runtime').TrainingConfiguration;readonly inputGuide:import('./training/input-guidance').TrainingInputGuide;readonly boarding:Readonly<Record<string,import('./training/runtime').TrainingBoardingObservation>>;readonly controlState:import('./training/runtime').TrainingInputObservation & {readonly livePaused:boolean;readonly clockOwner:'live'|'episode'};readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;

@@ -1,7 +1,8 @@
+import {training} from '@worldkit/three';
 import { SPECS } from '../config';
 import { MAPS } from '../environment/maps';
-import { parseAssetProfile, type AssetProfileV1 } from './profiles';
-import {controlFields} from './control-fields';
+import { parseAssetProfile, type AssetProfile } from './profiles';
+const {controlFields}=training;
 import './workbench.css';
 
 type Tab = 'scenes' | 'camera';
@@ -10,9 +11,9 @@ interface WorkbenchOptions {
   onPrepare(mapId: string, regionId: string, assetId: string): void;
   getMapId(): string;
   getAssetId(): string;
-  getProfile(id: string): AssetProfileV1;
-  applyProfile(profile: AssetProfileV1): void;
-  saveProfile(profile: AssetProfileV1): void;
+  getProfile(id: string): AssetProfile;
+  applyProfile(profile: AssetProfile): void;
+  saveProfile(profile: AssetProfile): void;
   resetProfile(id: string): void;
   getState(): Record<string, unknown>;
   togglePause(): void;
@@ -92,7 +93,7 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
     content.append(assetSelect('编辑 3C 资产', () => show('camera')));
     content.append(note('操控与相机参数按资产独立应用。进入相应载具后使用它的配置；保存到本地后，下次打开继续使用。'));
     const current = options.getProfile(selectedAsset);
-    if(selectedAsset==='person')content.append(note('人物使用原人物场的完整动作参数：常跑 3.1 m/s、冲刺 5.8 m/s、慢走 1.45 m/s。操控参数由人物模块管理，旧人物配置不会覆盖这套已标定手感。'));
+    if(selectedAsset==='person')content.append(note('人物使用已标定的 Playground 默认配置；下方基准参数与实际速度的换算见字段说明。'));
     const mode = SPECS.find(s => s.id === selectedAsset)?.mode;
     const road = mode === 'wheeled' || mode === 'bike';
     if (mode === 'space') content.append(note('默认启用平移稳定辅助：松开某个方向会消除该方向的漂移，Shift 强制制动。辅助设为 0 可测试纯惯性；已输入的方向仍能加速到最高速度。'));
@@ -107,14 +108,14 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
     };
     const fields: { group: 'camera' | 'control'; key: string; label: string; step: number }[] = [
       { group: 'camera', key: 'distance', label: '跟随距离 / 米', step: .25 },
-      { group: 'camera', key: 'baseFovDegrees', label: '基础视野 / 度', step: 1 },
-      { group: 'camera', key: 'recenterDelaySeconds', label: '环绕后回正等待 / 秒', step: .1 },
-      { group: 'camera', key: 'followResponsePerSecond', label: '相机跟随响应 / 每秒', step: .5 },
+      ...(['baseFovDegrees','recenterDelaySeconds','followResponsePerSecond'] as const).map(key=>({group:'camera' as const,key,label:`${training.CAMERA_PARAMETERS[key].label} / ${training.CAMERA_PARAMETERS[key].unit}`,step:training.CAMERA_PARAMETERS[key].step})),
       ...controlFields(mode??'character').filter(f=>!f.disabled).map(f=>({group:'control' as const,key:f.key,label:`${f.label} / ${f.unit}`,step:f.step})),
     ];
     for (const { group, key, label, step } of fields) {
       if(selectedAsset==='person'&&key==='recenterDelaySeconds')continue;
       const field = make('label', label, 'wb-field'), input = make('input'); input.type = 'number'; input.step = String(step);
+      const bounds=group==='camera'?(key==='distance'?training.CAMERA_DISTANCE_EDITOR_RANGE:training.CAMERA_TUNING_RANGES[key as training.NumericCameraKey]):training.CONTROL_RANGES[key as training.ControlKey];
+      input.min=String(bounds[0]);input.max=String(bounds[1]);
       input.value = String((current[group] as unknown as Record<string, number>)[key]);
       inputs.push({ group, key, input });
       input.oninput = () => { try { options.applyProfile(readFields()); inform('已应用到这个资产；保存后可跨刷新保留。'); } catch { /* Allow incomplete numeric edits until blur or save. */ } };
@@ -131,7 +132,7 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
     }), button('恢复资产默认值', () => {
       try { options.resetProfile(selectedAsset); show('camera'); inform('已恢复并清除这个资产的本地覆盖。'); } catch (error) { report(error); }
     }), button('暂停 / 继续', () => options.togglePause()), button('单步 1/60 秒', () => options.step()));
-    const shape = make('details'); shape.append(make('summary', '碰撞体积与资产标识'), make('pre', JSON.stringify({ assetId: current.assetId, version: current.version, defaultsRevision: current.defaultsRevision, envelope: current.envelope }, null, 2), 'wb-telemetry'));
+    const shape = make('details'); shape.append(make('summary', '碰撞体积与资产标识'), make('pre', JSON.stringify({ assetId: current.assetId, version: current.version, envelope: current.envelope }, null, 2), 'wb-telemetry'));
     const output = make('output', JSON.stringify(options.getState(), null, 2), 'wb-telemetry'); output.setAttribute('aria-label', '主体和相机实时状态');
     content.append(grid, actions, shape, make('h3', '当前运行主体 · 实时状态'), output, note('请在门框、楼梯、低顶和转角处结合移动观察镜头。渲染回调频率用于诊断，不代表显示器实际呈现 FPS。'));
   }

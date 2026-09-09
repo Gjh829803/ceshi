@@ -396,12 +396,16 @@ use ordinary input for visible travel, then `training.enter` when eligible.
 await world.execute({type:'training.profile',profile:{character:{
   maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
 }}});
-const effective = world.training!.exportProfile();
+const savedProfile = world.training!.exportProfile();
+const current = world.training!.inspectConfiguration();
 ```
 
-Profiles merge by instance ID, export full effective values and persist across
-reset/map/Episode initialization. Save the effective configuration in the project
-and apply it during initialization. Browser-local tuning alone is not delivery
+Profiles merge by instance ID and persist across reset/map/Episode initialization.
+`exportProfile()` returns a replayable profile: complete controls and explicit camera
+overrides. `inspectConfiguration()` reports the active subject/family, applicable
+control values, camera owner/mode and resolved camera settings alongside that profile.
+Read operations return copies without advancing time. Save the profile in project
+source and apply it during initialization. Browser-local tuning alone is not delivery
 configuration. Humanoid normal movement is `speed * 3.1 / 3.8`; acceleration is
 `accel * 14 / 12`; air acceleration is `grip * 5 / 3`; turning is `steer * 8 / 14`.
 `maxSpeed`, `slowSpeed`, `coastDeceleration` and `jumpSpeed` are independent actual
@@ -445,8 +449,9 @@ Training input and respects the same permission. Inspect the actual scene before
 claiming recording or visual acceptance.
 
 First-person driving inherits the vehicle controller's existing tilt, including
-for custom vehicle geometry bound to that controller. Keep this default feedback;
-scene code does not add another camera sway loop or a separate tilt setting.
+for custom vehicle geometry bound to that controller. This remains the default.
+Developer-only presentation tuning lives in `src/config/presentation.ts`; it is not
+a profile field. Scene code does not add another camera sway loop.
 These profile settings apply to Training. Independent subjects configure the eye
 through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
@@ -776,3 +781,12 @@ mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
 
 <!-- /asset-info -->
+
+
+## Developer tuning
+
+The [SDK configuration directory](src/config/README.md) owns shared defaults and
+parameter definitions. Playground's calibrated values are the baseline; its UI,
+SDK profile parsing and Creator schemas consume the same definitions. Internal
+presentation switches stay out of public profile fields. Config changes require
+rebuilding the SDK; authored Three geometry and gameplay remain ordinary code.

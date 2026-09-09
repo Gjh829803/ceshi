@@ -1,3 +1,4 @@
+import {DEFAULT_CHARACTER_OPTIONS} from './config/physics';
 import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
 import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
@@ -6,11 +7,6 @@ import type { EpisodeStartProbe } from './episode-contracts.js';
 
 export const MAXIMUM_EPISODE_START_ALIGNMENT_METERS = .35;
 
-export const DEFAULT_CHARACTER_OPTIONS: Required<CharacterOptions> = Object.freeze({
-  heightMeters: 1.8, radiusMeters: .35, walkSpeedMetersPerSecond: 2.4, runSpeedMetersPerSecond: 4.8,
-  jumpSpeedMetersPerSecond: 5, maximumStepHeightMeters: .3, minimumStepWidthMeters: .15,
-  snapToGroundDistanceMeters: .35, maximumSlopeRadians: Math.PI / 4, collisionOffsetMeters: .015,
-});
 // Float32 capsule contacts can report a slightly tilted normal on a flat cuboid.
 // This is only a retry eligibility tolerance, never the character's slope limit.
 const PLANAR_CONTACT_MINIMUM_Y = Math.cos(Math.PI / 180);

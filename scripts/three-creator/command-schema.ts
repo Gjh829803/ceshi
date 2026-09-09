@@ -12,8 +12,8 @@ const trainingInput={...trainingInputShape,description:'Use emptyTrainingInput()
 const trainingProfile=objectSchema({character:objectSchema(training.CONTROL_SCHEMA_PROPERTIES,[]),
  view:objectSchema(training.TRAINING_VIEW_SCHEMA_PROPERTIES,[]),
  cameraDistanceMeters:{anyOf:[training.CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},
- camera:objectSchema({recenterDelaySeconds:number,recenterResponsePerSecond:number,followResponsePerSecond:number,baseFovDegrees:number,targetHeightOffset:number,horizontalOffset:number,collisionEnabled:boolean,collisionRadiusMeters:number},[]),
- vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:number},[])}},[]);
+ camera:objectSchema(training.CAMERA_SCHEMA_PROPERTIES,[]),
+ vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:training.VEHICLE_CAMERA_DISTANCE_SCHEMA},[])}},[]);
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[

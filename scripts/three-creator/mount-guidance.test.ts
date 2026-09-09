@@ -38,10 +38,10 @@ it('discovers horse integration and only its required example assets',async()=>{
   const schema:any=await service.schema('mounted-interaction' as any);
   expect(schema.entryPoint.name).toBe('createHumanoidWorld');
   expect(schema.sdkFactoryContracts).toContain('export declare function createHumanoidWorld(');
-  expect(schema.trainingSourceContracts['horse.ts']).toContain('class TrainingHorse');
-  expect(schema.trainingSourceContracts['horse.ts']).toContain('load(resolve: TrainingResourceResolver): Promise<void>');
-  expect(schema.trainingSourceContracts['horse.ts']).not.toContain('mixer');
-  expect(schema.trainingSourceContracts['runtime.ts']).toContain('interface TrainingOptions');
+  expect(schema.trainingSourceContracts['training/horse.ts']).toContain('class TrainingHorse');
+  expect(schema.trainingSourceContracts['training/horse.ts']).toContain('load(resolve: TrainingResourceResolver): Promise<void>');
+  expect(schema.trainingSourceContracts['training/horse.ts']).not.toContain('mixer');
+  expect(schema.trainingSourceContracts['training/runtime.ts']).toContain('interface TrainingOptions');
   expect(schema.sdkGuide).toContain('Imported horse');
  }finally{await service.close();}
 });

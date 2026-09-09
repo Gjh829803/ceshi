@@ -1,3 +1,4 @@
+import {VEHICLE_ATTITUDE} from '../config/vehicle';
 import {evaluateMount,evaluateDismount,type MountContext,type MountDecision,type MountFailureCode} from './mounted-interaction';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { HumanoidController,HUMANOID_BODY } from './humanoid/controller';
@@ -5,7 +6,7 @@ import type { MotionSource } from './humanoid/motion';
 import { resetCreatureState, stepCreature, canPlaceCreature, creatureBodies } from './creatures/controller';
 import type { CreatureState } from './creatures/types';
 import { coastSpeed, roadYawRate } from './handling';
-import {CONTROL_RANGES,defaultTrainingControl,parseTrainingControl,type TrainingControl} from './control-tuning';
+import {CONTROL_RANGES,DEFAULT_CHARACTER_CONTROL_BASE,defaultTrainingControl,parseTrainingControl,type TrainingControl} from '../config/control';
 import { EnvironmentQueries, vehicleBody } from './environment/queries';
 import { groundVehiclePose } from './environment/vehicle-pose';
 import type { MapSpawn } from './environment/types';
@@ -141,7 +142,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
     if(mode==='boat') {
       if(!footprintWet(v.position.x,v.position.z,s.radius)) {v.position.copy(old);v.velocity.x=0;v.velocity.z=0;}
       v.position.y=waterSurface+.1+Math.sin(time*1.8+v.position.z*.07)*.12;
-      v.pitch=Math.sin(time*1.3)*.025+Math.abs(speed)*.003;v.roll=damp(v.roll,v.steering*speed*.008,3,dt);
+      v.pitch=Math.sin(time*1.3)*.025+Math.abs(speed)*.003;v.roll=damp(v.roll,v.steering*speed*VEHICLE_ATTITUDE.boat.rollRadiansPerSteeringSpeed,VEHICLE_ATTITUDE.boat.rollResponsePerSecond,dt);
     } else if(mode==='hover') {
       const floor=supportHeight(v.position.x,v.position.z,s.radius,true),oldFloor=supportHeight(old.x,old.z,s.radius,true),target=floor+1.3;
       // Follow the rate of terrain ascent, then enforce hull clearance independently of the spring.
@@ -150,14 +151,16 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
       if(v.position.y<floor+.55){v.position.y=floor+.55;v.velocity.y=Math.max(v.velocity.y,surfaceRate,0);}
       const ahead=surfaceHeight(v.position.x+newF.x,v.position.z+newF.z),behind=surfaceHeight(v.position.x-newF.x,v.position.z-newF.z);
       const slope=Math.abs(ahead-behind)<1.5?Math.atan2(ahead-behind,2):0;
-      v.pitch=damp(v.pitch,slope-i.forward*.04,6,dt);v.roll=damp(v.roll,v.steering*.12,4,dt);v.grounded=false;
+      v.pitch=damp(v.pitch,slope-i.forward*.04,6,dt);v.roll=damp(v.roll,v.steering*VEHICLE_ATTITUDE.hover.rollRadiansPerSteering,VEHICLE_ATTITUDE.hover.rollResponsePerSecond,dt);v.grounded=false;
     } else {
       const actualFloor=surfaceHeight(v.position.x,v.position.z);
       v.velocity.y-=18*dt;
       if(v.position.y<=actualFloor+.12) {v.position.y=actualFloor;v.velocity.y=0;v.grounded=true;} else v.grounded=false;
       const ahead=surfaceHeight(v.position.x+newF.x*1.2,v.position.z+newF.z*1.2),behind=surfaceHeight(v.position.x-newF.x*1.2,v.position.z-newF.z*1.2);
       const targetPitch=v.grounded&&Math.abs(ahead-behind)<3?Math.atan2(ahead-behind,2.4):0;
-      v.pitch=damp(v.pitch,targetPitch,12,dt);v.roll=damp(v.roll,mode==='bike'?clamp(v.steering*speed*.02,-.5,.5):clamp(-v.steering*speed*.003,-.12,.12),7,dt);
+      const attitude=mode==='bike'?VEHICLE_ATTITUDE.bike:VEHICLE_ATTITUDE.ground;
+      v.pitch=damp(v.pitch,targetPitch,12,dt);
+      v.roll=damp(v.roll,clamp(v.steering*speed*attitude.rollRadiansPerSteeringSpeed,-attitude.maximumRollRadians,attitude.maximumRollRadians),attitude.rollResponsePerSecond,dt);
     }
     v.rotation.setFromEuler(euler.set(-v.pitch,v.yaw,v.roll,'YXZ'));v.submerged=driveDisabled;
   }
@@ -226,7 +229,7 @@ export class Simulation {
   humanoid!:HumanoidController;
   private humanoidClips:ReadonlySet<string>=new Set();
   private humanoidMotions:readonly MotionSource[]=[];
-  characterControl=defaultTrainingControl('character',{speed:3.8,accel:12,grip:3,steer:14});
+  characterControl=defaultTrainingControl('character',DEFAULT_CHARACTER_CONTROL_BASE);
   private prepared=new Map<string,MapSpawn>();
   failureCode:MountFailureCode|undefined;
   vehicles:VehicleState[]=[];active=-1;time=0;transition=0;transitionKind:''|'enter'|'exit'='';message='';teleportRevision=0;

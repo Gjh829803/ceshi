@@ -37,11 +37,11 @@ export class CreatorDiscovery {
     const suggestedExample = topic === 'mounted-interaction' ? 'mounted-interaction' :
       topic === 'character-actions' ? 'character-actions' : 'independent-world';
     const trainingExampleTopic = includesTraining && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
-    const sourceFiles = ['config.ts', 'control-tuning.ts', 'environment/types.ts', 'platform/session.ts', 'runtime.ts'];
-    if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('horse.ts');
-    if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid/action-schema.ts', 'simulation.ts');
+    const sourceFiles = ['training/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'training/environment/types.ts', 'training/runtime.ts'];
+    if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('training/horse.ts');
+    if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('training/humanoid/action-schema.ts', 'training/simulation.ts');
     const trainingSourceContracts = includesTraining ? Object.fromEntries(await Promise.all(
-      sourceFiles.map(async name => [name, trainingContractSource(await guidance.source(`training/${name}`))]),
+      sourceFiles.map(async name => [name, trainingContractSource(await guidance.source(name))]),
     )) : undefined;
     const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
       sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace}),

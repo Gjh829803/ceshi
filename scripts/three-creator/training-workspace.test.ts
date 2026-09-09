@@ -1,9 +1,9 @@
 import {describe,it,expect,vi} from 'vitest';
 import {Group,PerspectiveCamera,Scene} from 'three';
 import {createCapsuleDebug,createCollisionDebug} from '../../examples/three-creator/sdk-capabilities/humanoid/capsule-debug';
-import {createWorld} from '@worldkit/three';
+import {createWorld,training} from '@worldkit/three';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../examples/three-creator/sdk-capabilities/platform/profiles';
-import {applyCameraProfile,applyControlProfile,readEffectiveControlProfile} from '../../examples/three-creator/sdk-capabilities/platform/profile-runtime';
+import {applyCameraProfile,applyControlProfile,readEffectiveProfile} from '../../examples/three-creator/sdk-capabilities/platform/profile-runtime';
 import {getMap} from '../../examples/three-creator/sdk-capabilities/environment/maps';
 import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
 import {defaultRegion,prepareCourse} from '../../examples/three-creator/sdk-capabilities/platform/scenarios';
@@ -64,21 +64,19 @@ describe('training workspace configuration',()=>{
    h.world.forEachCollider(c=>expect(c.isEnabled()).toBe(true));
   }finally{debug.dispose();world.dispose();}
  });
- it('round trips all effective controls, fills older profiles and rejects malformed additions',()=>{
+ it('round trips complete current profiles and rejects incomplete or old migrated forms',()=>{
   const values=new Map<string,string>(),storage={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);},removeItem:(k:string)=>{values.delete(k);}};
   const profile=getDefaultProfile('rover')!;
   const control=profile.control;control.coastDeceleration=2;control.maxSpeed=40;control.brakeDeceleration=30;
   saveAssetProfile(storage,profile);expect(loadAssetProfile(storage,'rover')?.control).toMatchObject({coastDeceleration:2,maxSpeed:40,brakeDeceleration:30});
   expect(()=>saveAssetProfile(storage,{...profile,control:{...control,coastDeceleration:NaN}})).toThrow();
-  saveAssetProfile(storage,{...profile,defaultsRevision:2,control:{speed:10,accel:3,grip:4,steer:1}});
-  expect(loadAssetProfile(storage,'rover')).toMatchObject({defaultsRevision:3,control:{speed:10,maxSpeed:11.5,coastDeceleration:5}});
-  saveAssetProfile(storage,{...profile,defaultsRevision:2,control:{speed:31,accel:11,grip:9,steer:.64}});
-  expect(loadAssetProfile(storage,'rover')).toMatchObject({defaultsRevision:3,control:{speed:31,accel:11,grip:9,steer:.64,maxSpeed:35.65,brakeDeceleration:19.8}});
+  expect(()=>saveAssetProfile(storage,{...profile,control:{speed:10,accel:3,grip:4,steer:1}})).toThrow();
+  expect(()=>saveAssetProfile(storage,{...profile,defaultsRevision:2})).toThrow();
  });
  it('reads live SDK movement tuning before a camera-only edit',async()=>{
   const rover=SPECS.find(spec=>spec.id==='rover')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:rover,object:new Group()}]}});
   try{const runtime=world.training!,cached=getDefaultProfile('rover')!;runtime.applyProfile({vehicles:{rover:{coastDeceleration:2}}});
-   const effective=readEffectiveControlProfile(runtime,cached);expect(effective.control.coastDeceleration).toBe(2);
+   const effective=readEffectiveProfile(runtime,cached);expect(effective.control.coastDeceleration).toBe(2);
    effective.camera.distance=10;applyCameraProfile(runtime,effective);expect(runtime.exportProfile().vehicles?.rover?.coastDeceleration).toBe(2);
   }finally{world.dispose();}
  });
@@ -131,4 +129,28 @@ describe('training workspace configuration',()=>{
    await world.reset();expect(world.training!.followCamera.baseDistance).toBe(12);
   }finally{world.dispose();}
  });
+});
+
+
+it('uses complete current camera values and never backfills old camera shapes',()=>{
+ expect(()=>training.parseCameraTuning({recenterDelaySeconds:1,followResponsePerSecond:8,baseFovDegrees:55})).toThrow();
+ const profile=getDefaultProfile('person')!;
+ expect(profile.control).toEqual(training.defaultTrainingControl('character',{speed:3.1,accel:14,grip:5,steer:8}));
+});
+
+it('installs the calibrated Playground movement before any profile call and restores it after reset',async()=>{
+ const create=()=>createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
+ const world=await create(),reference=await create();
+ try{
+  // Captured pre-refactor Playground values and its existing calibration formula.
+  const baseline={speed:3.1,accel:14,grip:5,steer:8};
+  reference.training!.applyProfile({character:training.defaultTrainingControl('character',baseline)});
+  const actual=world.training!.simulation.humanoid!.movementTuning;
+  expect(actual).toMatchObject({speedScale:3.1/3.8,accelerationScale:14/12,airControlScale:5/3,turnScale:8/14,maxSpeed:5.8*3.1/3.8});
+  expect(actual).toEqual(reference.training!.simulation.humanoid!.movementTuning);
+  world.step({moveZRatio:-1},90);reference.step({moveZRatio:-1},90);
+  expect(world.getEntityState('person').positionWorldMetersXYZ).toEqual(reference.getEntityState('person').positionWorldMetersXYZ);
+  await world.reset();
+  expect(world.training!.simulation.humanoid!.movementTuning).toEqual(actual);
+ }finally{world.dispose();reference.dispose();}
 });

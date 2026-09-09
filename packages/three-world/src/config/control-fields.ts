@@ -1,8 +1,8 @@
-import {training} from '@worldkit/three';
-type Key=training.ControlKey;
+import {CONTROL_RANGES,type ControlKey} from './control';
+type Key=ControlKey;
 export type ControlField={key:Key;label:string;unit:string;step:number;note:string;section:'速度范围'|'加速与减速'|'转向与稳定'|'专项运动';disabled?:boolean};
 
-/** UI descriptions only; defaults and numeric validation live in the SDK. */
+/** Shared parameter meaning and controller-family applicability. No simulation state. */
 export function controlFields(family:string):ControlField[]{
  const person=family==='character',road=['wheeled','bike'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','bike','slide','hover','boat'].includes(family);
  const fields:ControlField[]=[];
@@ -31,4 +31,12 @@ export function controlFields(family:string):ControlField[]{
  if(family==='glider')add('launchSpeed','弹射初速度','m/s','再次准备后按 Shift 发射的初速度。','专项运动');
  return fields;
 }
-export const controlKeys=Object.keys(training.CONTROL_RANGES) as Key[];
+export const controlKeys=Object.keys(CONTROL_RANGES) as Key[];
+
+/** Discovery only: stored complete profiles may retain inactive family fields. */
+export function controlSchemaForFamily(family:string){
+ return Object.fromEntries(controlFields(family).filter(field=>!field.disabled).map(field=>{
+  const [minimum,maximum]=CONTROL_RANGES[field.key];
+  return [field.key,{type:'number',minimum,maximum,description:`${field.label} (${field.unit}): ${field.note}`}];
+ }));
+}
