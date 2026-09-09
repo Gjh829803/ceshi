@@ -33,9 +33,10 @@ path.add(new LineCurve3(point(500, 240), point(500, -160)));
 
 const length = path.getLength();
 const count = Math.ceil(length / 7);
+const startFinishZ = -70;
 export const START_FINISH = {
-  x: -620, z: -418.5,
-  grid: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, x: -620 + (i % 2 ? 4 : -4), z: -431 - i * 7 })),
+  x: -620, z: startFinishZ,
+  grid: Array.from({ length: 10 }, (_, i) => ({ number: i + 1, x: -620 + (i % 2 ? 4 : -4), z: startFinishZ - 12.5 - i * 7 })),
 };
 export const GRAND_PRIX = {
   lengthMeters: length,
@@ -89,7 +90,7 @@ export function createGrandPrix(): MapDefinition {
   const playerSpawn: MapSpawn['position'] = [supercarSpawn.position[0] + 3, .03, supercarSpawn.position[2]];
   const spawns: MapSpawn[] = [
     { id: 'gp-player', name: '超跑旁', position: playerSpawn, yaw: 0, regionId: 'gp-pits' },
-    { id: 'gp-straight-start', name: '主直道起点', position: [-620, .03, -480], yaw: 0, regionId: 'gp-straight' },
+    { id: 'gp-straight-start', name: '主直道起点', position: [START_FINISH.x, .03, START_FINISH.z - 25], yaw: 0, regionId: 'gp-straight' },
     { id: 'gp-esses-start', name: 'S 弯入口', position: [-240, .03, 300], yaw: Math.PI / 2, regionId: 'gp-esses' },
     { id: 'gp-hairpin-start', name: '后直道制动段', position: [500, .03, -80], yaw: Math.PI, regionId: 'gp-hairpin' },
     { id: 'gp-technical-start', name: '技术弯入口', position: [220, .03, -80], yaw: -Math.PI / 2, regionId: 'gp-technical' },
