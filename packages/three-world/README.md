@@ -331,6 +331,39 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 <!-- /asset-info -->
 
 <!-- topic:training -->
+
+### Brake-turn drift for authored vehicles
+
+For an arcade car or motorcycle, set `brakeDrift: true` on its `training.VehicleSpec`
+(`mode: 'wheeled'` or `'bike'`). The SDK integrates real lateral velocity; do not
+rotate the visual root or install a second movement loop to fake a skid.
+
+```ts
+import type { training } from "@worldkit/three";
+
+const driftTuning = {
+  brakeDrift: true,
+  grip: 10, steer: 0.65,
+  steeringResponse: 7, steeringReturn: 12,
+  brakeDeceleration: 6, brakeDamping: 0.5, coastDeceleration: 1.8,
+} satisfies Partial<training.VehicleSpec>;
+// Include ...driftTuning in the spec passed to createHumanoidWorld({ vehicles }).
+```
+
+These are starting values, not universal tuning: test speed, turning radius and
+recovery for the authored vehicle. Brake while steering above 2.5 m/s; strength
+ramps to its maximum at 6 m/s. Default S is forward braking (reverse below
+1 m/s), while Space gives a stronger handbrake slide. Reverse and parking-speed
+turns do not activate this model. `grip`, steering and braking control the slide
+and recovery. At full drift, braking and handbrake damping are reduced to 70% to retain
+momentum. The flag belongs to VehicleSpec; numeric tuning can be applied
+through `world.training.applyProfile`. Persist both in authored source for delivery.
+
+Read `creator_get_examples({topic: 'custom-vehicle'})` for a complete motorcycle
+using this configuration, or `training-assets` for the Playground presets.
+[Design, parameter units and tuning checks](../../docs/three-vehicle-drift.md).
+
+
 ## Bind scene, controls and parameters
 
 `createHumanoidWorld` uses the Training backend through `createWorld({training})`.

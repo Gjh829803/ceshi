@@ -9,6 +9,7 @@
 | 生产新资产、接入行动模式并提交 PR | [资产包提交与 Agent 接入规范](asset-production-integration.md) |
 | 读取真实接口 | [公共类型](../packages/three-world/src/contracts.ts) |
 | 修改内部调参、效果开关与 Playground 默认值 | [配置入口](../packages/three-world/src/config/README.md) · [验证记录](reviews/2026-09-09-runtime-tuning.md) |
+| 配置汽车、摩托车漂移及理解速度/抓地力影响 | [制动漂移设计与调参](three-vehicle-drift.md) |
 | 使用 Agent 工具、编译、验证和交付 | [Creator](../scripts/three-creator/README.md) |
 | 规划动作、录制、生成样式和恢复 | [Episode](../scripts/three-episode/README.md) |
 | 运行数据生产 | [生产流程](three-sdk-data-production.md) · [云生成](../scripts/cloud/three-eval-README.md) |

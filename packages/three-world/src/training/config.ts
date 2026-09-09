@@ -7,5 +7,7 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
   spawn: [number, number, number]; yaw: number; speed: number; accel: number; grip: number;
   steer: number; radius: number; seat: [number, number, number]; camera: number; hint: string; characterPose?: 'stand' | 'ride';
   archetype: VehicleArchetype; visualVariant?: 'utility' | 'touring' | 'rescue' | 'patrol' | 'trainer' | 'survey';
+  /** Opt-in progressive brake-turn slip for cars and motorcycles; recovery follows lateral velocity. */
+  brakeDrift?: boolean;
   envelope: CollisionEnvelope;
 }

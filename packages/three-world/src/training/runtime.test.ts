@@ -645,3 +645,22 @@ it('separates the saved profile from active resolved camera settings without mut
   expect(r.exportProfile().character!.speed).not.toBe(999);
  }finally{world.dispose();}
 });
+
+ it.each(['wheeled','bike'] as const)('%s opts into brake-turn slip, retains momentum and recovers without affecting low-speed steering',async(mode)=>{
+  const trial=async(drift:boolean,speed:number,brake:boolean)=>{const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:{...map,bounds:{min:[-500,-10,-500],max:[500,50,500]},boxes:[{id:'ground',position:[0,-.5,0],size:[1000,1,1000]}]},character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',object:new Group(),spec:{...spec,mode,brakeDrift:drift,brakeDeceleration:8,coastDeceleration:1.5,brakeDamping:.65}}]}});try{
+   const r=world.training!,sim=r.simulation;sim.active=0;sim.transition=0;
+   const v=sim.vehicle!;v.position.set(-30,.03,-50);v.velocity.set(0,0,speed);v.spec.brakeDrift=drift;v.spec.brakeDeceleration=8;v.spec.coastDeceleration=1.5;v.spec.brakeDamping=.65;
+   const slip=()=>Math.abs(v.velocity.x*Math.cos(v.yaw)-v.velocity.z*Math.sin(v.yaw));
+   world.step({training:{...emptyInput(),forward:brake?-1:0,steer:1}},36);
+   const during={slip:slip(),speed:v.velocity.length(),yaw:v.yaw};
+   world.step({training:{...emptyInput(),forward:.3}},240);
+   return {...during,recovered:slip()};
+  }finally{world.dispose();}};
+  const regular=await trial(false,25,true),drift=await trial(true,25,true);
+  expect(drift.slip).toBeGreaterThan(regular.slip*2);expect(drift.speed).toBeGreaterThan(12);
+  expect(drift.recovered).toBeLessThan(drift.slip*.15);
+  expect(drift.speed).toBeLessThanOrEqual(25);
+  const moderate=await trial(true,8,true);expect(moderate.slip).toBeGreaterThan(1);expect(moderate.speed).toBeGreaterThan(3);
+  expect(await trial(true,2,true)).toEqual(await trial(false,2,true));
+  expect(await trial(true,25,false)).toEqual(await trial(false,25,false));
+ });

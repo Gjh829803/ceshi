@@ -48,11 +48,12 @@ part([.8,.06,.14],[0,.46,-.1],darkMaterial);
 // Source101's current ride pose needs clearance above this narrow cushion's top;
 // .165 m is a starting fit for this rig/pose, not automatic fitting for other models.
 const pelvisClearanceMeters=.165;
+// Arcade drift is SDK-owned: brake while steering; tune grip and brake damping, not visual yaw.
 // The standard vehicle pose uses the existing skeleton; this is not automatic hand/foot IK.
 const spec:TrainingVehicleSpec={id:'custom-bike',name:'自建摩托',en:'CUSTOM BIKE',mode:'bike',kernel:'K02',archetype:'bike',color:'#eeeeee',
- spawn:[0,0,0],yaw:0,speed:12,accel:6,grip:13,steer:1.12,radius:.85,characterPose:'ride',
+ spawn:[0,0,0],yaw:0,speed:12,accel:6,grip:10,steer:.65,brakeDrift:true,steeringResponse:7,steeringReturn:12,brakeDeceleration:6,brakeDamping:.5,coastDeceleration:1.8,radius:.85,characterPose:'ride',
  seat:[cushionCenter[0],cushionCenter[1]+cushionSize[1]/2+pelvisClearanceMeters,cushionCenter[2]],camera:6.8,
- hint:'W/S 油门与制动 · A/D 转向 · Space 刹车 · F 上下车',
+ hint:'W/S 油门与制动 · A/D 转向 · Space 制动漂移 · F 上下车',
  envelope:{kind:'box',halfExtents:[.55,1.2,1.3],offset:[0,1.2,0]}};
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person',
  vehicles:[{instanceId:'custom-bike',assetId:'custom.motorcycle',object:bike,spec}]});
@@ -65,5 +66,5 @@ world.setCaptureTargets(['person','custom-bike']);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#333c;color:white;padding:12px;font:14px sans-serif;white-space:pre';
 presentation.ui.mount(hud);
-world.onUpdate(()=>{const state=world.snapshot().training;hud.textContent=`预设人物 + 自建摩托\nWASD 移动 / 驾驶 · F 上下车 · Space 刹车\n${state?.mountedInstanceId?'骑乘':'步行'} · ${state?.message??''}`;});
+world.onUpdate(()=>{const state=world.snapshot().training;hud.textContent=`预设人物 + 自建摩托\nWASD 移动 / 驾驶 · F 上下车 · Space 制动漂移\n${state?.mountedInstanceId?'骑乘':'步行'} · ${state?.message??''}`;});
 await world.start();presentation.focus();
