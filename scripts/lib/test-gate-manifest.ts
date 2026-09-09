@@ -17,6 +17,10 @@ export interface TestGateManifestEntryV1 {
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
   { path: "apps/three-creator-playground/bridge-inspection.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "apps/three-creator-playground/character-continuity.test.ts", lane: "contract" },
+  { path: "apps/three-playground/src/equipment-panel.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/inspector.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/library.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/panels.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/camera-collision/src/camera-collision-solver.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-library.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-locomotion.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

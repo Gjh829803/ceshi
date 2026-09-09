@@ -1,0 +1,88 @@
+[data-slot="dialog-content"] .modal-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ffffff14;
+  text-align: left;
+  flex-shrink: 0;
+}
+[data-slot="dialog-content"] .modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: #e5eeee;
+}
+[data-slot="dialog-content"] .modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #a6c1c5;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+[data-slot="dialog-content"] .modal-close:hover {
+  background: #ffffff0d;
+  color: #e5eeee;
+}
+[data-slot="dialog-content"] .modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+[data-slot="dialog-content"] .modal-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid #ffffff14;
+  background: #0d2930;
+  flex-shrink: 0;
+  margin: 0;
+}
+[data-slot="dialog-content"] .modal-footer:empty {
+  display: none;
+}
+[data-slot="dialog-content"] .modal-footer button:not([role="checkbox"]):not([role="switch"]) {
+  min-height: 32px;
+}
+[data-slot="dialog-content"] .modal-body {
+  padding: 20px 24px;
+}
+[data-slot="dialog-content"].workbench,
+[data-slot="dialog-content"].pause-card,
+[data-slot="dialog-content"].contribution-dialog {
+  padding: 0;
+  gap: 0;
+}
+.modal-body .modal-footer {
+  margin: 20px -24px -20px;
+}
+@media (max-width: 600px) {
+  [data-slot="dialog-content"] .modal-header,
+  [data-slot="dialog-content"] .modal-footer {
+    padding: 14px 16px;
+  }
+  [data-slot="dialog-content"] .modal-body {
+    padding: 16px;
+  }
+  .modal-body .modal-footer {
+    margin: 16px -16px -16px;
+  }
+}
+
+[data-slot=dialog-content] .modal-footer{height:auto;min-height:64px}

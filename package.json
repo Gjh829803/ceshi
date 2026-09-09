@@ -36,7 +36,10 @@
     "three:episode:resume": "tsx scripts/three-episode/resume.ts",
     "three:episode:preview": "node scripts/three-episode/preview-server.mjs",
     "verify:three-workspace": "tsx scripts/testing/verify-three-workspace.ts",
-    "test:cloud-orchestration": "node --test scripts/cloud/*.test.mjs"
+    "test:cloud-orchestration": "node --test scripts/cloud/*.test.mjs",
+    "dev:editor": "pnpm --filter @worldkit/three-playground dev",
+    "build:editor": "pnpm --filter @worldkit/three-playground build",
+    "test:editor:browser": "tsx apps/three-playground/scripts/browser-smoke.ts"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",
