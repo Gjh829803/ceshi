@@ -109,7 +109,7 @@ it('returns a readable schema guide first and actual source contracts only when 
   expect(guide.availableSections).toContain('training');
   expect(Buffer.byteLength(JSON.stringify(guide))).toBeLessThan(12000);
   const declarations = await schema(tools, { topic: 'mounted-interaction', sections: ['training'] });
-  expect(declarations.trainingSourceContracts?.['horse.ts']).toContain('class TrainingHorse');
+  expect(declarations.trainingSourceContracts?.['training/horse.ts']).toContain('class TrainingHorse');
   expect(declarations).not.toHaveProperty('sdkGuide');
   const complete = await schema(tools, { topic: 'mounted-interaction', sections: ['all'] });
   expect(complete.sdkContracts).toBeDefined();

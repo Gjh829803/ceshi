@@ -6,8 +6,8 @@ import { renderAssetThumbnails } from './ui/thumbnails';
 import { mountInspector } from './platform/inspector';
 import { SPECS } from './config';
 import { getMap,MAPS } from './environment/maps';
-import { applyControlProfile, applyCameraProfile, readEffectiveControlProfile } from './platform/profile-runtime';
-import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfileV1 } from './platform/profiles';
+import { applyControlProfile, applyCameraProfile, readEffectiveProfile } from './platform/profile-runtime';
+import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfile } from './platform/profiles';
 import { buildVehicle } from './models';
 import { FrameRateMeter } from './fps';
 import { FramePacingPanel } from './fps-hud';
@@ -59,10 +59,10 @@ const sdkPresentation=sdk.createPresentation({container:canvas.parentElement!});
 // Otherwise the transparent orbit surface intercepts reset/quick-slot clicks.
 for(const element of viewportUI)sdkPresentation.ui.mount(element);
 const interactionVisuals=buildInteractionVisuals(scene);
-const profiles=new Map<string,AssetProfileV1>();
+const profiles=new Map<string,AssetProfile>();
 const exportedProfiles=new Map<string,string>();
 for(const id of ['person',...SPECS.map(s=>s.id)]){
-  const project=(effectiveProfiles as {profiles:AssetProfileV1[]}).profiles.find(p=>p.assetId===id);
+  const project=(effectiveProfiles as {profiles:AssetProfile[]}).profiles.find(p=>p.assetId===id);
   let profile=project??getDefaultProfile(id)!;
   exportedProfiles.set(id,JSON.stringify(profile));
   // Local overrides are visibly marked and never silently included in a delivery.
@@ -159,7 +159,7 @@ const humanPanel=mountHumanoidLab(document.body,{
 const equipmentPanel=mountEquipmentPanel(document.body,character,accessories,onPanelChange);
 const workbench=mountWorkbench(document.body,{
   onOpenChange:onPanelChange,onPrepare:prepareSelection,getMapId:()=>session.map.id,getAssetId:()=>sim.vehicle?.spec.id??'person',
-  getProfile:id=>readEffectiveControlProfile(runtime,profiles.get(id)!),
+  getProfile:id=>readEffectiveProfile(runtime,profiles.get(id)!),
   applyProfile:value=>{const profile=parseAssetProfile(value);applyControlProfile(runtime,profile);profiles.set(profile.assetId,profile);syncCameraProfile(true);if(paused)renderPausedState();},
   saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
   resetProfile:id=>{clearAssetProfile(localStorage,id);const profile=getDefaultProfile(id)!;profiles.set(id,profile);applyControlProfile(runtime,profile);syncCameraProfile(true);if(paused)renderPausedState();},
@@ -174,7 +174,7 @@ function movementState(){
 const inspector=mountInspector(el('inspectorHost'),{
   getAssetId:()=>sim.vehicle?.spec.id??'person',
   getSubject:()=>({name:sim.vehicle?.spec.name??'主体人物',subtitle:sim.vehicle?`${sim.vehicle.spec.en} / ${sim.vehicle.spec.kernel}`:'TRAVERSAL / 101 BONES · 48 CLIPS',state:paused?'已暂停':sim.vehicle?'驾驶中':character.clipLabel,color:sim.vehicle?.spec.color??'#b4d7c2'}),
-  getProfile:id=>readEffectiveControlProfile(runtime,profiles.get(id)!),
+  getProfile:id=>readEffectiveProfile(runtime,profiles.get(id)!),
   applyProfile:(value,tab)=>{const profile=parseAssetProfile(value);if(tab==='movement')applyControlProfile(runtime,profile);else applyCameraProfile(runtime,profile);profiles.set(profile.assetId,profile);if(paused)renderPausedState();},
   saveProfile:profile=>{saveAssetProfile(localStorage,profile);},
   resetProfile:(id,tab)=>{const profile=structuredClone(profiles.get(id)!),defaults=getDefaultProfile(id)!;if(tab==='movement'){profile.control=defaults.control;applyControlProfile(runtime,profile);}else {profile.camera=defaults.camera;applyCameraProfile(runtime,profile);}profiles.set(id,profile);if(paused)renderPausedState();},

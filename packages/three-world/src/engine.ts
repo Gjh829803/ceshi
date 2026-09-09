@@ -1,7 +1,8 @@
 import { emptyInput } from './training/simulation';
 import { trainingHost } from './training/host-access';
 import * as THREE from 'three';
-import { DEFAULT_CHARACTER_OPTIONS, ThreePhysics } from './physics.js';
+import { ThreePhysics } from './physics.js';
+import {DEFAULT_CHARACTER_OPTIONS} from './config/physics';
 import { ThreeNavigation } from './navigation.js';
 import { ThreeCameraRig, type CameraRigInput } from './camera.js';
 import { ownViewport } from './viewport.js';

@@ -168,7 +168,7 @@ describe('Three tool operations and truthful submission', () => {
     try{
       const schema=await service.schema('training');
       expect(schema.sdkGuide).toContain('defaultPerspective');expect(schema.sdkGuide).toContain('keyboardToggleEnabled');
-      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.trainingSourceContracts?.['runtime.ts']).toContain('TrainingViewSettings');
+      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.trainingSourceContracts?.['training/runtime.ts']).toContain('TrainingViewSettings');
       const check=new Ajv({strict:false}).compile(WORLD_COMMAND_SCHEMA);
       expect(check({type:'training.profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(true);
       expect(check({type:'training.profile',profile:{view:{defaultPerspective:'invented'}}})).toBe(false);

@@ -1,12 +1,12 @@
+import {applyVehicleCameraRoll} from './camera-roll';
 import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-world/camera-collision';
 import { probeTrainingCamera } from './camera-queries';
 import { Simulation, angleDelta, clamp, damp } from './simulation';
 import type { MotionPose } from './presentation';
-import { DEFAULT_CAMERA_TUNING, parseCameraTuning, type CameraTuning } from './platform/session';
+import { DEFAULT_CAMERA_TUNING, HUMANOID_CAMERA_DEFAULTS, CHARACTER_CAMERA_DISTANCE_METERS, parseCameraTuning, type CameraTuning } from '../config/camera';
 import type { EnvironmentQueries } from './environment/queries';
-const HUMANOID_CAMERA_DEFAULTS={...DEFAULT_CAMERA_TUNING,followResponsePerSecond:7,baseFovDegrees:58,collisionRadiusMeters:.2};
 interface CameraPresentationPose {
   position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
   up:T.Vector3; fov:number; near:number;
@@ -70,11 +70,16 @@ export class FollowCamera {
 
   tuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
   private humanoidTuning:CameraTuning={...HUMANOID_CAMERA_DEFAULTS};
+  private vehicleTuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
+  private activeSubject:'character'|'vehicle'='character';
+  private selectTuning(sim:Simulation):CameraTuning{return sim.vehicle?this.vehicleTuning:this.humanoidTuning;}
+  getEffectiveTuning(sim:Simulation):CameraTuning{return {...this.selectTuning(sim)};}
   /** Explicit overrides apply independently; distance never selects unrelated defaults. */
   configureTuning(overrides:Partial<CameraTuning>):void {
     const tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...overrides});
     const humanoid=parseCameraTuning({...HUMANOID_CAMERA_DEFAULTS,...overrides});
-    this.tuning=tuning;this.humanoidTuning=humanoid;
+    this.vehicleTuning=tuning;this.humanoidTuning=humanoid;
+    this.tuning=this.activeSubject==='character'?humanoid:tuning;
   }
   baseDistance?:number;
   yaw=0;pitch=.3;zoom=1;mode=0;lastOrbit=-10;target=new T.Vector3();initialized=false;lastActive=-2;distance=6;
@@ -132,8 +137,9 @@ export class FollowCamera {
     if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
     else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
   }
-  reset(sim:Simulation){this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
+  reset(sim:Simulation){this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
   update(sim:Simulation,dt:number,pose?:MotionPose){
+    this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);
     this.collisionHumanoid=sim.vehicle?undefined:sim.humanoid;
     const v=sim.vehicle,body=pose??v??sim.player,speed=body.velocity.length(),position=body.position,yaw=pose?.yaw??v?.yaw??sim.player.yaw,rotation=pose?.rotation??v?.rotation;
     if(this.revision!==sim.teleportRevision){this.revision=sim.teleportRevision;this.reset(sim);}
@@ -183,10 +189,10 @@ export class FollowCamera {
     const fov=damp(this.camera.fov,this.tuning.baseFovDegrees+Math.min(12,speed*.23),3,dt);if(Math.abs(fov-this.camera.fov)>.0001){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
   }
   private characterDistance(){
-    const configured=this.baseDistance??8.8;
+    const configured=this.baseDistance??CHARACTER_CAMERA_DISTANCE_METERS;
     // Preserve the source's indoor default even when the UI supplies the
     // unchanged 8.8 m asset baseline; non-default user tuning takes precedence.
-    return configured===8.8?this.environment.map.characterCameraDistanceMeters??configured:configured;
+    return configured===CHARACTER_CAMERA_DISTANCE_METERS?this.environment.map.characterCameraDistanceMeters??configured:configured;
   }
   private updateShoulder(sim:Simulation,dt:number,pose?:MotionPose):void {
     const v=sim.vehicle,h=sim.humanoid,position=pose?.position??v?.position??sim.player.position;
@@ -238,6 +244,7 @@ export class FollowCamera {
       this.localRotation.set(this.pitch,this.seatLookYaw,0,'YXZ');
       this.direction.set(0,0,1).applyEuler(this.localRotation).applyQuaternion(rotation);
       this.up.set(0,1,0).applyQuaternion(rotation);
+      applyVehicleCameraRoll(this.up,this.direction);
     }else{
       const h=sim.humanoid;
       // 稳定眼位随真实胶囊蹲伏/匍匐变化，不继承翻滚动画的旋转或头部摆动。

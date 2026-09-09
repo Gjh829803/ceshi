@@ -1,15 +1,16 @@
-import type {Mode} from './config';
+import type {Mode} from '../training/config';
 
 /** Speeds: m/s; accelerations: m/s²; exponential response/damping: 1/s. */
-export const CONTROL_RANGES={
- speed:[0,200],accel:[0,100],grip:[0,100],steer:[0,30],
- maxSpeed:[0,250],reverseSpeed:[0,100],slowSpeed:[0,100],groundSpeed:[0,100],
- coastDeceleration:[0,100],brakeDeceleration:[0,200],brakeDamping:[0,100],groundDeceleration:[0,100],directionChangeDeceleration:[0,200],
- steeringResponse:[0,100],steeringReturn:[0,100],
- verticalAcceleration:[0,100],linearDamping:[0,100],verticalDamping:[0,100],
- drag:[0,100],dragQuadratic:[0,1],pitchResponse:[0,50],rollResponse:[0,50],
- throttleResponse:[0,10],minimumSpeed:[0,100],launchSpeed:[0,100],jumpSpeed:[0,30],
-} as const;
+const range=(minimum:number,maximum:number)=>Object.freeze([minimum,maximum] as const);
+export const CONTROL_RANGES=Object.freeze({
+ speed:range(0,200),accel:range(0,100),grip:range(0,100),steer:range(0,30),
+ maxSpeed:range(0,250),reverseSpeed:range(0,100),slowSpeed:range(0,100),groundSpeed:range(0,100),
+ coastDeceleration:range(0,100),brakeDeceleration:range(0,200),brakeDamping:range(0,100),groundDeceleration:range(0,100),directionChangeDeceleration:range(0,200),
+ steeringResponse:range(0,100),steeringReturn:range(0,100),
+ verticalAcceleration:range(0,100),linearDamping:range(0,100),verticalDamping:range(0,100),
+ drag:range(0,100),dragQuadratic:range(0,1),pitchResponse:range(0,50),rollResponse:range(0,50),
+ throttleResponse:range(0,10),minimumSpeed:range(0,100),launchSpeed:range(0,100),jumpSpeed:range(0,30),
+});
 export interface TrainingControl {
  speed:number;accel:number;grip:number;steer:number;
  maxSpeed:number;reverseSpeed:number;slowSpeed:number;groundSpeed:number;
@@ -21,8 +22,10 @@ export interface TrainingControl {
 }
 export type ControlKey=keyof TrainingControl;
 export type CoreControl=Pick<TrainingControl,'speed'|'accel'|'grip'|'steer'>;
+/** Calibrated Playground authoring values; movement conversion remains in the controller. */
+export const DEFAULT_CHARACTER_CONTROL_BASE:Readonly<CoreControl>=Object.freeze({speed:3.1,accel:14,grip:5,steer:8});
 export type ExtendedControl=Omit<TrainingControl,keyof CoreControl>;
-export const CONTROL_SCHEMA_PROPERTIES=Object.fromEntries(Object.entries(CONTROL_RANGES).map(([key,[minimum,maximum]])=>[key,{type:'number',minimum,maximum}]));
+export const CONTROL_SCHEMA_PROPERTIES=Object.freeze(Object.fromEntries(Object.entries(CONTROL_RANGES).map(([key,[minimum,maximum]])=>[key,Object.freeze({type:'number',minimum,maximum})])));
 
 /** Materialize family constants once per instance. Acceleration edits must not
  * silently rewrite independent coasting or braking settings. */

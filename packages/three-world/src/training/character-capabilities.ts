@@ -1,5 +1,5 @@
 import {TRAVERSAL_LIMITS,CROUCH_HALF,RADIUS,type HumanoidController} from './humanoid/controller';
-import {SURFACE_TUNING} from './humanoid/surface-actions';
+import {SURFACE_TUNING} from '../config/actions';
 import {ACTION_TUNING,SKILL_DEFINITIONS,type SkillId} from './humanoid/action-schema';
 import type {HumanoidInput} from './simulation';
 import {SWIM_ROOT_DEPTH,SWIM_SPEED,SWIM_FAST_SPEED} from './humanoid/water-physics';

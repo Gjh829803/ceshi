@@ -5,6 +5,13 @@ Read [the architecture](docs/three-sdk-architecture.md), then the relevant
 or [Episode](scripts/three-episode/README.md) guide. Public contracts and their
 actual consumers are authoritative.
 
+## Development branch
+
+`main` is the default development branch and pull request target. Start new work
+from the latest `origin/main`. The former integration branch
+`codex/three-sdk-data-production-20260907` is historical and is no longer the
+development base; dated review records retain their original branch identities.
+
 ## Design intent
 
 Read [the design background and tradeoffs](docs/three-sdk-architecture.md#设计背景与取舍)

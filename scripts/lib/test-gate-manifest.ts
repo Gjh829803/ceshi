@@ -24,6 +24,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/camera.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/capture-selection-integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/capture-selection.test.ts", lane: "contract" },
+  { path: "packages/three-world/src/config/configuration.test.ts", lane: "contract" },
   { path: "packages/three-world/src/episode-locomotion.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/episode.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-asset.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

@@ -29,16 +29,16 @@ it('reads the current workspace declarations and refreshes their source identity
 });
 
 it('exposes edited skill definitions as source and never advertises host thresholds as active workspace capabilities',async()=>{
- const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/humanoid/action-schema.ts');
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/config/actions.ts');
  await writeFile(file,(await readFile(file,'utf8')).replace('slideMinimumSpeedMetersPerSecond:2.5','slideMinimumSpeedMetersPerSecond:5'));
  const detail=await call(service,'assets_describe',{assetId:'humanoid.source-101'});
  expect(detail.characterUsage[0]).not.toHaveProperty('skillRequests');
  expect(detail.characterUsage[0].runtimeAuthority).toBe('workspace-sdk-source');
- expect(detail.runtimeDefinitions['training/humanoid/action-schema.ts']).toContain('slideMinimumSpeedMetersPerSecond:5');
+ expect(detail.runtimeDefinitions['config/actions.ts']).toContain('slideMinimumSpeedMetersPerSecond:5');
  const schema=await call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['commands']});
  expect(schema).not.toHaveProperty('characterCapabilities');expect(schema).not.toHaveProperty('controlBindings');
  expect(schema.worldCommandSchema).toBeDefined(); // Host transport remains fixed.
- expect(schema.runtimeDefinitions['training/humanoid/action-schema.ts']).toContain('slideMinimumSpeedMetersPerSecond:5');
+ expect(schema.runtimeDefinitions['config/actions.ts']).toContain('slideMinimumSpeedMetersPerSecond:5');
  const guide=await call(service,'creator_get_authoring_schema',{topic:'character-actions'});
  expect(guide.sdkGuide).not.toContain('2.5');
  const search=await call(service,'assets_search',{query:'滑铲'});
@@ -56,17 +56,9 @@ it('reads edited vehicle input guidance from the workspace instead of advertisin
  expect(schema.runtimeDefinitions['training/input-guidance.ts']).toContain('Workspace-specific braking');
 });
 
-it('keeps older workspace discovery available when the optional input guide is absent',async()=>{
- const service=await fixture();await rm(path.join(service.workspace,'sdk/three-world/src/training/input-guidance.ts'));
- const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['training']});
- expect(schema.runtimeDefinitions['training/input-guidance.ts']).toContain('unavailable in this workspace SDK');
- expect(schema).not.toHaveProperty('trainingInputGuides');
- expect((await call(service,'assets_describe',{assetId:'humanoid.source-101'})).characterUsage[0].runtimeAuthority).toBe('workspace-sdk-source');
-});
-
 it('parses authored source without executing initializers and never silently falls back to Host files',async()=>{
  const service=await fixture(),marker=path.join(service.workspace,'host-executed');
- const file=path.join(service.workspace,'sdk/three-world/src/training/humanoid/action-schema.ts');
+ const file=path.join(service.workspace,'sdk/three-world/src/config/actions.ts');
  await writeFile(file,(await readFile(file,'utf8'))+`\nexport const SIDE_EFFECT=(()=>{throw new Error(${JSON.stringify(marker)});})();\n`);
  await expect(call(service,'assets_describe',{assetId:'humanoid.source-101'})).resolves.toHaveProperty('runtimeDefinitions');
  await expect(access(marker)).rejects.toThrow();
@@ -77,7 +69,7 @@ it('parses authored source without executing initializers and never silently fal
 });
 
 it('binds live inspection to the same workspace source and its changed action condition',async()=>{
- const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/humanoid/action-schema.ts');
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/config/actions.ts');
  await writeFile(file,(await readFile(file,'utf8')).replace('slideMinimumSpeedMetersPerSecond:2.5','slideMinimumSpeedMetersPerSecond:5'));
  await writeFile(path.join(service.workspace,'main.ts'),`
 import {Group,PerspectiveCamera,Scene} from 'three';

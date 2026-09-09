@@ -4,7 +4,7 @@ import type {HumanoidActionContext} from './types';
 import type {ClimbSurface,SurfaceCommands,SurfacePose} from './surface-types';
 import runtime from './action-runtime.json';
 
-export const SURFACE_TUNING=Object.freeze({standingHeightMeters:1.68,proneHeightMeters:.66,climbHeightMeters:1.76,proneSpeedMetersPerSecond:.85,climbVerticalSpeedMetersPerSecond:.72,climbLateralSpeedMetersPerSecond:.42,entryDistanceMinimumMeters:.28,entryDistanceMaximumMeters:.8});
+import {SURFACE_TUNING} from '../../config/actions';
 const DT=1/60,RADIUS=.28,STAND_HEIGHT=SURFACE_TUNING.standingHeightMeters,PRONE_HEIGHT=SURFACE_TUNING.proneHeightMeters,CLIMB_HEIGHT=SURFACE_TUNING.climbHeightMeters;
 const UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1};
 const META=new Map(runtime.clips.map(clip=>[clip.id,clip]));

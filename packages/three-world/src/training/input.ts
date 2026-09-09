@@ -1,27 +1,7 @@
 import type { HumanoidInput, Input } from './simulation';
 
-/** Keyboard, HUD and recording admission all read this semantic binding table. */
-export const INPUT_BINDINGS = {
-  forward:{codes:['KeyW'],label:'前进'}, backward:{codes:['KeyS'],label:'后退'},
-  left:{codes:['KeyA'],label:'左移'}, right:{codes:['KeyD'],label:'右移'},
-  sprint:{codes:['ShiftLeft','ShiftRight'],label:'冲刺 / 加速'},
-  jump:{codes:['Space'],label:'跳跃 / 翻越 / 起身；攀爬时尝试翻上'},
-  crouch:{codes:['KeyC','ControlLeft','ControlRight'],label:'蹲伏 / 站立；冲刺时滑铲；攀爬时松手'},
-  prone:{codes:['KeyZ'],label:'匍匐 / 起身'}, roll:{codes:['KeyQ'],label:'翻滚'},
-  interact:{codes:['KeyE'],label:'拾取 / 坐下 / 起身 / 进入攀爬'},
-  putDown:{codes:['KeyG'],label:'放下物件'}, vehicle:{codes:['KeyF'],label:'上下载具 / 坐骑'},
-  swimStyle:{codes:[],label:'切换泳姿（动作菜单，可自定义按键）'},
-  slow:{codes:[],label:'慢走（可自定义按键）'},
-  cameraToggle:{codes:['KeyT'],label:'第一 / 第三人称切换（需启用）'},
-  cameraLeft:{codes:['ArrowLeft'],label:'视角左转 / 飞行左移'},
-  cameraRight:{codes:['ArrowRight'],label:'视角右转 / 飞行右移'},
-  cameraUp:{codes:['ArrowUp'],label:'视角向上 / 飞行俯仰'},
-  cameraDown:{codes:['ArrowDown'],label:'视角向下 / 飞行俯仰'},
-} as const;
-export type ControlAction=keyof typeof INPUT_BINDINGS;
-export type KeyBindings=Readonly<Record<ControlAction,readonly string[]>>;
-export const SUPPORTED_KEY_CODES:readonly string[]=Object.freeze([...Array.from({length:26},(_,i)=>`Key${String.fromCharCode(65+i)}`),...Array.from({length:10},(_,i)=>`Digit${i}`),'Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','ArrowUp','ArrowDown','ArrowLeft','ArrowRight']);
-export const DEFAULT_KEY_BINDINGS:KeyBindings=Object.freeze(Object.fromEntries(Object.entries(INPUT_BINDINGS).map(([id,b])=>[id,Object.freeze([...b.codes])]))) as KeyBindings;
+import {INPUT_BINDINGS,DEFAULT_KEY_BINDINGS,SUPPORTED_KEY_CODES,type ControlAction,type KeyBindings} from '../config/input';
+export {INPUT_BINDINGS,DEFAULT_KEY_BINDINGS,SUPPORTED_KEY_CODES,type ControlAction,type KeyBindings} from '../config/input';
 export function createKeyBindings(overrides:Partial<KeyBindings>={},base:KeyBindings=DEFAULT_KEY_BINDINGS):KeyBindings {
   if(!overrides||typeof overrides!=='object'||Array.isArray(overrides))throw new Error('KEY_BINDINGS_INVALID');
   const result={...base},seen=new Map<string,string>();

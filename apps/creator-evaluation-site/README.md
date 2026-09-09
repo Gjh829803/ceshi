@@ -17,11 +17,11 @@ Keep display configuration in `RUN_ROOT/evaluation-publication.json`:
 {
   "schemaVersion": 1,
   "kind": "three-creator-host-publication",
-  "runId": "three-sdk-actions-ten-20260908",
+  "runId": "three-sdk-actions-example",
   "title": "Three SDK · 动作与主体十例评测",
   "description": "真实云端生成、动作场景条件与主体绑定验证。",
   "sourceIdentity": {
-    "branch": "codex/three-sdk-data-production-20260907"
+    "branch": "main"
   },
   "cases": {}
 }
