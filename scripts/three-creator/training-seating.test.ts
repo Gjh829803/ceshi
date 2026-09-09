@@ -4,11 +4,11 @@ import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld,training} from '@worldkit/three';
 import {SourceCharacter} from '@worldkit/three/testing';
-import {buildVehicle} from '../../examples/three-creator/sdk-capabilities/models';
-import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
-import {getMap} from '../../examples/three-creator/sdk-capabilities/environment/maps';
-import {prepareCourse} from '../../examples/three-creator/sdk-capabilities/platform/scenarios';
-vi.mock('../../examples/three-creator/sdk-capabilities/assets/resources',()=>({resolveTrainingResource:()=>{throw new Error('Unexpected creature resource load in road seating test');},definitions:{}}));
+import {buildVehicle} from '../../shared/training-content/models';
+import {SPECS} from '../../shared/training-content/config';
+import {getMap} from '../../shared/training-content/environment/maps';
+import {prepareCourse} from '../../shared/training-content/platform/scenarios';
+vi.mock('../../shared/training-content/assets/resources',()=>({resolveTrainingResource:()=>{throw new Error('Unexpected creature resource load in road seating test');},definitions:{}}));
 
 it('keeps the actual seated pelvis above car and motorcycle cushions and the first-person camera at the raised head',async()=>{
  const assetRoot=new URL('../../assets/three-creator/training/humanoid/source/',import.meta.url);

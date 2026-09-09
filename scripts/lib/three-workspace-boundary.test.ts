@@ -51,7 +51,7 @@ it("checks real imports and every dependency scope while ignoring negative fixtu
     'import "@whitebox-world/camera-collision/testing";',
   ].join("\n");
   const manifest = { name: "fixture", dependencies: { "@babylonjs/havok": "1" }, devDependencies: { "@whitebox-world/dev-old": "*" }, peerDependencies: { "@whitebox-world/peer-old": "*" }, optionalDependencies: { "@whitebox-world/optional-old": "*" } };
-  const violations = checkThreeWorkspaceFiles({ ...retained, "package.json": JSON.stringify(manifest), "scripts/use.ts": source, "docs/history.ts": 'import "@babylonjs/historical";' });
+  const violations = checkThreeWorkspaceFiles({ ...retained, "package.json": JSON.stringify(manifest), "shared/training-content/use.ts": source, "docs/history.ts": 'import "@babylonjs/historical";' });
   expect(violations.map(({ specifier }) => specifier).sort()).toEqual([
     "@babylonjs/core", "@babylonjs/havok", "@whitebox-world/compiler", "@whitebox-world/dev-old",
     "@whitebox-world/native-babylon", "@whitebox-world/optional-old", "@whitebox-world/peer-old",

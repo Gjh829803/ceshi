@@ -635,8 +635,8 @@ geometry registered under another ID to restore it. Do not mutate a published
 geometry template. Geometry IDs are discoverable; an effect cannot secretly edit
 physics geometry. Async procedural geometry uses scope.replaceGeometry.
 
-The complete sdk-capabilities example combines these features with a reusable
-character, complete custom fox, real stairs, ramp, NPC controls and reset.
+The React editor in `apps/three-playground` uses the scene and vehicle modules in
+`shared/training-content`. Runnable integration examples live in `examples/three-creator`.
 
 <!-- topic:presentation -->
 ## Shared shadow settings

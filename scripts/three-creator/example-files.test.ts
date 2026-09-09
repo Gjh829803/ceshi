@@ -10,7 +10,7 @@ import {EPISODE_SCHEMA} from './contracts.js';
 import {createAssetPolicySnapshot, assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
 describe('modular training example discovery',()=>{
- const root=path.resolve('examples/three-creator/sdk-capabilities');
+ const root=path.resolve('shared/training-content');
  it('lists nested dependencies instead of pretending four files are complete',async()=>{
   const result=await readExampleFiles(root,'training-assets');expect(result.fileManifest.some(f=>f.path==='environment/maps.ts')).toBe(true);
   expect(result.fileManifest.some(f=>f.path==='ui/workspace.ts')).toBe(false);

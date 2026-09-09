@@ -27,7 +27,7 @@ function catalogPlugin(): Plugin {
       await readFile(
         path.join(
           repository,
-          "examples/three-creator/sdk-capabilities/project.json",
+          "shared/training-content/project.json",
         ),
         "utf8",
       ),

@@ -1,7 +1,7 @@
 # React Playground
 
 The maintainer editor uses React and shadcn/ui form components. It reuses the
-Three SDK and the scene/configuration modules in `examples/three-creator/sdk-capabilities`.
+Three SDK and the scene/configuration modules in `shared/training-content`.
 The shared directory contains scene modules and configuration only; the former
 DOM editor has been removed. Creator uses the standalone training-independent example.
 

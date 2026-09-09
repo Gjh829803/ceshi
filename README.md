@@ -34,7 +34,8 @@ pnpm dev
 
 默认启动 React + shadcn/ui 编辑器，地址为 `http://127.0.0.1:5178/`，支持热更新。
 `pnpm dev:example` 在 `http://127.0.0.1:5175/` 预览独立 SDK 集成示例，不提供编辑器。
-项目参数保存在 `profiles.json`，界面支持导出。
+编辑器位于 `apps/three-playground`，共享场景、模型和配置位于 `shared/training-content`。
+项目参数保存在 `shared/training-content/profiles.json`，界面支持导出。
 `?debugProfiles=1` 可加载浏览器本地调试参数，正式交付使用项目配置。
 
 独立集成示例位于 [character-actions](examples/three-creator/character-actions/main.ts)

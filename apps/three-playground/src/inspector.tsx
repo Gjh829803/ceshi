@@ -15,7 +15,7 @@ import type {
   AssetProfile,
   ProfileCameraTuning,
   ControlTuning,
-} from "../../../examples/three-creator/sdk-capabilities/platform/profiles";
+} from "../../../shared/training-content/platform/profiles";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Slider } from "./components/ui/slider";

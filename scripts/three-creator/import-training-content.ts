@@ -12,7 +12,7 @@ const donor = path.resolve(process.argv[2] ?? '');
 const expected = 'c293622a63716b8473cc2a95cb485c515265945e';
 if (execFileSync('git', ['rev-parse', 'HEAD'], { cwd: donor, encoding: 'utf8' }).trim() !== expected) throw new Error('TRAINING_DONOR_VERSION_MISMATCH');
 const destination = path.join(REPOSITORY_ROOT, 'assets/three-creator/training');
-const content = path.join(REPOSITORY_ROOT, 'examples/three-creator/sdk-capabilities');
+const content = path.join(REPOSITORY_ROOT, 'shared/training-content');
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 async function walk(dir: string): Promise<string[]> {
   const result: string[] = [];

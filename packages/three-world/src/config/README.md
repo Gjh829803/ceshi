@@ -35,7 +35,7 @@ use the same settings, including new lights after map replacement. This is a
 one-time application; scene code retains light placement, tracking and disposal.
 Mesh `castShadow`/`receiveShadow` flags remain authored Three properties.
 
-Playground imports `examples/three-creator/sdk-capabilities/presentation.json` and
+Playground imports `shared/training-content/presentation.json` and
 passes its `shadows` through the exported `resolveShadowSettings()` parser. An
 empty object inherits SDK defaults; `{"shadows":{"enabled":false}}` turns them off.
 Other projects can import their own JSON the same way. These are build-time

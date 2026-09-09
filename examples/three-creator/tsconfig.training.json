@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.json","include":["sdk-capabilities/**/*.ts","training-independent/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}
+{"extends":"../../tsconfig.json","include":["../../shared/training-content/**/*.ts","training-independent/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}

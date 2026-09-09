@@ -26,7 +26,7 @@ describe("React workbench and humanoid controls", () => {
 
       import { mountWorkbench } from './apps/three-playground/src/workbench.tsx';
       import { mountHumanoidLab } from './apps/three-playground/src/humanoid-panel.tsx';
-      import { getDefaultProfile } from './examples/three-creator/sdk-capabilities/platform/profiles.ts';
+      import { getDefaultProfile } from './shared/training-content/platform/profiles.ts';
       import { training } from '@worldkit/three';
       let profile=getDefaultProfile('person'), auto=false, smoothing=true, debug='off';
       const events=[];
