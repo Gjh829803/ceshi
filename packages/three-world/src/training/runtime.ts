@@ -416,7 +416,7 @@ export class TrainingRuntime implements PhysicsPort {
   }
   private advanceOwned(input:WorldInput,dt:number,pointer:CameraRigInput={}):void{
     if(this.disposed)throw new Error('TRAINING_DISPOSED');
-    if(input.cameraTogglePressed&&this.profile.view.keyboardToggleEnabled&&!this.authored)this.setCameraModeOwned(this.followCamera.mode===1?0:1);
+    if(input.cameraTogglePressed&&this.profile.view.keyboardToggleEnabled&&!this.authored)this.setCameraModeOwned((this.followCamera.mode+1)%3 as 0|1|2);
     if(!this.authored)this.followCamera.beforeFixedUpdate();
     const previousBinding=this.presentation.active,previousRevision=this.presentation.revision;
     this.presentation.beforeStep(this.simulation);

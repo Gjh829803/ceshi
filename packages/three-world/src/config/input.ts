@@ -11,7 +11,7 @@ export const INPUT_BINDINGS = Object.freeze({
   putDown:binding(['KeyG'],'放下物件'), vehicle:binding(['KeyF'],'上下载具 / 坐骑'),
   swimStyle:binding([],'切换泳姿（动作菜单，可自定义按键）'),
   slow:binding([],'慢走（可自定义按键）'),
-  cameraToggle:binding(['KeyT'],'第一 / 第三人称切换（需启用）'),
+  cameraToggle:binding(['KeyT'],'切换视角（需启用）'),
   cameraLeft:binding(['ArrowLeft'],'视角左转 / 飞行左移'),
   cameraRight:binding(['ArrowRight'],'视角右转 / 飞行右移'),
   cameraUp:binding(['ArrowUp'],'视角向上 / 飞行俯仰'),

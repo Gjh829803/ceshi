@@ -1,6 +1,6 @@
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
-import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,PCFShadowMap,type WebGLRenderer} from 'three';
 import {createMountedFixture} from './mounted-test-fixture';
 import {FirstPersonBody} from './first-person-body';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -136,9 +136,9 @@ describe('SDK training runtime',()=>{
   const world=await fixture();try{const r=world.training!;
    r.applyProfile({view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});
    expect(r.snapshot()).toMatchObject({cameraMode:1,view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}});
-   world.step({cameraTogglePressed:true},3);expect(r.snapshot().cameraMode).toBe(0);
+   world.step({cameraTogglePressed:true},3);expect(r.snapshot().cameraMode).toBe(2);
    r.applyProfile({view:{keyboardToggleEnabled:false}});
-   world.step({cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
+   world.step({cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(2);
    r.setCameraMode(2);expect(r.snapshot().cameraMode).toBe(2);
    await world.reset();expect(r.snapshot().cameraMode).toBe(1);
    expect(r.exportProfile().view).toEqual({defaultPerspective:'first-person',keyboardToggleEnabled:false});
@@ -153,7 +153,8 @@ describe('SDK training runtime',()=>{
    r.applyProfile({view:{keyboardToggleEnabled:true}});
    engine.advance(1/120,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
    engine.advance(1/120,{});expect(r.snapshot().cameraMode).toBe(1);
-   engine.advance(3/60,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
+   engine.advance(3/60,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(2);
+   engine.advance(1/60,{cameraTogglePressed:true});expect(r.snapshot().cameraMode).toBe(0);
    engine.advance(1/120,{cameraTogglePressed:true});world.stop();world.step({});expect(r.snapshot().cameraMode).toBe(0);
    world.useAuthoredCamera();world.step({cameraTogglePressed:true});expect(r.cameraMode).toBe('authored');
   }finally{world.dispose();}
@@ -165,6 +166,18 @@ describe('SDK training runtime',()=>{
   keyboard.keyUp('KeyT');keyboard.keyDown('KeyT');keyboard.clear();expect(keyboard.sample().cameraTogglePressed).toBe(false);
   keyboard.setKeyBindings({cameraToggle:['KeyV']});keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(false);
   keyboard.keyDown('KeyV');expect(keyboard.sample().cameraTogglePressed).toBe(true);
+ });
+ it.each([false,true])('cycles T through all three views once per press while mounted=%s',async mounted=>{
+  const world=await fixture();try{const r=world.training!;
+   r.applyProfile({view:{keyboardToggleEnabled:true}});
+   if(mounted){r.approach('car-1');expect(r.enter('car-1')).toBe(true);world.step({},31);}
+   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setTrainingMode(()=>mounted);keyboard.enabled=true;
+   for(const expected of [1,2,0,1]){
+    keyboard.keyDown('KeyT');world.step(keyboard.sample(),3);expect(r.snapshot().cameraMode).toBe(expected);
+    keyboard.keyDown('KeyT',true);world.step(keyboard.sample());expect(r.snapshot().cameraMode).toBe(expected);
+    keyboard.keyUp('KeyT');
+   }
+  }finally{world.dispose();}
  });
  it('preserves authored camera ownership across map replacement and reset with a saved first-person preference',async()=>{
   const world=await fixture();try{const r=world.training!;
@@ -474,7 +487,7 @@ describe('SDK training runtime',()=>{
  it('uses the Episode lease, frame metadata and fixed solver for mounted recordings',async()=>{
   const win=new EventTarget(),doc=Object.assign(new EventTarget(),{defaultView:win,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(win,{document:doc});vi.stubGlobal('window',win);vi.stubGlobal('requestAnimationFrame',vi.fn(()=>1));vi.stubGlobal('cancelAnimationFrame',vi.fn());
   const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:doc,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:()=> 'data:image/png;base64,dGVzdA=='});let ratio=1;const size=new Vector2(800,600);
-  const renderer={domElement:canvas,render:vi.fn(),getSize:(out:Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(r:number)=>{ratio=r;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as WebGLRenderer;
+  const renderer={shadowMap:{enabled:false,type:PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(r:number)=>{ratio=r;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as WebGLRenderer;
   const world=await fixture(renderer);try{await world.start();const port=(win as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__.episode!;
    const start={positionWorldMetersXYZ:[-20,.03,-20] as const,facingYawRadians:Math.PI,training:{vehicleInstanceId:'car-1',mounted:true,cameraMode:2 as const,velocityWorldMetersPerSecondXYZ:[0,0,4] as const}};
    expect(port.capabilities().training?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);await port.prepareSegment(start,{widthPixels:640,heightPixels:360});

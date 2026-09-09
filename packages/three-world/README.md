@@ -431,9 +431,9 @@ const world = await createHumanoidWorld({scene, camera, canvas, map,
 world.setKeyBindings({cameraToggle: ['KeyV']});
 ```
 
-Defaults are `third-person` and `keyboardToggleEnabled: false`. The switch toggles
-only first/third person; it works on foot and while driving. If the current view
-is shoulder, the first press selects first person. Held-key repeats, paused worlds
+Defaults are `third-person` and `keyboardToggleEnabled: false`. Each press cycles
+third person → first person → shoulder → third person, matching the Playground
+camera button; it works on foot and while driving. Held-key repeats, paused worlds
 and focused UI controls do not toggle. Authored camera ownership is preserved.
 Read effective configuration from `world.snapshot().training.view` or
 `world.training.exportProfile()`. Reset and map replacement restore the configured
@@ -466,8 +466,9 @@ offsets do not move the eye. On foot it follows physical posture with a stable
 horizon; mounted it uses the animated rider's eye and the vehicle's orientation,
 with independent seat-local look (±150° yaw). Steering still comes from vehicle
 input. It uses the existing single camera/input owner, including Episode stepping.
-The capabilities playground enables **T** for first/third-person switching; its camera menu also selects the shoulder view. Click the
-view in first person to lock the mouse; **Esc** releases/pauses, and dragging
+The capabilities playground enables **T** to cycle all three views, matching its
+camera button. Click the view in first person or shoulder mode to lock the mouse;
+**Esc** releases/pauses, and dragging
 remains available when locking is unavailable. Character action bindings retain their configured values.
 Local head/neck triangles are excluded from an instance-private geometry while
 first person is active; original geometry and all bone transforms are preserved
