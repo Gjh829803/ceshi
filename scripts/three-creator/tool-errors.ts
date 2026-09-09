@@ -1,12 +1,15 @@
 import type { ErrorObject } from 'ajv';
-import { errorMessage } from './contracts.js';
+import { HostDiagnosticError, serializeDiagnostic, type SerializedDiagnostic, type HostDiagnosticContext } from './diagnostic-serialization.js';
 
 export interface RecoveryStep {
   instruction: string;
   tool?: string;
   arguments?: Record<string, unknown>;
 }
-export interface CreatorToolDiagnostic {
+export interface CreatorToolDiagnostic extends SerializedDiagnostic {
+  host?: HostDiagnosticContext;
+  browserErrors?: SerializedDiagnostic[];
+  collectionError?: SerializedDiagnostic;
   code: string;
   message: string;
   details?: unknown;
@@ -22,14 +25,22 @@ export class CreatorToolInputError extends Error {
   }
 }
 
+function isErrorInstance<T extends Error>(value: unknown, constructor: new (...args: any[]) => T): value is T {
+  try { return value instanceof constructor; } catch { return false; }
+}
+
 /** Add recovery guidance without changing validation, scheduling or retry authority. */
 export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
-  const message = errorMessage(error);
-  const code = error instanceof CreatorToolInputError ? error.code :
+  const original = isErrorInstance(error, HostDiagnosticError) ? error.diagnostic : serializeDiagnostic(error);
+  const message = original.message;
+  const code = isErrorInstance(error, CreatorToolInputError) ? error.code : original.code ??
     /^(THREE_[A-Z0-9_]+|WORLD_[A-Z0-9_]+|EPISODE_[A-Z0-9_]+)(?=:|\s|$)/.exec(message)?.[1] ??
-    (error instanceof SyntaxError ? 'THREE_JSON_INVALID' : 'THREE_TOOL_FAILED');
+    (isErrorInstance(error, SyntaxError) ? 'THREE_JSON_INVALID' : 'THREE_TOOL_FAILED');
   let nextSteps: RecoveryStep[];
   switch (code) {
+    case 'ENTITY_ROLE_REQUIRED':
+      nextSteps = [{ instruction: original.suggestedAction ?? 'Set an explicit entity role using the public addEntity contract.', tool: 'creator_get_authoring_schema', arguments: { topic: 'getting-started', sections: ['contracts'] } }];
+      break;
     case 'THREE_TOOL_INPUT_INVALID':
       nextSteps = [{ instruction: 'Correct the tool name or arguments using its input schema and details.validationErrors; then call the corrected tool.' }];
       break;
@@ -75,9 +86,10 @@ export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
     default:
       nextSteps = [{ instruction: 'Inspect the original diagnostic and any operation journal first. Preserve existing evidence and request identity; do not bypass validation or automatically resubmit an unknown operation.' }];
   }
-  return { code, message, ...(error instanceof CreatorToolInputError ? { details: error.details } : {}), nextSteps };
+  return { ...original, code, message, ...(isErrorInstance(error, HostDiagnosticError) ? { host: error.host, ...(error.browserErrors ? {browserErrors:error.browserErrors} : {}), ...(error.collectionError ? {collectionError:error.collectionError} : {}) } : {}), ...(isErrorInstance(error, CreatorToolInputError) ? { details: error.details } : {}), nextSteps };
 }
 
 export function creatorToolErrorResponse(error: unknown) {
-  return { error: errorMessage(error), errorDetails: creatorToolDiagnostic(error) };
+  const errorDetails = creatorToolDiagnostic(error);
+  return { error: errorDetails.message, errorDetails };
 }

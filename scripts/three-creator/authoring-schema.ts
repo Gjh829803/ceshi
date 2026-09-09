@@ -56,32 +56,105 @@ export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  return selected.trim();
 }
 
+const declarationPrinter=ts.createPrinter({removeComments:false});
+function sourceChecker(file:ts.SourceFile):ts.TypeChecker {
+ const options:ts.CompilerOptions={target:ts.ScriptTarget.Latest,noResolve:true,types:[]};
+ const host=ts.createCompilerHost(options),getSourceFile=host.getSourceFile.bind(host);
+ host.getSourceFile=(fileName,languageVersion,onError,shouldCreateNewSourceFile)=>fileName===file.fileName
+  ? file:getSourceFile(fileName,languageVersion,onError,shouldCreateNewSourceFile);
+ return ts.createProgram([file.fileName],options,host).getTypeChecker();
+}
+function staticInitializerType(initializer:ts.Expression):ts.TypeNode|undefined {
+ if(ts.isNumericLiteral(initializer)||(ts.isPrefixUnaryExpression(initializer)&&ts.isNumericLiteral(initializer.operand)&&
+  [ts.SyntaxKind.PlusToken,ts.SyntaxKind.MinusToken,ts.SyntaxKind.TildeToken].includes(initializer.operator)))
+  return ts.factory.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword);
+ if(ts.isStringLiteralLike(initializer))return ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword);
+ if(initializer.kind===ts.SyntaxKind.TrueKeyword||initializer.kind===ts.SyntaxKind.FalseKeyword)
+  return ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword);
+ return undefined;
+}
+function declarationParameters(parameters:ts.NodeArray<ts.ParameterDeclaration>,checker:()=>ts.TypeChecker):ts.ParameterDeclaration[]{
+ return parameters.map((parameter,index)=>{
+  let type=parameter.type;
+  if(parameter.initializer&&!type){
+   type=staticInitializerType(parameter.initializer);
+   const inferred=type?undefined:checker().getTypeAtLocation(parameter);
+   if(inferred&&(inferred.flags&(ts.TypeFlags.Any|ts.TypeFlags.Unknown)))throw new Error(`THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED: ${parameter.name.getText()}`);
+   type??=inferred&&checker().typeToTypeNode(inferred,undefined,ts.NodeBuilderFlags.NoTruncation);
+   if(!type)throw new Error(`THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED: ${parameter.name.getText()}`);
+  }
+  const followedByRequired=parameters.slice(index+1).some(next=>!next.questionToken&&!next.initializer&&!next.dotDotDotToken);
+  const optional=parameter.questionToken??(parameter.initializer&&!followedByRequired?ts.factory.createToken(ts.SyntaxKind.QuestionToken):undefined);
+  if(parameter.initializer&&followedByRequired&&type&&!ts.isUnionTypeNode(type))type=ts.factory.createUnionTypeNode([type,ts.factory.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword)]);
+  else if(parameter.initializer&&followedByRequired&&type&&ts.isUnionTypeNode(type)&&!type.types.some(member=>member.kind===ts.SyntaxKind.UndefinedKeyword))
+   type=ts.factory.createUnionTypeNode([...type.types,ts.factory.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword)]);
+  return ts.factory.updateParameterDeclaration(parameter,parameter.modifiers,parameter.dotDotDotToken,parameter.name,optional,type,undefined);
+ });
+}
+function methodDeclaration(method:ts.MethodDeclaration,file:ts.SourceFile,checker:()=>ts.TypeChecker):string {
+ return declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.createMethodSignature(undefined,method.name,
+  method.questionToken,method.typeParameters,declarationParameters(method.parameters,checker),method.type),file);
+}
+function methodDeclarationOrUnavailable(method:ts.MethodDeclaration,file:ts.SourceFile,checker:()=>ts.TypeChecker,owner:string):string {
+ try{return methodDeclaration(method,file,checker);}catch(error){
+  if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
+  return `/** Declaration unavailable for ${method.name.getText(file)}: a default parameter type could not be resolved statically at ${owner}.${method.name.getText(file)} in this source excerpt; consult the workspace source. */`;
+ }
+}
+function publicMethods(members:ts.NodeArray<ts.ClassElement>,allowed?:ReadonlySet<string>):ts.MethodDeclaration[]{
+ const methods=members.filter((member):member is ts.MethodDeclaration=>ts.isMethodDeclaration(member)&&
+  (!allowed||allowed.has(member.name.getText()))&&
+  !(ts.canHaveModifiers(member)?ts.getModifiers(member):undefined)?.some(modifier=>
+   modifier.kind===ts.SyntaxKind.PrivateKeyword||modifier.kind===ts.SyntaxKind.ProtectedKeyword));
+ const overloaded=new Set(methods.filter(method=>!method.body).map(method=>method.name.getText()));
+ return methods.filter(method=>!method.body||!overloaded.has(method.name.getText()));
+}
+
 /** Extract the public shapes, not the runtime implementation or bundled datasets. */
 export function trainingContractSource(source:string):string {
  const file=ts.createSourceFile('training.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+ let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingRuntime');
  if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','onVisualUpdate']);
-  const signatures=runtime.members.filter((member):member is ts.MethodDeclaration=>ts.isMethodDeclaration(member)&&allowed.has(member.name.getText(file))).map(method=>{
-   const end=method.body?.pos??method.end;return source.slice(method.getStart(file),end).trim()+';';
-  });declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
+  const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'TrainingRuntime'));
+  declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingHorse');
- if(horse){const printer=ts.createPrinter();const members=horse.members.filter(member=>!(ts.canHaveModifiers(member)?ts.getModifiers(member):undefined)?.some(m=>m.kind===ts.SyntaxKind.PrivateKeyword||m.kind===ts.SyntaxKind.ProtectedKeyword));
+ if(horse){const methods=new Set(publicMethods(horse.members));const members=horse.members.filter(member=>!(ts.canHaveModifiers(member)?ts.getModifiers(member):undefined)?.some(m=>m.kind===ts.SyntaxKind.PrivateKeyword||m.kind===ts.SyntaxKind.ProtectedKeyword));
   const signatures=members.map(member=>{
    if(ts.isPropertyDeclaration(member))return `${member.modifiers?.some(m=>m.kind===ts.SyntaxKind.ReadonlyKeyword)?'readonly ':''}${member.name.getText(file)}: ${member.type?.getText(file)};`;
    if(ts.isGetAccessorDeclaration(member))return `get ${member.name.getText(file)}(): ${member.type?.getText(file)};`;
-   if(ts.isMethodDeclaration(member)||ts.isConstructorDeclaration(member))return source.slice(member.getStart(file),member.body?.pos??member.end).trim()+';';
-   return printer.printNode(ts.EmitHint.Unspecified,member,file);
-  });declarations.push(`export declare class TrainingHorse {\n${signatures.join('\n')}\n}`);}
+   if(ts.isMethodDeclaration(member))return methods.has(member)?methodDeclarationOrUnavailable(member,file,checker,'TrainingHorse'):'';
+   if(ts.isConstructorDeclaration(member))try {
+    if(member.parameters.some(parameter=>parameter.modifiers?.some(modifier=>[
+     ts.SyntaxKind.PublicKeyword,ts.SyntaxKind.PrivateKeyword,ts.SyntaxKind.ProtectedKeyword,ts.SyntaxKind.ReadonlyKeyword,ts.SyntaxKind.OverrideKeyword,
+    ].includes(modifier.kind))))return '/** Declaration unavailable for constructor: parameter properties require their public property shape at TrainingHorse.constructor in this source excerpt; consult the workspace source. */';
+    const parameters=declarationParameters(member.parameters,checker).map(parameter=>ts.factory.updateParameterDeclaration(parameter,
+     undefined,parameter.dotDotDotToken,parameter.name,parameter.questionToken,parameter.type,undefined));
+    return declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.createConstructorDeclaration(undefined,parameters,undefined),file);
+   } catch(error) {
+    if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
+    return '/** Declaration unavailable for constructor: a default parameter type could not be resolved statically at TrainingHorse.constructor in this source excerpt; consult the workspace source. */';
+   }
+   return declarationPrinter.printNode(ts.EmitHint.Unspecified,member,file);
+  }).filter(Boolean);declarations.push(`export declare class TrainingHorse {\n${signatures.join('\n')}\n}`);}
  return declarations.join('\n');
 }
 
 /** The factory shape follows its implementation; aliases point at public SDK types. */
 export function humanoidContractSource(source:string):string {
  const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+ let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const factory=file.statements.find((node):node is ts.FunctionDeclaration=>ts.isFunctionDeclaration(node)&&node.name?.text==='createHumanoidWorld');
  if(!factory?.body)throw new Error('THREE_HUMANOID_FACTORY_MISSING');
- const signature=source.slice(factory.getStart(file),factory.body.pos).trim().replace('export async function','export declare function')+';';
+ let signature:string;
+ try {signature=declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.createFunctionDeclaration(
+   [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
+   factory.asteriskToken,factory.name,factory.typeParameters,declarationParameters(factory.parameters,checker),factory.type,undefined),file);
+ } catch(error) {
+  if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
+  signature='/** Declaration unavailable for createHumanoidWorld: a default parameter type could not be resolved statically at createHumanoidWorld in this source excerpt; consult the workspace source. */';
+ }
  return `import type {WorldOptions,ThreeWorld,TrainingMap,TrainingCharacter,training} from '@worldkit/three';
 type MapDefinition=TrainingMap;
 type Character=TrainingCharacter;

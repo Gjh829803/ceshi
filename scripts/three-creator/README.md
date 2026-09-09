@@ -31,6 +31,15 @@ persist both fields with their original ID. Input errors include AJV field
 locations; recovery steps never execute retries or relax validation. Reconcile
 unknown operations through the original session/journal before any new submission.
 
+Startup and bridge failures preserve available SDK `code`, `category`, `phase`,
+`entityIds` and `suggestedAction`. `errorDetails.host` separately identifies the
+Host phase, bridge method when relevant, and candidate source/runtime/build hashes.
+Native error stacks and bounded causes are retained when available; plain thrown
+objects do not acquire invented source locations. Auxiliary diagnostic collection
+failures do not replace the original failure or prevent an otherwise-ready world
+from opening. Read the existing failed operation to inspect its saved causes;
+this does not start another browser or repeat the failed action.
+
 ## Four levels for an Agent
 
 Choose the controlled subject from the request and reference. Environment and
@@ -74,8 +83,12 @@ for exact calls and action cards.
 `availableSections` and `runtimeGuidance` identifying its source. Select `sections` from guide, contracts,
 project, episode, observation, commands or training; `["all"]` returns the complete
 selected topic. For example, `{topic:"mounted-interaction", sections:["training"]}`
-returns actual Training source contracts. Public type declarations use an
-AST-selected dependency closure, not a separate handwritten API definition.
+returns Training declaration excerpts from the indicated source files. Selected
+public types within `contracts.ts` use an AST-selected dependency closure.
+Training excerpts retain public type references; they are not standalone declaration packages.
+Default parameters are rendered as declarations without executing their expressions.
+An unresolved imported default marks only that declaration unavailable; other
+declarations and the topic guide remain readable.
 Examples include a complete file manifest and support selected files per topic.
 
 `assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
@@ -94,6 +107,10 @@ Call `creator_materialize_runtime({})` to export the runtime into the workspace:
 - `sdk/three-world/src/`: world, action, animation, physics and input modules.
 - `sdk/camera-collision/src/`: shared camera collision implementation.
 - `sdk/runtime.json`: dependency and source layout contract.
+
+The reply's `runtimeSourceHash` identifies this SDK source snapshot, including
+when `sdk/` already exists. It is separate from the project's `sourceHash` and
+does not mean that the copied source has been compiled or started.
 
 Edit the module that owns the behavior, then call `world_validate` to build its
 browser runtime. Keep one clock, physics backend, actor controller, animation
@@ -262,6 +279,11 @@ telemetry are explicitly unobserved, not passed.
 
 ## Verify and deliver
 
+`world_preview` pauses the world. Its default `opening` view also resets it;
+top-down and object views use the paused state without that reset.
+`world_capture_triviews` resets before taking delivery views. Use these tools
+when their lifecycle effects match the state you want to inspect.
+
 Choose an episode that exercises the requested core movement and actions and
 records their outcomes. Submission requires a same-session,
 current-world/current-episode successful recording, all episode steps completed,
@@ -271,7 +293,17 @@ preserves real timestamps without synthesized frames or FPS padding. The real
 stopped-canvas postroll records a terminal sample and is excluded from input and
 active time.
 
-Submission atomically writes `creator-delivery.tar.gz` and `creator-result.json`.
+`world_playtest` returns `status:passed` when technical recording checks pass;
+read `executionMode` and `isCompleteEpisode` separately. Target `reached` means a
+sample entered its XYZ tolerance, not that a gameplay goal was independently verified.
+Omit `durationSeconds` for the full plan. A shorter value truncates debugging;
+a longer value keeps waiting after all steps, with unreleased keys held until cleanup.
+`framesPerSecond` requests video capture samples, not simulation or display FPS.
+`actualWallSeconds` measures this input/recording interval and its finalization;
+it excludes browser startup and subsequent transcoding, and is not whole-task time.
+
+Submission creates a local package and atomically writes `creator-delivery.tar.gz`
+and `creator-result.json`. It does not upload, publish, start Episode or request a review.
 The archive contains one hash-closed `payload/` with source, playable, playtest,
 captures, episode.json, delivery.json and artifact-hashes.json. Symlinks fail.
 Technical delivery is `ready-for-independent-review`; core functionality and fixed
