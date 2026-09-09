@@ -1,10 +1,12 @@
 import {describe,it,expect} from 'vitest';
 import * as THREE from 'three';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import sharp from 'sharp';
 import {ThreeCreatorTools} from './tools.js';
+import {executeThreeCreatorTool,toolContent} from './mcp.js';
 import {captureTargets,captureObjectViews} from '../../apps/three-creator-playground/capture.js';
 import type {WorldObservation} from '@worldkit/three';
 import type {Page} from 'playwright';
@@ -145,3 +147,88 @@ it('opens the synchronous SDK presentation before capture measurement and restor
  expect(()=>captureObjectViews(world,'entity-triview',['hero','2'])).toThrow('SINGLE_TARGET_REQUIRED');
  expect(entered).toBe(1);expect(active).toBe(false);
 });
+
+const currentSdkSource=String.raw`import * as THREE from 'three';
+import {createWorld} from '@worldkit/three';
+const scene=new THREE.Scene();scene.background=new THREE.Color('#29435d');
+const camera=new THREE.PerspectiveCamera(58,960/540,.08,100);
+const renderer=new THREE.WebGLRenderer({preserveDrawingBuffer:true});renderer.setSize(960,540);document.body.append(renderer.domElement);
+const player=new THREE.Mesh(new THREE.CapsuleGeometry(.3,1.1),new THREE.MeshBasicMaterial({color:'#ffcc00'}));
+const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{},training:{
+ map:{id:'current-preview',name:'Current preview',description:'',bounds:{min:[-20,-5,-20],max:[20,20,20]},boxes:[{id:'ground',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
+ character:{instanceId:'player',object:player},vehicles:[]}});
+await world.start();world.stop();world.step({},40);
+world.training.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});world.training.setCameraMode(2);
+window.currentPreviewWorld=world;`;
+
+it('previews the current SDK shoulder through MCP without resetting paused ticks, and keeps opening reset semantics',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'current-preview-sdk-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  await writeFile(path.join(root,'index.html'),'<html><script type="module" src="./main.ts"></script></html>');
+  await writeFile(path.join(root,'main.ts'),currentSdkSource);await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await service.inspect({sections:['snapshot']});const page=(service as unknown as {session:{page:Page}}).session.page;
+  const baseline=await page.evaluate(()=>{
+   const observer=window.__WORLDKIT_EVAL__!;
+   return observer.withPresentation!(()=>({snapshot:observer.snapshot!(),configuration:observer.capabilities!({entityIds:[]}).training!.configuration}));
+  }),before=baseline.snapshot;
+  expect(before.training!.cameraMode).toBe(2);expect(before.simulationTick).toBe(40);expect(before.isRunning).toBe(false);
+  expect(baseline.configuration.profile.camera?.targetHeightOffset).toBe(1.1);
+  const started=await executeThreeCreatorTool(service,'world_preview',{view:'current'}) as {operationId:string};
+  const operation=await service.getOperation(started.operationId,25);expect(operation.status,operation.error).toBe('succeeded');
+  const current=operation.result!;
+  expect(current.view).toBe('current');expect(current.cameraObservation).toMatchObject({simulationTick:40,isRunning:false,trainingCameraMode:2,owner:'follow',camera:before.camera});
+  expect(current.cameraObservation.cameraOverrides).toEqual(baseline.configuration.profile.camera);
+  expect(current.cameraObservation.cameraOverrides).toEqual({targetHeightOffset:1.1});
+  expect(current.cameraObservation.cameraSettings).toEqual(baseline.configuration.effective.camera.settings);
+  expect(current.cameraObservation.cameraSettings).toMatchObject({targetHeightOffset:1.1,horizontalOffset:0,baseFovDegrees:58});
+  expect(current.cameraObservation.framing).toEqual(baseline.configuration.effective.camera.framing);
+  expect(current.cameraObservation.framing).toMatchObject({advisory:true,status:'observed',headSource:'posture-eye'});
+  expect(current.cameraObservation.framing.sampleSimulationSeconds).toBeCloseTo(before.simulationSeconds,12);
+  expect(current.cameraObservation.framing.issues).toEqual(expect.arrayContaining([expect.objectContaining({code:'SHOULDER_FRAMING_OFFSET_REVIEW'})]));
+  expect(current.cameraObservation).not.toHaveProperty('entities');expect(current.cameraObservation).not.toHaveProperty('snapshot');
+  expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!())).toEqual(before);
+  const candidate=await service.validate();expect(current).toMatchObject({sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash});
+  const content=await toolContent(service,operation);expect(content.some(item=>item.type==='image')).toBe(true);
+  expect((await sharp(await readFile(current.image.path)).metadata()).width).toBe(960);
+  const optional=await page.evaluate(()=>{
+   const host=window.__THREE_CREATOR_HOST__!,observer=window.__WORLDKIT_EVAL__!,original=observer.capabilities,originalSnapshot=observer.snapshot!;
+   let queries=0,snapshotReads=0;
+   observer.snapshot=()=>{snapshotReads++;return originalSnapshot();};
+   observer.capabilities=query=>{queries++;if(JSON.stringify(query)!==JSON.stringify({entityIds:[]}))throw new Error('unbounded description');return original!(query);};
+   try{
+    const present=host.capture('current') as any,currentSnapshotReads=snapshotReads;host.capture('opening');host.read();
+    const onDemandQueries=queries;
+    observer.capabilities=()=>{throw new Error('optional framing unavailable');};
+    const degraded=host.capture('current') as any;
+    delete observer.capabilities;const unavailable=host.capture('current') as any;
+    observer.snapshot=()=>{throw new Error('optional snapshot unavailable');};const noSnapshot=host.capture('current') as any;
+    return {framing:present.cameraObservation.framing,onDemandQueries,currentSnapshotReads,degraded:degraded.cameraObservation,image:degraded.image,unavailable:unavailable.cameraObservation,noSnapshot:noSnapshot.cameraObservation};
+   }finally{observer.snapshot=originalSnapshot;if(original)observer.capabilities=original;else delete observer.capabilities;}
+  });
+  expect(optional.framing).toEqual(baseline.configuration.effective.camera.framing);expect(optional.onDemandQueries).toBe(1);
+  expect(optional.currentSnapshotReads).toBe(1);
+  expect(optional.degraded).toMatchObject({trainingCameraMode:2,simulationTick:40,owner:'follow',framing:null,cameraOverrides:null,cameraSettings:null});expect(optional.image).toMatch(/^data:image\/png;base64,/);
+  expect(optional.unavailable).toMatchObject({trainingCameraMode:2,simulationTick:40,framing:null,cameraOverrides:null,cameraSettings:null});
+  expect(optional.noSnapshot).toMatchObject({simulationTick:null,camera:null,trainingCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+  await service.preview('opening');const reset=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!());
+  expect(reset.training!.cameraMode).toBe(0);expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},60000);
+
+it('accepts current through the actual CLI and captures raw pixels without calling lifecycle or requiring SDK diagnostics',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'current-preview-cli-'));
+ try{
+  await writeFile(path.join(root,'index.html'),'<html><script type="module" src="./main.js"></script></html>');
+  await writeFile(path.join(root,'main.js'),source.replace('startLive(){},stopLive(){},reset:render',"startLive(){throw new Error('CURRENT_STARTED_WORLD');},stopLive(){throw new Error('CURRENT_STOPPED_WORLD');},reset(){throw new Error('CURRENT_RESET_WORLD');}"));
+  const child=spawn(process.execPath,['--import','tsx','scripts/three-creator/cli.ts','--workspace',root,'--profile','three-raw','--tool','world_preview','--arguments',JSON.stringify({view:'current'})],{stdio:['ignore','pipe','pipe']});
+  let stdout='',stderr='';child.stdout.on('data',value=>{stdout+=value;});child.stderr.on('data',value=>{stderr+=value;});
+  try{
+   const code=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+   expect(code,stderr||stdout).toBe(0);const operation=JSON.parse(stdout);expect(operation.status).toBe('succeeded');
+   const result=operation.result;expect(result.view).toBe('current');
+   expect(result.cameraObservation).toEqual({worldRevision:null,simulationTick:null,simulationSeconds:null,isRunning:null,camera:null,trainingCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+   expect(result.sourceHash).toMatch(/^[a-f0-9]{64}$/);expect(result.runtimeHash).toMatch(/^[a-f0-9]{64}$/);
+   expect((await sharp(await readFile(result.image.path)).metadata()).width).toBe(960);
+  }finally{child.kill('SIGTERM');}
+ }finally{await rm(root,{recursive:true,force:true});}
+},60000);

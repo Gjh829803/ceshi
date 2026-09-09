@@ -276,6 +276,69 @@ describe('SDK training runtime',()=>{
    r.setCameraMode(1);expect(c.distance).toBe(0);r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);
   }finally{world.dispose();}
  });
+ it.each([false,true])('reports shoulder offset framing while preserving configured camera behavior (mounted=%s)',async mounted=>{
+  const world=await fixture();try{
+   const r=world.training!,s=r.simulation,c=r.followCamera;world.step({},60);
+   if(mounted){expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);world.step({},60);}
+   const baseline=[0,1,2].map(mode=>{r.setCameraMode(mode as 0|1|2);return {eye:c.camera.position.clone(),target:c.target.clone(),distance:c.distance};});
+   expect(r.inspectConfiguration().effective.camera.framing.issues).toEqual([]);
+   r.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});r.setCameraMode(2);
+   expect(c.camera.position.y-baseline[2]!.eye.y).toBeCloseTo(1.1);expect(c.distance).toBeCloseTo(2);
+   const snapshot=world.snapshot(),state=c.collisionState,matrices=[c.camera.matrix.clone(),c.camera.matrixWorld.clone(),c.camera.matrixWorldInverse.clone()];
+   const framing=world.describe().training!.configuration.effective.camera.framing;
+   expect(framing).toMatchObject({advisory:true,status:'observed',issues:[{code:'SHOULDER_FRAMING_OFFSET_REVIEW'}]});
+   expect(framing.headScreenPositionNormalizedXY![1]).toBeGreaterThan(.9);
+   expect(world.snapshot()).toEqual(snapshot);expect(c.collisionState).toEqual(state);expect([c.camera.matrix,c.camera.matrixWorld,c.camera.matrixWorldInverse]).toEqual(matrices);
+   r.setCameraMode(1);expect(c.camera.position.distanceTo(baseline[1]!.eye)).toBeLessThan(1e-6);
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'not-applicable',reason:'first-person',headInFrame:null,issues:[]});
+   r.setCameraMode(0);expect(c.target.y-baseline[0]!.target.y).toBeCloseTo(1.1);expect(c.distance).toBeCloseTo(11);
+   expect(r.exportProfile()).toMatchObject({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});
+   r.setCameraMode(2);r.applyProfile({camera:{targetHeightOffset:0}});
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'observed',offsetsPending:true,sampledOffsets:{targetHeightOffset:1.1,horizontalOffset:0},issues:[{code:'SHOULDER_FRAMING_OFFSET_REVIEW'}]});
+   r.setCameraMode(2);expect(r.inspectConfiguration().effective.camera.framing.offsetsPending).toBe(false);
+   expect(c.camera.position.distanceTo(baseline[2]!.eye)).toBeLessThan(1e-6);expect(r.inspectConfiguration().effective.camera.framing.issues).toEqual([]);
+   await world.reset();r.setCameraMode(2);expect(r.inspectConfiguration().effective.camera.framing.headScreenPositionNormalizedXY![1]).toBeCloseTo(.5);
+   world.useAuthoredCamera();expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'not-applicable',reason:'authored-camera',issues:[]});
+  }finally{world.dispose();}
+ });
+ it('samples framing from the displayed camera time without changing collision recovery',async()=>{
+  const world=await fixture();try{const r=world.training!,c=r.followCamera,s=r.simulation;
+   r.setCameraMode(2);c.capturePresentationPose(s,true);c.beforeFixedUpdate();
+   s.time+=1/60;s.player.position.x+=1;c.update(s,1/60);c.capturePresentationPose(s);
+   const state=c.collisionState;
+   for(const alpha of [.25,.8,1]){
+    c.present({position:new Vector3(alpha,s.player.position.y,0),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0},alpha);
+    const framing=r.inspectConfiguration().effective.camera.framing;
+    expect(framing.sampleSimulationSeconds).toBeCloseTo(alpha/60);expect(framing.headPositionWorldMetersXYZ![0]).toBeCloseTo(alpha);
+    expect(framing.headScreenPositionNormalizedXY![1]).toBeCloseTo(.5);expect(framing.issues).toEqual([]);expect(c.collisionState).toEqual(state);
+   }
+   const leaked=c.framingSample!;leaked.position.set(99,99,99);expect(c.framingSample!.position.x).toBeCloseTo(1);
+  }finally{world.dispose();}
+ });
+ it('does not treat deliberate shoulder offsets as invalid configuration or a passed visual review',async()=>{
+  const world=await fixture();try{const r=world.training!,c=r.followCamera;
+   r.applyProfile({camera:{targetHeightOffset:.1,horizontalOffset:.1}});r.setCameraMode(2);
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'observed',headInFrame:true,issues:[]});
+   r.applyProfile({camera:{horizontalOffset:3}});r.setCameraMode(2);
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'observed',headInFrame:false,issues:[{code:'SHOULDER_FRAMING_OFFSET_REVIEW'}]});
+   expect(r.exportProfile().camera!.horizontalOffset).toBe(3);
+   c.camera.quaternion.setFromAxisAngle(new Vector3(0,1,0),0);
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'observed',headScreenPositionNormalizedXY:null,headInFrame:false});
+   c.camera.projectionMatrix.elements[0]=NaN;
+   expect(r.inspectConfiguration().effective.camera.framing).toMatchObject({status:'unavailable',reason:'invalid-projection',headInFrame:null,issues:[]});
+  }finally{world.dispose();}
+ });
+ it('uses the swimming posture eye for shoulder framing after real water entry',async()=>{
+  const world=await fixture();try{const r=world.training!,s=r.simulation,c=r.followCamera;
+   r.switchMap({...map,water:[{id:'pool',min:[-10,-2,-10],max:[10,4,10],surface:2}]});world.step({},120);
+   expect(s.humanoid!.swimming).toBe(true);r.applyProfile({camera:{targetHeightOffset:1}});r.setCameraMode(2);
+   const framing=r.inspectConfiguration().effective.camera.framing;
+   expect(framing.headPositionWorldMetersXYZ![1]-s.player.position.y).toBeCloseTo(1.35);
+   c.camera.updateMatrixWorld(true);const head=s.player.position.clone().add(new Vector3(0,1.35,0)).project(c.camera);
+   expect(framing.headScreenPositionNormalizedXY![1]).toBeCloseTo((1-head.y)/2);
+   expect(framing.issues).toEqual([expect.objectContaining({code:'SHOULDER_FRAMING_OFFSET_REVIEW'})]);
+  }finally{world.dispose();}
+ });
  it('retracts the shoulder arm against a wall and restores it after leaving',async()=>{
   const world=await fixture();try{
    const r=world.training!,s=r.simulation,c=r.followCamera;

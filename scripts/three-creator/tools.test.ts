@@ -11,7 +11,7 @@ import { EPISODE_SCHEMA, sha256 } from './contracts.js';
 import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
-import { executeThreeCreatorTool } from './mcp.js';
+import { executeThreeCreatorTool, THREE_CREATOR_TOOLS } from './mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
 import {recordedVideoEncodingArgs} from './video.js';
@@ -211,6 +211,71 @@ describe('Three tool operations and truthful submission', () => {
 
 
 describe('v2 command and discovery boundary', () => {
+  const discoveryCall=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={})=>executeThreeCreatorTool(service,name,args) as Promise<any>;
+  it('delivers camera guidance through default and selected Agent schema sections and example file selection',async()=>{
+    const service=new ThreeCreatorTools(await fixture(),'three-sdk');
+    try{
+      const initial=await discoveryCall(service,'creator_get_authoring_schema');
+      expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(initial.cameraAuthoring);
+      expect(initial.cameraAuthoring).toMatchObject({scope:'training-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
+      expect(initial.cameraAuthoring.startWithDefaults).toMatch(/whitebox/i);
+      expect(initial.cameraAuthoring.opening).toContain('useAuthoredCamera');
+      expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
+      expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'training.camera',mode:2}}});
+      expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
+      for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
+      expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.training.configuration.effective.camera.framing'});
+      for(const request of [initial.cameraAuthoring.verify.selectView,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
+        const tool=THREE_CREATOR_TOOLS.find(tool=>tool.name===request.tool);
+        expect(tool,request.tool).toBeDefined();
+        expect(new Ajv({strict:false}).compile(tool!.inputSchema)(request.arguments),request.tool).toBe(true);
+      }
+      for(const [topic,sections] of [['training',['guide']],['mounted-interaction',['training']],['control',['commands']],['getting-started',['all']]] as const){
+        const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic,sections});
+        expect(selected.cameraAuthoring).toEqual(initial.cameraAuthoring);
+      }
+      for(const args of [{},{topic:'vehicle-camera',files:[]}]){
+        const example=await discoveryCall(service,'creator_get_examples',args);
+        expect(example.cameraAuthoring).toEqual(initial.cameraAuthoring);
+      }
+      const commands=await discoveryCall(service,'creator_get_authoring_schema',{topic:'control',sections:['commands']});
+      const profile=commands.worldCommandSchema.oneOf.find((entry:any)=>entry.properties.type.const==='training.profile').properties.profile;
+      expect(profile.properties.camera.properties.targetHeightOffset).toMatchObject({default:0,minimum:-2,maximum:5,description:expect.stringMatching(/increment.*meters/i)});
+      const check=new Ajv({strict:false}).compile(commands.worldCommandSchema);
+      for(const camera of [{targetHeightOffset:1.1,horizontalOffset:0},{targetHeightOffset:-2,horizontalOffset:-3},{targetHeightOffset:5,horizontalOffset:3}])expect(check({type:'training.profile',profile:{cameraDistanceMeters:11,camera}})).toBe(true);
+    }finally{await service.close();}
+  });
+  it('uses current workspace source for camera guidance instead of presenting Host numeric defaults as active',async()=>{
+    const service=new ThreeCreatorTools(await fixture(),'three-sdk');
+    try{
+      await service.materializeRuntime();
+      const file=path.join(service.workspace,'sdk/three-world/src/config/camera.ts');
+      await writeFile(file,(await readFile(file,'utf8')).replace('targetHeightOffset:numeric(0,','targetHeightOffset:numeric(.4,'));
+      const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'training',sections:['guide','training']});
+      expect(selected.cameraAuthoring).toMatchObject({runtimeAuthority:'workspace-sdk-source'});
+      expect(selected.cameraAuthoring).not.toHaveProperty('parameters');
+      expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(selected.cameraAuthoring);
+      expect(selected.cameraAuthoring.source).toContain('sdk/three-world/src/config/camera.ts');
+      expect(selected.runtimeDefinitions['config/camera.ts']).toContain('targetHeightOffset:numeric(.4,');
+      const example=await discoveryCall(service,'creator_get_examples');
+      expect(example.cameraAuthoring).toEqual(selected.cameraAuthoring);
+      expect(example.exampleAuthority).toBe('host-baseline');
+      expect(example.runtimeGuidance.runtimeSourceHash).toBe(selected.runtimeGuidance.runtimeSourceHash);
+    }finally{await service.close();}
+  });
+  it('keeps Training camera offsets out of raw and standalone nonhuman guidance',async()=>{
+    const raw=new ThreeCreatorTools(await fixture(),'three-raw'),sdk=new ThreeCreatorTools(await fixture(),'three-sdk');
+    try{
+      for(const name of ['creator_describe_environment','creator_get_authoring_schema','creator_get_examples'])expect(await discoveryCall(raw,name)).not.toHaveProperty('cameraAuthoring');
+      for(const name of ['creator_get_authoring_schema','creator_get_examples']){
+        const result=await discoveryCall(sdk,name,{topic:'nonhuman-subject'});
+        expect(result.cameraAuthoring).toMatchObject({scope:'ordinary-sdk-follow'});
+        expect(result.cameraAuthoring).not.toHaveProperty('parameters');
+        expect(JSON.stringify(result.cameraAuthoring)).toContain('setCameraFollow');
+        expect(JSON.stringify(result.cameraAuthoring)).not.toMatch(/training\.camera|targetHeightOffset|configuration\.effective\.camera\.framing/);
+      }
+    }finally{await raw.close();await sdk.close();}
+  });
   it('accepts the SDK camera distance interval through Host command transport', () => {
     const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
     for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'training.profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(true);

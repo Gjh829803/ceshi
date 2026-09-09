@@ -2,11 +2,52 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {describe, expect, it} from 'vitest';
-import {AUTHORING_TOPICS, guideTopic, publicContractTopic,humanoidContractSource} from './authoring-schema.js';
+import {AUTHORING_TOPICS, guideTopic, publicContractTopic,humanoidContractSource,trainingContractSource} from './authoring-schema.js';
 import {SDK_EXAMPLE} from './examples.js';
+import {training} from '@worldkit/three';
+const {CAMERA_PARAMETERS,CAMERA_SCHEMA_PROPERTIES,CAMERA_DISTANCE_METERS_SCHEMA,VEHICLE_CAMERA_DISTANCE_SCHEMA,DEFAULT_CAMERA_TUNING,parseCameraTuning}=training;
 
 const contracts = readFileSync(new URL('../../packages/three-world/src/contracts.ts', import.meta.url), 'utf8');
 const guide = readFileSync(new URL('../../packages/three-world/README.md', import.meta.url), 'utf8');
+
+describe('Agent camera authoring contract',()=>{
+ it('publishes additive offset defaults without narrowing existing values or changing unrelated schema fields',()=>{
+  const properties=CAMERA_SCHEMA_PROPERTIES as Record<string,Record<string,unknown>>;
+  for(const [key,minimum,maximum] of [['targetHeightOffset',-2,5],['horizontalOffset',-3,3]] as const){
+   expect(properties[key]).toMatchObject({type:'number',minimum,maximum,default:0});
+   const definition=CAMERA_PARAMETERS[key] as typeof CAMERA_PARAMETERS[typeof key]&{description:string};
+   expect(properties[key]!.description).toBe(definition.description);
+   expect(definition.description).toMatch(/increment.*meters/i);
+   expect(definition.description).toContain('mode 0');expect(definition.description).toContain('mode 2');
+   expect(definition.description).toMatch(/mode 1.*ignor/i);
+   for(const value of [minimum,maximum,1.1])expect(parseCameraTuning({...DEFAULT_CAMERA_TUNING,[key]:value})[key]).toBe(value);
+  }
+  expect(properties.targetHeightOffset!.description).toMatch(/not.*eye height.*absolute/i);
+  expect(properties.baseFovDegrees).toEqual({type:'number',minimum:30,maximum:100,description:'基础视野 (degrees)'});
+  expect(properties.collisionEnabled).toEqual({type:'boolean',description:'启用碰撞检测'});
+  expect(CAMERA_DISTANCE_METERS_SCHEMA).toMatchObject({type:'number',exclusiveMinimum:0,maximum:100,description:expect.stringMatching(/only.*mode 0/i)});
+  expect(VEHICLE_CAMERA_DISTANCE_SCHEMA).toMatchObject({type:'number',minimum:0,description:expect.stringMatching(/only.*mode 0/i)});
+ });
+ it('retains field JSDoc inside the AST-discovered CameraTuning contract',()=>{
+  const source=readFileSync(new URL('../../packages/three-world/src/config/camera.ts',import.meta.url),'utf8');
+  const {file,byName}=declarations(trainingContractSource(source));
+  const tuning=byName.get('CameraTuning');
+  if(!tuning||!ts.isInterfaceDeclaration(tuning))throw new Error('CameraTuning is missing');
+  for(const key of ['targetHeightOffset','horizontalOffset']){
+   const member=tuning.members.find(member=>member.name?.getText(file)===key)!;
+   const docs=ts.getJSDocCommentsAndTags(member).map(doc=>doc.getText(file)).join('\n');
+   expect(docs).toMatch(/increment.*meters/i);expect(docs).toContain('Default 0');
+   expect(docs).toContain('mode 0');expect(docs).toContain('mode 2');expect(docs).toMatch(/mode 1.*ignor/i);
+  }
+ });
+ it('gives Training readers a default-first camera recipe and distinguishes current preview from reset opening',()=>{
+  const selected=guideTopic(guide,'training');
+  for(const text of ['targetHeightOffset','horizontalOffset','useAuthoredCamera','training.camera',"view:'current'","view:'opening'",'configuration.effective.camera.framing'])expect(selected).toContain(text);
+  expect(selected).toMatch(/opening.*reset/i);
+  expect(selected).toMatch(/projection does not\s+prove pixel visibility/i);
+  expect(guideTopic(guide,'observation')).toContain('opening, current, top-down and entity-triview');
+ });
+});
 
 function declarations(source:string) {
  const file = ts.createSourceFile('contracts.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
