@@ -459,6 +459,57 @@ through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
 ### Training camera perspectives
 
+Start with the tuned defaults: omit `profile.camera` and `cameraDistanceMeters`
+when creating the world. Large whitebox landmarks do not require raising the
+humanoid eye. Override only a specific framing defect observed in real views.
+
+`profile.camera.targetHeightOffset` and `horizontalOffset` are **increments in
+metres**, both defaulting to **0**, added to the controller's existing target or
+eye-based anchor. The vertical offset is not eye height or absolute world height:
+`targetHeightOffset:1.1` adds another 1.1 m. Both offsets are shared by mode 0 and
+mode 2; mode 1 ignores them. They remain valid adjustments, including negative
+values. `cameraDistanceMeters` affects only mode 0; mode 2 owns its independent
+shoulder distance. A distant opening composition is not a reason to override the
+gameplay follow distance or eye offset.
+
+Use `world.useAuthoredCamera()` for an authored opening, then return control with
+`training.camera` when play begins. Compare each enabled mode on foot, entering,
+mounted, exiting and after reset in the real-input playtest. For a focused Creator
+check, select the view and capture its actual world pixels:
+
+```js
+world_execute_command({command:{type:'training.camera',mode:2}})
+world_preview({view:'current'})
+world_inspect({sections:['description']})
+```
+
+`world_preview({view:'current'})` preserves the current view without resetting or
+advancing simulation. Its `cameraObservation` includes `cameraOverrides` (explicit
+`profile.camera`), `cameraSettings` (resolved settings) and `framing`, alongside
+the real pixels. `world_preview({view:'opening'})` stops and resets the world;
+use opening only to check the reset opening. Top-down and object triviews do not
+establish gameplay framing.
+
+On demand, `world.describe().training.configuration.effective.camera.framing`
+reports `status`/`reason`, `sampleSimulationSeconds`, `headSource`, the head anchor
+in world space, and `headScreenPositionNormalizedXY` (top-left `[0,0]`, bottom-right
+`[1,1]`; null behind the camera or unavailable). Creator forwards it in
+`world_inspect({sections:['description']})` under `observation.description`.
+Read the current mode from `configuration.effective.camera.mode` and explicit
+offsets from `configuration.profile.camera`. `framing.sampledOffsets` identifies
+the offset inputs associated with the displayed pose; `offsetsPending:true` means
+new configuration has not yet reached that sample (for example, an edit while
+paused). Do not interpret the old image using the newly configured values.
+`SHOULDER_FRAMING_OFFSET_REVIEW`
+advises checking nonzero offsets in mode 2 when the head projects near an edge or
+outside the frame. Empty `issues` is not visual acceptance; projection does not
+prove pixel visibility or absence of occlusion. Reading this advice does not step
+simulation or adjust the camera.
+
+These defaults describe the supplied Training runtime. For an edited project SDK,
+read its current `sdk/three-world/src/config/camera.ts` and `training/camera.ts`,
+rebuild and inspect the matching runtime; Host examples are reference material.
+Independent subjects use their own `setCameraFollow({view})` contract.
 
 Training camera modes are `0` (third-person follow), `1` (first person) and `2`
 (immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
@@ -557,10 +608,12 @@ snapshot. `world.training.inspectBoarding(id)` provides the same targeted query.
 
 `profile.camera` is a partial set of explicit overrides. Each field takes effect
 independently of `cameraDistanceMeters`; `exportProfile().camera` retains those
-explicit fields. Unset fields keep the mode's default (humanoid third person uses
+explicit fields, subject to the [camera mode rules](#training-camera-perspectives).
+The framing offsets default to 0 and add to an existing anchor; they are not
+absolute coordinates. Unset fields keep the mode's default (humanoid third person uses
 FOV 58, response 7, collision radius .2; vehicle defaults remain unchanged).
 The SDK and Creator command transport share the same `(0,100]` meter range for
-`cameraDistanceMeters`; null returns to the subject's default distance.
+`cameraDistanceMeters` in mode 0; null returns to the subject's default distance.
 
 <!-- topic:extensions -->
 ## Configure or implement a behavior
@@ -774,7 +827,7 @@ then apply the object's complete world quaternion, including parent rotation.
 Right is front cross up. The Host captures real rendered front/right/back images.
 It does not substitute a display clone or fabricate hidden geometry.
 
-Creator `world_preview` supports opening, top-down and entity-triview captures
+Creator `world_preview` supports opening, current, top-down and entity-triview captures
 from the pure world canvas. Model input must use that pure canvas or
 `presentation.modelInput`, never a whole-page
 screenshot, presentation container or model output. Keep derived reference and

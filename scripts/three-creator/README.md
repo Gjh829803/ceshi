@@ -78,6 +78,17 @@ returns actual Training source contracts. Public type declarations use an
 AST-selected dependency closure, not a separate handwritten API definition.
 Examples include a complete file manifest and support selected files per topic.
 
+SDK environment, default schema guides and examples expose shared `cameraAuthoring`
+guidance; selecting training/commands sections or example files retains it. Use
+tuned defaults, overriding only defects observed in real views. Large whitebox
+landmarks do not require lifting the humanoid eye. Training offsets are metre
+increments on existing anchors, default 0, shared by modes 0/2 and ignored by
+mode 1; follow distance affects only mode 0. Read the
+[SDK camera contract](../../packages/three-world/README.md#training-camera-perspectives)
+for details. Workspace SDK guidance points to current source and matching runtime
+inspection; Host values are not authority for edited SDKs. Standalone nonhuman
+guidance uses `setCameraFollow({view})`; raw guidance does not claim Training support.
+
 `assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
 20 maximum. Empty query lists permitted assets; continue with `nextOffset` until
 null. Search by name, action or scene need such as `滑铲`, `游泳` or `pickup`.
@@ -194,7 +205,7 @@ Register complete capture targets in priority order with
 `world.setCaptureTargets(['player','tower','bridge'])`. SDK semantic front is
 local **-Z**, up **+Y**; `frontYawRadians` rotates about local Y and parent rotation
 is applied. Contextual map anchors use their documented **+Z** heading convention.
-`world_preview` offers opening, top-down and entity-triview captures of pure world
+`world_preview` offers opening, current, top-down and entity-triview captures of pure world
 pixels. Mount HUD through `world.createPresentation()`.
 
 ## Real input episodes
@@ -251,6 +262,23 @@ cabins; the vehicle movement envelope remains intact. Inspect the first-person
 view and a low-angle orbit near the cabin when those views are part of the scene.
 An authored opening belongs in the user reset/start action, not an unconditional
 `onReset` camera write during Episode capture.
+
+Use `world.useAuthoredCamera()` for that opening and hand control back through
+`training.camera` when play begins. To check shoulder view, call
+`world_execute_command({command:{type:'training.camera',mode:2}})`, then
+`world_preview({view:'current'})`. Current preview preserves the view without reset
+or simulation stepping. Its `cameraObservation` includes `cameraOverrides`
+(explicit `profile.camera`), `cameraSettings` (resolved settings) and `framing`.
+Compare these values with the real pixels. `world_preview({view:'opening'})` stops and resets; it
+checks the reset opening. Compare real pixels during walking, entering, mounted
+play, exiting, each enabled mode and reset in the existing real-input playtest.
+
+For framing advice, request `world_inspect({sections:['description']})` and read
+`observation.description.training.configuration.effective.camera.framing`.
+This is on-demand head-anchor projection advice without stepping or camera changes.
+`SHOULDER_FRAMING_OFFSET_REVIEW` suggests checking explicit shoulder offsets.
+No issues does not mean visual acceptance, and projection does not prove visibility or lack of
+occlusion. Use the actual current preview to judge the composition.
 
 Inspect/playtest `characterContinuity` feedback observes the Training character's
 skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate

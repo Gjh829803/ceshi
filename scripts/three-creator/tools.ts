@@ -18,6 +18,7 @@ import type { ExampleTopic } from './example-files.js';
 import {summarizeCharacterContinuity} from '../../apps/three-creator-playground/character-continuity.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
 import {humanAuthoringGuidance} from './character-guidance.js';
+import {cameraAuthoringGuidance} from './camera-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
@@ -110,13 +111,15 @@ export class ThreeCreatorTools {
   }
   async environment() {
     const snapshot=this.compiler.assetPolicy();
-    const runtimeGuidance=(await readRuntimeGuidance(this.compiler)).provenance;
+    const guidance=await readRuntimeGuidance(this.compiler),runtimeGuidance=guidance.provenance;
+    const cameraAuthoring=cameraAuthoringGuidance(this.profile,guidance.isWorkspace);
     return {runtimeGuidance, kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
       assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createWorld binds an independently controlled subject, while createHumanoidWorld loads the supplied human and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
       subjectAuthoring:subjectAuthoringGuidance(this.profile),
       humanAuthoring: humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
+      ...(cameraAuthoring?{cameraAuthoring}:{}),
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
@@ -242,11 +245,12 @@ export class ThreeCreatorTools {
   private async capture(session: Session, root: string, view: string, entityIds: string[] = [], frontYawRadians?: number) {
     const result = await this.bridge(session, 'capture', [view, entityIds, frontYawRadians]); const bytes = Buffer.from(result.image.replace(/^data:image\/png;base64,/, ''), 'base64'); delete result.image;
     const name = `${view}-${sha256(JSON.stringify(entityIds)).slice(0, 10)}.png`, file = path.join(root, name); await mkdir(root, { recursive: true }); await writeFile(file, bytes);
-    return { ...result, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: session.candidate.sourceHash, worldBuildHash: session.candidate.worldBuildHash, profile: this.profile };
+    return { ...result, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: session.candidate.sourceHash, worldBuildHash: session.candidate.worldBuildHash, runtimeHash: session.candidate.runtimeHash, runtimeSourceHash: session.candidate.runtimeSourceHash, profile: this.profile };
   }
   async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number) {
-    if (!['opening', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
-    const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'stop');
+    if (!['opening', 'current', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
+    const candidate = await this.compiler.prepare(), session = await this.open(candidate);
+    if (view !== 'current') await this.bridge(session, 'stop');
     if (view === 'opening') await this.bridge(session, 'reset');
     return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
   }
