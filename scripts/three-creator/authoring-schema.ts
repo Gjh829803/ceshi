@@ -46,7 +46,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic, optio
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?'export declare function createWorld(options:{scene:THREE.Scene;camera:THREE.Camera;canvas?:HTMLCanvasElement;renderer?:THREE.WebGLRenderer}):Promise<World>;':''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?"export declare function createWorld(options?:import('@worldkit/three').WorldOptions):Promise<import('@worldkit/three').ThreeWorld>;":''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;

@@ -247,6 +247,18 @@ Mouse drag and arrows control camera. SchemaVersion 2 also supports step
 `lifecycle:"start"|"pause"|"reset"`; transitions release held keys. Targets measure
 actual XYZ proximity and do not steer or teleport the character.
 
+Each `targetResults` entry includes `nearestSample`: the closest recorded player
+position, its original zero-based `traceSampleIndex` in `trace.json`, wall time
+since trace start, and available simulation time/tick and world revision.
+`deltaToTargetMetersXYZ` is **target minus sampled player position** in world
+meters: `[0,20,0]` means the target is 20 meters above that sample.
+`distanceOutsideToleranceMeters` is the remaining distance to the tolerance
+boundary, clamped to zero inside it. These measurements use existing samples,
+including pause/reset samples; they do not infer between-sample crossings, goal
+order or gameplay acceptance. With no usable position, distances and
+`nearestSample` are null; `reached:false` then means unobserved. Missing sample
+times are null. The containing report identifies source/runtime/world/episode.
+
 Omit `durationSeconds` from `world_playtest` for the full episode, or provide a
 shorter duration for debugging. The Host executes full steps in real wall time
 and records the native canvas. Input and video frame timestamps bind that video

@@ -70,6 +70,38 @@ it.each(['getting-started','nonhuman-subject','extensions'] as const)('exposes e
  }
 });
 
+it('publishes createWorld with the actual optional options and full SDK return type',()=>{
+ const factories=['getting-started','nonhuman-subject'].map(topic=>{
+  const file=ts.createSourceFile('contract.ts',publicContractTopic(contracts,topic as 'getting-started'|'nonhuman-subject'),ts.ScriptTarget.Latest,true);
+  const factory=file.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createWorld');
+  if(!factory)throw new Error('Missing createWorld declaration');
+  return factory.getText(file);
+ });
+ expect(factories[0]).toBe(factories[1]);
+ const filename=fileURLToPath(new URL('./.world-factory-consumer.ts',import.meta.url));
+ const source=`import type * as THREE from 'three';
+import {createWorld as actualFactory,type World,type WorldOptions,type ThreeWorld} from '@worldkit/three';
+${factories[0]}
+createWorld(); createWorld(undefined); createWorld({});
+declare const scene:THREE.Scene;
+createWorld({scene});
+createWorld({fixedTimeStepSeconds:1/60,navigation:true,assetDefinitions:{},shadows:{enabled:false}});
+const acceptsActual:typeof createWorld=actualFactory;
+const acceptsPublished:typeof actualFactory=createWorld;
+const actualResult:Promise<ThreeWorld>=createWorld();
+// @ts-expect-error A timestep must remain numeric.
+createWorld({fixedTimeStepSeconds:'fast'});
+// @ts-expect-error A camera must remain a Three camera.
+createWorld({camera:'front'});
+`;
+ const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
+ const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
+ host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
+ const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename);
+ if(!consumer)throw new Error('Missing factory consumer');
+ expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
+},20_000);
+
 describe('Agent presentation contract',()=>{
  it('exposes shared shadow settings, light application and the JSON usage path',()=>{
   const source=publicContractTopic(contracts,'presentation');

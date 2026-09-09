@@ -23,6 +23,7 @@ import {cameraAuthoringGuidance} from './camera-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
+import {measureEpisodeTargets} from './target-feedback.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -399,7 +400,7 @@ export class ThreeCreatorTools {
     const samples = trace.samples as any[], errors = samples.flatMap(sample => sample.errors ?? []); const validSamples = samples.filter(sample => Array.isArray(sample.positionMetersXYZ) && sample.positionMetersXYZ.length === 3 && sample.positionMetersXYZ.every((value: unknown) => typeof value === 'number' && Number.isFinite(value)));
     if (samples.length !== validSamples.length) failure ??= 'THREE_PLAYTEST_OBSERVATION_INVALID: missing or nonfinite actual player position';
     let travelledMeters = 0; for (let i = 1; i < validSamples.length; i++) { const a = validSamples[i - 1]!.positionMetersXYZ, b = validSamples[i]!.positionMetersXYZ; travelledMeters += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
-    const targetResults = input.episode.targets.map(target => { const nearestDistanceMeters = Math.min(...validSamples.map(sample => Math.hypot(...target.positionMetersXYZ.map((value, index) => value - sample.positionMetersXYZ[index])))); return { ...target, nearestDistanceMeters: Number.isFinite(nearestDistanceMeters) ? nearestDistanceMeters : null, reached: nearestDistanceMeters <= target.toleranceMeters }; });
+    const targetResults = measureEpisodeTargets(input.episode.targets, samples);
     const capturedInput = trace.keyboardEvents.some((event: any) => event.type === 'keydown' && event.isTrusted) && trace.keyboardEvents.some((event: any) => event.type === 'keyup' && event.isTrusted);
     const isCompleteEpisode = completedSteps === input.episode.steps.length && budget.mode === 'full-episode';
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
