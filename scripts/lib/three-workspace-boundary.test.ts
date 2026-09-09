@@ -23,6 +23,7 @@ it("rejects a dangling import after its workspace package was removed", async ()
 });
 
 const retained = {
+  "apps/three-playground/package.json": JSON.stringify({ name: "@worldkit/three-playground", dependencies: { "@worldkit/three": "workspace:*" } }),
   "package.json": JSON.stringify({ name: "fixture" }),
   "packages/three-world/package.json": JSON.stringify({ name: "@worldkit/three", dependencies: { "@whitebox-world/camera-collision": "workspace:*" } }),
   "packages/camera-collision/package.json": JSON.stringify({ name: "@whitebox-world/camera-collision" }),
@@ -32,7 +33,9 @@ it("requires exactly the retained workspace package identities", () => {
   expect(checkThreeWorkspaceFiles(retained)).toEqual([]);
   expect(checkThreeWorkspaceFiles({ ...retained, "packages/old/package.json": '{"name":"@whitebox-world/old"}' }))
     .toContainEqual({ code: "THREE_WORKSPACE_PACKAGE", importer: "packages/old/package.json", specifier: "@whitebox-world/old" });
-  expect(checkThreeWorkspaceFiles({ "package.json": "{}" })).toHaveLength(2);
+  expect(checkThreeWorkspaceFiles({ ...retained, "apps/three-playground/package.json": '{"name":"@worldkit/unknown"}' }))
+    .toContainEqual({ code: "THREE_WORKSPACE_PACKAGE", importer: "apps/three-playground/package.json", specifier: "@worldkit/unknown" });
+  expect(checkThreeWorkspaceFiles({ "package.json": "{}" })).toHaveLength(3);
 });
 
 it("checks real imports and every dependency scope while ignoring negative fixtures and history", () => {

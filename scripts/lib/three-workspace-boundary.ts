@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 const RETAINED_PACKAGES = new Map([
+  ["apps/three-playground/package.json", "@worldkit/three-playground"],
   ["packages/camera-collision/package.json", "@whitebox-world/camera-collision"],
   ["packages/three-world/package.json", "@worldkit/three"],
 ]);
