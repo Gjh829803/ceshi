@@ -13,8 +13,9 @@ export const DEFAULT_SHADOW_SETTINGS:Readonly<ShadowSettings> = Object.freeze({
   coverageMeters:60,
   nearMeters:1,
   farMeters:350,
-  bias:-0.00015,
-  normalBiasMeters:0.04,
+  // Keep the receiver offset below a texel at the default depth range for contact shadows.
+  bias:-0.00002,
+  normalBiasMeters:0.01,
   radius:1,
   intensity:1,
 });
