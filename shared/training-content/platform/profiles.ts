@@ -23,7 +23,7 @@ const records: Record<string, AssetProfile> = { person };
 for (const spec of SPECS) records[spec.id] = {
   version: PROFILE_VERSION,
   assetId: spec.id,
-  control: training.parseTrainingControl(Object.fromEntries(Object.keys(training.defaultTrainingControl(spec.mode,spec)).filter(key => key in spec).map(key => [key, spec[key as keyof typeof spec]])), training.defaultTrainingControl(spec.mode,spec)),
+  control: {...training.defaultTrainingControl(spec.mode,spec),...(spec.maxSpeed!==undefined?{maxSpeed:spec.maxSpeed}:{}),...(spec.reverseSpeed!==undefined?{reverseSpeed:spec.reverseSpeed}:{})},
   camera: { ...DEFAULT_CAMERA_TUNING, distance: spec.camera },
   envelope: structuredClone(spec.envelope),
 };

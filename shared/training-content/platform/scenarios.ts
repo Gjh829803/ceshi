@@ -7,6 +7,10 @@ import { SPECS } from '../config';
 
 const { vehicleBody }=training;
 import type { MapDefinition, MapSpawn } from '../environment/types';
+// Course preparation relocates the selected vehicle; it must not create a second initial spawn.
+const campusGradePreparations:readonly MapSpawn[]=SPECS.filter(spec=>spec.wheelPhysics).map(spec=>({
+ id:`powertrain-grade-${spec.id}`,vehicleId:spec.id,name:'12° 坡道起步',position:[27,0,139],yaw:0,regionId:'grades',
+}));
 /** Map entry follows authored spawn priority, not the region display order. */
 export function defaultRegion(map:MapDefinition,assetId:string){
  const mode=assetId==='person'?'character':SPECS.find(s=>s.id===assetId)?.mode;
@@ -25,7 +29,7 @@ export function prepareCourse(sim:Simulation,map:MapDefinition,regionId:string,a
  const isCharacter=assetId==='person'||assetId==='character',index=sim.vehicles.findIndex(v=>v.spec.id===assetId),vehicle=sim.vehicles[index];
  if(!isCharacter&&!vehicle)throw new Error('未找到载具');
  if(!region.modes.includes(isCharacter?'character':vehicle!.spec.mode))throw new Error('此区域不支持当前运动类别');
- const spawns=map.spawns.filter(s=>s.regionId===regionId);
+ const spawns=[...(map.id==='campus'?campusGradePreparations:[]),...map.spawns].filter(s=>s.regionId===regionId);
  const spawn=(vehicle&&spawns.find(s=>s.vehicleId===assetId))??(vehicle&&spawns.find(s=>s.vehicleId===vehicle.spec.archetype))??spawns.find(s=>!s.vehicleId);
  if(!spawn)throw new Error('该区域没有准备点');
  const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spawn.yaw);

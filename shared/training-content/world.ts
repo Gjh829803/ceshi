@@ -43,6 +43,7 @@ export function buildWorld(scene:T.Scene,map:MapDefinition=getMap('campus')):Wor
   const ringGeo=new T.RingGeometry(128,147,128);geometries.add(ringGeo);const ring=new T.Mesh(ringGeo,mat('#425762'));ring.rotation.x=-Math.PI/2;ring.position.set(-28,.028,73);ring.receiveShadow=true;root.add(ring);
   for(let j=0;j<100;j++){const a=j/100*Math.PI*2;stripe(-28+137.5*Math.sin(a),73+137.5*Math.cos(a),.32,4,'#e5ece7',.07,a);}
   for(let j=0;j<90;j++){const a=j/90*Math.PI*2;stripe(-28+148*Math.sin(a),73+148*Math.cos(a),1.2,5,j%2?'#e5ece7':'#d69e75',.08,a);}
+  label('SUSPENSION / 逐轮悬架测试',-24,.08,96,30,2.4);
   label('VECTOR / TRAINING CAMPUS',-12,.08,41,64,6);label('22 M / DROP',-94,22.06,184,35,4);label('33 M / GLIDE',-130,33.04,-166,26,3);
   for(const [i,degree] of [5,12,22].entries())label(`${degree}° / GRADE`,5+i*22,.08,138,15,2.5);
   label('SHALLOW BANK',187,.07,-213,30,3);label('DEEP WATER / 42 M',146,.08,-65,36,3);

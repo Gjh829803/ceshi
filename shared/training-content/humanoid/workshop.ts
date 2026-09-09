@@ -26,6 +26,12 @@ function interactionStation(prefix: string, tx: number, tz: number) {
       approach: [tx + 5, .02, tz - 6], yaw: Math.PI,
       colliderIds: ['seat-cushion', 'seat-back', 'chair-leg--1--1', 'chair-leg--1-1', 'chair-leg-1--1', 'chair-leg-1-1'].map(id => `${prefix}-${id}`) },
   ];
+  for(const box of boxes){
+    const id=box.id.slice(prefix.length+1);
+    if(id.startsWith('seat-')||id.startsWith('chair-leg-'))box.rigidGroup={id:`${prefix}-chair-body`,massKg:8};
+    else if(id==='pickup-top'||id.startsWith('table-leg--5-'))box.rigidGroup={id:`${prefix}-pickup-table`,massKg:24};
+    else if(id==='place-top'||id.startsWith('table-leg--8-'))box.rigidGroup={id:`${prefix}-place-table`,massKg:24};
+  }
   // Painted anchors are thin visual-only strips; the object is a dynamic target.
   for (const target of interactions) for (const side of [-1, 1])
     boxes.push(block(`${target.id}-anchor-${side}`, [target.approach[0] + side * .29, .008, target.approach[2]], [.025, .008, .5], mint, undefined, false));

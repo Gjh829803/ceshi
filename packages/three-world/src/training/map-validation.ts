@@ -8,6 +8,7 @@ export function validateTrainingMap(map:MapDefinition):void{
   if(!map||!text(map.id)||!map.bounds||!vector(map.bounds.min)||!vector(map.bounds.max)||map.bounds.min.some((n,i)=>n>=map.bounds.max[i]!)||!vector(map.playerSpawn))fail();
   for(const list of [map.boxes,map.water,map.regions,map.spawns])if(!Array.isArray(list))fail();
   for(const list of [map.interactions,map.climbSurfaces,map.looseCrates,map.characterTrials])if(list!==undefined&&!Array.isArray(list))fail();
+  const groupMasses=new Map<string,number>();for(const box of map.boxes)if(box.rigidGroup){const g=box.rigidGroup;if(!text(g.id)||!Number.isFinite(g.massKg)||g.massKg<=0||box.collision===false||(groupMasses.has(g.id)&&groupMasses.get(g.id)!==g.massKg))fail();groupMasses.set(g.id,g.massKg);}
   for(const box of map.boxes)if(!box||!text(box.id)||!vector(box.position)||!vector(box.size)||box.size.some(n=>n<=0)||(box.rotation!==undefined&&!vector(box.rotation)))fail();
   for(const water of map.water)if(!water||!text(water.id)||!vector(water.min)||!vector(water.max)||water.min.some((n,i)=>n>=water.max[i]!)||!Number.isFinite(water.surface))fail();
   for(const region of map.regions)if(!region||!text(region.id)||!vector(region.center)||!Array.isArray(region.modes)||region.modes.some(m=>!text(m)))fail();

@@ -294,7 +294,7 @@ function CameraEditor({
       step: training.CAMERA_PARAMETERS[key].step,
     })),
     ...training
-      .controlFields(mode ?? "character")
+      .controlFields(mode ?? "character",!!SPECS.find(s=>s.id===assetId)?.wheelPhysics)
       .filter((f) => !f.disabled)
       .map((f) => ({
         group: "control" as const,

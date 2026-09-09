@@ -2,8 +2,8 @@ import {CONTROL_RANGES,type ControlKey} from './control';
 type Key=ControlKey;
 export type ControlField={key:Key;label:string;unit:string;step:number;note:string;section:'速度范围'|'加速与减速'|'转向与稳定'|'专项运动';disabled?:boolean};
 
-/** Shared parameter meaning and controller-family applicability. No simulation state. */
-export function controlFields(family:string):ControlField[]{
+/** UI descriptions only; defaults and numeric validation live in the SDK. */
+export function controlFields(family:string,powertrain=false):ControlField[]{
  const person=family==='character',road=['wheeled','bike'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','bike','slide','hover','boat'].includes(family);
  const fields:ControlField[]=[];
  const add=(key:Key,label:string,unit:string,note:string,section:ControlField['section'],step=.1,disabled=false)=>fields.push({key,label,unit,note,section,step,disabled});
@@ -29,13 +29,20 @@ export function controlFields(family:string):ControlField[]{
  if(air||sub)add('pitchResponse','俯仰姿态响应','/s','向目标俯仰姿态靠拢的速度。','专项运动');
  if(family==='plane')add('throttleResponse','油门升降速率','/s','Shift / Ctrl 每秒增加或减少的油门量（油门范围 0–1）。','专项运动',.01);
  if(family==='glider')add('launchSpeed','弹射初速度','m/s','再次准备后按 Shift 发射的初速度。','专项运动');
+ if(powertrain)for(const f of fields){
+  if(['accel','coastDeceleration','brakeDamping'].includes(f.key)){f.disabled=true;f.note='动力链模式：加速由发动机与齿比决定；滑行由发动机制动、滚阻和风阻决定。';}
+  if(f.key==='brakeDeceleration'){f.label='制动力基准';f.note='换向制动和 Space 制动的最大轮轴制动扭矩基准，实际制动力受抓地力限制。';}
+  if(f.key==='grip'){f.label='轮胎侧向响应';f.unit='/s';f.note='侧向滑动的衰减速率；摩擦上限由轮胎材质倍率、轮载和地面摩擦独立决定。';}
+  if(family==='wheeled'&&f.key==='steer')f.note='控制完整机械舵角；高速平滑转向过程，最终舵角不随车速缩小。';
+  if(family==='wheeled'&&['steeringResponse','steeringReturn'].includes(f.key))f.note+=' 高速按 1 + 前向速度绝对值 / 20 平滑响应，保留完整舵角。';
+ }
  return fields;
 }
 export const controlKeys=Object.keys(CONTROL_RANGES) as Key[];
 
 /** Discovery only: stored complete profiles may retain inactive family fields. */
-export function controlSchemaForFamily(family:string){
- return Object.fromEntries(controlFields(family).filter(field=>!field.disabled).map(field=>{
+export function controlSchemaForFamily(family:string,powertrain=false){
+ return Object.fromEntries(controlFields(family,powertrain).filter(field=>!field.disabled).map(field=>{
   const [minimum,maximum]=CONTROL_RANGES[field.key];
   return [field.key,{type:'number',minimum,maximum,description:`${field.label} (${field.unit}): ${field.note}`}];
  }));

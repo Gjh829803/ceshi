@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import {Vector3} from 'three';
+import {Vector3,Quaternion,Euler} from 'three';
 import {bindingLabel,DEFAULT_KEY_BINDINGS,type KeyBindings} from '../input';
 import type {HumanoidActionContext} from './types';
 import {ACTION_TUNING,SKILL_DEFINITIONS,type InteractionTarget,type SkillId,type SkillRequest,type SkillResult} from './action-schema';
@@ -23,12 +23,13 @@ export class ActionSystem {
   private cooldown=0;
   private results=new Map<string,SkillResult>();
   private requests=new Map<string,string>();
+  private unstableSeats=new Set<string>();
+  private makePickup(target:TargetRuntime){const d=target.definition,size=d.size??[.13,.13,.13];target.body=this.sim.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(...d.position).setGravityScale(9.81/18).setCcdEnabled(true).lockRotations().setSleeping(true));target.collider=this.sim.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setMass(d.massKg??.3).setCollisionGroups(0x0001ffeb),target.body);}
   constructor(private sim:HumanoidActionContext){
     for(const definition of sim.level?.interactions??[]){
       const target:TargetRuntime={definition:structuredClone(definition),position:new Vector3(...definition.position),state:'available'};
       if(definition.kind==='pickup'){
-        const size=definition.size??[.13,.13,.13];
-        target.collider=sim.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setTranslation(...definition.position));
+        this.makePickup(target);
       }
       this.targets.set(definition.id,target);
     }
@@ -43,14 +44,14 @@ export class ActionSystem {
   }
   reset(){
     if(this.active)this.finish('cancelled','RESET','测试点已复位');
-    this.active=null;this.pose=null;this.carrying=null;this.seated=null;this.cooldown=0;
+    this.active=null;this.pose=null;this.carrying=null;this.seated=null;this.cooldown=0;this.unstableSeats.clear();
     this.sim.actionCapsuleHalf=null;
     for(const target of this.targets.values()){
       if(target.body){this.sim.world.removeRigidBody(target.body);target.body=undefined;target.collider=undefined;}
       const source=this.sim.level?.interactions?.find(t=>t.id===target.definition.id);
       if(source)target.definition=structuredClone(source);
       target.position.fromArray(target.definition.position);target.state='available';
-      if(target.definition.kind==='pickup'&&!target.collider){const size=target.definition.size??[.13,.13,.13];target.collider=this.sim.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setTranslation(...target.definition.position));}
+      if(target.definition.kind==='pickup'&&!target.collider)this.makePickup(target);
       target.collider?.setTranslation(target.position);target.collider?.setEnabled(true);
     }
   }
@@ -63,15 +64,22 @@ export class ActionSystem {
     // The hands are inside the conservative upright movement capsule. Detach
     // immediately beyond that capsule, then let a real dynamic body fall.
     const position=sim.position.clone().addScaledVector(UP,1.057).addScaledVector(sim.facing,RADIUS+Math.max(size[0],size[2])/2+.035);
-    if(target.collider)sim.world.removeCollider(target.collider,true);
+    if(target.body)sim.world.removeRigidBody(target.body);else if(target.collider)sim.world.removeCollider(target.collider,true);
     target.body=sim.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x,position.y,position.z).setCcdEnabled(true).lockRotations());
-    target.collider=sim.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setMass(Math.max(.01,target.definition.massKg??1)).setFriction(.65),target.body);
+    target.collider=sim.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setMass(Math.max(.01,target.definition.massKg??1)).setFriction(.65).setCollisionGroups(0x0001ffeb),target.body);
     target.body.setLinvel({x:sim.velocity.x,y:Math.min(0,sim.vertical),z:sim.velocity.z},true);
     target.position.copy(position);target.state='dropped';this.carrying=null;this.pose=null;
     sim.lastResult='进入深水：物件已脱手并按重力下沉；复位可恢复到台面';
   }
   /** Safe to call every render frame; never overwrites hand-attached positions. */
-  syncDropped(){for(const target of this.targets.values())if(target.body&&target.state==='dropped')target.position.copy(target.body.translation());}
+  syncDropped(){for(const target of this.targets.values())if(target.body&&target.state!=='carried')target.position.copy(target.body.translation());}
+  syncSeats(resolve:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null){
+    this.unstableSeats.clear();
+    for(const source of this.sim.level.interactions){if(source.kind!=='seat'||!source.colliderIds?.length)continue;const anchor=resolve(source.colliderIds[0]!,source.position),approach=resolve(source.colliderIds[0]!,source.approach),target=this.targets.get(source.id);if(!anchor||!approach||!target)continue;
+      target.position.copy(anchor.position);target.definition.position=anchor.position.toArray();target.definition.approach=approach.position.toArray();target.definition.yaw=source.yaw+new Euler().setFromQuaternion(anchor.rotation,'YXZ').y;
+      if(!anchor.stable||(this.seated===source.id&&this.sim.position.distanceTo(approach.position)>.25)){this.unstableSeats.add(source.id);if(this.active?.targetId===source.id)this.finish('cancelled','SEAT_MOVED','座椅移动或翻倒，坐姿交互已中断');if(this.seated===source.id){this.seated=null;this.pose=null;this.sim.actionCapsuleHalf=null;target.state='available';}}
+    }
+  }
   status(id:string){const result=this.results.get(id);return result?{...result}:null;}
   private save(result:SkillResult){
     this.results.set(result.requestId,{...result});
@@ -94,6 +102,7 @@ export class ActionSystem {
     if((action==='slide'||action==='roll')&&this.cooldown>0)return ['COOLDOWN','动作仍在恢复中'];
     if(action==='pickup'||action==='sit'){
       if(!target||target.definition.kind!==(action==='pickup'?'pickup':'seat'))return ['INVALID_TARGET','没有对应类型的交互目标'];
+      if(action==='sit'&&this.unstableSeats.has(target.definition.id))return ['SEAT_UNSTABLE','座椅移动或翻倒，暂时不能坐下'];
       if(target.state!=='available'&&target.state!=='placed')return ['TARGET_UNAVAILABLE','目标已被占用'];
       const approach=new Vector3(...target.definition.approach),delta=approach.clone().sub(sim.position);
       if(Math.hypot(delta.x,delta.z)>ACTION_TUNING.approachRadiusMeters||Math.abs(delta.y)>ACTION_TUNING.approachVerticalToleranceMeters)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
@@ -195,7 +204,7 @@ export class ActionSystem {
     const position=placement.position!;
     target.position.copy(position);target.state='placed';target.definition.position=position.toArray();
     target.definition.approach=sim.position.toArray();target.definition.yaw=Math.atan2(sim.facing.x,sim.facing.z);
-    target.collider?.setTranslation(position);target.collider?.setEnabled(true);this.carrying=null;
+    if(target.body){target.body.setTranslation(position,true);target.body.setLinvel({x:0,y:0,z:0},false);target.body.setEnabled(true);}else target.collider?.setTranslation(position);target.collider?.setEnabled(true);this.carrying=null;
     return this.save({...request,targetId:target.definition.id,status:'completed',code:'PLACED',message:'已放到台面（物件状态切换，暂无专用放下动画）'});
   }
   /** Called at fixed 60 Hz on dry land before ordinary locomotion. */
@@ -251,7 +260,7 @@ export class ActionSystem {
       this.move(new Vector3());this.pose={key:'pickup',time:Math.min(active.elapsed,DURATIONS.pickup!),phase:'pickup'};sim.state='pickup';
       if(active.elapsed>=.30&&!active.attached){
         active.attached=true;this.carrying=active.targetId!;const target=this.targets.get(this.carrying)!;
-        target.state='carried';target.collider?.setEnabled(false);
+        target.state='carried';target.collider?.setEnabled(false);target.body?.setEnabled(false);
       }
       if(active.elapsed>=DURATIONS.pickup!)this.finish('completed','ATTACHED','已拾取：WASD 搬运，靠近台面 G 放下');
     }else if(active.id==='sit'){

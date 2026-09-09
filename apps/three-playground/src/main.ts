@@ -353,6 +353,7 @@ function setCameraMode(mode: number) {
 function cycleCamera() {
   setCameraMode((follow.mode + 1) % 3);
 }
+function recoverVehicle(){if(!ready)return;if(runtime.recoverVehicle())syncTeleport();toast(sim.message);}
 function interact() {
   if (!ready || paused || panelOpen) return;
   humanDemo = null;
@@ -385,6 +386,7 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (paused || !ready) return;
+    if(e.code==='KeyR'&&!e.ctrlKey&&sim.vehicle&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes('KeyR'))){e.preventDefault();recoverVehicle();return;}
     if (
       /^Digit[1-6]$/.test(e.code) &&
       !Object.values(sdk.getKeyBindings()).some((codes) =>
@@ -401,6 +403,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && ready) pause(true);
 });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
 shell.on("resetButton", async () => {
   await sdk.reset();
@@ -606,6 +609,7 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
+    powertrain:!!v?.wheelPhysics,
     family: v?.spec.mode ?? "character",
     control: training.readTrainingControl(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
@@ -950,6 +954,8 @@ function updateUI() {
     p = sim.player,
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
+  const drive=v?.wheelPhysics?.powertrain;
+  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{rpm:drive.rpm,maxRpm:v!.spec.wheelPhysics!.powertrain?.maxRpm??6200,gear:drive.gear<0?'R':drive.gear===0?'N':'D'+drive.gear,speed:Math.round(speed*3.6),throttle:Math.round(drive.throttle*100),shifting:drive.shiftRemaining>0}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
@@ -1132,12 +1138,12 @@ function updateCreatureVisual(n: number, dt: number) {
       dt,
     );
 }
-function updateVisuals(dt: number) {
+function updateVisuals(dt: number,sample?:training.TrainingDisplaySample) {
   collisionDebug.update(sim.humanoid, collisionMode, session.map.boxes);
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
     updateCreatureVisual(n, dt);
-    updateVehicleWheels(vis, state, {
+    updateVehicleWheels(vis, sample?.vehicles[n]??state, {
       grounded: state.grounded && !state.submerged,
       dt,
       revision: sim.teleportRevision,
@@ -1164,6 +1170,7 @@ function updateVisuals(dt: number) {
     sim.vehicle?.position ?? sim.player.position,
     follow.underwater,
   );
+  for(const box of session.map.boxes)if(box.rigidGroup){const pose=sim.environment.propBoxPose(box.id),mesh=world.root.getObjectByName(box.id);if(pose&&mesh){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}}
   updateUI();
 }
 runtime.onVisualUpdate(updateVisuals);
@@ -1235,6 +1242,8 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable training selections and state inspection.
 const labAPI = {
   getState: () => ({
+    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?.wheelPhysics?{...sim.vehicle.wheelPhysics.powertrain}:undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),
+
     mapId: session.map.id,
     activeVehicle: sim.vehicle?.spec.id ?? null,
     mode: sim.vehicle?.spec.mode ?? "character",

@@ -1080,3 +1080,5 @@ button svg {
 .workspace-header svg{width:16px;height:16px}
 
 .rail-label{font-size:10px;line-height:14px;white-space:nowrap}
+
+.powertrain-hud{position:absolute;bottom:80px;left:24px;width:264px;padding:16px;background:#102d32ed;color:#e5eddd;border-radius:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;pointer-events:none}.powertrain-hud strong{font-size:24px;color:#c9dfa2}.powertrain-hud meter{width:100%}.powertrain-hud small{width:100%}

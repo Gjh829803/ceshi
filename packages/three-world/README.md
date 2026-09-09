@@ -344,7 +344,7 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 
 ### Brake-turn drift for authored vehicles
 
-For an arcade car or motorcycle, set `brakeDrift: true` on its `training.VehicleSpec`
+For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` on its `training.VehicleSpec`
 (`mode: 'wheeled'` or `'bike'`). The SDK integrates real lateral velocity; do not
 rotate the visual root or install a second movement loop to fake a skid.
 
@@ -966,6 +966,7 @@ interpenetration. Browser visual and capture acceptance are separate checks.
 <!-- /asset-info -->
 
 
+<!-- topic:extensions -->
 ## Developer tuning
 
 The [SDK configuration directory](src/config/README.md) owns shared defaults and
@@ -973,3 +974,167 @@ parameter definitions. Playground's calibrated values are the baseline; its UI,
 SDK profile parsing and Creator schemas consume the same definitions. Internal
 presentation switches stay out of public profile fields. Config changes require
 rebuilding the SDK; authored Three geometry and gameplay remain ordinary code.
+
+<!-- topic:training -->
+## Per-wheel road simulation
+
+An optional `VehicleSpec.wheelPhysics` enables the configurable road model for
+wheeled and bike modes. Configure `mass` in kilograms and `radius`, `hubHeight`,
+`halfTrack`, `halfWheelbase` in metres. The capabilities playground enables it
+for the rover, racer and utility rover. Author the chassis envelope above the
+tyre contact plane; cylinder sweeps with the tyre radius, width and steering angle
+supply ground support. `wheelWidth` defaults to 0.4 m.
+
+`centerOfMassHeight` sets the local mass centre in metres (default 0.65 for cars,
+0.85 with rider balance). Both rigid-body mass properties and force moment arms
+use this value. The playground uses 0.65 for rover, 0.75 for utility rover,
+0.50 for racer, 0.45 for supercar and 0.30 for kart. These are authored tuning
+values, not measurements of production vehicles. `tireFriction` multiplies ground
+friction (default 1); the playground uses 1.4 for rover/utility/kart and 1.55
+for racer/supercar so the high-speed trajectory responds under throttle. These are
+handling calibration values. `grip` controls lateral velocity response in /s independently.
+Cars keep their full mechanical steering angle at every speed: central full lock
+is min(0.65, 0.5 × steer) radians, with inner/outer Ackermann angles applied afterward.
+Input response still smooths steering changes. Actual turning comes from tyre
+friction and chassis forces; the model does not impose a speed-based angle cap,
+hard lateral-acceleration cap or direct body orientation correction.
+`steeringGripRatio` (default 0.85, range >0 to 1) scales the steering axle friction
+limit on cars, leaving the non-steering axle a stability reserve during repeated
+countersteering. It is a handling calibration, not a measured tyre coefficient.
+The existing rider-balance steering path remains separate.
+
+For cars, steering response is divided by `1 + abs(forwardSpeed) / 20` while
+the final mechanical angle stays unchanged. This smooths rapid countersteering.
+Traction control reserves lateral capacity as steering and speed increase:
+the drive torque ceiling is `0.95 * grip * radius * sqrt(1 - reserve)`, where
+`reserve = 0.8 * steering² * min(1, abs(forwardSpeed) / 15)` and steering is
+clamped to ±1. Straight-line traction retains its original ceiling. Combined
+tyre forces still obey the same friction circle; no extra yaw torque or pose lock
+is applied. Rider-balance profiles keep their own steering and traction response.
+
+The training fixed step owns spring/damper support, per-wheel tyre forces and
+chassis force/torque integration. Ground friction comes from the queried collider.
+Throttle supplies wheel torque, steering uses inner/outer wheel angles, braking
+and lateral force share a grip limit. `maxRaise` and `maxDrop` are relative to
+the 0.25 m nominal suspension length; each defaults to 0.1 m. The playground
+uses raise/drop of 0.02/0.025 m for the racer, 0.025/0.025 m for the rover and
+0.04/0.045 m for the utility rover. Spring stiffness uses 2.2 Hz sprung-mass
+frequency, 0.8 damping ratio and static per-wheel weight preload. At maximum
+compression a unilateral suspension-axis impulse uses chassis effective mass,
+contact-point velocity and bounded penetration correction to transfer the load
+to its linear and angular motion. The correction speed is capped at 0.6 m/s;
+no separate rigid wheel collider redirects horizontal speed into a curb launch.
+Damping uses contact-normal velocity divided by the suspension/normal alignment,
+so motion uphill is not mistaken for suspension extension. The compression stop
+uses this projection only when alignment exceeds 0.9; sharp edge normals retain
+the suspension-axis velocity to avoid converting a curb strike into a launch.
+A dynamic chassis in the existing Rapier
+world resolves translation, rotation, contact friction and CCD together. A tapered
+lower hull and separate cabin replace the solid outer envelope for physical contact;
+the envelope remains available for character and boarding queries. Vehicle gravity
+is 9.81 m/s²; the world's existing humanoid gravity remains unchanged. Suspension
+and tyre forces run before each shared physics substep (at most 1/120 s), and both
+animation and the mounted camera read the resulting body state. Parked physics-enabled
+vehicles continue simulating with parking brakes. Reset releases the old body.
+This is a custom simplified force model, not the Chaos solver. ABS, tyre damage and deformable
+tyres are not implemented.
+
+`TrainingDisplaySample.vehicles[n].wheels` carries suspension length, steering and
+spin angle at the chassis display timestamp. `onVisualUpdate` receives this sample
+as its second argument; `updateVehicleWheels` reads it without a second animation
+integrator. Reset recreates wheel state. Vehicles without this configuration keep
+their existing controller and wheel animation.
+
+### Engine and automatic transmission
+
+The local playground's **原地扶正** button and unassigned **R** shortcut call
+`TrainingRuntime.recoverVehicle()`; command clients use `training.recover`.
+Recovery requires an occupied wheeled/bike/slide vehicle, nearby dry ground and
+enough clearance. It first tries the current horizontal position, then searches
+outwards up to 6 metres if the chassis spans a ledge or uneven support. Nine
+support samples over the chassis footprint plus margin reject missing ground,
+excessive height differences and unsuitable slopes. Nearby placement also checks
+obstacles along the relocation segment and the complete upright body clearance.
+The notification distinguishes nearby relocation from in-place recovery. It preserves heading, driver, camera mode
+and the authored start point, clears motion and resets wheel/drivetrain state.
+It raises the upright body just above local support and lets suspension settle.
+Missing ground or obstructed clearance rejects the operation without moving the
+vehicle. The existing reset button still returns to the authored start.
+
+The four-wheel model uses `wheelPhysics.powertrain` (`PowertrainConfig`), with
+defaults when omitted. Specify `torqueCurve` as increasing `[rpm, Nm]` pairs,
+`idleRpm`, `maxRpm`, `upshiftRpm`, `downshiftRpm`, positive descending
+`forwardRatios`, `reverseRatio`, `finalDrive`, `efficiency` (0–1), `shiftSeconds`,
+`engineBrakeTorque` (Nm), `dragArea` (CdA in m²) and `rollingResistance` (coefficient).
+Runtime configuration validates these values and clones them per vehicle.
+
+For forward driving, Shift plus W also multiplies engine torque by optional
+`boostTorqueMultiplier` (default 1.8, valid range 1–4), in addition to selecting
+the higher speed limit. While accelerating it requests a lower gear when its predicted RPM is below 85% of the sport upshift threshold; that threshold is 110% of normal, capped 350 RPM below redline. Shift interruption and cooldown still apply. It does not boost reverse or bypass braking, shift
+interruptions or the RPM limiter. Grounded wheel drive torque is limited to 95%
+of its available friction torque as a simplified traction control. Upshifts also
+require the road-speed-equivalent RPM to reach the threshold, preventing transient
+wheelspin from selecting a higher gear too early.
+
+Wheel angular speed feeds engine RPM through the gear ratio. The torque curve,
+throttle, ratio and efficiency determine axle torque, shared equally between configured driven
+wheels. Automatic shifts interrupt torque through neutral, then engage over 0.18 s.
+Ground contact and slip gate automatic shifts; RPM hysteresis and cooldown prevent
+rapid gear hunting. Opposite-direction input brakes before selecting D/R near rest.
+Gravity, tyre load, engine braking, rolling resistance and quadratic aerodynamic
+drag determine hill performance without a scripted slope-speed multiplier.
+
+`vehicle.wheelPhysics.powertrain` exposes RPM, current/target gear (R=-1, N=0),
+shift time remaining, engagement, throttle and engine/axle torque. The fixed clock
+owns this state; reset recreates it. The playground HUD reads it without advancing
+simulation. Rover, racer and utility rover have separate authored engine settings;
+the terrain test prepares them before the 12° ramp.
+
+For these vehicles, legacy `accel`, `coastDeceleration` and `brakeDamping` do not
+drive physics and are disabled in the playground inspector. Use the powertrain
+configuration for those effects; `brakeDeceleration` sets brake torque capacity.
+Existing speed settings limit engine drive, rather than forcibly clamping downhill
+velocity. This is a simplified automatic powertrain with launch slip and no engine
+stall; it does not model a full clutch, torque converter, differential or manual gears.
+
+### Movable environment props
+
+Set `EnvironmentBox.rigidGroup` to `{id, massKg}` on each part of a movable
+object. Parts sharing an id form one compound dynamic body; `massKg` is the total
+group mass and must agree on every part. Box positions/rotations remain authored
+world transforms. Ungrouped boxes remain fixed. EnvironmentQueries owns the body
+in the existing Rapier world, with gravity, CCD, friction and angular motion.
+`propBoxPose(id)` returns each physical part's current world pose for presentation;
+`resetProps()` restores the original group poses and clears velocities.
+
+The playground groups chairs and tables, and makes loose boards and freestanding
+markers movable. Building and traversal-course structures remain fixed. Seat
+anchors follow the group's pose; moving, tilted or displaced occupied seats cancel
+seating. Pickup objects use independent dynamic bodies while unheld, so removing
+their table support lets them fall. Their existing rotation lock is retained for
+the authored carrying animation. This supports moving and tipping whole props;
+it does not implement fracture or a full Chaos vehicle solver.
+
+## Configurable road vehicle physics
+
+Set `spec.wheelPhysics = training.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
+for `wheeled` or `bike` subjects. Both run in the existing physics world and use
+per-wheel suspension, tyre forces, dynamic chassis collision and the powertrain.
+The motorcycle profile enables grounded rider balance torque; it does not right
+an airborne or overturned vehicle. Its low-speed reverse is a playground assist.
+
+Override mass (kg), radius, hubHeight, halfTrack, halfWheelbase, wheelWidth and
+suspension maxRaise/maxDrop (metres) to match the authored model. Supply `wheels`
+as an ordered list of `{x,z,steering,driven}` for 2–12 wheels. The visual wheel-rig
+order must match this list. All wheels currently share tyre radius and suspension
+settings. Omitting the list retains the legacy four-wheel layout. Motorcycle
+profiles derive two centreline wheels from halfWheelbase unless overridden.
+Driven wheels share axle torque; sprung load and braking scale with wheel count.
+Wheel presentation reads the same interpolated hub height, suspension, spin and
+steering state. Do not retain a separate visual lean/rolling integrator.
+
+Current playground mapping: rover, racer, trail-rover, supercar, bike and touring-bike.
+Aircraft, hovercraft, boats, human-powered boards and animal-drawn carriages keep
+their specialised controllers; their dynamic-prop collisions remain enabled.
+This is a reusable road solver, not a complete vehicle simulation: no individual
+wheel masses, differential model, per-wheel tyre sizes or trailer joint solver.

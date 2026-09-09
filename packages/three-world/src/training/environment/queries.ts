@@ -47,17 +47,21 @@ function validatePose(pose: BodyPose) {
   )
     throw new Error("TRAINING_QUERY_INVALID");
 }
-export interface MoveResult {position:Vector3;grounded:boolean;normal:Vector3;blocked:boolean;normals:Vector3[]}
+export interface MoveResult {position:Vector3;grounded:boolean;normal:Vector3;blocked:boolean;normals:Vector3[];contacts?:{point:Vector3;normal:Vector3}[]}
+export interface VehicleRigidRig {token:object;body:RAPIER.RigidBody;colliders:RAPIER.Collider[];beforeStep:(dt:number)=>void;afterStep:()=>void}
 export interface HumanoidRig {world:RAPIER.World;body:RAPIER.RigidBody;capsule:RAPIER.Collider;controller:RAPIER.KinematicCharacterController}
-export interface ActorQueryBody {id:string;actorId?:string;position:Vector3;rotation:Quaternion;body:QueryBody}
+export interface ActorQueryBody {id:string;actorId?:string;physical?:boolean;position:Vector3;rotation:Quaternion;body:QueryBody}
 
 /** The map owns one world. Borrowed character rigs and interaction bodies share its fixed tick. */
 export class EnvironmentQueries {
   private world:RAPIER.World;
+  private vehicleRigs=new Map<string,VehicleRigidRig>();
   private controller:RAPIER.KinematicCharacterController;
   private disposed=false;
   private staticColliders=new Map<string,RAPIER.Collider>();
   private staticColliderIds=new Map<number,string>();
+  private propBodies=new Map<string,{body:RAPIER.RigidBody;origin:Vector3}>();
+  private propBoxes=new Map<string,string>();
   private rigs=new Set<HumanoidRig>();
   private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string;actorId:string}>();
   private actorColliderHandles=new Set<number>();
@@ -70,8 +74,22 @@ export class EnvironmentQueries {
   constructor(readonly map:MapDefinition){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
     this.world=new RAPIER.World({x:0,y:-18,z:0});
+    const groups=new Map<string,typeof map.boxes[number][]>();
+    for(const box of map.boxes)if(box.rigidGroup){const g=box.rigidGroup;if(box.collision===false||!g.id||!Number.isFinite(g.massKg)||g.massKg<=0)throw new Error('TRAINING_PROP_INVALID');const list=groups.get(g.id)??[];list.push(box);groups.set(g.id,list);}
+    for(const [id,boxes] of groups){
+      const mass=boxes[0]!.rigidGroup!.massKg;if(boxes.some(b=>b.rigidGroup!.massKg!==mass))throw new Error('TRAINING_PROP_MASS_CONFLICT');
+      const volume=boxes.reduce((s,b)=>s+b.size[0]*b.size[1]*b.size[2],0),origin=new Vector3();
+      for(const b of boxes)origin.addScaledVector(new Vector3(...b.position),b.size[0]*b.size[1]*b.size[2]/volume);
+      const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(origin.x,origin.y,origin.z).setGravityScale(9.81/18).setCcdEnabled(true).setLinearDamping(.15).setAngularDamping(.3).setSleeping(true));
+      this.propBodies.set(id,{body,origin});
+      for(const b of boxes){const p=new Vector3(...b.position).sub(origin),rotation=new Quaternion().setFromEuler(new Euler(...(b.rotation??[0,0,0])));
+        // 排除载具查询代理（第 3 组）；只与真正的动态车身求解，避免重复的静态包围盒卡住物品。
+        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(b.size[0]/2,b.size[1]/2,b.size[2]/2).setTranslation(p.x,p.y,p.z).setRotation(rotation).setDensity(mass/volume).setFriction(.55).setRestitution(.08).setCollisionGroups(0x0001ffeb),body);
+        this.staticColliders.set(b.id,collider);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
+      }
+    }
     for(const box of map.boxes){
-      if(box.collision===false)continue;
+      if(box.collision===false||box.rigidGroup)continue;
       const rotation=new Quaternion().setFromEuler(new Euler(...(box.rotation??[0,0,0]),'XYZ'));
       // GJK loses centimetres of contact precision against a kilometre-wide
       // cuboid when the source character radius is only .28 m. Subdivide broad
@@ -81,7 +99,7 @@ export class EnvironmentQueries {
       const width=box.size[0]/nx,depth=box.size[2]/nz;
       for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++){
         const x=box.position[0]-box.size[0]/2+(ix+.5)*width,z=box.position[2]-box.size[2]/2+(iz+.5)*depth;
-        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(width/2,box.size[1]/2,depth/2).setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85));
+        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(width/2,box.size[1]/2,depth/2).setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85).setCollisionGroups(0x0001ffff));
         this.staticColliderIds.set(collider.handle,box.id);
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
@@ -96,21 +114,30 @@ export class EnvironmentQueries {
   private assertLive(){if(this.disposed)throw new Error('Environment queries disposed');}
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
   colliderId(handle:number):string{return this.staticColliderIds.get(handle)??[...this.actorColliders].find(([,v])=>v.collider.handle===handle)?.[0]??`collider-${handle}`;}
+  wheelSweep(origin:Vector3,rotation:Quaternion,direction:Vector3,radius:number,width:number,distance:number){
+    this.assertLive();
+    const hit=this.world.castShape(origin,rotation,direction,new RAPIER.Cylinder(width/2,radius),0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
+    if(!hit)return null;
+    return {distance:hit.time_of_impact,normal:new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z),point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z),friction:hit.collider.friction()};
+  }
   raycast(origin:Vector3,direction:Vector3,distance:number){
     this.assertLive();const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,direction),distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
     if(!hit)return null;
     const id=[...this.staticColliders].find(([,c])=>c.handle===hit.collider.handle)?.[0]??`collider-${hit.collider.handle}`;
-    return {id,distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
+    return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id);}
+  propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
+  propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
+  resetProps(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.propagateModifiedBodyPositionsToColliders();}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
    * Cached handles are safe to inspect from Rapier query predicates. */
   isActorCollider(collider:RAPIER.Collider){this.assertLive();return this.actorColliderHandles.has(collider.handle);}
   createHumanoidRig(position:Vector3,half=.56,radius=.28):HumanoidRig {
     this.assertLive();
     const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(position.x,position.y+half+radius,position.z));
-    const capsule=this.world.createCollider(RAPIER.ColliderDesc.capsule(half,radius).setMass(75).setFriction(0),body);
+    const capsule=this.world.createCollider(RAPIER.ColliderDesc.capsule(half,radius).setMass(75).setFriction(0).setCollisionGroups(0x0008ffff),body);
     const rig={world:this.world,body,capsule,controller:this.world.createCharacterController(.015)};
     this.rigs.add(rig);this.queryExcluded.add(capsule.handle);return rig;
   }
@@ -128,9 +155,9 @@ export class EnvironmentQueries {
       if(entry&&entry.bodyKey!==bodyKey){this.queryExcluded.delete(entry.collider.handle);this.actorColliderHandles.delete(entry.collider.handle);this.world.removeCollider(entry.collider,false);this.actorColliders.delete(actor.id);entry=undefined;}
       if(!entry){
         const b=actor.body,desc=b.kind==='capsule'?RAPIER.ColliderDesc.capsule(b.height/2-b.radius,b.radius):RAPIER.ColliderDesc.cuboid(...b.halfExtents);
-        entry={collider:this.world.createCollider(desc),bodyKey,actorId:actor.actorId??actor.id};this.actorColliders.set(actor.id,entry);this.actorColliderHandles.add(entry.collider.handle);this.queryExcluded.add(entry.collider.handle);
+        entry={collider:this.world.createCollider(desc.setCollisionGroups(0x0004ffff)),bodyKey,actorId:actor.actorId??actor.id};this.actorColliders.set(actor.id,entry);this.actorColliderHandles.add(entry.collider.handle);this.queryExcluded.add(entry.collider.handle);
       }
-      entry.collider.setTranslation(center(actor.position,actor.body,actor.rotation));entry.collider.setRotation(actor.rotation);
+      entry.collider.setCollisionGroups(actor.physical?0x0004ffff:0x0010ffff);entry.collider.setTranslation(center(actor.position,actor.body,actor.rotation));entry.collider.setRotation(actor.rotation);
     }
     for(const [id,entry] of this.actorColliders)if(!live.has(id)){this.queryExcluded.delete(entry.collider.handle);this.actorColliderHandles.delete(entry.collider.handle);this.world.removeCollider(entry.collider,false);this.actorColliders.delete(id);}
   }
@@ -138,6 +165,7 @@ export class EnvironmentQueries {
   private directColliders(filter: BodyQueryFilter = {}): RAPIER.Collider[] {
     this.assertLive();
     const excluded = new Set(filter.excludedColliderHandles);
+    for(const [id,rig] of this.vehicleRigs)if(filter.excludedActorIds?.has(id))for(const collider of rig.colliders)excluded.add(collider.handle);
     for (const entry of this.actorColliders.values()) {
       // Actor part IDs are retained; exclusion names the exact instance, never a prefix.
       if (filter.excludedActorIds?.has(entry.actorId))
@@ -292,7 +320,21 @@ export class EnvironmentQueries {
         }
       : null;
   }
-  stepPhysics(dt:number){this.assertLive();this.world.timestep=dt;this.world.step();}
+  releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders)this.queryExcluded.delete(collider.handle);this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
+  retainVehicleRigs(ids:ReadonlySet<string>){for(const id of this.vehicleRigs.keys())if(!ids.has(id))this.releaseVehicleRig(id);}
+  vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number):VehicleRigidRig {
+    this.assertLive();const previous=this.vehicleRigs.get(id);if(previous?.token===token)return previous;if(previous)this.releaseVehicleRig(id);
+    const inertia={x:mass*(4*halfLength*halfLength+1)/12,y:mass*(4*halfWidth*halfWidth+4*halfLength*halfLength)/12,z:mass*(4*halfWidth*halfWidth+1)/12};
+    const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x,position.y,position.z).setRotation(rotation).setGravityScale(9.81/18).setCcdEnabled(true).setAngularDamping(.7).setAdditionalMassProperties(mass,{x:0,y:centerOfMassHeight,z:0},inertia,{x:0,y:0,z:0,w:1}));
+    // 下车身两端收窄并斜切；驾驶舱另设碰撞体，避免整个包围盒形成巨大平底车头。
+    const points:number[]=[];for(const side of [-1,1])for(const x of [-halfWidth,halfWidth]){points.push(x,.32,side*halfLength*.64,x,1.02,side*halfLength*.64,x*.88,.52,side*halfLength,x*.88,.72,side*halfLength);}
+    const hull=RAPIER.ColliderDesc.convexHull(new Float32Array(points));if(!hull){this.world.removeRigidBody(body);throw new Error('TRAINING_CHASSIS_HULL_INVALID');}
+    const cabin=RAPIER.ColliderDesc.cuboid(halfWidth*.72,Math.max(.2,(height-1.02)/2),halfLength*.4).setTranslation(0,(height+1.02)/2,-.15);
+    const colliders=[hull,cabin].map(desc=>this.world.createCollider(desc.setDensity(0).setFriction(.6).setRestitution(.08).setCollisionGroups(0x00020013),body));
+    for(const collider of colliders)this.queryExcluded.add(collider.handle);
+    const rig:VehicleRigidRig={token,body,colliders,beforeStep:()=>{},afterStep:()=>{}};this.vehicleRigs.set(id,rig);return rig;
+  }
+  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();for(const rig of this.vehicleRigs.values())rig.afterStep();}}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){
@@ -312,17 +354,23 @@ export class EnvironmentQueries {
     if(c.clone().sub(e).toArray().some((v,i)=>v<this.map.bounds.min[i]!)||c.clone().add(e).toArray().some((v,i)=>v>this.map.bounds.max[i]!)||this.overlaps(p,body,rotation))return null;
     return p;
   }
-  move(position:Vector3,delta:Vector3,body:QueryBody=PLAYER_BODY,rotation=identity,step=0):MoveResult {
+  move(position:Vector3,delta:Vector3,body:QueryBody=PLAYER_BODY,rotation=identity,step=0,push?:{massKg:number;dt:number}):MoveResult {
     this.assertLive();
     const c=center(position,body,rotation);
     const descriptor=body.kind==='capsule'?RAPIER.ColliderDesc.capsule(body.height/2-body.radius,body.radius):RAPIER.ColliderDesc.cuboid(...body.halfExtents);
     const proxy=this.world.createCollider(descriptor.setTranslation(c.x,c.y,c.z).setRotation(rotation));
     if(step>0){this.controller.enableAutostep(step,.12,false);this.controller.enableSnapToGround(.12);}else{this.controller.disableAutostep();this.controller.disableSnapToGround();}
-    this.controller.computeColliderMovement(proxy,delta,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,other=>other.handle!==proxy.handle&&this.environmentFilter(other));
+    // 只有实际移动传入质量；探路、复位和台阶候选查询不得推动场景物体。
+    const timestep=this.world.timestep;
+    this.controller.setApplyImpulsesToDynamicBodies(!!push);
+    this.controller.setCharacterMass(push?.massKg??null);
+    if(push)this.world.timestep=push.dt;
+    try{this.controller.computeColliderMovement(proxy,delta,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,other=>other.handle!==proxy.handle&&this.environmentFilter(other));}
+    finally{this.world.timestep=timestep;this.controller.setApplyImpulsesToDynamicBodies(false);this.controller.setCharacterMass(null);}
     const movement=this.controller.computedMovement();
     const p=position.clone().add(new Vector3(movement.x,movement.y,movement.z));
-    const normals:Vector3[]=[];
-    for(let n=0;n<this.controller.numComputedCollisions();n++){const hit=this.controller.computedCollision(n);if(hit)normals.push(new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z));}
+    const normals:Vector3[]=[],contacts:{point:Vector3;normal:Vector3}[]=[];
+    for(let n=0;n<this.controller.numComputedCollisions();n++){const hit=this.controller.computedCollision(n);if(hit){const normal=new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z);normals.push(normal);contacts.push({normal,point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z)});}}
     const grounded=this.controller.computedGrounded();
     this.world.removeCollider(proxy,false);
     // Short stair treads can be narrower than a capsule's diameter. Try an explicit
@@ -346,7 +394,7 @@ export class EnvironmentQueries {
     const offset=new Vector3(...body.offset).applyQuaternion(rotation),extent=extents(body,rotation),min=new Vector3(...this.map.bounds.min).add(extent).sub(offset),max=new Vector3(...this.map.bounds.max).sub(extent).sub(offset);
     for(let axis=0;axis<3;axis++){if(p.getComponent(axis)<min.getComponent(axis))normals.push(new Vector3().setComponent(axis,1));if(p.getComponent(axis)>max.getComponent(axis))normals.push(new Vector3().setComponent(axis,-1));}
     p.clamp(min,max);
-    return {position:p,grounded,normal:normals[0]??new Vector3(0,1,0),normals,blocked:p.clone().sub(position).distanceToSquared(delta)>1e-6};
+    return {position:p,grounded,normal:normals[0]??new Vector3(0,1,0),normals,contacts,blocked:p.clone().sub(position).distanceToSquared(delta)>1e-6};
   }
   cameraFilter(excludedActorIds:ReadonlySet<string>):(collider:RAPIER.Collider)=>boolean {
     const excluded=new Set(this.queryExcluded);
