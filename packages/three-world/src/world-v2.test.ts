@@ -72,6 +72,26 @@ function box(width = 1, height = 1, depth = 1) {
   return new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshBasicMaterial());
 }
 
+it.each([
+  {role:undefined, actual:'undefined'},
+  {role:'actor', actual:'"actor"'},
+  {role:null, actual:'null'},
+  {role:17, actual:'17'},
+  {role:{toString(){throw new Error('must not inspect object values');}}, actual:'object'},
+])('rejects an invalid entity role with repair context and no registration ($actual)',async({role,actual})=>{
+  const world=await createWorld({navigation:false});liveWorlds.push(world);
+  const object=box(),before=world.snapshot();
+  let error:unknown;
+  try{world.addEntity({id:'landmark',object,role} as never);}catch(caught){error=caught;}
+  expect(error).toMatchObject({code:'ENTITY_ROLE_REQUIRED',category:'invalid-input',phase:'control',entityIds:['landmark']});
+  const diagnostic=error as {message:string;suggestedAction:string};
+  for(const value of ['options.role','terrain','obstacle','decoration',actual])expect(diagnostic.message).toContain(value);
+  expect(diagnostic.suggestedAction).toContain('options.role');
+  expect(world.snapshot().entities).toEqual(before.entities);
+  expect(object.parent).toBeNull();
+  object.geometry.dispose();object.material.dispose();
+});
+
 async function fixture() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, .05, 100);

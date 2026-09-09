@@ -14,6 +14,57 @@ function actor(x = 0, z = 0, y = .04) { const object = new THREE.Group(); object
 function ticks(physics: ThreePhysics, count: number, drives: Readonly<Record<string, CharacterDrive>> = {}) { for (let i = 0; i < count; i++) physics.step(dt, drives); }
 afterEach(() => { for (const physics of retained.splice(0)) physics.dispose(); vi.restoreAllMocks(); });
 
+describe('actionable collision budget failures',()=>{
+  it.each([
+    {shape:'trimesh' as const,limits:{maximumTriangleCount:64},code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED',measurement:/availableTriangleBudget=64/},
+    {shape:'box' as const,limits:{maximumColliderCount:63},code:'PHYSICS_COLLIDER_BUDGET_EXCEEDED',measurement:/requiredColliderCount=64.*maximumColliderCount=63/},
+  ])('identifies $shape subdivision without changing rejection or leaving a body behind',async({shape,limits,code,measurement})=>{
+    const physics=await create(limits),ground=box(0,-.5,0,30,1,30),before=physics.audit();
+    let error:unknown;try{physics.addRigid('wide-floor',ground,{kind:'fixed',shape});}catch(caught){error=caught;}
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({code,category:'content',phase:'physics',entityIds:['wide-floor'],
+      message:expect.stringMatching(measurement),suggestedAction:expect.stringContaining('convex-hull')});
+    expect((error as Error).message).not.toContain('use the default triangle mesh representation');
+    if(shape==='trimesh')expect((error as Error).message).toMatch(/at least.*maximumEdgeMeters=4/);
+    if(shape==='box')expect((error as Error).message).toContain('sizeMetersXYZ=[30,1,30]');
+    expect(physics.audit()).toEqual(before);expect(physics.state('wide-floor')).toBeUndefined();
+    // This authored object is a closed convex box; the hull is its intended volume.
+    physics.addRigid('wide-floor',ground,{kind:'fixed',shape:'convex-hull'});
+    expect(physics.audit().colliderCount).toBe(1);
+    expect(physics.castCameraArm([0,4,0],[0,-4,0],.1).colliderEntityId).toBe('wide-floor');
+  });
+
+  it('reports world totals and changed candidates while retaining the original live body',async()=>{
+    const physics=await create({maximumTriangleCount:20}),ground=box(0,-.5,0,1,1,1);
+    physics.addRigid('existing',ground,{kind:'fixed',shape:'box'});const before=physics.audit(),state=physics.state('existing');
+    let error:unknown;try{physics.validateBatch([{kind:'rigid',id:'new-floor',object:box(3,-.5,0,1,1,1),options:{kind:'fixed',shape:'box'}}]);}catch(caught){error=caught;}
+    expect(error).toMatchObject({code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED',entityIds:['new-floor'],
+      message:expect.stringMatching(/plannedTriangleCount=24.*retainedTriangleCount=12.*maximumTriangleCount=20/)});
+    expect(physics.audit()).toEqual(before);expect(physics.state('existing')).toEqual(state);
+    expect(()=>physics.validateBatch([{kind:'rigid',id:'new-floor',object:box(3,-.5,0,1,1,1),options:{kind:'fixed',shape:'box'}}],['existing'])).not.toThrow();
+  });
+
+  it('keeps the existing entity identity on a rejected geometry refresh',async()=>{
+    const physics=await create({maximumColliderCount:63}),ground=box(0,-.5,0,1,1,1);
+    physics.addRigid('resized-floor',ground,{kind:'fixed',shape:'box'});const before=physics.audit();
+    ground.scale.set(30,1,30);
+    let error:unknown;try{physics.refresh('resized-floor');}catch(caught){error=caught;}
+    expect(error).toMatchObject({code:'PHYSICS_COLLIDER_BUDGET_EXCEEDED',entityIds:['resized-floor']});
+    expect(physics.audit()).toEqual(before);
+  });
+
+  it('keeps invalid instance counts diagnostic without invoking author formatting',async()=>{
+    const physics=await create(),format=vi.fn(()=>{throw new Error('author formatting must not run');});
+    for(const count of [Symbol('invalid'),{toString:format}]){
+      const object=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial(),1);
+      object.count=count as unknown as number;
+      let error:unknown;try{physics.addRigid('invalid-instances',object,{kind:'fixed',shape:'convex-hull'});}catch(caught){error=caught;}
+      expect(error).toMatchObject({code:'PHYSICS_COLLIDER_BUDGET_EXCEEDED',entityIds:['invalid-instances']});
+      expect(format).not.toHaveBeenCalled();expect(physics.audit().entityCount).toBe(0);
+    }
+  });
+});
+
 describe('Three/Rapier character movement', () => {
   it('resolves the same first-tick Episode pose when geometry is published in a fresh or previously stepped world',async()=>{
     const physics=await create(),publish=()=>{physics.addRigid('ground',box(0,-.1,0,24,.2,24),{kind:'fixed'});

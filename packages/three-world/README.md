@@ -97,6 +97,16 @@ children may animate using the SDK update callback. For vehicles, pass a
 `TrainingVehicleInstance` with its own `object` and `spec` to `createHumanoidWorld`.
 Choose the controller family and collision envelope for the shape you created.
 
+Large static `mesh` and `box` collision shapes both expand through exact
+subdivision. Budget failures identify the entity, measured/planned counts and
+available budget; an unfinished subdivision reports a lower bound, not its final
+size. Switching between mesh and box can hit a different budget. For a closed
+convex solid whose hull is the intended collider, use `physics.shape:'convex-hull'`.
+A convex hull fills concavities and openings: keep required passages by simplifying
+the mesh or authoring separate convex pieces. Source geometry and total world
+budgets still apply to all shapes. Read `entityIds`, `message` and
+`suggestedAction` in the failed operation before changing the scene.
+
 An SDK-owned renderer sizes to the stage and follows resizing; a supplied renderer
 keeps its sizing policy. Create HTML HUD through `world.createPresentation()`.
 Finish registration and configuration before the first `await world.start()`, which

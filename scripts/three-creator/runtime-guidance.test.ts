@@ -2,6 +2,7 @@ import {afterEach,expect,it} from 'vitest';
 import {mkdtemp,readFile,writeFile,rm,access,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import ts from 'typescript';
 import {ThreeCreatorTools} from './tools';
 import {executeThreeCreatorTool} from './mcp';
 
@@ -16,6 +17,53 @@ async function fixture(){
 }
 const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={})=>executeThreeCreatorTool(service,name,args) as Promise<any>;
 afterEach(async()=>{await Promise.all(services.splice(0).map(s=>s.close()));await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
+
+it('publishes a valid optional method parameter from the edited workspace runtime',async()=>{
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/runtime.ts');
+ const before=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ const original=await readFile(file,'utf8');
+ await writeFile(file,original.replace('prepareCharacter(position:Vec3,yaw=0):boolean','prepareCharacter(position:Vec3,yaw:0|1=0):boolean'));
+ const result=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ expect(result.runtimeGuidance.runtimeSourceHash).not.toBe(before.runtimeGuidance.runtimeSourceHash);
+ const declarations=ts.createSourceFile('runtime.ts',result.trainingSourceContracts['training/runtime.ts'],ts.ScriptTarget.Latest,true);
+ const runtime=declarations.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='TrainingRuntime');
+ const method=runtime?.members.find(node=>node.name?.getText(declarations)==='prepareCharacter');
+ if(!method)throw new Error('Missing public prepareCharacter declaration');
+ const filename=path.join(service.workspace,'declaration-consumer.ts');
+ const source=`type Vec3=readonly [number,number,number];\ninterface Runtime {${method.getText(declarations)}}\ndeclare const runtime:Runtime;\nruntime.prepareCharacter([0,0,0]);\nruntime.prepareCharacter([0,0,0],1);\n// @ts-expect-error The workspace narrowed this parameter to 0 or 1.\nruntime.prepareCharacter([0,0,0],2);\n`;
+ const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,strict:true,skipLibCheck:true,noEmit:true,types:[]};
+ const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
+ host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
+ const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename);
+ if(!consumer)throw new Error('Missing declaration consumer');
+ expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
+},20_000);
+
+it.each(['Math.PI','DEFAULT_YAW'])('keeps guides available with the valid workspace default %s',async initializer=>{
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/runtime.ts');
+ const before=await call(service,'creator_get_authoring_schema',{topic:'training'});
+ const imported=initializer==='DEFAULT_YAW';
+ if(imported)await writeFile(path.join(path.dirname(file),'guidance-default.ts'),'export const DEFAULT_YAW=0;');
+ const source=(await readFile(file,'utf8')).replace('prepareCharacter(position:Vec3,yaw=0):boolean',`prepareCharacter(position:Vec3,yaw=${initializer}):boolean`);
+ await writeFile(file,(imported?"import {DEFAULT_YAW} from './guidance-default';\n":'')+source);
+ const guide=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['guide']});
+ expect(guide.sdkGuide).toEqual(expect.any(String));
+ expect(guide.runtimeGuidance.runtimeSourceHash).not.toBe(before.runtimeGuidance.runtimeSourceHash);
+ const detail=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ expect(detail.runtimeGuidance.runtimeSourceHash).toBe(guide.runtimeGuidance.runtimeSourceHash);
+ const sourceFile=ts.createSourceFile('runtime.ts',detail.trainingSourceContracts['training/runtime.ts'],ts.ScriptTarget.Latest,true);
+ const runtime=sourceFile.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='TrainingRuntime');
+ expect(runtime?.members.some(node=>node.name?.getText(sourceFile)==='setInput')).toBe(true);
+ const method=runtime?.members.find((node):node is ts.MethodSignature=>ts.isMethodSignature(node)&&node.name.getText(sourceFile)==='prepareCharacter');
+ if(imported){
+  expect(method).toBeUndefined();
+  expect(detail.trainingSourceContracts['training/runtime.ts']).toContain('Declaration unavailable for prepareCharacter');
+ }else{
+  expect(method?.parameters[1]?.initializer).toBeUndefined();
+  expect(method?.parameters[1]?.type?.kind).toBe(ts.SyntaxKind.NumberKeyword);
+  expect(method?.parameters[1]?.questionToken).toBeDefined();
+ }
+},20_000);
 
 it('publishes the current project shadow defaults through presentation discovery',async()=>{
  const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/config/presentation.ts');

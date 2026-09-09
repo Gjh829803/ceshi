@@ -6,8 +6,10 @@ key landmarks or interaction targets. Omit decorative detail, clothing additions
 accessories, atmospheric effects, reflections and elaborate shadows.
 
 Read creator_describe_environment and the getting-started schema, then choose the
-example for the requested subject. Write
-ordinary index.html and local JS/TS. Native Three geometry is freely editable.
+example for the requested subject. Use these public guides and examples to write
+a runnable index.html and local JS/TS. Read additional topics or SDK implementation
+to resolve a concrete missing contract, explain an observed failure, or implement
+a required runtime change. Native Three geometry is freely editable.
 Use assets_search/assets_describe for reusable models and motions; project.json
 selects permitted resources. In the three-sdk profile, for a nonhuman protagonist use createWorld with its
 own visual root, body and movement; select it with setControlledEntity and follow
@@ -54,7 +56,11 @@ Pickup and sitting require reachable interaction anchors. Show the current targe
 and explain failed conditions. Use world snapshots and operation completion to
 verify actions. Never infer successful movement from an accepted request alone.
 
-Check the opening preview for broad composition and readable routes. Use real
+Check the opening preview for broad composition and readable routes. For the
+current state during testing, use world_preview with view current; opening pauses
+and resets the world. On a failed tool operation, use its errorDetails code,
+SDK suggestedAction and host phase/candidate identity to choose the repair.
+Read the same failed operation for its saved diagnosis. Use real
 inputs and world_inspect to verify the requested core functions: movement,
 applicable actions, collisions, camera and reset. Build enough connected space and
 real scene conditions for those functions. For riding tasks, include walking,
@@ -65,10 +71,18 @@ fit. This structural diagnostic is advisory and cannot certify preset provenance
 or identify an extra human mesh by shape. Report unsupported poses instead of
 substituting a primitive rider. Repair observed functional problems.
 After the final source change, complete an input episode covering the core actions
-and their outcomes, then capture the opening and selected object three-views.
-Choose the episode length by functional coverage. A truncated debug run is not a
-complete episode. Long tools return operation IDs; poll the same operation through
-operations_get.
+and their outcomes. Choose its length by functional coverage; omit world_playtest
+durationSeconds to execute the full plan. Use a shorter durationSeconds for a
+debug run while keeping episode.json unchanged. Read targetResults.nearestSample
+for measured position, time and target-minus-player XYZ offsets when tuning routes.
+recordingReadiness describes recording prerequisites for the reported world and
+episode hashes; a truncated debug run is incomplete even when status is passed.
+Once a complete recording covers the requested outcomes and the world/episode
+remain unchanged, proceed to world_submit. Re-record after changing either or
+when observed failures or missing coverage require repair. Inspect additional
+views needed to judge the requested composition and functions; world_submit
+automatically captures missing current opening and object three-views.
+Long tools return operation IDs; poll the same operation through operations_get.
 
 Run world_playtest and world_submit in the same MCP service session. Delivery
 technical success is separate from task review. Preserve the requested goals and

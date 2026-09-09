@@ -15,6 +15,8 @@ import { executeThreeCreatorTool, THREE_CREATOR_TOOLS } from './mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
 import {recordedVideoEncodingArgs} from './video.js';
+import {RAW_EXAMPLE} from './examples.js';
+import {measureEpisodeTargets} from './target-feedback.js';
 
 const roots: string[] = [];
 async function fixture(source = `import * as THREE from 'three'; window.authorScene = new THREE.Scene(); document.title = 'ordinary browser APIs work';`) {
@@ -23,7 +25,94 @@ async function fixture(source = `import * as THREE from 'three'; window.authorSc
   await writeFile(path.join(root, 'main.ts'), source); return root;
 }
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+describe('sampled target feedback',()=>{
+  it('retains the first nearest sample, signed XYZ offset and original trace index without changing samples',()=>{
+    const samples=Object.freeze([
+      Object.freeze({wallSeconds:0,observationError:'missing position'}),
+      Object.freeze({wallSeconds:1,simulationTick:60,simulationSeconds:1,worldRevision:3,positionMetersXYZ:Object.freeze([4,8,12])}),
+      Object.freeze({wallSeconds:2,simulationTick:120,simulationSeconds:2,worldRevision:3,positionMetersXYZ:Object.freeze([4,8,12])}),
+      Object.freeze({wallSeconds:3,positionMetersXYZ:Object.freeze([100,100,100])}),
+    ]);
+    const targets=[{id:'gate',positionMetersXYZ:[1,12,12] as [number,number,number],toleranceMeters:2}];
+    const [result]=measureEpisodeTargets(targets,samples);
+    expect(result).toEqual({...targets[0],nearestDistanceMeters:5,reached:false,distanceOutsideToleranceMeters:3,
+      nearestSample:{traceSampleIndex:1,wallSeconds:1,simulationTick:60,simulationSeconds:1,worldRevision:3,
+        positionMetersXYZ:[4,8,12],deltaToTargetMetersXYZ:[-3,4,0]}});
+  });
+  it('keeps exact tolerance hits and reset-era sample time without inferring an in-between crossing',()=>{
+    const target={id:'gate',positionMetersXYZ:[0,0,0] as [number,number,number],toleranceMeters:1};
+    const samples=[{wallSeconds:1,simulationTick:50,simulationSeconds:5,positionMetersXYZ:[-2,0,0]},
+      {wallSeconds:2,simulationTick:1,simulationSeconds:.1,positionMetersXYZ:[1,0,0]}];
+    expect(measureEpisodeTargets([target],samples)[0]).toMatchObject({reached:true,nearestDistanceMeters:1,distanceOutsideToleranceMeters:0,
+      nearestSample:{traceSampleIndex:1,wallSeconds:2,simulationTick:1,simulationSeconds:.1}});
+    expect(measureEpisodeTargets([{...target,toleranceMeters:.1}],samples)[0]).toMatchObject({reached:false,nearestDistanceMeters:1});
+  });
+  it('leaves unavailable measurements null and ignores invalid positions without inventing time',()=>{
+    const target={id:'gate',positionMetersXYZ:[0,0,0] as [number,number,number],toleranceMeters:1};
+    const invalid=[null,{}, {positionMetersXYZ:[NaN,0,0]}, {positionMetersXYZ:[0,Infinity,0]}, {positionMetersXYZ:[0,0]}, {positionMetersXYZ:['0',0,0]}];
+    for(const samples of [[],invalid])expect(measureEpisodeTargets([target],samples)[0]).toMatchObject({reached:false,nearestDistanceMeters:null,nearestSample:null,distanceOutsideToleranceMeters:null});
+    expect(measureEpisodeTargets([target],[...invalid,{positionMetersXYZ:[0,0,0],wallSeconds:Infinity,simulationTick:'1'}])[0]).toMatchObject({reached:true,
+      nearestSample:{traceSampleIndex:6,wallSeconds:null,simulationTick:null,simulationSeconds:null,worldRevision:null}});
+  });
+});
+
 describe('Three semantic target views', () => {
+
+  it('returns trace-backed target offsets through playtest and preserves them in delivery without adding a gate', async () => {
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
+      steps:[{keysDown:['w'],durationSeconds:.5},{keysUp:['w'],durationSeconds:.15}],
+      targets:[{id:'high-gate',positionMetersXYZ:[0,20,-.5],toleranceMeters:1}]}));
+    try {
+      const started=await executeThreeCreatorTool(service,'world_playtest',{}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:true,issues:[]});
+      expect(Number.isFinite(Date.parse(report.recordingReadiness.checkedAt))).toBe(true);
+      const target=report.targetResults[0];
+      expect(target.reached).toBe(false);
+      expect(target.nearestSample).toMatchObject({traceSampleIndex:expect.any(Number),wallSeconds:expect.any(Number),simulationTick:null,simulationSeconds:null});
+      const trace=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'trace.json'),'utf8'));
+      const sample=trace.samples[target.nearestSample.traceSampleIndex];
+      expect(target.nearestSample.positionMetersXYZ).toEqual(sample.positionMetersXYZ);
+      expect(target.nearestSample.wallSeconds).toBe(sample.wallSeconds);
+      expect(target.nearestSample.deltaToTargetMetersXYZ).toEqual([0,20,-.5-sample.positionMetersXYZ[2]]);
+      expect(target.distanceOutsideToleranceMeters).toBeCloseTo(target.nearestDistanceMeters-1,10);
+      expect(target.nearestDistanceMeters).toBeCloseTo(Math.hypot(...target.nearestSample.deltaToTargetMetersXYZ),10);
+      const delivery=await service.submit();
+      expect(delivery.targetResults).toEqual(report.targetResults);
+      expect(delivery.episodeHash).toBe(report.episodeHash);expect(delivery.worldBuildHash).toBe(report.worldBuildHash);
+      const saved=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'playtest.json'),'utf8'));
+      expect(saved.recordingReadiness).toEqual(report.recordingReadiness);
+      // Historical eligibility does not approve an edited input plan.
+      const episodeFile=path.join(root,'episode.json');await writeFile(episodeFile,(await readFile(episodeFile,'utf8'))+'\n');
+      await expect(service.submit()).rejects.toThrow('EPISODE_CHANGED_AFTER_PLAYTEST');
+      expect(report.recordingReadiness.episodeHash).toBe(delivery.episodeHash);
+    } finally {await service.close();}
+  },30_000);
+
+  it('reports incomplete recording prerequisites on a technically passing debug run before submit',async()=>{
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
+      steps:[{keysDown:['w'],durationSeconds:1},{keysUp:['w'],durationSeconds:.1}],targets:[]}));
+    try {
+      const before=Date.now();
+      const started=await executeThreeCreatorTool(service,'world_playtest',{durationSeconds:.2}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.executionMode).toBe('debug');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:false,
+        issues:[{code:'INCOMPLETE_EPISODE',actual:false,required:true}]});
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeLessThanOrEqual(Date.now());
+      await expect(service.submit()).rejects.toThrow('INCOMPLETE_EPISODE');
+    } finally {await service.close();}
+  },30_000);
 
 
   it('packages a runnable animated humanoid in the SDK starter', async () => {

@@ -9,7 +9,9 @@ export default defineConfig({
     include: TEST_GATE_MANIFEST_V1
       .filter((entry) => entry.lane === "resource-heavy")
       .map((entry) => entry.path),
-    pool: "threads",
+    // Isolate WASM/native state in child processes after the V8 JIT allocation
+    // assertion observed in the CI worker-thread pool.
+    pool: "forks",
     fileParallelism: false,
     minWorkers: 1,
     maxWorkers: 1,

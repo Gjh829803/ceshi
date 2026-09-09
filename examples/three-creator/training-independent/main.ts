@@ -26,5 +26,5 @@ world.setCaptureTargets([{entityId:'person'},{entityId:'rover-instance-1'}]);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#102c35d9;color:white;padding:12px;font:14px sans-serif';
 hud.textContent='独立资产世界 · WASD 移动 · F 上下车 · Space 越障';presentation.ui.mount(hud);
-const button=document.createElement('button');button.textContent='前往越野车';button.onclick=async()=>{await world.execute({type:'training.approach',instanceId:'rover-instance-1'});presentation.focus();};hud.append(button);
+const button=document.createElement('button');button.textContent='传送到登乘点';button.onclick=async()=>{await world.execute({type:'training.approach',instanceId:'rover-instance-1'});presentation.focus();};hud.append(button);
 await world.start();presentation.focus();

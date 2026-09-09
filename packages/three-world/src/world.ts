@@ -132,7 +132,13 @@ export class ThreeWorld implements API.World {
   });return clone;
  }
  addEntity(options:API.EntityOptions):THREE.Object3D{
-  this.alive();requireId(options.id);if(!['terrain','obstacle','decoration'].includes(options.role))throw failure('ENTITY_ROLE_REQUIRED');
+  this.alive();requireId(options.id);
+  const role:unknown=options.role;
+  if(typeof role!=='string'||!['terrain','obstacle','decoration'].includes(role)){
+   const actual=role===null?'null':typeof role==='string'?JSON.stringify(role.slice(0,160)):['number','boolean','undefined'].includes(typeof role)?String(role):typeof role;
+   throw {...failure('ENTITY_ROLE_REQUIRED',`addEntity options.role must be terrain, obstacle or decoration; received ${actual}.`,'invalid-input',[options.id]),
+    suggestedAction:'Set options.role explicitly: terrain or obstacle for collision geometry, decoration for visual-only geometry.'};
+  }
   if(options.role==='decoration'&&options.physics)throw failure('DECORATION_CANNOT_HAVE_PHYSICS');
   const physics=options.role==='decoration'?{kind:'none' as const}:options.physics?{...options.physics,shape:options.physics.shape==='mesh'?'trimesh' as const:options.physics.shape??'trimesh' as const}:{kind:'fixed' as const};
   if(physics.kind==='dynamic'&&(!('massKilograms' in physics)||!Number.isFinite(physics.massKilograms)||physics.massKilograms<=0))throw failure('DYNAMIC_MASS_REQUIRED');
