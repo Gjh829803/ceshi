@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import {createHumanoidWorld,training,type TrainingMap,type TrainingVehicleSpec} from '@worldkit/three';
+import {createHumanoidWorld,humanoid,type EnvironmentDefinition,type VehicleSpec} from '@worldkit/three';
 
 // Select handling first; this returns configuration only, never a vehicle model.
-const spec=training.createRoadVehicleSpec('motorcycle');
+const spec=humanoid.createRoadVehicleSpec('motorcycle');
 spec.id='custom-bike';spec.speed=12;spec.maxSpeed=16;
 const physics=spec.wheelPhysics;
 
@@ -12,7 +12,7 @@ const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,300);
 camera.position.set(7,4,-8);camera.lookAt(0,1,0);
 const canvas=document.createElement('canvas');canvas.style.cssText='display:block;width:100vw;height:100vh';document.body.append(canvas);
 // Map boxes use world-space metres: position is the centre, size is the full XYZ extent.
-const map:TrainingMap={id:'custom-bike-course',name:'自建摩托',description:'预设人物上下车，载具只包含机械结构',
+const map:EnvironmentDefinition={id:'custom-bike-course',name:'自建摩托',description:'预设人物上下车，载具只包含机械结构',
  bounds:{min:[-60,-5,-60],max:[60,30,60]},
  boxes:[{id:'ground',position:[0,-.1,0],size:[120,.2,120],color:'#dddddd'}],
  water:[],
@@ -55,15 +55,15 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'pers
  vehicles:[{instanceId:'custom-bike',assetId:'custom.motorcycle',object:bike,spec}]});
 // Optional mechanical presentation; the SDK still owns chassis movement and time.
 const mechanical={wheelRigs,steering:[wheelRigs[1]!.steering]};
-world.training!.onVisualUpdate((dt,sample)=>{const runtime=world.training!,state=runtime.simulation.vehicles[0]!;training.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision,active:runtime.simulation.vehicle===state});});
+world.humanoid!.onVisualUpdate((dt,sample)=>{const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision,active:runtime.simulation.vehicle===state});});
 // createHumanoidWorld owns the one preset character for walking, riding and reset.
 // Never hide/recreate it when mounted; vehicle and character keep separate SDK-owned roots.
 world.setCaptureTargets(['person','custom-bike']);
 const presentation=world.createPresentation();
 const recover=document.createElement('button');recover.textContent='扶正车辆';
-recover.onclick=()=>{void world.execute({type:'training.recover'}).then(()=>presentation.focus());};
+recover.onclick=()=>{void world.execute({type:'vehicle.recover'}).then(()=>presentation.focus());};
 presentation.ui.mount(recover);
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#333c;color:white;padding:12px;font:14px sans-serif;white-space:pre';
 presentation.ui.mount(hud);
-world.onUpdate(()=>{const state=world.snapshot().training;hud.textContent=`预设人物 + 自建摩托\nWASD 移动 / 驾驶 · F 上下车 · Space 制动\n${state?.mountedInstanceId?'骑乘':'步行'} · ${state?.message??''}`;});
+world.onUpdate(()=>{const state=world.snapshot().humanoid;hud.textContent=`预设人物 + 自建摩托\nWASD 移动 / 驾驶 · F 上下车 · Space 制动\n${state?.mountedInstanceId?'骑乘':'步行'} · ${state?.message??''}`;});
 await world.start();presentation.focus();

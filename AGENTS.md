@@ -55,7 +55,7 @@ extra clothing/accessories, atmospheric effects, reflections and elaborate shado
    collision dimensions, seat anchors and mechanical animation bindings.
 2. Bind: author ordinary Three Mesh/Group geometry freely. Bind custom subjects
    through `addCharacter({object,body,movement})`; bind vehicles through their
-   visual root and `TrainingVehicleInstance.spec`. Define actual colliders,
+   visual root and `VehicleInstance.spec`. Define actual colliders,
    interaction anchors, climb surfaces and water for contextual abilities.
 3. Configure: apply and export explicit movement/profile parameters with units.
 4. Implement: edit the relevant SDK source module, rebuild it for the project,

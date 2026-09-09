@@ -15,7 +15,7 @@ the previous displayed camera. Exact captures use the committed fixed pose.
 
 Three-world owns framing and subject visibility. A visibility callback may ignore
 an arm obstruction only if the eye is clear; eye penetration still forces safety.
-Ordinary and Training policies choose recovery parameters independently. Each
+Ordinary and Humanoid policies choose recovery parameters independently. Each
 controller owns a separate solver and resets it on incompatible actor/mode/start
 transitions. Failed solves restore the prior transaction state.
 

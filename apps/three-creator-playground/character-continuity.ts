@@ -19,7 +19,7 @@ export interface CharacterContinuity {
  }|null;
  readonly scope:string;
 }
-const scope='Training skinned character continuity from the first ready observation. First-person geometry identity is deferred because the SDK temporarily clips head geometry; empty indexed meshes are excluded from visibility checks in that view. Rigid equipment is outside the identity comparison. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
+const scope='Player skinned character continuity from the first ready observation. First-person geometry identity is deferred because the SDK temporarily clips head geometry; empty indexed meshes are excluded from visibility checks in that view. Rigid equipment is outside the identity comparison. This does not prove preset asset provenance, pixel visibility, animation ownership or absence of an extra rider. Inspect opening, mounted, dismounted and reset frames.';
 function visuals(root:Object3D):VisualBinding[]{
  const result:VisualBinding[]=[];
  root.traverse(object=>{
@@ -83,14 +83,14 @@ export class CharacterContinuityMonitor {
   catch{return unavailable('CHARACTER_DIAGNOSTICS_UNAVAILABLE');}
  }
  private observe(world:WorldObservation,snapshot:WorldSnapshot|null):CharacterContinuity {
-  if(snapshot?.schemaVersion===2&&!snapshot.training&&!this.baselines.has(world.scene))return {advisory:true,status:'not-applicable',issues:[],evidence:null,scope};
-  const character=snapshot?.training?.character;
+  if(snapshot?.schemaVersion===2&&!snapshot.humanoid&&!this.baselines.has(world.scene))return {advisory:true,status:'not-applicable',issues:[],evidence:null,scope};
+  const character=snapshot?.humanoid?.character;
   if(!character)return unavailable('CHARACTER_TELEMETRY_UNAVAILABLE');
   const root=Object.hasOwn(world.targets,character.instanceId)?world.targets[character.instanceId]:
-   snapshot.controlledEntityId===character.instanceId?world.player:undefined;
+   snapshot.controlledEntityId===character.instanceId?world.controlledObject:undefined;
   if(!root)return unavailable('CHARACTER_ROOT_UNOBSERVED');
   const current=visuals(root);
-  const firstPerson=snapshot.training!.cameraMode===1&&snapshot.camera?.mode==='follow';
+  const firstPerson=snapshot.humanoid!.cameraMode===1&&snapshot.camera?.mode==='follow';
   let baseline=this.baselines.get(world.scene);
   if(!baseline){
    if(!current.some(value=>value.bones.length>0))return unavailable('CHARACTER_RIG_UNOBSERVED');
@@ -109,7 +109,7 @@ export class CharacterContinuityMonitor {
   this.baselines.set(world.scene,baseline);
   return {advisory:true,status:issues.length?'issues':firstPerson?'partial':'observed',issues,scope,evidence:{
    instanceId:character.instanceId,rootUuid:root.uuid,baselineRootUuid:baseline.root.uuid,
-   mountedInstanceId:snapshot.training!.mountedInstanceId,meshCount:current.length,renderableMeshCount,
+   mountedInstanceId:snapshot.humanoid!.mountedInstanceId,meshCount:current.length,renderableMeshCount,
    geometryIdentity:firstPerson?'deferred-first-person':baseline.geometryInitialized?'checked':'unobserved',
   }};
  }

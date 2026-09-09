@@ -8,7 +8,7 @@ import path from 'node:path';
 import Ajv from 'ajv';
 import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assertNoSymlinks, type Candidate, type AssetPolicyOptions } from './compiler.js';
 import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
-import { training, type WorldCommand } from '@worldkit/three';
+import { humanoid, type WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, type AuthoringTopic } from './authoring-schema.js';
 import { readRuntimeGuidance } from './runtime-guidance.js';
 import { CreatorDiscovery, type SchemaSection } from './creator-discovery.js';
@@ -125,7 +125,7 @@ export class ThreeCreatorTools {
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
-      observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
+      observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,controlledObject,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
       delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a complete nonempty real episode with captured keydown and keyup, valid video and no browser/SDK errors, and real player/target front-right-back captures. Choose the episode length needed to demonstrate the requested behavior. Route success is a measurement, not semantic or visual acceptance.',
       discovery: 'Asset search returns ranked, paginated summaries; assets_describe supplies complete details. Schema defaults to guide; request sections for contracts as needed.',
@@ -258,7 +258,7 @@ export class ThreeCreatorTools {
       observation,
       feedback: {
         characterContinuity: observation.characterContinuity,
-        water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.training?.water) : undefined,
+        water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.humanoid?.water) : undefined,
       },
       pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors],
     };
@@ -406,7 +406,7 @@ export class ThreeCreatorTools {
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.training?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
     const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
     const report = {...recording, recordingReadiness: {scope: 'recording-only' as const,

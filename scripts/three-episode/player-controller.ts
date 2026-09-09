@@ -2,7 +2,7 @@ import type { EpisodeCapabilities, EpisodeFrame, Vec3, WorldSnapshot } from '@wo
 import type { EpisodeCaptureSession } from './browser.js';
 import type { EpisodeSegmentPlan } from './contracts.js';
 import { RouteController, type RouteDecision, type RouteMovement } from './route-controller.js';
-import { TrainingRouteController } from './training-route.js';
+import { VehicleRouteController } from './vehicle-route.js';
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 const angle = (n: number) => Math.atan2(Math.sin(n), Math.cos(n));
@@ -15,7 +15,7 @@ export interface PlayerDecision extends RouteDecision {
  * physics port owns clearance, movement, jumps and camera collision response. */
 export class PlayerCaptureController {
   private readonly route: RouteController;
-  private readonly trainingRoute:TrainingRouteController;
+  private readonly vehicleRoute:VehicleRouteController;
   private mounted=false;
   private readonly ordinal: number;
   private activeSeconds = 0;
@@ -36,20 +36,20 @@ export class PlayerCaptureController {
   constructor(private readonly segment: EpisodeSegmentPlan, private readonly movement: RouteMovement,
     private readonly cameraMode: EpisodeCapabilities['camera']['mode'], private readonly probe: EpisodeCaptureSession['probeStart'], private readonly customInput?:EpisodeCaptureSession['routeInput']) {
     this.route = new RouteController(segment, movement);
-    this.trainingRoute=new TrainingRouteController(segment);
+    this.vehicleRoute=new VehicleRouteController(segment);
     this.ordinal = Number(segment.id.slice(-2));
     this.jumpState = segment.actionGoals?.length ? 'not-scheduled' : (movement.jumpSpeedMetersPerSecond ?? 0) <= 0 ? 'unsupported' : this.ordinal % 2 === 0 ? 'pending' : 'not-scheduled';
     this.nextJumpAt = 14 + this.ordinal * 0.4;
   }
-  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger);this.trainingRoute.holdWaypoint(trigger); }
-  completeHeldWaypoint(index: number) { if(this.mounted){this.trainingRoute.completeHeldWaypoint(index);this.route.seekCursor(this.trainingRoute.cursor);}else{this.route.completeHeldWaypoint(index);this.trainingRoute.seekCursor(this.route.cursor);} }
+  holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger);this.vehicleRoute.holdWaypoint(trigger); }
+  completeHeldWaypoint(index: number) { if(this.mounted){this.vehicleRoute.completeHeldWaypoint(index);this.route.seekCursor(this.vehicleRoute.cursor);}else{this.route.completeHeldWaypoint(index);this.vehicleRoute.seekCursor(this.route.cursor);} }
   pause(time: number) { this.previousTime = time; this.paused = true; this.previousCamera = undefined; }
   async step(snapshot: WorldSnapshot, forward: Vec3, time: number): Promise<PlayerDecision> {
-    const mounted=Boolean(snapshot.training?.mountedInstanceId);
-    if(mounted!==this.mounted){if(mounted)this.trainingRoute.seekCursor(this.route.cursor);else this.route.seekCursor(this.trainingRoute.cursor);this.mounted=mounted;}
+    const mounted=Boolean(snapshot.humanoid?.mountedInstanceId);
+    if(mounted!==this.mounted){if(mounted)this.vehicleRoute.seekCursor(this.route.cursor);else this.route.seekCursor(this.vehicleRoute.cursor);this.mounted=mounted;}
     if(mounted){
       this.previousTime=time;
-      const decision=this.trainingRoute.step(snapshot,time);
+      const decision=this.vehicleRoute.step(snapshot,time);
       return {...decision,input:decision.mode==='action'||this.cameraMode==='authored'?decision.input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
         behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
     }
@@ -190,7 +190,7 @@ export function summarizePlayerBehavior(frames: readonly { snapshot: WorldSnapsh
 export function playerBehaviorFeedback(frames: readonly {snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[],capabilities:EpisodeCapabilities,hasActionGoals=false){
   const evidence=summarizePlayerBehavior(frames),diagnostics:{code:string;message:string}[]=[];
   if(!hasActionGoals){
-    const mounted=frames.some(f=>!!f.snapshot.training?.mountedInstanceId);
+    const mounted=frames.some(f=>!!f.snapshot.humanoid?.mountedInstanceId);
     if(capabilities.camera.mode!=='authored'&&(mounted?evidence.renderedYawTravelDegrees<10:evidence.renderedYawRangeDegrees<20||evidence.renderedYawTravelDegrees<40))diagnostics.push({code:'CAMERA_VARIATION_LOW',message:'Recorded camera variation was limited; compare the actual framing with the requested composition.'});
     if(evidence.plannedJumps.some(j=>j.takeoffAtSeconds===null||j.landedAtSeconds===null))diagnostics.push({code:'OPTIONAL_JUMP_INCOMPLETE',message:'An automatically suggested jump lacked observed takeoff/landing; this is not an explicitly requested action failure.'});
   }

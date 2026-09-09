@@ -10,19 +10,33 @@ import {executeThreeCreatorTool} from './mcp.js';
 import {EPISODE_SCHEMA} from './contracts.js';
 import {createAssetPolicySnapshot, assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
-describe('modular training example discovery',()=>{
- const root=path.resolve('shared/training-content');
+describe('modular player example discovery',()=>{
+ const root=path.resolve('shared/preset-content');
  it('lists nested dependencies instead of pretending four files are complete',async()=>{
-  const result=await readExampleFiles(root,'training-assets');expect(result.fileManifest.some(f=>f.path==='environment/maps.ts')).toBe(true);
+  const result=await readExampleFiles(root,'preset-assets');expect(result.fileManifest.some(f=>f.path==='environment/maps.ts')).toBe(true);
   expect(result.fileManifest.some(f=>f.path==='ui/workspace.ts')).toBe(false);
   expect(Object.keys(result.files)).toEqual(['config.ts','models.ts','assets/resources.ts','creatures/specs.ts','creatures/manifest.ts']);
  });
  it('reads topic modules and rejects arbitrary paths',async()=>{
   const presentation=await readExampleFiles(root,'extensions',['presentation.json']);
   expect(JSON.parse(presentation.files['presentation.json']!)).toEqual({shadows:{}});
-  expect((await readExampleFiles(root,'training-maps')).files['environment/maps.ts']).toContain('campus');
+  expect((await readExampleFiles(root,'environment-maps')).files['environment/maps.ts']).toContain('campus');
   await expect(readExampleFiles(root,'extensions',['../../package.json'])).rejects.toThrow('THREE_EXAMPLE_FILE_UNKNOWN');
  });
+});
+
+it('serves scene HUD code through the presentation-ui MCP topic',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'presentation-ui-example-'));
+ const service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const result=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'presentation-ui'}) as {files:Record<string,string>};
+  expect(result.files['main.ts']).toContain('world.createPresentation()');
+  expect(result.files['main.ts']).toContain('presentation.ui.mount(hud)');
+  expect(JSON.parse(result.files['project.json']!).assetIds).toEqual(['humanoid.source-101']);
+  for(const [name,source] of Object.entries(result.files))await writeFile(path.join(root,name),source);
+  expect((await service.compiler.prepare()).project.assetIds).toEqual(['humanoid.source-101']);
+  await expect(executeThreeCreatorTool(service,'creator_get_examples',{topic:'playground-ui'})).rejects.toThrow();
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
 });
 
 describe('vehicle-camera example discovery', () => {
@@ -66,11 +80,11 @@ describe('vehicle-camera example discovery', () => {
   const root=await mkdtemp(path.join(os.tmpdir(),'vehicle-drift-discovery-'));
   const service=new ThreeCreatorTools(root,'three-sdk');
   try{
-   const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'training',sections:['guide','training']}) as unknown as {sdkGuide:string;trainingSourceContracts:Record<string,string>};
+   const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['guide','humanoid']}) as unknown as {sdkGuide:string;humanoidSourceContracts:Record<string,string>};
    expect(schema.sdkGuide).toContain('createRoadVehicleSpec');
    expect(schema.sdkGuide).toContain("topic:'custom-vehicle'");
    expect(schema.sdkGuide).toContain('brakeDeceleration');
-   expect(schema.trainingSourceContracts['training/config.ts']).toContain('brakeDrift?: boolean');
+   expect(schema.humanoidSourceContracts['humanoid-runtime/config.ts']).toContain('brakeDrift?: boolean');
    const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'custom-vehicle'}) as {files:Record<string,string>};
    expect(example.files['main.ts']).toContain("createRoadVehicleSpec('motorcycle')");
    expect(example.files['main.ts']).toContain('sample.vehicles[0]');
@@ -91,10 +105,10 @@ it.each([['custom-vehicle','custom-bike'],['vehicle-camera','rover']] as const)(
   const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
   try{
    const start={positionWorldMetersXYZ:[0,.03,0] as const,facingYawRadians:Math.PI,
-    training:{vehicleInstanceId:instanceId,mounted:true,cameraMode:0 as const}};
+    humanoid:{vehicleInstanceId:instanceId,mounted:true,cameraMode:0 as const}};
    const before=await episode.prepareSegment(start,{widthPixels:640,heightPixels:360});
-   const after=await episode.advance({training:{forward:1,steer:.1,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);
-   expect(after.training!.mountedInstanceId).toBe(instanceId);
+   const after=await episode.advance({humanoid:{forward:1,steer:.1,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);
+   expect(after.humanoid!.mountedInstanceId).toBe(instanceId);
    expect(after.simulationTick-before.simulationTick).toBe(180);
    const vehicle=after.entities.find(v=>v.id===instanceId)!;
    expect(Math.hypot(vehicle.positionWorldMetersXYZ[0],vehicle.positionWorldMetersXYZ[2])).toBeGreaterThan(2);

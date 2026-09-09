@@ -1,8 +1,8 @@
-import {training} from '@worldkit/three';
+import {humanoid} from '@worldkit/three';
 import type {CreatorProfile} from './contracts.js';
 
 /** Shared discovery advice; workspace runtime values must come from its source and live inspection. */
-export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=false,subject:'training'|'nonhuman'='training') {
+export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=false,subject:'humanoid'|'nonhuman'='humanoid') {
   if(profile==='three-raw')return undefined;
   const runtimeAuthority=workspaceRuntime?'workspace-sdk-source':'host-sdk-baseline';
   const root=workspaceRuntime?'sdk/three-world/src':'packages/three-world/src';
@@ -13,19 +13,19 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
     verify:'Use current-view pixels when needed to judge requested camera behavior or diagnose a problem. world_preview({view:"opening"}) resets to the opening; no fixed perspective/reset checklist is required.',
   };
   return {
-    scope:'training-only',runtimeAuthority,
+    scope:'humanoid-only',runtimeAuthority,
     source:[`${root}/config/camera.ts`],
     startWithDefaults:'Omit camera/cameraDistanceMeters to reuse tuned defaults. Whitebox scale is not eye height. Override only observed defects.',
     ...(workspaceRuntime?{
-      currentContract:'Read current workspace source via topic:training, sections:[training]. Host example values are not runtime authority. Rebuild with world_validate and match runtimeSourceHash in world_inspect.',
+      currentContract:'Read current workspace source via topic:humanoid, sections:[humanoid]. Host example values are not runtime authority. Rebuild with world_validate and match runtimeSourceHash in world_inspect.',
     }:{parameters:{
-      targetHeightOffset:{default:training.CAMERA_PARAMETERS.targetHeightOffset.defaultValue,description:training.CAMERA_PARAMETERS.targetHeightOffset.description},
-      horizontalOffset:{default:training.CAMERA_PARAMETERS.horizontalOffset.defaultValue,description:training.CAMERA_PARAMETERS.horizontalOffset.description},
-      cameraDistanceMeters:{description:training.CAMERA_DISTANCE_METERS_SCHEMA.description},
+      targetHeightOffset:{default:humanoid.CAMERA_PARAMETERS.targetHeightOffset.defaultValue,description:humanoid.CAMERA_PARAMETERS.targetHeightOffset.description},
+      horizontalOffset:{default:humanoid.CAMERA_PARAMETERS.horizontalOffset.defaultValue,description:humanoid.CAMERA_PARAMETERS.horizontalOffset.description},
+      cameraDistanceMeters:{description:humanoid.CAMERA_DISTANCE_METERS_SCHEMA.description},
     }}),
-    opening:'Opening: world.useAuthoredCamera(); play: training.camera. Avoid onReset camera takeovers in Episode.',
+    opening:'Opening: world.useAuthoredCamera(); play: humanoid.camera. Avoid onReset camera takeovers in Episode.',
     verify:{
-      selectView:{tool:'world_execute_command',arguments:{command:{type:'training.camera',mode:2}}},
+      selectView:{tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}},
       currentView:{tool:'world_preview',arguments:{view:'current'}},
       read:'cameraObservation: cameraOverrides (explicit), cameraSettings, framing, alongside pixels.',
       opening:'opening resets, unlike current.',
@@ -33,7 +33,7 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
     },
     inspect:{
       tool:'world_inspect',arguments:{sections:['description']},
-      path:'observation.description.training.configuration.effective.camera.framing',
+      path:'observation.description.humanoid.configuration.effective.camera.framing',
       meaning:'Check sampledOffsets/offsetsPending for old-frame/new-config mismatch. Projection is advisory, not pixel visibility or visual acceptance.',
     },
   };

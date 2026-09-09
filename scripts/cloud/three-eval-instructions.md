@@ -18,7 +18,7 @@ selects permitted resources. In the three-sdk profile, for a nonhuman protagonis
 own visual root, body and movement; select it with setControlledEntity and follow
 that subject with the camera. Read nonhuman-subject for the complete example.
 In the three-raw profile, author the nonhuman subject with ordinary Three and expose
-it as observer.player; this profile supplies its own movement, physics and observation.
+it as observer.controlledObject; this profile supplies its own movement, physics and observation.
 Do not add a human, rider, or mount/dismount controls to a standalone animal.
 Flight, swimming and other movement require the corresponding actual controller
 and compatible animation; use the current SDK contracts and registered abilities.
@@ -29,12 +29,12 @@ keeps the same instance through walking, mounting, riding, dismounting and reset
 Never hide that person or draw a replacement rider as part of a vehicle. Vehicle
 geometry is authored separately from its human. Do not load supplied or
 external vehicle models. For SDK cars and motorcycles, select a model-free
-training.createRoadVehicleSpec configuration and draw geometry to its dimensions;
+humanoid.createRoadVehicleSpec configuration and draw geometry to its dimensions;
 custom-vehicle and vehicle-camera illustrate binding. Other vehicle modes use
 their actual SDK contracts. Reuse supplied creatures when suitable; otherwise,
 if policy allows, draw simple Mesh/Group geometry
 and bind it through addCharacter({object,body,movement}), registerMovement, or a
-TrainingVehicleInstance {object,spec}. The raw profile uses normal Three and
+VehicleInstance {object,spec}. The raw profile uses normal Three and
 implements its own movement, physics and observation.
 
 Use these layers as needed:
@@ -49,9 +49,9 @@ Use these layers as needed:
    validators remain outside the authored runtime.
 
 Read current controlBindings and character capability conditions from the schema
-or world_inspect. For Training vehicle input, use the active family's inputGuide
+or world_inspect. For Humanoid vehicle input, use the active family's inputGuide
 in the world description: boost and axes have different meanings for cars,
-aircraft, spacecraft and underwater vehicles. Use emptyTrainingInput() and change
+aircraft, spacecraft and underwater vehicles. Use emptyHumanoidInput() and change
 only the relevant channels. After editing sdk/, read its current definitions and
 rebuilt state instead of assuming Host defaults. Use abilities only when needed
 by the task; their prerequisites apply when selected. A slide needs the current

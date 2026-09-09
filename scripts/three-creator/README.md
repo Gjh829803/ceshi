@@ -46,7 +46,7 @@ Choose the controlled subject from the request and reference. Environment and
 `getting-started` schema responses expose `subjectAuthoring` routes: ordinary
 humans use `character-actions`, human riding uses `mounted-interaction` with a
 vehicle example, and independent animals use `nonhuman-subject`. Generic schema
-topics identify `createWorld`; human/Training topics identify `createHumanoidWorld`.
+topics identify `createWorld`; human/Humanoid topics identify `createHumanoidWorld`.
 The existing default example still demonstrates a human and labels its use.
 `createWorld` is the general foundation, including custom human integrations;
 `createHumanoidWorld` wraps it with the complete supplied human kit. Both return
@@ -57,9 +57,9 @@ treating the two functions as separate human/nonhuman engines.
 ground movement, camera, collision and capture. Read the current movement and
 asset contracts for other forms and abilities. The same actor must remain the
 controlled/captured subject; do not create a rider for an animal protagonist.
-In an ordinary SDK world without Training, character continuity is
-`not-applicable`; loss of telemetry after a Training baseline remains `unavailable`.
-Training first-person view temporarily clips head geometry. Continuity reports
+In an ordinary SDK world without Humanoid, character continuity is
+`not-applicable`; loss of telemetry after a Humanoid baseline remains `unavailable`.
+Humanoid first-person view temporarily clips head geometry. Continuity reports
 `partial` with `geometryIdentity: deferred-first-person` while still checking the
 same root, skinned meshes, skeleton and bones. Empty indexed meshes are excluded
 from visibility checks in that view; remaining body meshes must be renderable.
@@ -69,7 +69,7 @@ coverage information, not an additional delivery gate.
 | Level | Tools / source | Use |
 | --- | --- | --- |
 | Reuse | Environment, asset search/describe, subject-specific example | General `createWorld` or complete human kit through `createHumanoidWorld` |
-| Bind | `nonhuman-subject`, `character-actions`, `training` schemas/examples | Author a Mesh and its body/movement, collision map, water or interaction anchors |
+| Bind | `nonhuman-subject`, `character-actions`, `humanoid` schemas/examples | Author a Mesh and its body/movement, collision map, water or interaction anchors |
 | Configure | Runtime commands and profiles | Change actual parameters with units; export effective values into the project |
 | Implement | `creator_materialize_runtime`, then edit `sdk/` | Modify a controller/module and rebuild with `world_validate` |
 
@@ -89,31 +89,31 @@ group ID and the same total mass in kilograms. Omit the field for boxes that
 should stay fixed. Supply physical support when the object should rest in place.
 `creator_get_examples({topic:'character-actions'})` uses tables and a chair to illustrate
 seat/pickup interactions, visual pose synchronization and reset. The SDK owns
-the dynamic bodies; scene code reads `propBoxPose(id)` from the current Training
+the dynamic bodies; scene code reads `propBoxPose(id)` from the current Humanoid
 environment in `onVisualUpdate` and copies world poses to the visuals.
 
 `creator_get_authoring_schema({topic})` returns a short guide by default, with
 `availableSections` and `runtimeGuidance` identifying its source. Select `sections` from guide, contracts,
-project, episode, observation, commands or training; `["all"]` returns the complete
-selected topic. For example, `{topic:"mounted-interaction", sections:["training"]}`
-returns Training declaration excerpts from the indicated source files. Selected
+project, episode, observation, commands or humanoid; `["all"]` returns the complete
+selected topic. For example, `{topic:"mounted-interaction", sections:["humanoid"]}`
+returns Humanoid declaration excerpts from the indicated source files. Selected
 public types within `contracts.ts` use an AST-selected dependency closure.
-Training excerpts retain public type references; they are not standalone declaration packages.
+Humanoid excerpts retain public type references; they are not standalone declaration packages.
 Default parameters are rendered as declarations without executing their expressions.
 An unresolved imported default marks only that declaration unavailable; other
 declarations and the topic guide remain readable.
 Examples include a complete file manifest and support selected files per topic.
 
 SDK environment, default schema guides and examples expose shared `cameraAuthoring`
-guidance; selecting training/commands sections or example files retains it. Use
+guidance; selecting humanoid/commands sections or example files retains it. Use
 tuned defaults, overriding only defects observed in real views. Large whitebox
-landmarks do not require lifting the humanoid eye. Training offsets are metre
+landmarks do not require lifting the humanoid eye. Humanoid offsets are metre
 increments on existing anchors, default 0, shared by modes 0/2 and ignored by
 mode 1; follow distance affects only mode 0. Read the
-[SDK camera contract](../../packages/three-world/README.md#training-camera-perspectives)
+[SDK camera contract](../../packages/three-world/README.md#humanoid-camera-perspectives)
 for details. Workspace SDK guidance points to current source and matching runtime
 inspection; Host values are not authority for edited SDKs. Standalone nonhuman
-guidance uses `setCameraFollow({view})`; raw guidance does not claim Training support.
+guidance uses `setCameraFollow({view})`; raw guidance does not claim Humanoid support.
 
 `assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
 20 maximum. Empty query lists permitted assets; continue with `nextOffset` until
@@ -149,12 +149,12 @@ a new hash. Missing required or invalid workspace files fail explicitly instead 
 back to Host declarations. An older workspace without the optional vehicle input
 guide reports that guidance as unavailable while keeping other discovery usable.
 
-For a workspace SDK, `contracts`/`training` sections use its declarations.
-`runtimeDefinitions` (training/commands sections and asset details) contains current
+For a workspace SDK, `contracts`/`humanoid` sections use its declarations.
+`runtimeDefinitions` (humanoid/commands sections and asset details) contains current
 exported definition source, including tuning and input bindings. Initializers are
 never evaluated on the Host. Evaluated Host capability cards and key bindings are
 omitted because they may be stale; use the current source and actual
-`world_inspect.observation.snapshot.training.characterCapabilities` eligibility.
+`world_inspect.observation.snapshot.humanoid.characterCapabilities` eligibility.
 Search still uses catalog/baseline terms to find assets, not to certify edited
 runtime abilities. Mounted integration remains unverified until checked in that
 runtime. Examples are marked `exampleAuthority: host-baseline` and require adapting
@@ -249,7 +249,7 @@ source identity. Use schemaVersion 2 for actions:
   {"keysDown":["c"],"durationSeconds":0.1},
   {"keysUp":["c"],"durationSeconds":2},
   {"keysUp":["w","Shift"],"durationSeconds":0.2},
-  {"commands":[{"type":"training.action","request":{"requestId":"roll-1","action":"roll"}}],"durationSeconds":2}
+  {"commands":[{"type":"humanoid.perform-action","request":{"requestId":"roll-1","action":"roll"}}],"durationSeconds":2}
 ]}
 ```
 
@@ -284,10 +284,10 @@ including NPCs and riders. Keep each person as one instance across walking,
 mounting, riding, dismounting and reset; custom vehicle geometry never includes a
 replacement rider. `humanAuthoring` in environment/schema/asset detail responses
 states this requirement independently of the project's editable SDK source.
-`creator_get_authoring_schema({topic:'training',sections:['training']})` returns
+`creator_get_authoring_schema({topic:'humanoid',sections:['humanoid']})` returns
 model-free `roadVehicleConfigurations` for car and motorcycle on the Host SDK
 baseline. Workspace SDKs return their source definitions instead. Call
-`training.createRoadVehicleSpec('car' | 'motorcycle')` for a fresh configuration,
+`humanoid.createRoadVehicleSpec('car' | 'motorcycle')` for a fresh configuration,
 then author the chassis, wheel groups and seat to those dimensions.
 `creator_get_examples({topic:'custom-vehicle'})` provides a self-drawn motorcycle;
 `vehicle-camera` provides a self-drawn car. Both select only the preset human asset and remain usable when custom external
@@ -301,7 +301,8 @@ See [integration status and follow-ups](../../docs/reviews/2026-09-09-creator-ve
 For seat-fit details, `creator_get_authoring_schema({topic:'mounted-interaction'})`
 provides the SDK's [vehicle seat fit guidance](../../packages/three-world/README.md#vehicle-seat-fit).
 `spec.seat` locates the pelvis, not the cushion surface. The custom motorcycle
-example derives it from the cushion dimensions and a Source101 pose clearance.
+example derives its cushion position from the configured pelvis anchor, cushion
+thickness and a Source101 pose clearance.
 These reference values require checking against the authored seat and mounted pose;
 the SDK does not automatically fit arbitrary seats. First-person eye height follows
 the actual head, so correct the rider/seat fit before adjusting camera settings.
@@ -316,8 +317,8 @@ An authored opening belongs in the user reset/start action, not an unconditional
 `onReset` camera write during Episode capture.
 
 Use `world.useAuthoredCamera()` for that opening and hand control back through
-`training.camera` when play begins. To check shoulder view, call
-`world_execute_command({command:{type:'training.camera',mode:2}})`, then
+`humanoid.set-camera-mode` when play begins. To check shoulder view, call
+`world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})`, then
 `world_preview({view:'current'})`. Current preview preserves the view without reset
 or simulation stepping. Its `cameraObservation` includes `cameraOverrides`
 (explicit `profile.camera`), `cameraSettings` (resolved settings) and `framing`.
@@ -327,18 +328,18 @@ outcomes or an observed problem; production has no fixed vehicle lifecycle
 regression checklist.
 
 For framing advice, request `world_inspect({sections:['description']})` and read
-`observation.description.training.configuration.effective.camera.framing`.
+`observation.description.humanoid.configuration.effective.camera.framing`.
 This is on-demand head-anchor projection advice without stepping or camera changes.
 `SHOULDER_FRAMING_OFFSET_REVIEW` suggests checking explicit shoulder offsets.
 No issues does not mean visual acceptance, and projection does not prove visibility or lack of
 occlusion. Use the actual current preview to judge the composition.
 
-Inspect/playtest `characterContinuity` feedback observes the Training character's
+Inspect/playtest `characterContinuity` feedback observes the Humanoid character's
 skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate
 changes even if the author restores the person before the last frame. It is
 advisory, with no change to v0.2 technical admission. It cannot prove preset
 provenance, detect every extra rider, or measure seat/hand/foot fit; use relevant
-frames when such a problem needs investigation. Legacy/raw worlds without Training
+frames when such a problem needs investigation. Legacy/raw worlds without Humanoid
 telemetry are explicitly unobserved, not passed.
 
 ## Verify and deliver

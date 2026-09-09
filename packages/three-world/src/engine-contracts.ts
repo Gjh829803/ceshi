@@ -113,7 +113,7 @@ export type CharacterEntityOptions = EntityOptions & Readonly<{
   asset?: AssetInstance;
 }>;
 export type WorldInput = Readonly<{
-  training?:import('./training/simulation').Input;
+  humanoid?:import('./humanoid-runtime/simulation').Input;
   moveXRatio?: number;
   moveZRatio?: number;
   moveYRatio?: number;
@@ -158,7 +158,7 @@ export interface WorldObservation {
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;
   readonly renderer: THREE.WebGLRenderer;
-  readonly player: THREE.Object3D;
+  readonly controlledObject: THREE.Object3D;
   readonly targets: Readonly<Record<string, THREE.Object3D>>;
   /** Local semantic front rotates -Z around +Y, then follows the target's world quaternion. */
   readonly targetFrontYawRadiansById?: Readonly<Record<string, number>>;

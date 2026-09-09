@@ -2,10 +2,10 @@ import * as T from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type {
-  TrainingCharacter,
+  HumanoidCharacter,
   CharacterAttachmentPoint,
 } from "@worldkit/three";
-import { ACCESSORY_CHOICES } from "../../../shared/training-content/humanoid/accessories";
+import { ACCESSORY_CHOICES } from "../../../shared/preset-content/humanoid/accessories";
 export type PreviewPin = {
   point: CharacterAttachmentPoint;
   hidden: boolean;
@@ -16,7 +16,7 @@ export type PreviewPin = {
 export function createEquipmentPreview(
   canvas: HTMLCanvasElement,
   stage: HTMLElement,
-  character: TrainingCharacter,
+  character: HumanoidCharacter,
   isOpen: () => boolean,
   updatePins: (pins: PreviewPin[]) => void,
 ) {

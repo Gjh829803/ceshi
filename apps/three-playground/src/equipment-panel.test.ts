@@ -27,9 +27,9 @@ describe("React equipment preview ownership and lifecycle", () => {
       const toastRoot=createRoot(toastHost);toastRoot.render(createElement(Toaster,{duration:Infinity}));
 
       import * as T from 'three';
-      import {TrainingCharacter} from '@worldkit/three';
+      import {HumanoidCharacter} from '@worldkit/three';
       import {mountEquipmentPanel} from './apps/three-playground/src/equipment-panel.tsx';
-      import {createAccessoryPreview} from './shared/training-content/humanoid/accessories.ts';
+      import {createAccessoryPreview} from './shared/preset-content/humanoid/accessories.ts';
       const root=new T.Group();
       const names=['head','spine_05','hand_l','hand_r','foot_l','foot_r'];
       const bones=names.map((name,i)=>{const b=new T.Bone();b.name=name;b.position.set(i%2?.2:-.2,1.5-i*.23,0);root.add(b);return b;});
@@ -45,7 +45,7 @@ describe("React equipment preview ownership and lifecycle", () => {
       const draw=WebGL2RenderingContext.prototype.drawElements;
       WebGL2RenderingContext.prototype.drawElements=function(...args){draws++;return draw.apply(this,args);};
       const source={root,actions:{},dispose(){geometry.dispose();material.dispose();skeleton.dispose();root.removeFromParent();}};
-      const character=new TrainingCharacter(source),accessories=createAccessoryPreview(character),events=[];
+      const character=new HumanoidCharacter(source),accessories=createAccessoryPreview(character),events=[];
       const panel=mountEquipmentPanel(document.body,character,accessories,open=>events.push(open));
       const open=document.createElement('button');open.textContent='打开装备';open.onclick=()=>panel.open();document.body.append(open);
       window.equipmentTest={

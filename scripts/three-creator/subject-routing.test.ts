@@ -36,14 +36,14 @@ it.each([0,1])('switches the standalone subject and replays the Episode default 
   const host=window.__THREE_CREATOR_HOST__!,observer=window.__WORLDKIT_EVAL__!,world=(window as unknown as {__subjectTestWorld:import('@worldkit/three').ThreeWorld}).__subjectTestWorld;
   await host.stop();host.capture('opening',[],null);const before=observer.snapshot!();
   let primaryHidden=false,objectShown=false;
-  observer.withPresentation!(()=>{primaryHidden=!observer.player.children.some(o=>(o as import('three').Mesh).isMesh&&o.layers.test(observer.camera.layers));});
-  observer.withPresentation!(()=>{objectShown=observer.player.children.some(o=>(o as import('three').Mesh).isMesh&&o.layers.test(observer.camera.layers));},{view:'object'});
+  observer.withPresentation!(()=>{primaryHidden=!observer.controlledObject.children.some(o=>(o as import('three').Mesh).isMesh&&o.layers.test(observer.camera.layers));});
+  observer.withPresentation!(()=>{objectShown=observer.controlledObject.children.some(o=>(o as import('three').Mesh).isMesh&&o.layers.test(observer.camera.layers));},{view:'object'});
   const first=host.capture('entity-triview',['player'],null).image,after=observer.snapshot!();
   world.setCameraPerspective('third-person');const third=host.capture('entity-triview',['player'],null).image;
   await host.reset();
-  const masks=observer.player.children.map(o=>o.layers.mask);
+  const masks=observer.controlledObject.children.map(o=>o.layers.mask);
   try{observer.withPresentation!(()=>{throw new Error('view failure fixture');});}catch{}
-  const restoredOnFailure=observer.player.children.every((o,i)=>o.layers.mask===masks[i]);
+  const restoredOnFailure=observer.controlledObject.children.every((o,i)=>o.layers.mask===masks[i]);
   return {before,after,primaryHidden,objectShown,restoredOnFailure,sameObjectViews:first===third,reset:observer.snapshot!()};
  });
  expect(captured.primaryHidden).toBe(true);expect(captured.objectShown).toBe(true);expect(captured.sameObjectViews).toBe(true);
@@ -87,7 +87,7 @@ it('uses current workspace contracts for the nonhuman route and retains raw guid
  const schema=await call(service,'creator_get_authoring_schema',{topic:'nonhuman-subject',sections:['contracts']});
  expect(schema.sdkContracts).toContain('subjectProbe');
  expect(schema.runtimeGuidance.kind).toBe('workspace-sdk-source');
- expect(schema.runtimeDefinitions['training/humanoid/action-schema.ts']).toBeUndefined();
+ expect(schema.runtimeDefinitions['humanoid-runtime/humanoid/action-schema.ts']).toBeUndefined();
  const rawRoot=await mkdtemp(path.join(os.tmpdir(),'raw-subject-'));roots.push(rawRoot);
  const raw=new ThreeCreatorTools(rawRoot,'three-raw');services.push(raw);
  const env=await call(raw,'creator_describe_environment');expect(env.subjectAuthoring.routes).toEqual([]);
@@ -102,7 +102,7 @@ it('runs a nonhuman subject with no humanoid assets, collides, resets and captur
  expect(definitions.assets).toEqual([]);
  const inspected=await service.inspect();
  expect(inspected.observation.snapshot.controlledEntityId).toBe('fox');
- expect(inspected.observation.snapshot.training).toBeUndefined();
+ expect(inspected.observation.snapshot.humanoid).toBeUndefined();
  expect(inspected.observation.snapshot.entities.filter((e:any)=>e.role==='actor').map((e:any)=>e.id)).toEqual(['fox']);
  expect(inspected.feedback.characterContinuity).toMatchObject({status:'not-applicable',issues:[]});
  expect(inspected.pageErrors).toEqual([]);expect(inspected.blockedNetworkRequests).toEqual([]);
@@ -114,7 +114,7 @@ it('runs a nonhuman subject with no humanoid assets, collides, resets and captur
   const moved=await episode.advance({moveZRatio:-1},180),fox=moved.entities.find(e=>e.id==='fox')!;
   expect(fox.positionWorldMetersXYZ[2]).toBeLessThan(-1);
   expect(fox.positionWorldMetersXYZ[2]).toBeGreaterThan(-4);
-  expect(moved.training).toBeUndefined();
+  expect(moved.humanoid).toBeUndefined();
   await episode.release();await episode.prepareSegment(start,{widthPixels:640,heightPixels:360});
   expect((await episode.frame('image/png')).imageDataUrl).toBe(first.imageDataUrl);
   expect(episode.errors).toEqual([]);

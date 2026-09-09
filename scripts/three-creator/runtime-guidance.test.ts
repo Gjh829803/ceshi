@@ -19,14 +19,14 @@ const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={}
 afterEach(async()=>{await Promise.all(services.splice(0).map(s=>s.close()));await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
 
 it('publishes a valid optional method parameter from the edited workspace runtime',async()=>{
- const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/runtime.ts');
- const before=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/humanoid-runtime/runtime.ts');
+ const before=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid']});
  const original=await readFile(file,'utf8');
  await writeFile(file,original.replace('prepareCharacter(position:Vec3,yaw=0):boolean','prepareCharacter(position:Vec3,yaw:0|1=0):boolean'));
- const result=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ const result=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid']});
  expect(result.runtimeGuidance.runtimeSourceHash).not.toBe(before.runtimeGuidance.runtimeSourceHash);
- const declarations=ts.createSourceFile('runtime.ts',result.trainingSourceContracts['training/runtime.ts'],ts.ScriptTarget.Latest,true);
- const runtime=declarations.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='TrainingRuntime');
+ const declarations=ts.createSourceFile('runtime.ts',result.humanoidSourceContracts['humanoid-runtime/runtime.ts'],ts.ScriptTarget.Latest,true);
+ const runtime=declarations.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='HumanoidRuntime');
  const method=runtime?.members.find(node=>node.name?.getText(declarations)==='prepareCharacter');
  if(!method)throw new Error('Missing public prepareCharacter declaration');
  const filename=path.join(service.workspace,'declaration-consumer.ts');
@@ -40,24 +40,24 @@ it('publishes a valid optional method parameter from the edited workspace runtim
 },20_000);
 
 it.each(['Math.PI','DEFAULT_YAW'])('keeps guides available with the valid workspace default %s',async initializer=>{
- const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/runtime.ts');
- const before=await call(service,'creator_get_authoring_schema',{topic:'training'});
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/humanoid-runtime/runtime.ts');
+ const before=await call(service,'creator_get_authoring_schema',{topic:'humanoid'});
  const imported=initializer==='DEFAULT_YAW';
  if(imported)await writeFile(path.join(path.dirname(file),'guidance-default.ts'),'export const DEFAULT_YAW=0;');
  const source=(await readFile(file,'utf8')).replace('prepareCharacter(position:Vec3,yaw=0):boolean',`prepareCharacter(position:Vec3,yaw=${initializer}):boolean`);
  await writeFile(file,(imported?"import {DEFAULT_YAW} from './guidance-default';\n":'')+source);
- const guide=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['guide']});
+ const guide=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['guide']});
  expect(guide.sdkGuide).toEqual(expect.any(String));
  expect(guide.runtimeGuidance.runtimeSourceHash).not.toBe(before.runtimeGuidance.runtimeSourceHash);
- const detail=await call(service,'creator_get_authoring_schema',{topic:'training',sections:['training']});
+ const detail=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid']});
  expect(detail.runtimeGuidance.runtimeSourceHash).toBe(guide.runtimeGuidance.runtimeSourceHash);
- const sourceFile=ts.createSourceFile('runtime.ts',detail.trainingSourceContracts['training/runtime.ts'],ts.ScriptTarget.Latest,true);
- const runtime=sourceFile.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='TrainingRuntime');
+ const sourceFile=ts.createSourceFile('runtime.ts',detail.humanoidSourceContracts['humanoid-runtime/runtime.ts'],ts.ScriptTarget.Latest,true);
+ const runtime=sourceFile.statements.find((node):node is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(node)&&node.name.text==='HumanoidRuntime');
  expect(runtime?.members.some(node=>node.name?.getText(sourceFile)==='setInput')).toBe(true);
  const method=runtime?.members.find((node):node is ts.MethodSignature=>ts.isMethodSignature(node)&&node.name.getText(sourceFile)==='prepareCharacter');
  if(imported){
   expect(method).toBeUndefined();
-  expect(detail.trainingSourceContracts['training/runtime.ts']).toContain('Declaration unavailable for prepareCharacter');
+  expect(detail.humanoidSourceContracts['humanoid-runtime/runtime.ts']).toContain('Declaration unavailable for prepareCharacter');
  }else{
   expect(method?.parameters[1]?.initializer).toBeUndefined();
   expect(method?.parameters[1]?.type?.kind).toBe(ts.SyntaxKind.NumberKeyword);
@@ -68,7 +68,7 @@ it.each(['Math.PI','DEFAULT_YAW'])('keeps guides available with the valid worksp
 it('publishes the current project shadow defaults through presentation discovery',async()=>{
  const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/config/presentation.ts');
  await writeFile(file,(await readFile(file,'utf8')).replace('coverageMeters:60','coverageMeters:96'));
- const result=await call(service,'creator_get_authoring_schema',{topic:'presentation',sections:['contracts','training']});
+ const result=await call(service,'creator_get_authoring_schema',{topic:'presentation',sections:['contracts','humanoid']});
  expect(result.runtimeDefinitions['config/presentation.ts']).toContain('coverageMeters:96');
  expect(result.sdkContracts).toContain('configureShadowLight');
  expect(result.sdkContracts).toContain('interface ShadowSettings');
@@ -106,11 +106,11 @@ it('exposes edited skill definitions as source and never advertises host thresho
 });
 
 it('reads edited vehicle input guidance from the workspace instead of advertising the Host baseline',async()=>{
- const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/training/input-guidance.ts');
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/humanoid-runtime/input-guidance.ts');
  await writeFile(file,(await readFile(file,'utf8')).replace('Brakes velocity through damping','Workspace-specific braking'));
- const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['training']});
- expect(schema).not.toHaveProperty('trainingInputGuides');
- expect(schema.runtimeDefinitions['training/input-guidance.ts']).toContain('Workspace-specific braking');
+ const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['humanoid']});
+ expect(schema).not.toHaveProperty('humanoidInputGuides');
+ expect(schema.runtimeDefinitions['humanoid-runtime/input-guidance.ts']).toContain('Workspace-specific braking');
 });
 
 it('parses authored source without executing initializers and never silently falls back to Host files',async()=>{
@@ -120,7 +120,7 @@ it('parses authored source without executing initializers and never silently fal
  await expect(call(service,'assets_describe',{assetId:'humanoid.source-101'})).resolves.toHaveProperty('runtimeDefinitions');
  await expect(access(marker)).rejects.toThrow();
  await rm(file);
- await expect(call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['training']})).rejects.toThrow('THREE_RUNTIME_GUIDANCE_SOURCE_MISSING');
+ await expect(call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['humanoid']})).rejects.toThrow('THREE_RUNTIME_GUIDANCE_SOURCE_MISSING');
  await symlink('/etc/hosts',file);
  await expect(call(service,'assets_search',{query:'horse'})).rejects.toThrow('THREE_RUNTIME_SOURCE_SYMLINK');
 });
@@ -132,20 +132,20 @@ it('binds live inspection to the same workspace source and its changed action co
 import {Group,PerspectiveCamera,Scene} from 'three';
 import {createWorld} from '@worldkit/three';
 const canvas=document.createElement('canvas');document.body.append(canvas);
-const world=await createWorld({scene:new Scene(),canvas,camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{
+const world=await createWorld({scene:new Scene(),canvas,camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{
  map:{id:'audit',name:'Audit',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
  character:{instanceId:'person',object:new Group()},vehicles:[]}});
-world.training.simulation.setHumanoidAssets(new Set(['slide-start','slide-loop','slide-exit']),[]);
+world.humanoid.simulation.setHumanoidAssets(new Set(['slide-start','slide-loop','slide-exit']),[]);
 await world.start();world.stop();world.step({moveZRatio:-1},120);
 `);
- const schema=await call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['training']});
+ const schema=await call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['humanoid']});
  const inspected=await service.inspect();
  expect(inspected.runtimeSourceHash).toBe(schema.runtimeGuidance.runtimeSourceHash);
  const snapshot=inspected.observation.snapshot;
  const player=snapshot.entities.find((entity:any)=>entity.id==='person');
  const speed=Math.hypot(...player.motion.velocityWorldMetersPerSecondXYZ);
  expect(speed).toBeGreaterThan(2.5);expect(speed).toBeLessThan(5);
- expect(snapshot.training.characterCapabilities.find((card:any)=>card.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW'});
+ expect(snapshot.humanoid.characterCapabilities.find((card:any)=>card.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW'});
  expect(inspected.pageErrors).toEqual([]);expect(inspected.blockedNetworkRequests).toEqual([]);
 },20000);
 

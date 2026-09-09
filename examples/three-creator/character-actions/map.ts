@@ -1,6 +1,6 @@
-import type {TrainingMap} from '@worldkit/three';
+import type {EnvironmentDefinition} from '@worldkit/three';
 
-const boxes:TrainingMap['boxes'][number][]=[
+const boxes:EnvironmentDefinition['boxes'][number][]=[
     {id:'near-bank',position:[-10,-.5,0],size:[30,1,40],color:'#cccccc'},
     {id:'pool-floor',position:[10.5,-2.5,0],size:[11,1,40],color:'#bbbbbb'},
     {id:'far-bank',position:[28,-.5,0],size:[24,1,40],color:'#cccccc'},
@@ -16,7 +16,7 @@ const boxes:TrainingMap['boxes'][number][]=[
 const chairColliders=['seat','seat-back'];
 
 /** Three visuals and collision boxes share these dimensions, in metres. */
-export const map:TrainingMap={
+export const map:EnvironmentDefinition={
   id:'character-actions',name:'人物动作场',description:'移动、滑铲、匍匐、攀爬、搬运与游泳',
   bounds:{min:[-25,-5,-20],max:[40,30,20]},
   boxes,

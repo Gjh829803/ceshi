@@ -20,8 +20,8 @@ describe("React playground inspector", () => {
         contents: `
    import {toast} from './apps/three-playground/node_modules/sonner/dist/index.mjs';
    import {mountInspector} from './apps/three-playground/src/inspector.tsx';
-   import {getDefaultProfile,parseAssetProfile} from './shared/training-content/platform/profiles.ts';
-   import {SPECS} from './shared/training-content/config.ts';
+   import {getDefaultProfile,parseAssetProfile} from './shared/preset-content/platform/profiles.ts';
+   import {SPECS} from './shared/preset-content/config.ts';
    let current='person',mode=0,interactions=0,speedKmh=0;const appliedSections=[];
    const profiles=new Map(['person',...SPECS.map(s=>s.id)].map(id=>[id,getDefaultProfile(id)])),saved=[];
    const inspector=mountInspector(document.querySelector('#host'),{

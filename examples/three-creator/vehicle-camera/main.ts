@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import {createHumanoidWorld, training, type TrainingMap} from '@worldkit/three';
+import {createHumanoidWorld, humanoid, type EnvironmentDefinition} from '@worldkit/three';
 import {applyWhiteboxMaterials} from './whitebox-materials';
 
 // Choose automobile handling before authoring the model. This contains no geometry.
-const spec=training.createRoadVehicleSpec('car');spec.id='rover';spec.speed=12;spec.maxSpeed=16;
+const spec=humanoid.createRoadVehicleSpec('car');spec.id='rover';spec.speed=12;spec.maxSpeed=16;
 const physics=spec.wheelPhysics;
 
 const scene = new THREE.Scene();
@@ -15,7 +15,7 @@ canvas.style.cssText = 'display:block;width:100vw;height:100vh';
 document.body.append(canvas);
 
 // Box centres and full sizes are in metres. Visuals and collision use the same boxes.
-const map: TrainingMap = {
+const map: EnvironmentDefinition = {
   id: 'vehicle-camera', name: 'Self-drawn car camera and glass',
   description: 'Walk beside the open cabin, drive, orbit through glass and compare the solid wall.',
   bounds: {min: [-30, -5, -30], max: [30, 20, 30]},
@@ -74,9 +74,9 @@ world.onDispose(() => {
   for (const mesh of environmentMeshes) { mesh.geometry.dispose(); mesh.material.dispose(); }
 });
 world.onDispose(applyWhiteboxMaterials(rover));
-world.training!.onVisualUpdate((dt,sample)=>{
-  const runtime=world.training!,state=runtime.simulation.vehicles[0]!;
-  training.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision});
+world.humanoid!.onVisualUpdate((dt,sample)=>{
+  const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;
+  humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision});
 });
 world.setCaptureTargets(['person', 'rover']);
 
@@ -90,7 +90,7 @@ reset.textContent = 'Reset'; reset.style.marginTop = '8px';
 reset.onclick = async () => { await world.reset(); presentation.focus(); };
 hud.append(status, reset); presentation.ui.mount(hud);
 world.onUpdate(() => {
-  const state = world.snapshot().training!;
+  const state = world.snapshot().humanoid!;
   status.textContent = `Self-drawn car camera and glass\nWASD move / drive · F enter / exit · Space brake\nDrag to orbit · T third person / first person / shoulder\n${state.mountedInstanceId ? 'Driving' : 'On foot'} · ${['Third person', 'First person', 'Shoulder'][state.cameraMode]}\n${state.message}`;
 });
 await world.start(); presentation.focus();

@@ -1,9 +1,9 @@
 # React Playground
 
 The maintainer editor uses React and shadcn/ui form components. It reuses the
-Three SDK and the scene/configuration modules in `shared/training-content`.
+Three SDK and the scene/configuration modules in `shared/preset-content`.
 The shared directory contains scene modules and configuration only; the former
-DOM editor has been removed. Creator uses the standalone training-independent example.
+DOM editor has been removed. Creator uses the standalone vehicle-sandbox example.
 
 ```sh
 pnpm dev                       # http://127.0.0.1:5178 (repository root)

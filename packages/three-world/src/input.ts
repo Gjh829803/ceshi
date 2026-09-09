@@ -1,6 +1,6 @@
 import type { WorldInput } from './engine-contracts.js';
 import type { CameraRigInput } from './camera.js';
-import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './training/input.js';
+import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './humanoid-runtime/input.js';
 
 const UI_CONTROL_SELECTOR = 'input,textarea,select,button,a[href],[role="textbox"],[role="button"]';
 function isElement(value: EventTarget): value is Element {
@@ -18,13 +18,13 @@ function includesRoot(event: Event, root: HTMLElement | undefined): boolean {
 
 export const MOVEMENT_KEYS = new Set(Object.values(DEFAULT_KEY_BINDINGS).flat());
 export class WorldKeyboard {
-  private trainingMounted:(()=>boolean)|undefined;
-  private readonly trainingPressed:KeyAction[]=[];
+  private humanoidMounted:(()=>boolean)|undefined;
+  private readonly humanoidPressed:KeyAction[]=[];
   private bindings:KeyBindings=DEFAULT_KEY_BINDINGS;
   getKeyBindings():KeyBindings{return createKeyBindings({},this.bindings);}
   setKeyBindings(overrides:Partial<KeyBindings>):void{const next=createKeyBindings(overrides,this.bindings);this.clear();this.bindings=next;}
   private bound(action:ControlAction,code:string):boolean{return this.bindings[action].includes(code);}
-  setTrainingMode(mounted:()=>boolean):void{this.trainingMounted=mounted;}
+  setHumanoidMode(mounted:()=>boolean):void{this.humanoidMounted=mounted;}
   private admittedKey(code:string):boolean{return Object.values(this.bindings).some(codes=>codes.includes(code));}
   readonly held = new Set<string>();
   private jumpQueued = false;
@@ -55,8 +55,8 @@ export class WorldKeyboard {
     this.record('keydown', code, repeat);
     if (repeat && !this.held.has(code)) return;
     if (!this.held.has(code)) {
-      if(this.trainingMounted){const action=actionForKey(code,this.trainingMounted(),this.held,this.bindings);if(action)this.trainingPressed.push(action);}
-      if(!this.trainingMounted&&this.bound('cameraToggle',code))this.cameraToggleQueued=true;
+      if(this.humanoidMounted){const action=actionForKey(code,this.humanoidMounted(),this.held,this.bindings);if(action)this.humanoidPressed.push(action);}
+      if(!this.humanoidMounted&&this.bound('cameraToggle',code))this.cameraToggleQueued=true;
       if (this.bound('jump',code)) this.jumpQueued = true;
       if (this.bound('interact',code)) this.interactQueued = true;
     }
@@ -67,12 +67,12 @@ export class WorldKeyboard {
     if (this.transcript.length < 100_000) this.transcript.push({ type, code, repeat, simulationTick: this.getTick() });
   }
   sample(): WorldInput {
-    if(this.trainingMounted){
-      const mounted=this.trainingMounted(),humanoid:import('./training/simulation').HumanoidInput={};let interact=false,cameraTogglePressed=false;
-      for(const action of this.trainingPressed){if(action.kind==='vehicle')interact=true;else if(action.kind==='camera-toggle')cameraTogglePressed=true;else if(!mounted)Object.assign(humanoid,action.input);}
-      const training=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings);
-      const result:WorldInput={training,interactPressed:interact,cameraTogglePressed,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
-      this.trainingPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
+    if(this.humanoidMounted){
+      const mounted=this.humanoidMounted(),humanoid:import('./humanoid-runtime/simulation').HumanoidActionInput={};let interact=false,cameraTogglePressed=false;
+      for(const action of this.humanoidPressed){if(action.kind==='vehicle')interact=true;else if(action.kind==='camera-toggle')cameraTogglePressed=true;else if(!mounted)Object.assign(humanoid,action.input);}
+      const player=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings);
+      const result:WorldInput={humanoid:player,interactPressed:interact,cameraTogglePressed,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
+      this.humanoidPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
     }
     const has = (action:ControlAction) => this.bindings[action].some(code => this.held.has(code));
     const result: WorldInput = {
@@ -89,7 +89,7 @@ export class WorldKeyboard {
     };
     this.jumpQueued = false; this.interactQueued = false;this.cameraToggleQueued=false; return result;
   }
-  clear(): void { this.held.clear(); this.trainingPressed.length=0;this.jumpQueued = false; this.interactQueued = false;this.cameraToggleQueued=false; }
+  clear(): void { this.held.clear(); this.humanoidPressed.length=0;this.jumpQueued = false; this.interactQueued = false;this.cameraToggleQueued=false; }
   detach(): void { this.abort?.abort(); this.abort = undefined; this.clear(); }
 }
 

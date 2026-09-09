@@ -1,6 +1,6 @@
 import { ModalHeader, ModalFooter } from "./components/modal-layout";
 import { FramePacingView } from "./fps-panel";
-import type { FrameRateReading } from "../../../shared/training-content/fps";
+import type { FrameRateReading } from "../../../shared/preset-content/fps";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +20,8 @@ import { createPortal, flushSync } from "react-dom";
 import { Button } from "./components/ui/button";
 import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
 import { Icon } from "./components/icon";
-import type { AssetEntry } from "../../../shared/training-content/platform/catalog";
-import { MAPS } from "../../../shared/training-content/environment/maps";
+import type { AssetEntry } from "../../../shared/preset-content/platform/catalog";
+import { MAPS } from "../../../shared/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
 
 type Flags =

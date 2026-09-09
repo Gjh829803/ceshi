@@ -1,7 +1,7 @@
 # Self-drawn car camera and glass
 
 A native Three scene using only `humanoid.source-101`. It selects
-`training.createRoadVehicleSpec('car')` before drawing its own car geometry. Creator's
+`humanoid.createRoadVehicleSpec('car')` before drawing its own car geometry. Creator's
 `creator_get_examples({topic:'vehicle-camera'})` returns the entry files and the
 local [material helper](whitebox-materials.ts); request `README.md` separately.
 Keep the full returned source graph and [asset selection](project.json).

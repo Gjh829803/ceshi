@@ -83,24 +83,24 @@ it('paginates the permitted catalog deterministically without omissions or dupli
 it('keeps denied assets and dependent examples outside the frozen search and guidance', async () => {
   const tools = await service(['humanoid.source-101']);
   const result = await search(tools, { query: '骑马' });
-  expect(result.assets.map(asset => asset.id)).not.toContain('training.horse');
+  expect(result.assets.map(asset => asset.id)).not.toContain('creature.horse');
   expect(result.mountUsage).toEqual([]);
-  await expect(describeAsset(tools, { assetId: 'training.horse' })).rejects.toThrow('THREE_ASSET_UNAVAILABLE');
+  await expect(describeAsset(tools, { assetId: 'creature.horse' })).rejects.toThrow('THREE_ASSET_UNAVAILABLE');
   const guidance = await schema(tools, { topic: 'mounted-interaction' });
-  expect(guidance.trainingExampleTopic).toBeUndefined();
-  expect(guidance.sdkGuide).not.toContain('new TrainingHorse');
+  expect(guidance.humanoidExampleTopic).toBeUndefined();
+  expect(guidance.sdkGuide).not.toContain('new HorseVisual');
 });
 
 it('discovers handling configurations without offering vehicle models', async () => {
   const tools = await service();
-  const result = await search(tools, { query: 'training.wheeled', limit: 20 });
+  const result = await search(tools, { query: 'humanoid.wheeled', limit: 20 });
   expect(result.assets).toEqual([]);
-  const selected=await schema(tools,{topic:'training',sections:['training']});
+  const selected=await schema(tools,{topic:'humanoid',sections:['humanoid']});
   expect(selected.roadVehicleConfigurations!.car.mode).toBe('wheeled');
   expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('bike');
   expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
   expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
-  expect(selected.trainingSourceContracts['training/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
+  expect(selected.humanoidSourceContracts['humanoid-runtime/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
 
 });
 
@@ -109,13 +109,13 @@ it('returns a readable schema guide first and actual source contracts only when 
   const guide = await schema(tools, { topic: 'mounted-interaction' });
   expect(guide.sdkGuide).toContain('Imported horse');
   expect(guide.sdkGuide).not.toContain('## Per-wheel road simulation');
-  expect((await schema(tools, { topic: 'training' })).sdkGuide).toContain('## Per-wheel road simulation');
+  expect((await schema(tools, { topic: 'humanoid' })).sdkGuide).toContain('## Per-wheel road simulation');
   expect(guide).not.toHaveProperty('sdkContracts');
-  expect(guide).not.toHaveProperty('trainingSourceContracts');
-  expect(guide.availableSections).toContain('training');
+  expect(guide).not.toHaveProperty('humanoidSourceContracts');
+  expect(guide.availableSections).toContain('humanoid');
   expect(Buffer.byteLength(JSON.stringify(guide))).toBeLessThan(12000);
-  const declarations = await schema(tools, { topic: 'mounted-interaction', sections: ['training'] });
-  expect(declarations.trainingSourceContracts?.['training/horse.ts']).toContain('class TrainingHorse');
+  const declarations = await schema(tools, { topic: 'mounted-interaction', sections: ['humanoid'] });
+  expect(declarations.humanoidSourceContracts?.['humanoid-runtime/horse.ts']).toContain('class HorseVisual');
   expect(declarations).not.toHaveProperty('sdkGuide');
   const complete = await schema(tools, { topic: 'mounted-interaction', sections: ['all'] });
   expect(complete.sdkContracts).toBeDefined();
@@ -126,7 +126,7 @@ it('returns a readable schema guide first and actual source contracts only when 
   expect(controls.characterCapabilities).toBeDefined();
   expect(controls.controlBindings).toBeDefined();
   expect(complete.episode).toBeDefined();
-  expect(complete.trainingSourceContracts).toEqual(declarations.trainingSourceContracts);
+  expect(complete.humanoidSourceContracts).toEqual(declarations.humanoidSourceContracts);
 });
 
 it('keeps failed operation identity and adds actionable diagnostics to its persisted result', async () => {
@@ -162,7 +162,7 @@ it('returns correlated structured CLI errors and keeps the same session usable',
     expect(unknown.id).toBe('unknown-operation');
     expect(unknown.errorDetails.nextSteps.map((step: { instruction: string }) => step.instruction).join(' ')).toContain('Do not resubmit');
     expect(next.id).toBe('next');
-    expect(next.result.assets[0].id).toBe('training.horse');
+    expect(next.result.assets[0].id).toBe('creature.horse');
   } finally { child.kill('SIGTERM'); }
 }, 20000);
 
@@ -189,7 +189,7 @@ it('exposes structured MCP errors while keeping raw discovery on its supported a
     const schema = JSON.parse((response.content as { text: string }[])[0]!.text);
     expect(schema.project).toBeDefined();
     expect(schema).not.toHaveProperty('sdkContracts');
-    expect(schema.availableSections).not.toContain('training');
+    expect(schema.availableSections).not.toContain('humanoid');
     const assets = await client.callTool({ name: 'assets_search', arguments: { query: 'horse' } });
     const found = JSON.parse((assets.content as { text: string }[])[0]!.text);
     expect(found.assets.length).toBeGreaterThan(0);

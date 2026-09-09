@@ -9,13 +9,13 @@ import { ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { training } from "@worldkit/three";
-import { SPECS } from "../../../shared/training-content/config";
-import { MAPS } from "../../../shared/training-content/environment/maps";
+import { humanoid } from "@worldkit/three";
+import { SPECS } from "../../../shared/preset-content/config";
+import { MAPS } from "../../../shared/preset-content/environment/maps";
 import {
   parseAssetProfile,
   type AssetProfile,
-} from "../../../shared/training-content/platform/profiles";
+} from "../../../shared/preset-content/platform/profiles";
 import "./styles/workbench.css";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -290,10 +290,10 @@ function CameraEditor({
     ).map((key) => ({
       group: "camera" as const,
       key,
-      label: `${training.CAMERA_PARAMETERS[key].label} / ${training.CAMERA_PARAMETERS[key].unit}`,
-      step: training.CAMERA_PARAMETERS[key].step,
+      label: `${humanoid.CAMERA_PARAMETERS[key].label} / ${humanoid.CAMERA_PARAMETERS[key].unit}`,
+      step: humanoid.CAMERA_PARAMETERS[key].step,
     })),
-    ...training
+    ...humanoid
       .controlFields(mode ?? "character",!!SPECS.find(s=>s.id===assetId)?.wheelPhysics)
       .filter((f) => !f.disabled)
       .map((f) => ({
@@ -354,11 +354,11 @@ function CameraEditor({
             bounds =
               f.group === "camera"
                 ? f.key === "distance"
-                  ? training.CAMERA_DISTANCE_EDITOR_RANGE
-                  : training.CAMERA_TUNING_RANGES[
-                      f.key as training.NumericCameraKey
+                  ? humanoid.CAMERA_DISTANCE_EDITOR_RANGE
+                  : humanoid.CAMERA_TUNING_RANGES[
+                      f.key as humanoid.NumericCameraKey
                     ]
-                : training.CONTROL_RANGES[f.key as training.ControlKey];
+                : humanoid.CONTROL_RANGES[f.key as humanoid.ControlKey];
           return (
             <label key={id} className="wb-field">
               {f.label}

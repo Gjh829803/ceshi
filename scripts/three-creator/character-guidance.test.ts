@@ -9,7 +9,7 @@ import catalog from '../../assets/three-creator/asset-catalog.json';
 import Ajv from 'ajv';
 import {EPISODE_SCHEMA} from './contracts';
 import {Group,PerspectiveCamera,Vector3} from 'three';
-import {createWorld,training} from '@worldkit/three';
+import {createWorld,humanoid} from '@worldkit/three';
 import {map} from '../../examples/three-creator/character-actions/map';
 const roots:string[]=[];
 async function root(){const dir=await mkdtemp(path.join(os.tmpdir(),'character-guide-'));roots.push(dir);return dir;}
@@ -38,10 +38,10 @@ it('discovers the full kit by Chinese skill names and exposes actual skill condi
 it('provides a character-only example and the actual interaction/input contracts',async()=>{
  const service=new ThreeCreatorTools(await root(),'three-sdk');
  try{
-  const schema:any=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['guide','training']});
-  expect(schema.trainingSourceContracts['training/humanoid/action-schema.ts']).toContain('interface SkillRequest');
-  expect(schema.trainingSourceContracts['training/environment/types.ts']).toContain('interface MapClimbSurface');
-  expect(schema.trainingSourceContracts['training/environment/types.ts']).toContain('rigidGroup?');
+  const schema:any=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['guide','humanoid']});
+  expect(schema.humanoidSourceContracts['humanoid-runtime/humanoid/action-schema.ts']).toContain('interface SkillRequest');
+  expect(schema.humanoidSourceContracts['humanoid-runtime/environment/types.ts']).toContain('interface MapClimbSurface');
+  expect(schema.humanoidSourceContracts['humanoid-runtime/environment/types.ts']).toContain('rigidGroup?');
   expect(schema.sdkGuide).toContain('EnvironmentBox.rigidGroup');
   expect(schema.sdkGuide).toContain('propBoxPose(id)');
   const example:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'character-actions'});
@@ -67,9 +67,9 @@ it('keeps raw model discovery explicit about implementing its own controller',as
 
 it('lets the character push the example furniture while preserving support, assembly and reset',async()=>{
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},
-  training:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
+  humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
  try{
-  const runtime=world.training!,q=runtime.simulation.environment;
+  const runtime=world.humanoid!,q=runtime.simulation.environment;
   const initialProps=map.boxes.filter(box=>box.rigidGroup).map(box=>({id:box.id,pose:q.propBoxPose(box.id)}));
   const seat=q.colliderForId('seat')!,back=q.colliderForId('seat-back')!;
   const body=seat.parent();expect(body?.isDynamic()).toBe(true);
@@ -78,11 +78,11 @@ it('lets the character push the example furniture while preserving support, asse
   // Legs must support the surfaces at their interaction heights under gravity.
   expect(seat.translation().y).toBeCloseTo(.41,2);
   expect(q.colliderForId('pickup-table')!.translation().y).toBeCloseTo(.799,2);
-  expect(world.snapshot().training!.interactionTargets.find(t=>t.id==='parcel')!.positionWorldMetersXYZ[1]).toBeGreaterThan(.88);
+  expect(world.snapshot().humanoid!.interactionTargets.find(t=>t.id==='parcel')!.positionWorldMetersXYZ[1]).toBeGreaterThan(.88);
   const origin=new Vector3().copy(seat.translation());
   const spacing=origin.distanceTo(new Vector3().copy(back.translation()));
   expect(runtime.prepareCharacter([1,.02,-6.7],0)).toBe(true);
-  runtime.setInput({...training.emptyInput(),forward:1});world.step({},120);runtime.clearInput();
+  runtime.setInput({...humanoid.emptyInput(),forward:1});world.step({},120);runtime.clearInput();
   expect(new Vector3().copy(seat.translation()).distanceTo(origin)).toBeGreaterThan(.25);
   expect(new Vector3().copy(seat.translation()).distanceTo(new Vector3().copy(back.translation()))).toBeCloseTo(spacing,4);
   expect(q.colliderForId('wall')!.translation()).toEqual({x:-16,y:1.5,z:-7});

@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'nonhuman-subject', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'humanoid', 'character-actions', 'mounted-interaction', 'nonhuman-subject', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -8,7 +8,7 @@ export interface WorldObservation {
  readonly scene:THREE.Scene;
  readonly camera:THREE.Camera;
  readonly renderer:THREE.WebGLRenderer;
- readonly player:THREE.Object3D;
+ readonly controlledObject:THREE.Object3D;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
  startLive():void|Promise<void>;
@@ -22,9 +22,9 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
- training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
- 'mounted-interaction':['training','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
- 'character-actions':['training','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
+ humanoid:['humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'mounted-interaction':['humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
+ 'character-actions':['humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
 export function publicContractTopic(source: string, topic: AuthoringTopic, options:{includeHostFactory?:boolean}={}): string {
@@ -46,7 +46,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic, optio
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/training\/[^']+'\)/g,"import('@worldkit/three').training")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?"export declare function createWorld(options?:import('@worldkit/three').WorldOptions):Promise<import('@worldkit/three').ThreeWorld>;":''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/humanoid-runtime\/[^']+'\)/g,"import('@worldkit/three').humanoid")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?"export declare function createWorld(options?:import('@worldkit/three').WorldOptions):Promise<import('@worldkit/three').ThreeWorld>;":''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;
@@ -111,8 +111,8 @@ function publicMethods(members:ts.NodeArray<ts.ClassElement>,allowed?:ReadonlySe
 }
 
 /** Extract the public shapes, not the runtime implementation or bundled datasets. */
-export function trainingContractSource(source:string):string {
- const file=ts.createSourceFile('training.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
+export function runtimeContractSource(source:string):string {
+ const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
  for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&node.name?.text==='createRoadVehicleSpec'){
@@ -120,34 +120,34 @@ export function trainingContractSource(source:string):string {
    [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
    node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));
  }
- const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingRuntime');
+ const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HumanoidRuntime');
  if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','onVisualUpdate']);
-  const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'TrainingRuntime'));
-  declarations.push(`export interface TrainingRuntime {\n${signatures.join('\n')}\n}`);}
- const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingHorse');
+  const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
+  declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
+ const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');
  if(horse){const methods=new Set(publicMethods(horse.members));const members=horse.members.filter(member=>!(ts.canHaveModifiers(member)?ts.getModifiers(member):undefined)?.some(m=>m.kind===ts.SyntaxKind.PrivateKeyword||m.kind===ts.SyntaxKind.ProtectedKeyword));
   const signatures=members.map(member=>{
    if(ts.isPropertyDeclaration(member))return `${member.modifiers?.some(m=>m.kind===ts.SyntaxKind.ReadonlyKeyword)?'readonly ':''}${member.name.getText(file)}: ${member.type?.getText(file)};`;
    if(ts.isGetAccessorDeclaration(member))return `get ${member.name.getText(file)}(): ${member.type?.getText(file)};`;
-   if(ts.isMethodDeclaration(member))return methods.has(member)?methodDeclarationOrUnavailable(member,file,checker,'TrainingHorse'):'';
+   if(ts.isMethodDeclaration(member))return methods.has(member)?methodDeclarationOrUnavailable(member,file,checker,'HorseVisual'):'';
    if(ts.isConstructorDeclaration(member))try {
     if(member.parameters.some(parameter=>parameter.modifiers?.some(modifier=>[
      ts.SyntaxKind.PublicKeyword,ts.SyntaxKind.PrivateKeyword,ts.SyntaxKind.ProtectedKeyword,ts.SyntaxKind.ReadonlyKeyword,ts.SyntaxKind.OverrideKeyword,
-    ].includes(modifier.kind))))return '/** Declaration unavailable for constructor: parameter properties require their public property shape at TrainingHorse.constructor in this source excerpt; consult the workspace source. */';
+    ].includes(modifier.kind))))return '/** Declaration unavailable for constructor: parameter properties require their public property shape at HorseVisual.constructor in this source excerpt; consult the workspace source. */';
     const parameters=declarationParameters(member.parameters,checker).map(parameter=>ts.factory.updateParameterDeclaration(parameter,
      undefined,parameter.dotDotDotToken,parameter.name,parameter.questionToken,parameter.type,undefined));
     return declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.createConstructorDeclaration(undefined,parameters,undefined),file);
    } catch(error) {
     if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
-    return '/** Declaration unavailable for constructor: a default parameter type could not be resolved statically at TrainingHorse.constructor in this source excerpt; consult the workspace source. */';
+    return '/** Declaration unavailable for constructor: a default parameter type could not be resolved statically at HorseVisual.constructor in this source excerpt; consult the workspace source. */';
    }
    return declarationPrinter.printNode(ts.EmitHint.Unspecified,member,file);
-  }).filter(Boolean);declarations.push(`export declare class TrainingHorse {\n${signatures.join('\n')}\n}`);}
+  }).filter(Boolean);declarations.push(`export declare class HorseVisual {\n${signatures.join('\n')}\n}`);}
  return declarations.join('\n');
 }
 
 /** The factory shape follows its implementation; aliases point at public SDK types. */
-export function humanoidContractSource(source:string):string {
+export function humanoidFactoryContractSource(source:string):string {
  const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const factory=file.statements.find((node):node is ts.FunctionDeclaration=>ts.isFunctionDeclaration(node)&&node.name?.text==='createHumanoidWorld');
@@ -160,12 +160,11 @@ export function humanoidContractSource(source:string):string {
   if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
   signature='/** Declaration unavailable for createHumanoidWorld: a default parameter type could not be resolved statically at createHumanoidWorld in this source excerpt; consult the workspace source. */';
  }
- return `import type {WorldOptions,ThreeWorld,TrainingMap,TrainingCharacter,training} from '@worldkit/three';
-type MapDefinition=TrainingMap;
-type Character=TrainingCharacter;
-type TrainingProfile=training.TrainingProfile;
-type TrainingVehicleInstance=training.TrainingVehicleInstance;
+ return `import type {WorldOptions,ThreeWorld,EnvironmentDefinition,HumanoidCharacter,humanoid} from '@worldkit/three';
+type Character=HumanoidCharacter;
+type HumanoidProfile=humanoid.HumanoidProfile;
+type VehicleInstance=humanoid.VehicleInstance;
 type AssetDefinition=NonNullable<WorldOptions['assetDefinitions']>[string];
-${trainingContractSource(source)}
+${runtimeContractSource(source)}
 ${signature}`;
 }

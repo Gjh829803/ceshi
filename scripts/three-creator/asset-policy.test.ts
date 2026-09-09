@@ -41,7 +41,7 @@ it('rejects a denied asset selected by manually authored project.json',async()=>
 });
 
 it('recognizes a forbidden asset by bytes even when copied under a custom filename',async()=>{
- const root=await workspace(),resource=catalog.assets.find(a=>a.id==='training.rover')!;
+ const root=await workspace(),resource=catalog.assets.find(a=>a.id==='vehicle.rover')!;
  const {options}=await pin({allowedAssetIds:['humanoid.source-101']});
  await writeFile(path.join(root,'custom-character.glb'),await readFile(resource.sourcePath));
  await expect(new ThreeCompiler(root,'three-sdk',options).prepare()).rejects.toThrow('THREE_ASSET_POLICY_RESOURCE_DENIED');
@@ -103,14 +103,14 @@ it('rejects invalid defaults, unknown permissions and ambiguous IDs',()=>{
   {defaultHumanoidAssetId:'unavailable.asset'},
   {allowedAssetIds:[...defaultPolicy.allowedAssetIds,'unknown.asset']},
   {allowedAssetIds:[...defaultPolicy.allowedAssetIds,defaultPolicy.allowedAssetIds[0]]},
-  {defaultHumanoidAssetId:'training.rover'},
+  {defaultHumanoidAssetId:'vehicle.rover'},
   {allowCustomAssets:'true'},
  ])expect(()=>createAssetPolicySnapshot({...defaultPolicy,...overrides},catalog.assets)).toThrow('THREE_ASSET_POLICY');
 });
 
 it.each(['js','jsx','ts','tsx','mjs'])('checks embedded forbidden bytes in %s and preserves shared allowed dependencies',async extension=>{
  const snapshot=createAssetPolicySnapshot({...defaultPolicy,allowedAssetIds:['humanoid.source-101']},catalog.assets);
- const bytes=await readFile(catalog.assets.find(a=>a.id==='training.rover')!.sourcePath);
+ const bytes=await readFile(catalog.assets.find(a=>a.id==='vehicle.rover')!.sourcePath);
  expect(()=>verifyAssetPolicySources(snapshot,{[`main.${extension}`]:Buffer.from(`const url="data:model/gltf-binary;base64,${bytes.toString('base64')}";`)})).toThrow('THREE_ASSET_POLICY_RESOURCE_DENIED');
  const shared=catalog.assets.find(a=>a.id==='humanoid.source-101')!.resources![0]!;
  const customCatalog=[...catalog.assets,{...catalog.assets[0],id:'disabled.alias',resources:[shared]}];
@@ -160,8 +160,8 @@ it('keeps vehicle model bytes outside the default Creator policy while retaining
  const root=await workspace(),service=new ThreeCreatorTools(root,'three-sdk');
  try{
   expect((await service.assets()).assets.map(a=>a.id)).toContain('humanoid.source-101');
-  expect((await service.assets('', 'training.rover')).assets).toEqual([]);
-  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['training.rover']}));
+  expect((await service.assets('', 'vehicle.rover')).assets).toEqual([]);
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['vehicle.rover']}));
   await expect(service.compiler.prepare()).rejects.toThrow('THREE_ASSET_POLICY_DENIED');
  }finally{await service.close();}
 });

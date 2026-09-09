@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createHumanoidWorld,training} from '@worldkit/three';
+import {createHumanoidWorld,humanoid} from '@worldkit/three';
 import {map} from './map';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
@@ -21,7 +21,7 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'pers
 world.setCaptureTargets(['person']);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;max-width:460px;padding:12px;background:#16313ddd;color:white;font:14px sans-serif';
-const help=document.createElement('p');help.textContent=training.controlHints(world.getKeyBindings()).map(([key,label])=>`${key} ${label}`).join(' · ');
+const help=document.createElement('p');help.textContent=humanoid.controlHints(world.getKeyBindings()).map(([key,label])=>`${key} ${label}`).join(' · ');
 const button=document.createElement('button');button.textContent='通过 SDK 命令翻滚';
 const reset=document.createElement('button');reset.textContent='重置人物与桌椅';
 reset.onclick=async()=>{await world.reset();await world.start();presentation.focus();};
@@ -29,21 +29,21 @@ const propsHelp=document.createElement('p');propsHelp.textContent='走向桌椅�
 const result=document.createElement('pre'),status=document.createElement('pre');
 const parcel=new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.13),new THREE.MeshStandardMaterial({color:'#f4ae51'}));scene.add(parcel);
 button.onclick=async()=>{
- const receipt=await world.execute({type:'training.action',request:{requestId:crypto.randomUUID(),action:'roll'}});
+ const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:crypto.randomUUID(),action:'roll'}});
  result.textContent=JSON.stringify(receipt,null,2);presentation.focus();
  // An accepted receipt is not completion. A model uses the returned operationId
  // with world_get_operation; a page can query world.operations.get(operationId).
 };
 hud.append(help,propsHelp,button,reset,result,status);presentation.ui.mount(hud);
-world.training!.onVisualUpdate(()=>{
+world.humanoid!.onVisualUpdate(()=>{
  // Read the current owner each time: reset/map replacement can replace physics.
  // Meshes stay directly under the scene because these poses are world-space.
- const environment=world.training!.simulation.environment;
+ const environment=world.humanoid!.simulation.environment;
  for(const [id,mesh] of propMeshes){
   const pose=environment.propBoxPose(id);
   if(pose){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}
  }
- const snapshot=world.snapshot().training!;
+ const snapshot=world.snapshot().humanoid!;
  const target=snapshot.interactionTargets.find(target=>target.id==='parcel');
  if(target){parcel.position.set(...target.positionWorldMetersXYZ);parcel.quaternion.set(...target.rotationWorldQuaternionXYZW);}
  status.textContent=JSON.stringify(snapshot.character,null,2);

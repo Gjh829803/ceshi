@@ -134,7 +134,7 @@ export type WriteClaim =
  | {readonly kind:'visual';readonly channelId:string}
  | {readonly kind:'state';readonly stateId:string};
 export type ParameterCommand = {readonly type:'parameter.set';readonly parameterId:string;readonly value:Scalar};
-export type WorldCommand = PrimitiveCommand | ParameterCommand | import('./training/runtime').TrainingCommand
+export type WorldCommand = PrimitiveCommand | ParameterCommand | import('./humanoid-runtime/runtime').HumanoidCommand
  | {readonly type:'action.invoke';readonly actionId:string;readonly arguments:Readonly<Record<string,Scalar>>};
 export interface ExecutionOptions {
  /** Host adds this; repeated command IDs return the original receipt, never spawn twice. */
@@ -188,7 +188,7 @@ export interface EffectParameterDefinition<S extends ScalarSchema> {
 }
 export type ParameterDefinition<S extends ScalarSchema> = PropertyParameterDefinition<S>|EffectParameterDefinition<S>;
 export interface WorldInput {
- readonly training?:import('./training/simulation').Input;
+ readonly humanoid?:import('./humanoid-runtime/simulation').Input;
  readonly moveXRatio?:number; readonly moveZRatio?:number; readonly moveYRatio?:number;
  readonly cameraYawRatio?:number; readonly cameraPitchRatio?:number;
  readonly run?:boolean; readonly jump?:boolean; readonly jumpPressed?:boolean;
@@ -261,7 +261,7 @@ export interface CommandDescriptor {
  readonly unavailableReason?:RuntimeError;
 }
 export interface WorldDescription {
- readonly training?:{readonly configuration:import('./training/runtime').TrainingConfiguration;readonly inputGuide:import('./training/input-guidance').TrainingInputGuide;readonly boarding:Readonly<Record<string,import('./training/runtime').TrainingBoardingObservation>>;readonly controlState:import('./training/runtime').TrainingInputObservation & {readonly livePaused:boolean;readonly clockOwner:'live'|'episode'};readonly characterCapabilities:readonly import('./training/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./training/input').KeyBindings};
+ readonly humanoid?:{readonly configuration:import('./humanoid-runtime/runtime').HumanoidConfiguration;readonly inputGuide:import('./humanoid-runtime/input-guidance').HumanoidInputGuide;readonly boarding:Readonly<Record<string,import('./humanoid-runtime/runtime').BoardingObservation>>;readonly controlState:import('./humanoid-runtime/runtime').HumanoidInputObservation & {readonly livePaused:boolean;readonly clockOwner:'live'|'episode'};readonly characterCapabilities:readonly import('./humanoid-runtime/character-capabilities').CharacterCapabilityState[];readonly keyBindings:import('./humanoid-runtime/input').KeyBindings};
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;
@@ -293,7 +293,7 @@ export interface CameraState {
  readonly transitionProgressRatio?:number;
 }
 export interface WorldSnapshot {
- readonly training?:import('./training/runtime').TrainingSnapshot;
+ readonly humanoid?:import('./humanoid-runtime/runtime').HumanoidSnapshot;
  readonly schemaVersion:2;
  readonly worldRevision:number;
  readonly simulationTick:number;
@@ -380,15 +380,16 @@ export interface World {
  readonly shadowSettings:Readonly<ShadowSettings>;
  /** Apply this world's settings once to an authored directional light. Does not move or own it. */
  configureShadowLight(light:THREE.DirectionalLight):void;
- readonly training:import('./training/runtime.js').TrainingRuntime|undefined;
+ /** Optional humanoid/riding runtime; independently bound actors use the ordinary world API. */
+ readonly humanoid:import('./humanoid-runtime/runtime.js').HumanoidRuntime|undefined;
  readonly scene:THREE.Scene;
  readonly camera:THREE.Camera;
  readonly cameraMode:'authored'|'follow-pending'|'follow';
  readonly assets:Assets;
  readonly state:StateStore;
  readonly operations:Operations;
- getKeyBindings():import('./training/input').KeyBindings;
- setKeyBindings(overrides:Partial<import('./training/input').KeyBindings>):void;
+ getKeyBindings():import('./humanoid-runtime/input').KeyBindings;
+ setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void;
  /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
  createPresentation(options?:PresentationOptions):WorldPresentation;
  addEntity(options:EntityOptions):THREE.Object3D;
@@ -434,7 +435,9 @@ export interface WorldObservation {
  withPresentation?<T>(work:()=>T,options?:{readonly view?:'world'|'object'}):T;
  readonly episode?:import('./episode-contracts.js').EpisodeRuntimePort;
  readonly ready:boolean; readonly scene:THREE.Scene; readonly camera:THREE.Camera;
- readonly renderer:THREE.WebGLRenderer; readonly player:THREE.Object3D;
+ readonly renderer:THREE.WebGLRenderer;
+ /** Live object for the current controlled entity; available for human and nonhuman subjects. */
+ readonly controlledObject:THREE.Object3D;
  /** Same active presentation for application transport/UI integration; absent for raw/legacy worlds. */
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;

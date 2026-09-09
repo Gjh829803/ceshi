@@ -1,20 +1,20 @@
 import { createWorld, type ThreeWorld, type WorldOptions } from './world.js';
-import { Character } from './training/character.js';
-import type { MapDefinition } from './training/environment/types.js';
-import { validateTrainingMap } from './training/map-validation.js';
-import type { TrainingProfile, TrainingVehicleInstance } from './training/runtime.js';
+import { Character } from './humanoid-runtime/character.js';
+import type { EnvironmentDefinition } from './humanoid-runtime/environment/types.js';
+import { validateEnvironment } from './humanoid-runtime/map-validation.js';
+import type { HumanoidProfile, VehicleInstance } from './humanoid-runtime/runtime.js';
 import type { AssetDefinition } from './engine-contracts.js';
 
 export const DEFAULT_HUMANOID_ASSET_ID = 'humanoid.source-101';
 export interface HumanoidResource { readonly path:string; readonly uri:string }
 export type HumanoidAssetDefinition = AssetDefinition & { readonly resources?:readonly HumanoidResource[] };
-export type HumanoidWorldOptions = Omit<WorldOptions,'training'|'assetDefinitions'> & {
-  readonly map:MapDefinition;
+export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinitions'> & {
+  readonly map:EnvironmentDefinition;
   readonly characterId?:string;
   readonly assetDefinitions?:Readonly<Record<string,HumanoidAssetDefinition>>;
   readonly resourceUrl?:(logicalPath:string)=>string;
-  readonly vehicles?:readonly TrainingVehicleInstance[];
-  readonly profile?:TrainingProfile;
+  readonly vehicles?:readonly VehicleInstance[];
+  readonly profile?:HumanoidProfile;
   /** A supplied character transfers its lifecycle to the returned World. */
   readonly character?:Character;
 };
@@ -25,7 +25,7 @@ export type HumanoidWorldOptions = Omit<WorldOptions,'training'|'assetDefinition
  */
 export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<ThreeWorld>{
   const {map,characterId='player',resourceUrl,vehicles=[],profile,character:provided,assetDefinitions:configured,...worldOptions}=options;
-  validateTrainingMap(map);
+  validateEnvironment(map);
   if(!characterId.trim()||vehicles.some(vehicle=>vehicle.instanceId===characterId))throw new Error('HUMANOID_INSTANCE_ID_INVALID');
   let definitions=configured;
   if(!definitions&&!resourceUrl&&!provided?.loaded&&typeof document!=='undefined'){
@@ -47,8 +47,8 @@ export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<
       });
       await character.load(resolve);
     }
-    world=await createWorld({...worldOptions,assetDefinitions:definitions??{},training:{map,vehicles,character:{instanceId:characterId,object:character.root,animation:character}}});
-    if(profile)world.training!.applyProfile(profile);
+    world=await createWorld({...worldOptions,assetDefinitions:definitions??{},humanoid:{map,vehicles,character:{instanceId:characterId,object:character.root,animation:character}}});
+    if(profile)world.humanoid!.applyProfile(profile);
     world.setCaptureTargets([characterId]);
     return world;
   }catch(error){

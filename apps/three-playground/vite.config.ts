@@ -27,7 +27,7 @@ function catalogPlugin(): Plugin {
       await readFile(
         path.join(
           repository,
-          "shared/training-content/project.json",
+          "shared/preset-content/project.json",
         ),
         "utf8",
       ),

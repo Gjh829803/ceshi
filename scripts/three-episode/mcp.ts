@@ -19,7 +19,7 @@ export const EPISODE_TOOLS = [
   object({ view: { enum: ['opening', 'current', 'top-down'] }, cameraPositionWorldMetersXYZ: vec3, lookAtWorldMetersXYZ: vec3, entityIds: { type: 'array', items: string, maxItems: 64, uniqueItems: true } }),
   object({ sourceFile: string, offsetCharacters: { type: 'integer', minimum: 0, maximum: 1_048_576 }, maximumCharacters: { type: 'integer', minimum: 1, maximum: 32_000 } }, ['sourceFile']),
  ] } },
- { name: 'episode_probe', description: 'Inspect one requested start (including the full optional Training vehicle state) using real local Rapier queries, or pick a point from a previous actual view. Keeps requested XZ and only aligns support height locally; reports unsupported/overlapping starts without selecting another room or route. Point hits distinguish visible geometry from actual support.', inputSchema: { type: 'object' as const, oneOf: [
+ { name: 'episode_probe', description: 'Inspect one requested start (including the full optional Player vehicle state) using real local Rapier queries, or pick a point from a previous actual view. Keeps requested XZ and only aligns support height locally; reports unsupported/overlapping starts without selecting another room or route. Point hits distinguish visible geometry from actual support.', inputSchema: { type: 'object' as const, oneOf: [
   object({ kind: { const: 'start' }, start: EPISODE_START_SCHEMA }, ['kind', 'start']),
   object({ kind: { const: 'view-point' }, viewId: string, pixelUv: { type: 'array', items: { type: 'number', minimum: 0, maximum: 1 }, minItems: 2, maxItems: 2 } }, ['kind', 'viewId', 'pixelUv']),
  ] } },

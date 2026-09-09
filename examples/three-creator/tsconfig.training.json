@@ -1,1 +1,0 @@
-{"extends":"../../tsconfig.json","include":["../../shared/training-content/**/*.ts","training-independent/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}

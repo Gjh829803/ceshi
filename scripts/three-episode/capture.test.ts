@@ -29,7 +29,7 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
     errors: options.shouldFail && tick > 30 ? [{ code: 'FIXTURE_RUNTIME_ERROR', message: 'fixture failure', phase: 'step', category: 'runtime', entityIds: ['actor'] }] : [] });
   const session: EpisodeCaptureSession = {
     errors: [], capabilities: async () => capabilities,
-    execute: async () => { throw new Error('fixture does not expose training actions'); },
+    execute: async () => { throw new Error('fixture does not expose player actions'); },
     operation: async () => { throw new Error('fixture operation missing'); },
     probeStart: async start => ({ isValid: true, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: [] }),
     prepareSegment: async start => { tick = 1; yaw = start.facingYawRadians; pitch = 0; velocity = [0,0,0]; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
@@ -120,20 +120,20 @@ describe('Three episode deterministic production capture', () => {
     ];
     let tick = 1, started = 0, currentAction = '', seated: string | null = null;
     const commands: string[] = [];
-    const training = (snapshot: WorldSnapshot): WorldSnapshot => {
+    const player = (snapshot: WorldSnapshot): WorldSnapshot => {
       tick = snapshot.simulationTick;
       if (currentAction && tick >= started + 30) seated = currentAction === 'sit' ? 'chair' : null;
-      return { ...snapshot, training: { character: { instanceId: 'actor', state: seated ? 'seated' : 'idle', stance: 'stand', swimming: false, swimStyle: 'freestyle', carrying: null, seated,
+      return { ...snapshot, humanoid: { character: { instanceId: 'actor', state: seated ? 'seated' : 'idle', stance: 'stand', swimming: false, swimStyle: 'freestyle', carrying: null, seated,
         activeAction: currentAction && tick < started + 30 ? { requestId: currentAction, action: currentAction, phase: 'animate', elapsedSeconds: (tick - started) / 60 } : null },
         surface: { mode: 'none', surfaceId: null, pose: null }, water: { swimming: false, contact: null },
-        interactionTargets: [{ id: 'chair', kind: 'seat', eligible: true, reason: 'READY', approachPositionWorldMetersXYZ: [0, 0, 0] }], message: '' } as unknown as NonNullable<WorldSnapshot['training']> };
+        interactionTargets: [{ id: 'chair', kind: 'seat', eligible: true, reason: 'READY', approachPositionWorldMetersXYZ: [0, 0, 0] }], message: '' } as unknown as NonNullable<WorldSnapshot['humanoid']> };
     };
     const originalPrepare = session.prepareSegment, originalAdvance = session.advance, originalFrame = session.frame;
-    session.prepareSegment = async (...args) => training(await originalPrepare(...args));
-    session.advance = async (...args) => training(await originalAdvance(...args));
-    session.frame = async (...args) => { const frame = await originalFrame(...args); return { ...frame, snapshot: training(frame.snapshot) }; };
+    session.prepareSegment = async (...args) => player(await originalPrepare(...args));
+    session.advance = async (...args) => player(await originalAdvance(...args));
+    session.frame = async (...args) => { const frame = await originalFrame(...args); return { ...frame, snapshot: player(frame.snapshot) }; };
     session.execute = async command => {
-      if (command.type !== 'training.action') throw new Error('unexpected fixture command');
+      if (command.type !== 'humanoid.perform-action') throw new Error('unexpected fixture command');
       currentAction = command.request.action; started = tick; commands.push(currentAction);
       return { status: 'accepted', commandId: currentAction, worldRevision: 0, operationId: currentAction };
     };

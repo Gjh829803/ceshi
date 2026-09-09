@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import type { FrameRateReading } from "../../../shared/training-content/fps";
+import type { FrameRateReading } from "../../../shared/preset-content/fps";
 export function FramePacingView({
   reading,
 }: {

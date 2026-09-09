@@ -13,11 +13,11 @@ import type {Page} from 'playwright';
 
 function fixture(){
  const scene=new THREE.Scene(),player=new THREE.Group(),first=new THREE.Group(),second=new THREE.Group();scene.add(player,first,second);
- return{scene,player,first,second,world:{scene,player,camera:new THREE.PerspectiveCamera(),renderer:{} as THREE.WebGLRenderer,targets:{hero:player,'10':first,'2':second}} as Pick<WorldObservation,'scene'|'player'|'camera'|'renderer'|'targets'|'captureTargetIds'|'targetRepresentativesById'>};
+ return{scene,controlledObject:player,first,second,world:{scene,controlledObject:player,camera:new THREE.PerspectiveCamera(),renderer:{} as THREE.WebGLRenderer,targets:{hero:player,'10':first,'2':second}} as Pick<WorldObservation,'scene'|'controlledObject'|'camera'|'renderer'|'targets'|'captureTargetIds'|'targetRepresentativesById'>};
 }
 describe('ordered representative capture selection',()=>{
  it('treats prototype-named raw entity IDs as IDs, not inherited representatives',()=>{
-  const f=fixture(),world={...f.world,targets:{constructor:f.player,toString:f.first},captureTargetIds:['constructor','toString'],targetRepresentativesById:{}};
+  const f=fixture(),world={...f.world,targets:{constructor:f.controlledObject,toString:f.first},captureTargetIds:['constructor','toString'],targetRepresentativesById:{}};
   expect(captureTargets(world)).toEqual([{id:'player',sourceEntityId:'constructor'},{id:'toString',sourceEntityId:'toString'}]);
  });
  it('keeps explicit priority and subject-first completeness, with raw fallback and exact reference deduplication',()=>{
@@ -31,7 +31,7 @@ describe('ordered representative capture selection',()=>{
  });
  it('deduplicates exact instance references while retaining different selected instances',()=>{
   const f=fixture(),mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial(),3);f.first.add(mesh);
-  const world={...f.world,targets:{hero:f.player,a:f.first,b:f.first,c:f.first},captureTargetIds:['a','b','c'],targetRepresentativesById:{a:{kind:'instance' as const,object:mesh,instanceIndex:2},b:{kind:'instance' as const,object:mesh,instanceIndex:2},c:{kind:'instance' as const,object:mesh,instanceIndex:0}}};
+  const world={...f.world,targets:{hero:f.controlledObject,a:f.first,b:f.first,c:f.first},captureTargetIds:['a','b','c'],targetRepresentativesById:{a:{kind:'instance' as const,object:mesh,instanceIndex:2},b:{kind:'instance' as const,object:mesh,instanceIndex:2},c:{kind:'instance' as const,object:mesh,instanceIndex:0}}};
   expect(captureTargets(world)).toEqual([{id:'player',sourceEntityId:'hero'},{id:'a',sourceEntityId:'a',representative:{kind:'instance',objectUuid:mesh.uuid,instanceIndex:2}},{id:'c',sourceEntityId:'c',representative:{kind:'instance',objectUuid:mesh.uuid,instanceIndex:0}}]);
   mesh.count=2;expect(()=>captureTargets(world)).toThrow('INSTANCE_INVALID');
  });
@@ -41,7 +41,7 @@ describe('ordered representative capture selection',()=>{
   expect(captureTargets(world)[1]!.representative!.objectUuid).toBe(child.uuid);f.second.add(child);
   expect(()=>captureTargets(world)).toThrow('REPRESENTATIVE_NOT_IN_ENTITY');
   f.scene.remove(f.first);expect(()=>captureTargets({...f.world,captureTargetIds:['10']})).toThrow('TARGET_NOT_IN_SCENE');
-  f.player.add(child);expect(()=>captureTargets({...f.world,captureTargetIds:['hero'],targetRepresentativesById:{hero:{kind:'object',object:child}}})).toThrow('SUBJECT_MUST_BE_COMPLETE');
+  f.controlledObject.add(child);expect(()=>captureTargets({...f.world,captureTargetIds:['hero'],targetRepresentativesById:{hero:{kind:'object',object:child}}})).toThrow('SUBJECT_MUST_BE_COMPLETE');
   expect(()=>captureObjectViews(f.world,'entity-triview',['hero','2'])).toThrow('SINGLE_TARGET_REQUIRED');
  });
 });
@@ -71,7 +71,7 @@ const draws=[];scene.traverse(object=>{if(object!==instances&&(object.isMesh||ob
 const proxies=[];scene.onAfterRender=(r,s,c)=>{if(!c.isOrthographicCamera)return;const p=scene.children.find(x=>x.name==='capture:crystals');if(p){const color=new THREE.Color();p.getColorAt(0,color);proxies.push({count:p.count,color:color.toArray(),sameGeometry:p.geometry===geometry,sameMaterial:p.material===material});}};
 let geometryDisposals=0,materialDisposals=0;geometry.addEventListener('dispose',()=>geometryDisposals++);material.addEventListener('dispose',()=>materialDisposals++);
 const render=()=>renderer.render(scene,camera);
-window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,player,targets:{hero:player,crowd:ancestor,crystals:parent},captureTargetIds:['hero','crowd','crystals'],targetRepresentativesById,startLive(){},stopLive(){},reset:render};
+window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,controlledObject:player,targets:{hero:player,crowd:ancestor,crystals:parent},captureTargetIds:['hero','crowd','crystals'],targetRepresentativesById,startLive(){},stopLive(){},reset:render};
 window.captureFixture={scene,camera,renderer,unit,ancestor,body,attachment,instances,geometry,material,draws,proxies,getDisposals:()=>({geometryDisposals,materialDisposals})};render();`;
 
 describe('actual representative browser captures',()=>{
@@ -94,7 +94,7 @@ describe('actual representative browser captures',()=>{
     const w=window as any,observer=w.__WORLDKIT_EVAL__,host=w.__THREE_CREATOR_HOST__;
     const original={targets:observer.targets,ids:observer.captureTargetIds,representatives:observer.targetRepresentativesById,fronts:observer.targetFrontYawRadiansById};
     try{
-     observer.targets={constructor:observer.player};observer.captureTargetIds=['constructor'];observer.targetRepresentativesById={};observer.targetFrontYawRadiansById={};
+     observer.targets={constructor:observer.controlledObject};observer.captureTargetIds=['constructor'];observer.targetRepresentativesById={};observer.targetFrontYawRadiansById={};
      const capture=host.capture('entity-triview',['constructor']);
      return{target:capture.captureTarget,orientationTargetId:capture.orientationTargetId,frontYawRadians:capture.frontYawRadians};
     }finally{observer.targets=original.targets;observer.captureTargetIds=original.ids;observer.targetRepresentativesById=original.representatives;observer.targetFrontYawRadiansById=original.fronts;}
@@ -154,11 +154,11 @@ const scene=new THREE.Scene();scene.background=new THREE.Color('#29435d');
 const camera=new THREE.PerspectiveCamera(58,960/540,.08,100);
 const renderer=new THREE.WebGLRenderer({preserveDrawingBuffer:true});renderer.setSize(960,540);document.body.append(renderer.domElement);
 const player=new THREE.Mesh(new THREE.CapsuleGeometry(.3,1.1),new THREE.MeshBasicMaterial({color:'#ffcc00'}));
-const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{},training:{
+const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{},humanoid:{
  map:{id:'current-preview',name:'Current preview',description:'',bounds:{min:[-20,-5,-20],max:[20,20,20]},boxes:[{id:'ground',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
  character:{instanceId:'player',object:player},vehicles:[]}});
 await world.start();world.stop();world.step({},40);
-world.training.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});world.training.setCameraMode(2);
+world.humanoid.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});world.humanoid.setCameraMode(2);
 window.currentPreviewWorld=world;`;
 
 it('previews the current SDK shoulder through MCP without resetting paused ticks, and keeps opening reset semantics',async()=>{
@@ -169,14 +169,14 @@ it('previews the current SDK shoulder through MCP without resetting paused ticks
   await service.inspect({sections:['snapshot']});const page=(service as unknown as {session:{page:Page}}).session.page;
   const baseline=await page.evaluate(()=>{
    const observer=window.__WORLDKIT_EVAL__!;
-   return observer.withPresentation!(()=>({snapshot:observer.snapshot!(),configuration:observer.capabilities!({entityIds:[]}).training!.configuration}));
+   return observer.withPresentation!(()=>({snapshot:observer.snapshot!(),configuration:observer.capabilities!({entityIds:[]}).humanoid!.configuration}));
   }),before=baseline.snapshot;
-  expect(before.training!.cameraMode).toBe(2);expect(before.simulationTick).toBe(40);expect(before.isRunning).toBe(false);
+  expect(before.humanoid!.cameraMode).toBe(2);expect(before.simulationTick).toBe(40);expect(before.isRunning).toBe(false);
   expect(baseline.configuration.profile.camera?.targetHeightOffset).toBe(1.1);
   const started=await executeThreeCreatorTool(service,'world_preview',{view:'current'}) as {operationId:string};
   const operation=await service.getOperation(started.operationId,25);expect(operation.status,operation.error).toBe('succeeded');
   const current=operation.result!;
-  expect(current.view).toBe('current');expect(current.cameraObservation).toMatchObject({simulationTick:40,isRunning:false,trainingCameraMode:2,owner:'follow',camera:before.camera});
+  expect(current.view).toBe('current');expect(current.cameraObservation).toMatchObject({simulationTick:40,isRunning:false,humanoidCameraMode:2,owner:'follow',camera:before.camera});
   expect(current.cameraObservation.cameraOverrides).toEqual(baseline.configuration.profile.camera);
   expect(current.cameraObservation.cameraOverrides).toEqual({targetHeightOffset:1.1});
   expect(current.cameraObservation.cameraSettings).toEqual(baseline.configuration.effective.camera.settings);
@@ -207,11 +207,11 @@ it('previews the current SDK shoulder through MCP without resetting paused ticks
   });
   expect(optional.framing).toEqual(baseline.configuration.effective.camera.framing);expect(optional.onDemandQueries).toBe(1);
   expect(optional.currentSnapshotReads).toBe(1);
-  expect(optional.degraded).toMatchObject({trainingCameraMode:2,simulationTick:40,owner:'follow',framing:null,cameraOverrides:null,cameraSettings:null});expect(optional.image).toMatch(/^data:image\/png;base64,/);
-  expect(optional.unavailable).toMatchObject({trainingCameraMode:2,simulationTick:40,framing:null,cameraOverrides:null,cameraSettings:null});
-  expect(optional.noSnapshot).toMatchObject({simulationTick:null,camera:null,trainingCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+  expect(optional.degraded).toMatchObject({humanoidCameraMode:2,simulationTick:40,owner:'follow',framing:null,cameraOverrides:null,cameraSettings:null});expect(optional.image).toMatch(/^data:image\/png;base64,/);
+  expect(optional.unavailable).toMatchObject({humanoidCameraMode:2,simulationTick:40,framing:null,cameraOverrides:null,cameraSettings:null});
+  expect(optional.noSnapshot).toMatchObject({simulationTick:null,camera:null,humanoidCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
   await service.preview('opening');const reset=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!());
-  expect(reset.training!.cameraMode).toBe(0);expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
+  expect(reset.humanoid!.cameraMode).toBe(0);expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },60000);
 
@@ -226,7 +226,7 @@ it('accepts current through the actual CLI and captures raw pixels without calli
    const code=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
    expect(code,stderr||stdout).toBe(0);const operation=JSON.parse(stdout);expect(operation.status).toBe('succeeded');
    const result=operation.result;expect(result.view).toBe('current');
-   expect(result.cameraObservation).toEqual({worldRevision:null,simulationTick:null,simulationSeconds:null,isRunning:null,camera:null,trainingCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+   expect(result.cameraObservation).toEqual({worldRevision:null,simulationTick:null,simulationSeconds:null,isRunning:null,camera:null,humanoidCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
    expect(result.sourceHash).toMatch(/^[a-f0-9]{64}$/);expect(result.runtimeHash).toMatch(/^[a-f0-9]{64}$/);
    expect((await sharp(await readFile(result.image.path)).metadata()).width).toBe(960);
   }finally{child.kill('SIGTERM');}

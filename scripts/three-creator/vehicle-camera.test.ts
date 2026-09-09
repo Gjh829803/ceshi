@@ -134,7 +134,7 @@ it('runs the self-drawn car and preset humanoid with native T cycling, F mountin
     expect(initial.pageErrors).toEqual([]); expect(initial.blockedNetworkRequests).toEqual([]);
     expect(initial.feedback.characterContinuity).toMatchObject({status: 'observed', issues: []});
     const page = (service as unknown as {session: {page: Page}}).session.page;
-    const mode = () => page.evaluate(() => window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode);
+    const mode = () => page.evaluate(() => window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode);
     const visual = await page.evaluate(() => {
       const world = window.__WORLDKIT_EVAL__!;
       const rover = world.targets['rover']!;
@@ -145,7 +145,7 @@ it('runs the self-drawn car and preset humanoid with native T cycling, F mountin
           materials.push({transparent: material.transparent, opacity: material.opacity, side: material.side});
         }
       });
-      return {materials, playerUuid: world.player.uuid, view: world.snapshot!().training!.view};
+      return {materials, humanoidUuid: world.controlledObject.uuid, view: world.snapshot!().humanoid!.view};
     });
     expect(visual.materials.some(material => material.transparent && material.opacity === .25 && material.side === THREE.DoubleSide)).toBe(true);
     expect(visual.materials.some(material => !material.transparent && material.opacity === 1)).toBe(true);
@@ -153,24 +153,24 @@ it('runs the self-drawn car and preset humanoid with native T cycling, F mountin
     expect(await mode()).toBe(0);
     for (const next of [1, 2, 0]) {
       await page.keyboard.press('t');
-      await page.waitForFunction(expected => window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode === expected, next);
+      await page.waitForFunction(expected => window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode === expected, next);
     }
     await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().entities.some(entity => entity.id === 'person' && entity.motion?.isGrounded));
     await page.keyboard.press('f');
     await page.waitForFunction(() => {
-      const state = window.__WORLDKIT_EVAL__!.snapshot!().training!;
+      const state = window.__WORLDKIT_EVAL__!.snapshot!().humanoid!;
       return state.mountedInstanceId === 'rover' && state.transition.remainingSeconds === 0;
     });
     await page.keyboard.press('t');
-    await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode === 1);
+    await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode === 1);
     await page.keyboard.press('f');
     await page.waitForFunction(() => {
-      const state = window.__WORLDKIT_EVAL__!.snapshot!().training!;
+      const state = window.__WORLDKIT_EVAL__!.snapshot!().humanoid!;
       return state.mountedInstanceId === null && state.transition.remainingSeconds === 0;
     });
     await page.getByRole('button', {name: 'Reset'}).click();
-    await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode === 0);
-    expect(await page.evaluate(() => window.__WORLDKIT_EVAL__!.player.uuid)).toBe(visual.playerUuid);
+    await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode === 0);
+    expect(await page.evaluate(() => window.__WORLDKIT_EVAL__!.controlledObject.uuid)).toBe(visual.humanoidUuid);
     const final = await service.inspect();
     expect(final.feedback.characterContinuity).toMatchObject({status: 'observed', issues: []});
     expect(final.pageErrors).toEqual([]);

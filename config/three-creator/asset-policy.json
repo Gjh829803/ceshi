@@ -3,8 +3,8 @@
   "allowedAssetIds": [
     "humanoid.source-101",
     "quadruped.animal.large-static",
-    "training.dragon",
-    "training.horse"
+    "creature.dragon",
+    "creature.horse"
   ],
   "defaultHumanoidAssetId": "humanoid.source-101",
   "allowCustomAssets": true

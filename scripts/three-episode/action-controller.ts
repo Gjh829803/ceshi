@@ -1,4 +1,4 @@
-import { emptyTrainingInput, type CommandReceipt, type OperationStatus, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
+import { emptyHumanoidInput, type CommandReceipt, type OperationStatus, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
 import type { EpisodeCaptureSession } from './browser.js';
 import type { EpisodeActionGoal, EpisodeSegmentPlan } from './contracts.js';
 import { routeDirectionInput, type RouteDecision } from './route-controller.js';
@@ -12,7 +12,7 @@ const position = (snapshot: WorldSnapshot): Vec3 => {
 };
 const distance = (a: Vec3, b: Vec3) => Math.hypot(...a.map((v, i) => v - b[i]!) as [number, number, number]);
 function observedState(snapshot: WorldSnapshot) {
-  const t = snapshot.training;
+  const t = snapshot.humanoid;
   return { positionWorldMetersXYZ: position(snapshot), character: t?.character ?? null, surface: t?.surface ?? null,
     mount: t ? { instanceId: t.mountedInstanceId, transition: t.transition } : null,
     perspective: snapshot.camera?.perspective ?? (t ? t.cameraMode === 1 ? 'first-person' : 'third-person' : null),
@@ -20,13 +20,13 @@ function observedState(snapshot: WorldSnapshot) {
 }
 /** Send the family's documented stopping intent; the SDK still owns all damping and motion. */
 function stoppedInput(snapshot: WorldSnapshot): WorldInput {
-  if (!snapshot.training) return {};
-  const mounted = snapshot.training.mountedInstanceId;
-  const family = mounted ? snapshot.training.vehicles.find(vehicle => vehicle.instanceId === mounted)?.mode : undefined;
-  const input = emptyTrainingInput();
+  if (!snapshot.humanoid) return {};
+  const mounted = snapshot.humanoid.mountedInstanceId;
+  const family = mounted ? snapshot.humanoid.vehicles.find(vehicle => vehicle.instanceId === mounted)?.mode : undefined;
+  const input = emptyHumanoidInput();
   if (family === 'space' || family === 'sub') input.boost = true;
   else if (family !== 'dragon') { input.brake = true; input.slow = true; }
-  return { training: input };
+  return { humanoid: input };
 }
 
 export interface ActionTimelineEntry {
@@ -94,7 +94,7 @@ export class EpisodeActionController {
     return receipt;
   }
   private stateMatches(snapshot: WorldSnapshot) {
-    const { goal, initialState } = this.active!, t = snapshot.training;
+    const { goal, initialState } = this.active!, t = snapshot.humanoid;
     const intent = goal.intent;
     if (intent.kind === 'view') return observedState(snapshot).perspective === intent.perspective;
     if (!t) return false;
@@ -116,7 +116,7 @@ export class EpisodeActionController {
     if (goal.intent.kind === 'mount' || goal.intent.kind === 'view') return stoppedInput(snapshot);
     if (goal.intent.kind === 'climb' && !['enter', 'exit'].includes(goal.intent.direction)) {
       const direction = goal.intent.direction;
-      return { training: { ...emptyTrainingInput(), forward: direction === 'up' ? 1 : direction === 'down' ? -1 : 0,
+      return { humanoid: { ...emptyHumanoidInput(), forward: direction === 'up' ? 1 : direction === 'down' ? -1 : 0,
         steer: direction === 'right' ? 1 : direction === 'left' ? -1 : 0 } };
     }
     if (goal.completion.kind !== 'displacement' || (goal.intent.kind === 'skill' && ['pickup', 'sit', 'putDown', 'standUp'].includes(goal.intent.action))) return {};
@@ -129,8 +129,8 @@ export class EpisodeActionController {
     if (this.failure) throw new Error(this.failure);
     const goal = this.segment.actionGoals?.[this.cursor];
     if (!goal || (!this.active && !this.chained && route.mode !== 'action')) return route;
-    if (!snapshot.training && goal.intent.kind !== 'view') throw new Error('EPISODE_ACTION_RUNTIME_UNAVAILABLE');
-    const trainingState = snapshot.training!;
+    if (!snapshot.humanoid && goal.intent.kind !== 'view') throw new Error('EPISODE_ACTION_RUNTIME_UNAVAILABLE');
+    const humanoidState = snapshot.humanoid!;
     if (!this.active) {
       this.chained = false;
       const tick = this.tick(snapshot), entry = this.timeline[this.cursor]!;
@@ -143,21 +143,21 @@ export class EpisodeActionController {
     let input: WorldInput = {};
     if (!active.started) {
       if (goal.intent.kind === 'mount' && goal.intent.action === 'exit') {
-        const mounted = trainingState.mountedInstanceId;
-        const vehicle = mounted ? trainingState.vehicles.find(vehicle => vehicle.instanceId === mounted) : undefined;
+        const mounted = humanoidState.mountedInstanceId;
+        const vehicle = mounted ? humanoidState.vehicles.find(vehicle => vehicle.instanceId === mounted) : undefined;
         if (mounted && !vehicle) this.fail(`EPISODE_ACTION_TARGET_MISSING: ${mounted}`, snapshot);
         // A parked exit waits for measured rest, rather than aiming for the SDK's maximum permitted exit speed.
-        if (trainingState.transition.remainingSeconds > 0 || (vehicle && !(vehicle.speedMetersPerSecond <= .1))) {
+        if (humanoidState.transition.remainingSeconds > 0 || (vehicle && !(vehicle.speedMetersPerSecond <= .1))) {
           return { ...route, mode: 'action', input: stoppedInput(snapshot), positionWorldMetersXYZ: position(snapshot) };
         }
       }
       if (goal.intent.kind === 'mount' && goal.intent.action === 'enter' && !this.stateMatches(snapshot)) {
-        const vehicle = trainingState.vehicles.find(vehicle => vehicle.instanceId === goal.targetId);
+        const vehicle = humanoidState.vehicles.find(vehicle => vehicle.instanceId === goal.targetId);
         if (!vehicle) this.fail(`EPISODE_ACTION_TARGET_MISSING: ${goal.targetId}`, snapshot);
         const boarding = await this.session.boarding?.(vehicle!.instanceId);
         if (!boarding) this.fail('EPISODE_BOARDING_OBSERVATION_UNAVAILABLE', snapshot);
         if (!boarding!.eligible) {
-          if (boarding!.reason !== 'TRAINING_MOUNT_OUT_OF_REACH') this.fail(`EPISODE_ACTION_REJECTED: ${boarding!.reason}: ${boarding!.message}`, snapshot);
+          if (boarding!.reason !== 'VEHICLE_MOUNT_OUT_OF_REACH') this.fail(`EPISODE_ACTION_REJECTED: ${boarding!.reason}: ${boarding!.message}`, snapshot);
           const approach = boarding!.approachPositionWorldMetersXYZ;
           if (!approach) this.fail(`EPISODE_ACTION_TARGET_APPROACH_MISSING: ${goal.targetId}`, snapshot);
           if (distance(position(snapshot), approach!) > 2) this.fail(`EPISODE_ACTION_APPROACH_TOO_FAR: put the trigger waypoint within 2m of ${goal.targetId}'s approach`, snapshot);
@@ -165,7 +165,7 @@ export class EpisodeActionController {
         }
       }
       if (goal.intent.kind === 'skill' && ['pickup', 'sit'].includes(goal.intent.action)) {
-        const target = trainingState.interactionTargets.find(t => t.id === goal.targetId);
+        const target = humanoidState.interactionTargets.find(t => t.id === goal.targetId);
         if (!target) this.fail(`EPISODE_ACTION_TARGET_MISSING: ${goal.targetId}`, snapshot);
         const approach = target!.approachPositionWorldMetersXYZ;
         if (!approach) this.fail(`EPISODE_ACTION_TARGET_APPROACH_MISSING: ${goal.targetId}`, snapshot);
@@ -181,25 +181,25 @@ export class EpisodeActionController {
       active.entry.startTick = tick; active.entry.startFrame = this.frame(tick);
       let command: Command | undefined;
       const intent = goal.intent;
-      if (intent.kind === 'skill') command = { type: 'training.action', request: { requestId: `ep-${this.segment.id}-${this.cursor}`, action: intent.action, ...(goal.targetId ? { targetId: goal.targetId } : {}) } };
+      if (intent.kind === 'skill') command = { type: 'humanoid.perform-action', request: { requestId: `ep-${this.segment.id}-${this.cursor}`, action: intent.action, ...(goal.targetId ? { targetId: goal.targetId } : {}) } };
       else if (intent.kind === 'mount') {
-        if (!this.stateMatches(snapshot)) command = intent.action === 'enter' ? { type: 'training.enter', instanceId: goal.targetId! } : { type: 'training.exit' };
+        if (!this.stateMatches(snapshot)) command = intent.action === 'enter' ? { type: 'vehicle.enter', instanceId: goal.targetId! } : { type: 'vehicle.exit' };
       } else if (intent.kind === 'view') {
         if (!this.stateMatches(snapshot)) command = { type: 'camera.set-perspective', perspective: intent.perspective };
       } else if (!this.stateMatches(snapshot)) {
-        const training = emptyTrainingInput();
+        const player = emptyHumanoidInput();
         if (intent.kind === 'posture') {
-          active.crouchAfterProne = intent.stance === 'crouch' && trainingState.surface.mode === 'prone';
-          if (intent.stance === 'prone' || trainingState.surface.mode === 'prone') training.humanoid = { prone: true };
-          else training.humanoid = { toggleCrouch: true };
+          active.crouchAfterProne = intent.stance === 'crouch' && humanoidState.surface.mode === 'prone';
+          if (intent.stance === 'prone' || humanoidState.surface.mode === 'prone') player.actions = { prone: true };
+          else player.actions = { toggleCrouch: true };
         } else if (intent.kind === 'climb') {
-          if (['enter', 'exit'].includes(intent.direction)) training.humanoid = intent.direction === 'exit' ? { releaseClimb: true } : { climb: true };
+          if (['enter', 'exit'].includes(intent.direction)) player.actions = intent.direction === 'exit' ? { releaseClimb: true } : { climb: true };
           else this.fail('EPISODE_ACTION_CLIMB_REQUIRED: attach to the intended surface before climbing along it', snapshot);
         } else {
-          if (!trainingState.character.swimming) this.fail('EPISODE_ACTION_WATER_REQUIRED: swim-style requires actual swimming in a declared water volume', snapshot);
-          training.humanoid = { toggleSwimStyle: true };
+          if (!humanoidState.character.swimming) this.fail('EPISODE_ACTION_WATER_REQUIRED: swim-style requires actual swimming in a declared water volume', snapshot);
+          player.actions = { toggleSwimStyle: true };
         }
-        command = { type: 'training.input', input: training }; active.clearInput = true;
+        command = { type: 'humanoid.set-input', input: player }; active.clearInput = true;
       }
       if (command) {
         const receipt = await this.execute(command, snapshot);
@@ -208,7 +208,7 @@ export class EpisodeActionController {
       } else active.operationComplete = true;
     }
     input = this.continuationInput(snapshot, forward);
-    if(goal.intent.kind==='view'&&!snapshot.training&&this.customInput)input=await this.customInput({targetPositionWorldMetersXYZ:active.startPosition,gait:'walk',mode:'stop'});
+    if(goal.intent.kind==='view'&&!snapshot.humanoid&&this.customInput)input=await this.customInput({targetPositionWorldMetersXYZ:active.startPosition,gait:'walk',mode:'stop'});
     return { ...route, mode: 'action', input, positionWorldMetersXYZ: position(snapshot) };
   }
   /** Called after every actual simulation tick, including between captured frames. */
@@ -217,10 +217,10 @@ export class EpisodeActionController {
     const active = this.active, tick = this.tick(snapshot);
     this.record(snapshot);
     if (active.clearInput) {
-      await this.execute({ type: 'training.input', input: null }, snapshot); active.clearInput = false;
+      await this.execute({ type: 'humanoid.set-input', input: null }, snapshot); active.clearInput = false;
     }
-    if (active.crouchAfterProne && snapshot.training?.surface.mode === 'none') {
-      await this.execute({ type: 'training.input', input: { ...emptyTrainingInput(), humanoid: { toggleCrouch: true } } }, snapshot);
+    if (active.crouchAfterProne && snapshot.humanoid?.surface.mode === 'none') {
+      await this.execute({ type: 'humanoid.set-input', input: { ...emptyHumanoidInput(), actions: { toggleCrouch: true } } }, snapshot);
       active.crouchAfterProne = false; active.clearInput = true;
     }
     if (active.operationId) {
@@ -244,7 +244,7 @@ export class EpisodeActionController {
       this.active = undefined;
       return;
     }
-    if ((tick - active.triggerTick) * this.fixedTimeStepSeconds >= active.goal.timeoutSeconds) this.fail(`EPISODE_ACTION_TIMEOUT: ${active.goal.id}; actual state: ${snapshot.training?.character.state}; ${snapshot.training?.message ?? ''}`, snapshot);
+    if ((tick - active.triggerTick) * this.fixedTimeStepSeconds >= active.goal.timeoutSeconds) this.fail(`EPISODE_ACTION_TIMEOUT: ${active.goal.id}; actual state: ${snapshot.humanoid?.character.state}; ${snapshot.humanoid?.message ?? ''}`, snapshot);
   }
   finish(snapshot: WorldSnapshot | undefined, failed: boolean) {
     for (const entry of this.timeline) {

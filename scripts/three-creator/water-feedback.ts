@@ -1,5 +1,5 @@
 import type {WorldSnapshot} from '@worldkit/three';
-type WaterObservation=NonNullable<WorldSnapshot['training']>['water'];
+type WaterObservation=NonNullable<WorldSnapshot['humanoid']>['water'];
 export interface WaterFeedback {
  readonly advisory:true;
  readonly code:string;
@@ -8,9 +8,9 @@ export interface WaterFeedback {
  readonly nextChecks:readonly string[];
 }
 const notes:Record<string,readonly [string,readonly string[]]>={
- WATER_DIAGNOSTICS_UNAVAILABLE:['当前观测没有可用的 Training 水域诊断。',['若任务需要游泳，确认接入支持该观测的 SDK 和完整人物控制器。']],
+ WATER_DIAGNOSTICS_UNAVAILABLE:['当前观测没有可用的 Player 水域诊断。',['若任务需要游泳，确认接入支持该观测的 SDK 和完整人物控制器。']],
  WATER_CONTROLLER_INACTIVE:['人物水域控制器当前未参与运动，未使用旧的水域接触数据。',['检查人物是否在载具或攀越流程中；恢复人物控制后再观察。']],
- NO_WATER_DECLARED:['当前 Training 地图没有声明水域。',['若任务需要游泳，在 map.water 声明功能水域，并配套实际碰撞几何。']],
+ NO_WATER_DECLARED:['当前 Player 地图没有声明水域。',['若任务需要游泳，在 map.water 声明功能水域，并配套实际碰撞几何。']],
  NO_WATER_CONTACT:['已声明水域，但当前没有有效的水域接触样本。',['核对人物水平位置、脚底高度和水域范围；初始化或重置后推进短输入再观察。']],
  SWIMMING:['SDK 已根据当前水域接触进入游泳。',[]],
  WATER_TOO_SHALLOW:['实际支撑几何对应的水深未通过当前游泳深度判定。',['若此处本应为深水，检查池底、台阶或横穿水池的地面碰撞；让实际水深与场景意图一致。']],

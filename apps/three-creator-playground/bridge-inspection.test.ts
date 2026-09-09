@@ -63,7 +63,7 @@ it('uses the SDK empty-selection and text-search semantics without Host reinterp
 it('returns the full inspection when sections are omitted',async()=>{
  const {host}=await fixture(),result=host.inspect();
  expect(result.description!.entities.map(entity=>entity.state.id)).toEqual(['hero','npc']);
- for(const key of ['player','camera','targets','snapshot','characterContinuity','description','commandsSupported','diagnostics','objects','renderer'])expect(result).toHaveProperty(key);
+ for(const key of ['controlledObject','camera','targets','snapshot','characterContinuity','description','commandsSupported','diagnostics','objects','renderer'])expect(result).toHaveProperty(key);
  expect((result.diagnostics as {snapshot:unknown}).snapshot).toEqual(result.snapshot);
 });
 

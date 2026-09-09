@@ -7,13 +7,13 @@ function fixture(){
  const scene=new THREE.Scene(),root=new THREE.Group(),bone=new THREE.Bone();
  const mesh:THREE.SkinnedMesh=new THREE.SkinnedMesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());
  mesh.add(bone);mesh.bind(new THREE.Skeleton([bone]));root.add(mesh);scene.add(root);
- const world={scene,player:root,targets:{person:root},camera:new THREE.PerspectiveCamera()} as unknown as WorldObservation;
- const snapshot={controlledEntityId:'person',training:{character:{instanceId:'person'},mountedInstanceId:null}} as WorldSnapshot;
+ const world={scene,controlledObject:root,targets:{person:root},camera:new THREE.PerspectiveCamera()} as unknown as WorldObservation;
+ const snapshot={controlledEntityId:'person',humanoid:{character:{instanceId:'person'},mountedInstanceId:null}} as WorldSnapshot;
  return {world,snapshot,root,mesh,bone,monitor:new CharacterContinuityMonitor()};
 }
 
 function firstPerson(snapshot:WorldSnapshot):WorldSnapshot{
- return {...snapshot,camera:{...snapshot.camera,mode:'follow'},training:{...snapshot.training!,cameraMode:1}};
+ return {...snapshot,camera:{...snapshot.camera,mode:'follow'},humanoid:{...snapshot.humanoid!,cameraMode:1}};
 }
 
 it('defers temporary first-person geometry and verifies the original geometry on return',()=>{
@@ -56,7 +56,7 @@ it('permits empty head geometry in first person but detects hidden remaining bod
  expect(monitor.read(f.world,fp).issues).toContain('CHARACTER_VISUAL_HIDDEN');
 });
 
-it('fully checks authored cameras even when the saved Training perspective is first person',()=>{
+it('fully checks authored cameras even when the saved Player perspective is first person',()=>{
  const f=fixture();f.monitor.read(f.world,f.snapshot);f.mesh.geometry=f.mesh.geometry.clone();
  const fp=firstPerson(f.snapshot),snapshot={...fp,camera:{...fp.camera,mode:'authored' as const}};
  expect(f.monitor.read(f.world,snapshot).issues).toContain('CHARACTER_VISUAL_REPLACED');
@@ -66,7 +66,7 @@ it('keeps the same visual through seated bone motion, vehicle grouping and reset
  const f=fixture(),initial=f.monitor.read(f.world,f.snapshot);
  const assembly=new THREE.Group();f.world.scene.add(assembly);assembly.add(f.root);
  f.bone.rotation.x=.8;f.root.position.set(1,2,3);
- const mounted={...f.snapshot,training:{...f.snapshot.training!,mountedInstanceId:'custom-bike'}};
+ const mounted={...f.snapshot,humanoid:{...f.snapshot.humanoid!,mountedInstanceId:'custom-bike'}};
  expect(f.monitor.read(f.world,mounted)).toMatchObject({status:'observed',issues:[],evidence:{rootUuid:initial.evidence!.rootUuid,mountedInstanceId:'custom-bike'}});
  f.root.position.set(0,0,0);f.bone.rotation.x=0;
  expect(f.monitor.read(f.world,f.snapshot).issues).toEqual([]);
@@ -195,14 +195,14 @@ it('does not interpret rigid equipment changes as replacement of the skinned per
  expect(f.monitor.read(f.world,f.snapshot).issues).toContain('CHARACTER_VISUAL_HIDDEN');
 });
 
-it('marks valid ordinary SDK worlds as outside Training diagnosis without inventing human failures',()=>{
+it('marks valid ordinary SDK worlds as outside Player diagnosis without inventing human failures',()=>{
  const f=fixture();
  const snapshot={schemaVersion:2,controlledEntityId:'fox',entities:[]} as unknown as WorldSnapshot;
  expect(f.monitor.read(f.world,snapshot)).toMatchObject({status:'not-applicable',issues:[],evidence:null});
  expect(f.monitor.read(f.world,null).status).toBe('unavailable');
 });
 
-it('does not relabel lost Training telemetry as a nonhuman world after observing a person',()=>{
+it('does not relabel lost Player telemetry as a nonhuman world after observing a person',()=>{
  const f=fixture();f.monitor.read(f.world,f.snapshot);
  const snapshot={schemaVersion:2,controlledEntityId:'person',entities:[]} as unknown as WorldSnapshot;
  expect(f.monitor.read(f.world,snapshot)).toMatchObject({status:'unavailable',issues:['CHARACTER_TELEMETRY_UNAVAILABLE']});

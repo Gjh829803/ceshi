@@ -16,17 +16,39 @@ Mesh/Group subjects.
 
 One world owns one fixed clock, physics backend, controller per actor, animation
 owner and active camera writer. Creator compiles and validates; Episode records.
-Ordinary and Training cameras keep their framing and visibility policies while
+Ordinary and Humanoid cameras keep their framing and visibility policies while
 sharing the [collision solver](../camera-collision/README.md). Each controller owns
 independent recovery state. Display interpolation and repeated captures do not
 advance that state; fallback positions come from fixed snapshots.
 
 Positions and dimensions use metres, with **+Y** up. Ordinary actor/capture semantic
-front defaults to local **-Z**; Training map headings, vehicles and interaction yaw use **+Z**.
+front defaults to local **-Z**; Humanoid map headings, vehicles and interaction yaw use **+Z**.
 Keep the supplied skeleton orientation unchanged when connecting these conventions.
 
 <!-- topic:getting-started -->
 ## Choose the controlled subject
+
+`world.humanoid` is the optional humanoid and riding runtime installed
+by `createHumanoidWorld` or `createWorld({humanoid: ...})`. It owns the selected
+human's walking/riding state and shares the world's clock, physics and camera
+ownership. Independent actors registered with `addCharacter` use the ordinary
+world interfaces. `humanoid` input and snapshot fields refer to this runtime.
+`createHumanoidWorld` loads/binds the character kit; low-level `createWorld({humanoid})`
+uses the supplied object and optional animation. Available actions follow those
+actual bindings and scene conditions.
+
+`WorldObservation.controlledObject` is the current controlled entity's live
+`THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
+It is separate from `world.humanoid`; observers expose runtime state through
+`snapshot().humanoid`. Input action edges are `input.humanoid.actions`, while
+movement and vehicle axes share the same `input.humanoid` envelope.
+
+Use `humanoid.perform-action` for contextual humanoid actions, `vehicle.*` for
+boarding and recovery, and `humanoid.set-input`, `humanoid.apply-profile` and
+`humanoid.set-camera-mode` for the controller's input, settings and camera.
+Reusable asset IDs describe the object (`vehicle.rover`, `creature.horse`);
+`asset.vehicle` describes its vehicle controller binding. Source provenance
+remains separate from asset identity and controller capability.
 
 `createWorld` is the general world entry point for human or nonhuman actors.
 `createHumanoidWorld` is a convenience wrapper that loads or receives the supplied
@@ -48,7 +70,7 @@ A human model requirement applies to humans present in the scene, not to every
 possible protagonist. Existing `getting-started` example files demonstrate a human.
 
 For persistent first/third-person defaults and an optional switching key, use
-`profile.view`; the `training` topic contains the configuration example.
+`profile.view`; the `humanoid` topic contains the configuration example.
 
 ### Human setup
 
@@ -72,8 +94,8 @@ await world.start();
 The helper loads the selected resource bundle, binds the full humanoid controller,
 and returns a `ThreeWorld`. Options include `characterId` (default `player`),
 `vehicles`, `profile`, explicit `assetDefinitions`, a `resourceUrl(logicalPath)`
-resolver, or a supplied `TrainingCharacter`. The world owns the supplied
-character's lifecycle. `map` follows `TrainingMap`; inspect the actual schema or
+resolver, or a supplied `HumanoidCharacter`. The world owns the supplied
+character's lifecycle. `map` follows `EnvironmentDefinition`; inspect the actual schema or
 example before authoring it. Contextual actions need the geometry described in
 `character-actions`.
 
@@ -94,7 +116,7 @@ await world.start();
 Geometry is unrestricted. A custom root receives collision and movement, but no
 invented limb animation; skeletal clips require a compatible rig. Pure visual
 children may animate using the SDK update callback. For vehicles, pass a
-`TrainingVehicleInstance` with its own `object` and `spec` to `createHumanoidWorld`.
+`VehicleInstance` with its own `object` and `spec` to `createHumanoidWorld`.
 Choose the controller family and collision envelope for the shape you created.
 
 Large static `mesh` and `box` collision shapes both expand through exact
@@ -140,7 +162,7 @@ Movement comes from actual SDK bindings. The built-in ground movement supports
 walking/running/jumping with a capsule body. Other modes can use `registerMovement`
 through the extensions contracts; a visual wing or fish tail supplies no physics,
 pathfinding or compatible skeletal animation. A catalog creature documented as a
-Training mount does not automatically provide standalone flight or swimming.
+Humanoid mount does not automatically provide standalone flight or swimming.
 Keep visual limb animation on SDK update callbacks without moving the owned root.
 
 For first/third-person switching, supply an eye in the subject root's **local**
@@ -172,8 +194,8 @@ a segment view without changing that default. Keep capture targets on the actor.
 
 This route has no human mount/dismount controller. Show controls for its actual
 abilities, exercise movement/collision/camera/reset, and use the same Creator
-playtest/submit and Episode capture interfaces. Training-specific character
-continuity reports `not-applicable` when the ordinary SDK snapshot has no Training
+playtest/submit and Episode capture interfaces. Humanoid-specific character
+continuity reports `not-applicable` when the ordinary SDK snapshot has no Humanoid
 controller; unavailable telemetry remains distinct from this result.
 
 ### Recording custom movement
@@ -207,7 +229,7 @@ colliders; the default `ground` mode also requires nearby support.
 Episode capabilities explicitly report `movement.episodeInput` as custom or
 unsupported. An absent adapter leaves manual Creator play available and does not
 pretend that the Host knows how to steer arbitrary custom movement. Existing
-ordinary ground and Training vehicles keep their built-in recording paths.
+ordinary ground and Humanoid vehicles keep their built-in recording paths.
 
 <!-- topic:assets -->
 ## Select, load and reuse assets
@@ -231,7 +253,7 @@ effective asset policy.
 
 For a custom vehicle, see the [preset rider + custom motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
 (`creator_get_examples({topic:'custom-vehicle'})`). Supply only vehicle geometry
-as `TrainingVehicleInstance.object`, with a matching `spec` controller family,
+as `VehicleInstance.object`, with a matching `spec` controller family,
 collision envelope and local pelvis seat position. `createHumanoidWorld` keeps
 its preset character and applies the supported mounted pose on that skeleton.
 This does not provide universal hand/foot IK; inspect contact and seat fit.
@@ -242,7 +264,7 @@ The Creator requirement does not restrict the SDK's general custom-character API
 Creator self-check covers the requested task outcomes. Production does not require
 a separate vehicle regression or a fixed steering, slope, collision, boarding,
 exit and reset checklist. SDK development tests cover reusable control behavior.
-`characterContinuity` in inspect/playtest feedback tracks the Training character's
+`characterContinuity` in inspect/playtest feedback tracks the Humanoid character's
 root, skinned mesh, geometry and bone identities plus scene/material visibility.
 Rigid equipment is outside this identity comparison. It is
 advisory: it cannot prove asset provenance, screen visibility, animation ownership
@@ -270,13 +292,13 @@ changing a rig or motion binding.
 
 <!-- asset-info:humanoid.source-101 -->
 `humanoid.source-101` supplies 48 animation clips. Six skills accept discrete
-`training.action` requests; posture and surface changes use `training.input`;
+`humanoid.perform-action` requests; posture and surface changes use `humanoid.set-input`;
 locomotion and transitions follow actual controller state. `characterUsage` in
-asset tools exposes capabilities and controls. `world.training.characterCapabilities()`
+asset tools exposes capabilities and controls. `world.humanoid.characterCapabilities()`
 returns live cards with `eligible`,
 `reason`, `message`, `targetId`, requirements, scene conditions, parameters,
-completion and source module. `snapshot().training.characterCapabilities` gives
-compact live availability. `snapshot().training.interactionTargets` exposes
+completion and source module. `snapshot().humanoid.characterCapabilities` gives
+compact live availability. `snapshot().humanoid.interactionTargets` exposes
 approach positions, facing and per-target eligibility. Use the `character-actions`
 example and inspect runtime state before requesting an action.
 
@@ -318,7 +340,7 @@ list by object name or category. For those `map.boxes`, assign each part an
 `EnvironmentBox.rigidGroup: {id, massKg}`, using one group ID and the same total
 mass for the whole object. Omit the field for boxes that should remain fixed.
 Read current world-space part
-poses from `world.training.simulation.environment.propBoxPose(id)` in
+poses from `world.humanoid.simulation.environment.propBoxPose(id)` in
 `onVisualUpdate`; `world.reset()` restores the furniture too. The
 `character-actions` example includes complete movable tables and a chair, their
 seat/pickup interactions, visual synchronization and reset. See
@@ -328,7 +350,7 @@ seat/pickup interactions, visual synchronization and reset. See
 A ground collider extending over the pool makes it shallow regardless of the
 visible water. Entry currently requires measured depth >1.28 m and feet >0.95 m
 below the surface; retention uses depth >1.16 m and feet >0.5 m below the surface.
-`world.snapshot().training.water` and Creator `feedback.water` report the actual
+`world.snapshot().humanoid.water` and Creator `feedback.water` report the actual
 contact and threshold decisions. `feedback.waterTimeline` records state changes
 in a playtest. These diagnostics do not modify the controller or validation.
 
@@ -338,7 +360,7 @@ selection. Crawling turns and uses forward crawl; the wall-top transition uses
 traversal. Do not advertise four additional executable skills from these files.
 
 ```ts
-const receipt = await world.execute({type:'training.action', request:{
+const receipt = await world.execute({type:'humanoid.perform-action', request:{
   requestId:'pickup-parcel-1', action:'pickup', targetId:'parcel',
 }});
 if (receipt.status === 'accepted') {
@@ -348,29 +370,29 @@ if (receipt.status === 'accepted') {
 ```
 
 `accepted` means execution started. Check `operations.get`/`wait` and
-`world.snapshot().training.character` for completion, rejection or cancellation.
+`world.snapshot().humanoid.character` for completion, rejection or cancellation.
 Creator uses `world_get_operation`; polling never resubmits the action. Discrete
 requests are exactly `roll`, `slide`, `pickup`, `putDown`, `sit`, `standUp`.
 Crouch, prone, climb and swim-style changes are humanoid input fields.
 <!-- /asset-info -->
 
-<!-- topic:training -->
+<!-- topic:humanoid -->
 
 ### Brake-turn drift for authored vehicles
 
-For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` on its `training.VehicleSpec`
+For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` on its `humanoid.VehicleSpec`
 (`mode: 'wheeled'` or `'bike'`). The SDK integrates real lateral velocity; do not
 rotate the visual root or install a second movement loop to fake a skid.
 
 ```ts
-import type { training } from "@worldkit/three";
+import type { humanoid } from "@worldkit/three";
 
 const driftTuning = {
   brakeDrift: true,
   grip: 10, steer: 0.65,
   steeringResponse: 7, steeringReturn: 12,
   brakeDeceleration: 6, brakeDamping: 0.5, coastDeceleration: 1.8,
-} satisfies Partial<training.VehicleSpec>;
+} satisfies Partial<humanoid.VehicleSpec>;
 // Include ...driftTuning in the spec passed to createHumanoidWorld({ vehicles }).
 ```
 
@@ -381,7 +403,7 @@ ramps to its maximum at 6 m/s. Default S is forward braking (reverse below
 turns do not activate this model. `grip`, steering and braking control the slide
 and recovery. At full drift, braking and handbrake damping are reduced to 70% to retain
 momentum. The flag belongs to VehicleSpec; numeric tuning can be applied
-through `world.training.applyProfile`. Persist both in authored source for delivery.
+through `world.humanoid.applyProfile`. Persist both in authored source for delivery.
 
 Creator's self-drawn road examples use `wheelPhysics` instead of this arcade path.
 Do not combine `brakeDrift` with their per-wheel handling configuration.
@@ -390,17 +412,17 @@ Do not combine `brakeDrift` with their per-wheel handling configuration.
 
 ## Bind scene, controls and parameters
 
-`createHumanoidWorld` uses the Training backend through `createWorld({training})`.
+`createHumanoidWorld` uses the Humanoid backend through `createWorld({humanoid})`.
 It is the world's single solver, driven by the SDK 60 Hz clock and shared by
-Presentation and Episode. Author a `TrainingMap` with collision `boxes`, optional
+Presentation and Episode. Author a `EnvironmentDefinition` with collision `boxes`, optional
 `interactions`, `climbSurfaces`, water bounds, player spawn and scene bounds.
 Box `position` is its world-space centre; `size` is the full XYZ extent. Box rotations
 are XYZ Euler radians; map yaw zero faces +Z. Render the same geometry in Three;
 a visual surface is not a collider.
 
-For explicit composition, create a `TrainingCharacter`, `await character.load`
+For explicit composition, create a `HumanoidCharacter`, `await character.load`
 with a resource resolver, then pass
-`training:{map,character:{instanceId,object:character.root,animation:character},vehicles}`
+`humanoid:{map,character:{instanceId,object:character.root,animation:character},vehicles}`
 to `createWorld`. Vehicle instance IDs differ from asset IDs; multiple instances
 can reuse one visual asset and spec. `onVisualUpdate(dt)` updates visual
 children after the SDK places actors, without writing roots, mixer or camera.
@@ -420,43 +442,43 @@ children after the SDK places actors, without writing roots, mixer or camera.
 | F | Enter / exit vehicle or mount |
 
 Transition clips need no key. Swimming style is a secondary menu/input choice.
-HUD hints and recording admission derive from `training.INPUT_BINDINGS`.
+HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
 roll:['KeyR']})` rebinds semantic actions and rejects duplicate/invalid codes.
-`training.controlHints(bindings)` formats current labels. Esc belongs to the
+`humanoid.controlHints(bindings)` formats current labels. Esc belongs to the
 application menu; reset is an explicit menu/button action. Use semantic
 inputs/commands for Agent actions; key remapping need not change a plan.
 Presentation UI focus releases held gameplay keys. Programmatic
-`world.training.setInput(input)` returns a release callback scoped to that
+`world.humanoid.setInput(input)` returns a release callback scoped to that
 override; release it when the interaction ends. `setInput(undefined)` clears the
-active override. `WorldInput.training` uses the same input in deterministic ticks;
+active override. `WorldInput.humanoid` uses the same input in deterministic ticks;
 action edges execute once in a multi-tick step.
-Read `world.describe().training.inputGuide` for the active control family, or
-`training.TRAINING_INPUT_GUIDES` when authoring a vehicle. Start with
-`emptyTrainingInput()` and change only relevant channels. For example, `boost`
+Read `world.describe().humanoid.inputGuide` for the active control family, or
+`humanoid.HUMANOID_INPUT_GUIDES` when authoring a vehicle. Start with
+`emptyHumanoidInput()` and change only relevant channels. For example, `boost`
 increases car speed, adjusts plane throttle, launches a glider, and brakes a
 spaceship or submarine. Aircraft pitch uses `forward`; spaceship pitch uses
 `pitch`. Omitted guide channels are ignored and should stay neutral.
 Camera angular deltas use radians and distance deltas change the nominal arm in
 meters; collision response, speed pullback and smoothing still affect the final view.
 
-`world.training` provides prepare, approach/enter/exit, map switching, camera
+`world.humanoid` provides prepare, approach/enter/exit, map switching, camera
 modes and profile methods. These preparation helpers may relocate; normal
 movement uses real input. Generic navigation, impulse and root-edit commands are
-unavailable for contextual actors. Commands are `training.prepare`,
-`training.approach`, `training.enter`, `training.exit`, `training.camera`,
-`training.input`, `training.profile` and `training.action`.
-`training.approach` is a preparation relocation to a safe boarding position,
+unavailable for contextual actors. Commands are `vehicle.prepare`,
+`vehicle.approach`, `vehicle.enter`, `vehicle.exit`, `humanoid.set-camera-mode`,
+`humanoid.set-input`, `humanoid.apply-profile` and `humanoid.perform-action`.
+`vehicle.approach` is a preparation relocation to a safe boarding position,
 with velocity cleared. It does not walk there. Its applied command receipt
 includes `result.kind:"relocation"`, the character/vehicle IDs and actual position;
-use ordinary input for visible travel, then `training.enter` when eligible.
+use ordinary input for visible travel, then `vehicle.enter` when eligible.
 
 ```ts
-await world.execute({type:'training.profile',profile:{character:{
+await world.execute({type:'humanoid.apply-profile',profile:{character:{
   maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
 }}});
-const savedProfile = world.training!.exportProfile();
-const current = world.training!.inspectConfiguration();
+const savedProfile = world.humanoid!.exportProfile();
+const current = world.humanoid!.inspectConfiguration();
 ```
 
 Profiles merge by instance ID and persist across reset/map/Episode initialization.
@@ -472,7 +494,7 @@ unit values. Speeds are m/s; acceleration/braking is m/s²; damping/response is 
 Vehicle profile applicability depends on controller family; inspect the selected
 spec. Parameters do not replace collision, traversal or animation execution.
 
-`world.snapshot().training` exposes real character state, vehicle instance/family,
+`world.snapshot().humanoid` exposes real character state, vehicle instance/family,
 mounting, medium, speed, actions and effective controls. Reset clears movement,
 held input, actions, object attachments and animation history. Episode uses the
 same solver; its start may initialize a validated position/mount state and all
@@ -494,27 +516,27 @@ Defaults are `third-person` and `keyboardToggleEnabled: false`. Each press cycle
 third person → first person → shoulder → third person, matching the Playground
 camera button; it works on foot and while driving. Held-key repeats, paused worlds
 and focused UI controls do not toggle. Authored camera ownership is preserved.
-Read effective configuration from `world.snapshot().training.view` or
-`world.training.exportProfile()`. Reset and map replacement restore the configured
-default. Episode starts inherit it unless `start.training.cameraMode` explicitly
+Read effective configuration from `world.snapshot().humanoid.view` or
+`world.humanoid.exportProfile()`. Reset and map replacement restore the configured
+default. Episode starts inherit it unless `start.humanoid.cameraMode` explicitly
 selects a view for that segment; the override does not change the saved default.
 
-Use `world.training.applyProfile({view: {...}})` or `training.profile` to update
+Use `world.humanoid.applyProfile({view: {...}})` or `humanoid.apply-profile` to update
 settings. Setting `defaultPerspective` also selects it immediately; updating only
 `keyboardToggleEnabled` preserves the current view. Disabling the shortcut does
-not disable programmatic `world.training.setCameraMode(0 | 1 | 2)` or
-`training.camera` commands. `cameraTogglePressed` is the corresponding one-shot
-Training input and respects the same permission. Inspect the actual scene before
+not disable programmatic `world.humanoid.setCameraMode(0 | 1 | 2)` or
+`humanoid.set-camera-mode` commands. `cameraTogglePressed` is the corresponding one-shot
+Humanoid input and respects the same permission. Inspect the actual scene before
 claiming recording or visual acceptance.
 
 First-person driving inherits the vehicle controller's existing tilt, including
 for custom vehicle geometry bound to that controller. This remains the default.
 Developer-only presentation tuning lives in `src/config/presentation.ts`; it is not
 a profile field. Scene code does not add another camera sway loop.
-These profile settings apply to Training. Independent subjects configure the eye
+These profile settings apply to Humanoid. Independent subjects configure the eye
 through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
-### Training camera perspectives
+### Humanoid camera perspectives
 
 Start with the tuned defaults: omit `profile.camera` and `cameraDistanceMeters`
 when creating the world. Large whitebox landmarks do not require raising the
@@ -530,12 +552,12 @@ shoulder distance. A distant opening composition is not a reason to override the
 gameplay follow distance or eye offset.
 
 Use `world.useAuthoredCamera()` for an authored opening, then return control with
-`training.camera` when play begins. Inspect the views needed by the task or an
+`humanoid.set-camera-mode` when play begins. Inspect the views needed by the task or an
 observed camera problem. For a focused Creator check, select the view and capture
 its actual world pixels:
 
 ```js
-world_execute_command({command:{type:'training.camera',mode:2}})
+world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})
 world_preview({view:'current'})
 world_inspect({sections:['description']})
 ```
@@ -547,7 +569,7 @@ the real pixels. `world_preview({view:'opening'})` stops and resets the world;
 use opening only to check the reset opening. Top-down and object triviews do not
 establish gameplay framing.
 
-On demand, `world.describe().training.configuration.effective.camera.framing`
+On demand, `world.describe().humanoid.configuration.effective.camera.framing`
 reports `status`/`reason`, `sampleSimulationSeconds`, `headSource`, the head anchor
 in world space, and `headScreenPositionNormalizedXY` (top-left `[0,0]`, bottom-right
 `[1,1]`; null behind the camera or unavailable). Creator forwards it in
@@ -563,12 +585,12 @@ outside the frame. Empty `issues` is not visual acceptance; projection does not
 prove pixel visibility or absence of occlusion. Reading this advice does not step
 simulation or adjust the camera.
 
-These defaults describe the supplied Training runtime. For an edited project SDK,
-read its current `sdk/three-world/src/config/camera.ts` and `training/camera.ts`,
+These defaults describe the supplied Humanoid runtime. For an edited project SDK,
+read its current `sdk/three-world/src/config/camera.ts` and `humanoid-runtime/camera.ts`,
 rebuild and inspect the matching runtime; Host examples are reference material.
 Independent subjects use their own `setCameraFollow({view})` contract.
 
-Training camera modes are `0` (third-person follow), `1` (first person) and `2`
+Humanoid camera modes are `0` (third-person follow), `1` (first person) and `2`
 (immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
 2 m right-shoulder boom (wheel: 1.3–3.2 m), collision retraction and up to 4°
 speed FOV expansion. Mode 1 has zero arm length and a 0.035 m near plane; zoom and framing
@@ -582,7 +604,7 @@ camera button. Click the view in first person or shoulder mode to lock the mouse
 remains available when locking is unavailable. Character action bindings retain their configured values.
 Local head/neck triangles are excluded from an instance-private geometry while
 first person is active; original geometry and all bone transforms are preserved
-and restored for third person/authored views. Current training supports one
+and restored for third person/authored views. The humanoid runtime supports one
 controlled rider/driver, not a multiplayer passenger system. Existing mounted
 poses remain procedural approximations rather than imported PUBG animations.
 
@@ -649,23 +671,23 @@ to cancel the operation itself. World operation IDs are distinct from Creator to
 operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
 NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
-Player input owns the controlled actor. Single animations return to locomotion;
+Player input owns the controlled actor, including nonhuman subjects. Single animations return to locomotion;
 loop playback requires stop-action. set-visible only affects rendering; despawn
 removes the entity/collision/tasks. Capability rejection is not SDK success.
 
 ### Effective input and camera settings
 
-`world.describe().training.controlState` reports the current override, its source,
+`world.describe().humanoid.controlState` reports the current override, its source,
 the last input actually consumed with simulation time, `livePaused`, and the clock
 owner (`live` or `episode`). It is an on-demand observation. Release/reset clears
-obsolete input samples. `training.boarding[instanceId]` in the same description
+obsolete input samples. `humanoid.boarding[instanceId]` in the same description
 reports the actual boarding approach and eligibility; select `entityIds` to query
 only the relevant vehicle. These spatial queries are not repeated in every frame
-snapshot. `world.training.inspectBoarding(id)` provides the same targeted query.
+snapshot. `world.humanoid.inspectBoarding(id)` provides the same targeted query.
 
 `profile.camera` is a partial set of explicit overrides. Each field takes effect
 independently of `cameraDistanceMeters`; `exportProfile().camera` retains those
-explicit fields, subject to the [camera mode rules](#training-camera-perspectives).
+explicit fields, subject to the [camera mode rules](#humanoid-camera-perspectives).
 The framing offsets default to 0 and add to an existing anchor; they are not
 absolute coordinates. Unset fields keep the mode's default (humanoid third person uses
 FOV 58, response 7, collision radius .2; vehicle defaults remain unchanged).
@@ -686,12 +708,12 @@ project's `sdk/` sources, and run `world_validate` to rebuild. Module entry poin
 | Behavior | Source |
 | --- | --- |
 | Default humanoid setup | [humanoid.ts](src/humanoid.ts) |
-| Bindings and input | [training/input.ts](src/training/input.ts) |
-| Capability cards and action limits | [character-capabilities.ts](src/training/character-capabilities.ts) · [action-schema.ts](src/training/humanoid/action-schema.ts) |
-| Roll, slide, pickup and sitting | [action-system.ts](src/training/humanoid/action-system.ts) |
-| Crawling and wall/ladder movement | [surface-actions.ts](src/training/humanoid/surface-actions.ts) |
-| Map and anchor contracts | [environment/types.ts](src/training/environment/types.ts) |
-| World integration and profiles | [training/runtime.ts](src/training/runtime.ts) |
+| Bindings and input | [humanoid-runtime/input.ts](src/humanoid-runtime/input.ts) |
+| Capability cards and action limits | [character-capabilities.ts](src/humanoid-runtime/character-capabilities.ts) · [action-schema.ts](src/humanoid-runtime/humanoid/action-schema.ts) |
+| Roll, slide, pickup and sitting | [action-system.ts](src/humanoid-runtime/humanoid/action-system.ts) |
+| Crawling and wall/ladder movement | [surface-actions.ts](src/humanoid-runtime/humanoid/surface-actions.ts) |
+| Map and anchor contracts | [environment/types.ts](src/humanoid-runtime/environment/types.ts) |
+| World integration and profiles | [humanoid-runtime/runtime.ts](src/humanoid-runtime/runtime.ts) |
 | Generic actor and command contracts | [contracts.ts](src/contracts.ts) |
 
 Modify the existing owner, retain its callers/lifecycle, and verify both browser
@@ -746,7 +768,7 @@ geometry template. Geometry IDs are discoverable; an effect cannot secretly edit
 physics geometry. Async procedural geometry uses scope.replaceGeometry.
 
 The React editor in `apps/three-playground` uses the scene and vehicle modules in
-`shared/training-content`. Runnable integration examples live in `examples/three-creator`.
+`shared/preset-content`. Runnable integration examples live in `examples/three-creator`.
 
 <!-- topic:presentation -->
 ## Shared shadow settings
@@ -898,7 +920,7 @@ physical results. Choose the recording length by functional coverage.
 <!-- topic:mounted-interaction -->
 ### Vehicle seat fit
 
-`TrainingVehicleSpec.seat` is the rider's **pelvis anchor** in vehicle-local metres
+`VehicleSpec.seat` is the rider's **pelvis anchor** in vehicle-local metres
 (+Y up, +Z forward), not the seat mesh centre or cushion surface. The SDK aligns
 the actual preset pelvis to this anchor. Author the cushion and anchor together:
 for a horizontal box cushion, `seatY = cushionCenterY + cushionHeight / 2 + pelvisClearance`.
@@ -924,19 +946,19 @@ Check first-person visibility as well as enter/exit/reset transitions. First-per
 eye position follows the real head bone and its eye offset: correcting the pelvis
 also raises the eye. Do not conceal a sunken rider by independently lifting the camera.
 
-<!-- asset-info:training.horse,humanoid.source-101 -->
+<!-- asset-info:creature.horse,humanoid.source-101 -->
 ### Imported horse and rider anchors
 
-`TrainingHorse` owns the real `creatures/horse.glb` skeleton, cloned clips and
+`HorseVisual` owns the real `creatures/horse.glb` skeleton, cloned clips and
 playback resources. Load it with the Host's permitted logical resource resolver:
 
 ```ts
-import { TrainingHorse } from '@worldkit/three';
-const horse = new TrainingHorse();
-await horse.load(resolveTrainingResource);
+import { HorseVisual } from '@worldkit/three';
+const horse = new HorseVisual();
+await horse.load(resolvePresetResource);
 // Pass alongside the existing vehicle instanceId, assetId and calibrated spec:
 const horseInstance = {
-  instanceId: 'horse-1', assetId: 'training.horse', spec: horseSpec,
+  instanceId: 'horse-1', assetId: 'creature.horse', spec: horseSpec,
   object: horse.root, visual: horse,
   seatAnchor: {
     nodeName: 'Body', maximumOffsetMeters: 0.145579,
@@ -969,7 +991,7 @@ includes intermediate blend geometry. A 64-interval-only limit missed key extrem
 normalized horse, not arbitrary assets. `seat.driver` is not a bone in this GLB; use `Body` for its animated anchor.
 
 Runtime samples the horse before aligning the actual Source101 pelvis under
-`TrainingCharacter.actor`, then restores the fixed pose after display. It does
+`HumanoidCharacter.actor`, then restores the fixed pose after display. It does
 not move the logical rider root or capsule to follow a bone. The real horse plus
 Source101 geometry fits the existing box envelope (X ±0.8, Y 0–3.3, Z ±1.9 metres)
 across the measured fixed and animated seats; maximum measured height is
@@ -989,7 +1011,7 @@ SDK profile parsing and Creator schemas consume the same definitions. Internal
 presentation switches stay out of public profile fields. Config changes require
 rebuilding the SDK; authored Three geometry and gameplay remain ordinary code.
 
-<!-- topic:training -->
+<!-- topic:humanoid -->
 ## Configuration-first vehicle authoring
 
 Creator vehicles use Agent-authored Three geometry. Select their handling before
@@ -998,8 +1020,8 @@ asset policy excludes catalog vehicle models. Permitted humans and creatures
 remain separate asset subjects.
 
 ```ts
-import {training} from '@worldkit/three';
-const spec = training.createRoadVehicleSpec('motorcycle'); // or 'car'
+import {humanoid} from '@worldkit/three';
+const spec = humanoid.createRoadVehicleSpec('motorcycle'); // or 'car'
 spec.id = 'my-vehicle';
 // Build your own Mesh/Group using spec.wheelPhysics, spec.envelope and spec.seat.
 // Pass {instanceId:spec.id, assetId:'custom.vehicle', object:myRoot, spec}
@@ -1024,17 +1046,17 @@ per-wheel acceleration comes from the powertrain.
 | Chassis | Match `envelope` and configured dimensions. The solver derives a simplified tapered hull/cabin; arbitrary visual silhouettes do not automatically become collision shapes. |
 | Seat | `spec.seat` is the local pelvis anchor, not the cushion top. Use the supplied drive/ride pose; check actual cushion and limb clearance. |
 | Environment | Declare real ground/obstacles, a region allowing `spec.mode`, and a spawn matching the instance. Movable props additionally need `rigidGroup`. |
-| Display | Pass `sample.vehicles[index]` from `onVisualUpdate((dt,sample)=>...)` to `training.updateVehicleWheels`. This carries suspension, spin and steering at the chassis display time. |
+| Display | Pass `sample.vehicles[index]` from `onVisualUpdate((dt,sample)=>...)` to `humanoid.updateVehicleWheels`. This carries suspension, spin and steering at the chassis display time. |
 
 Read the full [motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
 with `creator_get_examples({topic:'custom-vehicle'})`, or the
 [self-drawn car](../../examples/three-creator/vehicle-camera/main.ts) with
 `topic:'vehicle-camera'`. Both use only the preset humanoid asset. The car example
 includes transparent windows and SDK camera switching. HUDs and buttons are
-Presentation DOM code; `training.recover` is the SDK recovery command.
+Presentation DOM code; `vehicle.recover` is the SDK recovery command.
 
 For the Host baseline, request
-`creator_get_authoring_schema({topic:'training',sections:['training']})` to read
+`creator_get_authoring_schema({topic:'humanoid',sections:['humanoid']})` to read
 `roadVehicleConfigurations` and the actual source contracts. A materialized
 workspace SDK exposes its source definitions, not potentially stale Host preset
 values. Change dimensions before building geometry; coordinate any later changes
@@ -1085,7 +1107,7 @@ clamped to ±1. Straight-line traction retains its original ceiling. Combined
 tyre forces still obey the same friction circle; no extra yaw torque or pose lock
 is applied. Rider-balance profiles keep their own steering and traction response.
 
-The training fixed step owns spring/damper support, per-wheel tyre forces and
+The humanoid runtime fixed step owns spring/damper support, per-wheel tyre forces and
 chassis force/torque integration. Ground friction comes from the queried collider.
 Throttle supplies wheel torque, steering uses inner/outer wheel angles, braking
 and lateral force share a grip limit. `maxRaise` and `maxDrop` are relative to
@@ -1112,7 +1134,7 @@ vehicles continue simulating with parking brakes. Reset releases the old body.
 This is a custom simplified force model, not the Chaos solver. ABS, tyre damage and deformable
 tyres are not implemented.
 
-`TrainingDisplaySample.vehicles[n].wheels` carries suspension length, steering and
+`HumanoidDisplaySample.vehicles[n].wheels` carries suspension length, steering and
 spin angle at the chassis display timestamp. `onVisualUpdate` receives this sample
 as its second argument; `updateVehicleWheels` reads it without a second animation
 integrator. Reset recreates wheel state. Vehicles without this configuration keep
@@ -1121,7 +1143,7 @@ their existing controller and wheel animation.
 ### Engine and automatic transmission
 
 The local playground's **原地扶正** button and unassigned **R** shortcut call
-`TrainingRuntime.recoverVehicle()`; command clients use `training.recover`.
+`HumanoidRuntime.recoverVehicle()`; command clients use `vehicle.recover`.
 Recovery requires an occupied wheeled/bike/slide vehicle, nearby dry ground and
 enough clearance. It first tries the current horizontal position, then searches
 outwards up to 6 metres if the chassis spans a ledge or uneven support. Nine
@@ -1187,7 +1209,7 @@ fixed. If it should rest in place, provide physical support; without support it
 falls. Keep the total group mass identical on every part.
 `creator_get_examples({topic:'character-actions'})` supplies a complete example
 in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
-callback reads the current `world.training.simulation.environment` after every
+callback reads the current `world.humanoid.simulation.environment` after every
 reset/map replacement and applies `propBoxPose` to scene-root meshes. For meshes
 under transformed parents, convert these world poses into parent-local space.
 Use `world.reset()` for a complete scene reset, including characters and items;
@@ -1203,7 +1225,7 @@ it does not implement fracture or a full Chaos vehicle solver.
 
 ## Configurable road vehicle physics
 
-Set `spec.wheelPhysics = training.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
+Set `spec.wheelPhysics = humanoid.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
 for `wheeled` or `bike` subjects. Both run in the existing physics world and use
 per-wheel suspension, tyre forces, dynamic chassis collision and the powertrain.
 The motorcycle profile enables grounded rider balance torque; it does not right

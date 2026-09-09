@@ -1,10 +1,10 @@
 import { expect, it, vi } from 'vitest';
-import type { WorldSnapshot, CommandReceipt, OperationStatus, TrainingBoardingObservation } from '@worldkit/three';
+import type { WorldSnapshot, CommandReceipt, OperationStatus, BoardingObservation } from '@worldkit/three';
 import { EpisodeActionController } from './action-controller.js';
 import type { EpisodeActionGoal, EpisodeSegmentPlan } from './contracts.js';
 import type { RouteDecision } from './route-controller.js';
 
-const vehicleState=(instanceId:string,mode:NonNullable<WorldSnapshot['training']>['vehicles'][number]['mode'],speedMetersPerSecond:number)=>({instanceId,assetId:'fixture',mode,speedMetersPerSecond,available:true,throttle:0,steering:0,grounded:true,submerged:false});
+const vehicleState=(instanceId:string,mode:NonNullable<WorldSnapshot['humanoid']>['vehicles'][number]['mode'],speedMetersPerSecond:number)=>({instanceId,assetId:'fixture',mode,speedMetersPerSecond,available:true,throttle:0,steering:0,grounded:true,submerged:false});
 const route: RouteDecision = { mode: 'action', input: {}, waypointIndex: 0, positionWorldMetersXYZ: [0, 0, 0] };
 const goal = (intent: EpisodeActionGoal['intent']): EpisodeActionGoal => ({ id: 'demonstration', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent, completion: { kind: 'settled', holdSeconds: 0 }, timeoutSeconds: 3 });
 function fixture(action: EpisodeActionGoal, withBoarding = true) {
@@ -17,11 +17,11 @@ function fixture(action: EpisodeActionGoal, withBoarding = true) {
   const targets: any[] = [];
   let p: [number, number, number] = [0, 0, 0];
   const snapshot = () => structuredClone({ simulationTick: 10 + tick, controlledEntityId: 'actor',
-    entities: [{ id: 'actor', positionWorldMetersXYZ: p }], training: { character: state, surface, interactionTargets: targets, water: { swimming: state.swimming, contact: null }, message: 'fixture' } }) as unknown as WorldSnapshot;
+    entities: [{ id: 'actor', positionWorldMetersXYZ: p }], humanoid: { character: state, surface, interactionTargets: targets, water: { swimming: state.swimming, contact: null }, message: 'fixture' } }) as unknown as WorldSnapshot;
   let status: OperationStatus['status'] = 'running';
   const execute = vi.fn(async (): Promise<CommandReceipt> => ({ status: 'accepted', commandId: 'command', worldRevision: 0, operationId: 'skill-op' }));
   const operation = vi.fn(async (): Promise<OperationStatus> => ({ id: 'skill-op', status, phase: status }));
-  const boarding = vi.fn(async (_instanceId: string): Promise<TrainingBoardingObservation> => ({ approachPositionWorldMetersXYZ: [0, 0, 0], eligible: false, reason: 'TRAINING_CHARACTER_BUSY', message: 'Busy' }));
+  const boarding = vi.fn(async (_instanceId: string): Promise<BoardingObservation> => ({ approachPositionWorldMetersXYZ: [0, 0, 0], eligible: false, reason: 'HUMANOID_CHARACTER_BUSY', message: 'Busy' }));
   const controller = new EpisodeActionController(segment, { execute, operation, ...(withBoarding ? { boarding } : {}) }, 10, 1 / 60);
   return { controller, execute, operation, boarding, state, surface, targets, snapshot,
     setStatus(value: OperationStatus['status']) { status = value; },
@@ -50,7 +50,7 @@ it('walks to a nearby actual target approach before dispatching', async () => {
   expect(result.input.moveXRatio).toBe(1); expect(f.execute).not.toHaveBeenCalled();
   await f.observe(10, [1, 0, 0]); target.eligible = true;
   await f.controller.step(f.snapshot(), [0, 0, -1], route);
-  expect(f.execute).toHaveBeenCalledWith(expect.objectContaining({ type: 'training.action', request: expect.objectContaining({ targetId: 'chair' }) }));
+  expect(f.execute).toHaveBeenCalledWith(expect.objectContaining({ type: 'humanoid.perform-action', request: expect.objectContaining({ targetId: 'chair' }) }));
 });
 
 it('requires observed displacement after a slide and does not mistake acceptance for motion', async () => {
@@ -68,7 +68,7 @@ it('clears one-shot input on the following tick and observes a settled prone pos
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'input', worldRevision: 0 }));
   await f.controller.step(f.snapshot(), [0, 0, -1], route);
   f.surface.mode = 'prone'; f.state.state = 'prone-transition'; await f.observe(1);
-  expect(f.execute).toHaveBeenLastCalledWith({ type: 'training.input', input: null });
+  expect(f.execute).toHaveBeenLastCalledWith({ type: 'humanoid.set-input', input: null });
   expect(f.controller.timeline[0]!.result).toBe('running');
   f.state.state = 'prone'; await f.observe(45);
   expect(f.controller.timeline[0]).toMatchObject({ result: 'succeeded', endTick: 45, endFrame: 18 });
@@ -94,16 +94,16 @@ it('walks to the measured boarding approach and waits for the actual enter trans
   const f = fixture({ ...goal({ kind: 'mount', action: 'enter' }), targetId: 'car' });
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'mount', worldRevision: 0 }));
   const vehicle = { instanceId: 'car' };
-  const boarding: TrainingBoardingObservation = { approachPositionWorldMetersXYZ: [1.5, 0, 0], eligible: false, reason: 'TRAINING_MOUNT_OUT_OF_REACH', message: 'Walk closer' };
+  const boarding: BoardingObservation = { approachPositionWorldMetersXYZ: [1.5, 0, 0], eligible: false, reason: 'VEHICLE_MOUNT_OUT_OF_REACH', message: 'Walk closer' };
   f.boarding.mockImplementation(async () => boarding);
   const snapshot = (tick: number, mounted: string | null, remainingSeconds: number) => ({ ...f.snapshot(), simulationTick: 10 + tick,
-    training: { ...f.snapshot().training!, vehicles: [vehicle], mountedInstanceId: mounted, transition: { kind: 'enter', remainingSeconds } } }) as unknown as WorldSnapshot;
+    humanoid: { ...f.snapshot().humanoid!, vehicles: [vehicle], mountedInstanceId: mounted, transition: { kind: 'enter', remainingSeconds } } }) as unknown as WorldSnapshot;
   const approaching = await f.controller.step(snapshot(0, null, 0), [0, 0, -1], route);
   expect(approaching.input.moveXRatio).toBe(1); expect(f.execute).not.toHaveBeenCalled();
   Object.assign(boarding, { eligible: true, reason: 'ELIGIBLE' });
   const entering = await f.controller.step(snapshot(1, null, 0), [0, 0, -1], route);
-  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'training.enter', instanceId: 'car' });
-  expect(entering.input.training).toMatchObject({ forward: 0, brake: true });
+  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'vehicle.enter', instanceId: 'car' });
+  expect(entering.input.humanoid).toMatchObject({ forward: 0, brake: true });
   await f.controller.observe(snapshot(2, 'car', .4));
   expect(f.controller.timeline[0]!.result).toBe('running');
   await f.controller.observe(snapshot(32, 'car', 0));
@@ -115,7 +115,7 @@ it('walks to the measured boarding approach and waits for the actual enter trans
 it('rejects ineligible boarding instead of preparing or relocating the actor', async () => {
   const f = fixture({ ...goal({ kind: 'mount', action: 'enter' }), targetId: 'car' });
   const snapshot = f.snapshot();
-  Object.assign(snapshot.training!, { transition: { kind: '', remainingSeconds: 0 }, vehicles: [{ instanceId: 'car' }] });
+  Object.assign(snapshot.humanoid!, { transition: { kind: '', remainingSeconds: 0 }, vehicles: [{ instanceId: 'car' }] });
   await expect(f.controller.step(snapshot, [0, 0, -1], route)).rejects.toThrow('CHARACTER_BUSY');
   expect(f.execute).not.toHaveBeenCalled();
 });
@@ -124,20 +124,20 @@ it('keeps exit running after control handoff until the real transition finishes'
   const f = fixture(goal({ kind: 'mount', action: 'exit' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'exit', worldRevision: 0 }));
   const snapshot = (tick: number, mounted: string | null, remainingSeconds: number) => ({ ...f.snapshot(), simulationTick: 10 + tick,
-    training: { ...f.snapshot().training!, mountedInstanceId: mounted, vehicles: [vehicleState('car','wheeled',0)], transition: { kind: 'exit', remainingSeconds } } }) as WorldSnapshot;
+    humanoid: { ...f.snapshot().humanoid!, mountedInstanceId: mounted, vehicles: [vehicleState('car','wheeled',0)], transition: { kind: 'exit', remainingSeconds } } }) as WorldSnapshot;
   const decision = await f.controller.step(snapshot(0, 'car', 0), [0, 0, -1], route);
-  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'training.exit' });
-  expect(decision.input.training).toMatchObject({ forward: 0, brake: true });
+  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'vehicle.exit' });
+  expect(decision.input.humanoid).toMatchObject({ forward: 0, brake: true });
   await f.controller.observe(snapshot(1, null, .3)); expect(f.controller.timeline[0]!.result).toBe('running');
   await f.controller.observe(snapshot(24, null, 0)); expect(f.controller.timeline[0]!.result).toBe('succeeded');
   expect(f.boarding).not.toHaveBeenCalled();
 });
 
-it('changes a non-Training view and completes only after the actual camera matches', async () => {
+it('changes a non-Player view and completes only after the actual camera matches', async () => {
   const f = fixture(goal({ kind: 'view', perspective: 'first-person' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
   const snapshot = (tick: number, perspective: string) => {
-    const { training: _training, ...base } = f.snapshot();
+    const { humanoid: _humanoid, ...base } = f.snapshot();
     return { ...base, simulationTick: tick + 10, camera: { perspective } } as WorldSnapshot;
   };
   await f.controller.step(snapshot(0, 'third-person'), [0, 0, -1], route);
@@ -147,10 +147,10 @@ it('changes a non-Training view and completes only after the actual camera match
   expect(f.boarding).not.toHaveBeenCalled();
 });
 
-it('prefers actual camera perspective over Training mode and falls back only when absent', async () => {
+it('prefers actual camera perspective over Player mode and falls back only when absent', async () => {
   const f = fixture(goal({ kind: 'view', perspective: 'first-person' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
-  const snapshot = f.snapshot(); Object.assign(snapshot.training!, { cameraMode: 1 });
+  const snapshot = f.snapshot(); Object.assign(snapshot.humanoid!, { cameraMode: 1 });
   Object.assign(snapshot, { camera: { perspective: 'third-person' } });
   await f.controller.step(snapshot, [0, 0, -1], route);
   await f.controller.observe(snapshot); expect(f.controller.timeline[0]!.result).toBe('running');
@@ -161,7 +161,7 @@ it('prefers actual camera perspective over Training mode and falls back only whe
 it('reports missing boarding observation only when an enter goal triggers', async () => {
   const f = fixture({ ...goal({ kind: 'mount', action: 'enter' }), targetId: 'car' }, false);
   const snapshot = f.snapshot();
-  Object.assign(snapshot.training!, { transition: { kind: '', remainingSeconds: 0 }, vehicles: [{ instanceId: 'car' }] });
+  Object.assign(snapshot.humanoid!, { transition: { kind: '', remainingSeconds: 0 }, vehicles: [{ instanceId: 'car' }] });
   expect((await f.controller.step(snapshot, [0, 0, -1], { ...route, mode: 'travel' })).mode).toBe('travel');
   await expect(f.controller.step(snapshot, [0, 0, -1], route)).rejects.toThrow('EPISODE_BOARDING_OBSERVATION_UNAVAILABLE');
   expect(f.execute).not.toHaveBeenCalled();
@@ -170,25 +170,25 @@ it('reports missing boarding observation only when an enter goal triggers', asyn
 it('brakes before exit and waits for measured rest and any existing transition', async () => {
   const f = fixture(goal({ kind: 'mount', action: 'exit' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'exit', worldRevision: 0 }));
-  const snapshot = (speed: number, remainingSeconds = 0) => ({ ...f.snapshot(), training: { ...f.snapshot().training!,
+  const snapshot = (speed: number, remainingSeconds = 0) => ({ ...f.snapshot(), humanoid: { ...f.snapshot().humanoid!,
     mountedInstanceId: 'car', vehicles: [vehicleState('car','wheeled',speed)], transition: { kind: 'enter', remainingSeconds } } }) as WorldSnapshot;
   const braking = await f.controller.step(snapshot(12), [0, 0, -1], route);
-  expect(braking.input.training).toMatchObject({ forward: 0, brake: true, boost: false });
+  expect(braking.input.humanoid).toMatchObject({ forward: 0, brake: true, boost: false });
   expect(f.execute).not.toHaveBeenCalled();
   await f.controller.step(snapshot(.5), [0, 0, -1], route);
   await f.controller.step(snapshot(.05, .1), [0, 0, -1], route);
   expect(f.execute).not.toHaveBeenCalled();
   await f.controller.step(snapshot(.05), [0, 0, -1], route);
-  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'training.exit' });
+  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'vehicle.exit' });
 });
 
 it('uses each mounted family stop input while waiting and changing view', async () => {
   for (const kind of ['mount', 'view'] as const) for (const mode of ['space', 'sub', 'dragon'] as const) {
     const f = fixture(goal(kind === 'mount' ? { kind, action: 'exit' } : { kind, perspective: 'first-person' }));
     f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
-    const snapshot = { ...f.snapshot(), training: { ...f.snapshot().training!, cameraMode: 0, mountedInstanceId: 'craft',
+    const snapshot = { ...f.snapshot(), humanoid: { ...f.snapshot().humanoid!, cameraMode: 0, mountedInstanceId: 'craft',
       vehicles: [vehicleState('craft',mode,10)], transition: { kind: '', remainingSeconds: 0 } } } as WorldSnapshot;
-    const input = (await f.controller.step(snapshot, [0, 0, -1], route)).input.training!;
+    const input = (await f.controller.step(snapshot, [0, 0, -1], route)).input.humanoid!;
     expect(input).toMatchObject({ forward: 0, lift: 0, steer: 0, boost: mode !== 'dragon', brake: false, slow: false });
     if (kind === 'mount') expect(f.execute).not.toHaveBeenCalled();
   }
@@ -196,9 +196,9 @@ it('uses each mounted family stop input while waiting and changing view', async 
 
 it('times out honestly when an aircraft cannot stop for exit', async () => {
   const f = fixture(goal({ kind: 'mount', action: 'exit' }));
-  const snapshot = { ...f.snapshot(), training: { ...f.snapshot().training!, mountedInstanceId: 'plane',
+  const snapshot = { ...f.snapshot(), humanoid: { ...f.snapshot().humanoid!, mountedInstanceId: 'plane',
     vehicles: [vehicleState('plane','plane',30)], transition: { kind: '', remainingSeconds: 0 } } } as WorldSnapshot;
-  expect((await f.controller.step(snapshot, [0, 0, -1], route)).input.training).toMatchObject({ forward: 0, boost: false, slow: true });
+  expect((await f.controller.step(snapshot, [0, 0, -1], route)).input.humanoid).toMatchObject({ forward: 0, boost: false, slow: true });
   expect(f.execute).not.toHaveBeenCalled();
   await expect(f.controller.observe({ ...snapshot, simulationTick: 190 })).rejects.toThrow('EPISODE_ACTION_TIMEOUT');
   expect(f.controller.timeline[0]!.result).toBe('failed');

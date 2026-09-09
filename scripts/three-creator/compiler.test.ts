@@ -40,8 +40,8 @@ async function platformScratch(root: string) {
 afterEach(async () => { audit.forbiddenRoots.length = 0; audit.calls.length = 0; await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 it.each([
-  ['training.carriage', ['creatures/horse.glb']],
-  ['training.dragon', ['creatures/dragon.glb']],
+  ['vehicle.carriage', ['creatures/horse.glb']],
+  ['creature.dragon', ['creatures/dragon.glb']],
 ] as const)('packages %s with only its required creature models', async (id, expected) => {
   const root = await fixture();
   await writeFile(path.join(root, 'project.json'), JSON.stringify({ schemaVersion: 1, assetIds: [id] }));
