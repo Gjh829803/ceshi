@@ -76,7 +76,7 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
-    const folder = topic === 'nonhuman-subject' ? 'nonhuman-subject' : topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
+    const folder = topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
       topic === 'character-actions' ? 'character-actions' :
       topic === 'independent-world' ? 'training-independent' : 'sdk-capabilities';
     return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);

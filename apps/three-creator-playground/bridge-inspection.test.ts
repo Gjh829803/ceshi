@@ -9,7 +9,7 @@ afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllG
 async function fixture(){
  // Only the rendering/browser boundary is stubbed; registry, physics, observer,
  // description queries and snapshots are the actual SDK implementation.
- const renderer={domElement:{width:800,height:600},render(){},info:{memory:{geometries:0,textures:0},render:{calls:0}}} as unknown as THREE.WebGLRenderer;
+ const renderer={domElement:{width:800,height:600},shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},render(){},info:{memory:{geometries:0,textures:0},render:{calls:0}}} as unknown as THREE.WebGLRenderer;
  const world=await createWorld({scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),renderer,navigation:false});worlds.push(world);
  for(const id of ['hero','npc']){const object=new THREE.Group();object.position.set(id==='hero'?0:4,1,0);world.addCharacter({id,object,body:{heightMeters:1.8,radiusMeters:.3}});}
  world.setControlledEntity('hero');

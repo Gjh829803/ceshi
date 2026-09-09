@@ -243,6 +243,15 @@ These reference values require checking against the authored seat and mounted po
 the SDK does not automatically fit arbitrary seats. First-person eye height follows
 the actual head, so correct the rider/seat fit before adjusting camera settings.
 
+`creator_get_examples({topic:'vehicle-camera'})` supplies a preset rover with a
+separate humanoid, SDK T/reset controls and an example-local Three material helper.
+Keep glass transparency, opacity and material-array slots when recoloring a model
+white or gray. Camera collision uses rigid vehicle geometry to preserve open
+cabins; the vehicle movement envelope remains intact. Inspect the first-person
+view and a low-angle orbit near the cabin when those views are part of the scene.
+An authored opening belongs in the user reset/start action, not an unconditional
+`onReset` camera write during Episode capture.
+
 Inspect/playtest `characterContinuity` feedback observes the Training character's
 skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate
 changes even if the author restores the person before the last frame. It is

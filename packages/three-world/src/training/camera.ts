@@ -1,4 +1,5 @@
 import {applyVehicleCameraRoll} from './camera-roll';
+import {VehicleCameraQueries} from './vehicle-camera-queries';
 import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-world/camera-collision';
@@ -41,6 +42,7 @@ export class FollowCamera {
     if(snap||!this.previousPresentation)this.previousPresentation=this.currentPresentation;
   }
   present(pose:MotionPose,alpha:number):void {
+    this.syncVehicleQueries();
     const a=this.previousPresentation,b=this.currentPresentation;
     if(!a||!b)return;
     const subject=a.subject.clone().lerp(b.subject,alpha);
@@ -92,17 +94,28 @@ export class FollowCamera {
   private shoulderDistance=2;
   private readonly originalNear:number;
   private collisionHumanoid:Simulation['humanoid']|undefined;
+  private readonly vehicleQueries:VehicleCameraQueries;
+  private cameraFilter:((collider:RAPIER.Collider)=>boolean)|undefined;
+  private mountedId:string|undefined;
+  private syncVehicleQueries():void {
+    this.vehicleQueries.sync();const excluded=new Set(this.vehicleQueries.refinedActorIds);
+    if(this.mountedId)excluded.add(this.mountedId);
+    this.cameraFilter=this.environment.cameraFilter(excluded);
+  }
   private collisionTick=0;
   private readonly collision=new CameraCollisionSolver((from,to,radius)=>{
     if(!this.tuning.collisionEnabled)return {distanceMeters:Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2])};
     const h=this.collisionHumanoid;
-    return h?probeTrainingCamera(h.world,from,to,radius,h.capsule):this.environment.cameraProbe(from,to,radius);
+    const environment=h?probeTrainingCamera(h.world,from,to,radius,h.capsule,this.cameraFilter):this.environment.cameraProbe(from,to,radius,this.cameraFilter);
+    const vehicle=this.vehicleQueries.probe(from,to,radius,this.mountedId);
+    return vehicle.startedOverlapping||vehicle.distanceMeters<environment.distanceMeters?vehicle:environment;
   });
   get collisionState(){return this.collision.captureTransactionState();}
   private readonly lastCharacterPosition=new T.Vector3();
   private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private revision=-1;
-  constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries){this.originalNear=camera.near;}
+  constructor(public camera:T.PerspectiveCamera,public environment:EnvironmentQueries,vehicles:readonly {instanceId:string;object:T.Object3D}[]=[]){this.originalNear=camera.near;this.vehicleQueries=new VehicleCameraQueries(vehicles);}
   get desiredPosition():T.Vector3{return this.desired.clone();}
+  dispose():void{this.vehicleQueries.dispose();}
   /** Canonical angular input. Pixel adapters keep their own sensitivity. */
   orbitRadians(yawDelta:number,pitchDelta:number,time:number,sim?:Simulation){
     if(this.mode===1||this.mode===2){
@@ -141,6 +154,7 @@ export class FollowCamera {
   update(sim:Simulation,dt:number,pose?:MotionPose){
     this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);
     this.collisionHumanoid=sim.vehicle?undefined:sim.humanoid;
+    this.mountedId=sim.vehicle?.spec.id;this.syncVehicleQueries();
     const v=sim.vehicle,body=pose??v??sim.player,speed=body.velocity.length(),position=body.position,yaw=pose?.yaw??v?.yaw??sim.player.yaw,rotation=pose?.rotation??v?.rotation;
     if(this.revision!==sim.teleportRevision){this.revision=sim.teleportRevision;this.reset(sim);}
     if(this.previousMode!==this.mode){this.previousMode=this.mode;this.reset(sim);}
@@ -277,7 +291,8 @@ export class FollowCamera {
         ray.dir.x=position.x+Math.cos(angle)*r-eye.x;
         ray.dir.y=position.y+y-eye.y;
         ray.dir.z=position.z+Math.sin(angle)*r-eye.z;
-        if(!world.castRay(ray,.99999,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,capsule))return true;
+        if(!world.castRay(ray,.99999,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,capsule,undefined,this.cameraFilter)&&
+          this.vehicleQueries.visibleBetween(eye.toArray(),[eye.x+ray.dir.x,eye.y+ray.dir.y,eye.z+ray.dir.z],this.mountedId))return true;
       }
     }
     return false;

@@ -348,9 +348,14 @@ export class EnvironmentQueries {
     p.clamp(min,max);
     return {position:p,grounded,normal:normals[0]??new Vector3(0,1,0),normals,blocked:p.clone().sub(position).distanceToSquared(delta)>1e-6};
   }
-  cameraProbe(from:Vec3,to:Vec3,radius:number) {
+  cameraFilter(excludedActorIds:ReadonlySet<string>):(collider:RAPIER.Collider)=>boolean {
+    const excluded=new Set(this.queryExcluded);
+    for(const entry of this.actorColliders.values())if(!excludedActorIds.has(entry.actorId))excluded.delete(entry.collider.handle);
+    return collider=>!excluded.has(collider.handle);
+  }
+  cameraProbe(from:Vec3,to:Vec3,radius:number,filter=this.environmentFilter) {
     this.assertLive();
-    const hit=probeTrainingCamera(this.world,from,to,radius,undefined,this.environmentFilter,.015);
+    const hit=probeTrainingCamera(this.world,from,to,radius,undefined,filter,.015);
     // Preserve the vehicle query's historical 0.002 of the swept segment margin.
     const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
     return {...hit,distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};

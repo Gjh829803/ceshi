@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "steps": [
+    {"durationSeconds": 0.6},
+    {"pointerDrag": {"deltaXPixels": 240, "deltaYPixels": 65}, "durationSeconds": 0.5},
+    {"keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.4},
+    {"keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.4},
+    {"keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.4},
+    {"keysDown": ["f"], "durationSeconds": 0.1},
+    {"keysUp": ["f"], "durationSeconds": 1.2},
+    {"keysDown": ["w"], "durationSeconds": 1.5},
+    {"keysUp": ["w"], "keysDown": ["Space"], "durationSeconds": 2},
+    {"keysUp": ["Space"], "keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.5},
+    {"keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.5},
+    {"keysDown": ["t"], "durationSeconds": 0.1},
+    {"keysUp": ["t"], "durationSeconds": 0.5},
+    {"keysDown": ["f"], "durationSeconds": 0.1},
+    {"keysUp": ["f"], "durationSeconds": 1.2},
+    {"keysDown": ["w"], "durationSeconds": 0.6},
+    {"keysUp": ["w"], "durationSeconds": 0.4},
+    {"lifecycle": "reset", "durationSeconds": 0.2},
+    {"lifecycle": "start", "durationSeconds": 0.5}
+  ],
+  "targets": []
+}

@@ -3,7 +3,7 @@ import {expect,it,vi} from 'vitest';
 import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld,training} from '@worldkit/three';
-import {Character as SourceCharacter} from '../../packages/three-world/src/training/humanoid/source-character';
+import {SourceCharacter} from '@worldkit/three/testing';
 import {buildVehicle} from '../../examples/three-creator/sdk-capabilities/models';
 import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
 import {getMap} from '../../examples/three-creator/sdk-capabilities/environment/maps';

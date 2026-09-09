@@ -1,7 +1,7 @@
 import { readFile, readdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-export const EXAMPLE_TOPICS = ['getting-started','extensions','training-assets','training-maps','training-ui','independent-world','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject'] as const;
+export const EXAMPLE_TOPICS = ['getting-started','extensions','training-assets','training-maps','training-ui','independent-world','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject','vehicle-camera'] as const;
 export type ExampleTopic = typeof EXAMPLE_TOPICS[number];
 export async function readExampleFiles(root:string, topic:ExampleTopic, selected?:readonly string[]) {
   const entries:{path:string;byteLength:number;sha256:string;readable:boolean}[]=[];
@@ -19,6 +19,7 @@ export async function readExampleFiles(root:string, topic:ExampleTopic, selected
     topic==='training-maps'?['environment/maps.ts','environment/modules.ts','humanoid/workshop.ts']:
     topic==='training-ui'?['ui/workspace.ts','platform/workbench.ts','platform/profiles.ts']:
     topic==='character-actions'?['index.html','main.ts','map.ts','project.json','episode.json']:
+    topic==='vehicle-camera'?['index.html','main.ts','project.json','episode.json','whitebox-materials.ts']:
     ['index.html','main.ts','project.json','episode.json'];
   const files:Record<string,string>={};
   for(const name of selected??defaults){const entry=entries.find(e=>e.path===name);if(!entry?.readable){if(selected)throw new Error(`THREE_EXAMPLE_FILE_UNKNOWN: ${name}`);continue;}

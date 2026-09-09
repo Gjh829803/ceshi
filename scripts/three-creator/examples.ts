@@ -41,6 +41,7 @@ await world.start();
 // Add scene conditions for contextual actions: see character-actions capability cards.
 // Custom nonhuman subjects may use createWorld + addCharacter({object,body,movement}).
 // For a custom vehicle, keep this preset person and read the custom-vehicle example.
+// For a preset rover with transparent whitebox glass and SDK T switching, read vehicle-camera.
 `;
 
 export function sdkExample(_assetId: string): string { return SDK_EXAMPLE; }

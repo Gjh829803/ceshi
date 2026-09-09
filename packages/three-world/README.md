@@ -478,6 +478,26 @@ and restored for third person/authored views. Current training supports one
 controlled rider/driver, not a multiplayer passenger system. Existing mounted
 poses remain procedural approximations rather than imported PUBG animations.
 
+Vehicle movement still uses `spec.envelope`. Camera queries refine that envelope
+with the vehicle's rigid Mesh triangles, so an open cabin is not a solid wall.
+Solid panels block the camera; transparent materials with opacity below one and
+transmission materials do not count as opaque sight blockers. Glass still blocks
+the camera's collision sphere. The mounted carrier is excluded from its own
+camera arm; other vehicles remain obstacles. Empty, skinned or actively morphed
+vehicle roots retain conservative envelope queries. Geometry edits follow Three's
+`needsUpdate` convention; models attached after initialization are discovered.
+Texture alpha cutouts and custom shader transparency are conservatively opaque
+for these geometry queries.
+
+Whitebox recoloring must preserve glass transparency, opacity, side and material
+array slots. Clone source materials and modify their palette instead of replacing
+every surface with an opaque material. The [rover camera example](../../examples/three-creator/vehicle-camera/README.md)
+(`creator_get_examples({topic:'vehicle-camera'})`) includes a native Three material
+helper and SDK-owned T/reset controls. Inspect first-person pixels as well as the
+mode number. For an authored opening, perform the camera handoff in the user's
+reset/start action; do not unconditionally claim the camera in `onReset`, which
+also runs while Episode owns the recording clock.
+
 <!-- topic:control -->
 ## One state for gameplay and text commands
 
