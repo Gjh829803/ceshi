@@ -169,7 +169,12 @@ describe("test gate configuration", () => {
     expect(packageJson.scripts.test).toBe(
       "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     );
-    expect(resourceHeavyVitestConfig.test?.pool).toBe("threads");
+    expect(resourceHeavyVitestConfig.test).toMatchObject({
+      pool: "forks",
+      fileParallelism: false,
+      minWorkers: 1,
+      maxWorkers: 1,
+    });
 
     vi.doUnmock("vitest/node");
     vi.resetModules();
