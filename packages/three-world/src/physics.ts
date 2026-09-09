@@ -390,7 +390,13 @@ export class ThreePhysics implements PhysicsPort {
   private computeEnvironmentMotion(proposal: CharacterProposal): void {
     const character = proposal.entry.character!, controller = character.controller;
     const requested = proposal.desired.clone().add(proposal.correction);
-    const includeEnvironment = (collider: Collider): boolean => this.entries.get(this.colliderOwners.get(collider.handle) ?? '')?.kind !== 'character';
+    // Newly published colliders belong to the direct sweep until world.step
+    // synchronizes the query pipeline. A reused broad phase may already see
+    // them after reset and add KCC's normal nudge, unlike a cold world.
+    const includeEnvironment = (collider: Collider): boolean => {
+      const owner=this.colliderOwners.get(collider.handle)??'';
+      return this.entries.get(owner)?.kind!=='character'&&!this.queryDirty.has(owner);
+    };
     controller.computeColliderMovement(proposal.entry.colliders[0]!, requested, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, includeEnvironment);
     proposal.movement.copy(controller.computedMovement()); proposal.grounded = controller.computedGrounded();
     let onlyPlanarFixedContacts = controller.numComputedCollisions() > 0;

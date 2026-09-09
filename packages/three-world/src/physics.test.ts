@@ -15,6 +15,18 @@ function ticks(physics: ThreePhysics, count: number, drives: Readonly<Record<str
 afterEach(() => { for (const physics of retained.splice(0)) physics.dispose(); vi.restoreAllMocks(); });
 
 describe('Three/Rapier character movement', () => {
+  it('resolves the same first-tick Episode pose when geometry is published in a fresh or previously stepped world',async()=>{
+    const physics=await create(),publish=()=>{physics.addRigid('ground',box(0,-.1,0,24,.2,24),{kind:'fixed'});
+      physics.addCharacter('fox',actor(0,0,.03),{heightMeters:1.15,radiusMeters:.45});};publish();
+    const start=[0,.03,0] as const,cold=physics.probeCharacterStart('fox',start);
+    expect(cold.isValid).toBe(true);const before=physics.state('fox');
+    expect(physics.probeCharacterStart('fox',start)).toEqual(cold);expect(physics.state('fox')).toEqual(before);
+    physics.teleport('fox',cold.resolvedPositionWorldMetersXYZ);ticks(physics,1);const first=physics.state('fox')!.positionMetersXYZ;
+    physics.remove('fox');physics.remove('ground');publish();
+    const warm=physics.probeCharacterStart('fox',start);expect(warm).toEqual(cold);
+    physics.teleport('fox',warm.resolvedPositionWorldMetersXYZ);ticks(physics,1);
+    expect(physics.state('fox')!.positionMetersXYZ).toEqual(first);
+  });
   it('runs five simulated minutes on the actual coarse Three surface after exact collision subdivision', async () => {
     const physics = await create(); const ground = floor(); const player = actor();
     physics.addRigid('ground', ground, { kind: 'fixed' }); physics.addCharacter('player', player);

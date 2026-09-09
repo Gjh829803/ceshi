@@ -29,6 +29,27 @@ function describe(object: THREE.Object3D) {
   const box = new THREE.Box3().setFromObject(object, true);
   return { uuid: object.uuid, name: object.name, type: object.type, parentUuid: object.parent?.uuid ?? null, positionMetersXYZ: position(object), visible: object.visible, childCount: object.children.length, bounds: box.isEmpty() ? null : { minimumMetersXYZ: box.min.toArray(), maximumMetersXYZ: box.max.toArray() } };
 }
+/** Optional camera feedback for one current-view capture, never the recording sampler. */
+function currentCameraObservation(world: WorldObservation) {
+  let snapshot: ReturnType<NonNullable<WorldObservation['snapshot']>> | null = null;
+  try { snapshot = world.snapshot?.() ?? null; } catch { /* Raw/older observers may not provide telemetry. */ }
+  let framing: unknown = null, cameraOverrides: unknown = null, cameraSettings: unknown = null;
+  if (snapshot?.training) {
+    try {
+      const configuration = world.capabilities?.({entityIds: []})?.training?.configuration;
+      const camera = configuration?.effective?.camera;
+      cameraOverrides = configuration?.profile?.camera ?? null;
+      cameraSettings = camera?.settings ?? null;
+      framing = camera && 'framing' in camera ? camera.framing ?? null : null;
+    } catch { /* Advisory diagnostics must not prevent a real image capture. */ }
+  }
+  return {
+    worldRevision: snapshot?.worldRevision ?? null, simulationTick: snapshot?.simulationTick ?? null,
+    simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null,
+    camera: snapshot?.camera ?? null, trainingCameraMode: snapshot?.training?.cameraMode ?? null,
+    owner: snapshot?.camera?.mode ?? null, framing, cameraOverrides, cameraSettings,
+  };
+}
 function createBridge() {
   const characterContinuity=new CharacterContinuityMonitor();
   let trace: any[] = [], events: any[] = [], frameCount = 0, active = false, startedAt = 0, previousFrameAt = 0, lastSampleAt = 0;
@@ -172,9 +193,13 @@ function createBridge() {
     },
     endRecording: finishRecording,
     captureTargets() { return captureTargets(observation()); },
-    capture(view: 'opening' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
+    capture(view: 'opening' | 'current' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
       const world = observation();
-      if (view === 'opening') return withCapturePresentation(world,()=>{world.scene.updateMatrixWorld(true);world.renderer.render(world.scene,world.camera);return {view,image:world.renderer.domElement.toDataURL('image/png'),player:describe(world.player)};});
+      if (view === 'opening' || view === 'current') return withCapturePresentation(world,()=>{
+        world.scene.updateMatrixWorld(true);world.renderer.render(world.scene,world.camera);
+        return {view,image:world.renderer.domElement.toDataURL('image/png'),player:describe(world.player),
+          ...(view === 'current' ? {cameraObservation: currentCameraObservation(world)} : {})};
+      });
       return captureObjectViews(world, view, entityIds, frontYawRadians);
     },
   };

@@ -10,9 +10,10 @@ import {SPECS} from '../../shared/training-content/config';
 import {defaultRegion,prepareCourse} from '../../shared/training-content/platform/scenarios';
 
 describe('training workspace configuration',()=>{
- it.each(['supercar','kart'])('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
+ it.each(SPECS.filter(spec=>spec.mode==='wheeled'||spec.mode==='bike').map(spec=>spec.id))('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
   const spec=SPECS.find(s=>s.id===id);expect(spec).toBeDefined();
   const profile=getDefaultProfile(id);expect(profile).toBeDefined();
+  expect(spec!.brakeDrift).toBe(true);expect(profile!.control.brakeDeceleration).toBe(spec!.brakeDeceleration);expect(profile!.control.brakeDamping).toBe(spec!.brakeDamping);
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(s=>({instanceId:s.id,assetId:s.id,spec:s,object:new Group()}))}});
   try{
    const runtime=world.training!,sim=runtime.simulation;
@@ -23,7 +24,8 @@ describe('training workspace configuration',()=>{
     expect(runtime.enter(id)).toBe(true);applyControlProfile(runtime,profile!);
     const origin=sim.vehicle!.position.clone();world.step({training:{...training.emptyInput(),forward:1}},180);
     expect(sim.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
-    const speed=sim.vehicle!.speed;world.step({training:{...training.emptyInput(),forward:-1}},30);
+    // Space remains a brake at parking speed; S intentionally becomes reverse below 1 m/s.
+    const speed=sim.vehicle!.speed;world.step({training:{...training.emptyInput(),brake:true}},30);
     expect(Math.abs(sim.vehicle!.speed)).toBeLessThan(speed);
     expect(sim.vehicle!.grounded).toBe(true);
     expect(runtime.environment.safeSpawn(sim.vehicle!.position,training.vehicleBody(spec!),sim.vehicle!.rotation)).not.toBeNull();

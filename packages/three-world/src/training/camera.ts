@@ -11,8 +11,16 @@ import type { EnvironmentQueries } from './environment/queries';
 interface CameraPresentationPose {
   position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
   up:T.Vector3; fov:number; near:number;
+  head:T.Vector3; headSource:'posture-eye'|'driver-eye'|'seat-eye-fallback'; simulationSeconds:number;
+  offsets:Pick<CameraTuning,'targetHeightOffset'|'horizontalOffset'>;
 }
 export class FollowCamera {
+  private displayedHead:{position:T.Vector3;source:CameraPresentationPose['headSource'];simulationSeconds:number;offsets:CameraPresentationPose['offsets']}|undefined;
+  /** Same interpolation sample as the displayed camera, copied for on-demand diagnostics. */
+  get framingSample(){
+    const displayed=this.displayedHead,pose=this.currentPresentation;
+    return displayed?{...displayed,position:displayed.position.clone(),offsets:{...displayed.offsets}}:pose?{position:pose.head.clone(),source:pose.headSource,simulationSeconds:pose.simulationSeconds,offsets:{...pose.offsets}}:undefined;
+  }
   private displayedTarget:T.Vector3|undefined;
   get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
   private previousPresentation:CameraPresentationPose|undefined;
@@ -20,6 +28,7 @@ export class FollowCamera {
   private presentationHumanoid:Simulation['humanoid']|undefined;
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
+    this.displayedHead=undefined;
     this.displayedTarget=undefined;
     const pose=this.currentPresentation;
     if(pose){
@@ -34,10 +43,18 @@ export class FollowCamera {
   }
   capturePresentationPose(sim:Simulation,snap=false):void {
     this.presentationHumanoid=sim.vehicle?undefined:sim.humanoid;
+    const head=new T.Vector3();let headSource:CameraPresentationPose['headSource']='posture-eye';
+    if(sim.vehicle){
+      if(this.eyePosition?.(head))headSource='driver-eye';
+      else {headSource='seat-eye-fallback';head.set(...sim.vehicle.spec.seat).add(new T.Vector3(0,sim.vehicle.spec.characterPose==='stand'?1.55:.72,.08)).applyQuaternion(sim.vehicle.rotation).add(sim.vehicle.position);}
+    }else head.copy(sim.player.position).add(new T.Vector3(0,sim.humanoid?(sim.humanoid.swimming?1.35:Math.max(.25,sim.humanoid.capsuleHeight-.12)):1.5,0));
+    this.displayedHead=undefined;
     this.currentPresentation={
       position:this.camera.position.clone(), rotation:this.camera.quaternion.clone(),
       target:this.target.clone(), subject:(sim.vehicle?.position??sim.player.position).clone(),
       up:this.camera.up.clone(), fov:this.camera.fov, near:this.camera.near,
+      head,headSource,simulationSeconds:sim.time,
+      offsets:{targetHeightOffset:this.tuning.targetHeightOffset,horizontalOffset:this.tuning.horizontalOffset},
     };
     if(snap||!this.previousPresentation)this.previousPresentation=this.currentPresentation;
   }
@@ -50,6 +67,7 @@ export class FollowCamera {
     const target=a.target.clone().lerp(b.target,alpha).add(offset);
     this.displayedTarget=target;
     const eye=a.position.clone().lerp(b.position,alpha).add(offset);
+    this.displayedHead={position:a.head.clone().lerp(b.head,alpha).add(offset),source:b.headSource,simulationSeconds:a.simulationSeconds+(b.simulationSeconds-a.simulationSeconds)*alpha,offsets:{targetHeightOffset:a.offsets.targetHeightOffset+(b.offsets.targetHeightOffset-a.offsets.targetHeightOffset)*alpha,horizontalOffset:a.offsets.horizontalOffset+(b.offsets.horizontalOffset-a.offsets.horizontalOffset)*alpha}};
     let resolved=eye;
     const humanoid=this.presentationHumanoid;
     if(this.tuning.collisionEnabled&&this.mode!==1&&alpha!==1){
