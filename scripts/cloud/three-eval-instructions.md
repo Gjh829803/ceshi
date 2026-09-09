@@ -5,9 +5,12 @@ environment forms and uniform basic lighting. Add identifying color only to a fe
 key landmarks or interaction targets. Omit decorative detail, clothing additions,
 accessories, atmospheric effects, reflections and elaborate shadows.
 
-Read creator_describe_environment and the getting-started schema, then choose the
-example for the requested subject. Use these public guides and examples to write
-a runnable index.html and local JS/TS. Read additional topics or SDK implementation
+Choose scene content and capabilities from the request and reference. SDK guides
+explain available capabilities, configuration, binding and actual preconditions;
+examples illustrate usage, not required scene templates or object categories.
+Use creator_describe_environment and the getting-started schema to discover the
+runtime and permitted assets. Read a matching example when needed to clarify
+binding, then write a runnable index.html and local JS/TS. Read additional topics or SDK implementation
 to resolve a concrete missing contract, explain an observed failure, or implement
 a required runtime change. Native Three geometry is freely editable.
 Use assets_search/assets_describe for reusable models and motions; project.json
@@ -23,10 +26,13 @@ All humans, including NPCs and riders, must use the
 permitted preset (currently humanoid.source-101), with its visible model, rig and
 motions kept together. For the SDK profile use createHumanoidWorld. Each person
 keeps the same instance through walking, mounting, riding, dismounting and reset.
-Never hide that person or draw a replacement rider as part of a vehicle. Missing
-vehicle geometry permits building only the vehicle, not redrawing its human. In
-the SDK profile, read creator_get_examples with topic custom-vehicle for that composition. Reuse other
-supplied nonhuman subjects when suitable; otherwise, if policy allows, draw simple Mesh/Group geometry
+Never hide that person or draw a replacement rider as part of a vehicle. Vehicle
+geometry is authored separately from its human. Do not load supplied or
+external vehicle models. For SDK cars and motorcycles, select a model-free
+training.createRoadVehicleSpec configuration and draw geometry to its dimensions;
+custom-vehicle and vehicle-camera illustrate binding. Other vehicle modes use
+their actual SDK contracts. Reuse supplied creatures when suitable; otherwise,
+if policy allows, draw simple Mesh/Group geometry
 and bind it through addCharacter({object,body,movement}), registerMovement, or a
 TrainingVehicleInstance {object,spec}. The raw profile uses normal Three and
 implements its own movement, physics and observation.
@@ -47,11 +53,13 @@ or world_inspect. For Training vehicle input, use the active family's inputGuide
 in the world description: boost and axes have different meanings for cars,
 aircraft, spacecraft and underwater vehicles. Use emptyTrainingInput() and change
 only the relevant channels. After editing sdk/, read its current definitions and
-rebuilt state instead of assuming Host defaults. A slide needs the current
+rebuilt state instead of assuming Host defaults. Use abilities only when needed
+by the task; their prerequisites apply when selected. A slide needs the current
 controller's actual minimum speed, grounded empty hands, run-up and body clearance;
 a tunnel is optional. Standing exits need headroom.
 Climbing needs a declared climb surface attached to a real collider. Swimming needs
-a declared water volume and pool floor/shore collision at appropriate depths.
+a declared water volume with the actual boundary/support geometry appropriate to
+the authored environment; eligibility follows measured depth and the controller.
 Pickup and sitting require reachable interaction anchors. Show the current target
 and explain failed conditions. Use world snapshots and operation completion to
 verify actions. Never infer successful movement from an accepted request alone.
@@ -61,15 +69,14 @@ current state during testing, use world_preview with view current; opening pause
 and resets the world. On a failed tool operation, use its errorDetails code,
 SDK suggestedAction and host phase/candidate identity to choose the repair.
 Read the same failed operation for its saved diagnosis. Use real
-inputs and world_inspect to verify the requested core functions: movement,
-applicable actions, collisions, camera and reset. Build enough connected space and
-real scene conditions for those functions. For riding tasks, include walking,
-entering, driving, exiting, walking again and reset. Check characterContinuity in
-world_inspect and world_playtest feedback; inspect opening, mounted, dismounted
-and reset frames for the same visible person, no extra rider and seat/hand/foot
-fit. This structural diagnostic is advisory and cannot certify preset provenance
-or identify an extra human mesh by shape. Report unsupported poses instead of
-substituting a primitive rider. Repair observed functional problems.
+inputs and world_inspect to verify the task's requested outcomes. Author the
+connections and physical conditions needed for those outcomes, without adding
+unrequested demonstration areas or abilities. Production does not require a
+separate vehicle regression, fixed boarding sequence or all-view/reset checklist.
+Use characterContinuity and relevant frames when a requested outcome or observed
+problem calls for them. This structural diagnostic is advisory and cannot certify
+preset provenance or identify an extra human mesh by shape. Report unsupported
+poses instead of substituting a primitive rider. Repair observed functional problems.
 After the final source change, complete an input episode covering the core actions
 and their outcomes. Choose its length by functional coverage; omit world_playtest
 durationSeconds to execute the full plan. Use a shorter durationSeconds for a

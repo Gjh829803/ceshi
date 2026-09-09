@@ -10,7 +10,7 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
     scope:'ordinary-sdk-follow',runtimeAuthority,
     source:[`${root}/contracts.ts`,`${root}/world.ts`],
     authoring:'Use setCameraFollow({view}) for the actual subject and rig; inspect current source and world.snapshot().camera. Do not copy humanoid eye heights into an independent subject.',
-    verify:'Compare real world_preview({view:"current"}) pixels and real input playtest across enabled perspectives and reset. world_preview({view:"opening"}) resets to the opening.',
+    verify:'Use current-view pixels when needed to judge requested camera behavior or diagnose a problem. world_preview({view:"opening"}) resets to the opening; no fixed perspective/reset checklist is required.',
   };
   return {
     scope:'training-only',runtimeAuthority,
@@ -29,7 +29,7 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
       currentView:{tool:'world_preview',arguments:{view:'current'}},
       read:'cameraObservation: cameraOverrides (explicit), cameraSettings, framing, alongside pixels.',
       opening:'opening resets, unlike current.',
-      playtest:'Playtest walking/enter/mounted/exit, every enabled view and reset.',
+      playtest:'Cover requested camera behavior in the task self-check; inspect other views or lifecycle transitions only when relevant to an observed problem.',
     },
     inspect:{
       tool:'world_inspect',arguments:{sections:['description']},

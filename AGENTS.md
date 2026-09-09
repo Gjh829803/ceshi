@@ -35,6 +35,12 @@ turn optional observation or development regression into mandatory generation st
 
 ## Authoring and capability layers
 
+Describe SDK capabilities, configuration, binding contracts and actual execution
+conditions. The Agent decides which capabilities to use from the request and
+reference. Do not enumerate scenes or prescribe object categories, compositions
+or optional features. Examples illustrate usage, not required scene templates.
+
+
 Creator worlds use white/light-gray primitive environment forms, uniform basic
 lighting and a few identifying colors for key landmarks or interaction targets.
 Preserve broad reference composition, scale, spatial relationships and real

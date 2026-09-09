@@ -43,4 +43,4 @@ for(const dx of [-.22,.22])for(const dz of [-.14,.14]){
     color:'#eeeeee',rigidGroup:{id:'chair-body',massKg:8}});
   chairColliders.push(id);
 }
-// Ground, walls and traversal structures omit rigidGroup and stay fixed.
+// This example keeps ground/walls fixed; choose dynamic objects per scene and gameplay.

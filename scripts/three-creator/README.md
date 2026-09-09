@@ -81,11 +81,13 @@ handling before drawing; match physical dimensions, wheel layout and seat anchor
 explicit requirement. See the [SDK guide](../../packages/three-world/README.md)
 for exact calls and action cards.
 
-For loose tables, chairs and obstacles that should move on impact, configure
-`EnvironmentBox.rigidGroup: {id, massKg}` on all parts of each object, using one
-group ID and the same total mass in kilograms. Include real support geometry;
-floors, buildings and fixed structures stay ungrouped. Read
-`creator_get_examples({topic:'character-actions'})` for movable furniture,
+The Agent decides which objects should be dynamic from the scene and gameplay;
+there is no prescribed list of object categories. For `map.boxes` that should
+respond to gravity, forces and collisions, configure
+`EnvironmentBox.rigidGroup: {id, massKg}` on every part of the object, using one
+group ID and the same total mass in kilograms. Omit the field for boxes that
+should stay fixed. Supply physical support when the object should rest in place.
+`creator_get_examples({topic:'character-actions'})` uses tables and a chair to illustrate
 seat/pickup interactions, visual pose synchronization and reset. The SDK owns
 the dynamic bodies; scene code reads `propBoxPose(id)` from the current Training
 environment in `onVisualUpdate` and copies world poses to the visuals.

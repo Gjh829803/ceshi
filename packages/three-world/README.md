@@ -312,10 +312,12 @@ approach within 0.9 m and its vertical tolerance before requesting pickup/sit.
 These commands do not navigate. Render the movable object from the shared
 interaction state so it follows the hand and does not remain duplicated.
 
-**Movable furniture** — for loose tables, chairs or obstacles that should be pushed
-or knocked over, assign each part an `EnvironmentBox.rigidGroup: {id, massKg}`.
-Use one group ID and the same total mass for the whole object, with real legs or
-other support. Fixed structures omit the field. Read current world-space part
+**Dynamic objects** — the Agent decides which objects should respond to gravity,
+forces and collisions from the scene and gameplay requirements; there is no fixed
+list by object name or category. For those `map.boxes`, assign each part an
+`EnvironmentBox.rigidGroup: {id, massKg}`, using one group ID and the same total
+mass for the whole object. Omit the field for boxes that should remain fixed.
+Read current world-space part
 poses from `world.training.simulation.environment.propBoxPose(id)` in
 `onVisualUpdate`; `world.reset()` restores the furniture too. The
 `character-actions` example includes complete movable tables and a chair, their
@@ -1178,10 +1180,11 @@ in the existing Rapier world, with gravity, CCD, friction and angular motion.
 `propBoxPose(id)` returns each physical part's current world pose for presentation;
 `resetProps()` restores the original group poses and clears velocities.
 
-Use this configuration for authored loose furniture and obstacles whose requested
-behavior includes pushing or tipping. Give them real support geometry and keep
-the total group mass identical on every part; a floating tabletop will fall.
-Leave floors, buildings and fixed course structures ungrouped.
+The Agent chooses which objects need this behavior from the scene and gameplay,
+not from a prescribed category list. Set `rigidGroup` when a box assembly should
+respond to gravity, forces and collisions; omit it when the assembly should stay
+fixed. If it should rest in place, provide physical support; without support it
+falls. Keep the total group mass identical on every part.
 `creator_get_examples({topic:'character-actions'})` supplies a complete example
 in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
 callback reads the current `world.training.simulation.environment` after every
@@ -1191,8 +1194,8 @@ Use `world.reset()` for a complete scene reset, including characters and items;
 observation callbacks only copy poses and never step or reset physics.
 
 The playground groups chairs and tables, and makes loose boards and freestanding
-markers movable. Building and traversal-course structures remain fixed. Seat
-anchors follow the group's pose; moving, tilted or displaced occupied seats cancel
+markers movable. Its building and traversal-course structures remain fixed;
+these are choices in that example, not rules for other scenes. Seat anchors follow the group's pose; moving, tilted or displaced occupied seats cancel
 seating. Pickup objects use independent dynamic bodies while unheld, so removing
 their table support lets them fall. Their existing rotation lock is retained for
 the authored carrying animation. This supports moving and tipping whole props;
