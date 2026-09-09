@@ -60,3 +60,21 @@ describe('vehicle-camera example discovery', () => {
   } finally { await service.close(); await rm(root, {recursive: true, force: true}); }
  }, 30000);
 });
+
+ it('discovers drift in the training guide and compiles the complete custom vehicle example',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'vehicle-drift-discovery-'));
+  const service=new ThreeCreatorTools(root,'three-sdk');
+  try{
+   const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'training',sections:['guide','training']}) as unknown as {sdkGuide:string;trainingSourceContracts:Record<string,string>};
+   expect(schema.sdkGuide).toContain('brakeDrift: true');
+   expect(schema.sdkGuide).toContain("topic: 'custom-vehicle'");
+   expect(schema.sdkGuide).toContain('brakeDeceleration');
+   expect(schema.trainingSourceContracts['training/config.ts']).toContain('brakeDrift?: boolean');
+   const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'custom-vehicle'}) as {files:Record<string,string>};
+   expect(example.files['main.ts']).toContain('brakeDrift:true');
+   expect(example.files['main.ts']).toContain('brakeDamping:.5');
+   for(const [name,source]of Object.entries(example.files))await writeFile(path.join(root,name),source);
+   const candidate=await service.compiler.prepare();
+   expect(candidate.worldBuildHash).toBeTruthy();
+  }finally{await service.close();await rm(root,{recursive:true,force:true});}
+ });

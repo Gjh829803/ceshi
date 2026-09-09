@@ -1,7 +1,7 @@
 import type {VehicleSpec} from './config';
 export const ATV_SPEC:VehicleSpec={
  id:'atv',name:'全地形车',en:'QUAD ATV',mode:'wheeled',archetype:'atv',kernel:'K01',color:'#bc3543',
- spawn:[-40,0,45],yaw:0,speed:110/3.6,maxSpeed:125/3.6,reverseSpeed:6,accel:7.5,grip:8,steer:.42,
+ spawn:[-212,0,64],yaw:0,speed:110/3.6,maxSpeed:125/3.6,reverseSpeed:6,accel:7.5,grip:8,steer:.42,
  coastDeceleration:1.25,brakeDeceleration:10,steeringResponse:7,steeringReturn:9,throttleResponse:5,pitchResponse:8,rollResponse:7,
  radius:1.48,seat:[0,1,-.15],characterPose:'atv',camera:6.2,wheelbaseMeters:1.6,rearAxleZMeters:-.8,
  envelope:{kind:'box',halfExtents:[.91,.71,1.25],offset:[0,.71,0]},

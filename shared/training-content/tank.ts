@@ -3,7 +3,7 @@ import type {VehicleSpec} from './config';
 /** Enlarged training tank. +Z nose. Metres, seconds, m/s, m/s², rad/s. */
 export const TANK_SPEC:VehicleSpec={
   id:'tank',name:'履带坦克',en:'TANK',mode:'tank',archetype:'tank',kernel:'K16',color:'#7c8061',
-  spawn:[-70,0,45],yaw:0,speed:12,accel:3,grip:10,steer:.75,
+  spawn:[-240,0,64],yaw:0,speed:12,accel:3,grip:10,steer:.75,
   maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,
   steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5,
   radius:5.4,seat:[0,1.45,2.1],characterPose:'tank',camera:14,

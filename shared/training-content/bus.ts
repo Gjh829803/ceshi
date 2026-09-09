@@ -3,7 +3,7 @@ import type {VehicleSpec} from './config';
 /** Reference-inspired 5.8 m minibus; +Z forward, metres and seconds. */
 export const BUS_SPEC:VehicleSpec={
   id:'bus',name:'复古小巴',en:'MINIBUS',mode:'bus',archetype:'bus',kernel:'K15',color:'#83c7bb',
-  spawn:[-54,0,45],yaw:0,speed:22,accel:2.1,grip:12,steer:.52,
+  spawn:[-226,0,64],yaw:0,speed:22,accel:2.1,grip:12,steer:.52,
   maxSpeed:22,reverseSpeed:2.5,coastDeceleration:.55,brakeDeceleration:3.8,brakeDamping:0,
   steeringResponse:2.5,steeringReturn:3.2,throttleResponse:1.6,pitchResponse:3,rollResponse:2.5,
   wheelbaseMeters:3.3,rearAxleZMeters:-1.45,

@@ -7,6 +7,8 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
   spawn: [number, number, number]; yaw: number; speed: number; accel: number; grip: number;
   steer: number; radius: number; seat: [number, number, number]; camera: number; hint: string; characterPose?: 'unicycle' | 'atv' | 'stand' | 'ride' | 'sled' | 'ski' | 'tank' | 'sub' | 'kayak';
   archetype: VehicleArchetype; visualVariant?: 'bubble-sub' | 'canoe' | 'utility' | 'touring' | 'rescue' | 'patrol' | 'trainer' | 'survey';
+  /** Opt-in progressive brake-turn slip for cars and motorcycles; recovery follows lateral velocity. */
+  brakeDrift?: boolean;
   envelope: CollisionEnvelope;
   /** Bicycle-model geometry in metres, measured from the authored visual root. */
   wheelbaseMeters?: number;

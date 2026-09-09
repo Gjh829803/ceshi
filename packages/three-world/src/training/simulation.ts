@@ -195,24 +195,31 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
     const max=i.boost?s.maxSpeed:s.speed,water=wetHeight(v.position.x,v.position.z);
     const driveDisabled=water&&mode!=='boat'&&mode!=='hover';
     const braking=i.forward<0&&speed>1;
-    const acceleration=braking?-s.brakeDeceleration:i.forward*s.accel;
+    // Slip itself carries the recovery: no second integrator or hidden timer.
+    const driftSpeed=clamp((speed-2.5)/3.5,0,1);
+    const driftEnabled=road&&s.brakeDrift===true;
+    const initiatingDrift=driftEnabled&&(braking||i.brake)&&Math.abs(v.steering)>.12;
+    const existingSlip=clamp((Math.abs(side)/Math.max(Math.abs(speed),1)-.2)/.35,0,1);
+    const drift=driftEnabled?driftSpeed*(initiatingDrift?1:existingSlip*.85):0;
+    const lateralDrift=driftEnabled?driftSpeed*(initiatingDrift?1:existingSlip*.9):0;
+    const acceleration=braking?-s.brakeDeceleration*(1-drift*.3):i.forward*s.accel;
     speed+=driveDisabled?0:acceleration*dt;
     if(Math.abs(i.forward)<.01) speed=coastSpeed(speed,s.coastDeceleration,dt);
-    if(i.brake) speed*=Math.exp(-s.brakeDamping*dt);
+    if(i.brake) speed*=Math.exp(-s.brakeDamping*(1-drift*.3)*dt);
     speed=clamp(speed,-s.reverseSpeed,max);
     if(driveDisabled) speed*=Math.exp(-2.5*dt);
     const yawRate=road?roadYawRate(speed,s.steer):s.steer*(mode==='boat'?Math.min(Math.abs(speed)/4,1)*Math.sign(speed):1);
-    v.yaw-=v.steering*yawRate*dt*(i.brake&&mode==='wheeled'?1.25:1);
+    v.yaw-=v.steering*yawRate*dt*(driftEnabled?1+drift*.35:i.brake&&mode==='wheeled'?1.25:1);
     if(mode==='hover') side-=i.roll*s.accel*dt;
     const newF=scratch.set(Math.sin(v.yaw),0,Math.cos(v.yaw));
-    if(mode==='wheeled'||mode==='slide') {
+    if(mode==='wheeled'||mode==='slide'||(mode==='bike'&&drift>0)) {
       // Integrate drive along the old forward axis, then remove lateral slip
       // relative to the new heading. Repeatedly scaling the WHOLE velocity by
       // its forward projection caused low-grip turns to bleed speed every tick.
       v.velocity.x=forward.x*speed+right.x*side;
       v.velocity.z=forward.z*speed+right.z*side;
       const sideAfterTurn=v.velocity.x*Math.cos(v.yaw)-v.velocity.z*Math.sin(v.yaw);
-      const removed=sideAfterTurn*(1-Math.exp(-s.grip*(i.brake&&mode==='wheeled'?.18:1)*dt));
+      const removed=sideAfterTurn*(1-Math.exp(-s.grip*(driftEnabled?1-lateralDrift*(i.brake?.98:.96):i.brake&&mode==='wheeled'?.18:1)*dt));
       v.velocity.x-=Math.cos(v.yaw)*removed;v.velocity.z+=Math.sin(v.yaw)*removed;
     } else {
       side*=Math.exp(-s.grip*dt);
