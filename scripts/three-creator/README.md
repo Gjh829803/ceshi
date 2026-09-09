@@ -235,6 +235,14 @@ states this requirement independently of the project's editable SDK source.
 composition with only the preset human asset selected. It remains usable when
 custom external asset files are disabled: procedural Three geometry is allowed.
 
+For seated vehicles, request `creator_get_authoring_schema({topic:'mounted-interaction'})`
+and follow the SDK's [vehicle seat fit guidance](../../packages/three-world/README.md#vehicle-seat-fit).
+`spec.seat` locates the pelvis, not the cushion surface. The custom motorcycle
+example derives it from the cushion dimensions and a Source101 pose clearance.
+These reference values require checking against the authored seat and mounted pose;
+the SDK does not automatically fit arbitrary seats. First-person eye height follows
+the actual head, so correct the rider/seat fit before adjusting camera settings.
+
 Inspect/playtest `characterContinuity` feedback observes the Training character's
 skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate
 changes even if the author restores the person before the last frame. It is

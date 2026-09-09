@@ -7,6 +7,7 @@ import { mountInspector } from './platform/inspector';
 import { SPECS } from './config';
 import presentationConfig from './presentation.json';
 import { getMap,MAPS } from './environment/maps';
+import { GRAND_PRIX } from './environment/grand-prix';
 import { applyControlProfile, applyCameraProfile, readEffectiveProfile } from './platform/profile-runtime';
 import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfile } from './platform/profiles';
 import { buildVehicle } from './models';
@@ -223,9 +224,12 @@ function drawMap(){
   for(let x=16;x<w;x+=32){ctx.beginPath();ctx.moveTo(x,14);ctx.lineTo(x,h-14);ctx.stroke();}
   for(let y=16;y<h;y+=32){ctx.beginPath();ctx.moveTo(14,y);ctx.lineTo(w-14,y);ctx.stroke();}
   for(const water of map.water){const [x,y]=mp(water.min[0],water.max[2]);ctx.fillStyle='#267283';ctx.fillRect(x,y,(water.max[0]-water.min[0])*scale,(water.max[2]-water.min[2])*scale);}
-  for(const box of map.boxes){if(box.collision===false||box.size[0]>150||box.size[2]>150)continue;const [x,y]=mp(box.position[0],box.position[2]);ctx.fillStyle=box.position[1]<-1?'#719f9d55':'#a7bfc288';ctx.fillRect(x-box.size[0]*scale/2,y-box.size[2]*scale/2,Math.max(1,box.size[0]*scale),Math.max(1,box.size[2]*scale));}
+  if(map.id==='grand-prix'){
+    ctx.beginPath();GRAND_PRIX.samples.forEach(({position},i)=>{const [x,y]=mp(position.x,position.z);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});ctx.closePath();
+    ctx.strokeStyle='#c7d0c8';ctx.lineWidth=Math.max(3,GRAND_PRIX.roadWidthMeters*scale);ctx.lineJoin='round';ctx.stroke();
+  }else for(const box of map.boxes){if(box.collision===false||box.size[0]>150||box.size[2]>150)continue;const [x,y]=mp(box.position[0],box.position[2]);ctx.fillStyle=box.position[1]<-1?'#719f9d55':'#a7bfc288';ctx.fillRect(x-box.size[0]*scale/2,y-box.size[2]*scale/2,Math.max(1,box.size[0]*scale),Math.max(1,box.size[2]*scale));}
   ctx.font='bold 15px "Segoe UI"';
-  for(const region of map.regions){const [x,y]=mp(region.center[0],region.center[2]);ctx.strokeStyle=region.color;ctx.fillStyle=region.color;ctx.lineWidth=1;ctx.strokeRect(x-region.size[0]*scale/2,y-region.size[1]*scale/2,region.size[0]*scale,region.size[1]*scale);ctx.fillText(region.name.split(' / ')[0]!,x+3,y-4);}
+  for(const region of map.regions){const [x,y]=mp(region.center[0],region.center[2]);ctx.strokeStyle=region.color;ctx.fillStyle=region.color;ctx.lineWidth=1;if(map.id!=='grand-prix')ctx.strokeRect(x-region.size[0]*scale/2,y-region.size[1]*scale/2,region.size[0]*scale,region.size[1]*scale);ctx.fillText(region.name.split(' / ')[0]!,x+3,y-4);}
   sim.vehicles.forEach((v,n)=>{if(!sim.available(v))return;const [x,y]=mp(v.position.x,v.position.z);ctx.fillStyle=v.spec.color;ctx.beginPath();ctx.arc(x,y,sim.active===n?5:3,0,Math.PI*2);ctx.fill();});
   const p=sim.vehicle?.position??sim.player.position,[x,y]=mp(p.x,p.z),yaw=sim.vehicle?.yaw??sim.player.yaw;
   ctx.save();ctx.translate(x,y);ctx.rotate(yaw);ctx.fillStyle='#f7fbd9';ctx.shadowColor='#fff';ctx.shadowBlur=7;ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(-5,6);ctx.lineTo(0,3);ctx.lineTo(5,6);ctx.closePath();ctx.fill();ctx.restore();
@@ -283,7 +287,7 @@ sdk.onUpdate(({deltaSeconds})=>{
 sdk.onReset(()=>{clearInput();humanDemo=null;lastActive=-99;});
 await sdk.start();
 el('loading').classList.add('hidden');sdkPresentation.focus();
-toast('Whitebox SDK · 101 骨 / 48 动作 / 19 载具 / 3 地图');
+toast(`Whitebox SDK · 101 骨 / 48 动作 / ${SPECS.length} 载具 / ${MAPS.length} 地图`);
 disposeThumbnails=renderAssetThumbnails([{id:'person',object:character.root},...visuals.map((v,n)=>({id:SPECS[n]!.id,object:v.root}))],(id,url)=>library.setThumbnail(id,url));
 // Register DOM state with Presentation; model input continues to capture only the world canvas.
 const status=document.createElement('span');status.style.cssText='position:absolute;right:12px;bottom:12px;color:#fff;background:#20343ddd;padding:6px;font:12px sans-serif';

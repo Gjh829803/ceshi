@@ -1,5 +1,6 @@
 import * as T from 'three';
-import type { VehicleSpec } from './config';
+import { SPECS, type VehicleSpec } from './config';
+import { ROAD_CUSHIONS } from './road-seating';
 import { buildCreatureVisual, type CreatureVisual } from './creatures/visual';
 export const material=(color:string|number,metalness=.05,roughness=.65)=>new T.MeshStandardMaterial({color,metalness,roughness});
 const dark=material('#25313a',.3),rubber=material('#172128',0,.9),chrome=material('#bfced5',.6,.27),glass=new T.MeshPhysicalMaterial({color:'#9adddf',transparent:true,opacity:.25,roughness:.1,metalness:.3,side:T.DoubleSide});
@@ -32,13 +33,90 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     root.add(pivot);wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius:r});return pivot;
   }
   function pilotSeat(y:number,z=0){box(root,.72,.13,.75,0,y,z,dark);box(root,.74,.72,.13,0,y+.35,z-.38,dark);}
+  function roadSeat(){const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';if(s.mode!=='bike')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';}
   function thruster(x:number,y:number,z:number){const glow=new T.Mesh(new T.ConeGeometry(.18,.8,12),new T.MeshBasicMaterial({color:'#95f9ff',transparent:true,opacity:.65}));glow.rotation.x=-Math.PI/2;glow.position.set(x,y,z);root.add(glow);engine.push(glow);}
   const archetype=s.archetype;
-  if(archetype==='rover'||archetype==='racer') {
+  if(s.id==='supercar') {
+    // Concave plan profiles preserve a narrow cockpit between broad wheel
+    // shoulders. All bodywork and exhausts fit the existing collision envelope.
+    type Point=readonly[number,number];
+    function panel(name:string,outline:readonly Point[],bottom:number,top:number|((z:number)=>number),mat:T.Material){
+      const points=outline.map(([x,z])=>new T.Vector2(x,z)),faces=T.ShapeUtils.triangulateShape(points,[]),vertices:number[]=[];
+      const lower=outline.map(([x,z])=>new T.Vector3(x,bottom,z)),upper=outline.map(([x,z])=>new T.Vector3(x,typeof top==='number'?top:top(z),z));
+      const triangle=(a:T.Vector3,b:T.Vector3,c:T.Vector3)=>vertices.push(...a.toArray(),...b.toArray(),...c.toArray());
+      // ShapeUtils emits counterclockwise XY faces; the XZ top needs the reverse.
+      for(const [a,b,c] of faces){triangle(upper[c!]!,upper[b!]!,upper[a!]!);triangle(lower[a!]!,lower[b!]!,lower[c!]!);}
+      const ccw=!T.ShapeUtils.isClockWise(points);
+      for(let i=0;i<outline.length;i++){const next=(i+1)%outline.length,a=lower[i]!,b=lower[next]!,c=upper[next]!,d=upper[i]!;
+        if(ccw){triangle(a,c,b);triangle(a,d,c);}else{triangle(a,b,c);triangle(a,c,d);}}
+      const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
+      const mesh=new T.Mesh(geometry,mat);mesh.name=name;root.add(mesh);return mesh;
+    }
+    const edge:Point[]=[[.82,2.34],[1.10,1.72],[1.12,1.05],[1.02,.48],[.96,-.30],[1.04,-.90],[1.16,-1.48],[1.06,-2.12],[.86,-2.30]];
+    const outline:Point[]=[...edge,...edge.toReversed().map(([x,z]):Point=>[-x,z])];
+    panel('supercar-waisted-undertray',outline.map(([x,z]):Point=>[x+Math.sign(x)*.04,z]),.14,.24,dark);
+    panel('supercar-waisted-body',outline,.24,.46,paint);
+    panel('supercar-wedge-nose',[[-.82,2.34],[.82,2.34],[1.08,1.65],[.84,.66],[-.84,.66],[-1.08,1.65]],.46,z=>.83-(z-.66)*.18,paint);
+    // Flared rear haunches taper into the cockpit instead of forming box doors.
+    for(const side of [-1,1]){
+      const flank=edge.slice(2).map(([x,z]):Point=>[side*x,z]);
+      const inner=edge.slice(2).toReversed().map(([x,z]):Point=>[side*(x-.22),z]);
+      panel(`supercar-sculpted-flank-${side}`,[...flank,...inner],.43,z=>z<-.9?.86:.70,paint);
+      panel(`supercar-side-intake-${side}`,[[side*.98,-.28],[side*1.05,-.88],[side*1.10,-1.28],[side*.97,-1.20],[side*.87,-.45]],.47,.63,dark);
+      panel(`supercar-front-shoulder-${side}`,[[side*.84,.68],[side*1.12,1.05],[side*1.1,1.72],[side*.89,1.91],[side*.85,1.15]],.46,z=>.87-(z-.68)*.14,paint);
+    }
+    for(const x of [-1.02,1.02]) {
+      for(const z of [-1.5,1.5]){const axle=wheel(x,.37,z,.37,.32);if(z>0)steering.push(axle);}
+      box(root,.09,.32,.10,x*.74,1.01,.50,dark).rotation.x=-.5;
+    }
+    panel('supercar-rear-deck',[[-.65,-1.03],[.65,-1.03],[1.10,-1.50],[1.02,-2.12],[.86,-2.30],[-.86,-2.30],[-1.02,-2.12],[-1.10,-1.50]],.45,z=>.88+(z+1.03)*.10,paint);
+    panel('supercar-engine-cover',[[-.48,-1.10],[.48,-1.10],[.64,-1.92],[-.64,-1.92]],.86,.90,dark);
+    roadSeat();
+    box(root,1.52,.43,.035,0,1.00,.56,glass).rotation.x=-.48;
+    for(const x of [-.68,.68]){
+      box(root,.40,.055,.065,x,.56,2.22,accent).rotation.y=x<0?-.16:.16;
+      box(root,.55,.065,.05,x,.70,-2.20,new T.MeshBasicMaterial({color:'#9d352c'}));
+      tube([x,.75,-1.98],[x,1.12,-1.98],.04);
+    }
+    panel('supercar-rear-wing',[[-1.18,-2.27],[1.18,-2.27],[1.13,-1.86],[.69,-1.91],[-.69,-1.91],[-1.13,-1.86]],1.10,1.18,dark);
+    for(const side of [-1,1])box(root,.06,.25,.43,side*1.15,1.15,-2.06,dark);
+    box(root,1.95,.34,.10,0,.43,-2.18,dark);
+    // Four large open exhaust tips, with recessed dark bores and metal rims.
+    for(const x of [-.72,-.24,.24,.72]){
+      const exhaust=new T.Group();exhaust.name='supercar-exhaust';exhaust.position.set(x,.44,-2.16);root.add(exhaust);
+      const pipe=new T.Mesh(new T.CylinderGeometry(.16,.18,.55,16,1,true),chrome);pipe.rotation.x=Math.PI/2;exhaust.add(pipe);
+      const rim=new T.Mesh(new T.RingGeometry(.135,.18,20),chrome);rim.rotation.y=Math.PI;rim.position.z=-.276;exhaust.add(rim);
+      const bore=new T.Mesh(new T.CircleGeometry(.135,20),rubber);bore.rotation.y=Math.PI;bore.position.z=-.23;exhaust.add(bore);
+    }
+    // +Z is the nose: the column rises rearward from the dashboard toward the driver.
+    const columnBase=new T.Vector3(0,.57,.85),wheelCenter=new T.Vector3(0,.95,.19);
+    tube(columnBase.toArray(),wheelCenter.toArray(),.04);
+    const steeringWheel=new T.Mesh(new T.TorusGeometry(.23,.028,8,24),dark);steeringWheel.position.copy(wheelCenter);
+    steeringWheel.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),wheelCenter.clone().sub(columnBase).normalize());root.add(steeringWheel);
+  } else if(s.id==='kart') {
+    // A compact exposed chassis, four small tyres, side pods and rear engine.
+    box(root,1.4,.10,2.5,0,.16,0,dark);
+    for(const x of [-.63,.63]){
+      tube([x,.22,-1.14],[x,.22,1.12],.045);
+      box(root,.32,.22,1.03,x,.32,-.02,paint);
+    }
+    for(const x of [-.78,.78])for(const z of [-.89,.85]){const axle=wheel(x,.24,z,.24,.24);if(z>0)steering.push(axle);}
+    tube([-.78,.24,-.89],[.78,.24,-.89],.035);
+    box(root,1.86,.18,.26,0,.28,1.23,paint);
+    box(root,1.64,.12,.16,0,.25,-1.25,dark);
+    box(root,.66,.15,.7,0,.3,.75,paint).rotation.x=.14;
+    roadSeat();
+    box(root,.43,.34,.43,.46,.45,-.83,dark);
+    box(root,.30,.05,.36,.46,.64,-.83,chrome);
+    const columnBase=new T.Vector3(0,.24,.79),wheelCenter=new T.Vector3(0,.88,.30);
+    tube(columnBase.toArray(),wheelCenter.toArray(),.035);
+    const steeringWheel=new T.Mesh(new T.TorusGeometry(.22,.025,8,24),dark);steeringWheel.position.copy(wheelCenter);
+    steeringWheel.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),wheelCenter.clone().sub(columnBase).normalize());root.add(steeringWheel);
+  } else if(archetype==='rover'||archetype==='racer') {
     const sporty=archetype==='racer';const h=sporty?.5:.77;
     box(root,2,.25,3.8,0,.48+.125,0,paint);box(root,1.8,.25,1.3,0,h+.45,1.1,paint);
     for(const x of [-.91,.91])box(root,.18,.4,1.8,x,.88,0,paint);
-    box(root,1.9,.18,.8,0,h+.5,-1.25,paint);pilotSeat(s.seat[1]);
+    box(root,1.9,.18,.8,0,h+.5,-1.25,paint);roadSeat();
     box(root,2.2,.2,.18,0,.5,2,dark);box(root,2.2,.2,.18,0,.5,-2,dark);
     for(const x of [-1.1,1.1])for(const z of [-1.27,1.27]){const w=wheel(x,sporty?.39:.52,z,sporty?.39:.52,sporty?.32:.4);if(z>0)steering.push(w);}
     for(const x of [-.93,.93]){tube([x,h+.5,-.6],[x,h+1.4,-.45],.055);tube([x,h+1.4,-.45],[x,h+1.4,.7],.055);tube([x,h+1.4,.7],[x,h+.5,1],.055);}
@@ -49,7 +127,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   } else if(archetype==='bike') {
     wheel(0,.48,-1.1,.48,.28);steering.push(wheel(0,.48,1.1,.48,.28));
     tube([0,.5,-1.1],[0,1,.4],.13,paint);tube([0,.5,-1.1],[0,.55,.5],.09);tube([0,.55,.5],[0,.48,1.1],.07,chrome);
-    box(root,.52,.3,.9,0,.85,.2,paint);box(root,.54,.16,.95,0,.89,-.48,dark);
+    box(root,.52,.3,.9,0,.85,.2,paint);roadSeat();
     tube([-.25,.45,1.1],[-.25,1.3,.8],.05,chrome);tube([.25,.45,1.1],[.25,1.3,.8],.05,chrome);tube([-.6,1.35,.85],[.6,1.35,.85],.05);
     ball(root,0,1.2,.9,.23,.2,.16,new T.MeshBasicMaterial({color:'#ffefcd'}));
   } else if(archetype==='slide') {
@@ -96,4 +174,4 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   root.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
   return {root,seat,wheels,wheelRigs,rotors,steering,engine,label};
 }
-function SPECS_INDEX(s:VehicleSpec){const index=['rover','racer','bike','slide','hover','boat','sub','glider','plane','space','trail-rover','touring-bike','rescue-hover','patrol-boat','trainer-plane','survey-space'].indexOf(s.id);return index+1;}
+function SPECS_INDEX(s:VehicleSpec){return SPECS.findIndex(spec=>spec.id===s.id)+1;}

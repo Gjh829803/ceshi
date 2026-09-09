@@ -1,14 +1,71 @@
 import {describe,it,expect,vi} from 'vitest';
-import {Group,PerspectiveCamera,Scene} from 'three';
+import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
 import {createCapsuleDebug,createCollisionDebug} from '../../examples/three-creator/sdk-capabilities/humanoid/capsule-debug';
 import {createWorld,training} from '@worldkit/three';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../examples/three-creator/sdk-capabilities/platform/profiles';
 import {applyCameraProfile,applyControlProfile,readEffectiveProfile} from '../../examples/three-creator/sdk-capabilities/platform/profile-runtime';
 import {getMap} from '../../examples/three-creator/sdk-capabilities/environment/maps';
+import {GRAND_PRIX} from '../../examples/three-creator/sdk-capabilities/environment/grand-prix';
 import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
 import {defaultRegion,prepareCourse} from '../../examples/three-creator/sdk-capabilities/platform/scenarios';
 
 describe('training workspace configuration',()=>{
+ it.each(['supercar','kart'])('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
+  const spec=SPECS.find(s=>s.id===id);expect(spec).toBeDefined();
+  const profile=getDefaultProfile(id);expect(profile).toBeDefined();
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(s=>({instanceId:s.id,assetId:s.id,spec:s,object:new Group()}))}});
+  try{
+   const runtime=world.training!,sim=runtime.simulation;
+   for(const mapId of ['campus','grand-prix']){
+    const map=getMap(mapId);runtime.switchMap(map);
+    expect(runtime.approach(id)).toBe(true);expect(runtime.enter(id)).toBe(true);world.step({},40);expect(runtime.exit()).toBe(true);
+    prepareCourse(sim,map,mapId==='grand-prix'?'gp-straight':'staging',id);
+    expect(runtime.enter(id)).toBe(true);applyControlProfile(runtime,profile!);
+    const origin=sim.vehicle!.position.clone();world.step({training:{...training.emptyInput(),forward:1}},180);
+    expect(sim.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
+    const speed=sim.vehicle!.speed;world.step({training:{...training.emptyInput(),forward:-1}},30);
+    expect(Math.abs(sim.vehicle!.speed)).toBeLessThan(speed);
+    expect(sim.vehicle!.grounded).toBe(true);
+    expect(runtime.environment.safeSpawn(sim.vehicle!.position,training.vehicleBody(spec!),sim.vehicle!.rotation)).not.toBeNull();
+    const edited=structuredClone(profile!);edited.control.speed=17;applyControlProfile(runtime,edited);
+    expect(runtime.exportProfile().vehicles?.[id]?.speed).toBe(17);
+    await world.reset();expect(sim.vehicle).toBeFalsy();
+   }
+  }finally{world.dispose();}
+ });
+ it('prepares every circuit driving section on supported clear ground and drives past the old campus boundary',async()=>{
+  const map=getMap('grand-prix'),spec=SPECS.find(s=>s.id==='racer')!;
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'racer',assetId:'racer',spec,object:new Group()}]}});
+  try{
+   const runtime=world.training!,sim=runtime.simulation;
+   // Catch barriers cutting into the visual road, unsupported joins and pinched
+   // turns across the entire loop, including the width of the driven car.
+   for(const {position,tangent,normal} of GRAND_PRIX.samples){
+    const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.atan2(tangent.x,tangent.z));
+    for(const offset of [-7,0,7]){
+     const p=position.clone().addScaledVector(normal,offset);p.y=.03;
+     expect(runtime.environment.support(p)?.height).toBeCloseTo(0,2);
+     expect(runtime.environment.safeSpawn(p,training.vehicleBody(spec),rotation),`blocked road at ${p.toArray()}`).not.toBeNull();
+    }
+   }
+   for(const region of map.regions){
+    prepareCourse(sim,map,region.id,'racer');
+    const vehicle=sim.vehicles[0]!;
+    expect(runtime.environment.support(vehicle.position)?.height).toBeCloseTo(0,2);
+    expect(runtime.environment.safeSpawn(vehicle.position,training.vehicleBody(spec),vehicle.rotation)).not.toBeNull();
+   }
+   prepareCourse(sim,map,'gp-straight','racer');
+   expect(runtime.enter('racer')).toBe(true);
+   const before=sim.vehicle!.position.clone();
+   for(let i=0;i<300;i++)world.step({training:{forward:1,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},1);
+   expect(sim.vehicle!.position.z-before.z).toBeGreaterThan(40);
+   expect(sim.vehicle!.position.x).toBeLessThan(-500);
+   expect(Math.abs(sim.vehicle!.position.y)).toBeLessThan(.15);
+   await world.reset();expect(sim.vehicle).toBeFalsy();
+   runtime.switchMap(getMap('campus'));runtime.switchMap(map);
+   expect(runtime.environment.support(new Vector3(...map.playerSpawn))?.height).toBeCloseTo(0,2);
+  }finally{world.dispose();}
+ });
  it('shows the live collider pose and dimensions, hiding disabled colliders and releasing its scene object',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
   const scene=new Scene(),debug=createCapsuleDebug(scene);
@@ -88,9 +145,9 @@ describe('training workspace configuration',()=>{
    r.switchMap(getMap('campus'));world.step({},1);expect(r.followCamera.distance).toBe(10);
   }finally{world.dispose();}
  });
- it('authors all 19 campus spawns and approaches the actual patrol boat in water without moving it',async()=>{
+ it('authors every configured campus spawn and approaches the actual patrol boat in water without moving it',async()=>{
   const map=getMap('campus');
-  expect(map.spawns.filter(s=>s.vehicleId)).toHaveLength(19);
+  expect(map.spawns.filter(s=>s.vehicleId)).toHaveLength(SPECS.length);
   for(const spec of SPECS)expect(map.spawns.find(s=>s.vehicleId===spec.id)?.position).toEqual(spec.spawn);
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(spec=>({instanceId:spec.id,assetId:spec.id,spec,object:new Group()}))}});
   try{const r=world.training!,boat=r.simulation.vehicles.find(v=>v.spec.id==='patrol-boat')!;

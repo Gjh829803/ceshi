@@ -104,7 +104,10 @@ export class WorldEngine {
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
     if(this.training)this.keyboard.setTrainingMode(()=>!!this.training!.simulation.vehicle);
     this.inputRouter = new WorldInputRouter(this.keyboard, {
-      isRunning: () => this.running, canZoom: () => this.cameraRig.mode !== 'authored',
+      isRunning: () => this.running,
+      canZoom: () => this.training
+        ? this.training.cameraMode === 'follow' && this.training.followCamera.mode !== 1
+        : this.cameraRig.mode !== 'authored',
       wantsPointerLock: () => this.training?this.training.followCamera.mode!==0&&this.training.cameraMode==='follow':this.cameraRig.mode==='follow'&&this.cameraRig.perspective==='first-person',
       onPointer: input => { this.pointerInput = { activate: true,
         yawDeltaRadians: (this.pointerInput.yawDeltaRadians ?? 0) + (input.yawDeltaRadians ?? 0),

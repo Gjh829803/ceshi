@@ -36,16 +36,22 @@ for(const z of [-.85,.85]){
  part([.12,.65,.12],[0,.72,z]);
 }
 part([.4,.3,1.3],[0,.62,0]);
-part([.36,.1,.6],[0,.94,-.2],darkMaterial);
+const cushionCenter:[number,number,number]=[0,.94,-.2];
+const cushionSize:[number,number,number]=[.36,.1,.6];
+part(cushionSize,cushionCenter,darkMaterial);
 part([.32,.25,.4],[0,.94,.4]);
 part([.1,.35,.1],[0,1.08,.72]);
 part([.8,.08,.08],[0,1.23,.72],darkMaterial);
 part([.8,.06,.14],[0,.46,-.1],darkMaterial);
 
 // The seat is the rider pelvis anchor in vehicle-local metres. Positive Z is forward.
+// Source101's current ride pose needs clearance above this narrow cushion's top;
+// .165 m is a starting fit for this rig/pose, not automatic fitting for other models.
+const pelvisClearanceMeters=.165;
 // The standard vehicle pose uses the existing skeleton; this is not automatic hand/foot IK.
 const spec:TrainingVehicleSpec={id:'custom-bike',name:'自建摩托',en:'CUSTOM BIKE',mode:'bike',kernel:'K02',archetype:'bike',color:'#eeeeee',
- spawn:[0,0,0],yaw:0,speed:12,accel:6,grip:13,steer:1.12,radius:.85,seat:[0,.99,-.2],camera:6.8,
+ spawn:[0,0,0],yaw:0,speed:12,accel:6,grip:13,steer:1.12,radius:.85,characterPose:'ride',
+ seat:[cushionCenter[0],cushionCenter[1]+cushionSize[1]/2+pelvisClearanceMeters,cushionCenter[2]],camera:6.8,
  hint:'W/S 油门与制动 · A/D 转向 · Space 刹车 · F 上下车',
  envelope:{kind:'box',halfExtents:[.55,1.2,1.3],offset:[0,1.2,0]}};
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person',

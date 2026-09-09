@@ -225,6 +225,8 @@ as `TrainingVehicleInstance.object`, with a matching `spec` controller family,
 collision envelope and local pelvis seat position. `createHumanoidWorld` keeps
 its preset character and applies the supported mounted pose on that skeleton.
 This does not provide universal hand/foot IK; inspect contact and seat fit.
+See [vehicle seat fit](#vehicle-seat-fit), also returned by
+`creator_get_authoring_schema({topic:'mounted-interaction'})`, for calibration.
 The Creator requirement does not restrict the SDK's general custom-character API.
 
 During Creator self-check, exercise walk → enter → ride → exit → walk → reset.
@@ -764,6 +766,34 @@ composition, connected routes and the requested core movement/actions and their
 physical results. Choose the recording length by functional coverage.
 
 <!-- topic:mounted-interaction -->
+### Vehicle seat fit
+
+`TrainingVehicleSpec.seat` is the rider's **pelvis anchor** in vehicle-local metres
+(+Y up, +Z forward), not the seat mesh centre or cushion surface. The SDK aligns
+the actual preset pelvis to this anchor. Author the cushion and anchor together:
+for a horizontal box cushion, `seatY = cushionCenterY + cushionHeight / 2 + pelvisClearance`.
+Choose local X/Z to place the hips over the saddle or seat pan.
+
+For `humanoid.source-101`, these Playground fits provide starting references:
+
+| Mounted pose | Cushion geometry | Pelvis above cushion top |
+| --- | --- | --- |
+| Default `drive` (omit `characterPose`) | Car seat pan, 0.50 m deep | 0.125 m |
+| `characterPose: 'ride'` | Motorcycle saddle, 0.42 m wide | 0.165 m |
+
+These clearances depend on the current rig, pose and cushion geometry; they are
+not universal defaults or automatic seat fitting. A wider/deeper cushion can
+intersect the thighs even when the pelvis clears it. Changed rigs, poses or
+sloped seats need their own fit. The [custom motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
+shares its declared cushion centre/size with the pelvis calculation and uses the
+`ride` pose; it does not add another rider or provide automatic hand/foot IK.
+
+In the existing mounted self-check, inspect the pelvis and upper thighs against
+the cushion from the side, and check the seat back, hands, feet and head clearance.
+Check first-person visibility as well as enter/exit/reset transitions. First-person
+eye position follows the real head bone and its eye offset: correcting the pelvis
+also raises the eye. Do not conceal a sunken rider by independently lifting the camera.
+
 <!-- asset-info:training.horse,humanoid.source-101 -->
 ### Imported horse and rider anchors
 

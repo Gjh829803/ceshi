@@ -1,5 +1,7 @@
 import * as T from 'three';
 import { getMap } from './environment/maps';
+import { buildGrandPrixVisuals } from './environment/grand-prix-visuals';
+import { START_FINISH } from './environment/grand-prix';
 import type { MapDefinition } from './environment/types';
 export interface WorldVisual {root:T.Group;solids:T.Object3D[];sun:T.DirectionalLight;update:(time:number,target:T.Vector3,underwater:boolean)=>void;dispose:()=>void}
 /** The mesh transform is exactly the box transform consumed by environment queries. */
@@ -9,21 +11,30 @@ export function buildWorld(scene:T.Scene,map:MapDefinition=getMap('campus')):Wor
  const unit=new T.BoxGeometry(1,1,1);geometries.add(unit);
  const palette=new Map<string,T.MeshStandardMaterial>();
  function mat(color:string){let m=palette.get(color);if(!m){m=new T.MeshStandardMaterial({color,roughness:.88});palette.set(color,m);materials.add(m);}return m;}
- for(const descriptor of map.boxes){const mesh=new T.Mesh(unit,mat(descriptor.color??'#b8c8cc'));mesh.name=descriptor.id;mesh.position.set(...descriptor.position);mesh.scale.set(...descriptor.size);mesh.rotation.set(...(descriptor.rotation??[0,0,0]));mesh.receiveShadow=true;mesh.castShadow=descriptor.size[1]>.4;mesh.userData.environmentBoxId=descriptor.id;root.add(mesh);if(descriptor.collision!==false)solids.push(mesh);}
+ const circuit=map.id==='grand-prix'?buildGrandPrixVisuals(map):null;
+ if(circuit){root.add(circuit.root);solids.push(...circuit.solids);}
+ else for(const descriptor of map.boxes){const mesh=new T.Mesh(unit,mat(descriptor.color??'#b8c8cc'));mesh.name=descriptor.id;mesh.position.set(...descriptor.position);mesh.scale.set(...descriptor.size);mesh.rotation.set(...(descriptor.rotation??[0,0,0]));mesh.receiveShadow=true;mesh.castShadow=descriptor.size[1]>.4;mesh.userData.environmentBoxId=descriptor.id;root.add(mesh);if(descriptor.collision!==false)solids.push(mesh);}
  // Paint is deliberately non-colliding; batch by colour into instanced draws.
  const paint=new Map<string,{position:[number,number,number];size:[number,number,number];yaw:number}[]>();
  function stripe(x:number,z:number,w:number,d:number,color='#e5ece7',y=.035,yaw=0){const items=paint.get(color)??[];items.push({position:[x,y,z],size:[w,.025,d],yaw});paint.set(color,items);}
- function label(text:string,x:number,y:number,z:number,w:number,h:number,floor=true,color='#eef4f1'){
+ function label(text:string,x:number,y:number,z:number,w:number,h:number,floor=true,color='#eef4f1',yaw=0,textureWidth=1024){
   if(typeof document==='undefined')return;
-  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=160;const c=canvas.getContext('2d');if(!c)return;
-  c.clearRect(0,0,1024,160);c.fillStyle=color;c.font='600 70px "Segoe UI", sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(text,512,80,1000);
+  const canvas=document.createElement('canvas');canvas.width=textureWidth;canvas.height=160;const c=canvas.getContext('2d');if(!c)return;
+  c.clearRect(0,0,textureWidth,160);c.fillStyle=color;c.font='600 70px "Segoe UI", sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(text,textureWidth/2,80,textureWidth-24);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;textures.add(texture);
   const geometry=new T.PlaneGeometry(w,h);geometries.add(geometry);const material=new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:T.DoubleSide});materials.add(material);
-  const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);if(floor)mesh.rotation.x=-Math.PI/2;root.add(mesh);
+  const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);if(floor)mesh.rotation.x=-Math.PI/2;if(yaw)mesh.rotateOnWorldAxis(new T.Vector3(0,1,0),yaw);root.add(mesh);
  }
- for(const region of map.regions){if(region.id==='water'||region.id==='circuit'||region.id==='launch')continue;const [x,y,z]=region.center,[w,d]=region.size;
+ for(const region of map.regions){if(map.id==='grand-prix'||region.id==='water'||region.id==='circuit'||region.id==='launch')continue;const [x,y,z]=region.center,[w,d]=region.size;
   for(const side of [-1,1]){stripe(x+side*w/2,z,.3,d,region.color,y+.045);stripe(x,z+side*d/2,w,.3,region.color,y+.045);}
   label(region.name,x,y+.07,z-d/2-5,Math.min(w,38),3);
+ }
+ if(circuit){
+  for(const side of [-1,1])label('Zing Race',START_FINISH.x,9.7,START_FINISH.z+side*.71,19,1.7,false,'#24343b',side===-1?Math.PI:0,512);
+  for(const {number,x,z} of START_FINISH.grid)label(String(number).padStart(2,'0'),x,.07,z-3,1.4,1.8,true,'#f4f1df',Math.PI,160);
+  label('GRAND PRIX / PIT EXIT',-562,.07,-100,40,4);
+  label('START / 800 M STRAIGHT',-620,.07,-398,17,2.8);
+  for(const [distance,z] of [[150,150],[100,200],[50,250]])label(String(distance),-636,1.5,z!-.12,3,1.4,false,'#24343b',Math.PI);
  }
  if(map.id==='campus'){
   stripe(-285,0,46,620,'#425762',.014);for(let z=-280;z<=285;z+=28)stripe(-285,z,1.2,11);for(const x of [-306,-264])stripe(x,0,.3,590);
@@ -49,12 +60,13 @@ export function buildWorld(scene:T.Scene,map:MapDefinition=getMap('campus')):Wor
  const material=new T.MeshPhysicalMaterial({color:'#398d9b',roughness:.24,metalness:.2,transparent:true,opacity:.68,side:T.DoubleSide,depthWrite:false});materials.add(material);waterMaterials.push(material);
  const mesh=new T.Mesh(geometry,material);mesh.position.set((water.min[0]+water.max[0])/2,water.surface,(water.min[2]+water.max[2])/2);mesh.renderOrder=2;root.add(mesh);
  }
+ // Camera-centred sky at the far depth plane: large maps must not expose the clear colour.
  const skyGeometry=new T.SphereGeometry(1500,24,12);geometries.add(skyGeometry);
- const skyMaterial=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,uniforms:{top:{value:new T.Color('#76a9bd')},bottom:{value:new T.Color('#dae7e5')}},vertexShader:'varying float h;void main(){h=position.y/1500.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying float h;uniform vec3 top;uniform vec3 bottom;void main(){gl_FragColor=vec4(mix(bottom,top,pow(max(h,0.),.7)),1.);}'});materials.add(skyMaterial);
- const sky=new T.Mesh(skyGeometry,skyMaterial);root.add(sky);root.add(new T.HemisphereLight('#e4f4fb','#728a7e',2.1));
+ const skyMaterial=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,uniforms:{top:{value:new T.Color('#76a9bd')},bottom:{value:new T.Color('#dae7e5')}},vertexShader:'varying float h;void main(){h=position.y/1500.;vec4 clip=projectionMatrix*vec4(mat3(viewMatrix)*position,1.);gl_Position=clip.xyww;}',fragmentShader:'varying float h;uniform vec3 top;uniform vec3 bottom;void main(){gl_FragColor=vec4(mix(bottom,top,pow(max(h,0.),.7)),1.);}'});materials.add(skyMaterial);
+ const sky=new T.Mesh(skyGeometry,skyMaterial);sky.frustumCulled=false;root.add(sky);root.add(new T.HemisphereLight('#e4f4fb','#728a7e',2.1));
  const sun=new T.DirectionalLight('#fff0d6',3);sun.position.set(-70,140,-90);root.add(sun,sun.target);
  const previousFog=scene.fog,previousBackground=scene.background,airFog=new T.Fog('#c1d7dd',280,1000),waterFog=new T.Fog('#246879',8,105),waterBackground=new T.Color('#246879'),sunOffset=new T.Vector3(-70,140,-90);
  scene.fog=airFog;root.updateMatrixWorld(true);
  let disposed=false;
- return {root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
+ return {root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;circuit?.dispose();root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
 }

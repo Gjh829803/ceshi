@@ -15,8 +15,10 @@ function buildAccessory(point:CharacterAttachmentPoint):T.Group {
   const material=new T.MeshStandardMaterial({color:point==='back'?'#356b98':'#c89435',roughness:.8});
   const add=(geometry:T.BufferGeometry,position:T.Vector3)=>{const mesh=new T.Mesh(geometry,material);mesh.position.copy(position);root.add(mesh);return mesh;};
   if(point==='head'){
-    add(new T.CylinderGeometry(.25,.25,.025,20),new T.Vector3(0,.012,0));
-    add(new T.CylinderGeometry(.15,.17,.17,20),new T.Vector3(0,.105,0));
+    // Seat the smaller hat over the crown of the Source101 head.
+    root.position.y=-.04;
+    add(new T.CylinderGeometry(.16,.16,.02,20),new T.Vector3(0,.01,0));
+    add(new T.CylinderGeometry(.10,.115,.11,20),new T.Vector3(0,.075,0));
   }else if(point==='back'){
     // A rigid sample, deliberately short to make posture changes easy to inspect.
     add(new T.BoxGeometry(.48,.62,.025),new T.Vector3(0,-.23,-.07));

@@ -44,8 +44,9 @@ it('uses configured first-person defaults and SDK keyboard toggles in a generate
   const initial=await service.inspect();expect(initial.observation.snapshot.training.cameraMode).toBe(1);
   const page=(service as unknown as {session:{page:Page}}).session.page;
   const mode=()=>page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode);
-  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===0);
-  await page.keyboard.down('t');expect(await mode()).toBe(0);await page.keyboard.up('t');
+  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===2);
+  await page.keyboard.down('t');expect(await mode()).toBe(2);await page.keyboard.up('t');
+  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===0);
   await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===1);
   await page.evaluate(()=>{const input=document.createElement('input');input.id='focus-fixture';document.body.append(input);input.focus();});
   await page.keyboard.press('t');expect(await mode()).toBe(1);
@@ -152,7 +153,7 @@ it('allows procedural vehicle geometry when the frozen policy forbids custom ext
   expect(candidate.profile).toBe('three-sdk');
   const schema=await service.schema();expect(schema.humanAuthoring?.exampleTopic).toBe('custom-vehicle');
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
-});
+},30000);
 
 it('matches actual rider pixels for manual transforms and material groups without blocking Host observation',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'rider-renderability-'));

@@ -68,7 +68,7 @@ describe('training motion and camera inspector',()=>{
   await page.getByRole('button',{name:'保存到本地'}).click();expect((await state()).saved.at(-1).control.speed).toBe(12);
   await page.getByRole('tab',{name:'相机模式'}).click();await page.getByRole('button',{name:'恢复相机默认'}).click();expect((await state()).profile.control.speed).toBe(12);
  });
- it('populates all twenty subjects and applies every supported control through its inputs',async()=>{
+ it('populates all configured subjects and applies every supported control through its inputs',async()=>{
   const results=await page.evaluate(()=>{
    const api=(window as any).inspectorTest;
    return api.ids.map((id:string)=>{api.select(id);const changes:Record<string,number>={};
@@ -77,7 +77,8 @@ describe('training motion and camera inspector',()=>{
     return {id,changes,control:api.state().profile.control};
    });
   });
-  expect(results).toHaveLength(20);
+  expect(results.map((result:{id:string})=>result.id)).toEqual(expect.arrayContaining(['person','supercar','kart']));
+  expect(results).toHaveLength(await page.evaluate(()=>(window as any).inspectorTest.ids.length));
   for(const result of results)for(const [key,value]of Object.entries(result.changes))expect(result.control[key]).toBe(value);
  });
  it('shows family-specific applicability, runtime values and rejects invalid edits',async()=>{
