@@ -34,10 +34,14 @@ export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
   const original = isErrorInstance(error, HostDiagnosticError) ? error.diagnostic : serializeDiagnostic(error);
   const message = original.message;
   const code = isErrorInstance(error, CreatorToolInputError) ? error.code : original.code ??
-    /^(THREE_[A-Z0-9_]+|WORLD_[A-Z0-9_]+|EPISODE_[A-Z0-9_]+)(?=:|\s|$)/.exec(message)?.[1] ??
+    /^(THREE_[A-Z0-9_]+|WORLD_[A-Z0-9_]+|EPISODE_[A-Z0-9_]+|PHYSICS_[A-Z0-9_]+)(?=:|\s|$)/.exec(message)?.[1] ??
     (isErrorInstance(error, SyntaxError) ? 'THREE_JSON_INVALID' : 'THREE_TOOL_FAILED');
   let nextSteps: RecoveryStep[];
   switch (code) {
+    case 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED':
+    case 'PHYSICS_COLLIDER_BUDGET_EXCEEDED':
+      nextSteps = [{ instruction: original.suggestedAction ?? 'Inspect collision geometry and the reported budget. Both mesh and static box may subdivide; use convex-hull only when a closed convex volume matches the intended collision. Source and world budgets still apply.', tool: 'creator_get_authoring_schema', arguments: { topic: 'getting-started', sections: ['guide','contracts'] } }];
+      break;
     case 'ENTITY_ROLE_REQUIRED':
       nextSteps = [{ instruction: original.suggestedAction ?? 'Set an explicit entity role using the public addEntity contract.', tool: 'creator_get_authoring_schema', arguments: { topic: 'getting-started', sections: ['contracts'] } }];
       break;

@@ -70,13 +70,17 @@ export class ThreePhysics implements PhysicsPort {
     if (typeof id !== 'string' || !id.trim() || id.length > 128 || this.entries.has(id)) geometryError('PHYSICS_ENTITY_ID_INVALID', 'The physics entity id must be nonempty and unique.');
     if (!(object instanceof THREE.Object3D) || [...this.entries.values()].some(entry => entry.object === object)) geometryError('PHYSICS_OBJECT_INVALID', 'Register a Three Object3D only once.');
   }
-  private budget(plans: readonly { previous?: Entity; plan: Plan }[], removed: readonly string[] = []): void {
+  private budget(plans: readonly { id?: string; previous?: Entity; plan: Plan }[], removed: readonly string[] = []): void {
     const replaced = new Set([...removed, ...plans.flatMap(value => value.previous ? [value.previous.id] : [])]);
     let colliders = 0, triangles = 0;
     for (const entry of this.entries.values()) if (!replaced.has(entry.id)) { colliders += entry.colliders.length; triangles += entry.geometry?.geometries.reduce((sum, geometry) => sum + geometry.triangleCount, 0) ?? 0; }
+    const retainedColliders = colliders, retainedTriangles = triangles;
     for (const { plan } of plans) { colliders += plan.descriptors.length; triangles += plan.triangleCount; }
-    if (colliders > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', 'The operation exceeds the world collider budget.');
-    if (triangles > this.maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', 'The operation exceeds the world triangle budget.');
+    if (colliders > this.maximumColliders || triangles > this.maximumTriangles) {
+      const entityIds = plans.flatMap(({id, previous}) => id ?? previous?.id ?? []);
+      if (colliders > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', `The operation exceeds the world collider budget: plannedColliderCount=${colliders}, retainedColliderCount=${retainedColliders}, maximumColliderCount=${this.maximumColliders}.`, entityIds);
+      if (triangles > this.maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', `The operation exceeds the world triangle budget: plannedTriangleCount=${triangles}, retainedTriangleCount=${retainedTriangles}, maximumTriangleCount=${this.maximumTriangles}.`, entityIds);
+    }
   }
   private validateDynamicParent(object: THREE.Object3D): void {
     if (object.parent) {
@@ -86,14 +90,26 @@ export class ThreePhysics implements PhysicsPort {
     const pose = worldPose(object), reconstructed = new THREE.Matrix4().compose(pose.position, pose.rotation, pose.scale);
     if (object.matrixWorld.elements.some((value, index) => Math.abs(value - reconstructed.elements[index]!) > 1e-6)) geometryError('PHYSICS_DYNAMIC_SHEAR_UNSUPPORTED', 'A dynamic visual root must have a decomposable TRS transform.');
   }
-  private rigidPlan(object: THREE.Object3D, options: RigidPhysics, retained?: GeometrySnapshot, allowEmpty = false): Plan {
+  private rigidPlan(id: string, object: THREE.Object3D, options: RigidPhysics, retained?: GeometrySnapshot, allowEmpty = false): Plan {
     if (!options || !['fixed', 'kinematic', 'dynamic'].includes(options.kind) || (options.shape !== undefined && !['trimesh', 'convex-hull', 'box'].includes(options.shape))) geometryError('PHYSICS_OPTION_INVALID', 'Choose a fixed, kinematic or dynamic body with a supported shape.');
     const shape = options.shape ?? (options.kind === 'dynamic' ? 'convex-hull' : 'trimesh');
     if (options.kind === 'dynamic') { this.validateDynamicParent(object); if (shape === 'trimesh') geometryError('PHYSICS_DYNAMIC_TRIMESH_UNSUPPORTED', 'Use convex-hull or box for a dynamic body.'); }
     const friction = options.frictionRatio ?? .7, restitution = options.restitutionRatio ?? 0, mass = options.massKilograms ?? 1;
     validateNumber(friction, 0, 'frictionRatio'); validateNumber(restitution, 0, 'restitutionRatio'); validateNumber(mass, 0, 'massKilograms', options.kind !== 'dynamic');
     if (friction > 1 || restitution > 1) geometryError('PHYSICS_OPTION_INVALID', 'Friction and restitution ratios must be between zero and one.');
-    const geometry = retained ?? extractCollisionGeometry(object, this.maximumColliders, this.maximumTriangles, shape === 'trimesh', allowEmpty);
+    let geometry = retained;
+    if (!geometry) try { geometry = extractCollisionGeometry(object, this.maximumColliders, this.maximumTriangles, shape === 'trimesh', allowEmpty); }
+    catch (error) {
+      // Add ownership only to structured budget failures; diagnostic enrichment
+      // must not replace an unrelated author/provider error.
+      try {
+        if (error && typeof error === 'object') {
+          const code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+          if (code === 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED' || code === 'PHYSICS_COLLIDER_BUDGET_EXCEEDED') Object.assign(error, {entityIds: [id]});
+        }
+      } catch { /* Keep the original failure if its descriptors are unavailable. */ }
+      throw error;
+    }
     const descriptors: ColliderDesc[] = [], sourceObjects: THREE.Object3D[] = [];
     for (const mesh of geometry.geometries) {
       const append = (descriptor: ColliderDesc | null): void => {
@@ -111,7 +127,7 @@ export class ThreePhysics implements PhysicsPort {
         // unstable. These smaller native cuboids partition the exact same
         // volume, retaining the original visible mesh and collider ownership.
         const cells = options.kind === 'dynamic' ? new THREE.Vector3(1, 1, 1) : size.clone().divideScalar(4).ceil();
-        if (cells.x * cells.y * cells.z + descriptors.length > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', 'Exact box subdivision exceeds the collider budget; use the default triangle mesh representation for large static scenery.');
+        if (cells.x * cells.y * cells.z + descriptors.length > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', `Exact box subdivision exceeds the collider budget: requiredColliderCount=${cells.x * cells.y * cells.z + descriptors.length} (lower bound), maximumColliderCount=${this.maximumColliders}. Current mesh in the rigid-body frame: sizeMetersXYZ=${JSON.stringify(size.toArray())}, cellsXYZ=${JSON.stringify(cells.toArray())}. Counts exclude remaining meshes and other world entities.`, [id]);
         const cellSize = size.clone().divide(cells);
         for (let x = 0; x < cells.x; x++) for (let y = 0; y < cells.y; y++) for (let z = 0; z < cells.z; z++) append(RAPIER.ColliderDesc.cuboid(cellSize.x / 2, cellSize.y / 2, cellSize.z / 2)
           .setTranslation(center.x + (x + .5 - cells.x / 2) * cellSize.x, center.y + (y + .5 - cells.y / 2) * cellSize.y, center.z + (z + .5 - cells.z / 2) * cellSize.z));
@@ -175,12 +191,12 @@ export class ThreePhysics implements PhysicsPort {
     this.world.propagateModifiedBodyPositionsToColliders();
   }
   addRigid(id: string, object: THREE.Object3D, options: RigidPhysics): void {
-    this.newIdentity(id, object); const plan = this.rigidPlan(object, options); this.budget([{ plan }]);
+    this.newIdentity(id, object); const plan = this.rigidPlan(id, object, options); this.budget([{ id, plan }]);
     const initial = { local: localPose(object), pose: copyPose(plan.pose), geometry: plan.geometry! };
     this.publish(this.construct(id, object, options.kind, plan, { ...options }, initial));
   }
   addCharacter(id: string, object: THREE.Object3D, options: CharacterOptions = {}): void {
-    this.newIdentity(id, object); const plan = this.characterPlan(object, options); this.budget([{ plan }]);
+    this.newIdentity(id, object); const plan = this.characterPlan(object, options); this.budget([{ id, plan }]);
     this.publish(this.construct(id, object, 'character', plan, undefined, { local: localPose(object), pose: copyPose(plan.pose) }));
   }
   validateBatch(candidates: readonly PhysicsCandidate[], removedEntityIds: readonly string[] = []): void {
@@ -196,8 +212,8 @@ export class ThreePhysics implements PhysicsPort {
     for (const entry of this.entries.values()) if (!identities.has(entry.id) && !removed.has(entry.id) && objects.has(entry.object)) geometryError('PHYSICS_OBJECT_INVALID', 'A candidate object is already registered to a retained physics entity.');
     const plans = candidates.map(candidate => {
       const previous = this.entries.get(candidate.id);
-      const plan = candidate.kind === 'character' ? this.characterPlan(candidate.object, candidate.options ?? {}) : this.rigidPlan(candidate.object, candidate.options, undefined, Boolean(previous));
-      return { ...(previous ? { previous } : {}), plan, candidate };
+      const plan = candidate.kind === 'character' ? this.characterPlan(candidate.object, candidate.options ?? {}) : this.rigidPlan(candidate.id, candidate.object, candidate.options, undefined, Boolean(previous));
+      return { id: candidate.id, ...(previous ? { previous } : {}), plan, candidate };
     });
     this.budget(plans, removedEntityIds);
     const shapes: QueryShape[] = [];
@@ -226,7 +242,7 @@ export class ThreePhysics implements PhysicsPort {
     this.live(); if (!Array.isArray(ids) || new Set(ids).size !== ids.length) geometryError('PHYSICS_REFRESH_BATCH_INVALID', 'A refresh batch contains each physics id once.');
     const updates = ids.map(id => {
       const previous = this.entry(id);
-      const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings) : this.rigidPlan(previous.object, previous.options!, undefined, true);
+      const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings) : this.rigidPlan(previous.id, previous.object, previous.options!, undefined, true);
       return { previous, plan };
     });
     this.budget(updates);
@@ -581,7 +597,7 @@ export class ThreePhysics implements PhysicsPort {
         if (scale.distanceToSquared(entry.character.scale) > 1e-14) updates.push({ previous: entry, plan: this.characterPlan(entry.object, entry.character.settings) });
       } else {
         if (entry.kind === 'dynamic') this.validateDynamicParent(entry.object);
-        if (geometrySignature(entry.object, pose) !== entry.geometry!.signature) updates.push({ previous: entry, plan: this.rigidPlan(entry.object, entry.options!, undefined, true) });
+        if (geometrySignature(entry.object, pose) !== entry.geometry!.signature) updates.push({ previous: entry, plan: this.rigidPlan(entry.id, entry.object, entry.options!, undefined, true) });
       }
     }
     this.budget(updates);
@@ -682,7 +698,7 @@ export class ThreePhysics implements PhysicsPort {
     this.live(); const staged: { previous: Entity; entry: Entity }[] = [];
     try {
       for (const previous of this.entries.values()) {
-        const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings, previous.initial.pose) : this.rigidPlan(previous.object, previous.options!, previous.initial.geometry);
+        const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings, previous.initial.pose) : this.rigidPlan(previous.id, previous.object, previous.options!, previous.initial.geometry);
         const entry = this.construct(previous.id, previous.object, previous.kind, plan, previous.options, previous.initial);
         staged.push({ previous, entry });
       }

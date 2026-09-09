@@ -479,6 +479,33 @@ it('retains the real addEntity role failure before start without inventing a sta
   expect(operation.errorDetails).not.toHaveProperty('stack');
 },30000);
 
+it('preserves legacy physics error codes instead of classifying a known budget error as generic',async()=>{
+  const {creatorToolErrorResponse}=await import('./tool-errors');
+  const response=creatorToolErrorResponse(new Error('PHYSICS_TRIANGLE_BUDGET_EXCEEDED: old workspace SDK message'));
+  expect(response.errorDetails.code).toBe('PHYSICS_TRIANGLE_BUDGET_EXCEEDED');
+});
+
+it('returns the failed entity, actual subdivision budget and conditional shape guidance from browser startup',async()=>{
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),`
+    import * as THREE from 'three';import {createWorld} from '@worldkit/three';
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),renderer=new THREE.WebGLRenderer();
+    const world=await createWorld({scene,camera,renderer,navigation:false,physics:{maximumTriangleCount:64}});
+    world.addEntity({id:'wide-floor',role:'terrain',object:new THREE.Mesh(new THREE.BoxGeometry(30,1,30)),physics:{kind:'fixed',shape:'mesh'}});
+  `);
+  const started=tools.start('world.preview',()=>tools.preview());
+  const operation=await tools.getOperation(started.operationId,25);
+  expect(operation.status).toBe('failed');
+  expect(operation.errorDetails).toMatchObject({code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED',category:'content',phase:'physics',entityIds:['wide-floor'],
+    message:expect.stringContaining('availableTriangleBudget=64'),suggestedAction:expect.stringContaining('convex-hull'),stack:expect.any(String),
+    host:{phase:'browser.startup',candidate:{worldBuildHash:expect.any(String)}}});
+  expect(operation.errorDetails?.suggestedAction).toMatch(/concav|openings/);
+  expect(operation.errorDetails?.nextSteps[0]?.instruction).toBe(operation.errorDetails?.suggestedAction);
+  expect(await tools.getOperation(started.operationId)).toEqual(operation);
+},30000);
+
 
 it('keeps navigation failure primary when auxiliary diagnostic collection fails and closes once', async () => {
   const {chromium}=await import('playwright');
