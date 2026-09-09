@@ -59,9 +59,14 @@ git diff --check
 - `targetResults` 增加最近采样的位置、时间、原始 trace 索引、目标减人物的 XYZ 差值及容差外距离。复用录制样本，保留原接近度判定；没有新增录制、采样或提交门禁。具体字段见 [Creator 用法](../../scripts/three-creator/README.md#real-input-episodes)。
 - 增量验证：Creator 声明、工具、workspace guidance 共 3 文件 80 项通过；包含真实浏览器输入、未到达目标仍可技术交付，以及测量值随交付保留。Gallery 25 项、unpack 8 项通过；typecheck、test census 和 runtime prebuild 通过。
 - 增量 runtime 输出 `.codex-tmp/harness-target-feedback/runtime`，runtimeHash 为 `9f1ca85ee65cf77958d5effd1c31f6a694277f653a1c1a95da974d39e67fbf64`，与 main 合入后相同；本轮只改 Host 摘要和结果反馈。
+- `recordingReadiness` 在自检返回时列出已有录制条件与缺项，绑定录制 operation、world/episode 身份和检查时间。它只评价该份录像；submit 仍重新检查当前身份、文件和既有门禁。没有历史录像选择或复用。
+- [生成指令](../../scripts/cloud/three-eval-instructions.md) 明确公开指南优先、按具体问题查源码、当前视角与开场区别、全计划自检及完成覆盖后的交付路径。已核对云 runner 读取此文件；原本机 runner 是否消费该文件尚未确认。
+- 上述收尾改动验证：Creator 工具及可用性 2 文件 86 项、云契约 20 项（外部传输 mocked）、gallery 25 项、unpack 8 项通过；云契约包含 Python 回归调用，不将这些数字加总。typecheck、test census、文档链接与源码核对、独立审查通过；`.codex-tmp/harness-recording-readiness/runtime` 预构建身份与上行一致。
 
 ## 尚未覆盖
 
 没有运行完整 CI、云端独立测试 gate、新的模型生成或 Seedance 作业。没有测得端到端生成耗时/成功率的改善，也没有把源码审查或工程回归当作场景视觉验收。
 
-readiness、完整尝试/证据选择、短等待、默认输出裁剪，以及输入通道/工具名整体迁移仍是后续范围，见 [命名审查](2026-09-09-creator-api-naming-audit.md)。
+原本机运行 `run-mtti9598-6cb1a4 / world-09090254-6d57` 的平台入口、原始参考图/需求和事件产物尚未取得，因此同用例模型复测及卡片开始/完成时间修复未执行。现有本地契约测试不能替代该复测。
+
+工作区即时交付状态、完整尝试/证据选择、短等待、默认输出裁剪，以及输入通道/工具名整体迁移仍是后续范围，见 [命名审查](2026-09-09-creator-api-naming-audit.md)。

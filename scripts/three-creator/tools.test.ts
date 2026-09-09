@@ -69,6 +69,9 @@ describe('Three semantic target views', () => {
       const started=await executeThreeCreatorTool(service,'world_playtest',{}) as {operationId:string};
       const operation=await service.getOperation(started.operationId,25),report=operation.result;
       expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:true,issues:[]});
+      expect(Number.isFinite(Date.parse(report.recordingReadiness.checkedAt))).toBe(true);
       const target=report.targetResults[0];
       expect(target.reached).toBe(false);
       expect(target.nearestSample).toMatchObject({traceSampleIndex:expect.any(Number),wallSeconds:expect.any(Number),simulationTick:null,simulationSeconds:null});
@@ -82,6 +85,32 @@ describe('Three semantic target views', () => {
       const delivery=await service.submit();
       expect(delivery.targetResults).toEqual(report.targetResults);
       expect(delivery.episodeHash).toBe(report.episodeHash);expect(delivery.worldBuildHash).toBe(report.worldBuildHash);
+      const saved=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'playtest.json'),'utf8'));
+      expect(saved.recordingReadiness).toEqual(report.recordingReadiness);
+      // Historical eligibility does not approve an edited input plan.
+      const episodeFile=path.join(root,'episode.json');await writeFile(episodeFile,(await readFile(episodeFile,'utf8'))+'\n');
+      await expect(service.submit()).rejects.toThrow('EPISODE_CHANGED_AFTER_PLAYTEST');
+      expect(report.recordingReadiness.episodeHash).toBe(delivery.episodeHash);
+    } finally {await service.close();}
+  },30_000);
+
+  it('reports incomplete recording prerequisites on a technically passing debug run before submit',async()=>{
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
+      steps:[{keysDown:['w'],durationSeconds:1},{keysUp:['w'],durationSeconds:.1}],targets:[]}));
+    try {
+      const before=Date.now();
+      const started=await executeThreeCreatorTool(service,'world_playtest',{durationSeconds:.2}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.executionMode).toBe('debug');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:false,
+        issues:[{code:'INCOMPLETE_EPISODE',actual:false,required:true}]});
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeLessThanOrEqual(Date.now());
+      await expect(service.submit()).rejects.toThrow('INCOMPLETE_EPISODE');
     } finally {await service.close();}
   },30_000);
 

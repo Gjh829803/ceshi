@@ -343,6 +343,18 @@ a longer value keeps waiting after all steps, with unreleased keys held until cl
 `actualWallSeconds` measures this input/recording interval and its finalization;
 it excludes browser startup and subsequent transcoding, and is not whole-task time.
 
+`recordingReadiness` reports the existing recording prerequisites immediately:
+`eligible` and `issues` cover technical success, plan completeness and required
+input/video durations. `scope:'recording-only'`, `checkedAt`, `creatorOperationId`,
+`worldBuildHash` and `episodeHash` identify the recording assessed. This is a
+historical assessment of that recording, not a fresh workspace or file-integrity
+check, and does not certify task coverage or visual acceptance. `world_submit`
+still checks the current source/episode, evidence files, captures and asset policy.
+An unchanged complete recording with the requested outcomes can proceed to
+submission. Use a shorter `durationSeconds` for debugging without editing the
+plan; the latest completed debug run becomes the service's selected recording
+and can require a new full recording before submission.
+
 Submission creates a local package and atomically writes `creator-delivery.tar.gz`
 and `creator-result.json`. It does not upload, publish, start Episode or request a review.
 The archive contains one hash-closed `payload/` with source, playable, playtest,
