@@ -1,15 +1,10 @@
 import * as THREE from 'three';
-import {createHumanoidWorld, type HumanoidAssetDefinition, type TrainingMap, type TrainingVehicleSpec} from '@worldkit/three';
+import {createHumanoidWorld, training, type TrainingMap} from '@worldkit/three';
 import {applyWhiteboxMaterials} from './whitebox-materials';
 
-// Creator packages exactly the assets selected in project.json, including the humanoid actions.
-type CatalogAsset = HumanoidAssetDefinition & {training?: {spec: TrainingVehicleSpec}};
-const response = await fetch('./asset-definitions.json');
-if (!response.ok) throw new Error(`Asset catalog failed: HTTP ${response.status}`);
-const catalog = await response.json() as {assets: CatalogAsset[]};
-const roverAsset = catalog.assets.find(asset => asset.id === 'training.rover');
-if (!roverAsset?.training) throw new Error('Select training.rover in project.json');
-const assetDefinitions = Object.fromEntries(catalog.assets.map(asset => [asset.id, asset]));
+// Choose automobile handling before authoring the model. This contains no geometry.
+const spec=training.createRoadVehicleSpec('car');spec.id='rover';spec.speed=12;spec.maxSpeed=16;
+const physics=spec.wheelPhysics;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#eeeeee');
@@ -21,7 +16,7 @@ document.body.append(canvas);
 
 // Box centres and full sizes are in metres. Visuals and collision use the same boxes.
 const map: TrainingMap = {
-  id: 'vehicle-camera', name: 'Rover camera and glass',
+  id: 'vehicle-camera', name: 'Self-drawn car camera and glass',
   description: 'Walk beside the open cabin, drive, orbit through glass and compare the solid wall.',
   bounds: {min: [-30, -5, -30], max: [30, 20, 30]},
   boxes: [
@@ -41,26 +36,48 @@ const environmentMeshes = map.boxes.map(box => {
   return mesh;
 });
 
-// Retain the supplied rover geometry, seat and movement envelope, with a separate preset rider.
+// Self-drawn open car: dimensions, wheel layout and seat come from the selected configuration.
 const rover = new THREE.Group();
-const world = await createHumanoidWorld({scene, camera, canvas, map, assetDefinitions, characterId: 'person',
-  vehicles: [{instanceId: 'rover', assetId: 'training.rover', object: rover,
-    spec: structuredClone(roverAsset.training.spec)}],
+const bodyMaterial=new THREE.MeshStandardMaterial({color:'#eeeeee',roughness:1});
+const rubber=new THREE.MeshStandardMaterial({color:'#666666',roughness:1});
+const glass=new THREE.MeshStandardMaterial({color:'#cccccc',transparent:true,opacity:.25,side:THREE.DoubleSide});
+function part(size:[number,number,number],position:[number,number,number],material=bodyMaterial){
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),material);mesh.position.set(...position);rover.add(mesh);return mesh;
+}
+const halfWidth=spec.envelope.halfExtents[0],halfLength=spec.envelope.halfExtents[2];
+part([halfWidth*2-.2,.18,halfLength*2-.4],[0,.5,0]);
+part([halfWidth*2-.2,.35,.9],[0,.8,halfLength-.7]);
+part([halfWidth*2-.2,.4,.7],[0,.85,-halfLength+.6]);
+for(const side of [-1,1])part([.12,.45,2.3],[side*(halfWidth-.15),.8,0]);
+part([.72,.13,.5],[spec.seat[0],spec.seat[1]-.125-.065,spec.seat[2]],rubber);
+part([.72,.65,.12],[spec.seat[0],spec.seat[1]+.12,spec.seat[2]-.3]);
+part([halfWidth*2-.4,.65,.035],[0,1.35,.8],glass);
+const wheelRigs:{steering:THREE.Group;spin:THREE.Group;radius:number}[]=[];
+for(const [index,{x,z}] of physics.wheels.entries()){
+  const steering=new THREE.Group(),spin=new THREE.Group();
+  steering.name=`wheel.${index}.steer`;spin.name=`wheel.${index}.spin`;
+  steering.position.set(x,physics.hubHeight,z);
+  const wheel=new THREE.Mesh(new THREE.CylinderGeometry(physics.radius,physics.radius,physics.wheelWidth,16),rubber);
+  wheel.rotation.z=Math.PI/2;spin.add(wheel);steering.add(spin);rover.add(steering);
+  wheelRigs.push({steering,spin,radius:physics.radius});
+}
+const mechanical={wheelRigs,steering:wheelRigs.filter((_,i)=>physics.wheels[i]!.steering).map(r=>r.steering)};
+const world = await createHumanoidWorld({scene, camera, canvas, map, characterId: 'person',
+  vehicles: [{instanceId: 'rover', assetId: 'custom.car', object: rover,
+    spec}],
   profile: {
     view: {defaultPerspective: 'third-person', keyboardToggleEnabled: true},
     cameraDistanceMeters: 11,
-    // speed: m/s; accel: m/s². Other handling and actual collider dimensions retain the preset.
-    vehicles: {rover: {speed: 12, accel: 6}},
   },
 });
 world.onDispose(() => {
   for (const mesh of environmentMeshes) { mesh.geometry.dispose(); mesh.material.dispose(); }
 });
-try {
-  const model = await world.assets.load('training.rover');
-  rover.add(model.object);
-  world.onDispose(applyWhiteboxMaterials(model.object));
-} catch (error) { world.dispose(); throw error; }
+world.onDispose(applyWhiteboxMaterials(rover));
+world.training!.onVisualUpdate((dt,sample)=>{
+  const runtime=world.training!,state=runtime.simulation.vehicles[0]!;
+  training.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision});
+});
 world.setCaptureTargets(['person', 'rover']);
 
 const presentation = world.createPresentation();
@@ -74,6 +91,6 @@ reset.onclick = async () => { await world.reset(); presentation.focus(); };
 hud.append(status, reset); presentation.ui.mount(hud);
 world.onUpdate(() => {
   const state = world.snapshot().training!;
-  status.textContent = `Rover camera and glass\nWASD move / drive · F enter / exit · Space brake\nDrag to orbit · T third person / first person / shoulder\n${state.mountedInstanceId ? 'Driving' : 'On foot'} · ${['Third person', 'First person', 'Shoulder'][state.cameraMode]}\n${state.message}`;
+  status.textContent = `Self-drawn car camera and glass\nWASD move / drive · F enter / exit · Space brake\nDrag to orbit · T third person / first person / shoulder\n${state.mountedInstanceId ? 'Driving' : 'On foot'} · ${['Third person', 'First person', 'Shoulder'][state.cameraMode]}\n${state.message}`;
 });
 await world.start(); presentation.focus();

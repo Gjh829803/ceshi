@@ -91,13 +91,17 @@ it('keeps denied assets and dependent examples outside the frozen search and gui
   expect(guidance.sdkGuide).not.toContain('new TrainingHorse');
 });
 
-it('discovers vehicles by their maneuver and control guidance', async () => {
+it('discovers handling configurations without offering vehicle models', async () => {
   const tools = await service();
-  const result = await search(tools, { query: '漂移', limit: 20 });
-  expect(result.assets.map(asset => asset.id)).toEqual(expect.arrayContaining(['training.rover', 'training.racer']));
-  expect(result.assets.find(asset => asset.id === 'training.rover')?.useWhen).toContain('漂移');
-  const bindings = await search(tools, { query: 'training.wheeled', limit: 20 });
-  expect(bindings.assets.map(asset => asset.id)).toEqual(expect.arrayContaining(['training.rover', 'training.racer']));
+  const result = await search(tools, { query: 'training.wheeled', limit: 20 });
+  expect(result.assets).toEqual([]);
+  const selected=await schema(tools,{topic:'training',sections:['training']});
+  expect(selected.roadVehicleConfigurations!.car.mode).toBe('wheeled');
+  expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('bike');
+  expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
+  expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
+  expect(selected.trainingSourceContracts['training/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
+
 });
 
 it('returns a readable schema guide first and actual source contracts only when requested', async () => {

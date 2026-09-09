@@ -74,10 +74,21 @@ coverage information, not an additional delivery gate.
 | Implement | `creator_materialize_runtime`, then edit `sdk/` | Modify a controller/module and rebuild with `world_validate` |
 
 Mesh/Group creation is unrestricted by the asset catalog. Keep the supplied
-humanoid visible model, rig and motions. Reuse other supplied subjects when suitable;
-otherwise draw and bind them to existing ground/vehicle controllers. Compatible animation mapping remains an
+humanoid visible model, rig and motions. Reuse supplied creatures when suitable.
+Vehicles must use model-free handling configurations and authored Three geometry,
+without loading supplied or external vehicle models. Select car/motorcycle
+handling before drawing; match physical dimensions, wheel layout and seat anchors. Compatible animation mapping remains an
 explicit requirement. See the [SDK guide](../../packages/three-world/README.md)
 for exact calls and action cards.
+
+For loose tables, chairs and obstacles that should move on impact, configure
+`EnvironmentBox.rigidGroup: {id, massKg}` on all parts of each object, using one
+group ID and the same total mass in kilograms. Include real support geometry;
+floors, buildings and fixed structures stay ungrouped. Read
+`creator_get_examples({topic:'character-actions'})` for movable furniture,
+seat/pickup interactions, visual pose synchronization and reset. The SDK owns
+the dynamic bodies; scene code reads `propBoxPose(id)` from the current Training
+environment in `onVisualUpdate` and copies world poses to the visuals.
 
 `creator_get_authoring_schema({topic})` returns a short guide by default, with
 `availableSections` and `runtimeGuidance` identifying its source. Select `sections` from guide, contracts,
@@ -271,20 +282,30 @@ including NPCs and riders. Keep each person as one instance across walking,
 mounting, riding, dismounting and reset; custom vehicle geometry never includes a
 replacement rider. `humanAuthoring` in environment/schema/asset detail responses
 states this requirement independently of the project's editable SDK source.
-`creator_get_examples({topic:'custom-vehicle'})` provides a complete motorcycle
-composition with only the preset human asset selected. It remains usable when
-custom external asset files are disabled: procedural Three geometry is allowed.
+`creator_get_authoring_schema({topic:'training',sections:['training']})` returns
+model-free `roadVehicleConfigurations` for car and motorcycle on the Host SDK
+baseline. Workspace SDKs return their source definitions instead. Call
+`training.createRoadVehicleSpec('car' | 'motorcycle')` for a fresh configuration,
+then author the chassis, wheel groups and seat to those dimensions.
+`creator_get_examples({topic:'custom-vehicle'})` provides a self-drawn motorcycle;
+`vehicle-camera` provides a self-drawn car. Both select only the preset human asset and remain usable when custom external
+asset files are disabled: procedural Three geometry is allowed.
 
-For seated vehicles, request `creator_get_authoring_schema({topic:'mounted-interaction'})`
-and follow the SDK's [vehicle seat fit guidance](../../packages/three-world/README.md#vehicle-seat-fit).
+Road physics and movable props are integrated. Detailed drivetrain/wheel telemetry
+still requires SDK state access; standard Agent observation tools do not yet
+return it directly. The self-drawn examples do not include an engine dashboard.
+See [integration status and follow-ups](../../docs/reviews/2026-09-09-creator-vehicle-integration-status.md).
+
+For seat-fit details, `creator_get_authoring_schema({topic:'mounted-interaction'})`
+provides the SDK's [vehicle seat fit guidance](../../packages/three-world/README.md#vehicle-seat-fit).
 `spec.seat` locates the pelvis, not the cushion surface. The custom motorcycle
 example derives it from the cushion dimensions and a Source101 pose clearance.
 These reference values require checking against the authored seat and mounted pose;
 the SDK does not automatically fit arbitrary seats. First-person eye height follows
 the actual head, so correct the rider/seat fit before adjusting camera settings.
 
-`creator_get_examples({topic:'vehicle-camera'})` supplies a preset rover with a
-separate humanoid, SDK T/reset controls and an example-local Three material helper.
+`creator_get_examples({topic:'vehicle-camera'})` draws a car from the selected
+configuration with a separate humanoid, SDK T/reset controls and a local material helper.
 Keep glass transparency, opacity and material-array slots when recoloring a model
 white or gray. Camera collision uses rigid vehicle geometry to preserve open
 cabins; the vehicle movement envelope remains intact. Inspect the first-person
@@ -299,8 +320,9 @@ Use `world.useAuthoredCamera()` for that opening and hand control back through
 or simulation stepping. Its `cameraObservation` includes `cameraOverrides`
 (explicit `profile.camera`), `cameraSettings` (resolved settings) and `framing`.
 Compare these values with the real pixels. `world_preview({view:'opening'})` stops and resets; it
-checks the reset opening. Compare real pixels during walking, entering, mounted
-play, exiting, each enabled mode and reset in the existing real-input playtest.
+checks the reset opening. Inspect only the views relevant to the requested
+outcomes or an observed problem; production has no fixed vehicle lifecycle
+regression checklist.
 
 For framing advice, request `world_inspect({sections:['description']})` and read
 `observation.description.training.configuration.effective.camera.framing`.
@@ -313,8 +335,8 @@ Inspect/playtest `characterContinuity` feedback observes the Training character'
 skinned body identity and renderability; rigid equipment is excluded. The playtest timeline preserves intermediate
 changes even if the author restores the person before the last frame. It is
 advisory, with no change to v0.2 technical admission. It cannot prove preset
-provenance, detect every extra rider, or measure seat/hand/foot fit; inspect the
-opening, mounted, dismounted and reset images. Legacy/raw worlds without Training
+provenance, detect every extra rider, or measure seat/hand/foot fit; use relevant
+frames when such a problem needs investigation. Legacy/raw worlds without Training
 telemetry are explicitly unobserved, not passed.
 
 ## Verify and deliver

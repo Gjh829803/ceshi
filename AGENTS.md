@@ -43,7 +43,10 @@ extra clothing/accessories, atmospheric effects, reflections and elaborate shado
 
 1. Reuse: `createHumanoidWorld` loads `humanoid.source-101` and its contextual
    controller. Keep the supplied visible humanoid model, rig and actions by default.
-   Reuse other supplied subjects when suitable.
+   Reuse other supplied creatures when suitable. Vehicles use model-free handling
+   configurations and Agent-authored geometry; do not load vehicle model assets.
+   Select car/motorcycle configuration before drawing, then match wheel layout,
+   collision dimensions, seat anchors and mechanical animation bindings.
 2. Bind: author ordinary Three Mesh/Group geometry freely. Bind custom subjects
    through `addCharacter({object,body,movement})`; bind vehicles through their
    visual root and `TrainingVehicleInstance.spec`. Define actual colliders,

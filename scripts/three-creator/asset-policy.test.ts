@@ -152,3 +152,16 @@ it('carries the same policy through the real submit serializer and archive using
   expect(delivery.files['playable/asset-policy.json']).toBe(sha256(execFileSync('tar',['-xOf',receipt.archivePath,'payload/playable/asset-policy.json'])));
  }finally{await service.close();}
 });
+
+
+it('keeps vehicle model bytes outside the default Creator policy while retaining the preset human',async()=>{
+ const vehicleIds=catalog.assets.filter(a=>a.sourcePath.includes('/vehicles/')).map(a=>a.id);
+ expect(defaultPolicy.allowedAssetIds.filter(id=>vehicleIds.includes(id))).toEqual([]);
+ const root=await workspace(),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  expect((await service.assets()).assets.map(a=>a.id)).toContain('humanoid.source-101');
+  expect((await service.assets('', 'training.rover')).assets).toEqual([]);
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['training.rover']}));
+  await expect(service.compiler.prepare()).rejects.toThrow('THREE_ASSET_POLICY_DENIED');
+ }finally{await service.close();}
+});

@@ -5,7 +5,7 @@ import type {CreatorProfile} from './contracts.js';
 import {REPOSITORY_ROOT,type ThreeCompiler} from './compiler.js';
 import {readWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 
-const DEFINITION_FILES = ['config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera.ts','training/humanoid/action-schema.ts','training/input.ts','training/input-guidance.ts','training/character-capabilities.ts','training/runtime.ts'] as const;
+const DEFINITION_FILES = ['training/road-vehicle.ts','training/wheel-physics.ts','training/powertrain.ts','config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera.ts','training/humanoid/action-schema.ts','training/input.ts','training/input-guidance.ts','training/character-capabilities.ts','training/runtime.ts'] as const;
 
 /** One validated source snapshot per discovery call; never import author modules. */
 export class RuntimeGuidance {
@@ -33,7 +33,7 @@ export class RuntimeGuidance {
     return Object.fromEntries(await Promise.all(['world.ts','config/presentation.ts',...(includeTraining?DEFINITION_FILES:[])].map(async name=>{
       const source=await this.source(name);
       // Small config modules are returned whole so helper/type dependencies stay readable.
-      if(name.startsWith('config/'))return [name,source];
+      if(name.startsWith('config/')||name==='training/road-vehicle.ts')return [name,source];
       const file=ts.createSourceFile(name,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
       // Keep imports so references are traceable. Initializers are displayed as
       // source, not interpreted: arbitrary workspace code never runs on the Host.

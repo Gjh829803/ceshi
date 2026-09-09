@@ -123,7 +123,7 @@ describe('example-local whitebox materials', () => {
   });
 });
 
-it('runs the preset rover and humanoid with native T cycling, F mounting and reset', async () => {
+it('runs the self-drawn car and preset humanoid with native T cycling, F mounting and reset', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vehicle-camera-browser-'));
   const service = new ThreeCreatorTools(root, 'three-sdk');
   try {

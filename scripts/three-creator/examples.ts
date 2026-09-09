@@ -39,9 +39,10 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'play
 world.setCaptureTargets(['player']);
 await world.start();
 // Add scene conditions for contextual actions: see character-actions capability cards.
+// For pushable tables/chairs, read character-actions: rigidGroup, support geometry and physical pose display.
 // Custom nonhuman subjects may use createWorld + addCharacter({object,body,movement}).
 // For a custom vehicle, keep this preset person and read the custom-vehicle example.
-// For a preset rover with transparent whitebox glass and SDK T switching, read vehicle-camera.
+// For a self-drawn car using a model-free configuration and SDK T switching, read vehicle-camera.
 `;
 
 export function sdkExample(_assetId: string): string { return SDK_EXAMPLE; }

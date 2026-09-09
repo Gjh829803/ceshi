@@ -115,6 +115,11 @@ export function trainingContractSource(source:string):string {
  const file=ts.createSourceFile('training.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
+ for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&node.name?.text==='createRoadVehicleSpec'){
+  declarations.push(declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.updateFunctionDeclaration(node,
+   [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
+   node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));
+ }
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='TrainingRuntime');
  if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'TrainingRuntime'));

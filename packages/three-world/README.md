@@ -223,9 +223,9 @@ For Creator generation, every human (including NPCs and riders) must use the
 permitted preset visible model, skeleton and motions; omit added clothing,
 accessories and decorative visual children. Keep each person as the same instance
 through walking, mounting, riding, dismounting and reset. Never hide the preset
-person or include a replacement human in a vehicle model. Reuse other supplied
-nonhuman subjects when suitable. When none fits and policy permits, draw simple Mesh/Group geometry
-and bind its abilities. The catalog supports reuse without restricting Three
+person or include a replacement human in a vehicle model. Reuse supplied creatures
+when suitable. Vehicles use model-free handling configurations and Agent-authored
+Mesh/Group geometry; do not load supplied or external vehicle models. The catalog supports reuse without restricting Three
 geometry; custom subjects and compatible external assets follow the task's
 effective asset policy.
 
@@ -239,7 +239,9 @@ See [vehicle seat fit](#vehicle-seat-fit), also returned by
 `creator_get_authoring_schema({topic:'mounted-interaction'})`, for calibration.
 The Creator requirement does not restrict the SDK's general custom-character API.
 
-During Creator self-check, exercise walk → enter → ride → exit → walk → reset.
+Creator self-check covers the requested task outcomes. Production does not require
+a separate vehicle regression or a fixed steering, slope, collision, boarding,
+exit and reset checklist. SDK development tests cover reusable control behavior.
 `characterContinuity` in inspect/playtest feedback tracks the Training character's
 root, skinned mesh, geometry and bone identities plus scene/material visibility.
 Rigid equipment is outside this identity comparison. It is
@@ -310,6 +312,16 @@ approach within 0.9 m and its vertical tolerance before requesting pickup/sit.
 These commands do not navigate. Render the movable object from the shared
 interaction state so it follows the hand and does not remain duplicated.
 
+**Movable furniture** — for loose tables, chairs or obstacles that should be pushed
+or knocked over, assign each part an `EnvironmentBox.rigidGroup: {id, massKg}`.
+Use one group ID and the same total mass for the whole object, with real legs or
+other support. Fixed structures omit the field. Read current world-space part
+poses from `world.training.simulation.environment.propBoxPose(id)` in
+`onVisualUpdate`; `world.reset()` restores the furniture too. The
+`character-actions` example includes complete movable tables and a chair, their
+seat/pickup interactions, visual synchronization and reset. See
+[movable environment props](#movable-environment-props) for the contract.
+
 **Water** — declare volume bounds and surface height, with a real lower floor.
 A ground collider extending over the pool makes it shallow regardless of the
 visible water. Entry currently requires measured depth >1.28 m and feet >0.95 m
@@ -369,8 +381,8 @@ and recovery. At full drift, braking and handbrake damping are reduced to 70% to
 momentum. The flag belongs to VehicleSpec; numeric tuning can be applied
 through `world.training.applyProfile`. Persist both in authored source for delivery.
 
-Read `creator_get_examples({topic: 'custom-vehicle'})` for a complete motorcycle
-using this configuration, or `training-assets` for the Playground presets.
+Creator's self-drawn road examples use `wheelPhysics` instead of this arcade path.
+Do not combine `brakeDrift` with their per-wheel handling configuration.
 [Design, parameter units and tuning checks](../../docs/three-vehicle-drift.md).
 
 
@@ -516,9 +528,9 @@ shoulder distance. A distant opening composition is not a reason to override the
 gameplay follow distance or eye offset.
 
 Use `world.useAuthoredCamera()` for an authored opening, then return control with
-`training.camera` when play begins. Compare each enabled mode on foot, entering,
-mounted, exiting and after reset in the real-input playtest. For a focused Creator
-check, select the view and capture its actual world pixels:
+`training.camera` when play begins. Inspect the views needed by the task or an
+observed camera problem. For a focused Creator check, select the view and capture
+its actual world pixels:
 
 ```js
 world_execute_command({command:{type:'training.camera',mode:2}})
@@ -976,6 +988,65 @@ presentation switches stay out of public profile fields. Config changes require
 rebuilding the SDK; authored Three geometry and gameplay remain ordinary code.
 
 <!-- topic:training -->
+## Configuration-first vehicle authoring
+
+Creator vehicles use Agent-authored Three geometry. Select their handling before
+modeling; do not load supplied or external vehicle model assets. The Host default
+asset policy excludes catalog vehicle models. Permitted humans and creatures
+remain separate asset subjects.
+
+```ts
+import {training} from '@worldkit/three';
+const spec = training.createRoadVehicleSpec('motorcycle'); // or 'car'
+spec.id = 'my-vehicle';
+// Build your own Mesh/Group using spec.wheelPhysics, spec.envelope and spec.seat.
+// Pass {instanceId:spec.id, assetId:'custom.vehicle', object:myRoot, spec}
+// in createHumanoidWorld({vehicles:[...]}).
+```
+
+Start with these defaults; no source inspection or separate tuning step is needed.
+This factory returns fresh, independent data: controller family, speeds,
+steering/braking, physical mass and dimensions, explicit ordered wheels,
+powertrain, collision envelope and pelvis seat. It creates no geometry, assets,
+rigid body or clock. `car` uses four driven wheels and front steering;
+`motorcycle` uses rear drive, front steering and grounded balance assistance.
+Only these two road presets are provided here; other motion families retain
+their specialized controllers. `accel` remains a required legacy spec field but
+per-wheel acceleration comes from the powertrain.
+
+| Model binding | Configuration and authoring rule |
+| --- | --- |
+| Root | Metres, +Y up, +Z forward; unit scale and ground-level origin. Hand the vehicle root to the SDK; author visual children. |
+| Wheels | Iterate `wheelPhysics.wheels` in order. Each `{x,z}` is a hub location; Y is `hubHeight`. Use `radius` and `wheelWidth` for geometry. |
+| Wheel hierarchy | One steering Group per wheel, with a spin Group child. Steering rotates about Y; spin rotates about X. Keep the same order in `wheelRigs`. |
+| Chassis | Match `envelope` and configured dimensions. The solver derives a simplified tapered hull/cabin; arbitrary visual silhouettes do not automatically become collision shapes. |
+| Seat | `spec.seat` is the local pelvis anchor, not the cushion top. Use the supplied drive/ride pose; check actual cushion and limb clearance. |
+| Environment | Declare real ground/obstacles, a region allowing `spec.mode`, and a spawn matching the instance. Movable props additionally need `rigidGroup`. |
+| Display | Pass `sample.vehicles[index]` from `onVisualUpdate((dt,sample)=>...)` to `training.updateVehicleWheels`. This carries suspension, spin and steering at the chassis display time. |
+
+Read the full [motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
+with `creator_get_examples({topic:'custom-vehicle'})`, or the
+[self-drawn car](../../examples/three-creator/vehicle-camera/main.ts) with
+`topic:'vehicle-camera'`. Both use only the preset humanoid asset. The car example
+includes transparent windows and SDK camera switching. HUDs and buttons are
+Presentation DOM code; `training.recover` is the SDK recovery command.
+
+For the Host baseline, request
+`creator_get_authoring_schema({topic:'training',sections:['training']})` to read
+`roadVehicleConfigurations` and the actual source contracts. A materialized
+workspace SDK exposes its source definitions, not potentially stale Host preset
+values. Change dimensions before building geometry; coordinate any later changes
+across physics, wheel visuals and seat fit. Include the requested driving and
+interaction outcomes in the existing real-input self-check. Query configuration
+or diagnostics when needed; this workflow adds no mandatory tool calls or gates.
+
+Current integration covers road physics and movable props. Detailed RPM/gear and
+wheel-load/slip telemetry is not yet directly exposed by the Agent's standard
+observation tools; the self-drawn examples also do not include the Playground
+engine dashboard. These are optional observation/presentation follow-ups, not
+production prerequisites. See the [integration status](../../docs/reviews/2026-09-09-creator-vehicle-integration-status.md)
+for scope, evidence and remaining work.
+
 ## Per-wheel road simulation
 
 An optional `VehicleSpec.wheelPhysics` enables the configurable road model for
@@ -1106,6 +1177,18 @@ world transforms. Ungrouped boxes remain fixed. EnvironmentQueries owns the body
 in the existing Rapier world, with gravity, CCD, friction and angular motion.
 `propBoxPose(id)` returns each physical part's current world pose for presentation;
 `resetProps()` restores the original group poses and clears velocities.
+
+Use this configuration for authored loose furniture and obstacles whose requested
+behavior includes pushing or tipping. Give them real support geometry and keep
+the total group mass identical on every part; a floating tabletop will fall.
+Leave floors, buildings and fixed course structures ungrouped.
+`creator_get_examples({topic:'character-actions'})` supplies a complete example
+in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
+callback reads the current `world.training.simulation.environment` after every
+reset/map replacement and applies `propBoxPose` to scene-root meshes. For meshes
+under transformed parents, convert these world poses into parent-local space.
+Use `world.reset()` for a complete scene reset, including characters and items;
+observation callbacks only copy poses and never step or reset physics.
 
 The playground groups chairs and tables, and makes loose boards and freestanding
 markers movable. Building and traversal-course structures remain fixed. Seat

@@ -1,6 +1,7 @@
-# Rover camera and glass
+# Self-drawn car camera and glass
 
-A native Three scene using `humanoid.source-101` and `training.rover`. Creator's
+A native Three scene using only `humanoid.source-101`. It selects
+`training.createRoadVehicleSpec('car')` before drawing its own car geometry. Creator's
 `creator_get_examples({topic:'vehicle-camera'})` returns the entry files and the
 local [material helper](whitebox-materials.ts); request `README.md` separately.
 Keep the full returned source graph and [asset selection](project.json).
@@ -10,10 +11,10 @@ first person and shoulder. Space jumps on foot and brakes while driving. The
 Presentation DOM Reset button calls `world.reset()`. The HUD reads the SDK's
 current camera mode; `profile.view` enables T and restores third person on reset.
 
-The nominal camera distance is 11 m; collision can shorten it. Rover speed is
-12 m/s and acceleration is 6 m/s². Its supplied seat, geometry and movement
-envelope remain intact. The nearby solid wall uses matching visual and collision
-boxes, so camera obstruction can be compared with the rover's open cabin/glass.
+The nominal camera distance is 11 m; collision can shorten it. Normal speed is 12 m/s and boost speed is 16 m/s. Acceleration comes from the
+configured powertrain. Wheel geometry and seat placement follow the model-free
+configuration; wheel presentation reads the same SDK display sample. The nearby solid wall uses matching visual and collision
+boxes, so camera obstruction can be compared with the car's open cabin/glass.
 The SDK owns physics, animation, time and the active camera.
 
 `applyWhiteboxMaterials(root)` clones each distinct mesh material once, maps each

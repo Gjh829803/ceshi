@@ -1,3 +1,4 @@
+import * as publicTraining from './public';
 import {getMap} from '../../../../shared/training-content/environment/maps';
 import {SPECS as playgroundVehicles} from '../../../../shared/training-content/config';
 import {createRoadPhysicsProfile} from './wheel-physics';
@@ -232,4 +233,25 @@ describe('per-wheel road vehicle',()=>{
  it('has no tyre drive in air, falls and settles after landing',()=>{const f=fixture();try{f.v.position.y=3;run(f,8,{...emptyInput(),forward:1});expect(f.v.wheelPhysics!.wheels.every(w=>!w.contact&&w.force===0)).toBe(true);expect(f.v.velocity.z).toBeCloseTo(0);expect(f.v.velocity.y).toBeLessThan(0);expect(f.v.wheelPhysics!.wheels[0]!.omega).toBeGreaterThan(0);run(f,240);expect(f.v.grounded).toBe(true);expect(Math.abs(f.v.position.y)).toBeLessThan(.1);}finally{f.q.dispose();}});
  it('cannot drive through a wall',()=>{const f=fixture([{id:'wall',position:[0,2,9],size:[15,4,.3]}]);try{run(f,240,{...emptyInput(),forward:1});expect(f.v.position.z).toBeLessThan(6.8);}finally{f.q.dispose();}});
  it('renders the supplied suspension and wheel angle without integrating a second clock',()=>{const steering=new Group(),spin=new Group();const visual={wheelRigs:[{steering,spin,radius:.52}],steering:[steering]};const pose={position:new Vector3(),rotation:new Quaternion(),steering:0,wheels:[{length:.15,angle:4.2,steer:.2}]};for(const dt of [0,.016,.1,0])updateVehicleWheels(visual,pose,{grounded:true,dt,revision:0});expect(spin.rotation.x).toBe(4.2);expect(steering.position.y).toBeCloseTo(.62);expect(steering.rotation.y).toBe(.2);});
+});
+
+
+describe('model-free road vehicle configurations',()=>{
+ it.each(['car','motorcycle'] as const)('creates independent %s configurations that drive without a model asset',kind=>{
+  const selected=publicTraining.createRoadVehicleSpec(kind);
+  expect(selected.mode).toBe(kind==='car'?'wheeled':'bike');
+  expect(selected.wheelPhysics.wheels).toHaveLength(kind==='car'?4:2);
+  expect(selected.wheelPhysics.powertrain.torqueCurve.length).toBeGreaterThan(1);
+  expect(selected.brakeDrift).not.toBe(true);
+  const f=fixture();f.v=createVehicle(selected);
+  try{run(f,180);expect(f.v.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
+   run(f,180,{...emptyInput(),forward:1});expect(f.v.position.z).toBeGreaterThan(2);expect(f.v.speed).toBeGreaterThan(2);
+  }finally{f.q.dispose();}
+  selected.wheelPhysics.wheels[0]!.x=999;selected.seat[1]=999;
+  const next=publicTraining.createRoadVehicleSpec(kind);
+  expect(next.wheelPhysics.wheels[0]!.x).not.toBe(999);expect(next.seat[1]).not.toBe(999);
+ });
+ it('rejects an unknown handling family instead of silently selecting a car',()=>{
+  expect(()=>publicTraining.createRoadVehicleSpec('boat' as 'car')).toThrow('TRAINING_ROAD_KIND_INVALID');
+ });
 });

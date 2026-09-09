@@ -32,8 +32,11 @@ const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 try{
  await readFile(path.join(workspace,'requirement.md'),'utf8');
  await tool('creator_describe_environment');await tool('creator_get_authoring_schema',{topic:'training'});
- for(const assetId of ['humanoid.source-101','training.rover','training.patrol-boat']){const described=await tool('assets_describe',{assetId});assert.equal(described.assets.length,1);}
- await tool('assets_search',{query:'patrol'});await tool('world_validate');
+ const human=await tool('assets_describe',{assetId:'humanoid.source-101'});assert.equal(human.assets.length,1);
+ const configurations=await tool('creator_get_authoring_schema',{topic:'training',sections:['training']});
+ assert(configurations.roadVehicleConfigurations?.car||configurations.runtimeDefinitions,'Vehicle configuration/source unavailable');
+ // The authored harbor supplies its own car and boat geometry; vehicle model assets are not required.
+ await tool('world_validate');
  const initial=await tool('world_inspect');assert.deepEqual(initial.pageErrors,[]);assert.deepEqual(initial.blockedNetworkRequests,[]);
  for(const id of ['person','rover-instance-1','patrol-instance-1'])assert(initial.observation.targets[id]?.bounds,`Model not loaded: ${id}`);
  const action=await command({type:'training.action',request:{requestId:'acceptance-roll',action:'roll'}});assert.equal(action.status,'accepted');

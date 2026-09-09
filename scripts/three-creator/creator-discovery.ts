@@ -19,7 +19,7 @@ const sectionFields = {
   guide: ['entryPoint', 'sdkGuide', 'cameraAuthoring', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
-  training: ['trainingSourceContracts', 'trainingExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
+  training: ['roadVehicleConfigurations', 'trainingSourceContracts', 'trainingExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
 } as const;
 
 /** Read-only guidance over the compiler's frozen catalog; no browser/evidence ownership. */
@@ -37,10 +37,11 @@ export class CreatorDiscovery {
     const includesTraining = isSdk && ['training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const includesCommands = isSdk && ['control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const suggestedExample = topic === 'mounted-interaction' ? 'mounted-interaction' :
-      topic === 'character-actions' ? 'character-actions' : 'independent-world';
+      topic === 'character-actions' ? 'character-actions' : 'custom-vehicle';
     const trainingExampleTopic = includesTraining && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
     const sourceFiles = ['training/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'training/environment/types.ts', 'training/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('training/horse.ts');
+    if (['training','mounted-interaction','all'].includes(topic)) sourceFiles.push('training/road-vehicle.ts','training/wheel-physics.ts','training/powertrain.ts','training/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('training/humanoid/action-schema.ts', 'training/simulation.ts');
     const trainingSourceContracts = includesTraining ? Object.fromEntries(await Promise.all(
       sourceFiles.map(async name => [name, trainingContractSource(await guidance.source(name))]),
@@ -73,6 +74,7 @@ export class CreatorDiscovery {
       ...(includesCommands ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
       ...(guidance.isWorkspace?{runtimeDefinitions:await guidance.definitions(includesTraining||includesCommands)}:{}),
       ...(trainingSourceContracts ? { trainingSourceContracts } : {}),
+      ...(isSdk&&!guidance.isWorkspace&&['training','mounted-interaction','all'].includes(topic)?{roadVehicleConfigurations:{car:training.createRoadVehicleSpec('car'),motorcycle:training.createRoadVehicleSpec('motorcycle')}}:{}),
       ...(trainingExampleTopic ? { trainingExampleTopic } : {}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.',
     };

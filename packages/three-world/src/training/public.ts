@@ -27,3 +27,5 @@ export type {PowertrainConfig,PowertrainState} from './powertrain';
 export * from './input-guidance';
 
 export {controlFields,controlKeys,controlSchemaForFamily,type ControlField} from '../config/control-fields';
+
+export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';

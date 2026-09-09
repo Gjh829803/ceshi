@@ -17,6 +17,8 @@ vi.mock('node:fs/promises', async importOriginal => {
 });
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { ThreeCompiler, hashTree } from './compiler.js';
+import catalog from '../../assets/three-creator/asset-catalog.json';
+import {createAssetPolicySnapshot,assetPolicyHash} from './asset-policy.mjs';
 const roots: string[] = [];
 async function fixture() {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'three-compiler-boundary-'))); roots.push(root);
@@ -43,7 +45,12 @@ it.each([
 ] as const)('packages %s with only its required creature models', async (id, expected) => {
   const root = await fixture();
   await writeFile(path.join(root, 'project.json'), JSON.stringify({ schemaVersion: 1, assetIds: [id] }));
-  const candidate = await new ThreeCompiler(root, 'three-raw').prepare();
+  // Test historical compound-asset packaging with an explicit fixture policy;
+  // the production default intentionally excludes vehicle models.
+  const policyRoot=await mkdtemp(path.join(os.tmpdir(),'compiler-asset-fixture-'));roots.push(policyRoot);
+  const snapshot=createAssetPolicySnapshot({schemaVersion:1,allowedAssetIds:['humanoid.source-101',id],defaultHumanoidAssetId:'humanoid.source-101',allowCustomAssets:true},catalog.assets);
+  const policyPath=path.join(policyRoot,'policy.json');await writeFile(policyPath,JSON.stringify(snapshot));
+  const candidate = await new ThreeCompiler(root, 'three-raw',{assetPolicySnapshotPath:policyPath,assetPolicySha256:assetPolicyHash(snapshot)}).prepare();
   const definitions = JSON.parse(await readFile(path.join(candidate.playableRoot, 'asset-definitions.json'), 'utf8')) as {
     assets: { id: string; resources: { path: string; uri: string; byteLength: number }[] }[];
   };

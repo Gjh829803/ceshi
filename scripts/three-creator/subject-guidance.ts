@@ -14,6 +14,7 @@ export function subjectAuthoringGuidance(profile:CreatorProfile){
    {id:'mounted',when:'A human rides or drives a separate creature or vehicle.',entryPoint:'createHumanoidWorld',schemaTopic:'mounted-interaction',exampleTopic:'custom-vehicle'},
    {id:'nonhuman',when:'An animal or other nonhuman creature is itself the controlled subject.',entryPoint:'createWorld',schemaTopic:'nonhuman-subject',exampleTopic:'nonhuman-subject'},
   ],
+  vehicleAuthoring:{modelPolicy:'Author vehicle Mesh/Group geometry; do not load vehicle models. Select handling before drawing; use defaults and inspect details only as needed.',handlingTypes:['car','motorcycle'],factory:'training.createRoadVehicleSpec',schemaTopic:'training',exampleTopic:'custom-vehicle'},
   capabilities:'Read selected assets and the current SDK contracts for movement, animation and collision support. A wingsuit wearer is still a human with a movement mode; a mermaid or dragon needs its own compatible form and movement. Names, appearance and animation clips do not establish flight, swimming or navigation support.',
  };
 }
