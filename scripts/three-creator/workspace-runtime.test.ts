@@ -16,18 +16,22 @@ it('materializes only runtime sources, compiles edits and packages the exact sou
  try{
   const result:any=await executeThreeCreatorTool(service,'creator_materialize_runtime',{});
   expect(result).toMatchObject({directory:'sdk',created:true});
+  expect(result.runtimeSourceHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(result).not.toHaveProperty('sourceHash');
   const sources=await service.compiler.sourceFiles();
   expect(sources.has('sdk/three-world/src/world.ts')).toBe(true);
   expect(sources.has('sdk/camera-collision/src/index.ts')).toBe(true);
   expect([...sources.keys()].some(name=>name.includes('.test.')||name.includes('scripts/cloud')||name.includes('auth.json'))).toBe(false);
-  const first=await service.compiler.prepare();expect(first.runtimeSourceHash).toBe(result.sourceHash);
+  const first=await service.compiler.prepare();expect(first.runtimeSourceHash).toBe(result.runtimeSourceHash);
   const index=path.join(root,'sdk/three-world/src/index.ts');await writeFile(index,(await readFile(index,'utf8'))+'\nconsole.info("WORKSPACE_RUNTIME_EDIT");\n');
   const next=await service.compiler.prepare();
   expect(next.runtimeHash).not.toBe(first.runtimeHash);expect(next.runtimeSourceHash).not.toBe(first.runtimeSourceHash);
   expect(next.worldBuildHash).not.toBe(first.worldBuildHash);
   expect(await readFile(path.join(next.playableRoot,'runtime/worldkit-three.js'),'utf8')).toContain('WORKSPACE_RUNTIME_EDIT');
   expect(await readFile(path.join(next.sourceRoot,'sdk/three-world/src/index.ts'),'utf8')).toContain('WORKSPACE_RUNTIME_EDIT');
-  expect(await service.compiler.materializeRuntime()).toMatchObject({created:false,sourceHash:next.runtimeSourceHash});
+  const existing=await service.compiler.materializeRuntime();
+  expect(existing).toMatchObject({created:false,runtimeSourceHash:next.runtimeSourceHash});
+  expect(existing).not.toHaveProperty('sourceHash');
  }finally{await service.close();}
 });
 

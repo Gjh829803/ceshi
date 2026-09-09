@@ -210,6 +210,7 @@ class EvaluationSiteTests(unittest.TestCase):
             self.assertEqual(row['metrics']['activePlaySeconds'], 180)
             self.assertEqual(row['metrics']['inputWallSeconds'], 185)
             self.assertEqual(row['metrics']['actualWallSeconds'], 200)
+            self.assertNotIn('simulationSeconds', row['metrics'])
             self.assertTrue((self.root / 'staged' / row['playable']).is_file())
         self.assertFalse(any(p.name == 'project.json' or p.suffix == '.ts' for p in (self.root / 'staged').rglob('*')))
 

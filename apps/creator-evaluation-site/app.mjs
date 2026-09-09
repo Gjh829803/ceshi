@@ -524,7 +524,7 @@ function mountArtifacts(c) {
     const m = c.metrics || {};
     if (a.intermediate) metrics($("metrics"), [["中间版本", "交付状态"], [shortHash(a.worldBuildHash), "可用构建"], [formatTime(a.createdAt), "保存时间"]]);
     else if (c.validationMode === "interactive-preview") metrics($("metrics"), [["实时预览", "生成检查方式"], ["可直接体验", "路线与探索"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
-    else metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.simulationSeconds) ? `${m.simulationSeconds} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
+    else metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.actualWallSeconds) ? `${m.actualWallSeconds.toFixed(1)} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制墙钟时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
     $("play-controls").textContent = c.profile === "three-sdk" ? "点击场景后操作：WASD 移动 · Shift 冲刺 · Space 跳跃 / 翻越 / 起身 · C/Ctrl 蹲伏 · Shift + C/Ctrl 滑铲 · Z 匍匐 · Q 翻滚 · E 交互 · G 放下 · F 上下载具。动作需满足场景与状态条件，具体改键以场景说明为准。" : "WASD 移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体操作以场景说明为准。";
   }
   renderPlayerVersion(c, a);
