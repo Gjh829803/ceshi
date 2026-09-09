@@ -8,6 +8,8 @@ export interface EnvironmentBox {
   color?: string;
   surface?: 'concrete' | 'asphalt' | 'grip' | 'ice' | 'metal';
   collision?: boolean;
+  /** 同组碰撞盒组成一个刚体；massKg 是整组总质量。 */
+  rigidGroup?: {id:string;massKg:number};
 }
 export interface WaterVolume {
   id: string;

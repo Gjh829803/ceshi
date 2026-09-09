@@ -20,6 +20,15 @@ const map:MapDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK training runtime',()=>{
+ it('exposes in-place recovery through the command path without changing driver or camera mode',async()=>{
+  const world=await fixture();try{const runtime=world.training!;
+   expect(()=>runtime.command({type:'training.recover'})).toThrow('TRAINING_COMMAND_BLOCKED');
+   runtime.approach('car-1');expect(runtime.enter('car-1')).toBe(true);runtime.setCameraMode(2);
+   const v=runtime.simulation.vehicle!;v.position.set(-20,2,-20);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.velocity.set(2,0,3);
+   runtime.command({type:'training.recover'});expect(v.position.x).toBe(-20);expect(v.position.z).toBe(-20);expect(v.velocity.length()).toBe(0);
+   expect(runtime.snapshot().mountedInstanceId).toBe('car-1');expect(runtime.snapshot().cameraMode).toBe(2);
+  }finally{world.dispose();}
+ });
  it('reports a real boarding approach and the same enter eligibility without moving or clearing failure state',async()=>{
   const world=await fixture();try{const r=world.training!,s=r.simulation;
    world.step({});const before=world.getEntityState('player');const time=s.time;s.message='preserve observation state';
@@ -243,6 +252,15 @@ describe('SDK training runtime',()=>{
    const result=await world.execute({type:'training.action',request:{requestId:'distant-seat',action:'sit',targetId:'seat'}});
    expect(result).toMatchObject({status:'rejected',error:{code:target.reason}});expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(before);
    (target.approachPositionWorldMetersXYZ as unknown as number[])[0]=100;expect(runtime.snapshot().interactionTargets[0]!.approachPositionWorldMetersXYZ[0]).toBe(5);
+  }finally{world.dispose();}
+ });
+ it('moves seat anchors with a compound prop and rejects a toppled seat',async()=>{
+  const world=await fixture();try{const r=world.training!;
+   r.switchMap({...map,boxes:[map.boxes[0]!,{id:'chair-shape',position:[5,.5,5],size:[1,1,1],rigidGroup:{id:'chair',massKg:8}}],interactions:[{id:'chair-seat',label:'Seat',kind:'seat',position:[5,1,5],approach:[5,0,4],yaw:0,colliderIds:['chair-shape']}]});
+   r.simulation.setHumanoidAssets(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   const body=r.environment.colliderForId('chair-shape')!.parent()!;body.setTranslation({x:8,y:.5,z:5},true);body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2),true);world.step({},1);
+   const target=r.snapshot().interactionTargets[0]!;expect(target.positionWorldMetersXYZ[0]).toBeGreaterThan(7);expect(target.reason).toBe('SEAT_UNSTABLE');
+   r.environment.resetProps();world.step({},1);expect(r.snapshot().interactionTargets[0]!.positionWorldMetersXYZ[0]).toBeCloseTo(5,2);
   }finally{world.dispose();}
  });
  it('uses E to enter a collider-backed climb, Space to attempt the top and crouch to release',async()=>{

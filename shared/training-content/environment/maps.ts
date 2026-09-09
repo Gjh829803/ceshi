@@ -33,6 +33,12 @@ function campusBoxes():EnvironmentBox[]{
  for(const [i,deg] of [5,12,22].entries()){const x=5+i*22,rise=Math.tan(deg*Math.PI/180)*32;b.push(ramp(`grade-${deg}`,x,162,14,32,rise));add(`grade-${deg}-landing`,x,rise/2,181,14,rise,6,'#91acb4');}
  b.push(block('grade-crossfall',[86,1.25,176],[22,.3,34],'#b1bda9',[0,0,.10]));
  for(let i=0;i<6;i++)add(`grade-step-${i}`,90,(i+1)*.12,211+i*3,18,(i+1)*.24,3,'#b7c6c7');
+ // 三辆四轮车出发后直行即可验证交错单轮压坎与整轴减速带。
+ for(const [lane,x] of [-24,-10,-38].entries()){const start=lane===2?35:64;
+  add('suspension-left-'+lane,x-1.1,.06,start+14,.9,.12,1.1,'#c7a271');
+  add('suspension-right-'+lane,x+1.1,.06,start+20,.9,.12,1.1,'#c7a271');
+  add('suspension-axle-'+lane,x,.075,start+26,3.2,.15,1.1,'#c7a271');
+ }
  add('thin-wall',-64,3.5,-42,.3,7,38,'#d2a482');
  for(let i=0;i<14;i++)add(`slalom-${i}`,-43+(i%2)*14,.65,108+i*5,.9,1.3,.9,'#e6a170');
  // Hangar opens toward the runway; aircraft spawn remains unobstructed.
@@ -45,7 +51,8 @@ function campusBoxes():EnvironmentBox[]{
  add('stable-roof',112,3.55,16,10,.35,19,'#837257');
  add('stable-back',116,1.5,16,.25,3,16,'#b1956b');
  for(const x of [32,46,60,74,88])add(`paddock-marker-${x}`,x,.24,0,.55,.48,.55,'#c7ae76');
- b.push(...characterCourse.boxes);
+  b.push(...characterCourse.boxes);
+  for(const box of b)if(/^(slalom-|paddock-marker-|suspension-)/.test(box.id))box.rigidGroup={id:box.id,massKg:box.id.startsWith('suspension-')?25:8};
  return b;
 }
 const campus:MapDefinition={id:'campus',name:'VECTOR 综合训练园区',description:'连续驾驶、室内、多层地形、水域与飞行测试场',bounds:{min:[-500,-50,-500],max:[500,300,500]},boxes:campusBoxes(),water:[{id:'basin',min:[170,-44,-245],max:[478,-2,245],surface:-2}],regions,playerSpawn:[-24,0,55],spawns:[...originalSpawns,...[

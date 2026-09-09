@@ -13,7 +13,9 @@ describe('training workspace configuration',()=>{
  it.each(SPECS.filter(spec=>spec.mode==='wheeled'||spec.mode==='bike').map(spec=>spec.id))('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
   const spec=SPECS.find(s=>s.id===id);expect(spec).toBeDefined();
   const profile=getDefaultProfile(id);expect(profile).toBeDefined();
-  expect(spec!.brakeDrift).toBe(true);expect(profile!.control.brakeDeceleration).toBe(spec!.brakeDeceleration);expect(profile!.control.brakeDamping).toBe(spec!.brakeDamping);
+  // These presets use wheel forces, not the optional legacy brake-drift controller.
+  expect(spec!.wheelPhysics).toBeDefined();expect(spec!.brakeDrift).not.toBe(true);
+  expect(profile!.control.brakeDeceleration).toBeGreaterThan(0);expect(profile!.control.brakeDamping).toBeGreaterThan(0);
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(s=>({instanceId:s.id,assetId:s.id,spec:s,object:new Group()}))}});
   try{
    const runtime=world.training!,sim=runtime.simulation;
@@ -22,8 +24,12 @@ describe('training workspace configuration',()=>{
     expect(runtime.approach(id)).toBe(true);expect(runtime.enter(id)).toBe(true);world.step({},40);expect(runtime.exit()).toBe(true);
     prepareCourse(sim,map,mapId==='grand-prix'?'gp-straight':'staging',id);
     expect(runtime.enter(id)).toBe(true);applyControlProfile(runtime,profile!);
-    const origin=sim.vehicle!.position.clone();world.step({training:{...training.emptyInput(),forward:1}},180);
+    const origin=sim.vehicle!.position.clone();
+    // Torque curves and gear changes give each preset a different launch time.
+    // Keep the same distance requirement, with a bounded six-second driving window.
+    for(let frame=0;frame<360&&sim.vehicle!.position.distanceTo(origin)<=15;frame++)world.step({training:{...training.emptyInput(),forward:1}},1);
     expect(sim.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
+    expect(sim.vehicle!.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
     // Space remains a brake at parking speed; S intentionally becomes reverse below 1 m/s.
     const speed=sim.vehicle!.speed;world.step({training:{...training.emptyInput(),brake:true}},30);
     expect(Math.abs(sim.vehicle!.speed)).toBeLessThan(speed);
@@ -33,6 +39,16 @@ describe('training workspace configuration',()=>{
     expect(runtime.exportProfile().vehicles?.[id]?.speed).toBe(17);
     await world.reset();expect(sim.vehicle).toBeFalsy();
    }
+   runtime.switchMap(getMap('campus'));
+   const others=sim.vehicles.filter(v=>v.spec.id!==id).map(v=>v.position.clone());
+   prepareCourse(sim,getMap('campus'),'grades',id);
+   const staged=sim.vehicles.find(v=>v.spec.id===id)!;
+   expect(staged.position.x).toBeCloseTo(27);expect(staged.position.z).toBeCloseTo(139);
+   expect(sim.vehicles.filter(v=>v.spec.id!==id).map(v=>v.position.clone())).toEqual(others);
+   expect(runtime.enter(id)).toBe(true);
+   for(let frame=0;frame<360&&sim.vehicle!.position.z<150;frame++)world.step({training:{...training.emptyInput(),forward:1}},1);
+   expect(sim.vehicle!.position.z).toBeGreaterThanOrEqual(150);
+   expect(sim.vehicle!.position.y).toBeGreaterThan(.1);
   }finally{world.dispose();}
  });
  it('prepares every circuit driving section on supported clear ground and drives past the old campus boundary',async()=>{
@@ -150,7 +166,10 @@ describe('training workspace configuration',()=>{
  it('authors every configured campus spawn and approaches the actual patrol boat in water without moving it',async()=>{
   const map=getMap('campus');
   expect(map.spawns.filter(s=>s.vehicleId)).toHaveLength(SPECS.length);
-  for(const spec of SPECS)expect(map.spawns.find(s=>s.vehicleId===spec.id)?.position).toEqual(spec.spawn);
+  for(const spec of SPECS){
+   const spawns=map.spawns.filter(s=>s.vehicleId===spec.id);
+   expect(spawns).toHaveLength(1);expect(spawns[0]?.position).toEqual(spec.spawn);
+  }
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},training:{map,character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(spec=>({instanceId:spec.id,assetId:spec.id,spec,object:new Group()}))}});
   try{const r=world.training!,boat=r.simulation.vehicles.find(v=>v.spec.id==='patrol-boat')!;
    const before=boat.position.clone();expect(r.environment.waterAt(before)).not.toBeNull();

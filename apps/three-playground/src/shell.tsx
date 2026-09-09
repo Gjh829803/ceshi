@@ -47,6 +47,8 @@ export function mountShell(host: HTMLElement) {
     activeId: "person",
     controls: [] as [string, string][],
     system: [] as [string, string][],
+    recoverable:false,
+    drivetrain:null as null|{rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
     interaction: "",
     pacing: null as FrameRateReading | null,
     configurationDirty: false,
@@ -175,6 +177,7 @@ export function mountShell(host: HTMLElement) {
           </div>
         </section>
         <div className="stage-actions">
+          {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
           <label
             className={`subtle-button collider-toggle ${s.collider !== "off" ? "active" : ""}`}
           >
@@ -260,6 +263,7 @@ export function mountShell(host: HTMLElement) {
         >
           <Hint value={s.interaction} />
         </div>
+        {s.drivetrain&&<section className="powertrain-hud" aria-label="发动机与变速箱"><strong>{s.drivetrain.gear}</strong><span>{Math.round(s.drivetrain.rpm)} RPM</span><span>{s.drivetrain.speed} km/h</span><meter min={0} max={s.drivetrain.maxRpm} value={s.drivetrain.rpm}/><small>{s.drivetrain.shifting?'换挡中':'自动变速箱'} · 油门 {s.drivetrain.throttle}%</small></section>}
         <div className="bottom-hint">{t("bottomHint")}</div>
         {["left", "right"].map((side) => (
           <div key={side} className={`touch ${side}`}>

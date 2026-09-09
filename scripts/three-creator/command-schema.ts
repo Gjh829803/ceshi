@@ -18,7 +18,7 @@ const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optiona
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
  command('training.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
- {...command('training.approach',{instanceId:string}),description:training.TRAINING_APPROACH_DESCRIPTION},command('training.enter',{instanceId:string}),command('training.exit',{}),
+ {...command('training.approach',{instanceId:string}),description:training.TRAINING_APPROACH_DESCRIPTION},command('training.enter',{instanceId:string}),command('training.exit',{}),command('training.recover',{}),
  command('training.camera',{mode:{enum:[0,1,2]}}),command('training.input',{input:{anyOf:[trainingInput,{type:'null'}]}}),
  command('training.profile',{profile:trainingProfile}),
  command('training.action',{request:objectSchema({requestId:string,action:{enum:training.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])}),

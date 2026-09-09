@@ -20,6 +20,10 @@ export type { TrainingCommand } from './runtime';
 export { TrainingHorse } from './horse';
 export type { TrainingHorseFrame, TrainingSeatAnchor, TrainingResourceResolver } from './horse';
 
+export type {TrainingDisplaySample} from './presentation';
+export {createRoadPhysicsProfile} from './wheel-physics';
+export type {WheelLayout,WheelPhysicsConfig,SimulatedWheel} from './wheel-physics';
+export type {PowertrainConfig,PowertrainState} from './powertrain';
 export * from './input-guidance';
 
 export {controlFields,controlKeys,controlSchemaForFamily,type ControlField} from '../config/control-fields';

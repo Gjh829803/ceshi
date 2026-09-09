@@ -104,6 +104,8 @@ it('returns a readable schema guide first and actual source contracts only when 
   const tools = await service();
   const guide = await schema(tools, { topic: 'mounted-interaction' });
   expect(guide.sdkGuide).toContain('Imported horse');
+  expect(guide.sdkGuide).not.toContain('## Per-wheel road simulation');
+  expect((await schema(tools, { topic: 'training' })).sdkGuide).toContain('## Per-wheel road simulation');
   expect(guide).not.toHaveProperty('sdkContracts');
   expect(guide).not.toHaveProperty('trainingSourceContracts');
   expect(guide.availableSections).toContain('training');

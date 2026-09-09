@@ -8,6 +8,7 @@ export interface EnvironmentBox {
   color?: string;
   surface?: 'concrete' | 'asphalt' | 'grip' | 'ice' | 'metal';
   collision?: boolean;
+  rigidGroup?: {id:string;massKg:number};
 }
 export interface WaterVolume {
   id: string;

@@ -2,7 +2,7 @@ import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Group, Object3D } from 'three';
 export interface VehicleVisual {wheelRigs:{steering:Group;spin:Group;radius:number}[];steering:Object3D[]}
 
-export interface WheelPose {position:Vector3;rotation:Quaternion;steering:number}
+export interface WheelPose {wheels?:readonly {hubHeight?:number;length:number;angle:number;steer:number}[]|undefined;position:Vector3;rotation:Quaternion;steering:number}
 export interface WheelFrame {grounded:boolean;dt:number;revision:number;active?:boolean}
 interface RollingState {position:Vector3;direction:Vector3;angularSpeed:number}
 interface VehicleRollingState {revision:number;initialized:boolean;position:Vector3;wheels:RollingState[]}
@@ -16,6 +16,7 @@ export function resetVehicleWheels(visual:VehicleVisual){const state=states.get(
 /** Render wheels from the same interpolated pose as their chassis. */
 export function updateVehicleWheels(visual:VehicleVisual,pose:WheelPose,frame:WheelFrame){
   if(visual.wheelRigs.length===0)return;
+  if(pose.wheels){visual.wheelRigs.forEach((rig,i)=>{const w=pose.wheels![i];if(!w)return;rig.steering.position.y=(w.hubHeight??rig.radius)+.25-w.length;rig.steering.rotation.y=w.steer;rig.spin.rotation.x=w.angle;});return;}
   let state=states.get(visual);
   if(!state){state={revision:frame.revision,initialized:false,position:new Vector3(),wheels:visual.wheelRigs.map(()=>({position:new Vector3(),direction:new Vector3(),angularSpeed:0}))};states.set(visual,state);}
   const teleported=state.revision!==frame.revision||state.position.distanceToSquared(pose.position)>25*25;

@@ -1,7 +1,8 @@
 # 轮式载具制动漂移
 
-适用于 `VehicleSpec.mode` 为 `wheeled` 或 `bike` 的载具。设置
-`brakeDrift: true` 启用。当前 Playground 的七款汽车、卡丁车和摩托车均已启用；
+适用于未配置 `wheelPhysics`、且 `VehicleSpec.mode` 为 `wheeled` 或 `bike` 的载具。
+设置 `brakeDrift: true` 启用。当前 Playground 的物理车辆使用逐轮轮胎力模型，
+保留该模型的手刹受力与既有操控参数，不启用此街机漂移路径。
 船、滑板、飞行器和坐骑不使用这套模型。
 
 ## 设计与执行归属

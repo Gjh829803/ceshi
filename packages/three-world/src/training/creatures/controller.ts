@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { VehicleSpec } from '../config';
+import { vehicleImpactMass,type VehicleSpec } from '../config';
 import { vehicleBody, type EnvironmentQueries, type MoveResult, type QueryBody } from '../environment/queries';
 import type { Input, VehicleState } from '../simulation';
 import type { CreatureState } from './types';
@@ -64,14 +64,14 @@ function turnIsClear(position:Vector3,body:QueryBody,fromYaw:number,toYaw:number
   for(let n=1;n<=samples;n++)if(!clearBody(position,body,rotationAt(fromYaw+change*n/samples),q))return false;
   return true;
 }
-function moveBody(position:Vector3,delta:Vector3,body:QueryBody,yaw:number,walking:boolean,q:EnvironmentQueries):MoveResult{
+function moveBody(position:Vector3,delta:Vector3,body:QueryBody,yaw:number,walking:boolean,q:EnvironmentQueries,push:{massKg:number;dt:number}):MoveResult{
   const rotation=rotationAt(yaw);
-  if(!walking)return q.move(position,delta,body,rotation);
+  if(!walking)return q.move(position,delta,body,rotation,0,push);
   // Separate floor support from horizontal control: combined diagonal sweeps can
   // slowly sink a long, yawed box into a flat floor through Rapier's contact tolerance.
   const horizontal=new Vector3(delta.x,0,delta.z);
   const distance=(p:Vector3)=>Math.hypot(p.x-position.x-delta.x,p.z-position.z-delta.z);
-  let across=q.move(position,horizontal,body,rotation);
+  let across=q.move(position,horizontal,body,rotation,0,push);
   if(distance(across.position)>1e-5){
     const stepped=q.move(position,horizontal,body,rotation,.45);
     if(distance(stepped.position)<distance(across.position))across=stepped;
@@ -134,7 +134,7 @@ function stepMount(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   if(turnIsClear(old,body,v.yaw,yaw,q))v.yaw=yaw;
   const direction=heading(v.yaw),vertical=v.grounded?-1:v.velocity.y-18*dt;
   v.velocity.copy(direction).multiplyScalar(speed);v.velocity.y=vertical;
-  const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,true,q);
+  const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,true,q,{massKg:vehicleImpactMass(v.spec),dt});
   if(clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
   v.velocity.copy(v.position).sub(old).divideScalar(dt);
   // Keep the full solved translation for observations and physical dismount.
@@ -158,8 +158,8 @@ function stepCarriage(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   desiredCart.y+=(v.grounded?-1:v.velocity.y-18*dt)*dt;
   const leadTurn=turnIsClear(oldLead,LEAD_HORSE_BODY,oldLeadYaw,leadYaw,q),cartTurn=turnIsClear(oldCart,body,oldCartYaw,cartYaw,q);
   if(!leadTurn||!cartTurn){v.velocity.set(0,0,0);return;}
-  const lead=moveBody(oldLead,desiredLead.clone().sub(oldLead),LEAD_HORSE_BODY,leadYaw,true,q);
-  const cart=moveBody(oldCart,desiredCart.clone().sub(oldCart),body,cartYaw,true,q);
+  const lead=moveBody(oldLead,desiredLead.clone().sub(oldLead),LEAD_HORSE_BODY,leadYaw,true,q,{massKg:550,dt});
+  const cart=moveBody(oldCart,desiredCart.clone().sub(oldCart),body,cartYaw,true,q,{massKg:450,dt});
   const horizontalError=(a:Vector3,b:Vector3)=>Math.hypot(a.x-b.x,a.z-b.z);
   // A hit on EITHER part cancels the horizontal advance of BOTH; the drawbar never stretches.
   const blocked=horizontalError(lead.position,desiredLead)>1e-5||horizontalError(cart.position,desiredCart)>1e-5||
@@ -182,7 +182,7 @@ function stepDragon(v:VehicleState,i:Input,dt:number,q:EnvironmentQueries){
   if(turnIsClear(old,body,v.yaw,yaw,q))v.yaw=yaw;
   const vertical=state.flying?approach(v.velocity.y,lift*(i.boost?10:7),18*dt):v.grounded?-1:v.velocity.y-18*dt;
   v.velocity.copy(heading(v.yaw)).multiplyScalar(speed);v.velocity.y=vertical;
-  const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,!state.flying,q);
+  const moved=moveBody(old,v.velocity.clone().multiplyScalar(dt),body,v.yaw,!state.flying,q,{massKg:vehicleImpactMass(v.spec),dt});
   if(clearBody(moved.position,body,rotationAt(v.yaw),q))v.position.copy(moved.position);
   v.velocity.copy(v.position).sub(old).divideScalar(dt);
   v.grounded=moved.grounded;

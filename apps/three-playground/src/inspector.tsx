@@ -47,6 +47,7 @@ export type InspectorTelemetry = {
 };
 export type InspectorTab = "movement" | "camera";
 export type InspectorMovement = {
+  powertrain?:boolean;
   family: string;
   control: ControlTuning;
   velocity: readonly number[];
@@ -231,7 +232,7 @@ function Inspector({
   const person = assetId === "person",
     shoulder = camera.mode === 2,
     cockpit = camera.mode === 1;
-  const descriptions = training.controlFields(movement.family);
+  const descriptions = training.controlFields(movement.family,movement.powertrain);
   const hasChanges =
     dirty.has(`${assetId}:movement`) || dirty.has(`${assetId}:camera`);
   const markDirty = (target: InspectorTab) =>

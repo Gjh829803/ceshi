@@ -31,6 +31,7 @@ export type TrainingCommand =
  | {readonly type:'training.prepare';readonly instanceId:string;readonly spawn:MapSpawn}
  | {readonly type:'training.approach'|'training.enter';readonly instanceId:string}
  | {readonly type:'training.exit'}
+ | {readonly type:'training.recover'}
  | {readonly type:'training.camera';readonly mode:0|1|2}
  | {readonly type:'training.input';readonly input:Input|null}
  | {readonly type:'training.profile';readonly profile:TrainingProfile}
@@ -144,7 +145,7 @@ export class TrainingRuntime implements PhysicsPort {
   private profile:TrainingProfile & {view:TrainingViewSettings}={view:{...DEFAULT_TRAINING_VIEW}};
   private readonly initialCamera:THREE.PerspectiveCamera;
   private currentMap:MapDefinition;
-  private readonly visualUpdates=new Set<(deltaSeconds:number)=>void>();
+  private readonly visualUpdates=new Set<(deltaSeconds:number,sample:TrainingDisplaySample)=>void>();
   private readonly simulationReplacements=new Set<()=>void>();
   static async create(options:TrainingOptions,camera:THREE.Camera):Promise<TrainingRuntime>{
     validateTrainingMap(options.map);
@@ -219,7 +220,7 @@ export class TrainingRuntime implements PhysicsPort {
   get cameraMode():'authored'|'follow'{return this.authored?'authored':'follow';}
   command(command:TrainingCommand):SkillResult|undefined{this.assertExternalMutation();return this.commandOwned(command);}
   private commandOwned(command:TrainingCommand):SkillResult|undefined{
-    const fields:Record<TrainingCommand['type'],readonly string[]>={'training.prepare':['instanceId','spawn'],'training.approach':['instanceId'],'training.enter':['instanceId'],'training.exit':[],'training.camera':['mode'],'training.input':['input'],'training.profile':['profile'],'training.action':['request']};
+    const fields:Record<TrainingCommand['type'],readonly string[]>={'training.prepare':['instanceId','spawn'],'training.approach':['instanceId'],'training.enter':['instanceId'],'training.exit':[],'training.recover':[],'training.camera':['mode'],'training.input':['input'],'training.profile':['profile'],'training.action':['request']};
     if(!Object.hasOwn(fields,command.type)||Object.keys(command).some(k=>k!=='type'&&!fields[command.type].includes(k)))throw new Error('TRAINING_COMMAND_INVALID');
     let accepted=true;
     switch(command.type){
@@ -227,6 +228,7 @@ export class TrainingRuntime implements PhysicsPort {
       case 'training.approach':accepted=this.approachOwned(command.instanceId);break;
       case 'training.enter':accepted=this.enterOwned(command.instanceId);break;
       case 'training.exit':accepted=this.exitOwned();break;
+      case 'training.recover':accepted=this.recoverVehicleOwned();break;
       case 'training.camera':this.setCameraModeOwned(command.mode);break;
       case 'training.input':this.setInputOwned(command.input??undefined,'training.input');break;
       case 'training.profile':this.applyProfileOwned(command.profile);break;
@@ -258,8 +260,8 @@ export class TrainingRuntime implements PhysicsPort {
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['humanoid',object(Object.fromEntries(HUMANOID_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const create=(type:TrainingCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='training.approach'?{description:TRAINING_APPROACH_DESCRIPTION}:{})}});
     if(id!==this.options.character.instanceId)return [create('training.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('training.approach',{instanceId:{const:id}}),create('training.enter',{instanceId:{const:id}})];
-    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.spec.mode),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
-    return [create('training.exit',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
+    const profile=object({view:object(TRAINING_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.spec.mode,!!vehicle.wheelPhysics),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
+    return [create('training.exit',{}),create('training.recover',{}),create('training.camera',{mode:{enum:[0,1,2]}}),create('training.input',{input:{anyOf:[input,{type:'null'}]}}),create('training.profile',{profile}),create('training.action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():TrainingSnapshot{
     const s=this.simulation,h=s.humanoid,tr=h?.traversal,surface=h?.surface;
@@ -323,6 +325,8 @@ export class TrainingRuntime implements PhysicsPort {
   prepare(id:string,spawn:MapSpawn):boolean{this.assertExternalMutation();return this.prepareOwned(id,spawn);}
   private prepareOwned(id:string,spawn:MapSpawn):boolean{const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
   private approachOwned(id:string):boolean{this.index(id);const ok=this.simulation.approach(id);this.sync(0);return ok;}
+  recoverVehicle():boolean{this.assertExternalMutation();return this.recoverVehicleOwned();}
+  private recoverVehicleOwned():boolean{const ok=this.simulation.recoverVehicle();if(ok){this.clearInputOwned();this.presentation.snap(this.simulation);this.followCamera.reset(this.simulation);this.sync(0);}return ok;}
   interact():boolean{this.assertExternalMutation();const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
   enter(id:string):boolean{this.assertExternalMutation();return this.enterOwned(id);}
   private enterOwned(id:string):boolean{const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
@@ -375,7 +379,7 @@ export class TrainingRuntime implements PhysicsPort {
     const controls=vehicle?.spec??this.simulation.characterControl;
     return {profile:this.exportProfile(),effective:{
       subjectId:vehicle?.spec.id??this.options.character.instanceId,family,
-      control:Object.fromEntries(controlFields(family).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
+      control:Object.fromEntries(controlFields(family,!!vehicle?.wheelPhysics).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
       camera:{owner:this.authored?'authored':'follow',mode:this.followCamera.mode as 0|1|2,settings:this.followCamera.getEffectiveTuning(this.simulation),framing:this.inspectCameraFraming()},
     }};
   }
@@ -399,7 +403,7 @@ export class TrainingRuntime implements PhysicsPort {
     return {advisory:true,status:'observed',reason:offsetsPending?'framing-offsets-await-camera-update':null,sampleSimulationSeconds:sample.simulationSeconds,sampledOffsets:sample.offsets,offsetsPending,headSource:sample.source,headPositionWorldMetersXYZ:tuple(sample.position),headScreenPositionNormalizedXY:point,headInFrame,
       issues:this.followCamera.mode===2&&offset&&edge?[{code:'SHOULDER_FRAMING_OFFSET_REVIEW',message:'The head anchor projects near or outside the frame with additional profile.camera offsets. Compare a current-view capture with targetHeightOffset and horizontalOffset at 0; these are additions to the SDK posture anchor, not eye height. Orbit and collision may also affect framing. Projection alone does not prove pixel visibility.'}]:[]};
   }
-  onVisualUpdate(callback:(deltaSeconds:number)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
+  onVisualUpdate(callback:(deltaSeconds:number,sample:TrainingDisplaySample)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
   onSimulationReplaced(callback:()=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
   switchMap(map:MapDefinition):void{this.assertExternalMutation();
     const profile=this.prepareProfile(this.profile);validateTrainingMap(map);
@@ -570,7 +574,7 @@ export class TrainingRuntime implements PhysicsPort {
       const last=this.visualSample;
       if(!last||last.epoch!==sample.epoch||last.previousTick!==sample.previousTick||last.currentTick!==sample.currentTick||last.alpha!==sample.alpha){
         const elapsed=last&&last.epoch===sample.epoch?sample.timeSeconds-last.timeSeconds:0;
-        for(const update of this.visualUpdates)update(elapsed);
+        for(const update of this.visualUpdates)update(elapsed,sample);
         this.visualSample=sample;
       }
       // Rider placement follows visual callbacks and uses the same vehicle sample.
