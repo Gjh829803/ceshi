@@ -1,4 +1,49 @@
-import {VEHICLE_ATTITUDE} from '../config/vehicle';
+import { VEHICLE_ATTITUDE } from '../config/vehicle';
+
+import {
+  createUnicycleState,
+  copyUnicycleState,
+  stepUnicycle,
+  finishUnicycleStep,
+  type UnicycleState,
+} from './unicycle';
+
+import {
+  createSubmersibleState,
+  copySubmersibleState,
+  stepSubmersible,
+  finishSubmersibleStep,
+  type SubmersibleState,
+} from './submersible';
+
+import {
+  stepRaft,
+  finishRaftContact,
+  createRaftState,
+  type RaftState,
+} from './raft';
+
+import {
+  stepJetSki,
+  finishJetSkiStep,
+  createJetSkiState,
+  copyJetSkiState,
+  type JetSkiState,
+} from './jetski';
+
+import {
+  stepKayak,
+  createKayakState,
+  type KayakState,
+} from './kayak';
+
+import {
+  stepAtv,
+  finishAtvStep,
+  createAtvState,
+  copyAtvState,
+  type AtvState,
+} from './atv';
 import {evaluateMount,evaluateDismount,type MountContext,type MountDecision,type MountFailureCode} from './mounted-interaction';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { HumanoidController,HUMANOID_BODY } from './humanoid/controller';
@@ -6,7 +51,27 @@ import type { MotionSource } from './humanoid/motion';
 import { resetCreatureState, stepCreature, canPlaceCreature, creatureBodies } from './creatures/controller';
 import type { CreatureState } from './creatures/types';
 import { coastSpeed, roadYawRate } from './handling';
-import {CONTROL_RANGES,DEFAULT_CHARACTER_CONTROL_BASE,defaultTrainingControl,parseTrainingControl,type TrainingControl} from '../config/control';
+import {
+  CONTROL_RANGES,
+  DEFAULT_CHARACTER_CONTROL_BASE,
+  defaultTrainingControl,
+  parseTrainingControl,
+  type TrainingControl,
+} from '../config/control';
+
+import {
+  stepSled,
+  type SledState,
+} from './sled';
+
+import {
+  stepTank,
+  finishTankStep,
+  createTankState,
+  type TankState,
+} from './tank';
+
+import { stepBus } from './bus';
 import { EnvironmentQueries, vehicleBody } from './environment/queries';
 import { groundVehiclePose } from './environment/vehicle-pose';
 import type { MapSpawn } from './environment/types';
@@ -17,14 +82,21 @@ export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b
 export interface HumanoidInput {toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
 export interface Input { forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;humanoid?:HumanoidInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
-export interface VehicleState { spec:VehicleSpec & TrainingControl; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined }
+export interface VehicleState { spec:VehicleSpec & TrainingControl; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & TrainingControl {
   const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof TrainingControl]]));
   const control=parseTrainingControl(authored,defaultTrainingControl(spec.mode,spec));
   return {...structuredClone(spec),...control};
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {
-  const state:VehicleState={spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
+  const state:VehicleState={...(spec.mode==='kayak'?{kayak:{...createKayakState(),...(spec.visualVariant==='canoe'?{craft:'canoe' as const,side:-1}:{})}}:{}),spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
+  if((spec.mode==='sled'||spec.mode==='ski'))state.sled={phase:0,push:0,brake:0,steer:0};
+  if(spec.visualVariant==='bubble-sub'){state.submersible=createSubmersibleState();state.grounded=false;}
+  if(spec.archetype==='raft')state.raft=createRaftState();
+  if(spec.archetype==='jetski'){state.jetski=createJetSkiState();state.grounded=false;}
+  if(spec.archetype==='unicycle')state.unicycle=createUnicycleState();
+  if(spec.archetype==='atv')state.atv=createAtvState();
+  if(spec.mode==='tank')state.tank=createTankState();
   resetCreatureState(state);return state;
 }
 function actorFootprints(v:VehicleState){return creatureBodies(v).map((part,index)=>{
@@ -52,6 +124,15 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
   const s=v.spec,mode=s.mode,old=v.position.clone();
   const road=mode==='wheeled'||mode==='bike';
   v.steering=damp(v.steering,i.steer,Math.abs(i.steer)>0?s.steeringResponse:s.steeringReturn,dt);
+  if(v.submersible){stepSubmersible(v,i,dt,q);return;}
+  if(s.archetype==='raft'){stepRaft(v,i,dt,q);return;}
+  if(s.archetype==='jetski'){stepJetSki(v,i,dt,q);return;}
+  if(v.unicycle){stepUnicycle(v,i,dt,q);return;}
+  if(s.archetype==='atv'){stepAtv(v,i,dt,q);return;}
+  if(mode==='tank'){stepTank(v,i,dt,q);return;}
+  if(mode==='kayak'){stepKayak(v,i,dt,q);return;}
+  if(mode==='bus'){stepBus(v,i,dt,q);return;}
+  if(mode==='sled'||mode==='ski'){stepSled(v,i,dt,q);return;}
   const isAircraft=mode==='plane'||mode==='glider';
   if(mode==='space') {
     const angular=new Quaternion().setFromEuler(new Euler(i.pitch*s.steer*dt,-v.steering*s.steer*dt,i.roll*s.steer*dt,'YXZ'));
@@ -170,19 +251,25 @@ export interface PlayerState { position:Vector3; velocity:Vector3; yaw:number; g
 function stopIntoNormals(velocity:Vector3,normals:Vector3[]){for(const n of normals){const d=velocity.dot(n);if(d<0)velocity.addScaledVector(n,-d);}}
 function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:EnvironmentQueries){
   const old=v.position.clone(),oldRotation=v.rotation.clone(),oldYaw=v.yaw,oldPitch=v.pitch,oldRoll=v.roll;
+  const previousTank=v.tank?{...v,position:old.clone(),rotation:oldRotation.clone(),velocity:v.velocity.clone(),tank:{...v.tank}}:null;
   stepVehicleControls(v,i,dt,time,q);
+  const incoming=v.velocity.clone();
   const body=vehicleBody(v.spec),mode=v.spec.mode;
-  const ground=['wheeled','bike','slide'].includes(mode);
+  const ground=!!v.raft||['wheeled','bus','tank','bike','slide','sled','ski'].includes(mode);
   // Low-speed taxiing rests on wheels too; airborne attitude keeps its original
   // oriented hull and lift path, including the transition into takeoff.
   const taxi=mode==='plane'&&v.grounded&&v.speed<=14&&v.velocity.y<=0;
   const supported=ground||taxi;
   const delta=v.position.clone().sub(old),motionOrigin=old.clone();
-  let pose=supported?groundVehiclePose(body,v.rotation,v.yaw):{body,rotation:v.rotation};
-  const previousPose=supported?groundVehiclePose(body,oldRotation,oldYaw):{body,rotation:oldRotation};
+  // Runners and ATV tyres must follow the slope. Inflating a pitched hull into a level box
+  // suspends the sled above snow by half its length times the grade.
+  const snowHull=!!v.raft||mode==='sled'||mode==='ski'||v.spec.archetype==='atv';
+  const levelHull=supported&&!snowHull;
+  let pose=levelHull?groundVehiclePose(body,v.rotation,v.yaw):{body,rotation:v.rotation};
+  const previousPose=levelHull?groundVehiclePose(body,oldRotation,oldYaw):{body,rotation:oldRotation};
   // Ground lean changes hull clearance, not steering authority. Lift only to the
   // local support and sweep that lift with the old hull to retain roof clearance.
-  const clear=supported?q.safeSpawn(old,pose.body,pose.rotation):null;
+  const clear=supported&&(!snowHull||q.overlaps(old,pose.body,pose.rotation))?q.safeSpawn(old,pose.body,pose.rotation):null;
   if(q.overlaps(old,pose.body,pose.rotation)||(clear&&clear.y>old.y+1e-6)){
     const raised=clear&&q.move(old,clear.clone().sub(old),previousPose.body,previousPose.rotation);
     if(clear&&raised&&raised.position.distanceToSquared(clear)<1e-6)motionOrigin.copy(clear);
@@ -191,12 +278,14 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
       pose=previousPose;
     }
   }
-  if(supported&&delta.y>=0)delta.y-=.02;
+  if(supported&&delta.y>=0&&(!v.raft||v.grounded))delta.y-=.02;
   // Sweep driving separately from resting gravity. A diagonal grazing cast can
   // otherwise report spurious lateral normals from a large flat floor.
-  const horizontal=supported?q.move(motionOrigin,new Vector3(delta.x,0,delta.z),pose.body,pose.rotation,ground?.45:0):null;
+  const horizontal=supported?q.move(motionOrigin,new Vector3(delta.x,0,delta.z),pose.body,pose.rotation,v.raft?0:(mode==='sled'||mode==='ski')?.08:ground?.45:0):null;
   const vertical=q.move(horizontal?.position??motionOrigin,horizontal?new Vector3(0,delta.y,0):delta,pose.body,pose.rotation);
   const hit=horizontal?{...vertical,grounded:horizontal.grounded||vertical.grounded,blocked:horizontal.blocked||vertical.blocked,normals:[...horizontal.normals,...vertical.normals]}:vertical;
+  if(snowHull&&hit.normals.some(normal=>normal.y>=.5))hit.grounded=true;
+  if(v.raft)hit.grounded=hit.normals.some(normal=>normal.y>=.5)&&delta.y<=0;
   // Large floor colliders can leave a sub-centimetre overlap after Rapier's
   // resting cast. Recover only through a checked upward sweep, never through a
   // wall or ceiling; retain the last clear pose if recovery cannot fit.
@@ -211,7 +300,7 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
   // normals every tick would erase speed while holding the vehicle on the ramp.
   stopIntoNormals(v.velocity,horizontal?horizontal.normals.filter(n=>n.y<.5):hit.normals);
   if(horizontal){if(hit.grounded)v.velocity.y=0;if(vertical.normals.some(n=>n.y<-.25))v.velocity.y=Math.min(0,v.velocity.y);}
-  if(ground)v.grounded=hit.grounded;
+  if(ground||mode==='kayak'||v.jetski||v.submersible)v.grounded=hit.grounded;
   if(mode==='plane'||mode==='glider'){
     // The asset origin may be metres above its wheels. Use the swept hull contact,
     // including a short resting probe, and keep airborne lift free to leave ground.
@@ -221,8 +310,14 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
       if(v.speed<8){v.launched=false;v.speed=0;v.velocity.set(0,0,0);}
     }
   }
+  if(v.raft)finishRaftContact(v,incoming,hit.normals);
+  if(previousTank)finishTankStep(v,previousTank,q);
+  if(v.submersible)finishSubmersibleStep(v,dt,time);
+  if(v.jetski)finishJetSkiStep(v,old,dt,time);
+  if(v.atv)finishAtvStep(v,old,oldYaw,q);
+  if(v.unicycle)finishUnicycleStep(v,old,i,dt,q);
   if(hit.blocked)v.speed=Math.min(v.speed,v.velocity.length());
-  if((mode==='boat'||mode==='sub')&&!q.waterContains(v.position,v.spec.radius)){v.position.copy(old);v.velocity.set(0,0,0);v.speed=0;}
+  if(!v.submersible&&!v.jetski&&(mode==='boat'||mode==='sub')&&!q.waterContains(v.position,v.spec.radius)){v.position.copy(old);v.velocity.set(0,0,0);v.speed=0;}
 }
 export class Simulation {
   environment:EnvironmentQueries;
@@ -293,11 +388,14 @@ export class Simulation {
   nearest():number {let best=-1,d=Infinity;this.vehicles.forEach((v,n)=>{const ds=v.position.distanceTo(this.player.position),body=vehicleBody(v.spec),range=body.kind==='box'?Math.max(5.3,body.halfExtents[0]+2):Math.max(5.3,v.creature?v.spec.radius+1.6:0);if(this.available(v)&&ds<range&&ds<d&&v.velocity.length()<3){d=ds;best=n;}});return best;}
   private boardingPoint(v:VehicleState):Vector3|null {
     const q=this.environment;const body=vehicleBody(v.spec);
-    const rx=body.kind==='box'?body.halfExtents[0]+.9:v.spec.radius+1.2,rz=body.kind==='box'?body.halfExtents[2]+.9:v.spec.radius+1.2;
-    for(const [x=0,z=0] of [[rx,0],[-rx,0],[0,-rz],[0,rz]]){
+    const rx=body.kind==='box'?body.halfExtents[0]+(v.submersible?1.35:.9):v.spec.radius+1.2,rz=body.kind==='box'?body.halfExtents[2]+(v.submersible?1.35:.9):v.spec.radius+1.2;
+    const offsets=[[rx,0],[-rx,0],[0,-rz],[0,rz]];
+    // Prefer a dry pontoon when boarding a kayak; retain swimming exits offshore.
+    for(const dryOnly of (v.spec.mode==='kayak'||v.submersible?[true,false]:[false]))for(const [x=0,z=0] of offsets){
       const p=new Vector3(x,0,z).applyAxisAngle(new Vector3(0,1,0),v.yaw).add(v.position);
       const floor=q.support(p,4,.45),water=q.waterAt(p);
-      if(water&&v.position.y<water.surface+2)p.y=water.surface-1.25;
+      if(dryOnly){if(!floor||(water&&floor.height<water.surface)||Math.abs(floor.height-v.position.y)>1)continue;p.y=floor.height+.025;}
+      else if(water&&v.position.y<water.surface+2)p.y=water.surface-1.25;
       else if(floor&&Math.abs(floor.height-v.position.y)<4)p.y=floor.height+.025;
       else continue;
       const selectedDistance=v.position.distanceTo(p);
@@ -407,6 +505,7 @@ export class Simulation {
     }
     if (this.vehicle) {
       const v = this.vehicle;
+      if(v.submersible&&(this.environment.waterAt(v.position)?.surface??-Infinity)-v.position.y>.4){this.message='请先上浮至水面，再打开舱门离开潜艇';return false;}
       if (v.velocity.length() > 5) {
         this.message = '速度过快，请先减速至 18 km/h 以下再离开载具';
         return false;
@@ -429,6 +528,8 @@ export class Simulation {
     if(targetId){const decision=this.boardingDecision(targetId);
       if(!decision.ok){this.failureCode=decision.code;this.message=decision.message;return false;}
     }
+    const entering=this.vehicles[n]!;
+    if(entering.submersible&&(this.environment.waterAt(entering.position)?.surface??-Infinity)-entering.position.y>.4){this.message='潜艇尚在水下，请先准备到水面再登艇';return false;}
     if (!this.humanoid.setMounted(true)) return false;
     this.active = n; this.player.velocity.set(0, 0, 0); this.player.animation = 'Sitting_Enter';
     this.transition = .5; this.transitionKind = 'enter'; this.message = '控制权已交给载具';
@@ -461,17 +562,17 @@ export class Simulation {
   private stepActors(i:Input,dt:number,cameraYaw=0) {
     this.time+=dt;this.transition=Math.max(0,this.transition-dt);
     const vehicleBefore=this.vehicle?.position.clone();
-    const before=this.vehicle?{rotation:this.vehicle.rotation.clone(),yaw:this.vehicle.yaw,pitch:this.vehicle.pitch,roll:this.vehicle.roll,creature:this.vehicle.creature?{...this.vehicle.creature,leadPosition:this.vehicle.creature.leadPosition?.clone()}:undefined}:undefined;
+    const before=this.vehicle?{unicycle:copyUnicycleState(this.vehicle.unicycle),submersible:copySubmersibleState(this.vehicle.submersible),jetski:copyJetSkiState(this.vehicle.jetski),atv:copyAtvState(this.vehicle.atv),rotation:this.vehicle.rotation.clone(),yaw:this.vehicle.yaw,pitch:this.vehicle.pitch,roll:this.vehicle.roll,creature:this.vehicle.creature?{...this.vehicle.creature,leadPosition:this.vehicle.creature.leadPosition?.clone()}:undefined}:undefined;
     for (const v of this.vehicles) {
-      // Only the occupied craft owns input. Unoccupied mounts coast or settle;
-      // parked non-mount craft retain the existing no-advance policy.
+      // Only the occupied craft owns input. Kayaks continue floating when empty;
+      // their coasting motion uses the same collision checks as other movers.
       if (v === this.vehicle && this.transition === 0)
         stepVehicle(v, i, dt, this.time, this.environment);
       else if (
-        v !== this.vehicle &&
-        v.spec.mode === "mount" &&
+        (v !== this.vehicle || v.spec.mode === 'kayak' || !!v.jetski || !!v.submersible) &&
+        (!!v.submersible || !!v.jetski || v.spec.mode === "kayak" || v.spec.mode === "mount" || v.spec.mode === "sled" || v.spec.mode === "ski") &&
         this.available(v) &&
-        (v.velocity.lengthSq() > 1e-8 ||
+        (!!v.submersible || !!v.jetski || v.velocity.lengthSq() > 1e-8 ||
           !v.grounded ||
           (this.environment &&
             !this.environment.standingSupport(
@@ -481,6 +582,8 @@ export class Simulation {
             )))
       ) {
         const previous = {
+          ...(v.submersible?{submersible:copySubmersibleState(v.submersible)}:{}),
+          ...(v.jetski?{jetski:copyJetSkiState(v.jetski)}:{}),
           position: v.position.clone(),
           rotation: v.rotation.clone(),
           yaw: v.yaw,
@@ -497,12 +600,13 @@ export class Simulation {
           )
         ) {
           Object.assign(v, previous);
+          if(v.jetski)finishJetSkiStep(v,previous.position,dt,this.time);
           v.velocity.set(0, 0, 0);
           v.speed = 0;
         }
       }
     }
-    if(this.vehicle&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;}}
+    if(this.vehicle&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;if(this.vehicle.atv&&before!.atv){this.vehicle.atv.wheelAngles=[...before!.atv.wheelAngles];this.vehicle.atv.suspension=[...before!.atv.suspension];}if(this.vehicle.submersible&&before!.submersible)this.vehicle.submersible=before!.submersible;if(this.vehicle.jetski&&before!.jetski){this.vehicle.jetski=before!.jetski;finishJetSkiStep(this.vehicle,vehicleBefore,dt,this.time);}this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;if(this.vehicle.unicycle&&before!.unicycle){this.vehicle.unicycle=before!.unicycle;finishUnicycleStep(this.vehicle,vehicleBefore,i,dt,this.environment);}}}
     const p=this.player;
     if (this.vehicle) {
       p.position.copy(this.vehicle.position);

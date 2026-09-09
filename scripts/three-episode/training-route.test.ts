@@ -30,21 +30,21 @@ describe('training family route input',()=>{
 
 describe('actual player capture controller and training physics integration',()=>{
  const assets=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;training?:{spec:VehicleSpec}}[];
- for(const family of ['wheeled','plane','glider','sub','space'] as const){
+ for(const family of ['unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','sub','space'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
-   const asset=assets.find(a=>a.training?.spec.mode===family)!,spec=structuredClone(asset.training!.spec);
-   const aquatic=family==='sub',flight=family==='plane'||family==='glider';
-   const y=aquatic?-15:flight||family==='space'?100:.03;
+   const asset=assets.find(a=>family==='unicycle'?a.id==='training.unicycle':family==='raft'?a.id==='training.raft':family==='jetski'?a.id==='training.jetski':family==='observation-sub'?a.id==='training.observation-sub':family==='canoe'?a.id==='training.canoe':family==='atv'?a.training?.spec.archetype==='atv':a.training?.spec.mode===family)!,spec=structuredClone(asset.training!.spec);
+   const aquatic=family==='raft'||family==='jetski'||family==='observation-sub'||family==='sub'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
+   const y=(family==='raft'||family==='jetski'||family==='kayak'||family==='canoe')?.1:aquatic?-15:flight||family==='space'?100:.03;
    const floor=aquatic?-80:0;
    const map:MapDefinition={id:`capture-route-${family}`,name:'Independent capture route',description:'',bounds:{min:[-2000,-100,-2000],max:[2000,1000,2000]},
     boxes:[{id:'floor',position:[0,floor-1,0],size:[4000,2,4000]}],
     water:aquatic?[{id:'water',min:[-1900,-79,-1900],max:[1900,0,1900],surface:0}]:[],
-    regions:[{id:'route',name:'Route',description:'',center:[0,0,0],size:[3800,3800],color:'#aaa',modes:['character',family]}],
+    regions:[{id:'route',name:'Route',description:'',center:[0,0,0],size:[3800,3800],color:'#aaa',modes:['character',spec.mode]}],
     spawns:[{id:'parked',name:'Parked',vehicleId:'subject',position:[-100,y,-150],yaw:0,regionId:'route'}],playerSpawn:[-100,aquatic?-1.25:.03,-100]};
    const segment:EpisodeSegmentPlan={id:'segment-00',purpose:'Controller integration; not rendered video acceptance',endBehavior:'stop',
     start:{positionWorldMetersXYZ:[0,y,0],facingYawRadians:Math.PI,training:{vehicleInstanceId:'subject',mounted:true,
      ...(flight?{velocityWorldMetersPerSecondXYZ:[0,0,30],throttle:.7,launched:true}:{})}},
-    waypoints:[{positionWorldMetersXYZ:[5,y+(aquatic?-5:flight||family==='space'?5:0),100],gait:'walk'},
+    waypoints:family==='unicycle'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:family==='observation-sub'?[{positionWorldMetersXYZ:[2,y-2,15],gait:'walk'},{positionWorldMetersXYZ:[4,y-4,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,120],gait:'walk'}]:family==='canoe'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:(family==='raft'||family==='kayak')?[{positionWorldMetersXYZ:[2,y,15],gait:'walk'},{positionWorldMetersXYZ:[4,y,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:[{positionWorldMetersXYZ:[5,y+(aquatic&&family!=='jetski'?-5:flight||family==='space'?5:0),100],gait:'walk'},
      {positionWorldMetersXYZ:[15,y,250],gait:'walk'},{positionWorldMetersXYZ:[0,y,1500],gait:'walk'}]};
    const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),training:{map,vehicles:[{instanceId:'subject',assetId:asset.id,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
    try{
@@ -69,7 +69,7 @@ describe('actual player capture controller and training physics integration',()=
     expect(evidence.renderedYawTravelDegrees).toBeGreaterThan(10);
     expect(world.simulationTick).toBe(1800);expect(runtime.simulation.teleportRevision).toBe(revision);
     expect(frames.every(f=>f.snapshot.errors.length===0&&f.decision.positionWorldMetersXYZ.every(Number.isFinite))).toBe(true);
-    expect(new Vector3(...world.getEntityState('subject').positionWorldMetersXYZ).distanceTo(new Vector3(...segment.start.positionWorldMetersXYZ))).toBeGreaterThan(100);
+    expect(new Vector3(...world.getEntityState('subject').positionWorldMetersXYZ).distanceTo(new Vector3(...segment.start.positionWorldMetersXYZ))).toBeGreaterThan(family==='unicycle'?40:family==='observation-sub'?40:family==='canoe'?20:family==='raft'||family==='kayak'?30:100);
    }finally{world.dispose();}
   },20_000);
  }

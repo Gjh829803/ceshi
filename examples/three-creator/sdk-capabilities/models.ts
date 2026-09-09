@@ -1,7 +1,18 @@
+import {buildUnicycleModel} from './unicycle-model';
+import {buildSubmersibleModel} from './submersible-model';
+import {buildCanoeModel} from './canoe-model';
+import {buildKayakModel} from './kayak-model';
+import {buildRaftModel} from './raft-model';
+import {buildJetSkiModel} from './jetski-model';
+import {buildAtvModel} from './atv-model';
 import * as T from 'three';
 import { SPECS, type VehicleSpec } from './config';
 import { ROAD_CUSHIONS } from './road-seating';
 import { buildCreatureVisual, type CreatureVisual } from './creatures/visual';
+import { buildSkiModel } from './ski-model';
+import { buildSledModel } from './sled-model';
+import {buildTankModel} from './tank-model';
+import { buildBusModel } from './bus-model';
 export const material=(color:string|number,metalness=.05,roughness=.65)=>new T.MeshStandardMaterial({color,metalness,roughness});
 const dark=material('#25313a',.3),rubber=material('#172128',0,.9),chrome=material('#bfced5',.6,.27),glass=new T.MeshPhysicalMaterial({color:'#9adddf',transparent:true,opacity:.25,roughness:.1,metalness:.3,side:T.DoubleSide});
 export function box(parent:T.Object3D,w:number,h:number,d:number,x:number,y:number,z:number,mat:T.Material){const m=new T.Mesh(new T.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
@@ -15,6 +26,14 @@ export function labelSprite(text:string,color='#233746',width=5,height=.9):T.Spr
   const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;const sprite=new T.Sprite(new T.SpriteMaterial({map,depthTest:true}));sprite.scale.set(width,height,1);return sprite;
 }
 export function buildVehicle(s:VehicleSpec):VehicleVisual {
+  if(s.visualVariant==='bubble-sub'){const root=buildSubmersibleModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
+  if(s.archetype==='jetski'){const root=buildJetSkiModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2.4;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
+  if(s.archetype==='kayak'||s.archetype==='raft'){const root=s.archetype==='raft'?buildRaftModel():s.visualVariant==='canoe'?buildCanoeModel():buildKayakModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=1.65;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
+  if(s.archetype==='bus'){
+    const visual=buildBusModel(),seat=new T.Group();seat.position.set(...s.seat);visual.root.add(seat);visual.root.name=s.id;
+    const label=labelSprite(s.name);label.position.y=3.2;visual.root.add(label);
+    return {...visual,seat,label,rotors:[],engine:[]};
+  }
   if(['horse','carriage','dragon'].includes(s.archetype)){
     const root=new T.Group(),creature=buildCreatureVisual(s);root.name=s.id;root.add(creature.content,creature.seat);
     const label=labelSprite(s.name);label.position.y=s.mode==='dragon'?6.8:3.9;root.add(label);
@@ -36,7 +55,10 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   function roadSeat(){const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';if(s.mode!=='bike')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';}
   function thruster(x:number,y:number,z:number){const glow=new T.Mesh(new T.ConeGeometry(.18,.8,12),new T.MeshBasicMaterial({color:'#95f9ff',transparent:true,opacity:.65}));glow.rotation.x=-Math.PI/2;glow.position.set(x,y,z);root.add(glow);engine.push(glow);}
   const archetype=s.archetype;
-  if(s.id==='supercar') {
+  if(archetype==='unicycle'){root.add(buildUnicycleModel());
+  }else if(archetype==='atv'){root.add(buildAtvModel());
+  }else if(archetype==='tank'){root.add(buildTankModel());
+  }else if(s.id==='supercar') {
     // Concave plan profiles preserve a narrow cockpit between broad wheel
     // shoulders. All bodywork and exhausts fit the existing collision envelope.
     type Point=readonly[number,number];
@@ -130,6 +152,10 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     box(root,.52,.3,.9,0,.85,.2,paint);roadSeat();
     tube([-.25,.45,1.1],[-.25,1.3,.8],.05,chrome);tube([.25,.45,1.1],[.25,1.3,.8],.05,chrome);tube([-.6,1.35,.85],[.6,1.35,.85],.05);
     ball(root,0,1.2,.9,.23,.2,.16,new T.MeshBasicMaterial({color:'#ffefcd'}));
+  } else if(archetype==='ski') {
+    root.add(buildSkiModel());
+  } else if(archetype==='sled') {
+    root.add(buildSledModel());
   } else if(archetype==='slide') {
     box(root,.8,.18,2.1,0,.15,0,paint);box(root,.52,.035,1.35,0,.255,0,dark);
     for(const x of [-.34,.34])for(const z of [-.75,.75])wheel(x,.08,z,.09,.09);

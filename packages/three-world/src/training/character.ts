@@ -1,3 +1,6 @@
+import {fitUnicycleFeet} from './unicycle-rider';
+import {poseKayakHands} from './kayak-visual';
+import {fitAtvHands} from './atv-rider';
 import * as T from 'three';
 import {CharacterAttachments,type CharacterAttachmentPoint,type CharacterAttachmentTransform} from './character-attachments';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './character-attachments';
@@ -24,18 +27,58 @@ export class MountedRiderPose {
         if (bone && child) this.entries.push({ bone, child, side: sign, joint, base: new T.Quaternion() });
       }
     }
+    const spine=actor.getObjectByName('spine_01'),next=actor.getObjectByName('spine_02');
+    if(spine&&next)this.entries.push({bone:spine,child:next,side:0,joint:'spine',base:new T.Quaternion()});
   }
   restore() {
     if (!this.applied) return;
     for (const { bone, base } of this.entries) bone.quaternion.copy(base);
     this.applied = false;
   }
-  apply(weight = 1, mode: 'ride' | 'drive' = 'ride') {
+  apply(weight = 1, mode: 'unicycle' | 'ride' | 'drive' | 'sled' | 'ski' | 'kayak' = 'ride', sled?:HumanoidRenderState['sledPose'], unicycle?:HumanoidRenderState['unicyclePose']) {
     this.restore(); this.actor.updateWorldMatrix(true, true);
     this.actor.getWorldQuaternion(this.actorRotation).normalize();
     for (const { bone, child, side, joint, base } of this.entries) {
       base.copy(bone.quaternion);
-      if (joint === 'thigh') this.targetDirection.set(side * (mode === 'ride' ? .85 : .16), mode === 'ride' ? -.62 : -.1, mode === 'ride' ? .15 : 1);
+      if(joint==='spine'&&mode!=='ski'&&mode!=='unicycle')continue;
+      if(mode==='unicycle'){
+        const time=unicycle?.balanceTime??0,turn=unicycle?.balance??0,down=unicycle?.footDown??1;
+        const sway=Math.sin(time*2.7)*.10+Math.sin(time*4.3)*.035;
+        if(joint==='spine')this.targetDirection.set(-turn*.12+sway*.18,1,.035);
+        else if(joint==='upperarm')this.targetDirection.set(side,-.22-down*.22+side*(sway+turn*.20),.06+Math.sin(time*2.1+side)*.10);
+        else if(joint==='lowerarm')this.targetDirection.set(side*.9,.12+side*sway,.28+side*turn*.2);
+        else if(joint==='thigh')this.targetDirection.set(side*.2,-1,.4);
+        else if(joint==='calf')this.targetDirection.set(0,-1,-.2);
+        else this.targetDirection.set(0,-.02,1);
+      }else
+      if(mode==='ski'){
+        const turn=sled?.steer??0,push=sled?.push??0;
+        if(joint==='spine')this.targetDirection.set(-turn*.38,1,.2);
+        else if(joint==='thigh')this.targetDirection.set(side*.09,-1,.42);
+        else if(joint==='calf')this.targetDirection.set(0,-1,-.42);
+        else if(joint==='foot')this.targetDirection.set(0,-.02,1);
+        else if(joint==='upperarm')this.targetDirection.set(side*.6,-.8,.25-push*.25);
+        else this.targetDirection.set(side*.12,-.25,.9-push*.45);
+      }
+      else if(mode==='kayak'){
+        if(joint==='thigh')this.targetDirection.set(side*.12,-.04,1);
+        else if(joint==='calf')this.targetDirection.set(0,-.08,1);
+        else if(joint==='foot')this.targetDirection.set(0,.1,1);
+        else if(joint==='upperarm')this.targetDirection.set(side*.3,-.4,.7);
+        else this.targetDirection.set(-side*.1,.1,1);
+      }
+      else if (mode === 'sled') {
+        // Feet stay outside the narrow wooden seat. A low calf drop keeps the
+        // supplied human's soles above the runners instead of through the floor.
+        const drag=Math.max(sled?.brake??0,Math.max(0,-side*(sled?.steer??0))*.7);
+        const push=sled?.push??0;
+        if(joint==='thigh')this.targetDirection.set(side*1.15,-.06-drag*.28-push*.25,1);
+        else if(joint==='calf')this.targetDirection.set(side*.15,-.70-drag*.65-push*.5,.85-drag*.48-push*.48);
+        else if(joint==='foot')this.targetDirection.set(side*.06,-.02,1);
+        else if(joint==='upperarm')this.targetDirection.set(side*.25,-.65,.65);
+        else this.targetDirection.set(-side*.1,-.12,1);
+      }
+      else if (joint === 'thigh') this.targetDirection.set(side * (mode === 'ride' ? .85 : .16), mode === 'ride' ? -.62 : -.1, mode === 'ride' ? .15 : 1);
       else if (joint === 'calf') this.targetDirection.set(side * .03, -1, -.08);
       else if (joint === 'foot') this.targetDirection.set(side * .12, -.1, 1);
       else if (joint === 'upperarm') this.targetDirection.set(side * .3, -.6, .7);
@@ -82,7 +125,7 @@ export class Character {
   private localPosition = new T.Vector3();
   private localFacing = new T.Vector3(0, 0, 1);
   private simulationIdentity: object | undefined;
-  private mountedMode: 'stand' | 'drive' | 'ride' | null = null;
+  private mountedMode: HumanoidRenderState['mounted'] = null;
   // Source nodes are registered on adoption. Later author-added visual children
   // are not animation-owned, so their evaluated locals survive repeated frames.
   private presentationNodes=new Set<T.Object3D>([this.actor]);
@@ -177,7 +220,7 @@ export class Character {
     this.frame.position = this.localPosition; this.frame.facing = this.localFacing;
     if (mounted) {
       Object.assign(this.frame, emptyFrame(), { position: this.localPosition, facing: this.localFacing });
-      if (mode !== 'stand') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
+      if (mode !== 'stand' && mode !== 'ski') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
     } else if (pose.skills) {
       const carrying = pose.skills.carrying;
       this.frame.skills = { ...pose.skills, syncCarried: position => {
@@ -185,14 +228,26 @@ export class Character {
       } };
     }
     this.root.updateWorldMatrix(true, true);
-    source.update(dt, this.frame);
+    const smoothing=source.smoothing;
+    // An enclosed driver must have its calibrated full sitting pose even on the
+    // entry/reset boundary. Do not blend a standing body through the cabin roof.
+    if(mode==='unicycle'||mode==='sub'||mode==='tank'||mode==='atv')source.smoothing=false;
+    try{source.update(dt,this.frame);}finally{source.smoothing=smoothing;}
     if (mounted && mode !== 'stand') {
-      this.overlay!.apply(1, mode === 'ride' ? 'ride' : 'drive');
+      this.overlay!.apply(1, mode === 'unicycle' ? 'unicycle' : mode === 'kayak' ? 'kayak' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
       // Align the true source pelvis with the host's seat/saddle attachment.
       this.actor.updateWorldMatrix(true, true);
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);
       this.actor.position.copy(this.hipOffset).negate();
+      if(mode==='unicycle'&&pose.unicyclePose){
+        // Slide to the supporting side of the saddle; never stretch the source legs.
+        this.actor.position.x+=.16*pose.unicyclePose.footDown;
+        this.actor.position.y-=.12*pose.unicyclePose.footDown;
+        fitUnicycleFeet(source.root,this.root,pose.unicyclePose);
+      }
+      if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
     }
     this.root.updateWorldMatrix(true, true);
+    if(mode==='kayak'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);
   }
 }

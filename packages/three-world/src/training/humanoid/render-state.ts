@@ -1,3 +1,4 @@
+import {copyUnicycleState,blendUnicycleState} from '../unicycle';
 import { Quaternion, Vector3 } from 'three';
 import type { HumanoidController } from './controller';
 import { SOURCE_ACTION_DURATIONS,type HumanoidRenderState } from './animation';
@@ -16,12 +17,14 @@ export function readHumanoid(h?:HumanoidController):HumanoidRenderState|undefine
   };
 }
 export function copyHumanoid(s?:HumanoidRenderState):HumanoidRenderState|undefined {
-  return s?{...s,position:s.position.clone(),facing:s.facing.clone(),traversal:s.traversal?{...s.traversal}:null,completedMotion:s.completedMotion?{...s.completedMotion}:null,
+  return s?{...s,unicyclePose:copyUnicycleState(s.unicyclePose),...(s.kayakPose?{kayakPose:{...s.kayakPose}}:{}),...(s.sledPose?{sledPose:{...s.sledPose}}:{}),position:s.position.clone(),facing:s.facing.clone(),traversal:s.traversal?{...s.traversal}:null,completedMotion:s.completedMotion?{...s.completedMotion}:null,
     animationEvent:s.animationEvent?{...s.animationEvent}:null,surface:s.surface?{pose:s.surface.pose?{...s.surface.pose}:null}:null,
     skills:s.skills?{...s.skills,pose:s.skills.pose?{...s.skills.pose}:null,active:s.skills.active?{...s.skills.active}:null}:null}:undefined;
 }
 export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderState|undefined,alpha:number){
   const out=copyHumanoid(b);if(!out||!a||!b||a.simulationIdentity!==b.simulationIdentity)return out;
+  if(a.atvSteeringAngle!==undefined&&b.atvSteeringAngle!==undefined)out.atvSteeringAngle=a.atvSteeringAngle+(b.atvSteeringAngle-a.atvSteeringAngle)*alpha;
+  out.unicyclePose=blendUnicycleState(a.unicyclePose,b.unicyclePose,alpha);
   out.position.lerpVectors(a.position,b.position,alpha);
   const ay=Math.atan2(a.facing.x,a.facing.z),by=Math.atan2(b.facing.x,b.facing.z),yaw=ay+Math.atan2(Math.sin(by-ay),Math.cos(by-ay))*alpha;
   out.facing.set(Math.sin(yaw),0,Math.cos(yaw));

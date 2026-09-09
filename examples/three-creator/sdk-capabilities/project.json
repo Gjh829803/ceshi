@@ -1,1 +1,30 @@
-{"schemaVersion":1,"assetIds":["humanoid.source-101","training.rover","training.racer","training.bike","training.slide","training.hover","training.boat","training.sub","training.glider","training.plane","training.space","training.trail-rover","training.touring-bike","training.rescue-hover","training.patrol-boat","training.trainer-plane","training.survey-space","training.horse","training.carriage","training.dragon"]}
+{
+  "schemaVersion": 1,
+  "assetIds": [
+    "humanoid.source-101",
+    "training.observation-sub", "training.canoe", "training.kayak", "training.rover",
+    "training.racer",
+    "training.bike",
+    "training.unicycle",
+    "training.slide",
+    "training.hover",
+    "training.boat",
+    "training.sub",
+    "training.glider",
+    "training.plane",
+    "training.space",
+    "training.trail-rover",
+    "training.touring-bike",
+    "training.rescue-hover",
+    "training.patrol-boat",
+    "training.trainer-plane",
+    "training.survey-space",
+    "training.horse",
+    "training.carriage",
+    "training.dragon",
+    "training.tank",
+    "training.atv",
+    "training.jetski",
+    "training.raft"
+  ]
+}

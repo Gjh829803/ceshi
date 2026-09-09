@@ -1,9 +1,9 @@
-import { chromium } from 'playwright';
+import { launchChromiumWithSystemFallback } from '../lib/playwright-browser-launch';
 import { mkdir,writeFile } from 'node:fs/promises';
 import path from 'node:path';
 const output=path.resolve('outputs/training-migration/browser');await mkdir(output,{recursive:true});
 const selected=process.argv[3]?.split(',');
-const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});
+const browser=await launchChromiumWithSystemFallback({headless:true,args:['--enable-unsafe-swiftshader']});
 const page=await browser.newPage({viewport:{width:1440,height:960}}),errors:string[]=[];
 page.on('pageerror',e=>errors.push(e.message));
 try{
@@ -17,7 +17,7 @@ try{
   const distance=Math.hypot(...moved.position.map((n:number,i:number)=>n-initial.position[i]));
   if(distance<.1){console.log(JSON.stringify(await page.evaluate(()=>({state:(window as any).trainingGround.getState(),errors:(window as any).__WORLDKIT_EVAL__.snapshot().errors,keyEvidence:(window as any).keyEvidence,input:(window as any).__WORLDKIT_EVAL__.inspect().inputTranscript,focus:document.activeElement?.id})),null,2));throw new Error(`TRAINING_KEYBOARD_DID_NOT_MOVE: ${distance}`);}
   const results=[];
-  for(const id of ['rover','racer','bike','slide','hover','boat','sub','glider','plane','space','trail-rover','touring-bike','rescue-hover','patrol-boat','trainer-plane','survey-space','horse','carriage','dragon']){
+  for(const id of ['tank','rover','racer','bike','slide','bus','sled','ski','hover','boat','sub','glider','plane','space','trail-rover','touring-bike','rescue-hover','patrol-boat','trainer-plane','survey-space','horse','carriage','dragon']){
     if(selected&&!selected.includes(id))continue;
     await page.evaluate(id=>(window as any).trainingGround.selectVehicle(id),id);
     await page.keyboard.press('f');await page.waitForTimeout(650);

@@ -246,17 +246,17 @@ function updateUI(){
     lastActive=sim.active;el('category').textContent=v?`${['plane','glider','space','dragon'].includes(v.spec.mode)?'FLIGHT':v.spec.mode==='sub'||v.spec.mode==='boat'?'WATER':'GROUND'} / ${v.spec.kernel}`:'ON FOOT / K01';
     el('activeName').textContent=v?.spec.name??'人物动作训练';el('activeEn').textContent=v?`${v.spec.en} / PILOT CONTROL`:'TRAVERSAL LAB / 101 BONES';
     el('stateLabel').textContent=v?v.spec.characterPose==='ride'?'骑乘位已绑定':'驾驶位已绑定':'主体人物';
-    el('controls').innerHTML=controlsFor(v?.spec.mode??'character',sdk.getKeyBindings()).map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
+    el('controls').innerHTML=controlsFor(v?.spec.archetype==='unicycle'?'unicycle':v?.spec.archetype==='raft'?'raft':v?.spec.mode??'character',sdk.getKeyBindings()).map(([keys,title])=>`<div class="shortcut"><span class="keys">${keys.split(' / ').map(k=>`<kbd>${k}</kbd>`).join('')}</span><span>${title}</span></div>`).join('');
     setText('shortcutSubject',v?'载具操作':'人物操作');
     const systemKeys:[string,string][]=[['T','切换三种视角'],['点击 / 拖动','观察'],['滚轮','镜头距离'],['Esc','释放 / 暂停'],['1–6','快速前往']];
     setHTML('systemKeys',systemKeys.map(([keys,title])=>`<span class="shortcut"><kbd>${keys}</kbd><span>${title}</span></span>`).join(''));
     el('cameraNote').textContent=v?v.spec.mode==='space'?'相机随飞行器上方向旋转。拖动鼠标自由观察。':'方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。':'方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。';
     document.querySelectorAll<HTMLElement>('[data-vehicle-id]').forEach(b=>b.classList.toggle('selected',b.dataset.vehicleId===v?.spec.id));
   }
-  el('stateValue').textContent=v?(sim.transition>0?'正在入座':v.submerged?'载具涉水，请复位':v.creature?({graze:'休息',walk:'慢走',trot:'快步',gallop:'疾驰',rest:'停驻',flap:'振翅',glide:'滑翔'}[v.creature.gait]):v.spec.mode==='glider'&&!v.launched?'等待释放':v.spec.mode==='plane'?`油门 ${Math.round(v.throttle*100)}%`:'驾驶中'):p.swimming?'游泳':p.grounded?'地面移动':'空中';
+  el('stateValue').textContent=v?(sim.transition>0?'正在入座':v.submersible?(v.submersible.depth>.4?'水下航行':'水面漂浮'):v.submerged?'载具涉水，请复位':v.creature?({graze:'休息',walk:'慢走',trot:'快步',gallop:'疾驰',rest:'停驻',flap:'振翅',glide:'滑翔'}[v.creature.gait]):v.spec.mode==='glider'&&!v.launched?'等待释放':v.spec.mode==='plane'?`油门 ${Math.round(v.throttle*100)}%`:'驾驶中'):p.swimming?'游泳':p.grounded?'地面移动':'空中';
   setText('speed',String(Math.round(speed*3.6)));const altitude=(v?.position??p.position).y;setText('heightLabel',altitude<-2?'深度':'海拔');el('height').textContent=`${Math.round(altitude<-2?-altitude-2:altitude)} m`;el('throttle').style.width=`${Math.min(100,v?.spec.mode==='plane'?v.throttle*100:speed/(v?.spec.speed??7.2)*100)}%`;
   el('interaction').classList.toggle('small',!!v||nearest<0);
-  if(v) setHTML('interaction',v.submerged?'载具涉水 · 使用页面复位按钮继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
+  if(v) setHTML('interaction',v.submersible&&v.submersible.depth>.4?`深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`:v.submerged&&v.spec.mode!=='sub'?'载具涉水 · 使用页面复位按钮继续训练':v.spec.mode==='glider'&&!v.launched?'<kbd>Shift</kbd>从高台释放，开始滑翔':v.spec.mode==='plane'&&v.speed<14?'<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起':`<kbd>F</kbd>${speed>5?'减速至 18 km/h 以下可离开':'离开 '+v.spec.name}`);
   else setHTML('interaction',h?.skills.hint(sdk.getKeyBindings())??(h?.surface.mode==='climbing'?'Space 尝试翻上 · C 松手':runtime.characterCapabilities().find(c=>c.id==='climb')?.eligible?'E 进入攀爬':null)??(nearest>=0?`<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`:traversalPrompt??'打开资产库选择主体，或自由探索'));
   if(!v){setText('stateValue',character.clipLabel);setText('bottomHint',humanDemo?`演示：${humanDemo.trial.name} · WASD 接管`:(h?.skills.hint(sdk.getKeyBindings())??traversalPrompt??h?.lastResult??'打开人物动作面板选择测试'));}
   else setText('bottomHint',follow.mode===1?'点击画面锁定鼠标 · 自由观察不改变车辆方向 · T 切换视角 · Esc 释放 / 暂停':'点击 / 拖动观察 · 滚轮调距离 · T 循环切换三种视角 · 页面复位按钮返回起点 · Esc 暂停');

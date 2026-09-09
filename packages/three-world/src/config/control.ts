@@ -30,6 +30,14 @@ export const CONTROL_SCHEMA_PROPERTIES=Object.freeze(Object.fromEntries(Object.e
 /** Materialize family constants once per instance. Acceleration edits must not
  * silently rewrite independent coasting or braking settings. */
 export function defaultTrainingControl(mode:Mode|'character',base:CoreControl):TrainingControl{
+ if(mode==='tank')return {...defaultTrainingControl('wheeled',base),maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5};
+ if(mode==='kayak')return {...defaultTrainingControl('boat',base),maxSpeed:base.speed,reverseSpeed:1.8,coastDeceleration:.16,dragQuadratic:.08,brakeDamping:2.1,steeringResponse:5,steeringReturn:5,pitchResponse:4,rollResponse:4};
+ if(mode==='bus')return {...defaultTrainingControl('wheeled',base),maxSpeed:base.speed,reverseSpeed:2.5,
+  coastDeceleration:.55,brakeDeceleration:3.8,brakeDamping:0,steeringResponse:2.5,steeringReturn:3.2,
+  throttleResponse:1.6,pitchResponse:3,rollResponse:2.5};
+ if(mode==='sled'||mode==='ski')return {...defaultTrainingControl('slide',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
+  coastDeceleration:.22,brakeDeceleration:6,brakeDamping:0,steeringResponse:4,steeringReturn:6,
+  dragQuadratic:.006,pitchResponse:12,rollResponse:10};
  const road=mode==='wheeled'||mode==='bike',creature=mode==='mount'||mode==='carriage',person=mode==='character';
  return {speed:base.speed,accel:base.accel,grip:base.grip,steer:base.steer,
   maxSpeed:person?5.8*base.speed/3.8:mode==='dragon'?base.speed*1.2:creature||['plane','glider','space','sub'].includes(mode)?base.speed:base.speed*1.15,

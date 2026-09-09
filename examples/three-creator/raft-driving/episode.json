@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "targets": [],
+  "steps": [
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 0.3
+    },
+    {
+      "durationSeconds": 11
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 4
+    },
+    {
+      "keysDown": [
+        "Shift"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysUp": [
+        "w",
+        "Shift"
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "keysDown": [
+        "s"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysUp": [
+        "s"
+      ],
+      "keysDown": [
+        "w",
+        "a"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "a"
+      ],
+      "keysDown": [
+        "d"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "w",
+        "d"
+      ],
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "commands": [
+        {
+          "type": "training.camera",
+          "mode": 1
+        }
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "commands": [
+        {
+          "type": "training.camera",
+          "mode": 2
+        }
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "commands": [
+        {
+          "type": "training.camera",
+          "mode": 0
+        }
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 0.5
+    },
+    {
+      "lifecycle": "pause",
+      "durationSeconds": 0.3
+    },
+    {
+      "lifecycle": "start",
+      "durationSeconds": 0.3
+    },
+    {
+      "lifecycle": "reset",
+      "durationSeconds": 0.5
+    }
+  ]
+}

@@ -23,7 +23,7 @@ const records: Record<string, AssetProfile> = { person };
 for (const spec of SPECS) records[spec.id] = {
   version: PROFILE_VERSION,
   assetId: spec.id,
-  control: training.defaultTrainingControl(spec.mode,spec),
+  control: training.readTrainingControl(training.createVehicle(spec).spec),
   camera: { ...DEFAULT_CAMERA_TUNING, distance: spec.camera },
   envelope: structuredClone(spec.envelope),
 };

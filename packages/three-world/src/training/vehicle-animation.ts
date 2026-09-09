@@ -1,8 +1,9 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Group, Object3D } from 'three';
-export interface VehicleVisual {wheelRigs:{steering:Group;spin:Group;radius:number}[];steering:Object3D[]}
+import {busWheelAngle} from './bus';
+export interface VehicleVisual {root?:Object3D;wheelRigs:{steering:Group;spin:Group;radius:number}[];steering:Object3D[]}
 
-export interface WheelPose {position:Vector3;rotation:Quaternion;steering:number}
+export interface WheelPose {position:Vector3;rotation:Quaternion;steering:number;speed?:number;spec?:{mode:string;steer:number}}
 export interface WheelFrame {grounded:boolean;dt:number;revision:number;active?:boolean}
 interface RollingState {position:Vector3;direction:Vector3;angularSpeed:number}
 interface VehicleRollingState {revision:number;initialized:boolean;position:Vector3;wheels:RollingState[]}
@@ -21,9 +22,12 @@ export function updateVehicleWheels(visual:VehicleVisual,pose:WheelPose,frame:Wh
   const teleported=state.revision!==frame.revision||state.position.distanceToSquared(pose.position)>25*25;
   const rebase=!state.initialized||teleported||frame.dt<=0;
   const active=frame.active!==false;
+  const steeringAngle=pose.spec?.mode==='bus'?busWheelAngle(pose.steering,pose.speed??0,pose.spec.steer):-MathUtils.clamp(pose.steering,-1,1)*.34;
+  const wheel=visual.root?.getObjectByName('steering.wheel');
+  if(wheel)wheel.rotation.z=-steeringAngle*3;
   visual.wheelRigs.forEach((rig,index)=>{
     const rolling=state!.wheels[index]!;
-    rig.steering.rotation.y=visual.steering.includes(rig.steering)?-MathUtils.clamp(pose.steering,-1,1)*.34:0;
+    rig.steering.rotation.y=visual.steering.includes(rig.steering)?steeringAngle:0;
     position.copy(rig.steering.position).applyQuaternion(pose.rotation).add(pose.position);
     direction.set(Math.sin(rig.steering.rotation.y),0,Math.cos(rig.steering.rotation.y)).applyQuaternion(pose.rotation);
     if(rebase||!active){

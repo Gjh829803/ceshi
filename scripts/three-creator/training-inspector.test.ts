@@ -1,4 +1,5 @@
 import {build} from 'esbuild';
+import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
 import type {Browser,Page} from 'playwright';
 import {beforeAll,beforeEach,afterEach,afterAll,describe,it,expect} from 'vitest';
 import {launchChromiumWithSystemFallback} from '../lib/playwright-browser-launch.js';
@@ -77,8 +78,8 @@ describe('training motion and camera inspector',()=>{
     return {id,changes,control:api.state().profile.control};
    });
   });
-  expect(results.map((result:{id:string})=>result.id)).toEqual(expect.arrayContaining(['person','supercar','kart']));
-  expect(results).toHaveLength(await page.evaluate(()=>(window as any).inspectorTest.ids.length));
+  expect(results.map((result:{id:string})=>result.id)).toEqual(expect.arrayContaining(['person','supercar','kart','unicycle','observation-sub','raft','jetski','canoe','kayak','bus','tank','atv','sled','ski']));
+  expect(results).toHaveLength(SPECS.length+1);
   for(const result of results)for(const [key,value]of Object.entries(result.changes))expect(result.control[key]).toBe(value);
  });
  it('shows family-specific applicability, runtime values and rejects invalid edits',async()=>{

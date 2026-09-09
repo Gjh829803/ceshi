@@ -194,7 +194,7 @@ export function mountInspector(host:HTMLElement,options:InspectorOptions):AssetI
     write(modeNote,shoulder?'近距离右肩视角 · 滚轮调节距离 · 移动时轻微拉远':cockpit?'第一人称 · 点击画面自由观察，T 切换，Esc 释放':'第三人称跟随 · 鼠标自由环绕');
     write(actualDistance,`${format(camera.distance,2)} m`);write(actualFov,`${format(camera.fovDegrees)}°`);
     write(actualYaw,`${format(camera.yawRadians*180/Math.PI)}°`);write(actualPitch,`${format(camera.pitchRadians*180/Math.PI)}°`);
-    const descriptions=controlFields(family),visible=new Set(descriptions.map(d=>d.key));
+    const descriptions=controlFields(activeId==='unicycle'?'unicycle':activeId==='raft'?'raft':activeId==='jetski'?'jetski':activeId==='atv'?'atv':family),visible=new Set(descriptions.map(d=>d.key));
     for(const key of controlKeys)controls[key].row.hidden=!visible.has(key);
     for(const section of controlSections.values())section.hidden=true;
     for(const d of descriptions){const item=controls[d.key],section=controlSections.get(d.section)!;section.hidden=false;

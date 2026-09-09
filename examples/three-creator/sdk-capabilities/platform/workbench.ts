@@ -108,8 +108,34 @@ export function mountWorkbench(host: HTMLElement, options: WorkbenchOptions) {
     };
     const fields: { group: 'camera' | 'control'; key: string; label: string; step: number }[] = [
       { group: 'camera', key: 'distance', label: '跟随距离 / 米', step: .25 },
-      ...(['baseFovDegrees','recenterDelaySeconds','followResponsePerSecond'] as const).map(key=>({group:'camera' as const,key,label:`${training.CAMERA_PARAMETERS[key].label} / ${training.CAMERA_PARAMETERS[key].unit}`,step:training.CAMERA_PARAMETERS[key].step})),
-      ...controlFields(mode??'character').filter(f=>!f.disabled).map(f=>({group:'control' as const,key:f.key,label:`${f.label} / ${f.unit}`,step:f.step})),
+            ...(
+        [
+          'baseFovDegrees',
+          'recenterDelaySeconds',
+          'followResponsePerSecond',
+        ] as const
+      ).map(key => ({
+        group: 'camera' as const,
+        key,
+        label: `${training.CAMERA_PARAMETERS[key].label} / ${training.CAMERA_PARAMETERS[key].unit}`,
+        step: training.CAMERA_PARAMETERS[key].step,
+      })),
+
+      ...controlFields(
+        selectedAsset === 'unicycle' ||
+        selectedAsset === 'raft' ||
+        selectedAsset === 'jetski' ||
+        selectedAsset === 'atv'
+          ? selectedAsset
+          : mode ?? 'character',
+      )
+        .filter(field => !field.disabled)
+        .map(field => ({
+          group: 'control' as const,
+          key: field.key,
+          label: `${field.label} / ${field.unit}`,
+          step: field.step,
+        })),
     ];
     for (const { group, key, label, step } of fields) {
       if(selectedAsset==='person'&&key==='recenterDelaySeconds')continue;

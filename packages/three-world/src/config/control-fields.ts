@@ -4,6 +4,42 @@ export type ControlField={key:Key;label:string;unit:string;step:number;note:stri
 
 /** Shared parameter meaning and controller-family applicability. No simulation state. */
 export function controlFields(family:string):ControlField[]{
+ if(family==='unicycle')return controlFields('wheeled').filter(f=>['speed','maxSpeed','reverseSpeed','accel','coastDeceleration','brakeDeceleration','steer','steeringResponse','steeringReturn','pitchResponse','rollResponse'].includes(f.key)).map(f=>({...f,note:f.key==='accel'?'收脚回踏板后建立踩踏推进；悬空时无推进。':f.key==='coastDeceleration'?'松键自动减速；停稳后左脚寻找真实地面支撑。':f.key==='steer'?'依靠重心转向；原地不转动，低速转向减弱。':f.note,label:f.key==='steer'?'平衡转向速率':f.label,unit:f.key==='steer'?'rad/s':f.unit}));
+ if(family==='raft')return [...controlFields('kayak').map(f=>({...f,note:f.key==='speed'?'单人划行限速；Shift 提高划桨频率。':f.key==='accel'?'桨叶入水时产生推进；地面只受重力和摩擦。':f.note})),{key:'brakeDeceleration',label:'陆地制动',unit:'m/s²',step:.1,note:'Space 拖地制动；松键仍可沿坡面滑动。',section:'加速与减速'}];
+ if(family==='kayak')return [
+  {key:'speed',label:'前划限速',unit:'m/s',step:.1,note:'划桨速度上限；Shift 不增加动力。',section:'速度范围'},
+  {key:'reverseSpeed',label:'倒划限速',unit:'m/s',step:.1,note:'反向划桨先抵消前进动量。',section:'速度范围'},
+  {key:'accel',label:'划桨峰值加速度',unit:'m/s²',step:.1,note:'每 1.12 秒一次单侧划桨；回桨不推进。',section:'加速与减速'},
+  {key:'coastDeceleration',label:'线性水阻',unit:'/s',step:.01,note:'无输入时保留动量并逐渐滑停。',section:'加速与减速'},
+  {key:'dragQuadratic',label:'速度平方水阻',unit:'1/m',step:.001,note:'高速时阻力更明显。',section:'加速与减速'},
+  {key:'brakeDamping',label:'压桨制动阻尼',unit:'/s',step:.1,note:'Space 将桨叶压入水中减速。',section:'加速与减速'},
+  {key:'grip',label:'侧向水阻',unit:'/s',step:.1,note:'船头转动后仍保留短暂横向惯性。',section:'转向与稳定'},
+  {key:'steer',label:'扫桨角加速度',unit:'rad/s²',step:.1,note:'低速可用单侧桨转向，转动有惯性。',section:'转向与稳定'},
+ ];
+ if(family==='jetski')return controlFields('atv').map(f=>({...f,note:f.key==='steer'?'喷口偏航速率；有推进时转向强，松油后减弱。':f.key==='brakeDeceleration'?'S 先制动后倒船；Space 水阻制动。':f.note,label:f.key==='steer'?'喷口转向速率':f.label,unit:f.key==='steer'?'rad/s':f.unit}));
+ if(family==='atv')return controlFields('wheeled').filter(f=>['speed','maxSpeed','reverseSpeed','accel','grip','coastDeceleration','brakeDeceleration','steer','steeringResponse','steeringReturn','throttleResponse','pitchResponse','rollResponse'].includes(f.key)).map(f=>({...f,note:f.key==='steer'?'低速车把转角；高速减小转角，静止不能原地旋转。':f.note,label:f.key==='steer'?'低速转向角':f.label,unit:f.key==='steer'?'rad':f.unit}));
+ if(family==='tank')return controlFields('wheeled').filter(f=>['speed','maxSpeed','reverseSpeed','accel','coastDeceleration','brakeDeceleration','steer','steeringResponse','steeringReturn','throttleResponse','pitchResponse','rollResponse'].includes(f.key)).map(f=>({...f,note:f.key==='steer'?'履带差速偏航速率；静止支持原地转向。':f.note,label:f.key==='steer'?'差速转向速率':f.label,unit:f.key==='steer'?'rad/s':f.unit}));
+ if(family==='bus')return [
+  {key:'speed',label:'前进限速',unit:'m/s',step:.1,note:'满油门速度上限；Shift 不提供额外动力。',section:'速度范围'},
+  {key:'reverseSpeed',label:'倒车限速',unit:'m/s',step:.1,note:'S 先制动，再低速倒车。',section:'速度范围'},
+  {key:'accel',label:'起步加速度',unit:'m/s²',step:.1,note:'随车速增加逐渐减弱；油门有建立过程。',section:'加速与减速'},
+  {key:'coastDeceleration',label:'松油滑行减速度',unit:'m/s²',step:.1,note:'松开油门后的滚动阻力。',section:'加速与减速'},
+  {key:'brakeDeceleration',label:'制动减速度',unit:'m/s²',step:.1,note:'S 反向制动和 Space 刹车使用此值。',section:'加速与减速'},
+  {key:'steer',label:'前轮最大转角',unit:'rad',step:.01,note:'结合 3.3 米轴距计算转弯；高速减小转角。',section:'转向与稳定'},
+  ...(['steeringResponse','steeringReturn','throttleResponse','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回正',throttleResponse:'油门响应',pitchResponse:'俯仰响应',rollResponse:'车身侧倾响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
+ ];
+ if(family==='ski')return controlFields('sled').map(field=>({...field,label:field.label.replaceAll('蹬地','撑杖').replaceAll('滑条','雪板').replaceAll('拖脚','压刃'),note:field.note.replaceAll('蹬地','撑杖').replace('收脚','停止撑杖').replaceAll('滑条','雪板').replaceAll('雪橇','双板').replace('S / Space 双脚刹车；A / D 单侧拖脚产生部分阻力。','S / Space 制动；A / D 压刃转弯并损失部分速度。')}));
+ if(family==='sled')return [
+  {key:'speed',label:'下坡安全限速',unit:'m/s',step:.1,note:'重力滑行的速度上限；Shift 不提供动力。',section:'速度范围'},
+  {key:'groundSpeed',label:'蹬地速度上限',unit:'m/s',step:.1,note:'超过此速度收脚；W 不能在高速时继续加速。',section:'速度范围'},
+  {key:'accel',label:'蹬地峰值加速度',unit:'m/s²',step:.1,note:'每 0.85 秒一次的蹬地脉冲。',section:'加速与减速'},
+  {key:'coastDeceleration',label:'滑条摩擦减速度',unit:'m/s²',step:.01,note:'持续摩擦；默认模拟压实雪面。',section:'加速与减速'},
+  {key:'brakeDeceleration',label:'拖脚制动减速度',unit:'m/s²',step:.1,note:'S / Space 双脚刹车；A / D 单侧拖脚产生部分阻力。',section:'加速与减速'},
+  {key:'dragQuadratic',label:'空气阻力系数',unit:'1/m',step:.001,note:'减速度 = 系数 × 速度平方。',section:'加速与减速'},
+  {key:'grip',label:'滑条侧向阻尼',unit:'/s',step:.1,note:'低值允许横滑；转向后动量逐渐跟随雪橇。',section:'转向与稳定'},
+  {key:'steer',label:'拖脚转向速率',unit:'rad/s',step:.01,note:'随速度建立转向效果；静止不能原地转圈。',section:'转向与稳定'},
+  ...(['steeringResponse','steeringReturn','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回弹',pitchResponse:'顺坡俯仰响应',rollResponse:'横坡姿态响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
+ ];
  const person=family==='character',road=['wheeled','bike'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','bike','slide','hover','boat'].includes(family);
  const fields:ControlField[]=[];
  const add=(key:Key,label:string,unit:string,note:string,section:ControlField['section'],step=.1,disabled=false)=>fields.push({key,label,unit,note,section,step,disabled});

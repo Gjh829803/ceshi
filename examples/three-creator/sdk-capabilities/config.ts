@@ -1,15 +1,21 @@
+import {UNICYCLE_SPEC} from './unicycle';
+import {SUBMERSIBLE_SPEC} from './submersible';
+import {CANOE_SPEC} from './canoe';
+import {KAYAK_SPEC} from './kayak';
+import {RAFT_SPEC} from './raft';
+import {JETSKI_SPEC} from './jetski';
+import {ATV_SPEC} from './atv';
 import { CREATURE_SPECS } from './creatures/specs';
 import { roadSeatAnchor } from './road-seating';
-export type Mode = 'wheeled' | 'bike' | 'slide' | 'hover' | 'boat' | 'sub' | 'glider' | 'plane' | 'space' | 'mount' | 'carriage' | 'dragon';
-export type VehicleArchetype = 'rover' | 'racer' | 'bike' | 'slide' | 'hover' | 'boat' | 'sub' | 'glider' | 'plane' | 'space' | 'horse' | 'carriage' | 'dragon';
-export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, number]; offset: [number, number, number] }
-export interface VehicleSpec {
-  id: string; name: string; en: string; mode: Mode; kernel: string; color: string;
-  spawn: [number, number, number]; yaw: number; speed: number; accel: number; grip: number;
-  steer: number; radius: number; seat: [number, number, number]; camera: number; hint: string; characterPose?: 'stand' | 'ride';
-  archetype: VehicleArchetype; visualVariant?: 'utility' | 'touring' | 'rescue' | 'patrol' | 'trainer' | 'survey';
-  envelope: CollisionEnvelope;
-}
+import { SKI_SPEC } from './ski';
+import { SLED_SPEC } from './sled';
+import { TANK_SPEC } from './tank';
+import { BUS_SPEC } from './bus';
+import type { TrainingVehicleSpec as VehicleSpec } from '@worldkit/three';
+export type { VehicleSpec };
+export type Mode = VehicleSpec['mode'];
+export type VehicleArchetype = VehicleSpec['archetype'];
+export type CollisionEnvelope = VehicleSpec['envelope'];
 export const SPECS: VehicleSpec[] = [
   {id:'rover',name:'越野车',en:'ROVER',mode:'wheeled',kernel:'K03',color:'#f0b64d',spawn:[-24,0,64],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:roadSeatAnchor('rover'),camera:8.2,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}},
   {id:'racer',name:'公路赛车',en:'APEX',mode:'wheeled',kernel:'K03',color:'#f37659',spawn:[-10,0,64],yaw:0,speed:36,accel:12,grip:14,steer:1.08,radius:1.6,seat:roadSeatAnchor('racer'),camera:8,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'racer',envelope:{kind:'box',halfExtents:[1.35,1.1,2.15],offset:[0,1.1,0]}},
@@ -31,6 +37,8 @@ export const SPECS: VehicleSpec[] = [
   {id:'kart',name:'卡丁车',en:'KART',mode:'wheeled',kernel:'K03',color:'#e9bf4f',spawn:[-66,0,64],yaw:0,speed:24,accel:10,grip:19,steer:1.65,radius:1.15,seat:roadSeatAnchor('kart'),camera:6,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速',archetype:'racer',envelope:{kind:'box',halfExtents:[1,.85,1.45],offset:[0,.85,0]}},
 ];
 SPECS.push(...CREATURE_SPECS);
+SPECS.push(SLED_SPEC, SKI_SPEC);
+SPECS.push(UNICYCLE_SPEC,SUBMERSIBLE_SPEC,RAFT_SPEC,JETSKI_SPEC,CANOE_SPEC,KAYAK_SPEC,BUS_SPEC,TANK_SPEC,ATV_SPEC);
 export const START: [number,number,number] = [-24,0,55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;

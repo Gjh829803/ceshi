@@ -1,8 +1,30 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { emptyTrainingInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
-import type { RouteCursor, RouteDecision } from './route-controller.js';
-export const TRAINING_FAMILIES=['wheeled','bike','slide','hover','boat','sub','glider','plane','space','mount','carriage','dragon'] as const;
+import type {
+  RouteCursor,
+  RouteDecision,
+} from './route-controller.js';
+
+export const TRAINING_FAMILIES = [
+  'kayak',
+  'wheeled',
+  'bus',
+  'tank',
+  'bike',
+  'slide',
+  'sled',
+  'ski',
+  'hover',
+  'boat',
+  'sub',
+  'glider',
+  'plane',
+  'space',
+  'mount',
+  'carriage',
+  'dragon',
+] as const;
 export type TrainingFamily=typeof TRAINING_FAMILIES[number];
 const clamp=(n:number)=>Math.max(-1,Math.min(1,n));
 const angle=(n:number)=>Math.atan2(Math.sin(n),Math.cos(n));
@@ -14,7 +36,10 @@ export function trainingDirectionInput(family:TrainingFamily,position:Vec3,rotat
   const yaw=Math.atan2(heading.x,heading.z),desiredYaw=Math.atan2(delta.x,delta.z);
   const yawError=angle(desiredYaw-yaw),horizontal=Math.hypot(delta.x,delta.z);
   const input={forward:Math.max(.15,Math.cos(yawError)),steer:clamp(-yawError*1.8),roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false};
-  if(family==='space'){
+  if(family==='tank'){
+    input.forward=Math.abs(yawError)>1?0:input.forward;
+    input.brake=horizontal<Math.hypot(velocity[0],velocity[2])**2/12+.5;
+  } else if(family==='space'){
     const local=delta.clone().applyQuaternion(q.clone().invert());
     const localVelocity=new Vector3(...velocity).applyQuaternion(q.clone().invert());
     input.forward=clamp((local.z-localVelocity.z*.8)/4);input.strafe=clamp(-(local.x-localVelocity.x*.8)/4);input.lift=clamp((local.y-localVelocity.y*.8)/4);
@@ -24,6 +49,12 @@ export function trainingDirectionInput(family:TrainingFamily,position:Vec3,rotat
   } else if(family==='plane'||family==='glider'){
     const pitch=Math.atan2(delta.y+(family==='glider'?1.2:0),Math.max(5,horizontal));
     input.forward=clamp(-pitch/.62);input.boost=family==='glider'||Math.hypot(...velocity)<26;input.slow=family==='plane'&&Math.hypot(...velocity)>36;
+  } else if(family==='sled'||family==='ski'){
+    // Foot propulsion is only useful near walking speed; brake before a tight
+    // bend or the stopping distance, while leaving a coasting route unpowered.
+    const speed=Math.hypot(velocity[0],velocity[2]);
+    input.forward=speed<2.8?1:0;
+    input.brake=speed>2&&(horizontal<speed*speed/10+1||Math.abs(yawError)>1);
   } else if(family==='hover')input.roll=0;
   return {training:input};
 }
