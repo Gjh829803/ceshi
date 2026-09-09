@@ -6,6 +6,7 @@ import type {VehicleSpec} from './config';
 import type {MapDefinition} from './environment/types';
 import {initEnvironmentQueries} from './environment/queries';
 import {VehicleCameraQueries} from './vehicle-camera-queries';
+import {markCameraVisualEffect} from './camera-visual-effects';
 const queries=new Set<VehicleCameraQueries>();
 function trackQuery(vehicles:ConstructorParameters<typeof VehicleCameraQueries>[0]){const query=new VehicleCameraQueries(vehicles);queries.add(query);return query;}
 afterEach(()=>{for(const query of queries)query.dispose();queries.clear();});
@@ -105,6 +106,36 @@ describe('vehicle camera geometry',()=>{
    for(const free of oldFree){expect(free).toHaveBeenCalledTimes(1);free.mockRestore();}
    const currentFree=build.mock.results.slice(built).map(result=>vi.spyOn(result.value as ReturnType<RAPIER.TriMesh['intoRaw']>,'free'));
    query.dispose();query.dispose();for(const free of currentFree){expect(free).toHaveBeenCalledTimes(1);free.mockRestore();}
+  }finally{build.mockRestore();}
+ });
+ it('ignores moving SDK water effects while keeping the vehicle hull solid',()=>{
+  const root=new Group(),fx=new Group();root.add(fx);markCameraVisualEffect(fx);
+  block(root,[.2,3,4],[0,0,0]);const drop=block(fx,[1,1,1],[3,0,0]);
+  const query=trackQuery([{instanceId:'boat',object:root}]);query.sync();
+  expect(query.probe([3,0,0],[3,0,0],.2).startedOverlapping).not.toBe(true);
+  expect(query.probe([4,0,0],[-4,0,0],.2).distanceMeters).toBeCloseTo(3.7,4);
+  drop.scale.setScalar(0);query.sync();
+  expect(query.refinedActorIds.has('boat')).toBe(true);
+  expect(query.probe([4,0,0],[-4,0,0],.2).distanceMeters).toBeCloseTo(3.7,4);
+ });
+ it('reuses rigid part shapes while child meshes rotate, and releases removed parts',()=>{
+  const root=new Group(),arm=new Group();root.add(arm);
+  const panel=block(arm,[.2,3,4],[0,0,0]);
+  const child=new Mesh(new BoxGeometry(.2,.2,.2),new MeshStandardMaterial());child.position.y=4;panel.add(child);
+  const build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
+  try{
+   const query=trackQuery([{instanceId:'animated',object:root}]);query.sync();
+   expect(build).toHaveBeenCalledTimes(4);
+   const frees=build.mock.results.map(result=>vi.spyOn(result.value as ReturnType<RAPIER.TriMesh['intoRaw']>,'free'));
+   for(let n=0;n<30;n++){arm.rotation.y=n*.03;query.sync();}
+   expect(build).toHaveBeenCalledTimes(4);
+   arm.rotation.y=Math.PI/2;query.sync();
+   expect(query.probe([0,0,-3],[0,0,3],.1).distanceMeters).toBeCloseTo(2.8,4);
+   expect(query.visibleBetween([0,0,-3],[0,0,3])).toBe(false);
+   root.remove(arm);query.sync();
+   expect(query.probe([0,0,-3],[0,0,3],.1).colliderEntityId).toBeUndefined();
+   expect(query.refinedActorIds.size).toBe(0);
+   for(const free of frees){expect(free).toHaveBeenCalledTimes(1);free.mockRestore();}
   }finally{build.mockRestore();}
  });
  it('keeps an intentionally open cylinder hollow when welding only numerical seams',()=>{

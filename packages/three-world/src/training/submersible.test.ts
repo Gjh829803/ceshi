@@ -51,7 +51,7 @@ describe('observation submersible',()=>{
    world.step({training:{...emptyInput(),lift:1}},900);world.step({training:emptyInput()},600);expect(world.training!.interact()).toBe(true);
    world.training!.simulation.visit(0);expect(world.training!.simulation.vehicles[0]!.submersible).toEqual(createSubmersibleState());
   }finally{world.dispose();}
- },60_000);
+ });
 });
 
 it('places the original rider inside the sealed cabin from the first mounted frame',async()=>{

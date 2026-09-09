@@ -1,9 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import {Box3,Ray,Vector3,type Material,type Mesh,type Object3D} from 'three';
 import type {CameraCollisionProbeResult} from '@whitebox-world/camera-collision';
-import {extractCollisionGeometry,geometrySignature,isWorldVisible,worldPose,type WorldPose} from '../geometry';
+import {collisionMeshes,extractCollisionGeometry,geometrySignature,isWorldVisible,worldPose,type WorldPose} from '../geometry';
 import type {Vec3} from '../contracts';
 import {CameraMeshShape} from './camera-mesh-shape';
+import {isCameraVisualEffect} from './camera-visual-effects';
 
 interface Part {shape:CameraMeshShape;bounds:Box3;mesh:Mesh;materialIndex:number}
 interface Volume {shape:CameraMeshShape;bounds:Box3;parts:readonly Part[]}
@@ -43,12 +44,20 @@ export class VehicleCameraQueries {
  /** Sample the same visual pose used by this fixed step or display transaction. */
  sync():void {
   this.frames=[];this.refinedActorIds.clear();
+  const liveMeshes=new Set<Object3D>();
   for(const {instanceId,object} of this.vehicles){
    try{
-    const pose=worldPose(object),signature=geometrySignature(object,pose)+this.materialGroups(object);
-    let cached=this.cache.get(object);
+    worldPose(object);
+    const frames:Frame[]=[];
+    // Cache each rigid part in its own frame: rotating a wheel or paddle must
+    // update its pose without rebuilding every triangle in the whole vehicle.
+    for(const mesh of collisionMeshes(object)){
+    if(isCameraVisualEffect(mesh))continue;
+    liveMeshes.add(mesh);
+    const pose=worldPose(mesh),signature=geometrySignature(mesh,pose,false)+String(Array.isArray(mesh.material))+JSON.stringify(mesh.geometry.groups);
+    let cached=this.cache.get(mesh);
     if(!cached||cached.signature!==signature){
-     const snapshot=extractCollisionGeometry(object,4096,1_000_000,false,true),parts:Part[]=[],volumes:Volume[]=[];
+     const snapshot=extractCollisionGeometry(mesh,4096,1_000_000,false,true,false),parts:Part[]=[],volumes:Volume[]=[];
      try{
      for(const geometry of snapshot.geometries){
       const mesh=geometry.sourceObject,drawStart=mesh.geometry.drawRange.start;
@@ -67,18 +76,18 @@ export class VehicleCameraQueries {
       }
      }
      }catch(error){this.release({parts,volumes});throw error;}
-     if(cached)this.release(cached);cached={signature,parts,volumes};this.cache.set(object,cached);
+     if(cached)this.release(cached);cached={signature,parts,volumes};this.cache.set(mesh,cached);
     }
     // Empty/incompatible subjects retain the movement envelope as a conservative fallback.
-    if(cached.parts.length){this.refinedActorIds.add(instanceId);this.frames.push({id:instanceId,pose,parts:cached.parts,volumes:cached.volumes});}
+    if(cached.parts.length)frames.push({id:instanceId,pose,parts:cached.parts,volumes:cached.volumes});
+    }
+    if(frames.length){this.refinedActorIds.add(instanceId);this.frames.push(...frames);}
    }catch(error){
     // Skinned/morphed or temporarily incomplete meshes must not silently lose collision.
     if(!(error instanceof Error)||!error.message.startsWith('PHYSICS_'))throw error;
    }
   }
- }
- private materialGroups(root:Object3D):string {
-  const groups:string[]=[];root.traverse(object=>{const mesh=object as Mesh;if(mesh.isMesh)groups.push(String(Array.isArray(mesh.material)),JSON.stringify(mesh.geometry.groups));});return groups.join('|');
+  for(const [mesh,geometry] of this.cache)if(!liveMeshes.has(mesh)){this.release(geometry);this.cache.delete(mesh);}
  }
  private local(frame:Frame,point:Vec3){return new Vector3(...point).sub(frame.pose.position).applyQuaternion(frame.pose.rotation.clone().invert());}
  private vector(frame:Frame,v:RAPIER.Vector):Vec3{return new Vector3(v.x,v.y,v.z).applyQuaternion(frame.pose.rotation).toArray();}

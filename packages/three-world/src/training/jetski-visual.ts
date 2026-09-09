@@ -1,11 +1,13 @@
 import {CircleGeometry,DoubleSide,Group,SphereGeometry,InstancedMesh,Matrix4,MeshBasicMaterial,Object3D} from 'three';
 import type {JetSkiState} from './jetski';
+import {markCameraVisualEffect} from './camera-visual-effects';
 /** Pure sampling: repeated renders do not emit particles or advance their ages. */
 export function sampleJetSkiVisual(root:Object3D,s:JetSkiState,time:number){
  const bar=root.getObjectByName('jetski.handlebar');if(bar)bar.rotation.y=s.steeringAngle;
  const nozzle=root.getObjectByName('jetski.nozzle');if(nozzle)nozzle.rotation.y=s.steeringAngle;
  let fx=root.getObjectByName('jetski.water-fx') as Group|undefined;
  if(!fx){fx=new Group();fx.name='jetski.water-fx';fx.matrixAutoUpdate=false;
+  markCameraVisualEffect(fx);
   const drops=new InstancedMesh(new SphereGeometry(1,6,4),new MeshBasicMaterial({color:'#f5fcff'}),1536);drops.name='jetski.drops';drops.frustumCulled=false;
   const foam=new InstancedMesh(new CircleGeometry(1,16),new MeshBasicMaterial({color:'#edfaff',transparent:true,opacity:.62,depthWrite:false,side:DoubleSide}),1536);foam.name='jetski.foam';foam.frustumCulled=false;
   drops.count=0;foam.count=0;fx.add(drops,foam);root.add(fx);
