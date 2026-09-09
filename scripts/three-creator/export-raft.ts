@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildRaftModel } from '../../examples/three-creator/sdk-capabilities/raft-model';
-import { RAFT_SPEC,RAFT_SOCKETS } from '../../examples/three-creator/sdk-capabilities/raft';
+import { buildRaftModel } from '../../shared/training-content/raft-model';
+import { RAFT_SPEC,RAFT_SOCKETS } from '../../shared/training-content/raft';
 import { training } from '@worldkit/three';
 const {defaultTrainingControl}=training;
 

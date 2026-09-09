@@ -16,6 +16,12 @@ export type { VehicleSpec };
 export type Mode = VehicleSpec['mode'];
 export type VehicleArchetype = VehicleSpec['archetype'];
 export type CollisionEnvelope = VehicleSpec['envelope'];
+/** Specialized controller families share movement modes but have distinct tuning. */
+export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype'> | undefined): string {
+  const archetype = spec?.archetype;
+  return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
+    ? archetype : spec?.mode ?? 'character';
+}
 export const SPECS: VehicleSpec[] = [
   {id:'rover',name:'越野车',en:'ROVER',mode:'wheeled',kernel:'K03',color:'#f0b64d',spawn:[-24,0,64],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:roadSeatAnchor('rover'),camera:8.2,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}},
   {id:'racer',name:'公路赛车',en:'APEX',mode:'wheeled',kernel:'K03',color:'#f37659',spawn:[-10,0,64],yaw:0,speed:36,accel:12,grip:14,steer:1.08,radius:1.6,seat:roadSeatAnchor('racer'),camera:8,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'racer',envelope:{kind:'box',halfExtents:[1.35,1.1,2.15],offset:[0,1.1,0]}},

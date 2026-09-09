@@ -18,7 +18,7 @@
 | F | 上下车，沿用 SDK 的安全退出和速度限制 |
 | T | 第三人称、第一人称、肩后视角循环切换 |
 
-[规格](../examples/three-creator/sdk-capabilities/jetski.ts)采用 23 m/s 常规限速、
+[规格](../shared/training-content/jetski.ts)采用 23 m/s 常规限速、
 29 m/s 加速限速、5 m/s 倒船限速、6.5 m/s² 推进和 8 m/s² 制动。
 松油后保留惯性并受水阻减速，空载继续浮动；静止无推进时不会原地旋转。
 离水、悬空或搁浅时没有喷射推进力，船体使用现有 Rapier 碰撞世界检查岸边和障碍。
@@ -38,7 +38,7 @@
 粒子坐标与生命周期。零时间进入及左右满舵时，原人物手脚与控制锚点偏差小于 2 mm，
 检查了蒙皮顶点与车身的净空。脚踏顶面为 0.2505 m，实测脚底最低点约 0.2544 m。
 
-修改[模型](../examples/three-creator/sdk-capabilities/jetski-model.ts)后运行
+修改[模型](../shared/training-content/jetski-model.ts)后运行
 `node node_modules/tsx/dist/cli.mjs scripts/three-creator/export-jetski.ts`，
 重新生成 [GLB](../assets/three-creator/training/vehicles/jetski.glb) 和资产目录。
 运行 `pnpm build` 重建 SDK，重启预览加载新字节。

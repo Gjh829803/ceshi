@@ -51,7 +51,7 @@ export function checkThreeWorkspaceFiles(
     }
   }
   for (const [name, source] of Object.entries(files)) {
-    if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|scripts|deploy)\//.test(name)) continue;
+    if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|shared|scripts|deploy)\//.test(name)) continue;
     const syntax = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
       name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     const add = (node: ts.Node | undefined) => {
@@ -91,6 +91,6 @@ export async function scanThreeWorkspace(repositoryRoot: string): Promise<readon
       }
     }
   }
-  for (const directory of ["packages", "apps", "scripts", "deploy"]) await visit(directory);
+  for (const directory of ["packages", "apps", "shared", "scripts", "deploy"]) await visit(directory);
   return checkThreeWorkspaceFiles(files);
 }

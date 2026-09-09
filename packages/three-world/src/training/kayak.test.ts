@@ -1,7 +1,7 @@
-import {RAFT_SPEC} from '../../../../examples/three-creator/sdk-capabilities/raft';
-import {buildRaftModel} from '../../../../examples/three-creator/sdk-capabilities/raft-model';
-import {CANOE_SPEC} from '../../../../examples/three-creator/sdk-capabilities/canoe';
-import {buildCanoeModel} from '../../../../examples/three-creator/sdk-capabilities/canoe-model';
+import {RAFT_SPEC} from '../../../../shared/training-content/raft';
+import {buildRaftModel} from '../../../../shared/training-content/raft-model';
+import {CANOE_SPEC} from '../../../../shared/training-content/canoe';
+import {buildCanoeModel} from '../../../../shared/training-content/canoe-model';
 import {CANOE_WATER,paddleGrip} from './kayak';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
@@ -13,8 +13,8 @@ import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environme
 import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
 import {createKayakState,KAYAK_WATER,kayakPaddlePose,KAYAK_GEOMETRY} from './kayak';
 import {Character} from './character';
-import {KAYAK_SPEC} from '../../../../examples/three-creator/sdk-capabilities/kayak';
-import {buildKayakModel} from '../../../../examples/three-creator/sdk-capabilities/kayak-model';
+import {KAYAK_SPEC} from '../../../../shared/training-content/kayak';
+import {buildKayakModel} from '../../../../shared/training-content/kayak-model';
 import {sampleKayakVisual} from './kayak-visual';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false,spec=KAYAK_SPEC){

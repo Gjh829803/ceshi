@@ -10,12 +10,12 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { training } from "@worldkit/three";
-import { SPECS } from "../../../examples/three-creator/sdk-capabilities/config";
-import { MAPS } from "../../../examples/three-creator/sdk-capabilities/environment/maps";
+import { SPECS, vehicleControlFamily } from "../../../shared/training-content/config";
+import { MAPS } from "../../../shared/training-content/environment/maps";
 import {
   parseAssetProfile,
   type AssetProfile,
-} from "../../../examples/three-creator/sdk-capabilities/platform/profiles";
+} from "../../../shared/training-content/platform/profiles";
 import "./styles/workbench.css";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -268,7 +268,7 @@ function CameraEditor({
   reset(): void;
 }) {
   const current = o.getProfile(assetId),
-    mode = SPECS.find((s) => s.id === assetId)?.mode;
+    mode = vehicleControlFamily(SPECS.find((s) => s.id === assetId));
   const fields: {
     group: "camera" | "control";
     key: string;

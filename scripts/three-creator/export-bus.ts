@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildBusModel } from '../../examples/three-creator/sdk-capabilities/bus-model';
-import { BUS_SPEC } from '../../examples/three-creator/sdk-capabilities/bus';
+import { buildBusModel } from '../../shared/training-content/bus-model';
+import { BUS_SPEC } from '../../shared/training-content/bus';
 import { training } from '@worldkit/three';
 const {defaultTrainingControl}=training;
 

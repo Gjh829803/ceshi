@@ -12,8 +12,8 @@ W 加油，S 先制动再倒车，A / D 转向，Space 刹车。Shift 不增加�
 默认驾驶位使用现有 Source101 人物；地板顶面 0.52 m，测得人物最低点约 0.574 m。
 
 资产 ID 为 `training.bus`。外形和参数分别位于
-[bus-model.ts](../examples/three-creator/sdk-capabilities/bus-model.ts) 与
-[bus.ts](../examples/three-creator/sdk-capabilities/bus.ts)，运动实现位于
+[bus-model.ts](../shared/training-content/bus-model.ts) 与
+[bus.ts](../shared/training-content/bus.ts)，运动实现位于
 [SDK bus.ts](../packages/three-world/src/training/bus.ts)。
 模型仅包含载具，人物、相机、输入及碰撞均沿用 SDK 的现有所有者。
 

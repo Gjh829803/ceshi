@@ -27,8 +27,8 @@
 
 ## 人物、锚点与运动
 
-[规格](../examples/three-creator/sdk-capabilities/atv.ts)和
-[模型](../examples/three-creator/sdk-capabilities/atv-model.ts)定义驾驶座、后座预留点、
+[规格](../shared/training-content/atv.ts)和
+[模型](../shared/training-content/atv-model.ts)定义驾驶座、后座预留点、
 左右握把、左右脚踏、左右入口和驾驶观察点。当前 Training 控制一个驾驶者；
 后座为预留 socket，尚未提供第二位乘客的控制与挂载。
 
@@ -56,7 +56,7 @@ SDK 时钟和碰撞世界。短轴距为 1.6 米；前轮分别转向，每个�
 [路线测试](../scripts/three-episode/training-route.test.ts)包含 ATV 的三十秒实际控制器路线。
 [浏览器验收脚本](../scripts/three-creator/atv-browser-smoke.ts)从训练场资产库入口验证
 真实按键、三种视角、上下车与复位，保存视频、截图及运行时字节哈希到 `.codex-tmp/atv-browser/`。
-用法：`pnpm exec tsx scripts/three-creator/atv-browser-smoke.ts http://127.0.0.1:5175/`。
+该录像脚本针对旧训练预览；当前 React 编辑器验收运行 `pnpm test:editor:browser`。
 
 [独立试车场](../examples/three-creator/atv-driving/main.ts)通过资产目录加载 GLB；
 [真实输入计划](../examples/three-creator/atv-driving/episode.json)覆盖驾驶、坡道、制动、

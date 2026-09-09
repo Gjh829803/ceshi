@@ -20,15 +20,15 @@ describe("React playground inspector", () => {
         contents: `
    import {toast} from './apps/three-playground/node_modules/sonner/dist/index.mjs';
    import {mountInspector} from './apps/three-playground/src/inspector.tsx';
-   import {getDefaultProfile,parseAssetProfile} from './examples/three-creator/sdk-capabilities/platform/profiles.ts';
-   import {SPECS} from './examples/three-creator/sdk-capabilities/config.ts';
+   import {getDefaultProfile,parseAssetProfile} from './shared/training-content/platform/profiles.ts';
+   import {SPECS,vehicleControlFamily} from './shared/training-content/config.ts';
    let current='person',mode=0,interactions=0,speedKmh=0;const appliedSections=[];
    const profiles=new Map(['person',...SPECS.map(s=>s.id)].map(id=>[id,getDefaultProfile(id)])),saved=[];
    const inspector=mountInspector(document.querySelector('#host'),{
     getAssetId:()=>current,getSubject:()=>({name:current}),getProfile:id=>structuredClone(profiles.get(id)),
     applyProfile:(p,section)=>{appliedSections.push(section);profiles.set(p.assetId,parseAssetProfile(p));},saveProfile:p=>saved.push(structuredClone(p)),
     resetProfile:(id,section)=>{const p=structuredClone(profiles.get(id));p[section==='movement'?'control':'camera']=getDefaultProfile(id)[section==='movement'?'control':'camera'];profiles.set(id,p);},
-    getMovement:()=>({family:SPECS.find(s=>s.id===current)?.mode??'character',control:profiles.get(current).control,velocity:[1,2,3],grounded:true}),
+    getMovement:()=>({family:vehicleControlFamily(SPECS.find(s=>s.id===current)),control:profiles.get(current).control,velocity:[1,2,3],grounded:true}),
     getCamera:()=>({mode,distance:8,fovDegrees:60,yawRadians:0,pitchRadians:0,collisionLimited:false}),
     getTelemetry:()=>({speedKmh}),setCameraMode:v=>mode=v,onInteract:()=>interactions++
    });
@@ -204,7 +204,7 @@ describe("React playground inspector", () => {
       });
     });
     expect(results.map((result: { id: string }) => result.id)).toEqual(
-      expect.arrayContaining(["person", "supercar", "kart"]),
+      expect.arrayContaining(["person", "supercar", "kart", "atv", "bus", "canoe", "jetski", "kayak", "observation-sub", "raft", "ski", "sled", "tank", "unicycle"]),
     );
     expect(results).toHaveLength(
       await page.evaluate(() => (window as any).inspectorTest.ids.length),

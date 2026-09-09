@@ -13,8 +13,8 @@
 | F | 沿用统一上下载具流程；速度超过 5 m/s 时需先减速 |
 
 资产 ID 为 `training.sled`，运行家族为 `sled`，坐姿为 `sled`。
-[模型与座位配置](../examples/three-creator/sdk-capabilities/sled.ts)使用米、秒，+Z 为前方；
-[程序模型](../examples/three-creator/sdk-capabilities/sled-model.ts)和导出的 GLB 使用相同生成器。
+[模型与座位配置](../shared/training-content/sled.ts)使用米、秒，+Z 为前方；
+[程序模型](../shared/training-content/sled-model.ts)和导出的 GLB 使用相同生成器。
 角色保持原 Source101 模型，通过既有动画所有者叠加坐姿、蹬地与拖脚姿态。
 
 [SDK 控制器](../packages/three-world/src/training/sled.ts)使用固定步长，坡面法线投影重力为

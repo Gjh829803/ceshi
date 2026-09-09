@@ -15,5 +15,5 @@
     "types": ["node", "vitest/globals"],
     "jsx": "react-jsx"
   },
-  "include": ["packages/**/*.ts", "apps/**/*.ts", "apps/**/*.tsx", "scripts/**/*.ts", "vitest.config.ts"]
+  "include": ["packages/**/*.ts", "shared/**/*.ts", "apps/**/*.ts", "apps/**/*.tsx", "scripts/**/*.ts", "vitest.config.ts"]
 }

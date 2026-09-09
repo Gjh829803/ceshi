@@ -22,9 +22,9 @@
 
 ## 结构与所有权
 
-[规格和锚点](../examples/three-creator/sdk-capabilities/tank.ts)定义座位、左右手控制点、
+[规格和锚点](../shared/training-content/tank.ts)定义座位、左右手控制点、
 左右脚踏板、左右入口、驾驶观察点；模型另含炮塔旋转中心和炮口锚点。
-[模型](../examples/three-creator/sdk-capabilities/tank-model.ts)包含独立炮塔、炮管、
+[模型](../shared/training-content/tank-model.ts)包含独立炮塔、炮管、
 左右履带和负重轮。履带相位来自物理步实际接受的位移与转向，渲染采样不推进状态。
 车体使用放大的中空基础几何，保留低矮炮塔、长炮管和两侧履带的参考构图。
 
@@ -52,7 +52,7 @@
 [Episode 路线测试](../scripts/three-episode/training-route.test.ts)实际运行三十秒驾驶输入。
 [训练场浏览器验收](../scripts/three-creator/tank-browser-smoke.ts)从资产库进入，
 通过真实按键验证驾驶、三种相机、炮塔、下车及复位，并保存纯画面录像和运行时字节哈希到 `.codex-tmp/tank-browser/`。
-用法：`pnpm exec tsx scripts/three-creator/tank-browser-smoke.ts http://127.0.0.1:5175/`。
+该录像脚本针对旧训练预览；当前 React 编辑器验收运行 `pnpm test:editor:browser`。
 
 [独立试车场](../examples/three-creator/tank-driving/main.ts)通过目录 GLB 加载坦克，
 [输入计划](../examples/three-creator/tank-driving/episode.json)覆盖 32.4 秒真实操作、三种相机和生命周期。

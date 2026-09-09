@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildCanoeModel } from '../../examples/three-creator/sdk-capabilities/canoe-model';
-import { CANOE_SPEC } from '../../examples/three-creator/sdk-capabilities/canoe';
+import { buildCanoeModel } from '../../shared/training-content/canoe-model';
+import { CANOE_SPEC } from '../../shared/training-content/canoe';
 import { training } from '@worldkit/three';
 const {defaultTrainingControl}=training;
 

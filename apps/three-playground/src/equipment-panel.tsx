@@ -15,7 +15,7 @@ import type {
 import {
   ACCESSORY_CHOICES,
   type createAccessoryPreview,
-} from "../../../examples/three-creator/sdk-capabilities/humanoid/accessories";
+} from "../../../shared/training-content/humanoid/accessories";
 import "./styles/equipment-panel.css";
 import { Button } from "./components/ui/button";
 import { Checkbox } from "./components/ui/checkbox";

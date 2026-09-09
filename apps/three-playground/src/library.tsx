@@ -19,7 +19,7 @@ import {
   sortAssets,
   type AssetEntry,
   type AssetSort,
-} from "../../../examples/three-creator/sdk-capabilities/platform/catalog";
+} from "../../../shared/training-content/platform/catalog";
 import "./styles/platform.css";
 import { Icon } from "./components/icon";
 

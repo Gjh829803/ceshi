@@ -2,8 +2,8 @@ import {beforeAll,it,expect} from 'vitest';
 import {Vector3} from 'three';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
-import {RAFT_SPEC} from '../../../../examples/three-creator/sdk-capabilities/raft';
-import {buildRaftModel} from '../../../../examples/three-creator/sdk-capabilities/raft-model';
+import {RAFT_SPEC} from '../../../../shared/training-content/raft';
+import {buildRaftModel} from '../../../../shared/training-content/raft-model';
 import {sampleRaftVisual} from './raft';
 beforeAll(initEnvironmentQueries);
 function fixture(water=false,slope=false,wall=false){

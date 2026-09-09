@@ -17,7 +17,8 @@ export const controlsFor=(mode:string,bindings:training.KeyBindings=training.DEF
     case 'sub':return [[move,'推进 / 后退'],[turn,'转向'],[vertical,'上浮 / 下潜'],[roll,'横滚'],[key('sprint'),'制动'],[key('vehicle'),'离开驾驶位']];
     case 'space':return [[move,'前后推进'],[turn,'偏航'],[`${pair('cameraUp','cameraDown')} / ${pair('cameraLeft','cameraRight')}`,'俯仰 / 侧移'],[vertical,'局部升降'],[roll,'横滚'],[key('sprint'),'惯性制动'],[key('vehicle'),'离开驾驶位']];
     case 'hover':return [[move,'推进 / 后退'],[turn,'转向'],[roll,'侧向移动'],[key('jump'),'减速'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
-    case 'wheeled':return [[move,'油门 / 制动倒车'],[turn,'转向'],[key('jump'),'手刹漂移'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
+    case 'atv':case 'wheeled':return [[move,'油门 / 制动倒车'],[turn,'转向'],[key('jump'),'手刹漂移'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
+    case 'jetski':return [[move,'油门 / 制动后倒船'],[turn,'喷口转向'],[key('jump'),'水阻制动'],[key('sprint'),'加速'],[key('vehicle'),'上下艇']];
     case 'boat':return [[move,'推进 / 倒船'],[turn,'船舵'],[key('jump'),'减速'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
     case 'bike':case 'slide':return [[move,'前进 / 后退'],[turn,'转向'],[key('jump'),'刹车'],[key('sprint'),'加速'],[key('vehicle'),'离开载具']];
     default:return training.controlHints(bindings);

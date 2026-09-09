@@ -15,12 +15,17 @@ async function fixture(){
 afterEach(async()=>{for(const s of services.splice(0))await s.close();for(const r of roots.splice(0))await rm(r,{recursive:true,force:true});});
 const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={})=>executeThreeCreatorTool(service,name,args) as Promise<any>;
 
-it('switches the standalone subject through native keys, restores full object views and inherits the default in Episode',async()=>{
+it.each([0,1])('switches the standalone subject and replays the Episode default after %s startup ticks',async startupTicks=>{
  const service=await fixture(),example=await service.examples('nonhuman-subject');
  for(const [name,content]of Object.entries(example.files))await writeFile(path.join(service.workspace,name),name==='main.ts'?
-  content.replace("defaultPerspective:'third-person'","defaultPerspective:'first-person'")+"\n(window as any).__subjectTestWorld=world;":content);
+  // This test checks exact reset pixels, not multisample edge coverage. Software
+  // WebGL on CI can resolve a wall edge differently by one sample after resize.
+  // Use a single-sample fixture and retain the strict image equality assertions.
+  content.replace('createWorld({scene,camera,canvas})','createWorld({scene,camera,renderer:new THREE.WebGLRenderer({canvas,antialias:false})})')
+   .replace("defaultPerspective:'third-person'","defaultPerspective:'first-person'")+`\nworld.stop();world.step({},${startupTicks});(window as any).__subjectTestWorld=world;`:content);
  const initial=await service.inspect();expect(initial.observation.snapshot.camera.perspective).toBe('first-person');
  const page=(service as unknown as {session:{page:Page}}).session.page;
+ await page.evaluate(()=>((window as any).__subjectTestWorld).start());
  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.perspective==='third-person');
  await page.keyboard.down('t');expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.perspective)).toBe('third-person');await page.keyboard.up('t');
  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.perspective==='first-person');
@@ -50,7 +55,8 @@ it('switches the standalone subject through native keys, restores full object vi
   const first=await episode.frame('image/png');expect(await episode.frame('image/png')).toEqual(first);
   expect((await episode.advance({cameraTogglePressed:true},5)).camera.perspective).toBe('third-person');
   await episode.release();expect((await episode.prepareSegment({...start,cameraPerspective:'third-person'},viewport)).camera.perspective).toBe('third-person');
-  await episode.release();await episode.prepareSegment(start,viewport);expect((await episode.frame('image/png')).imageDataUrl).toBe(first.imageDataUrl);
+  await episode.release();await episode.prepareSegment(start,viewport);const replay=await episode.frame('image/png');
+  expect(replay.snapshot.camera).toEqual(first.snapshot.camera);expect(replay.imageDataUrl).toBe(first.imageDataUrl);
   expect(episode.errors).toEqual([]);
  }finally{await episode.close();}
 },30000);

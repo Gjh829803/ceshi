@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildSledModel } from '../../examples/three-creator/sdk-capabilities/sled-model';
-import { SLED_SPEC } from '../../examples/three-creator/sdk-capabilities/sled';
+import { buildSledModel } from '../../shared/training-content/sled-model';
+import { SLED_SPEC } from '../../shared/training-content/sled';
 import { training } from '@worldkit/three';
 const {defaultTrainingControl}=training;
 

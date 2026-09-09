@@ -20,8 +20,8 @@ W 交替划桨，S 倒划，A / D 单侧扫桨，Space 压桨制动。
 
 源码：
 
-- [模型](../examples/three-creator/sdk-capabilities/kayak-model.ts)
-- [默认驾驶参数](../examples/three-creator/sdk-capabilities/kayak.ts)
+- [模型](../shared/training-content/kayak-model.ts)
+- [默认驾驶参数](../shared/training-content/kayak.ts)
 - [SDK 物理](../packages/three-world/src/training/kayak.ts)
 - [SDK 桨和水纹显示](../packages/three-world/src/training/kayak-visual.ts)
 - [物理与真实骨架测试](../packages/three-world/src/training/kayak.test.ts)
@@ -30,8 +30,7 @@ W 交替划桨，S 倒划，A / D 单侧扫桨，Space 压桨制动。
 导出 `pnpm exec tsx scripts/three-creator/export-kayak.ts` 会更新
 `assets/three-creator/training/vehicles/kayak.glb` 及 `training.kayak` 的目录哈希。
 SDK 修改后执行 `pnpm build` 并重启预览服务。
-默认 `pnpm dev` 使用 5175；本次皮划艇独立预览使用
-`pnpm dev -- examples/three-creator/sdk-capabilities 5177`。
+在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
 
 浏览器验证输出到 `outputs/kayak/browser/`，包含纯画面录像、各视角截图、
 实际运行时字节 SHA-256 和键盘操作前后状态。

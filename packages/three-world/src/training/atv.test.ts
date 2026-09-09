@@ -8,8 +8,8 @@ import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './atv';
 import {Character} from './character';
-import {ATV_SPEC,ATV_SOCKETS} from '../../../../examples/three-creator/sdk-capabilities/atv';
-import {buildAtvModel} from '../../../../examples/three-creator/sdk-capabilities/atv-model';
+import {ATV_SPEC,ATV_SOCKETS} from '../../../../shared/training-content/atv';
+import {buildAtvModel} from '../../../../shared/training-content/atv-model';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
  const q=new EnvironmentQueries({id:'atv-test',name:'Tank',description:'',bounds:{min:[-2000,-10,-2000],max:[2000,100,2000]},

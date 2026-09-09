@@ -3,21 +3,21 @@ import * as T from "three";
 import { mountShell } from "./shell";
 import "./styles.css";
 
-import { controlsFor } from "../../../examples/three-creator/sdk-capabilities/ui/shortcuts";
-import { renderAssetThumbnails } from "../../../examples/three-creator/sdk-capabilities/ui/thumbnails";
+import { controlsFor } from "../../../shared/training-content/ui/shortcuts";
+import { renderAssetThumbnails } from "../../../shared/training-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
-import { SPECS } from "../../../examples/three-creator/sdk-capabilities/config";
-import presentationConfig from "../../../examples/three-creator/sdk-capabilities/presentation.json";
+import { SPECS, vehicleControlFamily } from "../../../shared/training-content/config";
+import presentationConfig from "../../../shared/training-content/presentation.json";
 import {
   getMap,
   MAPS,
-} from "../../../examples/three-creator/sdk-capabilities/environment/maps";
-import { GRAND_PRIX } from "../../../examples/three-creator/sdk-capabilities/environment/grand-prix";
+} from "../../../shared/training-content/environment/maps";
+import { GRAND_PRIX } from "../../../shared/training-content/environment/grand-prix";
 import {
   applyControlProfile,
   applyCameraProfile,
   readEffectiveProfile,
-} from "../../../examples/three-creator/sdk-capabilities/platform/profile-runtime";
+} from "../../../shared/training-content/platform/profile-runtime";
 import {
   getDefaultProfile,
   loadAssetProfile,
@@ -25,45 +25,45 @@ import {
   clearAssetProfile,
   parseAssetProfile,
   type AssetProfile,
-} from "../../../examples/three-creator/sdk-capabilities/platform/profiles";
-import { buildVehicle } from "../../../examples/three-creator/sdk-capabilities/models";
-import { FrameRateMeter } from "../../../examples/three-creator/sdk-capabilities/fps";
+} from "../../../shared/training-content/platform/profiles";
+import { buildVehicle } from "../../../shared/training-content/models";
+import { FrameRateMeter } from "../../../shared/training-content/fps";
 import {
   updateVehicleWheels,
   resetVehicleWheels,
-} from "../../../examples/three-creator/sdk-capabilities/vehicle-animation";
+} from "../../../shared/training-content/vehicle-animation";
 import {
   buildWorkspaceCatalog,
   type AssetEntry,
-} from "../../../examples/three-creator/sdk-capabilities/platform/catalog";
+} from "../../../shared/training-content/platform/catalog";
 import { mountAssetLibrary } from "./library";
 import { mountWorkbench } from "./workbench";
 import {
   defaultRegion,
   prepareCourse,
-} from "../../../examples/three-creator/sdk-capabilities/platform/scenarios";
-import { buildInteractionVisuals } from "../../../examples/three-creator/sdk-capabilities/humanoid/interaction-visuals";
-import { createAccessoryPreview } from "../../../examples/three-creator/sdk-capabilities/humanoid/accessories";
+} from "../../../shared/training-content/platform/scenarios";
+import { buildInteractionVisuals } from "../../../shared/training-content/humanoid/interaction-visuals";
+import { createAccessoryPreview } from "../../../shared/training-content/humanoid/accessories";
 import { mountEquipmentPanel } from "./equipment-panel";
 import { mountHumanoidLab } from "./humanoid-panel";
 import {
   createCollisionDebug,
   type CollisionDebugMode,
-} from "../../../examples/three-creator/sdk-capabilities/humanoid/capsule-debug";
+} from "../../../shared/training-content/humanoid/capsule-debug";
 import {
   HumanoidDemo,
   humanoidTraversalReady,
-} from "../../../examples/three-creator/sdk-capabilities/humanoid/demo";
-import type { CharacterTrial } from "../../../examples/three-creator/sdk-capabilities/environment/types";
+} from "../../../shared/training-content/humanoid/demo";
+import type { CharacterTrial } from "../../../shared/training-content/environment/types";
 import "./styles/workspace.css";
 
 import { createWorld, resolveShadowSettings, training } from "@worldkit/three";
-import { buildWorld } from "../../../examples/three-creator/sdk-capabilities/world";
+import { buildWorld } from "../../../shared/training-content/world";
 import {
   resolveTrainingResource,
   definitions,
-} from "../../../examples/three-creator/sdk-capabilities/assets/resources";
-import effectiveProfiles from "../../../examples/three-creator/sdk-capabilities/profiles.json";
+} from "../../../shared/training-content/assets/resources";
+import effectiveProfiles from "../../../shared/training-content/profiles.json";
 const { emptyInput, actionForKey, readControls } = training;
 type HumanoidInput = training.HumanoidInput;
 type SkillRequest = training.SkillRequest;
@@ -606,7 +606,7 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
-    family: v?.spec.mode ?? "character",
+    family: vehicleControlFamily(v?.spec),
     control: training.readTrainingControl(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
     grounded: v?.grounded ?? sim.player.grounded,
@@ -962,13 +962,13 @@ function updateUI() {
     setText(
       "category",
       v
-        ? `${["plane", "glider", "space", "dragon"].includes(v.spec.mode) ? "FLIGHT" : v.spec.mode === "sub" || v.spec.mode === "boat" ? "WATER" : "GROUND"} / ${v.spec.kernel}`
+        ? `${["plane", "glider", "space", "dragon"].includes(v.spec.mode) ? "FLIGHT" : ["sub", "boat", "kayak"].includes(v.spec.mode) ? "WATER" : "GROUND"} / ${v.spec.kernel}`
         : "ON FOOT / K01",
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
     shell.update({
-      controls: controlsFor(v?.spec.mode ?? "character", sdk.getKeyBindings()),
+      controls: controlsFor(vehicleControlFamily(v?.spec), sdk.getKeyBindings()),
     });
     setText("shortcutSubject", v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
@@ -993,7 +993,9 @@ function updateUI() {
     v
       ? sim.transition > 0
         ? "正在入座"
-        : v.submerged
+        : v.submersible
+          ? v.submersible.depth > .4 ? "水下航行" : "水面漂浮"
+          : v.submerged
           ? "载具涉水，请复位"
           : v.creature
             ? {
@@ -1027,7 +1029,9 @@ function updateUI() {
   if (v)
     setHTML(
       "interaction",
-      v.submerged
+      v.submersible && v.submersible.depth > .4
+        ? `深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
+        : v.submerged && v.spec.mode !== "sub"
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
           ? "<kbd>Shift</kbd>从高台释放，开始滑翔"

@@ -5,7 +5,7 @@ import type {
   TrainingCharacter,
   CharacterAttachmentPoint,
 } from "@worldkit/three";
-import { ACCESSORY_CHOICES } from "../../../examples/three-creator/sdk-capabilities/humanoid/accessories";
+import { ACCESSORY_CHOICES } from "../../../shared/training-content/humanoid/accessories";
 export type PreviewPin = {
   point: CharacterAttachmentPoint;
   hidden: boolean;

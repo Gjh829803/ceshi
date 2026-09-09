@@ -1,13 +1,13 @@
 import {describe,it,expect,vi} from 'vitest';
 import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
-import {createCapsuleDebug,createCollisionDebug} from '../../examples/three-creator/sdk-capabilities/humanoid/capsule-debug';
+import {createCapsuleDebug,createCollisionDebug} from '../../shared/training-content/humanoid/capsule-debug';
 import {createWorld,training} from '@worldkit/three';
-import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../examples/three-creator/sdk-capabilities/platform/profiles';
-import {applyCameraProfile,applyControlProfile,readEffectiveProfile} from '../../examples/three-creator/sdk-capabilities/platform/profile-runtime';
-import {getMap} from '../../examples/three-creator/sdk-capabilities/environment/maps';
-import {GRAND_PRIX} from '../../examples/three-creator/sdk-capabilities/environment/grand-prix';
-import {SPECS} from '../../examples/three-creator/sdk-capabilities/config';
-import {defaultRegion,prepareCourse} from '../../examples/three-creator/sdk-capabilities/platform/scenarios';
+import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../shared/training-content/platform/profiles';
+import {applyCameraProfile,applyControlProfile,readEffectiveProfile} from '../../shared/training-content/platform/profile-runtime';
+import {getMap} from '../../shared/training-content/environment/maps';
+import {GRAND_PRIX} from '../../shared/training-content/environment/grand-prix';
+import {SPECS} from '../../shared/training-content/config';
+import {defaultRegion,prepareCourse} from '../../shared/training-content/platform/scenarios';
 
 describe('training workspace configuration',()=>{
  it.each(['supercar','kart'])('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{

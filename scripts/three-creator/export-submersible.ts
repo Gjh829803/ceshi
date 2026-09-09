@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildSubmersibleModel } from '../../examples/three-creator/sdk-capabilities/submersible-model';
-import { SUBMERSIBLE_SPEC } from '../../examples/three-creator/sdk-capabilities/submersible';
+import { buildSubmersibleModel } from '../../shared/training-content/submersible-model';
+import { SUBMERSIBLE_SPEC } from '../../shared/training-content/submersible';
 import { training } from '@worldkit/three';
 const {defaultTrainingControl}=training;
 

@@ -12,7 +12,7 @@ const donor = path.resolve(process.argv[2] ?? '');
 const expected = 'c293622a63716b8473cc2a95cb485c515265945e';
 if (execFileSync('git', ['rev-parse', 'HEAD'], { cwd: donor, encoding: 'utf8' }).trim() !== expected) throw new Error('TRAINING_DONOR_VERSION_MISMATCH');
 const destination = path.join(REPOSITORY_ROOT, 'assets/three-creator/training');
-const content = path.join(REPOSITORY_ROOT, 'examples/three-creator/sdk-capabilities');
+const content = path.join(REPOSITORY_ROOT, 'shared/training-content');
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 async function walk(dir: string): Promise<string[]> {
   const result: string[] = [];
@@ -46,9 +46,9 @@ for (const relative of imports) {
 const contentModules = ['config.ts','models.ts','world.ts','vehicle-animation.ts',
   'environment/maps.ts','environment/types.ts','environment/modules.ts','environment/indoor.ts','environment/campus.ts',
   'creatures/specs.ts','creatures/manifest.ts','creatures/visual.ts',
-  'platform/catalog.ts','platform/library.ts','platform/workbench.ts','platform/inspector.ts','platform/profiles.ts','platform/profile-runtime.ts','platform/scenarios.ts',
-  'humanoid/workshop.ts','humanoid/interaction-visuals.ts','humanoid/panel.ts','humanoid/demo.ts',
-  'ui/workspace.ts','ui/workspace.css','ui/icons.ts','ui/shortcuts.ts','ui/thumbnails.ts'];
+  'platform/catalog.ts','platform/profiles.ts','platform/profile-runtime.ts','platform/scenarios.ts',
+  'humanoid/workshop.ts','humanoid/interaction-visuals.ts','humanoid/demo.ts',
+  'ui/shortcuts.ts','ui/thumbnails.ts'];
 for (const relative of contentModules) {
   const source = path.join(donor, 'src', relative);
   try {

@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildJetSkiModel } from '../../examples/three-creator/sdk-capabilities/jetski-model';
-import { JETSKI_SPEC,JETSKI_SOCKETS } from '../../examples/three-creator/sdk-capabilities/jetski';
+import { buildJetSkiModel } from '../../shared/training-content/jetski-model';
+import { JETSKI_SPEC,JETSKI_SOCKETS } from '../../shared/training-content/jetski';
 
 Object.assign(globalThis,{FileReader:class {
   result:unknown;onloadend?:()=>void;

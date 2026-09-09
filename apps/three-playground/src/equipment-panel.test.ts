@@ -29,7 +29,7 @@ describe("React equipment preview ownership and lifecycle", () => {
       import * as T from 'three';
       import {TrainingCharacter} from '@worldkit/three';
       import {mountEquipmentPanel} from './apps/three-playground/src/equipment-panel.tsx';
-      import {createAccessoryPreview} from './examples/three-creator/sdk-capabilities/humanoid/accessories.ts';
+      import {createAccessoryPreview} from './shared/training-content/humanoid/accessories.ts';
       const root=new T.Group();
       const names=['head','spine_05','hand_l','hand_r','foot_l','foot_r'];
       const bones=names.map((name,i)=>{const b=new T.Bone();b.name=name;b.position.set(i%2?.2:-.2,1.5-i*.23,0);root.add(b);return b;});

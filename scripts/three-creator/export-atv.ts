@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildAtvModel } from '../../examples/three-creator/sdk-capabilities/atv-model';
-import { ATV_SPEC,ATV_SOCKETS } from '../../examples/three-creator/sdk-capabilities/atv';
+import { buildAtvModel } from '../../shared/training-content/atv-model';
+import { ATV_SPEC,ATV_SOCKETS } from '../../shared/training-content/atv';
 
 Object.assign(globalThis,{FileReader:class {
   result:unknown;onloadend?:()=>void;

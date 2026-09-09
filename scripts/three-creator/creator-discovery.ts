@@ -11,14 +11,15 @@ import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
 import { characterUsage, humanAuthoringGuidance } from './character-guidance.js';
+import {cameraAuthoringGuidance} from './camera-guidance.js';
 
 export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'observation', 'commands', 'training', 'all'] as const;
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
-  guide: ['entryPoint', 'sdkGuide', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
+  guide: ['entryPoint', 'sdkGuide', 'cameraAuthoring', 'episodeNote', 'trainingExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
-  observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
-  training: ['trainingSourceContracts', 'trainingExampleTopic', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
+  observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
+  training: ['trainingSourceContracts', 'trainingExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'trainingInputGuides', 'runtimeDefinitions'],
 } as const;
 
 /** Read-only guidance over the compiler's frozen catalog; no browser/evidence ownership. */
@@ -31,6 +32,7 @@ export class CreatorDiscovery {
     const policy = this.compiler.assetPolicy().policy;
     const isSdk = this.profile === 'three-sdk';
     const nonhuman=topic==='nonhuman-subject';
+    const cameraAuthoring=cameraAuthoringGuidance(this.profile,guidance.isWorkspace,nonhuman?'nonhuman':'training');
     const humanoidTopic=['training','character-actions','mounted-interaction'].includes(topic);
     const includesTraining = isSdk && ['training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const includesCommands = isSdk && ['control', 'extensions', 'training', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
@@ -54,6 +56,7 @@ export class CreatorDiscovery {
     } : {};
     return {
       topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance,
+      ...(cameraAuthoring?{cameraAuthoring}:{}),
       ...(!nonhuman?{humanAuthoring:humanAuthoringGuidance(policy,this.profile)}:{}),
       ...(['getting-started','all'].includes(topic)?{subjectAuthoring:subjectAuthoringGuidance(this.profile)}:{}),
       ...(nonhuman&&isSdk?{exampleTopic:'nonhuman-subject'}:{}),
@@ -76,9 +79,10 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
+    if (topic === 'training-assets' || topic === 'training-maps') return path.join(REPOSITORY_ROOT, 'shared/training-content');
     const folder = topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : topic === 'custom-vehicle' ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
       topic === 'character-actions' ? 'character-actions' :
-      topic === 'independent-world' ? 'training-independent' : 'sdk-capabilities';
+      'training-independent';
     return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
   }
 
@@ -94,7 +98,8 @@ export class CreatorDiscovery {
 
   async examples(topic: ExampleTopic = 'getting-started', selectedFiles?: readonly string[]) {
     const guidance=await readRuntimeGuidance(this.compiler);
-    const authority={exampleAuthority:'host-baseline',runtimeGuidance:guidance.provenance};
+    const cameraAuthoring=cameraAuthoringGuidance(this.profile,guidance.isWorkspace,topic==='nonhuman-subject'?'nonhuman':'training');
+    const authority={exampleAuthority:'host-baseline',runtimeGuidance:guidance.provenance,...(cameraAuthoring?{cameraAuthoring}:{})};
     if (topic !== 'getting-started') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
       const missing = await this.missingExampleAssets(topic);

@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildTankModel } from '../../examples/three-creator/sdk-capabilities/tank-model';
-import { TANK_SPEC,TANK_SOCKETS } from '../../examples/three-creator/sdk-capabilities/tank';
+import { buildTankModel } from '../../shared/training-content/tank-model';
+import { TANK_SPEC,TANK_SOCKETS } from '../../shared/training-content/tank';
 
 Object.assign(globalThis,{FileReader:class {
   result:unknown;onloadend?:()=>void;

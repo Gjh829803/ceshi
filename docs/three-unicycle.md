@@ -19,8 +19,8 @@
 实现入口：[运动与状态](../packages/three-world/src/training/unicycle.ts)、
 [原骨架腿部求解](../packages/three-world/src/training/unicycle-rider.ts)、
 [角色动画](../packages/three-world/src/training/character.ts)、
-[模型](../examples/three-creator/sdk-capabilities/unicycle-model.ts)、
-[规格](../examples/three-creator/sdk-capabilities/unicycle.ts)。
+[模型](../shared/training-content/unicycle-model.ts)、
+[规格](../shared/training-content/unicycle.ts)。
 SDK 固定步进拥有运动、支撑与动作状态；显示插值只采样，Creator 和 Episode 共用同一执行路径。
 `training.vehicleDynamics[].unicycle` 返回阶段、落脚比例、轮相位和实际支撑点的副本。
 

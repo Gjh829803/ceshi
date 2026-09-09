@@ -7,13 +7,13 @@ import { Character } from './character';
 import { EnvironmentQueries, initEnvironmentQueries, vehicleBody } from './environment/queries';
 import { createVehicle, emptyInput, stepVehicle, type Input } from './simulation';
 import type { MapDefinition } from './environment/types';
-import { SLED_SPEC } from '../../../../examples/three-creator/sdk-capabilities/sled';
+import { SLED_SPEC } from '../../../../shared/training-content/sled';
 
-import { SKI_SPEC } from '../../../../examples/three-creator/sdk-capabilities/ski';
+import { SKI_SPEC } from '../../../../shared/training-content/ski';
 
-import {buildSkiModel} from '../../../../examples/three-creator/sdk-capabilities/ski-model';
+import {buildSkiModel} from '../../../../shared/training-content/ski-model';
 import {sampleSkiEquipment} from './ski-visual';
-import {getDefaultProfile} from '../../../../examples/three-creator/sdk-capabilities/platform/profiles';
+import {getDefaultProfile} from '../../../../shared/training-content/platform/profiles';
 
 beforeAll(initEnvironmentQueries);
 describe.each([SLED_SPEC,SKI_SPEC])('$id snow vehicle',spec=>{

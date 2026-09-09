@@ -15,7 +15,7 @@ import type {
   AssetProfile,
   ProfileCameraTuning,
   ControlTuning,
-} from "../../../examples/three-creator/sdk-capabilities/platform/profiles";
+} from "../../../shared/training-content/platform/profiles";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Slider } from "./components/ui/slider";
@@ -499,13 +499,13 @@ function Inspector({
               )}
               {cameraField(
                 "targetHeightOffset",
-                "在主体原始注视高度上增加偏移。",
+                "在 SDK 已有注视/眼位锚点上额外增加的米数，默认 0；第三人称与越肩共享，第一人称忽略。",
                 cockpit,
                 "第一人称眼位由人物姿态决定",
               )}
               {cameraField(
                 "horizontalOffset",
-                "相对镜头右方向偏移；驾驶位相对座位右方向。",
+                "在 SDK 已有构图位置上额外增加的横向米数，默认 0；第三人称与越肩共享，第一人称忽略。",
                 cockpit,
                 "第一人称眼位由人物姿态决定",
               )}

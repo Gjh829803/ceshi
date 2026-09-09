@@ -119,8 +119,25 @@ export interface TrainingConfiguration {
     readonly subjectId:string;
     readonly family:VehicleSpec['mode']|'character';
     readonly control:Partial<TrainingControl>;
-    readonly camera:{readonly owner:'authored'|'follow';readonly mode:0|1|2;readonly settings:CameraTuning};
+    readonly camera:{readonly owner:'authored'|'follow';readonly mode:0|1|2;readonly settings:CameraTuning;readonly framing:TrainingCameraFraming};
   };
+}
+/** Current camera anchor projection. Advisory only; it does not prove pixel visibility or absence of occlusion. */
+export interface TrainingCameraFraming {
+  readonly advisory:true;
+  readonly status:'observed'|'not-applicable'|'unavailable';
+  readonly reason:string|null;
+  readonly sampleSimulationSeconds:number|null;
+  /** Offset inputs associated with this camera sample, interpolated between fixed poses. */
+  readonly sampledOffsets:Readonly<Pick<CameraTuning,'targetHeightOffset'|'horizontalOffset'>>|null;
+  /** True when configured offsets have not yet reached this displayed camera sample. */
+  readonly offsetsPending:boolean|null;
+  readonly headSource:'posture-eye'|'driver-eye'|'seat-eye-fallback'|null;
+  readonly headPositionWorldMetersXYZ:Vec3|null;
+  /** Top-left is [0,0], bottom-right [1,1]; null when behind the camera or unavailable. */
+  readonly headScreenPositionNormalizedXY:readonly [number,number]|null;
+  readonly headInFrame:boolean|null;
+  readonly issues:readonly {readonly code:'SHOULDER_FRAMING_OFFSET_REVIEW';readonly message:string}[];
 }
 export interface TrainingBoardingObservation {
   readonly approachPositionWorldMetersXYZ:Vec3|null;
@@ -412,8 +429,28 @@ export class TrainingRuntime implements PhysicsPort {
     return {profile:this.exportProfile(),effective:{
       subjectId:vehicle?.spec.id??this.options.character.instanceId,family,
       control:Object.fromEntries(controlFields(family).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
-      camera:{owner:this.authored?'authored':'follow',mode:this.followCamera.mode as 0|1|2,settings:this.followCamera.getEffectiveTuning(this.simulation)},
+      camera:{owner:this.authored?'authored':'follow',mode:this.followCamera.mode as 0|1|2,settings:this.followCamera.getEffectiveTuning(this.simulation),framing:this.inspectCameraFraming()},
     }};
+  }
+  private inspectCameraFraming():TrainingCameraFraming {
+    const empty={advisory:true as const,sampleSimulationSeconds:null,sampledOffsets:null,offsetsPending:null,headSource:null,headPositionWorldMetersXYZ:null,headScreenPositionNormalizedXY:null,headInFrame:null,issues:[]};
+    if(this.authored||this.followCamera.mode===1)return {...empty,status:'not-applicable',reason:this.authored?'authored-camera':'first-person'};
+    const sample=this.followCamera.framingSample;
+    if(!sample)return {...empty,status:'unavailable',reason:'no-camera-sample'};
+    // Compose a private view matrix: inspection must not change camera matrices,
+    // render interpolation, collision history, animation or the simulation clock.
+    const matrix=this.camera.matrixAutoUpdate?new THREE.Matrix4().compose(this.camera.position,this.camera.quaternion,this.camera.scale):this.camera.matrix.clone();
+    if(this.camera.parent)matrix.premultiply(this.camera.parent.matrixWorld);
+    const clip=new THREE.Vector4(sample.position.x,sample.position.y,sample.position.z,1).applyMatrix4(matrix.invert()).applyMatrix4(this.camera.projectionMatrix);
+    if(!clip.toArray().every(Number.isFinite)||Math.abs(clip.w)<1e-9)return {...empty,status:'unavailable',reason:'invalid-projection'};
+    const point:readonly [number,number]|null=clip.w>0?[(clip.x/clip.w+1)/2,(1-clip.y/clip.w)/2]:null;
+    const headInFrame=point!==null&&point.every(value=>value>=0&&value<=1)&&Math.abs(clip.z/clip.w)<=1;
+    const camera=this.followCamera.getEffectiveTuning(this.simulation);
+    const offset=sample.offsets.targetHeightOffset!==0||sample.offsets.horizontalOffset!==0;
+    const offsetsPending=Math.abs(camera.targetHeightOffset-sample.offsets.targetHeightOffset)>1e-9||Math.abs(camera.horizontalOffset-sample.offsets.horizontalOffset)>1e-9;
+    const edge=point===null||point[0]<.05||point[0]>.95||point[1]<.1||point[1]>.9;
+    return {advisory:true,status:'observed',reason:offsetsPending?'framing-offsets-await-camera-update':null,sampleSimulationSeconds:sample.simulationSeconds,sampledOffsets:sample.offsets,offsetsPending,headSource:sample.source,headPositionWorldMetersXYZ:tuple(sample.position),headScreenPositionNormalizedXY:point,headInFrame,
+      issues:this.followCamera.mode===2&&offset&&edge?[{code:'SHOULDER_FRAMING_OFFSET_REVIEW',message:'The head anchor projects near or outside the frame with additional profile.camera offsets. Compare a current-view capture with targetHeightOffset and horizontalOffset at 0; these are additions to the SDK posture anchor, not eye height. Orbit and collision may also affect framing. Projection alone does not prove pixel visibility.'}]:[]};
   }
   onVisualUpdate(callback:(deltaSeconds:number)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
   onSimulationReplaced(callback:()=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}

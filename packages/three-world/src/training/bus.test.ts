@@ -6,7 +6,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Character} from './character';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
-import {BUS_SPEC} from '../../../../examples/three-creator/sdk-capabilities/bus';
+import {BUS_SPEC} from '../../../../shared/training-content/bus';
 import {busWheelAngle} from './bus';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){

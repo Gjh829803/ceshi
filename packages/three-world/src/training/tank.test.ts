@@ -8,8 +8,8 @@ import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environme
 import {tankBarrel,TANK_CONTROLS} from './tank';
 import {sampleTankVisual} from './tank-visual';
 import {Character} from './character';
-import {TANK_SPEC,TANK_SOCKETS} from '../../../../examples/three-creator/sdk-capabilities/tank';
-import {buildTankModel} from '../../../../examples/three-creator/sdk-capabilities/tank-model';
+import {TANK_SPEC,TANK_SOCKETS} from '../../../../shared/training-content/tank';
+import {buildTankModel} from '../../../../shared/training-content/tank-model';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
  const q=new EnvironmentQueries({id:'tank-test',name:'Tank',description:'',bounds:{min:[-200,-10,-200],max:[200,100,200]},

@@ -1,4 +1,4 @@
-import {getMap} from '../../../../examples/three-creator/sdk-capabilities/environment/maps';
+import {getMap} from '../../../../shared/training-content/environment/maps';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -10,8 +10,8 @@ import {initEnvironmentQueries,EnvironmentQueries,vehicleBody} from './environme
 import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
 import {SUBMERSIBLE_WATER,createSubmersibleState} from './submersible';
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
-import {SUBMERSIBLE_SPEC} from '../../../../examples/three-creator/sdk-capabilities/submersible';
-import {buildSubmersibleModel} from '../../../../examples/three-creator/sdk-capabilities/submersible-model';
+import {SUBMERSIBLE_SPEC} from '../../../../shared/training-content/submersible';
+import {buildSubmersibleModel} from '../../../../shared/training-content/submersible-model';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false){
  const q=new EnvironmentQueries({id:'pool',name:'Pool',description:'',bounds:{min:[-100,-30,-100],max:[100,30,100]},boxes:[{id:'floor',position:[0,dry?-1.55:-21,0],size:[200,1,200]},...(wall?[{id:'wall',position:[0,-4,9] as const,size:[100,40,.5] as const}]:[])],water:dry?[]:[{id:'water',min:[-90,-20.5,-90],max:[90,0,90],surface:0}],regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[180,180],color:'#aaa',modes:['sub','character']}],spawns:[],playerSpawn:[-20,1,0]});

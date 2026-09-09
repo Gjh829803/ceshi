@@ -8,8 +8,8 @@ import {Character} from './character';
 import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createUnicycleState,unicyclePedal,sampleUnicycleVisual,copyUnicycleState} from './unicycle';
-import {UNICYCLE_SPEC} from '../../../../examples/three-creator/sdk-capabilities/unicycle';
-import {buildUnicycleModel} from '../../../../examples/three-creator/sdk-capabilities/unicycle-model';
+import {UNICYCLE_SPEC} from '../../../../shared/training-content/unicycle';
+import {buildUnicycleModel} from '../../../../shared/training-content/unicycle-model';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
   const q=new EnvironmentQueries({id:'unicycle-test',name:'Unicycle',description:'',bounds:{min:[-100,-10,-100],max:[100,100,100]},

@@ -28,8 +28,8 @@
 
 实现与验证：
 
-- [模型](../examples/three-creator/sdk-capabilities/submersible-model.ts)
-- [驾驶配置](../examples/three-creator/sdk-capabilities/submersible.ts)
+- [模型](../shared/training-content/submersible-model.ts)
+- [驾驶配置](../shared/training-content/submersible.ts)
 - [浮力、压载及推进](../packages/three-world/src/training/submersible.ts)
 - [推进器和水粒子](../packages/three-world/src/training/submersible-visual.ts)
 - [物理、重置、舱门及真实人物验证](../packages/three-world/src/training/submersible.test.ts)
@@ -38,7 +38,7 @@
 
 运行 `pnpm exec tsx scripts/three-creator/export-submersible.ts` 更新 GLB 和目录哈希。
 SDK 改动后执行 `pnpm build` 并重启预览。
-本次预览命令为 `pnpm dev -- examples/three-creator/sdk-capabilities 5180`。
+在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
 验证结果位于 `outputs/submersible/`；浏览器报告包含实际加载的运行时字节哈希。
 `world.training!.snapshot().vehicleDynamics[].submersible` 提供压载比例、质量、
 浸入比例、浮力加速度、原点深度、水花和气泡数量等诊断数据。

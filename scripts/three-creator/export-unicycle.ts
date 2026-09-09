@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildUnicycleModel } from '../../examples/three-creator/sdk-capabilities/unicycle-model';
-import { UNICYCLE_SPEC,UNICYCLE_SOCKETS } from '../../examples/three-creator/sdk-capabilities/unicycle';
+import { buildUnicycleModel } from '../../shared/training-content/unicycle-model';
+import { UNICYCLE_SPEC,UNICYCLE_SOCKETS } from '../../shared/training-content/unicycle';
 
 Object.assign(globalThis,{FileReader:class {
   result:unknown;onloadend?:()=>void;

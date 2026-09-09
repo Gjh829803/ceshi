@@ -20,8 +20,8 @@
 | 平地或悬空 | 没有发动机或划桨推进力 |
 | 落地、碰墙 | 损失法向动能后有限回弹，气囊压缩并恢复 |
 
-[规格与锚点](../examples/three-creator/sdk-capabilities/raft.ts)定义驾驶座、两处乘客预留点、
-左右入口、驾驶观察点、脚部支撑；[模型](../examples/three-creator/sdk-capabilities/raft-model.ts)
+[规格与锚点](../shared/training-content/raft.ts)定义驾驶座、两处乘客预留点、
+左右入口、驾驶观察点、脚部支撑；[模型](../shared/training-content/raft-model.ts)
 包含左右手握持锚点。当前框架控制一位驾驶者，预留座位不代表已实现多人共同划桨。
 保留原 `humanoid.source-101` 人物、骨骼及缩放。船桨与手部目标同步更新，
 气囊压缩只改变 `raft.tubes`，人物、坐板和脚撑不随气囊缩放。
