@@ -6,7 +6,7 @@
   "description": "Three.js world creation, SDK runtime and Episode data production.",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
-    "dev": "tsx scripts/three-creator/training-preview.ts",
+    "dev": "pnpm dev:editor",
     "dev:training": "tsx scripts/three-creator/training-preview.ts",
     "test:training:browser": "tsx scripts/three-creator/training-browser-smoke.ts",
     "test:training:camera": "tsx scripts/three-creator/training-camera-browser-smoke.ts",

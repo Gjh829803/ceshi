@@ -32,8 +32,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-本地训练场默认地址为 `http://127.0.0.1:5175/`，展示完整人物、19 个载具和三张
-示例地图。修改源码后重启服务；项目参数保存在 `profiles.json`，界面支持导出。
+默认启动 React + shadcn/ui 编辑器，地址为 `http://127.0.0.1:5178/`，支持热更新。
+旧版 Creator 示例预览使用 `pnpm dev:training`，默认地址为 `http://127.0.0.1:5175/`。
+项目参数保存在 `profiles.json`，界面支持导出。
 `?debugProfiles=1` 可加载浏览器本地调试参数，正式交付使用项目配置。
 
 独立集成示例位于 [character-actions](examples/three-creator/character-actions/main.ts)

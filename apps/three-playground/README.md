@@ -6,7 +6,8 @@ The original Creator example remains a self-contained authoring example; the
 Creator compiler's dependency boundary is unchanged.
 
 ```sh
-pnpm dev:editor                 # http://127.0.0.1:5178
+pnpm dev                       # http://127.0.0.1:5178 (repository root)
+pnpm dev:editor                # same React editor
 pnpm build:editor              # .codex-tmp/react-playground-dist
 pnpm test:editor:browser        # real browser flow against running editor
 pnpm --filter @worldkit/three-playground typecheck
