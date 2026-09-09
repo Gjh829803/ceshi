@@ -616,6 +616,42 @@ The complete sdk-capabilities example combines these features with a reusable
 character, complete custom fox, real stairs, ramp, NPC controls and reset.
 
 <!-- topic:presentation -->
+## Shared shadow settings
+
+Both world factories accept partial `shadows` overrides. Omit them to use
+`DEFAULT_SHADOW_SETTINGS` from the SDK's [presentation config](src/config/presentation.ts).
+For imported JSON, use the shared parser:
+
+```ts
+import {createWorld, resolveShadowSettings} from '@worldkit/three';
+import config from './presentation.json'; // e.g. {"shadows":{"enabled":true,"coverageMeters":60}}
+const world = await createWorld({scene, camera, canvas,
+  shadows: resolveShadowSettings(config.shadows)});
+const sun = new THREE.DirectionalLight(0xffffff, 2);
+sun.position.set(-20, 40, -30);
+scene.add(sun, sun.target);
+world.configureShadowLight(sun);
+```
+
+The switch and algorithm apply to the renderer at creation, including a supplied
+renderer. Configure each selected directional light once and repeat for replacement
+lights; its position, target and lifetime remain authored. The SDK does not create
+lights, follow actors with them, or change mesh `castShadow`/`receiveShadow` flags.
+Other light types remain ordinary Three authoring. Disposing the world restores a
+supplied renderer's previous shadow switch/algorithm.
+
+Settings are JSON values: `enabled`, `type` (`basic`, `pcf`, `vsm`),
+`mapSizePixels`, `coverageMeters`, `nearMeters`, `farMeters`, `bias`,
+`normalBiasMeters`, `radius` and `intensity`. Coverage is the width/height in the
+directional light's view; sampling scale is `coverageMeters / mapSizePixels`.
+`bias` is normalized depth, `radius` is the filter radius (ignored by `basic`),
+and intensity ranges from 0 to 1. Larger coverage reduces detail; excessive bias
+can separate contact shadows. GPU texture limits may reduce actual map resolution.
+`world.shadowSettings` is the immutable resolved configuration, not a GPU measurement.
+Project files are imported by scene code and compiled into delivery; neither
+Creator nor Episode replaces them during capture. Playground's
+`presentation.json` uses this same path; edit, rebuild and refresh to apply changes.
+
 ## Independent UI, world pixels and model output
 
 Keep HUD, nameplates, menus, crosshairs, prompt inputs and other game UI out of

@@ -1,6 +1,22 @@
 /** Public Three SDK contract. All simulation is owned by one World runtime. */
 import type * as THREE from 'three';
 export type Vec3 = readonly [number, number, number];
+/** JSON-compatible project shadow settings; distances are in metres. */
+export interface ShadowSettings {
+ readonly enabled:boolean;
+ readonly type:'basic'|'pcf'|'vsm';
+ readonly mapSizePixels:number;
+ /** Width and height of a directional light's shadow camera, not a ground radius. */
+ readonly coverageMeters:number;
+ readonly nearMeters:number;
+ readonly farMeters:number;
+ /** Offset in normalized shadow depth. */
+ readonly bias:number;
+ readonly normalBiasMeters:number;
+ /** Filter radius in shadow texels; ignored by basic shadows. */
+ readonly radius:number;
+ readonly intensity:number;
+}
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | {readonly [key:string]:JsonValue};
 export type DeepReadonly<T> = T extends readonly (infer U)[] ? readonly DeepReadonly<U>[] : T extends object ? {readonly [K in keyof T]:DeepReadonly<T[K]>} : T;
 export type Scalar = boolean | number | string;
@@ -361,6 +377,9 @@ export interface WorldPresentation {
  dispose():void;
 }
 export interface World {
+ readonly shadowSettings:Readonly<ShadowSettings>;
+ /** Apply this world's settings once to an authored directional light. Does not move or own it. */
+ configureShadowLight(light:THREE.DirectionalLight):void;
  readonly training:import('./training/runtime.js').TrainingRuntime|undefined;
  readonly scene:THREE.Scene;
  readonly camera:THREE.Camera;

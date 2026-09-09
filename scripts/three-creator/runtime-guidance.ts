@@ -30,7 +30,7 @@ export class RuntimeGuidance {
     return readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src',relative),'utf8');
   }
   async definitions(includeTraining=true){
-    return Object.fromEntries(await Promise.all(['world.ts',...(includeTraining?DEFINITION_FILES:[])].map(async name=>{
+    return Object.fromEntries(await Promise.all(['world.ts','config/presentation.ts',...(includeTraining?DEFINITION_FILES:[])].map(async name=>{
       const source=await this.source(name);
       // Small config modules are returned whole so helper/type dependencies stay readable.
       if(name.startsWith('config/'))return [name,source];

@@ -16,7 +16,7 @@ They do not own a World, renderer, simulation loop or mutable runtime state.
 | `actions.ts` | Humanoid action and surface-action tuning |
 | `input.ts` | Default semantic keyboard bindings and supported codes |
 | `vehicle.ts` | Vehicle attitude calibration; affects hull clearance and rider pose |
-| `presentation.ts` | Internal presentation effects; no public profile switches |
+| `presentation.ts` | Shared shadow defaults and project override parsing; internal camera effects |
 
 To disable first-person camera roll inheritance, change
 `CAMERA_EFFECTS.vehicleTurnLean.enabled` to `false` in `presentation.ts`. `strength`
@@ -26,8 +26,26 @@ vehicle attitude, steering, collision or animation. At an exactly vertical sight
 line there is no unique horizon, so the existing up vector is retained. Third-person
 and shoulder camera behavior are unaffected by this switch.
 
-Internal effects are not exported by the package or exposed as Agent profile
-parameters. Existing public settings remain available through `TrainingProfile`.
+`DEFAULT_SHADOW_SETTINGS` defines the shadow switch, algorithm, map resolution,
+directional coverage/depth range, bias, normal bias, filter radius and intensity.
+`createWorld({shadows})` and `createHumanoidWorld({shadows})` apply these defaults
+with optional partial project overrides to the world's renderer. Call
+`world.configureShadowLight(light)` for each authored directional light that should
+use the same settings, including new lights after map replacement. This is a
+one-time application; scene code retains light placement, tracking and disposal.
+Mesh `castShadow`/`receiveShadow` flags remain authored Three properties.
+
+Playground imports `examples/three-creator/sdk-capabilities/presentation.json` and
+passes its `shadows` through the exported `resolveShadowSettings()` parser. An
+empty object inherits SDK defaults; `{"shadows":{"enabled":false}}` turns them off.
+Other projects can import their own JSON the same way. These are build-time
+project inputs, with no implicit file fetch or hot reload. Restart `pnpm dev` and
+refresh Playground after edits. `profiles.json` remains the per-actor tuning file.
+The readonly `world.shadowSettings` contains resolved requested settings; effective
+GPU resolution can be lower on devices with a smaller texture limit.
+
+Camera effects remain internal and are not exposed as Agent profile parameters.
+Existing public movement/camera settings remain available through `TrainingProfile`.
 Defaults are immutable; each runtime receives its own resolved copies. Changing a
 table requires a runtime rebuild and does not mutate already running worlds.
 

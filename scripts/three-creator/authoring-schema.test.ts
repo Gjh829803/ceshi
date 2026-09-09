@@ -30,6 +30,15 @@ it.each(['getting-started','nonhuman-subject','extensions'] as const)('exposes e
 });
 
 describe('Agent presentation contract',()=>{
+ it('exposes shared shadow settings, light application and the JSON usage path',()=>{
+  const source=publicContractTopic(contracts,'presentation');
+  expect(source).toContain('interface ShadowSettings');
+  expect(source).toContain('readonly shadowSettings');
+  expect(source).toContain('configureShadowLight');
+  const selected=guideTopic(guide,'presentation');
+  expect(selected).toContain('resolveShadowSettings(config.shadows)');
+  expect(selected).toContain('world.configureShadowLight(sun)');
+ });
  it('publishes the real presentation port with all source identity and binding dependencies',()=>{
   expect(AUTHORING_TOPICS).toContain('presentation');
   const {file,byName}=declarations(publicContractTopic(contracts,'presentation'));

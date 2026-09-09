@@ -6,6 +6,68 @@ import type { CommandReceipt, TaskScope } from './contracts.js';
 const liveWorlds: ThreeWorld[] = [];
 afterEach(() => { for (const world of liveWorlds.splice(0)) world.dispose(); });
 
+describe('shared shadow configuration',()=>{
+ it('applies project settings to the renderer and explicitly selected lights, including replacement lights',async()=>{
+  const renderer={shadowMap:{enabled:false,type:THREE.BasicShadowMap,needsUpdate:false,autoUpdate:false},render:()=>{}} as unknown as THREE.WebGLRenderer;
+  const untouched=new THREE.DirectionalLight(),scene=new THREE.Scene();scene.add(untouched);
+  const options=JSON.parse('{"mapSizePixels":1024,"coverageMeters":40,"nearMeters":2,"farMeters":220,"bias":-0.0002,"normalBiasMeters":0.03,"radius":0.7,"intensity":0.6}');
+  const world=await createWorld({scene,renderer,navigation:false,shadows:options});liveWorlds.push(world);
+  expect(renderer.shadowMap.enabled).toBe(true);expect(renderer.shadowMap.type).toBe(THREE.PCFShadowMap);
+  expect(untouched.castShadow).toBe(false);
+  options.coverageMeters=4;
+  for(let i=0;i<2;i++){
+   const light=new THREE.DirectionalLight();light.position.set(8,10,12);light.target.position.set(1,2,3);
+   // Three consumes the renderer-level dirty flag after rendering the previous light.
+   renderer.shadowMap.needsUpdate=false;
+   const projection=light.shadow.camera.projectionMatrix.clone();world.configureShadowLight(light);
+   expect(renderer.shadowMap.needsUpdate).toBe(true);expect(renderer.shadowMap.autoUpdate).toBe(false);
+   expect(light.castShadow).toBe(true);expect(light.shadow.mapSize.toArray()).toEqual([1024,1024]);
+   expect(light.shadow.camera).toMatchObject({left:-20,right:20,top:20,bottom:-20,near:2,far:220});
+   expect(light.shadow.camera.projectionMatrix.equals(projection)).toBe(false);
+   expect(light.shadow).toMatchObject({bias:-.0002,normalBias:.03,radius:.7,intensity:.6});
+   expect(light.position.toArray()).toEqual([8,10,12]);expect(light.target.position.toArray()).toEqual([1,2,3]);
+   light.shadow.dispose();
+  }
+  expect(world.simulationTick).toBe(0);
+  world.dispose();expect(renderer.shadowMap.enabled).toBe(false);expect(renderer.shadowMap.type).toBe(THREE.BasicShadowMap);
+  expect(()=>world.configureShadowLight(new THREE.DirectionalLight())).toThrow();
+ });
+ it('supports a disabled headless world and does not contaminate another world defaults',async()=>{
+  const disabled=await createWorld({navigation:false,shadows:{enabled:false}}),normal=await createWorld({navigation:false});liveWorlds.push(disabled,normal);
+  const light=new THREE.DirectionalLight();light.castShadow=true;disabled.configureShadowLight(light);expect(light.castShadow).toBe(false);
+  normal.configureShadowLight(light);expect(light.castShadow).toBe(true);
+  expect(normal.shadowSettings.enabled).toBe(true);expect(disabled.shadowSettings.enabled).toBe(false);
+  expect(Object.isFrozen(normal.shadowSettings)).toBe(true);
+  light.shadow.dispose();
+ });
+ it('releases old shadow textures on resize and preserves light update ownership',async()=>{
+  const world=await createWorld({navigation:false});liveWorlds.push(world);
+  const light=new THREE.DirectionalLight(),map=new THREE.WebGLRenderTarget(512,512),pass=new THREE.WebGLRenderTarget(512,512);
+  let disposed=0;map.addEventListener('dispose',()=>disposed++);pass.addEventListener('dispose',()=>disposed++);
+  light.shadow.map=map;light.shadow.mapPass=pass;light.shadow.autoUpdate=false;
+  world.configureShadowLight(light);
+  expect(disposed).toBe(2);expect(light.shadow.map).toBeNull();expect(light.shadow.mapPass).toBeNull();
+  expect(light.shadow.needsUpdate).toBe(true);expect(light.shadow.autoUpdate).toBe(false);
+  world.configureShadowLight(light);expect(disposed).toBe(2);
+ });
+ it('rejects invalid project JSON before mutating a supplied renderer',async()=>{
+  const renderer={shadowMap:{enabled:false,type:THREE.VSMShadowMap,needsUpdate:false}} as unknown as THREE.WebGLRenderer;
+  await expect(createWorld({renderer,navigation:false,shadows:{coverageMeters:0}})).rejects.toThrow('SHADOW_SETTINGS_INVALID');
+  expect(renderer.shadowMap).toEqual({enabled:false,type:THREE.VSMShadowMap,needsUpdate:false});
+ });
+ it('invalidates static light caches when applying and restoring the renderer algorithm',async()=>{
+  const scene=new THREE.Scene(),light=new THREE.DirectionalLight();light.castShadow=true;light.shadow.autoUpdate=false;scene.add(light);
+  const renderer={shadowMap:{enabled:true,type:THREE.BasicShadowMap,needsUpdate:false,autoUpdate:false}} as unknown as THREE.WebGLRenderer;
+  const world=await createWorld({scene,renderer,navigation:false});liveWorlds.push(world);
+  expect(light.shadow.needsUpdate).toBe(true);expect(light.shadow.autoUpdate).toBe(false);
+  light.shadow.needsUpdate=false;renderer.shadowMap.needsUpdate=false;
+  world.dispose();
+  expect(renderer.shadowMap.type).toBe(THREE.BasicShadowMap);
+  expect(renderer.shadowMap.needsUpdate).toBe(true);expect(light.shadow.needsUpdate).toBe(true);
+  expect(light.shadow.mapSize.toArray()).toEqual([512,512]);expect(light.castShadow).toBe(true);
+ });
+});
+
 function box(width = 1, height = 1, depth = 1) {
   return new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshBasicMaterial());
 }

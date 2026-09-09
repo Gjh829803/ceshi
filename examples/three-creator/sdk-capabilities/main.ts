@@ -5,6 +5,7 @@ import { controlsFor } from './ui/shortcuts';
 import { renderAssetThumbnails } from './ui/thumbnails';
 import { mountInspector } from './platform/inspector';
 import { SPECS } from './config';
+import presentationConfig from './presentation.json';
 import { getMap,MAPS } from './environment/maps';
 import { applyControlProfile, applyCameraProfile, readEffectiveProfile } from './platform/profile-runtime';
 import { getDefaultProfile, loadAssetProfile, saveAssetProfile, clearAssetProfile, parseAssetProfile, type AssetProfile } from './platform/profiles';
@@ -26,7 +27,7 @@ import type { CharacterTrial } from './environment/types';
 import './ui/workspace.css';
 
 
-import { createWorld, training } from '@worldkit/three';
+import { createWorld, resolveShadowSettings, training } from '@worldkit/three';
 import { buildWorld } from './world';
 import { resolveTrainingResource, definitions } from './assets/resources';
 import effectiveProfiles from './profiles.json';
@@ -39,20 +40,21 @@ decorateIcons();
 const canvas=document.querySelector<HTMLCanvasElement>('#viewport')!,scene=new T.Scene();
 const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;
+renderer.outputColorSpace=T.SRGBColorSpace;
 renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.04;
 const camera=new T.PerspectiveCamera(55,canvas.clientWidth/canvas.clientHeight,.12,2100);
 const visuals=SPECS.map(buildVehicle),character=new training.Character();
 try {await Promise.all([character.load(resolveTrainingResource),...visuals.map(v=>v.creature?.load())]);}
 catch(error){document.getElementById('loadText')!.textContent='资源加载失败：'+String(error);throw error;}
-const sdk=await createWorld({scene,camera,renderer,canvas,assetDefinitions:definitions,
+const sdk=await createWorld({scene,camera,renderer,canvas,assetDefinitions:definitions,shadows:resolveShadowSettings(presentationConfig.shadows),
   training:{map:getMap('campus'),vehicles:SPECS.map((spec,n)=>({instanceId:spec.id,assetId:'training.'+spec.id,spec,object:visuals[n]!.root})),character:{instanceId:'person',object:character.root,animation:character}}});
 const runtime=sdk.training!,sim=runtime.simulation,follow=runtime.followCamera;
 runtime.applyProfile({view:{keyboardToggleEnabled:true}});
 const accessories=createAccessoryPreview(character);
 let currentMap=getMap('campus'),world=buildWorld(scene,currentMap);
+sdk.configureShadowLight(world.sun);
 const session={get map(){return currentMap;},get world(){return world;},get queries(){return runtime.environment;},
-  switchMap(id:string){if(id===currentMap.id)return;const next=getMap(id),visual=buildWorld(scene,next);try{runtime.switchMap(next);}catch(error){visual.dispose();throw error;}world.dispose();world=visual;currentMap=next;},dispose(){world.dispose();sdk.dispose();}};
+  switchMap(id:string){if(id===currentMap.id)return;const next=getMap(id),visual=buildWorld(scene,next);try{sdk.configureShadowLight(visual.sun);runtime.switchMap(next);}catch(error){visual.dispose();throw error;}world.dispose();world=visual;currentMap=next;},dispose(){world.dispose();sdk.dispose();}};
 const viewportUI=Array.from(canvas.parentElement!.children).filter(element=>element!==canvas) as HTMLElement[];
 const sdkPresentation=sdk.createPresentation({container:canvas.parentElement!});
 // Keep the source HUD above the SDK input surface and inside its UI boundary.

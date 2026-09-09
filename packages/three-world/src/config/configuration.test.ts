@@ -1,8 +1,22 @@
 import {expect,it} from 'vitest';
 import {Vector3,Quaternion,Euler} from 'three';
 import {CAMERA_PARAMETERS,CAMERA_SCHEMA_PROPERTIES,DEFAULT_CAMERA_TUNING,parseCameraTuning} from './camera';
-import {CAMERA_EFFECTS} from './presentation';
+import {CAMERA_EFFECTS,DEFAULT_SHADOW_SETTINGS,resolveShadowSettings} from './presentation';
 import {applyVehicleCameraRoll} from '../training/camera-roll';
+
+it('resolves JSON shadow overrides into independent immutable settings',()=>{
+ const input=JSON.parse('{"enabled":false,"coverageMeters":90,"mapSizePixels":4096,"type":"basic","radius":0,"intensity":0.4}');
+ const settings=resolveShadowSettings(input),defaults=resolveShadowSettings();
+ expect(settings).toMatchObject({enabled:false,coverageMeters:90,mapSizePixels:4096,type:'basic',radius:0,intensity:.4});
+ expect(settings.bias).toBe(DEFAULT_SHADOW_SETTINGS.bias);
+ input.coverageMeters=10;expect(settings.coverageMeters).toBe(90);
+ expect(defaults).toEqual(DEFAULT_SHADOW_SETTINGS);expect(defaults).not.toBe(DEFAULT_SHADOW_SETTINGS);
+ expect(Object.isFrozen(defaults)).toBe(true);expect(Object.isFrozen(DEFAULT_SHADOW_SETTINGS)).toBe(true);
+});
+it.each([null,[],{enabled:'false'},{type:'pcf-soft'},{mapSizePixels:1000},{mapSizePixels:0},{coverageMeters:0},
+ {nearMeters:0},{nearMeters:400,farMeters:350},{bias:NaN},{normalBiasMeters:-1},{radius:-1},{intensity:1.1},{unknown:true}])('rejects unusable shadow settings %j',input=>{
+ expect(()=>resolveShadowSettings(input)).toThrow(/SHADOW_SETTINGS_INVALID/);
+});
 
 it('derives the complete camera schema from parameter definitions and rejects incomplete values',()=>{
  expect(Object.keys(CAMERA_SCHEMA_PROPERTIES)).toEqual(Object.keys(CAMERA_PARAMETERS));

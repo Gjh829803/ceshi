@@ -59,7 +59,7 @@ async function fixture(parentedCamera = false,custom=false) {
  const frames:FrameRequestCallback[]=[];vi.stubGlobal('requestAnimationFrame',(fn:FrameRequestCallback)=>{frames.push(fn);return frames.length;});vi.stubGlobal('cancelAnimationFrame',vi.fn());
  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:documentTarget,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:vi.fn(()=> 'data:image/png;base64,dGVzdA==')});
  let ratio=2;const size=new THREE.Vector2(400,300);
- const renderer={domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
+ const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
  const camera=new THREE.PerspectiveCamera(50,4/3,.1,500),scene=new THREE.Scene();camera.position.set(3,3,6);camera.lookAt(0,1,0);
  const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{}});
  world.addEntity({id:'floor',object:plane(),role:'terrain'});
@@ -88,6 +88,9 @@ describe('Episode observer ownership and relative opening',()=>{
  it('installs automatically and keeps fixed time, actor facing and camera memory at each new start',async()=>{
   const {world,port,actor,camera,frames,canvas}=await fixture();
   try{
+   const sun=new THREE.DirectionalLight();world.configureShadowLight(sun);world.scene.add(sun);
+   const shadowState=()=>({enabled:world.renderer!.shadowMap.enabled,type:world.renderer!.shadowMap.type,settings:world.shadowSettings,cast:sun.castShadow,map:sun.shadow.mapSize.toArray()});
+   const initialShadows=shadowState();
    expect(port.schemaVersion).toBe(1);expect(port.capabilities().movement.kind).toBe('ground');
    const sky=new THREE.Mesh(new THREE.SphereGeometry(1000),new THREE.MeshBasicMaterial());world.scene.add(sky);
    expect(port.capabilities().worldBounds.minimumWorldMetersXYZ[0]).toBeCloseTo(-20);expect(port.capabilities().worldBounds.maximumWorldMetersXYZ[0]).toBeCloseTo(20);
@@ -108,6 +111,7 @@ describe('Episode observer ownership and relative opening',()=>{
    expect(new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0),.4).applyQuaternion(actor.getWorldQuaternion(new THREE.Quaternion())).x).toBeCloseTo(1,5);
    port.advance({moveZRatio:-1},1);expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(new THREE.Vector3(-8,0,4))).toBeLessThan(10);
    port.release();expect(canvas.width).toBe(800);expect(canvas.height).toBe(600);expect(()=>port.advance({},1)).toThrow();await world.start();expect(world.isRunning).toBe(true);expect(()=>port.advance({},1)).toThrow();
+   expect(shadowState()).toEqual(initialShadows);
   }finally{world.dispose();}
  });
  it('does not double-transform a camera parented beneath the actor and resets to the original world',async()=>{

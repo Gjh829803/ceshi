@@ -21,7 +21,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],
- presentation: ['createPresentation','state','execute','getEntityState','reset'],
+ presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
  training:['training','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
  'mounted-interaction':['training','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['training','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],

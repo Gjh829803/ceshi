@@ -17,6 +17,15 @@ async function fixture(){
 const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={})=>executeThreeCreatorTool(service,name,args) as Promise<any>;
 afterEach(async()=>{await Promise.all(services.splice(0).map(s=>s.close()));await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
 
+it('publishes the current project shadow defaults through presentation discovery',async()=>{
+ const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/config/presentation.ts');
+ await writeFile(file,(await readFile(file,'utf8')).replace('coverageMeters:60','coverageMeters:96'));
+ const result=await call(service,'creator_get_authoring_schema',{topic:'presentation',sections:['contracts','training']});
+ expect(result.runtimeDefinitions['config/presentation.ts']).toContain('coverageMeters:96');
+ expect(result.sdkContracts).toContain('configureShadowLight');
+ expect(result.sdkContracts).toContain('interface ShadowSettings');
+});
+
 it('reads the current workspace declarations and refreshes their source identity after each edit',async()=>{
  const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/contracts.ts');
  const before=await call(service,'creator_get_authoring_schema',{topic:'all',sections:['contracts']});

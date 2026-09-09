@@ -52,7 +52,7 @@ export function buildWorld(scene:T.Scene,map:MapDefinition=getMap('campus')):Wor
  const skyGeometry=new T.SphereGeometry(1500,24,12);geometries.add(skyGeometry);
  const skyMaterial=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,uniforms:{top:{value:new T.Color('#76a9bd')},bottom:{value:new T.Color('#dae7e5')}},vertexShader:'varying float h;void main(){h=position.y/1500.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying float h;uniform vec3 top;uniform vec3 bottom;void main(){gl_FragColor=vec4(mix(bottom,top,pow(max(h,0.),.7)),1.);}'});materials.add(skyMaterial);
  const sky=new T.Mesh(skyGeometry,skyMaterial);root.add(sky);root.add(new T.HemisphereLight('#e4f4fb','#728a7e',2.1));
- const sun=new T.DirectionalLight('#fff0d6',3);sun.position.set(-70,140,-90);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:1,far:350});sun.shadow.bias=-.00015;sun.shadow.normalBias=.04;root.add(sun,sun.target);
+ const sun=new T.DirectionalLight('#fff0d6',3);sun.position.set(-70,140,-90);root.add(sun,sun.target);
  const previousFog=scene.fog,previousBackground=scene.background,airFog=new T.Fog('#c1d7dd',280,1000),waterFog=new T.Fog('#246879',8,105),waterBackground=new T.Color('#246879'),sunOffset=new T.Vector3(-70,140,-90);
  scene.fog=airFog;root.updateMatrixWorld(true);
  let disposed=false;

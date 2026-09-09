@@ -9,7 +9,7 @@ afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllG
 async function fixture() {
  // Headless renderer stub only: these tests exercise the real registry/observer/reset,
  // not rendered pixels. Browser isolation is verified separately by the capture adapter.
- const renderer={render:vi.fn()} as unknown as THREE.WebGLRenderer;
+ const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},render:vi.fn()} as unknown as THREE.WebGLRenderer;
  const world=await createWorld({scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),renderer,navigation:false});worlds.push(world);
  const trees=new THREE.Group(),tree=new THREE.Group(),lamps=new THREE.InstancedMesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial(),3);trees.add(tree,lamps);
  world.addEntity({id:'trees',object:trees,role:'decoration'});

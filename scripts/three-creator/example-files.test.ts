@@ -9,6 +9,8 @@ describe('modular training example discovery',()=>{
   expect(Object.keys(result.files)).toEqual(['index.html','main.ts','project.json','episode.json']);
  });
  it('reads topic modules and rejects arbitrary paths',async()=>{
+  const presentation=await readExampleFiles(root,'extensions',['presentation.json']);
+  expect(JSON.parse(presentation.files['presentation.json']!)).toEqual({shadows:{}});
   expect((await readExampleFiles(root,'training-maps')).files['environment/maps.ts']).toContain('campus');
   await expect(readExampleFiles(root,'extensions',['../../package.json'])).rejects.toThrow('THREE_EXAMPLE_FILE_UNKNOWN');
  });

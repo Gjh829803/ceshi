@@ -2,6 +2,8 @@ import { trainingHost } from './training/host-access';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { WorldEngine, type WorldOptions as EngineOptions } from './engine.js';
+import {resolveShadowSettings} from './config/presentation';
+import {applyRendererShadows,applyDirectionalShadows} from './shadows';
 import { ThreePresentation } from './presentation.js';
 import { normalizeCaptureSelection, observeCaptureSelection, type SelectedCaptureTarget } from './capture-selection.js';
 import { WorldAssets } from './assets-library.js';
@@ -26,7 +28,7 @@ type Prepared = {plan:Plan;spawned:Map<string,API.EntityOptions|API.CharacterOpt
 type Tween = {command:API.PropertyCommand;from:API.Vec3;to:API.Vec3;elapsed:number;duration:number;operationId:string;step:number};
 type Activity = {operationId:string;steps:{commandIndex:number;status:'queued'|'running'|'succeeded'|'failed'|'cancelled';error?:API.RuntimeError}[];parameters:string[];actorSteps:Map<string,number>;followTargets:Map<string,string>};
 type Queued = {prepared:Prepared;commandId:string;operationId:string;resolve:(receipt:API.CommandReceipt)=>void};
-export type WorldOptions = EngineOptions & {assetDefinitions?:Readonly<Record<string,AssetDefinition>>};
+export type WorldOptions = EngineOptions & {assetDefinitions?:Readonly<Record<string,AssetDefinition>>;shadows?:Partial<API.ShadowSettings>};
 const vec=(value:unknown):API.Vec3=>{if(!Array.isArray(value)||value.length!==3||!value.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=100000))throw failure('COMMAND_VECTOR_INVALID');return value as unknown as API.Vec3;};
 const tuple=(value:THREE.Vector3):API.Vec3=>[value.x,value.y,value.z];
 const commandFields:Record<API.PrimitiveCommand['type'],readonly string[]>={
@@ -45,6 +47,8 @@ const propertyChannel=(command:API.PrimitiveCommand):API.PropertyChannel|undefin
 
 /** Public authoring facade over one private engine. It never owns a second simulation loop. */
 export class ThreeWorld implements API.World {
+ readonly shadowSettings:Readonly<API.ShadowSettings>;
+ private restoreRendererShadows:(()=>void)|undefined;
  readonly scene:THREE.Scene;readonly camera:THREE.Camera;readonly renderer:THREE.WebGLRenderer|undefined;
  readonly assets:WorldAssets;readonly operations=new OperationLedger();readonly state:StateRegistry;
  private readonly entries=new Map<string,Registration>();
@@ -64,7 +68,8 @@ export class ThreeWorld implements API.World {
  private captureTargets:readonly SelectedCaptureTarget[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;
  private activeWriter:string|undefined;private observer:API.WorldObservation|undefined;
  private episodeLease:{state:'preparing'|'prepared';restoreViewport:()=>void}|undefined;
- private constructor(private readonly engine:WorldEngine,assets:WorldAssets){
+ private constructor(private readonly engine:WorldEngine,assets:WorldAssets,shadows:Readonly<API.ShadowSettings>){
+  this.shadowSettings=shadows;
   this.scene=engine.scene;this.camera=engine.camera;this.renderer=engine.renderer;this.assets=assets;
   this.state=new StateRegistry(id=>{const owner=this.owners.get(`state:${id}`);if(owner&&owner!==this.activeWriter)throw failure('STATE_OWNED_BY_PARAMETER',`Set parameter ${owner} instead.`);this.notifyChange();});
   engine.onUpdate(({deltaSeconds,simulationTick})=>this.beforeTick(deltaSeconds,simulationTick));
@@ -74,6 +79,7 @@ export class ThreeWorld implements API.World {
   engine.setDriveProvider((id,input,direction,dt)=>this.movementDrive(id,input,direction,dt));
  }
  static async create(options:WorldOptions={}):Promise<ThreeWorld>{
+  const shadows=resolveShadowSettings(options.shadows);
   const engine=await WorldEngine.create(options);
   try{
    let definitions=options.assetDefinitions??{};
@@ -83,15 +89,20 @@ export class ThreeWorld implements API.World {
     else if(response.status!==404)throw failure('ASSET_CATALOG_FAILED',`HTTP ${response.status}`);
    }
    const assets=new WorldAssets({definitions,...(typeof document!=='undefined'?{baseUri:document.baseURI}:{})});
-   const world=new ThreeWorld(engine,assets);
+   const world=new ThreeWorld(engine,assets,shadows);
    if(options.training){
     for(const v of options.training.vehicles)world.addCharacter({id:v.instanceId,name:v.spec.name,object:v.object,body:{heightMeters:Math.max(.1,v.spec.envelope.halfExtents[1]*2),radiusMeters:v.spec.radius},tags:['training-vehicle',v.assetId],frontYawRadians:Math.PI});
     const c=options.training.character;world.addCharacter({id:c.instanceId,object:c.object,body:{heightMeters:1.68,radiusMeters:.28},tags:['training-character'],frontYawRadians:Math.PI});world.setControlledEntity(c.instanceId);
    }
+   if(world.renderer)world.restoreRendererShadows=applyRendererShadows(world.renderer,world.scene,shadows);
    return world;
   }catch(error){engine.dispose();throw error;}
  }
  get training(){return this.engine.training;}
+ configureShadowLight(light:THREE.DirectionalLight):void{
+  this.alive();applyDirectionalShadows(light,this.shadowSettings);
+  if(this.renderer)this.renderer.shadowMap.needsUpdate=true;
+ }
  getKeyBindings(){return this.engine.keyboard.getKeyBindings();}
  setKeyBindings(overrides:Partial<import('./training/input').KeyBindings>):void{this.alive();this.engine.keyboard.setKeyBindings(overrides);}
  get cameraMode():API.CameraState['mode']{return this.engine.training?.cameraMode??this.engine.cameraRig.mode;}
@@ -706,7 +717,7 @@ export class ThreeWorld implements API.World {
  dispose():void{
   if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.training&&!trainingHost(this.training).isDisposed())trainingHost(this.training).setEpisodeOwned(false);lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireTrainingActivities();this.operations.cancelAll();
   for(const queued of this.queued.splice(0))queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});
-  this.presentation?.dispose();this.changes.clear();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
+  this.presentation?.dispose();this.changes.clear();this.restoreRendererShadows?.();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
  }
