@@ -33,7 +33,7 @@ pnpm dev
 ```
 
 默认启动 React + shadcn/ui 编辑器，地址为 `http://127.0.0.1:5178/`，支持热更新。
-旧版 Creator 示例预览使用 `pnpm dev:training`，默认地址为 `http://127.0.0.1:5175/`。
+`pnpm dev:example` 在 `http://127.0.0.1:5175/` 预览独立 SDK 集成示例，不提供编辑器。
 项目参数保存在 `profiles.json`，界面支持导出。
 `?debugProfiles=1` 可加载浏览器本地调试参数，正式交付使用项目配置。
 

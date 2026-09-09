@@ -17,7 +17,7 @@ export async function readExampleFiles(root:string, topic:ExampleTopic, selected
   await walk(root);
   const defaults=topic==='training-assets'?['config.ts','models.ts','assets/resources.ts','creatures/specs.ts','creatures/manifest.ts']:
     topic==='training-maps'?['environment/maps.ts','environment/modules.ts','humanoid/workshop.ts']:
-    topic==='training-ui'?['ui/workspace.ts','platform/workbench.ts','platform/profiles.ts']:
+    topic==='training-ui'?['index.html','main.ts','project.json','episode.json']:
     topic==='character-actions'?['index.html','main.ts','map.ts','project.json','episode.json']:
     topic==='vehicle-camera'?['index.html','main.ts','project.json','episode.json','whitebox-materials.ts']:
     ['index.html','main.ts','project.json','episode.json'];

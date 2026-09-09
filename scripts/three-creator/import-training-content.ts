@@ -46,9 +46,9 @@ for (const relative of imports) {
 const contentModules = ['config.ts','models.ts','world.ts','vehicle-animation.ts',
   'environment/maps.ts','environment/types.ts','environment/modules.ts','environment/indoor.ts','environment/campus.ts',
   'creatures/specs.ts','creatures/manifest.ts','creatures/visual.ts',
-  'platform/catalog.ts','platform/library.ts','platform/workbench.ts','platform/inspector.ts','platform/profiles.ts','platform/profile-runtime.ts','platform/scenarios.ts',
-  'humanoid/workshop.ts','humanoid/interaction-visuals.ts','humanoid/panel.ts','humanoid/demo.ts',
-  'ui/workspace.ts','ui/workspace.css','ui/icons.ts','ui/shortcuts.ts','ui/thumbnails.ts'];
+  'platform/catalog.ts','platform/profiles.ts','platform/profile-runtime.ts','platform/scenarios.ts',
+  'humanoid/workshop.ts','humanoid/interaction-visuals.ts','humanoid/demo.ts',
+  'ui/shortcuts.ts','ui/thumbnails.ts'];
 for (const relative of contentModules) {
   const source = path.join(donor, 'src', relative);
   try {

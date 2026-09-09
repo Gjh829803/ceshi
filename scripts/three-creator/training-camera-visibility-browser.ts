@@ -10,12 +10,12 @@ const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swifts
 const page=await browser.newPage({viewport:{width:960,height:640}}),errors:string[]=[];
 page.on('pageerror',error=>errors.push(error.message));
 try{
- await page.goto(process.argv[2]??'http://127.0.0.1:5175/');
+ await page.goto(process.argv[2]??'http://127.0.0.1:5178/');
  await page.waitForFunction(()=>Boolean((window as any).trainingGround?.getState().ready),{},{timeout:60000});
  await page.locator('#pauseButton').click();
  await page.evaluate(async()=>{
-  const sdkUrl='/runtime/worldkit-three.js',threeUrl='/runtime/three.js';
-  const {createWorld}=await import(sdkUrl),T=await import(threeUrl);
+  const harnessUrl='/scripts/camera-harness-imports.ts';
+  const {createWorld,T}=await import(harnessUrl);
   const canvas=document.createElement('canvas');document.body.replaceChildren(canvas);document.body.style.cssText='margin:0';
   const renderer=new T.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});renderer.setSize(960,640);
   const scene=new T.Scene();scene.background=new T.Color('#adc6cc');scene.add(new T.HemisphereLight(0xffffff,0x334455,3));

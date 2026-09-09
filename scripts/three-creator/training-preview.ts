@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { ThreeCompiler, isWithin } from './compiler.js';
-const workspace=path.resolve(process.argv[2]??'examples/three-creator/sdk-capabilities');
+const workspace=path.resolve(process.argv[2]??'examples/three-creator/training-independent');
 const port=Number(process.argv[3]??5175);
 const compiler=new ThreeCompiler(workspace,'three-sdk');
 const candidate=await compiler.prepare();

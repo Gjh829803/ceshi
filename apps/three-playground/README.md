@@ -2,8 +2,8 @@
 
 The maintainer editor uses React and shadcn/ui form components. It reuses the
 Three SDK and the scene/configuration modules in `examples/three-creator/sdk-capabilities`.
-The original Creator example remains a self-contained authoring example; the
-Creator compiler's dependency boundary is unchanged.
+The shared directory contains scene modules and configuration only; the former
+DOM editor has been removed. Creator uses the standalone training-independent example.
 
 ```sh
 pnpm dev                       # http://127.0.0.1:5178 (repository root)
@@ -37,9 +37,7 @@ imports or external model fetches are needed.
   slider, switch, select and previous layout rules have been removed.
 - All editor icons use official `lucide-react` components.
   `node apps/three-playground/scripts/sync-lucide-icons.mjs` refreshes the semantic
-  mapping and the Creator example's local official SVG node data from the locked
-  package. The local data preserves Creator's import boundary; its Lucide license
-  is included. No icon font or hand-authored icon paths are used.
+  mapping from the locked package. No icon font or hand-authored icon paths are used.
 
 Form focus releases driving input. Modal panels pause through the SDK callback;
 closing restores focus and the previous paused state. Configurations still need
