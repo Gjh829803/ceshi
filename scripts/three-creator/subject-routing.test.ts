@@ -18,7 +18,11 @@ const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={}
 it('switches the standalone subject through native keys, restores full object views and inherits the default in Episode',async()=>{
  const service=await fixture(),example=await service.examples('nonhuman-subject');
  for(const [name,content]of Object.entries(example.files))await writeFile(path.join(service.workspace,name),name==='main.ts'?
-  content.replace("defaultPerspective:'third-person'","defaultPerspective:'first-person'")+"\n(window as any).__subjectTestWorld=world;":content);
+  // This test checks exact reset pixels, not multisample edge coverage. Software
+  // WebGL on CI can resolve a wall edge differently by one sample after resize.
+  // Use a single-sample fixture and retain the strict image equality assertions.
+  content.replace('createWorld({scene,camera,canvas})','createWorld({scene,camera,renderer:new THREE.WebGLRenderer({canvas,antialias:false})})')
+   .replace("defaultPerspective:'third-person'","defaultPerspective:'first-person'")+"\n(window as any).__subjectTestWorld=world;":content);
  const initial=await service.inspect();expect(initial.observation.snapshot.camera.perspective).toBe('first-person');
  const page=(service as unknown as {session:{page:Page}}).session.page;
  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.perspective==='third-person');
