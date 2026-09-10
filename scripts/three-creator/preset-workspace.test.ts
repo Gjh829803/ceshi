@@ -69,7 +69,9 @@ describe('player workspace configuration',()=>{
    // turns across the entire loop, including the width of the driven car.
    for(const {position,tangent,normal} of GRAND_PRIX.samples){
     const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.atan2(tangent.x,tangent.z));
-    for(const offset of [-7,0,7]){
+    // Both bypass lanes stay flat; intentional centre-line ramps are not flat road.
+    const onRamp=map.boxes.some(box=>box.id.startsWith('gp-stunt-')&&Math.abs(position.x-box.position[0])<box.size[0]/2+3&&Math.abs(position.z-box.position[2])<box.size[2]/2+3);
+    for(const offset of onRamp?[-7,7]:[-7,0,7]){
      const p=position.clone().addScaledVector(normal,offset);p.y=.03;
      expect(runtime.environment.support(p)?.height).toBeCloseTo(0,2);
      expect(runtime.environment.safeSpawn(p,humanoid.vehicleBody(spec),rotation),`blocked road at ${p.toArray()}`).not.toBeNull();
