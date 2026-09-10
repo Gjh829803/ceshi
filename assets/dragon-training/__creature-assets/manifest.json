@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "familyId": "flying-creature",
+  "subtypeId": "flying-creature.dragon",
+  "units": "meters",
+  "riderSpace": "seat-bone-local-centimeters",
+  "source": "local Century D01/H01 extraction",
+  "clips": {
+    "D01_Flight_Base": {
+      "frames": [
+        0.0,
+        48.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.625,
+      "sourceDurationSeconds": 1.6,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Base_L": {
+      "frames": [
+        0.0,
+        48.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.625,
+      "sourceDurationSeconds": 1.6,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Base_R": {
+      "frames": [
+        0.0,
+        48.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.625,
+      "sourceDurationSeconds": 1.6,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Base_U": {
+      "frames": [
+        0.0,
+        48.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.625,
+      "sourceDurationSeconds": 1.6,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Base_D": {
+      "frames": [
+        0.0,
+        48.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.625,
+      "sourceDurationSeconds": 1.6,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Fast": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_BoostLoop": {
+      "frames": [
+        0.0,
+        236.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.127119064331055,
+      "sourceDurationSeconds": 7.8666665569292915,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Dive": {
+      "frames": [
+        0.0,
+        45.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.66666603088379,
+      "sourceDurationSeconds": 1.5000000310980761,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Hovering": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Dodge_L": {
+      "frames": [
+        0.0,
+        25.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.200000762939453,
+      "sourceDurationSeconds": 0.8333333129556775,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Dodge_R": {
+      "frames": [
+        0.0,
+        25.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.200000762939453,
+      "sourceDurationSeconds": 0.8333333129556775,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Shoot_Fireball": {
+      "frames": [
+        0.0,
+        19.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.578947067260742,
+      "sourceDurationSeconds": 0.6333333393732707,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Hovering_L": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Hovering_R": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Hovering_U": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Flight_Hovering_D": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Shoot_FlameThrower": {
+      "frames": [
+        0.0,
+        9.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 33.33333206176758,
+      "sourceDurationSeconds": 0.3000000114440922,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Shoot_FlameThrowerLoop": {
+      "frames": [
+        0.0,
+        20.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.5,
+      "sourceDurationSeconds": 0.6666666666666666,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_Shoot_FlameThrowerEnd": {
+      "frames": [
+        0.0,
+        9.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 33.33333206176758,
+      "sourceDurationSeconds": 0.3000000114440922,
+      "nonUnitScaleKeys": 0
+    },
+    "D01_TPOSE_Closed": {
+      "frames": [
+        0.0,
+        1.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 59.999996185302734,
+      "sourceDurationSeconds": 0.033333335452609726,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_Base": {
+      "frames": [
+        0.0,
+        24.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.25,
+      "sourceDurationSeconds": 0.8,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_Base_L": {
+      "frames": [
+        0.0,
+        24.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.25,
+      "sourceDurationSeconds": 0.8,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_Base_R": {
+      "frames": [
+        0.0,
+        24.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.25,
+      "sourceDurationSeconds": 0.8,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_Base_U": {
+      "frames": [
+        0.0,
+        24.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.25,
+      "sourceDurationSeconds": 0.8,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_Base_D": {
+      "frames": [
+        0.0,
+        24.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 31.25,
+      "sourceDurationSeconds": 0.8,
+      "nonUnitScaleKeys": 0
+    },
+    "H01_Flight_BrakeLoop": {
+      "frames": [
+        0.0,
+        93.0
+      ],
+      "framesPerSecond": 30,
+      "sourceFramesPerSecond": 30.322582244873047,
+      "sourceDurationSeconds": 3.0999998364550088,
+      "nonUnitScaleKeys": 0
+    }
+  },
+  "fireSocketNodeId": "CenturyFireSocket",
+  "riderContact": {
+    "seatBoneId": "Seat",
+    "feetMode": "hanging",
+    "handsMode": "authored-reins-pose",
+    "riderRootInSeatBoneSpace": {
+      "translation": [
+        -3.0517578125e-05,
+        -1.9073486328125e-06,
+        7.62939453125e-06
+      ],
+      "rotation": [
+        0.7071067690849304,
+        2.3666442139358423e-09,
+        2.665047293959333e-09,
+        0.7071067690849304
+      ]
+    }
+  },
+  "limitations": [
+    "no cloth simulation",
+    "no wing morph",
+    "no mounting transition",
+    "no combat damage"
+  ]
+}

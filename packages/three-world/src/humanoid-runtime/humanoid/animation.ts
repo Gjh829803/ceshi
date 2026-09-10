@@ -1,4 +1,4 @@
-import type {KayakState} from '../kayak';
+import type {KayakState} from '../motion-families/surface-vessel/paddling';
 import type { Vector3 } from 'three';
 import type { MotionPlan } from './motion';
 import actionRuntime from './action-runtime.json';

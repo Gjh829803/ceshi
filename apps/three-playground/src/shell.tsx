@@ -506,6 +506,7 @@ export function mountShell(host: HTMLElement) {
           <DialogContent
             className="loading-card"
             showCloseButton={false}
+            onCloseAutoFocus={(event) => { event.preventDefault(); action("viewportFocus"); }}
             onEscapeKeyDown={(e) => e.preventDefault()}
             onPointerDownOutside={(e) => e.preventDefault()}
           >
@@ -525,6 +526,7 @@ export function mountShell(host: HTMLElement) {
           <DialogContent
             className="pause-card"
             showCloseButton={false}
+            onCloseAutoFocus={(event) => { event.preventDefault(); action("viewportFocus"); }}
             onEscapeKeyDown={(e) => e.stopPropagation()}
           >
             <ModalHeader title="训练已暂停" />

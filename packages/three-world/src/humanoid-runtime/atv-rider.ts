@@ -1,5 +1,5 @@
 import {Quaternion,Vector3,type Object3D} from 'three';
-import {ATV_GEOMETRY} from './atv';
+import {ATV_GEOMETRY} from './motion-families/ground-vehicle/atv';
 
 /** Two-bone arm solve: rotations only; bone lengths and original geometry stay intact. */
 export function fitAtvHands(actor:Object3D,seatRoot:Object3D,angle:number):void{

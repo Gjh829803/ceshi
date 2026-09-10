@@ -24,8 +24,8 @@ it('drives, boosts, brakes before reverse, holds parked and cannot pivot without
  run(3,{forward:1,boost:true});expect(v.speed).toBeGreaterThan(33);run(.3,{forward:-1});expect(v.velocity.z).toBeGreaterThan(0);
  run(10,{forward:-1});expect(v.velocity.z).toBeLessThan(-4);expect(v.speed).toBeLessThanOrEqual(6.1);run(2,{brake:true});expect(v.speed).toBeLessThan(.01);
  const p=v.position.clone();run(2);expect(v.position.distanceTo(p)).toBeLessThan(.02);
- run(2,{forward:1,steer:1});expect(Math.abs(v.yaw)).toBeGreaterThan(.2);expect(Math.abs(v.atv!.wheelAngles[0]!-v.atv!.wheelAngles[1]!)).toBeGreaterThan(.2);
- const model=buildAtvModel();sampleAtvVisual(model,v.atv!);const angle=model.getObjectByName('atv.spin.0')!.rotation.x;sampleAtvVisual(model,v.atv!);expect(model.getObjectByName('atv.spin.0')!.rotation.x).toBe(angle);sampleAtvVisual(model,createAtvState());expect(model.getObjectByName('atv.spin.0')!.rotation.x).toBe(0);
+ run(2,{forward:1,steer:1});expect(Math.abs(v.yaw)).toBeGreaterThan(.2);expect(Math.abs(v.motion.atv!.wheelAngles[0]!-v.motion.atv!.wheelAngles[1]!)).toBeGreaterThan(.2);
+ const model=buildAtvModel();sampleAtvVisual(model,v.motion.atv!);const angle=model.getObjectByName('atv.spin.0')!.rotation.x;sampleAtvVisual(model,v.motion.atv!);expect(model.getObjectByName('atv.spin.0')!.rotation.x).toBe(angle);sampleAtvVisual(model,createAtvState());expect(model.getObjectByName('atv.spin.0')!.rotation.x).toBe(0);
  }finally{q.dispose();}
 });
 it('stops at solid walls and has no propulsion or chassis steering in midair',()=>{
@@ -50,8 +50,8 @@ it('exchanges impulses with a parked vehicle and displays the solver tyre travel
    {instanceId:'parked',assetId:'vehicle.atv',spec:{...ATV_SPEC,spawn:[0,.035,4]},object:buildAtvModel()}],
   character:{instanceId:'person',object:new Group()}}});
  try{world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-  world.step({humanoid:{...emptyInput(),forward:1}},180);const v=world.humanoid!.simulation.vehicle!,p=v.position.clone(),angles=[...v.atv!.wheelAngles];
-  world.step({humanoid:{...emptyInput(),forward:1}},60);const parked=world.humanoid!.simulation.vehicles[1]!;expect(parked.position.z).toBeGreaterThan(4);expect(parked.position.z-v.position.z).toBeGreaterThan(2.3);expect(v.atv!.wheelAngles).toEqual(v.wheelPhysics!.wheels.map(w=>w.angle));
+  world.step({humanoid:{...emptyInput(),forward:1}},180);const v=world.humanoid!.simulation.vehicle!,p=v.position.clone(),angles=[...v.motion.atv!.wheelAngles];
+  world.step({humanoid:{...emptyInput(),forward:1}},60);const parked=world.humanoid!.simulation.vehicles[1]!;expect(parked.position.z).toBeGreaterThan(4);expect(parked.position.z-v.position.z).toBeGreaterThan(2.3);expect(v.motion.atv!.wheelAngles).toEqual(v.motion.wheelPhysics!.wheels.map(w=>w.angle));
  }finally{world.dispose();f.q.dispose();}
 });
 it('keeps the original straddle rider clear of body panels and hands on the turning handlebar without scaling',async()=>{
@@ -88,4 +88,4 @@ it('keeps the original straddle rider clear of body panels and hands on the turn
  }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15_000);
 
-function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].motion.wheelPhysics||args[0].motion.body)args[4].stepPhysics(args[2]);}

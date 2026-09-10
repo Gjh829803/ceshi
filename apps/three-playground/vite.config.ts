@@ -4,6 +4,7 @@ import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { dragonTrainingPlugin } from "./dragon-training-plugin";
 import {
   catalogResources,
   publicCatalogValue,
@@ -80,7 +81,7 @@ function catalogPlugin(): Plugin {
   };
 }
 export default defineConfig({
-  plugins: [react(), tailwind(), catalogPlugin()],
+  plugins: [react(), tailwind(), catalogPlugin(), dragonTrainingPlugin(repository)],
   resolve: { dedupe: ["react", "react-dom", "three"] },
   server: {
     host: "127.0.0.1",
@@ -89,6 +90,10 @@ export default defineConfig({
     fs: { allow: [repository] },
   },
   build: {
+    rollupOptions: { input: {
+      main: path.join(import.meta.dirname, "index.html"),
+      dragonTraining: path.join(import.meta.dirname, "dragon-training.html"),
+    } },
     target: "es2022",
     outDir: "../../.codex-tmp/react-playground-dist",
     emptyOutDir: true,

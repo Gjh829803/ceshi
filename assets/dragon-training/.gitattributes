@@ -1,0 +1,4 @@
+# The manifest identifies exact release bytes across Windows and Unix checkouts.
+# Vendored release formatting is preserved with its content hashes.
+* -text -whitespace
+**/* -text -whitespace

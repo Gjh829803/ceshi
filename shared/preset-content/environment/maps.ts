@@ -1,3 +1,5 @@
+import {createDragonTrainingMap} from './dragon-training';
+import {createAircraftTrainingMap} from './airfield';
 import type { EnvironmentBox, EnvironmentDefinition, MapRegion, MapSpawn } from './types';
 import { block, indoorModule, ramp } from './modules';
 import { createCampusCharacterCourse, createCharacterWorkshop } from '../humanoid/workshop';
@@ -75,5 +77,5 @@ const campus:EnvironmentDefinition={id:'campus',name:'VECTOR 综合训练园区'
 ].map(([id,x,y,z])=>({id:`prepare-${id}`,name:regions.find(r=>r.id===id)!.name,position:[Number(x),Number(y),Number(z)] as const,yaw:0,regionId:String(id)})),characterCourse.spawn],interactions:characterCourse.interactions,climbSurfaces:characterCourse.climbSurfaces,characterTrials:characterCourse.characterTrials};
 campus.spawns=[...campus.spawns,{id:'prepare-sled-slope',name:'雪橇坡顶',position:[-390,Math.tan(Math.PI/15)*80,155],yaw:Math.PI,regionId:'sled-slope'}];
 const lab:EnvironmentDefinition={id:'indoor-lab',name:'室内专项实验室',description:'双层实验楼与开放车库',characterCameraDistanceMeters:5.6,bounds:{min:[-65,-10,-75],max:[65,40,75]},boxes:[block('lab-ground',[0,-2.5,0],[130,5,150]),...indoorModule(0,0)],water:[],regions:[{...regions[1]!,center:[0,0,0]}],spawns:[{id:'prepare-indoor',name:'实验楼入口',position:[0,0,-31],yaw:0,regionId:'indoor'}],playerSpawn:[0,0,-31]};
-export const MAPS:readonly EnvironmentDefinition[]=[campus,lab,createCharacterWorkshop(),createGrandPrix()];
+export const MAPS:readonly EnvironmentDefinition[]=[campus,lab,createCharacterWorkshop(),createGrandPrix(),createAircraftTrainingMap(),createDragonTrainingMap()];
 export function getMap(id:string):EnvironmentDefinition{const map=MAPS.find(m=>m.id===id);if(!map)throw new Error(`Unknown map: ${id}`);return map;}

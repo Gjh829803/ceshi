@@ -1,6 +1,6 @@
 import type {VehicleSpec} from './config';
 import {defaultMovementSettings} from '../config/control';
-import {createRoadPhysicsProfile,wheelLayout,type WheelPhysicsConfig,type WheelLayout} from './wheel-physics';
+import {createRoadPhysicsProfile,wheelLayout,type WheelPhysicsConfig,type WheelLayout} from './motion-families/ground-vehicle/wheel-physics';
 import {DEFAULT_POWERTRAIN,type PowertrainConfig} from './powertrain';
 
 export type RoadVehicleKind='car'|'motorcycle';
