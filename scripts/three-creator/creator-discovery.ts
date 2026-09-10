@@ -141,7 +141,7 @@ export class CreatorDiscovery {
         ], targets: [] }, null, 2),
       },
       sdkExample: guidance.isWorkspace?'Host baseline example; adapt it to the current workspace SDK declarations before use.':isSdk
-        ? 'Read the exported contracts and the installed SDK example before using createHumanoidWorld. Use setCaptureTargets and await world.start() to install the common observer after preparation. The main script owns ordinary Three scene geometry and camera composition.'
+        ? 'Read the exported contracts and the installed SDK example before using createHumanoidWorld. Use setCaptureTargets and await world.start(); the SDK prepares initial materials and renders the opening before starting simulation and publishing the common observer. Keep loading UI visible until start resolves. The main script owns ordinary Three scene geometry and camera composition.'
         : 'Use normal Three scene, camera and renderer. Your loop and keyboard handlers remain yours. Expose a ready observer with scene/camera/renderer/controlledObject/targets and startLive/stopLive/reset. The Host does not provide a movement or physics implementation to the raw baseline.',
     };
   }

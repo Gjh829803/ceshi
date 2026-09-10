@@ -129,11 +129,35 @@ it('runs the self-drawn car and preset humanoid with native T cycling, F mountin
   try {
     const example = await readExampleFiles(path.resolve('examples/three-creator/vehicle-camera'),
       'vehicle-camera', ['index.html', 'main.ts', 'project.json', 'episode.json', 'whitebox-materials.ts']);
+    example.files['main.ts'] = example.files['main.ts']!.replace('await world.start(); presentation.focus();', `
+const preparationEvidence:any[]=[];
+const compile=world.renderer!.compileAsync.bind(world.renderer);
+world.renderer!.compileAsync=async (...args)=>{
+ preparationEvidence.push({phase:'compile',running:world.isRunning,tick:world.simulationTick,ready:!!window.__WORLDKIT_EVAL__});
+ const result=await compile(...args);
+ preparationEvidence.push({phase:'compiled',running:world.isRunning,tick:world.simulationTick,ready:!!window.__WORLDKIT_EVAL__});
+ return result;
+};
+const draw=world.renderer!.render.bind(world.renderer);let opening=true;
+world.renderer!.render=(...args)=>{
+ if(opening){opening=false;preparationEvidence.push({phase:'render',running:world.isRunning,tick:world.simulationTick,ready:!!window.__WORLDKIT_EVAL__});}
+ draw(...args);
+};
+await world.start();
+preparationEvidence.push({phase:'started',running:world.isRunning,tick:world.simulationTick,ready:!!window.__WORLDKIT_EVAL__});
+(window as any).__preparationEvidence=preparationEvidence;
+presentation.focus();`);
     for (const [name, content] of Object.entries(example.files)) await writeFile(path.join(root, name), content);
     const initial = await service.inspect();
     expect(initial.pageErrors).toEqual([]); expect(initial.blockedNetworkRequests).toEqual([]);
     expect(initial.feedback.characterContinuity).toMatchObject({status: 'observed', issues: []});
     const page = (service as unknown as {session: {page: Page}}).session.page;
+    expect(await page.evaluate(()=>(window as any).__preparationEvidence)).toEqual([
+      {phase:'compile',running:false,tick:0,ready:false},
+      {phase:'compiled',running:false,tick:0,ready:false},
+      {phase:'render',running:false,tick:0,ready:false},
+      {phase:'started',running:true,tick:0,ready:true},
+    ]);
     const mode = () => page.evaluate(() => window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode);
     const visual = await page.evaluate(() => {
       const world = window.__WORLDKIT_EVAL__!;

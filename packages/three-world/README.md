@@ -132,7 +132,15 @@ budgets still apply to all shapes. Read `entityIds`, `message` and
 An SDK-owned renderer sizes to the stage and follows resizing; a supplied renderer
 keeps its sizing policy. Create HTML HUD through `world.createPresentation()`.
 Finish registration and configuration before the first `await world.start()`, which
-prepares resources, seals initial state and publishes `window.__WORLDKIT_EVAL__`.
+prepares resources, seals initial state, awaits initial scene material compilation
+with `renderer.compileAsync`, and renders the opening before starting the clock
+and publishing `window.__WORLDKIT_EVAL__`. Keep your loading UI visible and enable
+play controls after this promise resolves. Preparation does not advance simulation.
+Concurrent starts share preparation; pause/resume reuses compiled programs. A
+stop, reset or disposal during preparation rejects the pending start as `STALE_TASK`.
+This prepares the initial scene; later material/lighting changes may still compile
+new programs. It does not reduce shader complexity, draw calls or steady-state
+simulation cost. Worlds without a renderer skip GPU preparation.
 `stop()` pauses; `await world.reset()` restores the baseline and preserves the
 previous running/paused state. Use `onReset` for author-owned visual state and
 `onDispose` for external cleanup; `dispose()` releases the world. Each hook returns

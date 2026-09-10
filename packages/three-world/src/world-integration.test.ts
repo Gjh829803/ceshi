@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { expect,it } from 'vitest';
+import { expect,it,vi } from 'vitest';
 import {createWorld} from './world.js';
 
 it('accepts a declared ground movement profile and applies its speed through real physics',async()=>{
@@ -67,4 +67,91 @@ it('spawns prepared objects at world coordinates under a translated and rotated 
   const point=world.getEntityState('spawned').positionWorldMetersXYZ;
   expect(point[0]).toBeCloseTo(2);expect(point[1]).toBeCloseTo(1);expect(point[2]).toBeCloseTo(0);
  }finally{world.dispose();}
+});
+
+
+function deferredCompilation() {
+ let resolve!: () => void, reject!: (error: Error) => void;
+ const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+ return {promise, resolve, reject};
+}
+async function renderingFixture() {
+ const compilation = deferredCompilation();
+ const compileAsync = vi.fn(() => compilation.promise), render = vi.fn();
+ const renderer = {shadowMap:{enabled:false,type:THREE.BasicShadowMap,needsUpdate:false},compileAsync,render} as unknown as THREE.WebGLRenderer;
+ const world = await createWorld({renderer,navigation:false,assetDefinitions:{}});
+ world.addCharacter({id:'hero',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
+ world.setControlledEntity('hero');
+ return {world,compilation,compileAsync,render};
+}
+
+it('awaits one initial compilation and first frame before ready without advancing simulation',async()=>{
+ const {world,compilation,compileAsync,render}=await renderingFixture();
+ const observerWindow: {__WORLDKIT_EVAL__?:unknown} = {};
+ vi.stubGlobal('window',observerWindow);
+ try {
+  render.mockImplementation(()=>{expect(world.isRunning).toBe(false);expect(world.simulationTick).toBe(0);expect(observerWindow.__WORLDKIT_EVAL__).toBeUndefined();});
+  const first=world.start(), concurrent=world.start();
+  await vi.waitFor(()=>expect(compileAsync).toHaveBeenCalledTimes(1));
+  expect(compileAsync).toHaveBeenCalledWith(world.scene,world.camera);
+  expect(world.isRunning).toBe(false);expect(world.simulationTick).toBe(0);
+  expect(render).not.toHaveBeenCalled();expect(observerWindow.__WORLDKIT_EVAL__).toBeUndefined();
+  compilation.resolve();await Promise.all([first,concurrent]);
+  expect(render).toHaveBeenCalledTimes(1);expect(world.isRunning).toBe(true);
+  expect(observerWindow.__WORLDKIT_EVAL__).toMatchObject({ready:true});
+  render.mockImplementation(()=>{});world.stop();await world.start();
+  expect(compileAsync).toHaveBeenCalledTimes(1);expect(world.simulationTick).toBe(0);
+ } finally {world.dispose();vi.unstubAllGlobals();}
+});
+
+it('keeps compilation failures paused and permits a fresh successful retry',async()=>{
+ const {world,compilation,compileAsync,render}=await renderingFixture();
+ try {
+  const failure=expect(world.start()).rejects.toThrow('SHADER_FAILURE');
+  await vi.waitFor(()=>expect(compileAsync).toHaveBeenCalledTimes(1));
+  compilation.reject(new Error('SHADER_FAILURE'));await failure;
+  expect(render).not.toHaveBeenCalled();expect(world.isRunning).toBe(false);
+  compileAsync.mockResolvedValueOnce();await world.start();
+  expect(compileAsync).toHaveBeenCalledTimes(2);expect(world.isRunning).toBe(true);
+ } finally {world.dispose();}
+});
+
+it.each(['stop','reset','dispose'] as const)('prevents a late compilation from starting after %s',async action=>{
+ const {world,compilation,compileAsync,render}=await renderingFixture();
+ try {
+  const stopped=expect(world.start()).rejects.toMatchObject({code:'STALE_TASK'});
+  await vi.waitFor(()=>expect(compileAsync).toHaveBeenCalledTimes(1));
+  await world[action]();const renders=render.mock.calls.length;
+  compilation.resolve();await stopped;
+  expect(world.isRunning).toBe(false);expect(world.simulationTick).toBe(0);
+  expect(render).toHaveBeenCalledTimes(renders);
+ } finally {world.dispose();}
+});
+
+it('lets a new start supersede a stopped pending start while sharing compilation',async()=>{
+ const {world,compilation,compileAsync,render}=await renderingFixture();
+ try {
+  const stale=expect(world.start()).rejects.toMatchObject({code:'STALE_TASK'});
+  await vi.waitFor(()=>expect(compileAsync).toHaveBeenCalledTimes(1));
+  world.stop();const resumed=world.start();compilation.resolve();
+  await stale;await resumed;
+  expect(compileAsync).toHaveBeenCalledTimes(1);expect(render).toHaveBeenCalledTimes(1);
+  expect(world.isRunning).toBe(true);expect(world.simulationTick).toBe(0);
+ } finally {world.dispose();}
+});
+
+it('does not publish ready when the prepared opening frame fails',async()=>{
+ const {world,compilation,compileAsync,render}=await renderingFixture();
+ const observerWindow: {__WORLDKIT_EVAL__?:unknown} = {};
+ vi.stubGlobal('window',observerWindow);
+ try {
+  render.mockImplementationOnce(()=>{throw new Error('OPENING_RENDER_FAILED');});
+  const failed=expect(world.start()).rejects.toThrow('OPENING_RENDER_FAILED');
+  compilation.resolve();await failed;
+  expect(world.isRunning).toBe(false);expect(world.simulationTick).toBe(0);
+  expect(observerWindow.__WORLDKIT_EVAL__).toBeUndefined();
+  await world.start();expect(world.isRunning).toBe(true);
+  expect(compileAsync).toHaveBeenCalledTimes(1);
+  expect(observerWindow.__WORLDKIT_EVAL__).toMatchObject({ready:true});
+ } finally {world.dispose();vi.unstubAllGlobals();}
 });
