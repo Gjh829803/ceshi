@@ -805,6 +805,9 @@ World operation IDs are distinct from Creator tool
 operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
 NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
+Mounting ends foot-navigation operations and pauses patrol. Mounted actors reject
+ground-navigation requests; send explicit humanoid vehicle input to drive, then
+exit before requesting foot navigation or resuming patrol.
 Player input owns the controlled actor, including nonhuman subjects. Single animations return to locomotion;
 loop playback requires stop-action. set-visible only affects rendering; despawn
 removes the entity/collision/tasks. Capability rejection is not SDK success.

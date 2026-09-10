@@ -241,3 +241,30 @@ it('retires a removed actor action immediately without another simulation tick',
   const tick=world.simulationTick;expect((await world.execute({type:'entity.despawn',entityId:'temporary'})).status).toBe('applied');
   expect(world.simulationTick).toBe(tick);expect(world.operations.get(result.operationId)).toMatchObject({status:'cancelled',phase:'actor-removed'});
 });
+
+it.each([false,true])('ends only the mounting actor navigation and requires vehicle input (group=%s)',async group=>{
+  const spec=createRoadVehicleSpec('car'),world=await setup(undefined,{map:{...map,spawns:[{id:'car-spawn',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}]},vehicles:[{instanceId:'car',assetId:'custom.car',spec,object:new THREE.Group()}]});
+  const npc=await world.humanoid!.createCharacter();npc.root.position.set(7,.04,0);world.addCharacter({id:'driver',humanoid:npc});
+  expect((await world.execute({type:'vehicle.approach',instanceId:'car',actorId:'driver'})).status).toBe('applied');
+  world.setAutonomy('driver',{kind:'patrol',waypointPositionsWorldMetersXYZ:[[10,0,8]]});
+  if(group){const walker=await world.humanoid!.createCharacter();walker.root.position.set(-10,.04,0);world.addCharacter({id:'walker',humanoid:walker});world.registerAction({id:'both',description:'Two navigation requests',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'entity',entityId:'driver',channels:['locomotion']},{kind:'entity',entityId:'walker',channels:['locomotion']}],plan:()=>[{type:'actor.move-to',entityId:'driver',targetPositionWorldMetersXYZ:[10,0,8]},{type:'actor.move-to',entityId:'walker',targetPositionWorldMetersXYZ:[-10,0,8]}]});}
+  const goal=await world.execute(group?{type:'action.invoke',actionId:'both',arguments:{}}:{type:'actor.move-to',entityId:'driver',targetPositionWorldMetersXYZ:[10,0,8]});if(goal.status!=='accepted')throw new Error(JSON.stringify(goal));
+  expect((await world.execute({type:'vehicle.enter',instanceId:'car',actorId:'driver'})).status).toBe('applied');
+  expect(world.operations.get(goal.operationId).status).toBe(group?'running':'cancelled');
+  expect(await world.execute({type:'actor.move-to',entityId:'driver',targetPositionWorldMetersXYZ:[10,0,8]})).toMatchObject({status:'rejected',error:{code:'MOUNTED_ACTOR_NAVIGATION_UNSUPPORTED'}});
+  const before=world.getEntityState('car').positionWorldMetersXYZ;world.step({},360);const stationary=world.getEntityState('car').positionWorldMetersXYZ;
+  expect(Math.hypot(stationary[0]-before[0],stationary[2]-before[2])).toBeLessThan(.1);
+  if(group){expect(world.getEntityState('walker').positionWorldMetersXYZ[2]).toBeGreaterThan(7.5);expect(world.operations.get(goal.operationId)).toMatchObject({status:'cancelled',steps:[{status:'cancelled'},{status:'succeeded'}]});}
+  await world.execute({type:'humanoid.set-input',actorId:'driver',input:{...emptyInput(),forward:1}});world.step({},120);
+  expect(world.getEntityState('car').positionWorldMetersXYZ[2]-stationary[2]).toBeGreaterThan(1);
+});
+
+it('preserves a completed navigation step when that actor receives a new goal',async()=>{
+  const world=await setup();for(const [id,x] of [['a',0],['b',6]] as const){const actor=await world.humanoid!.createCharacter();actor.root.position.set(x,.04,0);world.addCharacter({id,humanoid:actor});}
+  world.registerAction({id:'staggered',description:'Independent distances',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'entity',entityId:'a',channels:['locomotion']},{kind:'entity',entityId:'b',channels:['locomotion']}],plan:()=>[{type:'actor.move-to',entityId:'a',targetPositionWorldMetersXYZ:[0,0,1]},{type:'actor.move-to',entityId:'b',targetPositionWorldMetersXYZ:[6,0,8]}]});
+  const group=await world.execute({type:'action.invoke',actionId:'staggered',arguments:{}});if(group.status!=='accepted')throw new Error(JSON.stringify(group));
+  world.step({},90);expect(world.operations.get(group.operationId)).toMatchObject({status:'running',steps:[{status:'succeeded'},{status:'running'}]});
+  expect((await world.execute({type:'actor.move-to',entityId:'a',targetPositionWorldMetersXYZ:[0,0,3]})).status).toBe('accepted');
+  expect(world.operations.get(group.operationId).steps![0]!.status).toBe('succeeded');world.step({},360);
+  expect(world.operations.get(group.operationId)).toMatchObject({status:'succeeded',steps:[{status:'succeeded'},{status:'succeeded'}]});
+});

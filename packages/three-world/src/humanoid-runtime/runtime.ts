@@ -415,7 +415,7 @@ export class HumanoidRuntime implements PhysicsPort {
   private setActorInputOwned(id:string,input:Input|undefined,source:'humanoid.set-input'|'setInput'='setInput'):(()=>void)|void{
     this.actorController(id);this.actorLastInputs.delete(id);if(input===undefined){this.actorInputs.delete(id);return;}
     this.validateInput(input);const entry={input:structuredClone(input),source};this.actorInputs.set(id,entry);
-    return()=>{this.assertExternalMutation();if(this.actorInputs.get(id)===entry){this.actorInputs.delete(id);this.actorLastInputs.delete(id);}};
+    return()=>{if(this.disposed||this.actorInputs.get(id)!==entry)return;this.assertExternalMutation();this.actorInputs.delete(id);this.actorLastInputs.delete(id);};
   }
   private clearInputOwned():void{this.actorInputs.clear();this.actorLastInputs.clear();this.previousJump=false;this.previousInteract=false;}
   private index(id:string):number{const n=this.options.vehicles.findIndex(v=>v.instanceId===id);if(n<0)throw new Error(`HUMANOID_INSTANCE_UNKNOWN: ${id}`);return n;}
@@ -703,7 +703,7 @@ export class HumanoidRuntime implements PhysicsPort {
   hasActor(id:string):boolean{return this.actors.has(id);}
   allowsWorldCommand(type:string,id:string):boolean{return this.hasActor(id)&&isHumanoidActorCommand(type);}
   private driveInput(id:string,drive:CharacterDrive|undefined):Input{
-    if(!drive)return emptyInput();if(!('velocityMetersPerSecondXZ' in drive))throw new Error('HUMANOID_GROUND_DRIVE_REQUIRED');
+    if(!drive||this.actorController(id).isMounted)return emptyInput();if(!('velocityMetersPerSecondXZ' in drive))throw new Error('HUMANOID_GROUND_DRIVE_REQUIRED');
     const [x,z]=drive.velocityMetersPerSecondXZ,tuning=this.actorController(id).movementTuning,walk=3.1*tuning.speedScale;
     const speed=Math.hypot(x,z),boost=speed>walk,limit=boost?tuning.maxSpeed:walk;
     return {...emptyInput(),steer:-x/limit,forward:z/limit,boost,jump:!!drive.jumpPressed};

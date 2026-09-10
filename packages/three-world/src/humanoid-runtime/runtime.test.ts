@@ -284,10 +284,13 @@ describe('SDK humanoid runtime',()=>{
    controller.setAvailableClips(new Set(['slide-start','slide-loop','slide-exit']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),forward:1,boost:true}},30);
    const result=await world.execute({type:'humanoid.perform-action',request:{requestId:'moving-roof',action:'slide'}});if(result.status!=='accepted')throw new Error('Slide unavailable');
    world.operations.cancel(result.operationId);world.step({},1);expect(controller.skills.active?.phase).toBe('exit');
-   const p=controller.position,physics=runtime.environment.world,roof=physics.createCollider(RAPIER.ColliderDesc.cuboid(2,.15,2).setTranslation(p.x,p.y+1.35,p.z));physics.updateSceneQueries();
+   const p=controller.position,physics=runtime.environment.borrowPhysics().world,roof=physics.createCollider(RAPIER.ColliderDesc.cuboid(2,.15,2).setTranslation(p.x,p.y+1.35,p.z));physics.updateSceneQueries();
    world.step({},90);expect(world.operations.get(result.operationId).status).toBe('running');expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);
    physics.removeCollider(roof,true);world.step({},90);expect(world.operations.get(result.operationId).status).toBe('cancelled');expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);
   }finally{world.dispose();}
+ });
+ it('allows stale input leases to release after world disposal',async()=>{
+  const world=await fixture(),release=world.humanoid!.setInput({...emptyInput(),forward:1});world.dispose();expect(()=>release()).not.toThrow();expect(()=>release()).not.toThrow();
  });
  it('rejects mounted skills immediately and shares rejection conditions with the capability query',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);

@@ -417,7 +417,7 @@ export class ThreeWorld implements API.World {
    if(options.expectedWorldRevision!==undefined&&options.expectedWorldRevision!==this.revision)throw failure('STALE_CONTEXT');
    const actorId='actorId' in command?command.actorId??this.humanoid.inputActorId:this.humanoid.inputActorId;
    const result=lease?humanoidHost(this.humanoid).command(cloneJson(command)):this.humanoid.command(cloneJson(command));
-   if(result?.status==='rejected')throw failure(result.code,result.message);this.touch();
+   if(result?.status==='rejected')throw failure(result.code,result.message);this.pauseMountedNavigation(actorId);this.touch();
    if(result?.status==='running'){const controller=this.humanoid.actorController(actorId),generation=this.entity(actorId).generation;const requestId=result.requestId;const operationId=this.operations.create('humanoid-action',()=>{const cancelled=controller.skills.cancel(requestId);if(cancelled?.status==='running')return false;this.humanoidActivities.delete(operationId);});this.humanoidActivities.set(operationId,{requestId,actorId,generation,controller});this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
    const resultInfo=command.type==='vehicle.approach'?{kind:'relocation' as const,entityId:actorId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(actorId).positionWorldMetersXYZ}:undefined;
    return {status:'applied',commandId,worldRevision:this.revision,...(resultInfo?{result:resultInfo}:{})};
@@ -438,8 +438,15 @@ export class ThreeWorld implements API.World {
   this.requests.set(commandId,{body,promise});return promise;
  }
  private engineCommand(command:EngineCommand):void{const result=this.engine.execute(command);if(result.status==='rejected')throw failure(result.error?.message.split(':')[0]??'ENGINE_COMMAND_FAILED',result.error?.message??'Engine rejected command','content');}
+ private pauseMountedNavigation(actorId?:string):void{
+  for(const [id,actor] of this.humanoid?.simulation.actors??[]){
+   if(actorId!==undefined&&actorId!==id||!actor.vehicle)continue;
+   if(this.engine.actorTaskState(id)?.status==='running')this.cancelActor(id);
+   const autonomy=this.autonomies.get(id);if(autonomy)autonomy.paused=true;
+  }
+ }
  private cancelActor(id:string):void{
-  for(const activity of this.activities.values())if(activity.actorSteps.has(id))this.operations.cancel(activity.operationId);
+  for(const activity of this.activities.values()){const index=activity.actorSteps.get(id);if(index===undefined)continue;if(activity.steps[index]!.status==='queued'||activity.steps[index]!.status==='running')activity.steps[index]!.status='cancelled';activity.actorSteps.delete(id);activity.followTargets.delete(id);this.operations.update(activity.operationId,{steps:activity.steps});this.settleActivity(activity);}
   if(this.entries.get(id)?.body)this.engineCommand({type:'actor.stop',entityId:id});
  }
  private cancelActivity(id:string):void{
@@ -524,6 +531,7 @@ export class ThreeWorld implements API.World {
     if(ratio>=1){this.tweens.splice(this.tweens.indexOf(tween),1);const activity=this.activities.get(tween.operationId);if(activity?.steps[tween.step])activity.steps[tween.step]!.status='succeeded';}
    }catch(error){const diagnostic=runtimeError(error,'transition',[tween.command.entityId]);this.operations.update(tween.operationId,{status:'failed',phase:'transition',error:diagnostic});for(const parameter of this.parameters.values())if(parameter.operationId===tween.operationId){parameter.status='failed';parameter.error=diagnostic;}this.cancelActivity(tween.operationId);}
   }
+  this.pauseMountedNavigation();
   for(const [id,autonomy] of this.autonomies){
    if(autonomy.paused||!this.entries.has(id)||this.entity(id).movementId!=='ground'||id===this.engine.controlledEntityId)continue;
    const current=this.engine.actorTaskState(id);if(current?.status==='running')continue;
@@ -542,11 +550,15 @@ export class ThreeWorld implements API.World {
    for(const [id,index] of activity.actorSteps){const state=this.engine.actorTaskState(id);if(state?.status==='succeeded')activity.steps[index]!.status='succeeded';if(state?.status==='failed'){activity.steps[index]!.status='failed';activity.steps[index]!.error=failure('ACTOR_TASK_FAILED',state.error??'Actor task failed','content',[id]);}}
    const failed=activity.steps.find(step=>step.status==='failed');
    if(failed){this.operations.update(operationId,{status:'failed',phase:'execution',error:failed.error!,steps:activity.steps});this.cancelActivity(operationId);}
-   else if(activity.steps.every(step=>step.status==='succeeded')){
-    this.operations.update(operationId,{status:'succeeded',phase:'completed',outcome:activity.actorSteps.size?'reached':'completed',steps:activity.steps});
-    for(const id of activity.parameters){const parameter=this.parameters.get(id);if(parameter?.operationId===operationId)parameter.status='settled';}this.activities.delete(operationId);
-   }else this.operations.update(operationId,{status:'running',steps:activity.steps});
+   else if(!this.settleActivity(activity))this.operations.update(operationId,{status:'running',steps:activity.steps});
   }
+ }
+ private settleActivity(activity:Activity):boolean{
+  if(!activity.steps.every(step=>step.status==='succeeded'||step.status==='cancelled'))return false;
+  const cancelled=activity.steps.some(step=>step.status==='cancelled'),id=activity.operationId;
+  this.operations.update(id,{status:cancelled?'cancelled':'succeeded',phase:cancelled?'cancelled':'completed',...(!cancelled?{outcome:activity.actorSteps.size?'reached' as const:'completed' as const}:{}),steps:activity.steps});
+  for(const parameterId of activity.parameters){const parameter=this.parameters.get(parameterId);if(parameter?.operationId===id)parameter.status='settled';}
+  this.activities.delete(id);return true;
  }
  private retireHumanoidActivities(actorId?:string):void{for(const [id,activity] of this.humanoidActivities)if(actorId===undefined||activity.actorId===actorId){this.operations.update(id,{status:'cancelled',phase:actorId===undefined?'simulation-replaced':'actor-removed'});this.humanoidActivities.delete(id);}}
  private copyEntry(entry:Registration):Registration{return {...entry,movementState:cloneJson(entry.movementState)};}
@@ -633,6 +645,7 @@ export class ThreeWorld implements API.World {
  }
  private navigationRestriction(type:API.PrimitiveCommand['type'],entry:Registration):API.RuntimeError|undefined{
   if(!['actor.move-to','actor.follow','actor.resume-autonomy'].includes(type))return;
+  if(this.humanoid?.hasActor(entry.id)&&this.humanoid.actorController(entry.id).isMounted)return failure('MOUNTED_ACTOR_NAVIGATION_UNSUPPORTED','Exit the vehicle before requesting foot navigation; driving requires explicit vehicle input.','unsupported-capability',[entry.id]);
   if(entry.movementId!=='ground')return failure('GROUND_NAVIGATION_REQUIRED','Custom movement can compute intent; built-in navigation currently supports ground.','unsupported-capability');
   if(!this.engine.navigationEnabled)return failure('WORLD_NAVIGATION_DISABLED','Built-in navigation is disabled in this world.','unsupported-capability');
  }

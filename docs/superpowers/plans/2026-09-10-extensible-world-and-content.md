@@ -107,6 +107,12 @@ runtime `77acc3f00d289a50a1b0f8bbbbc076c021382aa861ce51a41fbe3a51bb58735b`。
 
 ## R4：持续任务与事件
 
+安全取消已实现并经局部独立审查：低顶等待、坐姿过渡安全起身、握取后保持持有，
+角色删除在同边界结束操作。见 [取消验证](../../reviews/2026-09-11-safe-action-cancellation.md)。
+步行到骑乘的交接仅结束该 Actor 的导航步骤；分组操作继续跟踪其他角色，终态历史
+不会被后来请求改写。见 [交接验证](../../reviews/2026-09-11-mounted-navigation-ownership.md)。
+事件绑定、动态目标和整体 R4 验收尚未完成。
+
 文件：OperationLedger、WriteClaim 解析、action-system、CharacterAttachments、Creator/Episode 操作消费。
 
 - [ ] 测试跨事件 tick、暂停、循环、重复呈现、grip 前后取消、目标失效；operation 状态核对实际归属。
