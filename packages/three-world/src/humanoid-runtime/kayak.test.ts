@@ -2,11 +2,12 @@ import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
 import {CANOE_SPEC} from '../../../../shared/preset-content/canoe';
 import {buildCanoeModel} from '../../../../shared/preset-content/canoe-model';
-import {CANOE_WATER,paddleGrip} from './kayak';
+import {CANOE_WATER,paddleGrip,paddleBlade,kayakStroke} from './kayak';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {SkinnedMesh,Vector3,PerspectiveCamera} from 'three';
+import {SkinnedMesh,Vector3,PerspectiveCamera,Quaternion} from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 import {createWorld} from '../world';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
@@ -64,6 +65,27 @@ describe('kayak water and paddle mechanics',()=>{
     rider.root.updateMatrixWorld(true);let minY=Infinity,minFootY=Infinity;const point=new Vector3();rider.root.traverse(n=>{if(n instanceof SkinnedMesh){n.skeleton.update();for(let j=0;j<n.geometry.getAttribute('position').count;j++){n.getVertexPosition(j,point).applyMatrix4(n.matrixWorld);minY=Math.min(minY,point.y);if(point.z>.38)minFootY=Math.min(minFootY,point.y);if(spec.id==='raft'&&point.z>.41&&point.z<.61&&Math.abs(point.x)<.25)expect(point.y).toBeGreaterThan(.305);}}});expect(minY).toBeGreaterThan(-.18);if(spec.id==='raft'&&phase===.5&&side===-1)console.log('RAFT_FEET',minY,minFootY,rider.root.getObjectByName('ball_l')!.getWorldPosition(new Vector3()).toArray(),rider.root.getObjectByName('ball_r')!.getWorldPosition(new Vector3()).toArray());
     const pose=kayakPaddlePose(k);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(k,side).applyQuaternion(pose.rotation).add(pose.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(point).distanceTo(target)).toBeLessThan(.035);}
    }
+   if(spec.visualVariant==='canoe'){
+    // Grip coincidence alone missed forearms folded through the chest. Sample
+    // both sides and the entire forward/reverse/recovery/bracing motion.
+    for(const side of [-1,1])for(const reverse of [-1,1])for(const brake of [0,1])for(let frame=0;frame<24;frame++){
+     const k={...createVehicle(spec).kayak!,side,reverse,brake,phase:frame/24,effort:1};
+     rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'kayak',kayakPose:k});
+     rider.root.updateMatrixWorld(true);
+     const chest=rider.root.getObjectByName('spine_03')!.getWorldPosition(new Vector3()),head=rider.root.getObjectByName('head')!.getWorldPosition(new Vector3()).add(new Vector3(0,.1,0)),pose=kayakPaddlePose(k);
+     for(const [suffix,handSide] of [['l',1],['r',-1]] as const){
+      const shoulder=rider.root.getObjectByName(`upperarm_${suffix}`)!.getWorldPosition(new Vector3()),elbow=rider.root.getObjectByName(`lowerarm_${suffix}`)!.getWorldPosition(new Vector3()),hand=rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3());
+      const context=JSON.stringify({id:spec.id,side,reverse,brake,phase:k.phase,suffix});
+      expect(hand.distanceTo(paddleGrip(k,handSide).applyQuaternion(pose.rotation).add(pose.position)),context).toBeLessThan(.035);
+      if(handSide===side){
+       expect((elbow.x-shoulder.x)*side,context).toBeGreaterThan(.08);
+       const axis=hand.clone().sub(shoulder).normalize(),bend=elbow.clone().sub(shoulder);bend.addScaledVector(axis,-bend.dot(axis));
+       expect(bend.x*side,context+' shaft-side elbow must open outboard').toBeGreaterThan(0);
+      }else expect(elbow.z-shoulder.z,context).toBeGreaterThan(.1);
+      for(let j=0;j<=8;j++){const point=elbow.clone().lerp(hand,j/8);expect(point.distanceTo(head),context).toBeGreaterThan(.2);if(Math.abs(point.x)<.18)expect(point.z-chest.z,context).toBeGreaterThan(.12);}
+     }
+    }
+   }
    // Verify the runtime passes the stroke into the actual animation owner,
    // including a rotated craft; isolated bone posing is insufficient.
    const f=fixture(false,false,spec),map={...f.q.map,regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0] as const,size:[180,180] as const,color:'#aaa',modes:['kayak']}],spawns:[{id:'kayak',vehicleId:'kayak',name:'Kayak',position:[0,.07,0] as const,yaw:Math.PI/2,regionId:'pool'}]};f.q.dispose();
@@ -82,7 +104,7 @@ describe('single-blade canoe profile',()=>{
    expect(c.v.position.y).toBeCloseTo(.32-CANOE_WATER.mass/(1000*CANOE_WATER.maxDisplacement)*CANOE_WATER.depth,2);
    expect(c.v.kayak!.buoyancy).toBeCloseTo(9.81,1);
    c.run(6,{forward:1});k.run(6,{forward:1});expect(c.v.speed).toBeGreaterThan(.5);expect(c.v.speed).toBeLessThan(k.v.speed*.9);
-   expect(c.v.yaw).toBeLessThan(-.15);expect(c.v.kayak!.side).toBe(-1);
+   expect(c.v.yaw).toBeGreaterThan(.15);expect(c.v.kayak!.side).toBe(-1);
    const speed=c.v.speed;c.run(1);expect(c.v.speed).toBeGreaterThan(.2);expect(c.v.speed).toBeLessThan(speed);
    c.run(10,{forward:-1});const forward=new Vector3(Math.sin(c.v.yaw),0,Math.cos(c.v.yaw));expect(c.v.velocity.dot(forward)).toBeLessThan(-.2);
    c.run(4,{brake:true});expect(c.v.speed).toBeLessThan(.05);
@@ -90,12 +112,49 @@ describe('single-blade canoe profile',()=>{
  });
  it('changes paddle side to turn both ways, cannot propel on land and stops at a pier',()=>{
   const c=fixture(false,false,CANOE_SPEC),dry=fixture(true,false,CANOE_SPEC),wall=fixture(false,true,CANOE_SPEC);
-  try{c.run(2);c.run(5,{steer:-1});expect(c.v.kayak!.side).toBe(1);expect(c.v.yaw).toBeGreaterThan(.3);
-   const yaw=c.v.yaw;c.run(6,{steer:1});expect(c.v.kayak!.side).toBe(-1);expect(c.v.yaw).toBeLessThan(yaw-.3);
+  try{c.run(2);c.run(5,{steer:-1});expect(c.v.kayak!.side).toBe(-1);expect(c.v.yaw).toBeGreaterThan(.3);
+   const yaw=c.v.yaw;c.run(6,{steer:1});expect(c.v.kayak!.side).toBe(1);expect(c.v.yaw).toBeLessThan(yaw-.3);
    dry.run(8,{forward:1});expect(dry.v.speed).toBeLessThan(.002);expect(dry.v.kayak!.bladeImmersion).toBe(0);
-   wall.run(15,{forward:1});expect(wall.v.position.z).toBeGreaterThan(3);expect(wall.v.position.z).toBeLessThan(7);expect(qOverlap(wall)).toBe(false);
+   wall.run(15,{forward:1});expect(wall.v.position.z).toBeGreaterThan(3);expect(wall.v.position.z).toBeLessThan(7);
+   // The solver uses a rounded hull. Its enclosing sharp-cornered query box
+   // can overlap the pier on an oblique approach without hull penetration.
+   const e=wall.v.spec.envelope,rig=wall.q.vehicleRig(wall.v.spec.id,wall.v.bodyPhysics!,wall.v.position,wall.v.rotation,wall.v.bodyPhysics!.mass,e.halfExtents[0],e.halfExtents[2],e.offset[1]+e.halfExtents[1],wall.v.spec.bodyPhysics!.centerOfMassHeight);
+   for(const collider of rig.colliders){const contact=collider.contactShape(new RAPIER.Cuboid(50,4,.25),new Vector3(0,2,8),new Quaternion(),.1);expect(contact?.distance??0).toBeGreaterThanOrEqual(-.001);}
    expect(createVehicle(CANOE_SPEC).kayak).toMatchObject({craft:'canoe',side:-1,phase:0,effort:0,yawRate:0});
   }finally{c.q.dispose();dry.q.dispose();wall.q.dispose();}
+ });
+});
+
+describe('paddle side agrees with the turn and stroke direction',()=>{
+ it.each([KAYAK_SPEC,CANOE_SPEC,RAFT_SPEC].flatMap(spec=>{const {bodyPhysics,...environmentSpec}=spec;return [{spec,owner:'rigid-body'},{spec:environmentSpec,owner:'environment'}];}))('$spec.id ($owner) sweeps opposite the turn forward and on the turn side in reverse',({spec})=>{
+  for(const forward of [-1,0,1])for(const steer of [-1,1]){
+   const f=fixture(false,false,spec);try{
+    f.run(2);let yaw=0,workingFrames=0;
+    for(let frame=0;frame<240;frame++){
+     const before=f.v.yaw;f.run(1/60,{forward,steer});yaw+=Math.atan2(Math.sin(f.v.yaw-before),Math.cos(f.v.yaw-before));
+     const k=f.v.kayak!,stroke=kayakStroke(k);
+     if(frame>120&&stroke.power>.05&&k.bladeImmersion>.1){
+      const pose=kayakPaddlePose(k),blade=paddleBlade(k).applyQuaternion(pose.rotation).add(pose.position);
+      // +X is the rider's left; positive steer asks the bow to turn right.
+      expect(Math.sign(blade.x),JSON.stringify({id:spec.id,forward,steer,phase:k.phase})).toBe(steer*(forward<0?-1:1));
+      const later={...k,phase:k.phase+.001},next=kayakPaddlePose(later),nextBlade=paddleBlade(later).applyQuaternion(next.rotation).add(next.position);
+      expect((nextBlade.z-blade.z)*(forward<0?-1:1)).toBeLessThan(0);
+      workingFrames++;
+     }
+    }
+    expect(workingFrames).toBeGreaterThan(5);expect(yaw*steer).toBeLessThan(-.15);
+   }finally{f.q.dispose();}
+  }
+ });
+ it.each([CANOE_SPEC,RAFT_SPEC])('$id waits for recovery to change sides and resets reverse for a stationary turn',spec=>{
+  const f=fixture(false,false,spec);try{
+   f.run(2);f.v.kayak!.phase=.45;f.v.kayak!.effort=1;f.v.kayak!.side=-1;
+   f.run(1/60,{forward:1,steer:1});expect(f.v.kayak!.side).toBe(-1);
+   expect(f.v.kayak!.yawRate).toBeGreaterThan(0); // Old immersed blade still pushes left.
+   f.run(2,{forward:1,steer:1});expect(f.v.kayak!.side).toBe(1);
+   f.run(2,{forward:-1,steer:1});expect(f.v.kayak!.reverse).toBe(-1);expect(f.v.kayak!.side).toBe(-1);
+   f.run(2,{steer:1});expect(f.v.kayak!.reverse).toBe(1);expect(f.v.kayak!.side).toBe(1);
+  }finally{f.q.dispose();}
  });
 });
 

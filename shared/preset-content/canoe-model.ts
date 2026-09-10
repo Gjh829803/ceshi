@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {CANOE_SPEC} from './canoe';
+import {humanoid} from '@worldkit/three';
 export function buildCanoeModel(){
  const root=new T.Group();root.name='canoe';
  const wood=new T.MeshStandardMaterial({color:CANOE_SPEC.color,roughness:.95,side:T.DoubleSide});
@@ -19,7 +20,7 @@ export function buildCanoeModel(){
  }
  for(const x of [-.18,-.06,.06,.18])box(.11,.04,2.4,x,-.12,0);
  box(.99,.07,.36,0,.29,-.45);box(.85,.07,.29,0,.29,1.10);box(.76,.07,.27,0,.29,-1.35);
- const paddle=new T.Group();paddle.name='kayak.paddle';paddle.position.set(-.04,1.04,-.45);paddle.quaternion.setFromUnitVectors(new T.Vector3(0,-1,0),new T.Vector3(-.65,-.54,0).normalize());root.add(paddle);
+ const paddle=new T.Group(),pose=humanoid.kayakPaddlePose({...humanoid.createKayakState(),craft:'canoe',side:-1});paddle.name='kayak.paddle';paddle.position.copy(pose.position);paddle.quaternion.copy(pose.rotation);root.add(paddle);
  const shaft=new T.Mesh(new T.CylinderGeometry(.021,.021,1.32,10),dark);shaft.position.y=-.66;paddle.add(shaft);
  const grip=new T.Mesh(new T.CylinderGeometry(.025,.025,.18,10),wood);grip.rotation.z=Math.PI/2;paddle.add(grip);
  const blade=new T.Mesh(new T.SphereGeometry(1,12,8),wood);blade.name='canoe.single-blade';blade.position.y=-1.55;blade.scale.set(.14,.31,.025);paddle.add(blade);

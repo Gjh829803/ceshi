@@ -3,7 +3,7 @@ import type {Input,VehicleState} from './simulation';
 import {vehicleBody,type EnvironmentQueries} from './environment/queries';
 import {createPowertrain,stepPowertrain,validatePowertrain,type PowertrainConfig,type PowertrainState} from './powertrain';
 import {finishUnicycleStep,UNICYCLE_GEOMETRY} from './unicycle';
-import {kayakStroke,kayakPaddlePose,paddleBlade,KAYAK_WATER,CANOE_WATER} from './kayak';
+import {kayakStroke,kayakPaddlePose,paddleBlade,paddleRiderBody,KAYAK_WATER,CANOE_WATER} from './kayak';
 import {finishJetSkiStep} from './jetski';
 import {finishSubmersibleStep} from './submersible';
 import {tankBarrel,TANK_CONTROLS,TANK_GEOMETRY} from './tank';
@@ -20,10 +20,11 @@ export interface BodyPhysicsConfig {
   water?:{displacement:number;depth:number;bottom:number;damping:number};
 }
 export interface BodyPhysicsState {
+  riderMounted:boolean;
   angularVelocity:Vector3;powertrain:PowertrainState|undefined;
   effort:number;cadence:number;mass:number;contactCount:number;elapsed:number;
 }
-export const createBodyPhysics=(c:BodyPhysicsConfig):BodyPhysicsState=>({angularVelocity:new Vector3(),powertrain:c.powertrain?createPowertrain(c.powertrain):undefined,effort:0,cadence:0,mass:c.mass,contactCount:0,elapsed:0});
+export const createBodyPhysics=(c:BodyPhysicsConfig):BodyPhysicsState=>({riderMounted:false,angularVelocity:new Vector3(),powertrain:c.powertrain?createPowertrain(c.powertrain):undefined,effort:0,cadence:0,mass:c.mass,contactCount:0,elapsed:0});
 export function validateBodyPhysics(c:BodyPhysicsConfig):void {
   const fail=()=>{throw new Error('VEHICLE_BODY_PHYSICS_CONFIG_INVALID');};
   if(!['unicycle','sled','paddle','tracks','jet','submersible'].includes(c.kind)||!Number.isFinite(c.mass)||c.mass<20||!Number.isFinite(c.centerOfMassHeight)||Math.abs(c.centerOfMassHeight)>5)fail();
@@ -42,7 +43,9 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
   const c=v.spec.bodyPhysics!,state=v.bodyPhysics!,e=v.spec.envelope;
   const parts:{body:ReturnType<typeof vehicleBody>;rotation?:Quaternion}[]=[{body:vehicleBody(v.spec)}];
   if(v.tank){const barrel=tankBarrel({...v,position:new Vector3(),rotation:new Quaternion()});parts.push({body:{...barrel.body,offset:new Vector3(...barrel.body.offset).applyQuaternion(barrel.rotation).add(barrel.position).toArray()},rotation:barrel.rotation});}
+  if(c.kind==='paddle')parts.push({body:paddleRiderBody(v.spec.seat)});
   const rig=q.vehicleRig(v.spec.id,state,v.position,v.rotation,state.mass,e.halfExtents[0],e.halfExtents[2],e.offset[1]+e.halfExtents[1],c.centerOfMassHeight,parts,c.friction??.02,c.restitution??.08),body=rig.body;
+  if(c.kind==='paddle')rig.colliders[parts.length-1]!.setEnabled(state.riderMounted);
   // Synchronise explicit reset/teleport once; substeps below only read the solver.
   const prior=body.translation();let relocated=new Vector3(prior.x,prior.y,prior.z).distanceToSquared(v.position)>.01;
   body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(state.angularVelocity,true);
@@ -91,7 +94,10 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
       k.surface=water?.surface??null;k.immersion=immersion;k.buoyancy=buoyancy;k.turn=v.steering;k.brake=input.brake?1:0;
       k.effort=blend(k.effort,afloat&&!input.brake?Math.max(Math.abs(input.forward),Math.abs(input.steer)):0,7,h);
       if(Math.abs(input.forward)>.01)k.reverse=Math.sign(input.forward);
-      if(canoe&&Math.abs(input.steer)>.1&&(k.phase%1<.2||k.effort<.05))k.side=-Math.sign(input.steer);
+      else if(Math.abs(input.steer)>.1)k.reverse=1;
+      // +X is the rider's left. Forward sweeps turn away from the blade;
+      // reverse sweeps turn toward it. Change sides during recovery only.
+      if(canoe&&Math.abs(input.steer)>.1&&(k.phase%1<.2||k.effort<.05))k.side=Math.sign(input.steer)*k.reverse;
       if(k.effort>.005)k.phase+=h/(v.raft&&input.boost?.85:period);
       const stroke=kayakStroke(k),paddle=kayakPaddlePose(k),blade=paddleBlade(k,k.brake?1:stroke.side).applyQuaternion(paddle.rotation).add(paddle.position).applyQuaternion(v.rotation).add(v.position),w=q.waterAt(blade);
       k.bladeImmersion=w?clamp((w.surface-blade.y)/.1,0,1):0;
@@ -99,7 +105,7 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
       driveForce=mass*direction*s.accel*pulse*(v.raft&&input.boost?1.2:1);
       const resistance=immersion>0?s.coastDeceleration+Math.abs(speed)*s.dragQuadratic:v.grounded?(v.raft?.32:5):0;
       driveForce+=resist(Math.abs(speed)*(resistance+(input.brake&&afloat?s.brakeDamping*k.bladeImmersion:0)));
-      yawAcceleration=afloat?-v.steering*s.steer*pulse+stroke.side*direction*pulse*(v.raft?.035:canoe?.20:.10)-state.angularVelocity.y*(canoe?.85:1.15):v.grounded?-state.angularVelocity.y*8:0;
+      yawAcceleration=afloat?-stroke.side*pulse*(k.reverse*Math.abs(v.steering)*s.steer+direction*(v.raft?.035:canoe?.20:.10))-state.angularVelocity.y*(canoe?.85:1.15):v.grounded?-state.angularVelocity.y*8:0;
       pitch=direction*pulse*.025;roll=-stroke.side*pulse*.035-state.angularVelocity.y*speed*.018;
       state.effort=pulse;state.cadence=k.effort>.005?60/(v.raft&&input.boost?.85:period):0;v.throttle=direction*pulse;
     }else if(c.kind==='jet'||c.kind==='submersible'){

@@ -35,6 +35,7 @@ import {
 
 import {
   stepKayak,
+  paddleRiderBody,
   createKayakState,
   type KayakState,
 } from './kayak';
@@ -440,6 +441,7 @@ export class Simulation {
     if(v.velocity.length()>=3)return fail('VEHICLE_MOUNT_TOO_FAST','载具速度过快');
     const body=vehicleBody(v.spec),range=Math.max(5.3,body.kind==='box'?body.halfExtents[0]+2:0);
     if(v.position.distanceTo(this.player.position)>=range)return fail('VEHICLE_MOUNT_OUT_OF_REACH','靠近载具，按 F 进入驾驶位');
+    if(v.spec.bodyPhysics?.kind==='paddle'&&this.environment.bodyOverlap({position:v.position,rotation:v.rotation,body:paddleRiderBody(v.spec.seat)},{excludedActorIds:new Set([v.spec.id]),excludedColliderHandles:new Set([this.humanoid.capsule.handle])}))return fail('VEHICLE_MOUNT_SPACE_BLOCKED','座位上方空间不足，无法搭乘');
     return {ok:true,instanceId:id,position:new Vector3(...v.spec.seat).applyQuaternion(v.rotation).add(v.position),yaw:v.yaw,velocity:new Vector3()};
   }
   /** On-demand read of existing boarding geometry and the execution admission decision. */
@@ -540,7 +542,7 @@ export class Simulation {
     if (!this.humanoid.canBoard) { this.message = this.humanoid.boardingReason; return false; }
     const n = targetId ? this.vehicles.findIndex(v => v.spec.id === targetId) : this.nearest();
     if (n < 0) { this.message = '靠近载具，按 F 进入驾驶位'; return false; }
-    if(targetId){const decision=this.boardingDecision(targetId);
+    {const decision=this.boardingDecision(this.vehicles[n]!.spec.id);
       if(!decision.ok){this.failureCode=decision.code;this.message=decision.message;return false;}
     }
     const entering=this.vehicles[n]!;
@@ -621,6 +623,7 @@ export class Simulation {
     const vehicleBefore=this.vehicle?.position.clone();
     const before=this.vehicle?{unicycle:copyUnicycleState(this.vehicle.unicycle),submersible:copySubmersibleState(this.vehicle.submersible),jetski:copyJetSkiState(this.vehicle.jetski),atv:copyAtvState(this.vehicle.atv),rotation:this.vehicle.rotation.clone(),yaw:this.vehicle.yaw,pitch:this.vehicle.pitch,roll:this.vehicle.roll,creature:this.vehicle.creature?{...this.vehicle.creature,leadPosition:this.vehicle.creature.leadPosition?.clone()}:undefined}:undefined;
     for (const v of this.vehicles) {
+      if(v.bodyPhysics)v.bodyPhysics.riderMounted=v===this.vehicle;
       // 只有驾驶中的载具接收输入；四轮车停车后仍计算重力、悬架和驻车制动。
       if (v === this.vehicle && this.transition === 0)
         stepVehicle(v, i, dt, this.time, this.environment);

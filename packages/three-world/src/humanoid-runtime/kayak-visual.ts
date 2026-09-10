@@ -28,7 +28,9 @@ export function poseKayakHands(root:Object3D,k:KayakState){
   const target=paddleGrip(k,side).applyQuaternion(p.rotation).add(p.position).sub(new Vector3(...(k.craft==='canoe'?CANOE_GEOMETRY:KAYAK_GEOMETRY).seat));root.localToWorld(target);
   const a=upper.getWorldPosition(new Vector3()),b=lower.getWorldPosition(new Vector3()),c=hand.getWorldPosition(new Vector3()),l1=a.distanceTo(b),l2=b.distanceTo(c);
   const direction=target.clone().sub(a),distance=Math.min(direction.length(),l1+l2-.0001);direction.normalize();
-  const pole=new Vector3(side*.6,-1,-.15).applyQuaternion(rotation);pole.addScaledVector(direction,-pole.dot(direction)).normalize();
+  // The top hand crosses ahead of the chest with its elbow down; the shaft
+  // hand opens its elbow outboard instead of folding inward toward the shaft.
+  const pole=(k.craft==='canoe'?(side===(k.side??-1)?new Vector3(side*3,-.8,.6):new Vector3(side*.7,-1.2,1)):new Vector3(side*.6,-1,-.15)).applyQuaternion(rotation);pole.addScaledVector(direction,-pole.dot(direction)).normalize();
   const along=(l1*l1-l2*l2+distance*distance)/(2*Math.max(.001,distance));
   const elbow=a.clone().addScaledVector(direction,along).addScaledVector(pole,Math.sqrt(Math.max(0,l1*l1-along*along)));
   const aim=(bone:Object3D,child:Object3D,to:Vector3)=>{

@@ -35,7 +35,7 @@ import {
   disposeJetSkiVisual,
 } from './jetski-visual';
 
-import type { KayakState } from './kayak';
+import {paddleRiderBody,type KayakState} from './kayak';
 import { sampleKayakVisual } from './kayak-visual';
 
 import {
@@ -498,6 +498,7 @@ export class HumanoidRuntime implements PhysicsPort {
     let valid=!!safe&&safe.distanceTo(candidate.position)<=.35;
     if(safe)candidate.position.copy(safe);
     valid=valid&&canPlaceCreature(candidate,q);
+    if(config.mounted!==false&&candidate.spec.bodyPhysics?.kind==='paddle')valid=valid&&!q.bodyOverlap({position:candidate.position,rotation:candidate.rotation,body:paddleRiderBody(candidate.spec.seat)},{excludedActorIds:new Set([candidate.spec.id]),excludedColliderHandles:new Set([this.simulation.humanoid.capsule.handle])});
     if(candidate.spec.archetype!=='raft'&&['kayak','boat','sub'].includes(candidate.spec.mode))valid=valid&&q.waterContains(candidate.position,candidate.spec.radius);
     // Start relocation cannot overwrite another parked actor's occupied envelope.
     valid=valid&&!this.simulation.vehicles.some((v,i)=>i!==index&&this.simulation.available(v)&&Math.abs(v.position.y-candidate.position.y)<2&&Math.hypot(v.position.x-candidate.position.x,v.position.z-candidate.position.z)<v.spec.radius+candidate.spec.radius);
