@@ -176,6 +176,7 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
         if(pendingCapture&&options.capture)await (queue??createBatchQueue({store:createBatchStore({namespace:conf.namespace??'lwdp'})})).checkpointReady(pendingCapture.cohortId,pendingCapture.taskId,{stopBeforeSeedance:true,outputRoot:path.relative(REPO,output),checkpointS3Uri:options.publishS3Prefix,publishS3Uri:options.publishS3Prefix});
       }
     }catch(cleanupError:any){
+      // eslint-disable-next-line no-unsafe-finally -- Publication failure invalidates success but never replaces a primary error.
       if(!primaryError)throw cleanupError;
       process.stderr.write(`episode cleanup failed after ${state.error?.code}: ${cleanupError.message}\n`);
     }
