@@ -3,6 +3,7 @@ import { toast as notify } from "sonner";
 import * as T from "three";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
+import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
 import "./styles.css";
 
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
@@ -113,6 +114,9 @@ try {
   shell.flush();
   throw error;
 }
+const mapIds = MAPS.map(map => map.id);
+const initialMap = getMap(readInitialMap(location.hash, location.search, mapIds));
+writeMapHash(window, initialMap.id, true);
 const sdk = await createWorld({
   scene,
   camera,
@@ -121,7 +125,7 @@ const sdk = await createWorld({
   assetDefinitions: definitions,
   shadows: resolveShadowSettings(presentationConfig.shadows),
   humanoid: {
-    map: getMap("campus"),
+    map: initialMap,
     vehicles: SPECS.map((spec, n) => ({
       instanceId: spec.id,
       assetId: `${spec.mode === 'mount' || spec.mode === 'dragon' ? 'creature' : 'vehicle'}.${spec.id}`,
@@ -141,7 +145,7 @@ const runtime = sdk.humanoid!,
   follow = runtime.followCamera;
 runtime.applyProfile({ view: { keyboardToggleEnabled: true } });
 const accessories = createAccessoryPreview(character);
-let currentMap = getMap("campus"),
+let currentMap = initialMap,
   world = buildWorld(scene, currentMap);
 sdk.configureShadowLight(world.sun);
 const session = {
@@ -168,6 +172,7 @@ const session = {
     world.dispose();
     world = visual;
     currentMap = next;
+    writeMapHash(window, next.id);
   },
   dispose() {
     world.dispose();
@@ -748,9 +753,9 @@ shell.on("mapExpandButton", () =>
 shell.on("performanceButton", clearInput);
 
 shell.update({ mapId: session.map.id });
-shell.on("mapSelect", (value) => {
+function selectMap(value: string) {
   clearInput();
-  const map = getMap(value!);
+  const map = getMap(value);
   let id = value===DRAGON_TRAINING.id?"dragon":sim.vehicle?.spec.id ?? "person";
   if (
     !map.regions.some((r) =>
@@ -763,8 +768,17 @@ shell.on("mapSelect", (value) => {
   } catch (error) {
     toast(String(error));
     shell.update({ mapId: session.map.id });
+    writeMapHash(window, session.map.id, true);
   }
-});
+}
+shell.on("mapSelect", (value) => selectMap(value!));
+function restoreMapFromHash() {
+  const id = readMapHash(location.hash, mapIds);
+  // Canonicalize missing/invalid routes without adding a history entry.
+  writeMapHash(window, id, true);
+  // 初次从飞龙网址打开时，地图已经创建，仍需执行骑乘准备。
+  if (id !== session.map.id || (id === DRAGON_TRAINING.id && !sim.vehicle?.spec.flyingCreature)) selectMap(id);
+}
 shell.on("contributeButton", () => {
   shell.flag("contributionOpen", true);
   onPanelChange(true);
@@ -812,6 +826,7 @@ document.addEventListener("focusin", releaseUIInput);
 window.addEventListener(
   "pagehide",
   () => {
+    window.removeEventListener("hashchange", restoreMapFromHash);
     disposeThumbnails?.();
     inspector.dispose();
     stageObserver.disconnect();
@@ -1237,14 +1252,10 @@ sdk.onReset(() => {
   humanDemo = null;
   lastActive = -99;
 });
+window.addEventListener("hashchange", restoreMapFromHash);
+// Also catches URL edits made while the initial assets/runtime were loading.
+restoreMapFromHash();
 await sdk.start();
-const requestedMapId = new URLSearchParams(location.search).get("map");
-if (requestedMapId && MAPS.some((map) => map.id === requestedMapId)) {
-  const requestedMap = getMap(requestedMapId);
-  const selected=requestedMap.id===DRAGON_TRAINING.id?'dragon':'person';
-  prepareSelection(requestedMap.id, defaultRegion(requestedMap,selected).id,selected);
-  shell.update({ mapId: requestedMap.id });
-}
 // Read-only browser callback cadence; no simulation, animation or camera writes.
 const observePacing = (now: number) => {
   if (!paused && !panelOpen) {
