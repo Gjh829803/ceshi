@@ -68,11 +68,13 @@ export class Simulation {
   environment:EnvironmentQueries;
   humanoid!:HumanoidController;
   readonly actors=new Map<string,HumanoidActor>();
-  addActor(id:string,position:Vector3,yaw=0):HumanoidActor{
-    if(!id.trim()||this.actors.has(id))throw new Error('HUMANOID_ACTOR_ID_CONFLICT');
+  checkActorSpawn(position:Vector3):Vector3{
     const safe=this.environment.safeSpawn(position,HUMANOID_BODY);
-    if(!safe||this.environment.bodyOverlap({position:safe,rotation:new Quaternion(),body:HUMANOID_BODY},undefined,.015))throw new Error('HUMANOID_ACTOR_SPAWN_BLOCKED');
-    const actor=new HumanoidActor(this.environment,safe,yaw);this.actors.set(id,actor);return actor;
+    if(!safe||this.environment.bodyOverlap({position:safe,rotation:new Quaternion(),body:HUMANOID_BODY},undefined,.015))throw new Error('HUMANOID_ACTOR_SPAWN_BLOCKED');return safe;
+  }
+  addActor(id:string,position:Vector3,yaw=0,prevalidated=false):HumanoidActor{
+    if(!id.trim()||this.actors.has(id))throw new Error('HUMANOID_ACTOR_ID_CONFLICT');
+    const actor=new HumanoidActor(this.environment,prevalidated?position:this.checkActorSpawn(position),yaw);this.actors.set(id,actor);return actor;
   }
   removeActor(id:string):void{const actor=this.actors.get(id);if(actor){this.actors.delete(id);actor.dispose();}}
   private humanoidClips:ReadonlySet<string>=new Set();

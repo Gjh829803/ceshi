@@ -136,8 +136,8 @@ export class WorldEngine {
   private entity(id: string): Entity { const entity = this.entities.get(id); if (!entity) throw new Error(`WORLD_ENTITY_NOT_FOUND: ${id}`); return entity; }
   getObject(id: string): THREE.Object3D { return this.entity(id).object; }
   addEntity(options: EntityOptions): THREE.Object3D { return this.register(options); }
-  addCharacter(options: CharacterEntityOptions): THREE.Object3D { return this.register({ ...options, role: 'actor' }, { ...DEFAULT_CHARACTER_OPTIONS, ...options.character }, options.asset); }
-  private register(options: EntityOptions, character?: CharacterOptions, asset?: AssetInstance): THREE.Object3D {
+  addCharacter(options: CharacterEntityOptions,prevalidatedHumanoid=false): THREE.Object3D { return this.register({ ...options, role: 'actor' }, { ...DEFAULT_CHARACTER_OPTIONS, ...options.character }, options.asset,prevalidatedHumanoid); }
+  private register(options: EntityOptions, character?: CharacterOptions, asset?: AssetInstance,prevalidatedHumanoid=false): THREE.Object3D {
     this.alive(); requireId(options.id);
     if (this.entities.has(options.id)) throw new Error(`WORLD_ENTITY_DUPLICATE: ${options.id}`);
     if (!(options.object instanceof THREE.Object3D) || [...this.entities.values()].some(e => e.object === options.object)) throw new Error('WORLD_OBJECT_INVALID_OR_REGISTERED');
@@ -152,7 +152,7 @@ export class WorldEngine {
     setEntityBoundary(options.object, true);
     try {
       if (character !== undefined) {
-        if(binding)humanoidHost(this.humanoid!).bindCharacter(options.id,binding,(options as CharacterEntityOptions).character);
+        if(binding)humanoidHost(this.humanoid!).bindCharacter(options.id,binding,(options as CharacterEntityOptions).character,prevalidatedHumanoid);
         this.physics.addCharacter(options.id, options.object, character);
       }
       else if (physics.kind !== 'none') this.physics.addRigid(options.id, options.object, physics);

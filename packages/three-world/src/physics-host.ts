@@ -1,6 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type {ThreePhysics} from './physics';
-import type {CharacterDrive} from './engine-contracts';
+import type {CharacterDrive,CharacterOptions} from './engine-contracts';
 
 /** Internal borrowing contract; not exported by the author-facing SDK barrel. */
 export interface BorrowedPhysicsWorld {
@@ -9,6 +9,7 @@ export interface BorrowedPhysicsWorld {
   colliderRemoved?(id:string,collider:RAPIER.Collider):void;
   colliderChanged?(id:string,colliders:readonly RAPIER.Collider[]):void;
   colliderOwner?(handle:number):string|undefined;
+  characterSettings?(handle:number):Required<CharacterOptions>|undefined;
 }
 export interface PhysicsHostAccess {
   prepareStep(dt:number,drives:Readonly<Record<string,CharacterDrive>>):void;

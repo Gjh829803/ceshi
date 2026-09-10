@@ -80,6 +80,15 @@ it('rejects binding a live character into another world without damaging its own
   second.dispose();first.step({},1);expect(actor.loaded).toBe(true);
 });
 
+it.each(['parent-position','parent-rotation','manual-matrix','tilted-root'])('rejects an unsupported actor root before binding: %s',async transform=>{
+  const world=await setup(),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);
+  if(transform.startsWith('parent')){const parent=new THREE.Scene();parent.add(actor.root);if(transform==='parent-position')parent.position.x=2;else parent.rotation.y=.5;}
+  if(transform==='manual-matrix'){actor.root.updateMatrix();actor.root.matrixAutoUpdate=false;}
+  if(transform==='tilted-root')actor.root.rotation.x=.2;
+  const before=world.humanoid!.environment.colliderCount;
+  try{expect(()=>world.addCharacter({id:'a',humanoid:actor})).toThrow('HUMANOID_CHARACTER_TRANSFORM_INVALID');expect(world.humanoid!.environment.colliderCount).toBe(before);}finally{actor.dispose();}
+});
+
 it('can relocate a rebound NPC before the first world step',async()=>{
   const world=await setup(),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.step({},0);
   await world.reset();world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[3,.03,5],facingYawRadians:0});world.step({},1);
@@ -100,6 +109,73 @@ it('releases an asynchronously created instance when reset invalidates its reque
   vi.spyOn(source,'createInstance').mockImplementation(async()=>{await gate;const instance=await create();dispose=vi.spyOn(instance,'dispose');return instance;});
   const pending=world.humanoid!.createCharacter();await world.reset();resolve();
   await expect(pending).rejects.toThrow('HUMANOID_ACTOR_LOAD_STALE');expect(dispose).toHaveBeenCalledOnce();
+});
+
+it('spawns complete humanoids from a prepared prototype after its original source instance is released',async()=>{
+  const world=await setup(),seed=await world.humanoid!.createCharacter();
+  await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();
+  world.step({},0);
+  const receipt=await world.execute({type:'entity.spawn',prototypeId:'guide',entityId:'generated',positionWorldMetersXYZ:[3,.04,0]});
+  expect(receipt.status,JSON.stringify(receipt)).toBe('applied');
+  await world.execute({type:'humanoid.set-input',actorId:'generated',input:{...emptyInput(),forward:1}});world.step({},60);
+  expect(world.getEntityState('generated').positionWorldMetersXYZ[2]).toBeGreaterThan(1);expect(world.getEntityState('generated').animation?.actionId).toBeTruthy();
+  expect((await world.execute({type:'entity.despawn',entityId:'generated'})).status).toBe('applied');
+  const again=await world.execute({type:'entity.spawn',prototypeId:'guide',entityId:'generated',positionWorldMetersXYZ:[3,.04,0]});expect(again.status).toBe('applied');
+});
+
+it('rejects colliding prototype actors without publishing either instance',async()=>{
+  const world=await setup(),seed=await world.humanoid!.createCharacter();
+  await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();
+  world.registerAction({id:'pair',description:'Two actors',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'prototype',prototypeId:'guide'}],plan:()=>[
+    {type:'entity.spawn',prototypeId:'guide',entityId:'one',positionWorldMetersXYZ:[3,.04,0]},
+    {type:'entity.spawn',prototypeId:'guide',entityId:'two',positionWorldMetersXYZ:[3,.04,0]},
+  ]});
+  const before=world.humanoid!.environment.colliderCount;
+  const result=await world.execute({type:'action.invoke',actionId:'pair',arguments:{}});
+  expect(result.status,JSON.stringify(result)).toBe('rejected');expect(world.snapshot().entities.map(entity=>entity.id)).toEqual(['player']);expect(world.humanoid!.environment.colliderCount).toBe(before);
+});
+
+it.each([false,true])('validates the final wall pose before publishing a full actor (clear=%s)',async clear=>{
+  const world=await setup(),seed=await world.humanoid!.createCharacter();
+  await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial());wall.position.set(clear?3:8,1,0);
+  world.addEntity({id:'wall',object:wall,role:'obstacle',physics:{kind:'kinematic',shape:'box'}});
+  world.registerAction({id:'scene-change',description:'Prepare wall and actor',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'prototype',prototypeId:'guide'},{kind:'entity',entityId:'wall',channels:['position']}],plan:()=>clear?[
+    {type:'entity.spawn',prototypeId:'guide',entityId:'new-actor',positionWorldMetersXYZ:[3,.04,0]},
+    {type:'entity.set-position',entityId:'wall',positionWorldMetersXYZ:[8,1,0]},
+  ]:[
+    {type:'entity.set-position',entityId:'wall',positionWorldMetersXYZ:[3,1,0]},
+    {type:'entity.spawn',prototypeId:'guide',entityId:'new-actor',positionWorldMetersXYZ:[3,.04,0]},
+  ]});
+  const result=await world.execute({type:'action.invoke',actionId:'scene-change',arguments:{}});
+  expect(result.status,JSON.stringify(result)).toBe(clear?'applied':'rejected');expect(world.getEntityState('wall').positionWorldMetersXYZ[0]).toBe(8);
+  expect(world.snapshot().entities.some(entity=>entity.id==='new-actor')).toBe(clear);
+  wall.geometry.dispose();wall.material.dispose();
+});
+
+it('rejects an unsupported transform of a newly spawned humanoid before publication',async()=>{
+  const world=await setup(),seed=await world.humanoid!.createCharacter();
+  await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();
+  world.registerAction({id:'scaled',description:'Invalid character scale',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'prototype',prototypeId:'guide'}],plan:()=>[
+    {type:'entity.spawn',prototypeId:'guide',entityId:'one',positionWorldMetersXYZ:[3,.04,0]},
+    {type:'entity.set-scale',entityId:'one',scaleLocalXYZ:[2,2,2]},
+  ]});
+  expect((await world.execute({type:'action.invoke',actionId:'scaled',arguments:{}})).status).toBe('rejected');expect(world.snapshot().entities.map(entity=>entity.id)).toEqual(['player']);
+});
+
+it('does not spawn into a wall that only starts moving away when the plan commits',async()=>{
+  const world=await setup(),seed=await world.humanoid!.createCharacter();
+  await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial());wall.position.set(3,1,0);
+  world.addEntity({id:'wall',object:wall,role:'obstacle',physics:{kind:'kinematic',shape:'box'}});
+  world.registerAction({id:'clear-and-spawn',description:'Timed wall move',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'prototype',prototypeId:'guide'},{kind:'entity',entityId:'wall',channels:['position']}],plan:()=>[
+    {type:'entity.set-position',entityId:'wall',positionWorldMetersXYZ:[8,1,0],durationSeconds:1},
+    {type:'entity.spawn',prototypeId:'guide',entityId:'one',positionWorldMetersXYZ:[3,.04,0]},
+  ]});
+  const result=await world.execute({type:'action.invoke',actionId:'clear-and-spawn',arguments:{}});
+  expect(result.status,JSON.stringify(result)).toBe('rejected');expect(world.getEntityState('wall').positionWorldMetersXYZ[0]).toBe(3);
+  expect(world.snapshot().entities.some(entity=>entity.id==='one')).toBe(false);
+  wall.geometry.dispose();wall.material.dispose();
 });
 
 it('prepares Episode on the selected NPC and keeps the original player at its baseline',async()=>{

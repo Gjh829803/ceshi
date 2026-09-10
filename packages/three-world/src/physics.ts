@@ -219,7 +219,8 @@ export class ThreePhysics implements PhysicsPort {
     this.live();
     if (!Array.isArray(candidates) || !Array.isArray(removedEntityIds) || new Set(removedEntityIds).size !== removedEntityIds.length) geometryError('PHYSICS_CANDIDATE_BATCH_INVALID', 'Candidate and removal lists must contain each physics id once.');
     const removed = new Set(removedEntityIds), identities = new Set<string>(), objects = new Set<THREE.Object3D>();
-    for (const id of removed) this.entry(id);
+    for (const id of removed) if(!this.entries.has(id)){let found=false;this.world.colliders.forEach(c=>{if(this.borrowed?.colliderOwner?.(c.handle)===id)found=true;});if(!found)this.entry(id);}
+    if(!candidates.length)return;
     for (const candidate of candidates) {
       if (!candidate || !['rigid', 'character'].includes(candidate.kind) || typeof candidate.id !== 'string' || !candidate.id.trim() || candidate.id.length > 128 || identities.has(candidate.id) || removed.has(candidate.id)) geometryError('PHYSICS_CANDIDATE_BATCH_INVALID', 'Each candidate needs a unique id, a body kind, and no conflicting removal.');
       if (!(candidate.object instanceof THREE.Object3D) || objects.has(candidate.object)) geometryError('PHYSICS_OBJECT_INVALID', 'Each candidate needs a distinct Three Object3D.');
@@ -236,16 +237,30 @@ export class ThreePhysics implements PhysicsPort {
     for (const entry of this.entries.values()) if (!identities.has(entry.id) && !removed.has(entry.id) && entry.enabled) for (const collider of entry.colliders) {
       shapes.push({ id: entry.id, character: entry.kind === 'character', changed: false, shape: collider.shape, position: new THREE.Vector3().copy(collider.translation()), rotation: new THREE.Quaternion().copy(collider.rotation()), ...(entry.character ? { settings: entry.character.settings } : {}) });
     }
+    // Borrowed humanoid/map bodies participate in the same candidate scene;
+    // descriptor validation must not silently omit the other physics owners.
+    if(this.borrowed)this.world.colliders.forEach(collider=>{
+      if(this.colliderOwners.has(collider.handle)||!collider.isEnabled()||collider.isSensor()||collider.parent()?.isEnabled()===false)return;
+      const id=this.borrowed!.colliderOwner?.(collider.handle)??`collider-${collider.handle}`;if(identities.has(id)||removed.has(id))return;
+      const settings=this.borrowed!.characterSettings?.(collider.handle);
+      shapes.push({id,character:!!settings,changed:false,shape:collider.shape,position:new THREE.Vector3().copy(collider.translation()),rotation:new THREE.Quaternion().copy(collider.rotation()),...(settings?{settings}:{})});
+    });
     for (const { previous, plan, candidate } of plans) if (previous?.enabled !== false) for (const descriptor of plan.descriptors) {
       const rotation = candidate.kind === 'character' ? new THREE.Quaternion() : plan.pose.rotation.clone();
       shapes.push({ id: candidate.id, character: candidate.kind === 'character', changed: true, shape: descriptor.shape,
         position: new THREE.Vector3().copy(descriptor.translation).applyQuaternion(rotation).add(plan.pose.position), rotation: rotation.multiply(new THREE.Quaternion().copy(descriptor.rotation)), ...(plan.settings ? { settings: plan.settings } : {}) });
     }
-    for (let i = 0; i < shapes.length; i++) for (let j = i + 1; j < shapes.length; j++) {
-      const a = shapes[i]!, b = shapes[j]!;
-      if (a.id === b.id || (!a.character && !b.character) || (!a.changed && !b.changed)) continue;
+    for (let i = 0; i < shapes.length; i++) {
+      const a=shapes[i]!;if(!a.character)continue;
+      for (let j = 0; j < shapes.length; j++) {
+      const b=shapes[j]!;
+      if (a.id === b.id || (b.character&&j<=i) || (!a.changed && !b.changed)) continue;
       const contact = a.shape.contactShape(a.position, a.rotation, b.shape, b.position, b.rotation, 0);
-      if (contact && contact.distance < -.001) geometryError('PHYSICS_CHARACTER_OVERLAP', `Candidate physics overlaps a character: ${a.id}, ${b.id}. Choose a non-overlapping pose or body size.`);
+      const coincident=a.character&&b.character&&contact?.distance===0&&a.shape.type===RAPIER.ShapeType.Capsule&&b.shape.type===RAPIER.ShapeType.Capsule;
+      const capsule=a.shape as RAPIER.Capsule;
+      const overlap=coincident&&new RAPIER.Capsule(capsule.halfHeight,capsule.radius-Math.min(1e-5,capsule.radius*.001)).intersectsShape(a.position,a.rotation,b.shape,b.position,b.rotation);
+      if (overlap||contact && contact.distance < -.001) geometryError('PHYSICS_CHARACTER_OVERLAP', `Candidate physics overlaps a character: ${a.id}, ${b.id}. Choose a non-overlapping pose or body size.`);
+    }
     }
     const geometryChanged = shapes.some(shape => shape.changed && !shape.character);
     this.clearanceLifts(shapes, new Set(shapes.filter(shape => shape.character && (shape.changed || geometryChanged)).map(shape => shape.id)));

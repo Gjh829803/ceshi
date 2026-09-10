@@ -1,3 +1,4 @@
+import {isHumanoidActorCommand,validateCharacterBinding} from './character-binding';
 import {claimCharacter} from './character-ownership';
 import type {ActorInput} from './humanoid/actor';
 import {ThreePhysics} from '../physics';
@@ -274,7 +275,7 @@ export class HumanoidRuntime implements PhysicsPort {
     if(animation)this.simulation.setHumanoidAssets(animation.availableHumanoidClips,animation.motionSources);
     this.presentation=new PresentationState(this.simulation);
     registerHumanoidHost(this, {
-      bindCharacter:(id,character,settings)=>this.bindCharacter(id,character,settings),
+      bindCharacter:(id,character,settings,prevalidated)=>this.bindCharacter(id,character,settings,prevalidated),
       isDisposed: () => this.disposed,
       command: command => { this.assertLive(); return this.commandOwned(command); },
       setEpisodeOwned: owned => { this.assertLive(); this.episodeOwned=owned; },
@@ -757,7 +758,7 @@ export class HumanoidRuntime implements PhysicsPort {
     const v=this.simulation.vehicles.find(v=>v.spec.id===id);return v?{id,positionMetersXYZ:tuple(v.position),velocityMetersPerSecondXYZ:tuple(v.velocity),isGrounded:v.grounded,collisionEntityIds:[]}:this.ordinaryPhysics.state(id);
   }
   hasActor(id:string):boolean{return id===this.options.character.instanceId||this.actors.has(id);}
-  allowsWorldCommand(type:string,id:string):boolean{return this.hasActor(id)&&(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(type)||(type==='entity.despawn'&&this.actors.has(id)));}
+  allowsWorldCommand(type:string,id:string):boolean{return this.hasActor(id)&&isHumanoidActorCommand(type)&&(type!=='entity.despawn'||this.actors.has(id));}
   private driveInput(id:string,drive:CharacterDrive|undefined):Input{
     if(!drive)return emptyInput();if(!('velocityMetersPerSecondXZ' in drive))throw new Error('HUMANOID_GROUND_DRIVE_REQUIRED');
     const [x,z]=drive.velocityMetersPerSecondXZ,tuning=this.actorController(id).movementTuning,walk=3.1*tuning.speedScale;
@@ -778,14 +779,11 @@ export class HumanoidRuntime implements PhysicsPort {
     if(this.disposed||generation!==this.lifecycleGeneration){character.dispose();throw new Error('HUMANOID_ACTOR_LOAD_STALE');}return character;
   }
   actorController(id:string){const controller=id===this.options.character.instanceId?this.simulation.humanoid:this.simulation.actors.get(id)?.controller;if(!controller)throw new Error(`HUMANOID_ACTOR_UNKNOWN: ${id}`);return controller;}
-  private bindCharacter(id:string,animation:Character,movement:CharacterOptions={}):void{
+  private bindCharacter(id:string,animation:Character,movement:CharacterOptions={},prevalidated=false):void{
     this.assertLive();this.assertRigidIds([id]);
     if(!animation.loaded||animation===this.options.character.animation||[...this.actors.values()].some(binding=>binding.animation===animation))throw new Error('HUMANOID_CHARACTER_BINDING_INVALID');
-    for(const [key,value] of Object.entries(movement)){if(!['heightMeters','radiusMeters','walkSpeedMetersPerSecond','runSpeedMetersPerSecond','jumpSpeedMetersPerSecond'].includes(key)||!Number.isFinite(value)||value<0||((key==='walkSpeedMetersPerSecond'||key==='runSpeedMetersPerSecond')&&value===0))throw new Error('HUMANOID_MOVEMENT_UNSUPPORTED');}
-    const root=animation.root;root.updateWorldMatrix(true,false);
-    const position=root.getWorldPosition(new THREE.Vector3()),rotation=root.getWorldQuaternion(new THREE.Quaternion()),scale=root.getWorldScale(new THREE.Vector3());
-    if(scale.distanceTo(new THREE.Vector3(1,1,1))>1e-9||!root.matrixWorld.elements.every(Number.isFinite)||root.parent&&!(root.parent instanceof THREE.Scene))throw new Error('HUMANOID_CHARACTER_TRANSFORM_INVALID');
-    const actor=this.simulation.addActor(id,position,new THREE.Euler().setFromQuaternion(rotation,'YXZ').y);
+    const {position,rotation,yaw}=validateCharacterBinding(animation,movement),root=animation.root;
+    const actor=this.simulation.addActor(id,position,yaw,prevalidated);
     try{actor.controller.setAvailableClips(animation.availableHumanoidClips,animation.motionSources);Object.assign(actor.controller.movementTuning,this.simulation.humanoid.movementTuning);this.environment.colliderBindings.added(id,actor.controller.capsule);}
     catch(error){this.simulation.removeActor(id);throw error;}
     this.applyActorMovement(actor.controller,movement);
@@ -807,9 +805,9 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   remove(id:string):void{if(this.actors.has(id)){this.simulation.removeActor(id);this.actors.delete(id);this.objects.delete(id);this.actorInputs.delete(id);this.actorLastInputs.delete(id);if(this.cameraTargetId===id){this.authored=true;this.cameraActor=undefined;}}else this.ordinaryPhysics.remove(id);}
   validateBatch(candidates:readonly PhysicsCandidate[],removed:readonly string[]=[]):void{
-    if(candidates.some(c=>c.kind==='character'||this.objects.has(c.id))||removed.some(id=>this.objects.has(id)&&!this.actors.has(id)))throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');
+    if(candidates.some(c=>this.objects.has(c.id))||removed.some(id=>this.objects.has(id)&&!this.actors.has(id)))throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');
     this.assertRigidIds(candidates.map(candidate=>candidate.id));
-    this.ordinaryPhysics.validateBatch(candidates,removed.filter(id=>!this.actors.has(id)));
+    this.ordinaryPhysics.validateBatch(candidates,removed);
   }
   refresh(id:string):void{this.ordinaryPhysics.refresh(id);}
   refreshMany(ids:readonly string[]):void{this.ordinaryPhysics.refreshMany(ids);}

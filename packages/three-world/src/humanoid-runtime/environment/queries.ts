@@ -3,7 +3,7 @@ import {WorldInteractions} from '../humanoid/world-interactions';
 import {validateEnvironmentIdentities} from '../map-validation';
 import {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {BorrowedPhysicsWorld} from '../../physics-host';
-import {DYNAMIC_PROP_COLLISION_GROUPS} from '../../config/physics';
+import {DYNAMIC_PROP_COLLISION_GROUPS,DEFAULT_CHARACTER_OPTIONS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import { Euler,Quaternion,Vector3 } from 'three';
@@ -64,7 +64,7 @@ export class EnvironmentQueries {
   readonly colliderBindings:PhysicsColliderBindings;
   readonly interactions:WorldInteractions;
   private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
-  borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h)};}
+  borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h),characterSettings:handle=>{const rig=[...this.rigs].find(rig=>rig.capsule.handle===handle);return rig?{...DEFAULT_CHARACTER_OPTIONS,heightMeters:2*(rig.capsule.halfHeight()+rig.capsule.radius()),radiusMeters:rig.capsule.radius(),collisionOffsetMeters:rig.controller.offset(),maximumSlopeRadians:rig.controller.maxSlopeClimbAngle()}:undefined;}};}
   navigationGeometry(){this.assertLive();return readNavigationGeometry(this.world,collider=>!this.queryExcluded.has(collider.handle));}
   beforePhysicsSubstep(callback:(fraction:number)=>void){this.physicsSubsteps.add(callback);return()=>{this.physicsSubsteps.delete(callback);};}
 

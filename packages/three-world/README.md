@@ -440,6 +440,15 @@ uses committed fixed/kinematic collider geometry, including map surfaces without
 visual meshes. Actual dynamic obstacles and other characters remain subject to
 live collision; an obstructed route can fail with a blocked result.
 
+Full humanoid roots use unit scale, yaw-only rotation and automatic local matrix
+updates, directly under an untransformed Scene or without a parent. Set the root
+position before binding. For runtime generation, register a character prototype
+with `template:{kind:'character',options:{humanoid:seed}}`. Registration retains
+an independent source instance, so the caller can then dispose `seed`; each
+`entity.spawn` creates a fresh rig. Failed or cancelled preparation releases its
+unpublished instance. Spawn collision validation includes the complete candidate
+scene and the current occupancy of objects whose movement takes time.
+
 `humanoid.set-input` and `humanoid.perform-action` accept optional `actorId`;
 omitting it selects the current input actor. Accepted actions remain bound to that
 actor and its generation across input switches. `setInput()` release callbacks
