@@ -65,11 +65,11 @@ export class Simulation {
   readonly vehicles:VehicleState[];
   characterControl=defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE);
   time=0;
-  controlledActorId:string;
-  get controlledActor():HumanoidActor{return this.actor(this.controlledActorId);}
+  controlledActorId:string|undefined;
+  get controlledActor():HumanoidActor{if(this.controlledActorId===undefined)throw new Error('HUMANOID_INPUT_ACTOR_REQUIRED');return this.actor(this.controlledActorId);}
   actor(id:string):HumanoidActor{const actor=this.actors.get(id);if(!actor)throw new Error(`HUMANOID_ACTOR_UNKNOWN: ${id}`);return actor;}
   constructor(readonly environment:EnvironmentQueries,specs:readonly VehicleSpec[]=[],initialActor?:{id:string;position?:Vector3;yaw?:number}){
-    this.controlledActorId=initialActor?.id??'';this.vehicles=specs.map(createVehicle);const q=environment;
+    this.controlledActorId=initialActor?.id;this.vehicles=specs.map(createVehicle);const q=environment;
     let parked=0;
     for(const v of this.vehicles){Object.assign(v,createVehicle(v.spec));
       const spawn=q.map.spawns.find(s=>s.vehicleId===v.spec.id);
@@ -92,10 +92,10 @@ export class Simulation {
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
   syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft),...part}))));}
   reset():void{
-    const selected=this.controlledActor,index=selected.vehicleIndex;
+    const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
     for(const actor of this.actors.values()){const p=actor.controller.checkpoint;actor.resetAt(new Vector3(p.x,p.y,p.z),p.yaw+Math.PI);}
     this.environment.resetProps();this.environment.interactions.reset();
-    if(index>=0)selected.visit(index);else selected.message='人物与交互物已复位';
+    if(selected&&index>=0)selected.visit(index);else if(selected)selected.message='人物与交互物已复位';
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{

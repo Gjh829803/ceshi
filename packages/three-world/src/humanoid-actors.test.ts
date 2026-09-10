@@ -22,6 +22,15 @@ async function setup(renderer?:THREE.WebGLRenderer,options:Partial<Parameters<ty
   const world=await createHumanoidWorld({map,...options,...(renderer?{renderer}:{}),resourceUrl:path=>`https://actors.test/${path}`});worlds.push(world);return world;
 }
 
+function rendererFixture(){
+  const win=new EventTarget(),doc=Object.assign(new EventTarget(),{defaultView:win,activeElement:null,body:{},documentElement:{},hidden:false});
+  Object.assign(win,{document:doc,performance:globalThis.performance});vi.stubGlobal('window',win);vi.stubGlobal('requestAnimationFrame',vi.fn(()=>1));vi.stubGlobal('cancelAnimationFrame',vi.fn());
+  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:doc,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:()=> 'data:image/png;base64,dGVzdA=='});
+  let ratio=1;const size=new THREE.Vector2(800,600);
+  const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
+  return {win,renderer};
+}
+
 it('binds three full rigs, routes explicit actor input and preserves independent mixer ownership',async()=>{
   const world=await setup(),runtime=world.humanoid!;
   const a=await runtime.createCharacter(),b=await runtime.createCharacter();
@@ -214,11 +223,7 @@ it('does not spawn into a wall that only starts moving away when the plan commit
 });
 
 it('prepares Episode on the selected NPC and keeps the original player at its baseline',async()=>{
-  const win=new EventTarget(),doc=Object.assign(new EventTarget(),{defaultView:win,activeElement:null,body:{},documentElement:{},hidden:false});
-  Object.assign(win,{document:doc,performance:globalThis.performance});vi.stubGlobal('window',win);vi.stubGlobal('requestAnimationFrame',vi.fn(()=>1));vi.stubGlobal('cancelAnimationFrame',vi.fn());
-  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:doc,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:()=> 'data:image/png;base64,dGVzdA=='});
-  let ratio=1;const size=new THREE.Vector2(800,600);
-  const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
+  const {win,renderer}=rendererFixture();
   const world=await setup(renderer,{vehicles:[{instanceId:'car',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new THREE.Group()}]}),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.setCameraFollow({targetEntityId:'a'});world.step({},0);
   await world.start();world.stop();
   const episode=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
@@ -331,4 +336,79 @@ it('keeps moving ordinary and full humanoid capsules separated without navigatio
   let penetration=0;
   for(let tick=0;tick<180;tick++){world.step({humanoid:{...emptyInput(),forward:1}},1);const contact=player.capsule.contactCollider(collider!,.1);penetration=Math.max(penetration,-(contact?.distance??0));}
   expect(penetration).toBeLessThan(.003);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeLessThan(world.getEntityState('plain').positionWorldMetersXYZ[2]);
+});
+
+it('hands input between ordinary and full actors without redirecting NPC commands or camera ownership',async()=>{
+ const world=await setup(),runtime=world.humanoid!,object=new THREE.Group();object.position.set(3,.04,0);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
+ world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});world.step({},0);
+ const player=world.getEntityState('player').positionWorldMetersXYZ;
+ world.step({moveZRatio:-1},60);
+ expect(world.snapshot().humanoid).toBeUndefined();expect(world.describe().humanoid).toBeUndefined();
+ expect(()=>runtime.snapshot()).toThrow('HUMANOID_INPUT_ACTOR_REQUIRED');expect(runtime.snapshot('player').character.instanceId).toBe('player');
+ expect((await world.execute({type:'humanoid.set-input',input:{...emptyInput(),forward:1}})).status).toBe('rejected');
+ expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(player[2]);
+ expect(Math.abs(world.getEntityState('ordinary').positionWorldMetersXYZ[2])).toBeGreaterThan(1);
+ expect((await world.execute({type:'humanoid.set-input',actorId:'player',input:{...emptyInput(),forward:1}})).status).toBe('applied');
+ world.step({},30);expect(runtime.inspectControls('player').lastApplied?.input.forward).toBe(1);
+ world.setControlledEntity('player');expect(world.snapshot().humanoid?.character.instanceId).toBe('player');
+ world.setCameraFollow({targetEntityId:'player'});world.step({},1);
+ await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');expect(world.snapshot().humanoid).toBeUndefined();world.step({},1);
+});
+
+it('keeps one camera writer when following ordinary or full actors and when authoring the camera',async()=>{
+ const world=await setup(),runtime=world.humanoid!,object=new THREE.Group();object.position.set(4,.04,0);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
+ world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});
+ const follow=vi.spyOn(runtime.followCamera,'update'),present=vi.spyOn(runtime.followCamera,'present');
+ runtime.applyProfile({view:{defaultPerspective:'first-person'}});expect(runtime.cameraMode).toBe('authored');
+ world.step({},30);world.render();expect(follow).not.toHaveBeenCalled();expect(present).not.toHaveBeenCalled();
+ world.setCameraPerspective('first-person');expect(world.snapshot().camera.perspective).toBe('first-person');
+ world.setCameraFollow({targetEntityId:'player'});follow.mockClear();world.step({},10);expect(follow).toHaveBeenCalledTimes(10);
+ world.useAuthoredCamera();follow.mockClear();const camera=world.camera.matrix.clone();world.step({},10);expect(follow).not.toHaveBeenCalled();expect(world.camera.matrix.equals(camera)).toBe(true);
+});
+
+
+it.each([false,true])('records an ordinary controlled actor alongside full humanoids through Episode (custom=%s)',async(custom)=>{
+ const {win,renderer}=rendererFixture(),world=await setup(renderer),object=new THREE.Group();object.position.set(3,.04,0);
+ if(custom)world.registerMovement({id:'flight',version:1,description:'Independent vertical flight',initialState:null,
+  update:({input,state})=>({state,velocityWorldMetersPerSecondXYZ:[0,(input.moveYRatio??0)*2,0],applyGravity:false}),
+  episode:{startSupport:'free',input:()=>({moveYRatio:1})}});
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{})});
+ world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});
+ await world.start();world.stop();const episode=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
+ expect(episode.probeStart({positionWorldMetersXYZ:[-4,custom ? .2 : 1.73,0],facingYawRadians:0}).isValid).toBe(false);
+ expect(episode.capabilities().humanoid).toBeUndefined();expect(episode.capabilities().movement).toMatchObject({episodeInput:custom?'custom':'ground',heightMeters:1.2,radiusMeters:.3});
+ const start={positionWorldMetersXYZ:[3,custom?3:.03,5] as const,facingYawRadians:0,cameraPerspective:'first-person' as const};
+ expect(episode.probeStart({...start,humanoid:{vehicleInstanceId:'missing'}})).toMatchObject({isValid:false,diagnostics:[{code:'EPISODE_HUMANOID_START_UNSUPPORTED'}]});
+ const before=await episode.prepareSegment(start,{widthPixels:640,heightPixels:360}),player=before.entities.find(entity=>entity.id==='player')!;
+ const input=custom?episode.routeInput!({targetPositionWorldMetersXYZ:[3,8,5],gait:'walk'}):{moveZRatio:-1};
+ const after=episode.advance(input,60),moving=after.entities.find(entity=>entity.id==='ordinary')!;
+ expect(after.humanoid).toBeUndefined();expect(after.camera.perspective).toBe('first-person');
+ expect(()=>world.setCameraFollow({targetEntityId:'player'})).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot().camera.perspective).toBe('first-person');
+ expect(()=>world.setControlledEntity('player')).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+ if(custom)expect(moving.positionWorldMetersXYZ[1]).toBeGreaterThan(4);else expect(moving.positionWorldMetersXYZ[2]).toBeLessThan(4);
+ expect(after.entities.find(entity=>entity.id==='player')!.positionWorldMetersXYZ[2]).toBeCloseTo(player.positionWorldMetersXYZ[2]);
+ expect(episode.frame('image/png').snapshot.errors).toEqual([]);
+ expect((await episode.execute({type:'camera.set-perspective',perspective:'third-person'})).status).toBe('applied');
+ episode.release();await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');world.step({},1);
+});
+
+
+it('rejects a missing full camera target without poisoning the remaining ordinary world',async()=>{
+ const world=await setup(),object=new THREE.Group();object.position.set(3,.04,0);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary'});world.step({},0);
+ expect((await world.execute({type:'entity.despawn',entityId:'player'})).status).toBe('applied');
+ const before=world.camera.matrix.clone();expect((await world.execute({type:'humanoid.set-camera-mode',mode:1})).status).toBe('rejected');
+ expect((await world.execute({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'first-person'}}})).status).toBe('applied');
+ expect(world.camera.matrix.equals(before)).toBe(true);expect(()=>world.step({moveXRatio:1},60)).not.toThrow();expect(world.snapshot().errors).toEqual([]);
+ world.humanoid!.switchMap({...map,id:'ordinary-only-map'});world.step({},1);await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');expect(world.snapshot().humanoid).toBeUndefined();expect(world.humanoid!.hasActor('player')).toBe(true);world.step({},1);
+});
+
+it('continues observation after deleting a camera NPC and preserves ownership after rejected follow options',async()=>{
+ const world=await setup(),runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(3,.04,0);world.addCharacter({id:'npc',humanoid:npc});
+ const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
+ const before=world.snapshot().camera;expect(()=>world.setCameraFollow({targetEntityId:'ordinary',collisionRadiusMeters:0})).toThrow();expect(world.snapshot().camera).toEqual(before);
+ world.setCameraFollow({targetEntityId:'npc'});expect((await world.execute({type:'entity.despawn',entityId:'npc'})).status).toBe('applied');
+ expect(world.describe().humanoid!.configuration.effective.camera).toMatchObject({owner:'authored',settings:null,framing:{status:'not-applicable'}});world.step({},1);
 });

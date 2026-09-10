@@ -20,7 +20,7 @@ import { GRAND_PRIX } from "../../../shared/preset-content/environment/grand-pri
 import {
   applyControlProfile,
   applyCameraProfile,
-  readEffectiveProfile,
+  readEditableProfile,
 } from "../../../shared/preset-content/platform/profile-runtime";
 import {
   getDefaultProfile as getPresetDefaultProfile,
@@ -646,7 +646,7 @@ const workbench = mountWorkbench(document.body, {
   onPrepare: prepareSelection,
   getMapId: () => session.map.id,
   getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
-  getProfile: (id) => readEffectiveProfile(runtime, profiles.get(id)!),
+  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
   applyProfile: (value) => {
     const profile = parseAssetProfile(value);
     applyControlProfile(runtime, profile);
@@ -720,7 +720,7 @@ const inspector = mountInspector(el("inspectorHost"), {
     state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : character.clipLabel,
     color: sim.controlledActor.vehicle?.spec.color ?? "#b4d7c2",
   }),
-  getProfile: (id) => readEffectiveProfile(runtime, profiles.get(id)!),
+  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
   applyProfile: (value, tab) => {
     const profile = parseAssetProfile(value);
     if (tab === "movement") applyControlProfile(runtime, profile);

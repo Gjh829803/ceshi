@@ -108,7 +108,7 @@ export class ThreeWorld implements API.World {
  }
  getKeyBindings(){return this.engine.keyboard.getKeyBindings();}
  setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void{this.alive();this.engine.keyboard.setKeyBindings(overrides);}
- get cameraMode():API.CameraState['mode']{return this.engine.humanoid?.cameraMode??this.engine.cameraRig.mode;}
+ get cameraMode():API.CameraState['mode']{return this.engine.cameraMode;}
  get isRunning():boolean{return this.engine.isRunning;}
  get simulationTick():number{return this.engine.simulationTick;}
  private alive():void{if(this.disposed)throw failure('WORLD_DISPOSED');}
@@ -166,8 +166,8 @@ export class ThreeWorld implements API.World {
   const {asset:_asset,humanoid:_humanoid,...metadata}=options;const binding=runtimeActor??(options.humanoid?{object,animation:options.humanoid}:undefined);this.engine.addCharacter({...metadata,object,character,...(binding?{runtimeActor:binding}:{}),...(asset?{asset:this.assets.internal(asset)}:{})},prevalidated);
   this.entries.set(options.id,{id:options.id,object,options,role:'actor',body,...(asset?{asset}:{}),generation:++this.nextGeneration,geometryVersion:0,movementId,movementState:movementId==='ground'?null:cloneJson(this.movements.get(movementId)!.initialState),physicsKind:'character'});this.touch();return object;
  }
- setControlledEntity(id:string):void{this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
- setCameraFollow(options:API.CameraFollowOptions={}):void{this.engine.setCameraFollow(options);}
+ setControlledEntity(id:string):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
+ setCameraFollow(options:API.CameraFollowOptions={}):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraFollow(options);}
  setCameraPerspective(perspective:API.CameraPerspective):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraPerspective(perspective);}
  useAuthoredCamera():THREE.Camera{this.humanoid?.useAuthoredCamera();return this.engine.cameraRig.useAuthoredCamera();}
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
@@ -415,11 +415,10 @@ export class ThreeWorld implements API.World {
   const promise=Promise.resolve().then(():API.CommandReceipt=>{try{
    this.alive();if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');
    if(options.expectedWorldRevision!==undefined&&options.expectedWorldRevision!==this.revision)throw failure('STALE_CONTEXT');
-   const actorId='actorId' in command?command.actorId??this.humanoid.inputActorId:this.humanoid.inputActorId;
    const result=lease?humanoidHost(this.humanoid).command(cloneJson(command)):this.humanoid.command(cloneJson(command));
-   if(result?.status==='rejected')throw failure(result.code,result.message);this.pauseMountedNavigation(actorId);this.touch();
-   if(result?.status==='running'){const controller=this.humanoid.actorController(actorId),generation=this.entity(actorId).generation;const requestId=result.requestId;const operationId=this.operations.create('humanoid-action',()=>{const cancelled=controller.skills.cancel(requestId);if(cancelled?.status==='running')return false;this.humanoidActivities.delete(operationId);});this.humanoidActivities.set(operationId,{requestId,actorId,generation,controller});this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
-   const resultInfo=command.type==='vehicle.approach'?{kind:'relocation' as const,entityId:actorId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(actorId).positionWorldMetersXYZ}:undefined;
+   if(result?.status==='rejected')throw failure(result.code,result.message);this.pauseMountedNavigation();this.touch();
+   if(result?.status==='running'){const actorId='actorId' in command?command.actorId??this.humanoid.inputActorId:this.humanoid.inputActorId;const controller=this.humanoid.actorController(actorId),generation=this.entity(actorId).generation;const requestId=result.requestId;const operationId=this.operations.create('humanoid-action',()=>{const cancelled=controller.skills.cancel(requestId);if(cancelled?.status==='running')return false;this.humanoidActivities.delete(operationId);});this.humanoidActivities.set(operationId,{requestId,actorId,generation,controller});this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
+   const resultInfo=command.type==='vehicle.approach'?{kind:'relocation' as const,entityId:command.actorId??this.humanoid.inputActorId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(command.actorId??this.humanoid.inputActorId).positionWorldMetersXYZ}:undefined;
    return {status:'applied',commandId,worldRevision:this.revision,...(resultInfo?{result:resultInfo}:{})};
   }catch(error){return {status:'rejected',commandId,worldRevision:this.revision,error:runtimeError(error)};}});
   this.requests.set(commandId,{body,promise});return promise;
@@ -678,7 +677,7 @@ export class ThreeWorld implements API.World {
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
-  return {...(this.humanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
+  return {...(this.humanoid&&this.engine.controlledHumanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
    entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
     if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');
@@ -690,7 +689,7 @@ export class ThreeWorld implements API.World {
   };
  }
  snapshot():API.WorldSnapshot{
-  const engine=this.engine.snapshot();return {...(this.humanoid?{humanoid:this.humanoid.snapshot()}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:engine.simulationTick,simulationSeconds:engine.simulationSeconds,isRunning:engine.isRunning,...(engine.controlledEntityId?{controlledEntityId:engine.controlledEntityId}:{}),camera:this.humanoid?.cameraSnapshot()??this.engine.cameraRig.snapshot(),entities:[...this.entries.keys()].map(id=>this.getEntityState(id)),errors:[...this.errors,...engine.errors.map(error=>runtimeError(error.diagnostic??error.message,error.code,error.entityId?[error.entityId]:[]))]};
+  const engine=this.engine.snapshot();return {...(this.engine.controlledHumanoid?{humanoid:this.engine.controlledHumanoid.snapshot()}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:engine.simulationTick,simulationSeconds:engine.simulationSeconds,isRunning:engine.isRunning,...(engine.controlledEntityId?{controlledEntityId:engine.controlledEntityId}:{}),camera:this.engine.cameraSnapshot(),entities:[...this.entries.keys()].map(id=>this.getEntityState(id)),errors:[...this.errors,...engine.errors.map(error=>runtimeError(error.diagnostic??error.message,error.code,error.entityId?[error.entityId]:[]))]};
  }
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
@@ -707,7 +706,11 @@ export class ThreeWorld implements API.World {
   const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
   const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');if(start.cameraPerspective!==undefined&&!['first-person','third-person'].includes(start.cameraPerspective))throw failure('EPISODE_START_CAMERA_INVALID');};
   const adapter=()=>world.movements.get(controlled().movementId)?.episode;
-  const probe=(start:EpisodeStart)=>world.humanoid?world.humanoid.probeEpisodeStart(start):world.engine.physics.probeCharacterStart(controlled().id,start.positionWorldMetersXYZ,adapter()?.startSupport??'ground');
+  const probe=(start:EpisodeStart)=>{
+   if(world.engine.controlledHumanoid)return world.engine.controlledHumanoid.probeEpisodeStart(start);
+   if(start.humanoid!==undefined)return {isValid:false,requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,diagnostics:[{code:'EPISODE_HUMANOID_START_UNSUPPORTED',message:'The controlled actor does not have full humanoid or vehicle boarding capabilities.'}]};
+   return world.engine.physics.probeCharacterStart(controlled().id,start.positionWorldMetersXYZ,adapter()?.startSupport??'ground');
+  };
   const requirePrepared=()=>{world.alive();if(world.engine.isRunning)throw failure('EPISODE_LIVE_CLOCK_ACTIVE');if(world.episodeLease?.state!=='prepared')throw failure('EPISODE_SEGMENT_NOT_PREPARED');};
   const release=()=>{const lease=world.episodeLease;if(!lease)return;
    const host=world.humanoid?humanoidHost(world.humanoid):undefined;
@@ -722,8 +725,8 @@ export class ThreeWorld implements API.World {
      if(candidate.body){const body=world.engine.physics.characterSettings(candidate.id),position=worldPose(candidate.object).position;bounds.expandByPoint(position.clone().add(new THREE.Vector3(-body.radiusMeters,0,-body.radiusMeters)));bounds.expandByPoint(position.clone().add(new THREE.Vector3(body.radiusMeters,body.heightMeters,body.radiusMeters)));}
     }
     if(bounds.isEmpty())bounds.expandByPoint(worldPose(entry.object).position);
-    return {...(world.humanoid?{humanoid:world.humanoid.episodeCapabilities()}:{}),schemaVersion:1,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
-    movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,episodeInput:world.humanoid?'humanoid':entry.movementId==='ground'?'ground':adapter()?'custom':'unsupported',startSupport:adapter()?.startSupport??'ground',walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
+    return {...(world.engine.controlledHumanoid?{humanoid:world.engine.controlledHumanoid.episodeCapabilities()}:{}),schemaVersion:1,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
+    movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,episodeInput:world.engine.controlledHumanoid?'humanoid':entry.movementId==='ground'?'ground':adapter()?'custom':'unsupported',startSupport:adapter()?.startSupport??'ground',walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
     camera:{mode:world.cameraMode,segmentInitialization:'relative-authored-pose'},maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
    probeStart(start){validateStart(start);return probe(start);},
    async prepareSegment(start,viewport){
@@ -743,10 +746,9 @@ export class ThreeWorld implements API.World {
      const entry=controlled(),startProbe=probe(start);
      if(!startProbe.isValid)throw failure(startProbe.diagnostics[0]!.code,startProbe.diagnostics[0]!.message,'content',startProbe.diagnostics[0]!.entityIds);
      renderer.setPixelRatio(1);world.engine.resize(viewport.widthPixels,viewport.heightPixels);
-     if(world.humanoid)humanoidHost(world.humanoid).prepareEpisodeStart({...start,positionWorldMetersXYZ:startProbe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(startProbe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
+     if(world.engine.controlledHumanoid)humanoidHost(world.engine.controlledHumanoid).prepareEpisodeStart({...start,positionWorldMetersXYZ:startProbe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(startProbe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
      if(start.cameraPerspective!==undefined){
-      if(world.humanoid)humanoidHost(world.humanoid).command({type:'humanoid.set-camera-mode',mode:start.cameraPerspective==='first-person'?1:0});
-      else world.engine.cameraRig.setPerspective(start.cameraPerspective);
+      world.engine.setCameraPerspective(start.cameraPerspective);
      }
      world.engine.step({},1);world.engine.render();
      if(world.snapshot().errors.length)throw failure('EPISODE_PREPARATION_RUNTIME_ERROR');
@@ -767,8 +769,7 @@ export class ThreeWorld implements API.World {
      const commandId=`episode-command-${++world.nextCommand}`;
      try{
       if(!['first-person','third-person'].includes(command.perspective))throw failure('CAMERA_PERSPECTIVE_INVALID');
-      if(world.humanoid)humanoidHost(world.humanoid).command({type:'humanoid.set-camera-mode',mode:command.perspective==='first-person'?1:0});
-      else world.engine.setCameraPerspective(command.perspective);
+      world.engine.setCameraPerspective(command.perspective);
       world.touch();return Promise.resolve({status:'applied',commandId,worldRevision:world.revision});
      }catch(error){return Promise.resolve({status:'rejected',commandId,worldRevision:world.revision,error:runtimeError(error)});}
     }

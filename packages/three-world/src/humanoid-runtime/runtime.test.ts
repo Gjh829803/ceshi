@@ -781,7 +781,7 @@ it('separates the saved profile from active resolved camera settings without mut
   expect(config.effective.control).not.toHaveProperty('rollResponse');
   expect(world.snapshot()).toEqual(before);
   r.setCameraMode(1);
-  expect(r.inspectConfiguration().effective.camera.settings.followResponsePerSecond).toBe(7);
+  expect(r.inspectConfiguration().effective.camera.settings!.followResponsePerSecond).toBe(7);
   r.approach('car-1');r.enter('car-1');world.step({},31);
   expect(r.inspectConfiguration().effective.camera.settings).toMatchObject({baseFovDegrees:70,followResponsePerSecond:8,collisionRadiusMeters:.25});
   config.profile.character!.speed=999;config.effective.control.speed=999;

@@ -12,11 +12,12 @@ export interface HumanoidHostAccess {
   bindCharacter(id:string,binding:import('./character-binding').RuntimeActorBinding,settings?:import('../engine-contracts').CharacterOptions,prevalidated?:boolean):void;
   command(command: HumanoidCommand): SkillResult | undefined;
   setEpisodeOwned(owned: boolean): void;
-  advance(input: WorldInput, dt: number, pointer?: CameraRigInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>): void;
+  advance(input: WorldInput, dt: number, pointer?: CameraRigInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>,controlYawRadians?:number): void;
   reset(): void;
   finishReset():void;
   clearInput(): void;
-  setControlledActor(id:string):void;
+  setControlledActor(id:string|undefined):void;
+  teleportCharacter(id:string,position:import('../engine-contracts').Vec3):void;
   prepareEpisodeStart(start: EpisodeStart): void;
   present(alpha: number, tick: number, view?:'world'|'object'): () => void;
 }

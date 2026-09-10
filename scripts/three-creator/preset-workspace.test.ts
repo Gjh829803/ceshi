@@ -4,7 +4,7 @@ import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
 import {createCapsuleDebug,createCollisionDebug} from '../../shared/preset-content/humanoid/capsule-debug';
 import {createWorld,humanoid} from '@worldkit/three';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '../../shared/preset-content/platform/profiles';
-import {applyCameraProfile,applyControlProfile,readEffectiveProfile} from '../../shared/preset-content/platform/profile-runtime';
+import {applyCameraProfile,applyControlProfile,readEditableProfile} from '../../shared/preset-content/platform/profile-runtime';
 import {getMap} from '../../shared/preset-content/environment/maps';
 import {GRAND_PRIX} from '../../shared/preset-content/environment/grand-prix';
 import {SPECS} from '../../shared/preset-content/config';
@@ -164,8 +164,9 @@ describe('player workspace configuration',()=>{
  it('reads live SDK movement tuning before a camera-only edit',async()=>{
   const rover=SPECS.find(spec=>spec.id==='rover')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:rover,object:new Group()}]}});
   try{const runtime=world.humanoid!,cached=getDefaultProfile('rover')!;runtime.applyProfile({vehicles:{rover:{coastDeceleration:2}}});
-   const effective=readEffectiveProfile(runtime,cached);expect(effective.control.coastDeceleration).toBe(2);
+   const effective=readEditableProfile(runtime,cached);expect(effective.control.coastDeceleration).toBe(2);
    effective.camera.distance=10;applyCameraProfile(runtime,effective);expect(runtime.exportProfile().vehicles?.rover?.coastDeceleration).toBe(2);
+   world.useAuthoredCamera();const editable=readEditableProfile(runtime,effective);expect(editable.camera).toEqual(effective.camera);expect(runtime.inspectConfiguration().effective.camera.settings).toBeNull();
   }finally{world.dispose();}
  });
  it('uses the authored indoor camera default while keeping explicit distance edits across maps',async()=>{

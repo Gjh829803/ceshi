@@ -58,14 +58,20 @@ it if it will not be retried.
 The same humanoid world accepts ordinary NPCs through
 `world.addCharacter({id,object,body,movement})` or an `AssetInstance` binding.
 Their own capsule dimensions, navigation, custom movement intent and asset mixer
-run in the shared fixed tick. Character colliders participate in physical contact
+run in the shared fixed tick. `world.setControlledEntity(id)` can select either
+kind; `world.setCameraFollow({targetEntityId:id})` chooses the camera target
+independently. Ordinary first-person views declare a local `view.eyeOffsetLocalMetersXYZ`. Character colliders participate in physical contact
 and local avoidance, but are excluded from static navigation geometry. Full
 humanoid abilities still require a complete humanoid binding.
 
 `WorldObservation.controlledObject` is the current controlled entity's live
 `THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
-It is separate from `world.humanoid`; observers expose runtime state through
-`snapshot().humanoid`. Input action edges are `input.humanoid.actions`, while
+It is separate from `world.humanoid`. `snapshot().humanoid`, `describe().humanoid`
+and Episode humanoid capabilities describe the currently controlled full actor;
+they are absent when an ordinary character is controlled. Full NPCs remain
+available through explicit actor IDs, including `world.humanoid.snapshot(actorId)`.
+A humanoid request without an actor ID requires a controlled full actor; it never
+selects the previous humanoid silently. Input action edges are `input.humanoid.actions`, while
 movement and vehicle axes share the same `input.humanoid` envelope.
 
 Use `humanoid.perform-action` for contextual humanoid actions, `vehicle.*` for
@@ -189,6 +195,13 @@ both entity metadata and runtime state, even for zero ticks. Finish registration
 first. If resources or parameters need initialization, await `world.start()` and
 then stop before stepping. Invalid input and failed prototype preparation cannot
 leave a partially sealed baseline.
+The fixed engine activates one camera writer. Changing the controlled actor does
+not change the camera target. Following an ordinary actor releases the humanoid
+camera; following a full actor releases the ordinary rig. `useAuthoredCamera()`
+releases both. A rejected follow/mode request leaves the current owner intact.
+Editing an inactive humanoid camera's default perspective only stores the setting;
+explicit camera commands choose its owner. In humanoid configuration inspection,
+`effective.camera.settings` is null when that follow camera is inactive.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:nonhuman-subject -->
@@ -637,7 +650,8 @@ default. Episode starts inherit it unless `start.humanoid.cameraMode` explicitly
 selects a view for that segment; the override does not change the saved default.
 
 Use `world.humanoid.applyProfile({view: {...}})` or `humanoid.apply-profile` to update
-settings. Setting `defaultPerspective` also selects it immediately; updating only
+settings. Setting `defaultPerspective` selects it immediately only while the
+humanoid follow camera is active; otherwise it stores the next default. Updating only
 `keyboardToggleEnabled` preserves the current view. Disabling the shortcut does
 not disable programmatic `world.humanoid.setCameraMode(0 | 1 | 2)` or
 `humanoid.set-camera-mode` commands. `cameraTogglePressed` is the corresponding one-shot

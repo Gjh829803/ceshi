@@ -88,13 +88,14 @@ Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消�
 普通 Mesh/AssetInstance NPC 已接入共享物理、导航、自定义移动和动画，旧注册限制
 已删除；真实 Creator/Episode 四角色浏览器和生命周期边界通过，见
 [混合 NPC 验证](../../reviews/2026-09-11-mixed-character-npcs.md)。
-普通角色成为受控主角时的相机与 Episode 选择仍需继续迁移。
+普通角色成为受控主角时的输入、相机和 Episode 也已按实际能力迁移，
+见 [混合主角验证](../../reviews/2026-09-11-mixed-character-control.md)。
 
 - [x] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [x] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
 - [x] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
 - [x] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段提交与验证记录。
-- [ ] 同一个 Humanoid world 的普通 Mesh/AssetInstance 角色与完整人形共享物理、输入/自主移动及动画；清除旧注册限制，明确相机与 Episode 选择归属。
+- [x] 同一个 Humanoid world 的普通 Mesh/AssetInstance 角色与完整人形共享物理、输入/自主移动及动画；清除旧注册限制，明确相机与 Episode 选择归属。
 
 ## R3：共享目标与资源
 
