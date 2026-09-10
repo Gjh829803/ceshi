@@ -100,4 +100,3 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
   }
  }finally{world.dispose();vi.unstubAllGlobals();}
 },30000);
-

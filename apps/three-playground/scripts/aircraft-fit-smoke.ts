@@ -25,5 +25,3 @@ try{
  }
  assert.deepEqual(errors,[]);await writeFile(output+'/fit-browser.json',JSON.stringify({vehicles:['plane','trainer-plane'],views:['side','front','rear','oblique','contacts','exit'],errors},null,2));
 }finally{await browser.close();}
-
-
