@@ -475,6 +475,14 @@ with velocity cleared. It does not walk there. Its applied command receipt
 includes `result.kind:"relocation"`, the character/vehicle IDs and actual position;
 use ordinary input for visible travel, then `vehicle.enter` when eligible.
 
+For a boarding decision, read `world.humanoid.inspectBoarding(instanceId)`:
+it identifies the actual approach position, eligibility and rejection
+reason. `inspectControls()` reports the override and last applied controller
+input with its simulation time; `inputGuide()` describes the active family's
+channels. These methods are included in the `mounted-interaction` / `humanoid`
+declaration response. Host readers can use `world_inspect` description fields
+`humanoid.boarding`, `controlState` and `inputGuide` without reading solver internals.
+
 ```ts
 await world.execute({type:'humanoid.apply-profile',profile:{character:{
   maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
@@ -568,6 +576,30 @@ world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})
 world_preview({view:'current'})
 world_inspect({sections:['description']})
 ```
+
+`start()` starts the clock, not the user's first action. The public handoff is
+`world.humanoid.setCameraMode(0 | 1 | 2)`; there is no `humanoid.camera` method.
+Call it from the scene's chosen play input or start button. The optional
+[keyboard handoff example](../../examples/three-creator/vehicle-camera/opening-camera.ts)
+uses current movement/jump/boarding bindings on the focused gameplay surface:
+
+```ts
+// After configuring the authored pose, before the first start:
+world.useAuthoredCamera();
+installOpeningCameraHandoff(world, presentation.inputSurface);
+await world.start();
+presentation.focus();
+```
+
+Read the example via `creator_get_examples({topic:'vehicle-camera',files:['opening-camera.ts']})`
+and import its function into the scene. It leaves idle openings, paused worlds,
+UI input and ordinary camera switching alone; reset needs no extra listener.
+This particular example starts on movement, jump or boarding keys, not arbitrary
+pointer or semantic input. Choose the trigger required by the scene. Creator
+keyboard steps exercise the same DOM listener. For a semantic-input plan, select
+the camera with a `humanoid.set-camera-mode` command in the first play step (and
+after a reset when play resumes). Episode independently selects its segment
+camera and pauses the live clock; scene input handlers must not take it over.
 
 `world_preview({view:'current'})` preserves the current view without resetting or
 advancing simulation. Its `cameraObservation` includes `cameraOverrides` (explicit

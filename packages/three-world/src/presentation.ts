@@ -84,6 +84,7 @@ export class ThreePresentation implements API.WorldPresentation {
    ...(this.displayed?{sourceFrame:{...this.displayed.source}}:{}),...(this.lastError?{lastError:this.lastError}:{})};
  }
  focus():void {this.alive();this.host.focus();}
+ get inputSurface():HTMLElement {this.alive();return this.surface;}
  private mount(element:HTMLElement,options:{readonly interactive?:boolean}={}):()=>void {
   this.alive();if(element.ownerDocument!==this.uiRoot.ownerDocument||element.contains(this.stage)||element===this.stage)fail('UI_ELEMENT_INVALID');
   if(this.mounts.has(element))fail('UI_ELEMENT_ALREADY_MOUNTED');
