@@ -14,7 +14,7 @@ const canvas=document.createElement('canvas');canvas.style.cssText='display:bloc
 const a=Math.atan(.2);
 const map:EnvironmentDefinition={id:'raft-course',name:'橡皮艇岸坡试验',description:'陆地下滑、弹性接触、入水与划桨',bounds:{min:[-120,-30,-100],max:[120,100,300]},
  boxes:[{id:'floor',position:[0,-11,100],size:[240,2,400],color:'#cccccc'},{id:'ramp',position:[0,-.2*Math.cos(a),0],size:[16,.4,40/Math.cos(a)],rotation:[a,0,0],color:'#dddddd'},{id:'board-step',position:[2.1,2.9,-15],size:[1.5,.2,3],color:'#eeeeee'},{id:'pier',position:[0,1,65],size:[14,4,.6],color:'#cccccc'}],
- water:[{id:'water',min:[-119,-10,0],max:[119,0,299],surface:0}],regions:[{id:'water',name:'Shore',description:'Sloping bank and water',center:[0,0,90],size:[230,390],color:'#67a9bb',modes:['character','kayak']}],
+ water:[{id:'water',min:[-119,-10,0],max:[119,0,299],surface:0}],regions:[{id:'water',name:'Shore',description:'Sloping bank and water',center:[0,0,90],size:[230,390],color:'#67a9bb',modes:['character','paddled_boat']}],
  spawns:[{id:'raft-start',vehicleId:'raft-instance-1',name:'橡皮艇',position:[0,3.95,-15],yaw:0,regionId:'water'}],playerSpawn:[1.9,3.015,-15]};
 const waterMesh=new THREE.Mesh(new THREE.PlaneGeometry(238,299),new THREE.MeshStandardMaterial({color:'#4d97b1',roughness:1}));waterMesh.rotation.x=-Math.PI/2;waterMesh.position.set(0,0,149.5);scene.add(waterMesh);
 for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);if(box.rotation)mesh.rotation.set(...box.rotation);scene.add(mesh);}

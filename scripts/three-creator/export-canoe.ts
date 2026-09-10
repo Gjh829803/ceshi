@@ -24,7 +24,7 @@ const asset={id:'vehicle.canoe',displayName:'单桨木舟 / CANOE',path:'vehicle
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
   actions:{},limitations:['Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation.','W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-canoe.ts'},resources:[],
-  locomotionBindingIds:['vehicle.canoe'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('kayak',CANOE_SPEC),...CANOE_SPEC}},
+  locomotionBindingIds:['vehicle.canoe'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('paddled_boat',CANOE_SPEC),...CANOE_SPEC}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:CANOE_SPEC.seat}],collision:CANOE_SPEC.envelope};
 const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
 if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;

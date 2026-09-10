@@ -24,7 +24,7 @@ const asset={id:'vehicle.kayak',displayName:'单人皮划艇 / KAYAK',path:'vehi
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
   actions:{},limitations:['Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation.','W paddles, S back-paddles, A/D sweep, Space braces to slow; propulsion requires immersion.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-kayak.ts'},resources:[],
-  locomotionBindingIds:['vehicle.kayak'],vehicle:{schemaVersion:1,spec:{...KAYAK_SPEC,...defaultMovementSettings('kayak',KAYAK_SPEC)}},
+  locomotionBindingIds:['vehicle.kayak'],vehicle:{schemaVersion:1,spec:{...KAYAK_SPEC,...defaultMovementSettings('paddled_boat',KAYAK_SPEC)}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:KAYAK_SPEC.seat}],collision:KAYAK_SPEC.envelope};
 const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
 if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;

@@ -31,24 +31,24 @@ export const CONTROL_SCHEMA_PROPERTIES=Object.freeze(Object.fromEntries(Object.e
  * silently rewrite independent coasting or braking settings. */
 export function defaultMovementSettings(mode:Mode|'character',base:CoreControl):MovementSettings{
  if(mode==='tank')return {...defaultMovementSettings('wheeled',base),maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5};
- if(mode==='kayak')return {...defaultMovementSettings('boat',base),maxSpeed:base.speed,reverseSpeed:1.8,coastDeceleration:.16,dragQuadratic:.08,brakeDamping:2.1,steeringResponse:5,steeringReturn:5,pitchResponse:4,rollResponse:4};
+ if(mode==='paddled_boat')return {...defaultMovementSettings('boat',base),maxSpeed:base.speed,reverseSpeed:1.8,coastDeceleration:.16,dragQuadratic:.08,brakeDamping:2.1,steeringResponse:5,steeringReturn:5,pitchResponse:4,rollResponse:4};
  if(mode==='bus')return {...defaultMovementSettings('wheeled',base),maxSpeed:base.speed,reverseSpeed:2.5,
   coastDeceleration:.55,brakeDeceleration:3.8,brakeDamping:0,steeringResponse:2.5,steeringReturn:3.2,
   throttleResponse:1.6,pitchResponse:3,rollResponse:2.5};
- if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('slide',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
+ if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('skateboard',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
   coastDeceleration:.22,brakeDeceleration:6,brakeDamping:0,steeringResponse:4,steeringReturn:6,
   dragQuadratic:.006,pitchResponse:12,rollResponse:10};
  const road=mode==='wheeled'||mode==='motorcycle'||mode==='unicycle',creature=mode==='mount'||mode==='carriage',person=mode==='character';
  return {speed:base.speed,accel:base.accel,grip:base.grip,steer:base.steer,
-  maxSpeed:person?5.8*base.speed/3.8:mode==='dragon'?base.speed*1.2:creature||['plane','glider','space','sub'].includes(mode)?base.speed:base.speed*1.15,
+  maxSpeed:person?5.8*base.speed/3.8:mode==='dragon'?base.speed*1.2:creature||['plane','glider','spacecraft','submarine'].includes(mode)?base.speed:base.speed*1.15,
   reverseSpeed:mode==='dragon'?base.speed*.2:mode==='carriage'?1.4:mode==='mount'?2.5:base.speed*.3,
   slowSpeed:person?1.45*base.speed/3.8:2.5,groundSpeed:5,
   coastDeceleration:person?20*base.accel/12:mode==='dragon'?base.grip*2:creature?base.accel:road?5:mode==='hover'?3:1.8,
-  brakeDeceleration:creature?20:base.accel*1.8,brakeDamping:mode==='space'?8:mode==='sub'?6:road?3.8:3.5,groundDeceleration:base.accel,directionChangeDeceleration:base.accel*2,
+  brakeDeceleration:creature?20:base.accel*1.8,brakeDamping:mode==='spacecraft'?8:mode==='submarine'?6:road?3.8:3.5,groundDeceleration:base.accel,directionChangeDeceleration:base.accel*2,
   steeringResponse:creature||mode==='dragon'?10:road?14:9,steeringReturn:creature||mode==='dragon'?10:road?22:14,
-  verticalAcceleration:base.accel*.8,linearDamping:mode==='sub'?.9:base.grip,verticalDamping:1.8,
+  verticalAcceleration:base.accel*.8,linearDamping:mode==='submarine'?.9:base.grip,verticalDamping:1.8,
   drag:mode==='plane'?.8:mode==='glider'?.26:.25,dragQuadratic:mode==='glider'?.0008:.002,
-  pitchResponse:mode==='glider'?2.6:mode==='sub'?2:3.2,rollResponse:3.5,throttleResponse:.38,
+  pitchResponse:mode==='glider'?2.6:mode==='submarine'?2:3.2,rollResponse:3.5,throttleResponse:.38,
   minimumSpeed:mode==='glider'?7:0,launchSpeed:22,jumpSpeed:6.3,
  };
 }

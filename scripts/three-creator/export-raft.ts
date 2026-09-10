@@ -24,7 +24,7 @@ const asset={id:'vehicle.raft',displayName:'橡皮艇 / INFLATABLE BOAT',path:'v
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
   actions:{},limitations:['Unpowered inflatable boat; paddle propulsion on water, gravity sliding on land and damped contact restitution. Single active driver; passenger anchors reserved.','W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-raft.ts'},resources:[],
-  locomotionBindingIds:['vehicle.raft'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('kayak',RAFT_SPEC),...RAFT_SPEC}},
+  locomotionBindingIds:['vehicle.raft'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('paddled_boat',RAFT_SPEC),...RAFT_SPEC}},
   sockets:Object.entries(RAFT_SOCKETS).map(([node,positionMetersXYZ])=>({id:node,node,positionMetersXYZ})).concat([{id:'control.hand.left',node:'control.hand.left',positionMetersXYZ:[0,0,0]},{id:'control.hand.right',node:'control.hand.right',positionMetersXYZ:[0,-.56,0]}]),collision:RAFT_SPEC.envelope};
 const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
 if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;

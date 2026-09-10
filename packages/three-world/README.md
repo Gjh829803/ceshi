@@ -1091,6 +1091,32 @@ Only these two road presets are provided here; other motion families retain
 their specialized controllers. `accel` remains a required legacy spec field but
 per-wheel acceleration comes from the powertrain.
 
+Vehicle `mode` selects the driving family and map-region permission key.
+`archetype` selects the vehicle subtype, including its mechanics and model bindings.
+`characterPose` selects the rider posture; it supplies no propulsion.
+
+| Vehicle | `mode` | `archetype` |
+| --- | --- | --- |
+| Skateboard | `skateboard` | `skateboard` |
+| Kayak | `paddled_boat` | `kayak` |
+| Canoe | `paddled_boat` | `canoe` |
+| Inflatable raft | `paddled_boat` | `raft` |
+| Submarine | `submarine` | `submarine` |
+| Spacecraft | `spacecraft` | `spacecraft` |
+
+The `paddled_boat` family shares the existing stroke and buoyancy implementation.
+`canoe` and `raft` select single-blade paddling; `kayak` selects alternating
+double-blade paddling. All reuse `characterPose: 'paddling'` for the seated rider
+and bind the hands to the actual paddle. The humanoid action `slide` remains
+the running slide action.
+
+For force-driven paddling, `bodyPhysics.kind` is `paddle`, with mass and water
+displacement parameters. The scene supplies actual water and collision geometry.
+Asset IDs and `visualVariant` values do not replace these driving contracts.
+`submarine` provides underwater movement; `spacecraft` provides zero-gravity
+body-local translation and rotation, not orbital mechanics. Read the current
+`inputGuide()` for each mode's throttle, steering and braking semantics.
+
 | Model binding | Configuration and authoring rule |
 | --- | --- |
 | Root | Metres, +Y up, +Z forward; unit scale and ground-level origin. Hand the vehicle root to the SDK; author visual children. |
@@ -1204,7 +1230,7 @@ their existing controller and wheel animation.
 
 The local playground's **原地扶正** button and unassigned **R** shortcut call
 `HumanoidRuntime.recoverVehicle()`; command clients use `vehicle.recover`.
-Recovery requires an occupied wheeled/motorcycle/unicycle/slide vehicle, nearby dry ground and
+Recovery requires an occupied wheeled/motorcycle/unicycle/skateboard vehicle, nearby dry ground and
 enough clearance. It first tries the current horizontal position, then searches
 outwards up to 6 metres if the chassis spans a ledge or uneven support. Nine
 support samples over the chassis footprint plus margin reject missing ground,

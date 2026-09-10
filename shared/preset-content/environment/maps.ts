@@ -4,22 +4,22 @@ import { createCampusCharacterCourse, createCharacterWorkshop } from '../humanoi
 import { SPECS } from '../config';
 import { createGrandPrix } from './grand-prix';
 const characterCourse=createCampusCharacterCourse();
-const groundModes=['character','wheeled','bus','tank','motorcycle', 'unicycle','slide','sled','ski','hover','mount','carriage'];
+const groundModes=['character','wheeled','bus','tank','motorcycle', 'unicycle','skateboard','sled','ski','hover','mount','carriage'];
 const regions:MapRegion[]=[
  {id:'staging',name:'01 / 车辆准备区',description:'上下车、转向与六快捷槽',center:[-12,0,66],size:[130,54],color:'#ddb573',modes:groundModes},
  {id:'indoor',name:'02 / 室内实验楼',description:'门洞 · 立柱 · 低顶 · 楼梯 · 二层 · 车库',center:[-180,0,-20],size:[76,68],color:'#77b9c6',modes:groundModes},
  {id:'grades',name:'03 / 地形测试',description:'5° / 12° / 22° 梯度、横坡与台阶',center:[35,0,170],size:[140,100],color:'#d49d7c',modes:groundModes},
- {id:'water',name:'04 / 水域实验场',description:'浅滩、码头桩、水下顶棚与深水',center:[324,-2,0],size:[308,490],color:'#5cafbb',modes:['character','kayak','boat','sub','hover']},
+ {id:'water',name:'04 / 水域实验场',description:'浅滩、码头桩、水下顶棚与深水',center:[324,-2,0],size:[308,490],color:'#5cafbb',modes:['character','paddled_boat','boat','submarine','hover']},
  {id:'airfield',name:'05 / 航空跑道',description:'宽门机库、起飞、空中门框',center:[-285,0,0],size:[46,620],color:'#e4a17f',modes:['plane','glider','hover','dragon']},
  {id:'launch',name:'06 / 滑翔高台',description:'33 米高台、释放与着陆',center:[-130,33,-155],size:[32,41],color:'#b3c8d5',modes:['glider']},
- {id:'six-dof',name:'07 / 六向空间',description:'垂直、横移、俯仰与滚转框架',center:[-84,0,-70],size:[50,65],color:'#b9ace1',modes:['space','hover','dragon']},
+ {id:'six-dof',name:'07 / 六向空间',description:'垂直、横移、俯仰与滚转框架',center:[-84,0,-70],size:[50,65],color:'#b9ace1',modes:['spacecraft','hover','dragon']},
  {id:'circuit',name:'08 / 环道与绕桩',description:'高速转向、刹车与低速绕桩',center:[-28,0,73],size:[300,300],color:'#96bfa5',modes:groundModes},
  {id:'creatures',name:'09 / 生物骑乘场',description:'骑马步态 · 马车牵引 · 飞龙起降',center:[60,0,35],size:[90,70],color:'#a6b57f',modes:['character','mount','carriage','dragon']},
  characterCourse.region,
  {id:'sled-slope',name:'11 / 滑雪与雪橇坡道',description:'12° 雪坡 · 松键滑行 · 双板压弯 / 雪橇拖脚 · 制动',center:[-390,0,110],size:[58,150],color:'#b8d4df',modes:['character','sled','ski']},
 ];
 const originalSpawns:MapSpawn[]=SPECS.map(spec=>({id:`vehicle-${spec.id}`,vehicleId:spec.id,name:spec.name,position:[...spec.spawn],yaw:spec.yaw,
- regionId:spec.mode==='kayak'||spec.mode==='boat'||spec.mode==='sub'?'water':spec.mode==='plane'?'airfield':spec.mode==='glider'?'launch':spec.mode==='space'?'six-dof':['mount','carriage','dragon'].includes(spec.mode)?'creatures':'staging'}));
+ regionId:spec.mode==='paddled_boat'||spec.mode==='boat'||spec.mode==='submarine'?'water':spec.mode==='plane'?'airfield':spec.mode==='glider'?'launch':spec.mode==='spacecraft'?'six-dof':['mount','carriage','dragon'].includes(spec.mode)?'creatures':'staging'}));
 function campusBoxes():EnvironmentBox[]{
  const b:EnvironmentBox[]=[block('ground-main',[-165,-2.5,0],[670,5,1000]),block('ground-north',[335,-2.5,372.5],[330,5,255]),block('ground-south',[335,-2.5,-372.5],[330,5,255]),block('ground-east',[489,-2.5,0],[22,5,490]),block('basin-floor',[324,-45,0],[308,2,490],'#607f7d'),...indoorModule(-180,-20)];
  const add=(id:string,x:number,y:number,z:number,w:number,h:number,d:number,color?:string,collision=true)=>b.push(block(id,[x,y,z],[w,h,d],color,undefined,collision));

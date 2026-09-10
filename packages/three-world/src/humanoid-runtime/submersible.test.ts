@@ -14,7 +14,7 @@ import {SUBMERSIBLE_SPEC} from '../../../../shared/preset-content/submersible';
 import {buildSubmersibleModel} from '../../../../shared/preset-content/submersible-model';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false){
- const q=new EnvironmentQueries({id:'pool',name:'Pool',description:'',bounds:{min:[-100,-30,-100],max:[100,30,100]},boxes:[{id:'floor',position:[0,dry?-1.55:-21,0],size:[200,1,200]},...(wall?[{id:'wall',position:[0,-4,9] as const,size:[100,40,.5] as const}]:[])],water:dry?[]:[{id:'water',min:[-90,-20.5,-90],max:[90,0,90],surface:0}],regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[180,180],color:'#aaa',modes:['sub','character']}],spawns:[],playerSpawn:[-20,1,0]});
+ const q=new EnvironmentQueries({id:'pool',name:'Pool',description:'',bounds:{min:[-100,-30,-100],max:[100,30,100]},boxes:[{id:'floor',position:[0,dry?-1.55:-21,0],size:[200,1,200]},...(wall?[{id:'wall',position:[0,-4,9] as const,size:[100,40,.5] as const}]:[])],water:dry?[]:[{id:'water',min:[-90,-20.5,-90],max:[90,0,90],surface:0}],regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[180,180],color:'#aaa',modes:['submarine','character']}],spawns:[],playerSpawn:[-20,1,0]});
  const v=createVehicle({...SUBMERSIBLE_SPEC,spawn:[0,.12,0],yaw:0});let time=0;
  const run=(seconds:number,input:Partial<Input>={})=>{for(let n=0;n<Math.round(seconds*60);n++){time+=1/60;stepVehicle(v,{...emptyInput(),...input},1/60,time,q);}};
  return {q,v,run,time:()=>time};
@@ -44,7 +44,7 @@ describe('observation submersible',()=>{
  });
  it('keeps unattended craft afloat, prevents underwater hatch exit, and resets ballast/particles',async()=>{
   const f=fixture(),map=f.q.map;f.q.dispose();const spec={...SUBMERSIBLE_SPEC,spawn:[0,.12,0] as [number,number,number],yaw:0};
-  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),navigation:false,humanoid:{map:{...map,spawns:[{id:'sub',name:'sub',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'pool'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.observation-sub',spec,object:buildSubmersibleModel()}],character:{instanceId:'person',object:new Group()}}});
+  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),navigation:false,humanoid:{map:{...map,spawns:[{id:'submarine',name:'submarine',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'pool'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.observation-sub',spec,object:buildSubmersibleModel()}],character:{instanceId:'person',object:new Group()}}});
   try{world.step({humanoid:emptyInput()},600);expect(world.humanoid!.simulation.vehicles[0]!.position.y).toBeCloseTo(.12,2);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,-5,0],facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});expect(world.humanoid!.interact()).toBe(false);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:spec.spawn,facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});world.step({humanoid:{...emptyInput(),lift:-1}},420);expect(world.humanoid!.interact()).toBe(false);expect(world.humanoid!.simulation.message).toContain('上浮');
@@ -60,7 +60,7 @@ it('places the original rider inside the sealed cabin from the first mounted fra
  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');});
  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...SUBMERSIBLE_SPEC.seat);
-  for(const dt of [0,1/60,.5]){rider.update(dt,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'sub'});
+  for(const dt of [0,1/60,.5]){rider.update(dt,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'submarine'});
    rider.root.updateMatrixWorld(true);let low=Infinity,high=-Infinity,front=-Infinity;const v=new Vector3();rider.root.traverse(n=>{if(n instanceof SkinnedMesh){n.skeleton.update();for(let j=0;j<n.geometry.getAttribute('position').count;j++){n.getVertexPosition(j,v).applyMatrix4(n.matrixWorld);low=Math.min(low,v.y);high=Math.max(high,v.y);front=Math.max(front,v.z);}}});
    expect(low).toBeGreaterThan(-.33);expect(high).toBeLessThan(1.42);expect(front).toBeLessThan(1.27);
   }

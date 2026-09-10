@@ -102,7 +102,21 @@ it('discovers handling configurations without offering vehicle models', async ()
   expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
   expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
   expect(selected.humanoidSourceContracts['humanoid-runtime/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
-
+  const vehicleContract=selected.humanoidSourceContracts['humanoid-runtime/config.ts'];
+  expect(vehicleContract).toContain("'skateboard'");
+  expect(vehicleContract).toContain("'paddled_boat'");
+  expect(vehicleContract).toContain("'submarine'");
+  expect(vehicleContract).toContain("'spacecraft'");
+  expect(vehicleContract).not.toMatch(/['"](?:sub|space|slide|paddle)['"](?=\s*\|)/);
+  expect(vehicleContract).toContain('Driving family and map-region permission key');
+  expect(vehicleContract).toContain('Rider pose, not propulsion');
+  expect(vehicleContract).toContain('canoe and raft use single-blade strokes');
+  expect(vehicleContract).toContain("kind: 'paddle'");
+  const guide=await schema(tools,{topic:'humanoid',sections:['guide']});
+  expect(guide.sdkGuide).toContain('| Canoe | `paddled_boat` | `canoe` |');
+  expect(guide.sdkGuide).toContain("characterPose: 'paddling'");
+  expect(guide.sdkGuide).toContain('| Submarine | `submarine` | `submarine` |');
+  expect(guide.sdkGuide).toContain('| Spacecraft | `spacecraft` | `spacecraft` |');
 });
 
 it('returns a readable schema guide first and actual source contracts only when requested', async () => {

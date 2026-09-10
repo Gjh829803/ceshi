@@ -24,7 +24,7 @@ const asset={id:'vehicle.observation-sub',displayName:'单人观景潜艇 / SUBM
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
   actions:{},limitations:['Hydrostatic buoyancy and ballast approximation; no fluid solver or pressure damage.','W/S propulsion, A/D yaw, Ctrl dives with ballast, Space surfaces, Q/E roll, Shift slows; hatch opens only at the surface.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-submersible.ts'},resources:[],
-  locomotionBindingIds:['vehicle.observation-sub'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('sub',SUBMERSIBLE_SPEC),...SUBMERSIBLE_SPEC}},
+  locomotionBindingIds:['vehicle.observation-sub'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('submarine',SUBMERSIBLE_SPEC),...SUBMERSIBLE_SPEC}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:SUBMERSIBLE_SPEC.seat}],collision:SUBMERSIBLE_SPEC.envelope};
 const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
 if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;

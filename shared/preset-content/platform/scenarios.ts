@@ -46,9 +46,9 @@ export function prepareCourse(sim:Simulation,map:EnvironmentDefinition,regionId:
   }
   const v=vehicle!,body=vehicleBody(v.spec),mode=v.spec.mode;
   const clearance=body.kind==='box'?Math.max(0,body.halfExtents[1]-body.offset[1]):0;
-  if(mode==='boat'||mode==='sub'){if(!water)continue;position.y=water.surface+(mode==='boat'?.1:-1.1);}
+  if(mode==='boat'||mode==='submarine'){if(!water)continue;position.y=water.surface+(mode==='boat'?.1:-1.1);}
   else if(mode==='hover')position.y=(water?.surface??floor?.height??position.y)+1.3;
-  else position.y=(floor?.height??position.y)+Math.max(mode==='space'?.8:0,clearance)+.025;
+  else position.y=(floor?.height??position.y)+Math.max(mode==='spacecraft'?.8:0,clearance)+.025;
   const safe=q.safeSpawn(position,body,rotation);if(!safe)continue;
   // Avoid occupying an archetype's parked instance when staging one of its variants.
   const radius=body.kind==='box'?Math.hypot(body.halfExtents[0],body.halfExtents[2]):body.radius;

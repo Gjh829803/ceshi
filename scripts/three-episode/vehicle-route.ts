@@ -7,21 +7,21 @@ import type {
 } from './route-controller.js';
 
 export const VEHICLE_FAMILIES = [
-  'kayak',
+  'paddled_boat',
   'wheeled',
   'bus',
   'tank',
   'motorcycle',
   'unicycle',
-  'slide',
+  'skateboard',
   'sled',
   'ski',
   'hover',
   'boat',
-  'sub',
+  'submarine',
   'glider',
   'plane',
-  'space',
+  'spacecraft',
   'mount',
   'carriage',
   'dragon',
@@ -40,12 +40,12 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
   if(family==='tank'){
     input.forward=Math.abs(yawError)>1?0:input.forward;
     input.brake=horizontal<Math.hypot(velocity[0],velocity[2])**2/12+.5;
-  } else if(family==='space'){
+  } else if(family==='spacecraft'){
     const local=delta.clone().applyQuaternion(q.clone().invert());
     const localVelocity=new Vector3(...velocity).applyQuaternion(q.clone().invert());
     input.forward=clamp((local.z-localVelocity.z*.8)/4);input.strafe=clamp(-(local.x-localVelocity.x*.8)/4);input.lift=clamp((local.y-localVelocity.y*.8)/4);
     input.steer=0; // Translation axes are independent; preserve the captured attitude.
-  } else if(family==='sub'||family==='dragon'){
+  } else if(family==='submarine'||family==='dragon'){
     input.lift=clamp((delta.y-velocity[1]*.8)/3);input.forward=horizontal<.5?0:input.forward;
   } else if(family==='plane'||family==='glider'){
     const pitch=Math.atan2(delta.y+(family==='glider'?1.2:0),Math.max(5,horizontal));
@@ -97,7 +97,7 @@ export class VehicleRouteController {
     }
     if(!this.anchor||Math.hypot(...position.map((v,i)=>v-this.anchor![i]!))>.25){this.anchor=position;this.lastProgress=time;}
     if(time-this.lastProgress>5)return {...base,mode:'failed',input:{},diagnostic:{code:'EPISODE_PLAYER_ROUTE_BLOCKED',message:'Real vehicle input made no progress for five seconds.',collisionEntityIds:actor.motion?.collisionEntityIds??[]}};
-    const airborne=['space','sub','plane','glider','dragon'].includes(vehicle.mode);
+    const airborne=['spacecraft','submarine','plane','glider','dragon'].includes(vehicle.mode);
     const tolerance=held?.radiusMeters ?? (airborne?2:1);
     // All axes remain checked: a bridge below a waypoint is never counted as arrival.
     if(distance<=tolerance)this.advanceWaypoint();

@@ -28,7 +28,7 @@ export function labelSprite(text:string,color='#233746',width=5,height=.9):T.Spr
 export function buildVehicle(s:VehicleSpec):VehicleVisual {
   if(s.visualVariant==='bubble-sub'){const root=buildSubmersibleModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='jetski'){const root=buildJetSkiModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2.4;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
-  if(s.archetype==='kayak'||s.archetype==='raft'){const root=s.archetype==='raft'?buildRaftModel():s.visualVariant==='canoe'?buildCanoeModel():buildKayakModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=1.65;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
+  if(s.archetype==='kayak'||s.archetype==='canoe'||s.archetype==='raft'){const root=s.archetype==='raft'?buildRaftModel():s.archetype==='canoe'?buildCanoeModel():buildKayakModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=1.65;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='bus'){
     const visual=buildBusModel(),seat=new T.Group();seat.position.set(...s.seat);visual.root.add(seat);visual.root.name=s.id;
     const label=labelSprite(s.name);label.position.y=3.2;visual.root.add(label);
@@ -156,7 +156,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     root.add(buildSkiModel());
   } else if(archetype==='sled') {
     root.add(buildSledModel());
-  } else if(archetype==='slide') {
+  } else if(archetype==='skateboard') {
     box(root,.8,.18,2.1,0,.15,0,paint);box(root,.52,.035,1.35,0,.255,0,dark);
     for(const x of [-.34,.34])for(const z of [-.75,.75])wheel(x,.08,z,.09,.09);
     box(root,.65,.07,.28,0,.25,1,accent).rotation.x=-.23;
@@ -171,7 +171,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     ball(root,0,-.15,0,1.3,.55,2.6,paint);box(root,2.15,.2,3.2,0,.05,-.2,accent);pilotSeat(.35,-.3);
     box(root,1.6,.6,.08,0,.65,1,glass).rotation.x=-.25;box(root,.5,.8,.4,0,-.2,-2.6,dark);
     tube([-.9,.25,1.1],[-.65,.45,2],.025,chrome);tube([.9,.25,1.1],[.65,.45,2],.025,chrome);tube([-.65,.45,2],[.65,.45,2],.025,chrome);
-  } else if(archetype==='sub') {
+  } else if(archetype==='submarine') {
     ball(root,0,-.8,0,1.2,.55,2.7,paint);ball(root,0,.28,.65,.91,.94,1.34,glass);pilotSeat(.1,.5);
     box(root,3.5,.12,.9,0,-.2,-1.4,dark);box(root,.15,1.4,.8,0,.5,-2.1,paint);
     tube([0,.7,-.2],[0,1.65,-.2],.1);tube([0,1.65,-.2],[0,1.65,.2],.1);
@@ -185,7 +185,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     if(!glider){const prop=new T.Group();prop.position.set(0,.4,3.25);box(prop,2.8,.13,.08,0,0,0,dark);box(prop,.13,2.8,.08,0,0,0,dark);root.add(prop);rotors.push(prop);wheel(-1.1,.27,.5,.27,.2);wheel(1.1,.27,.5,.27,.2);wheel(0,.2,-2,.2,.15);}
     else {box(root,.6,.04,1,0,-.13,0,dark);}
     for(const x of [-3.9,3.9])ball(root,x,.65,0,.12,.09,.15,new T.MeshBasicMaterial({color:x<0?'#fb6a51':'#79f0c5'}));
-  } else if(archetype==='space') {
+  } else if(archetype==='spacecraft') {
     ball(root,0,-.45,0,1.25,.36,1.9,paint);pilotSeat(.15,.4);ball(root,0,.42,.62,.88,.86,1.05,glass);
     for(const x of [-1.55,1.55]) {box(root,.65,.6,2.4,x,0,-.3,dark);box(root,.8,.15,1.3,x,.35,-.4,paint);thruster(x,0,-1.9);}
     box(root,3.6,.1,.55,0,0,.7,accent);box(root,.1,.8,.8,0,.6,-1.4,paint);
@@ -196,7 +196,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   else if(s.visualVariant==='patrol'){box(root,1.35,.8,1.15,0,.75,-.35,paint);box(root,1.1,.5,.04,0,.94,.25,glass);tube([0,1.15,-.3],[0,2,-.3],.035,chrome);}
   else if(s.visualVariant==='trainer'){box(root,1.35,.12,1.1,0,1.45,-.65,accent);for(const x of [-3.7,3.7])box(root,.55,.08,.75,x,.42,-.15,paint);}
   else if(s.visualVariant==='survey'){for(const x of [-2.3,2.3]){const panel=box(root,.9,.04,1.8,x,.35,-.2,new T.MeshBasicMaterial({color:'#4577a5'}));panel.rotation.z=x<0?.08:-.08;}ball(root,0,1.15,-.6,.35,.35,.35,accent);}
-  const label=labelSprite(`${String(SPECS_INDEX(s)).padStart(2,'0')}  /  ${s.name}`);label.position.set(0,s.mode==='plane'||s.mode==='glider'?3.7:s.mode==='sub'?3.4:3.5,0);root.add(label);
+  const label=labelSprite(`${String(SPECS_INDEX(s)).padStart(2,'0')}  /  ${s.name}`);label.position.set(0,s.mode==='plane'||s.mode==='glider'?3.7:s.mode==='submarine'?3.4:3.5,0);root.add(label);
   root.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
   return {root,seat,wheels,wheelRigs,rotors,steering,engine,label};
 }
