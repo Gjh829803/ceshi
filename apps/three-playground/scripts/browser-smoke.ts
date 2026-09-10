@@ -5,7 +5,7 @@ page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()
 try{
 await page.goto(process.argv[2]??'http://127.0.0.1:5178');await page.waitForFunction(()=>!!(window as any).playground,{},{timeout:60000});
 const state=()=>page.evaluate(()=>(window as any).playground.getState());
-await page.locator('#colliderSelect').click();await page.getByRole('listbox').waitFor();await page.keyboard.press('Escape');assert.equal((await state()).paused,false);
+await page.locator('#displayButton').click();await page.getByRole('tab',{name:/辅助/}).click();await page.getByRole('checkbox',{name:'碰撞体',exact:true}).check();await page.getByRole('combobox',{name:'碰撞体范围'}).click();await page.getByRole('listbox').waitFor();await page.keyboard.press('Escape');await page.getByRole('button',{name:'重置辅助',exact:true}).click();await page.getByRole('button',{name:'关闭显示检查'}).click();assert.equal((await state()).paused,false);
 assert.equal(await page.locator('select:visible').count(),0);
 await page.locator('#mapSelect').click();await page.getByRole('option',{name:'大奖赛 · 驾驶测试赛道',exact:true}).click();await page.waitForFunction(()=>(window as any).playground.getState().mapId==='grand-prix');
 await page.mouse.click(650,450);await page.keyboard.press('f');await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle==='supercar');

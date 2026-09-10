@@ -144,6 +144,8 @@ describe('player workspace configuration',()=>{
    expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(expected.vertices));
    expect(expected.vertices.length).toBeGreaterThan(0);
    expect(expected.vertices.length).toBeLessThan(h.world.debugRender().vertices.length);
+   debug.update(h,'all',map.boxes,true);
+   expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(h.world.debugRender().vertices));
    expect(h.world.colliders.len()).toBe(count);
    h.world.forEachCollider(c=>expect(c.isEnabled()).toBe(true));
   }finally{debug.dispose();world.dispose();}

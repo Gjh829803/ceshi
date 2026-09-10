@@ -18,6 +18,51 @@ changes to the scene entry reload the world. A production build includes the
 verified asset catalog closure and can be served as static files. No CDN runtime
 imports or external model fetches are needed.
 
+## Display previews
+
+The viewport toolbar separates **画面** (material, clay, unlit, linear depth,
+type colors and camera-space geometry normals) from **显示检查**. Each mode has
+an always-visible purpose and usage explanation. The inspector shares one scope
+(whole scene, current subject or selected objects) across its Objects and Helpers
+tabs. The current subject includes its rider/mount combination. Object selection
+does not change gameplay control or the camera. Search and grouped rows operate on
+actual scene roots; selection, visibility and temporary isolation are independent.
+Exiting isolation restores the previous scope, hidden objects and type filters.
+
+Helpers independently show colliders, mesh edges, interaction anchors, declared
+climb surfaces and water volumes. Collider scope can follow the shared scope,
+include nearby shapes within a distance in metres, or show the whole physics world.
+Nearby uses the current subject when the shared scope is the whole scene. Ground
+can be included or excluded explicitly. Ownership uses actual capsule, environment,
+pickup and loose-crate collider bindings; unknown ownership is reported, not inferred.
+Unavailable scoped helpers show a reason. Global quick-check presets can expand
+the scope. Temporary **仅看碰撞体 / 仅看线框** preserves the base picture and saved
+helper settings; leaving it restores the combination. Mesh-edge overlays are
+unavailable over depth, type-color and normal buffers, but wireframe-only remains usable.
+Depth limits are metres along the camera view direction, near black and far white.
+Diagnostic buffers retain alpha-cutout holes and treat blended surfaces as opaque.
+Type colors come from actual scene roots; unclassified meshes have their own color.
+Anchor/region markers describe bindings, not current action eligibility.
+
+Picture, Objects and Helpers have independent reset buttons. Desktop inspection can
+be pinned into the existing right sidebar; mobile uses a bottom drawer. Settings
+are session-local. Map changes retire scene-local object selection, hidden IDs and
+isolation while retaining picture and helper choices. The optional diagnostic renderer shares the current scene and interpolated
+camera, draws only after a source frame, and never steps the SDK. Its canvas sits
+below Presentation UI/output. Original source pixels, model-input captures and
+streams remain unchanged. Temporary visibility, materials and lighting are restored
+even on errors. Diagnostic passes omit source shadows to avoid rewriting shadow
+resources owned by the source renderer. Returning to defaults shows the original
+renderer directly. Map changes release cached diagnostic materials; disposal
+releases the diagnostic canvas, helpers and GPU resources.
+
+With the editor running, verify the real modes, source-pixel isolation, map/reset
+transitions and mobile panel using:
+
+```sh
+pnpm exec tsx apps/three-playground/scripts/display-smoke.ts http://127.0.0.1:5178
+```
+
 - `src/main.ts` binds the scene and SDK actions to the editor. One SDK owns simulation,
   character animation and the active camera. This entry is editor-specific; shared
   environment/vehicle/profile data stays in the example modules.

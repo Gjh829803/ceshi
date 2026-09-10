@@ -17,6 +17,11 @@ export interface TestGateManifestEntryV1 {
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
   { path: "apps/three-creator-playground/bridge-inspection.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "apps/three-creator-playground/character-continuity.test.ts", lane: "contract" },
+  { path: "apps/three-playground/src/display-panel.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/display-preview.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/display-scene.test.ts", lane: "contract" },
+  { path: "apps/three-playground/src/display-scope.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "apps/three-playground/src/display-settings.test.ts", lane: "contract" },
   { path: "apps/three-playground/src/equipment-panel.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/three-playground/src/inspector.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/three-playground/src/library.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },

@@ -59,7 +59,7 @@ export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campu
  const waterMaterials:T.MeshPhysicalMaterial[]=[];
  for(const water of map.water){const geometry=new T.PlaneGeometry(water.max[0]-water.min[0],water.max[2]-water.min[2],32,32);geometry.rotateX(-Math.PI/2);geometries.add(geometry);
  const material=new T.MeshPhysicalMaterial({color:'#398d9b',roughness:.24,metalness:.2,transparent:true,opacity:.68,side:T.DoubleSide,depthWrite:false});materials.add(material);waterMaterials.push(material);
- const mesh=new T.Mesh(geometry,material);mesh.position.set((water.min[0]+water.max[0])/2,water.surface,(water.min[2]+water.max[2])/2);mesh.renderOrder=2;root.add(mesh);
+ const mesh=new T.Mesh(geometry,material);mesh.name='water:'+water.id;mesh.position.set((water.min[0]+water.max[0])/2,water.surface,(water.min[2]+water.max[2])/2);mesh.renderOrder=2;root.add(mesh);
  }
  // Camera-centred sky at the far depth plane: large maps must not expose the clear colour.
  const skyGeometry=new T.SphereGeometry(1500,24,12);geometries.add(skyGeometry);
