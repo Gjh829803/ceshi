@@ -101,6 +101,14 @@ export function stageContext(repositoryRoot, outputRoot) {
   assert(/^patchedDependencies:\n(?:  '@recast-navigation\/(?:core|generators)@0\.43\.1': patches\/@recast-navigation__(?:core|generators)@0\.43\.1\.patch\n?){2}$/.test(patches.trimEnd() + '\n'), 'Review changed patch allowlist');
   put('pnpm-workspace.yaml', Buffer.from('packages:\n  - "packages/three-world"\n  - "packages/camera-collision"\n\nallowBuilds:\n  esbuild: true\n\n' + patches), true);
   source('packages/three-world/package.json', true);
+  const sdkManifest=JSON.parse(readFileSync(path.join(repositoryRoot,'packages/three-world/package.json'),'utf8'));
+  const rapierBuild=JSON.parse(readFileSync(path.join(repositoryRoot,'vendor/rapier-query-refresh/build.json'),'utf8'));
+  assert(/^rapier3d-compat-0\.20\.0-whitebox-query\.1-[a-f0-9]{16}\.tgz$/.test(rapierBuild.archive),'Review changed Rapier build');
+  const rapierArchive=`vendor/rapier-query-refresh/${rapierBuild.archive}`;
+  assert.equal(sdkManifest.dependencies['@dimforge/rapier3d-compat'],`file:../../${rapierArchive}`);
+  source(rapierArchive,true);
+  assert.equal(files.get(rapierArchive).sha256,`sha256:${rapierBuild.sha256}`,'Rapier archive SHA mismatch');
+  source('vendor/rapier-query-refresh/build.json',true);
   source('packages/camera-collision/package.json', true);
   source('patches/@recast-navigation__core@0.43.1.patch', true);
   source('patches/@recast-navigation__generators@0.43.1.patch', true);

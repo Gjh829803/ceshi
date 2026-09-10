@@ -261,7 +261,7 @@ export class ThreeWorld implements API.World {
  private primitive(command:API.PrimitiveCommand):API.PrimitiveCommand{
   if(!command||typeof command!=='object'||!Object.hasOwn(commandFields,command.type)||Object.keys(command).some(key=>key!=='type'&&!commandFields[command.type].includes(key)))throw failure('COMMAND_FIELDS_INVALID');
   const copy=cloneJson(command);
-  if(this.humanoid&&'entityId' in copy&&this.humanoid.state(copy.entityId))throw failure('HUMANOID_USE_RUNTIME_COMMANDS','Use world.humanoid for humanoid and vehicle runtime commands.');
+  if(this.humanoid&&'entityId' in copy&&this.humanoid.logicalPose(copy.entityId))throw failure('HUMANOID_USE_RUNTIME_COMMANDS','Use world.humanoid for humanoid and vehicle runtime commands.');
   if('entityId' in copy)requireId(copy.entityId);
   if('durationSeconds' in copy&&copy.durationSeconds!==undefined&&(!Number.isFinite(copy.durationSeconds)||copy.durationSeconds<0||copy.durationSeconds>300))throw failure('DURATION_INVALID');
   switch(copy.type){

@@ -56,6 +56,20 @@ human and binds its complete controller and actions, optionally with vehicles.
 It calls `createWorld` internally and returns the same `ThreeWorld`; both entries
 use the same runtime ownership and lifecycle.
 
+A Humanoid world also accepts ordinary `addEntity({id, object, physics})` fixed,
+dynamic and kinematic bodies. They share its Rapier world with the person and
+vehicles; authored poses, collider refresh, commands and reset use the normal
+entity interfaces. IDs must be distinct from the supplied person, vehicles and
+map colliders, including when replacing the map. A conflicting replacement is
+rejected before the active world changes. Dynamic bodies retain ordinary
+9.81 m/s² gravity; vehicle simulation retains its 120 Hz substeps inside SDK ticks.
+See the [shared physics example](../../examples/three-creator/shared-physics/main.ts).
+
+Registering, moving or enabling a body updates native scene queries without
+advancing simulation. Contact solving and collision events occur on the next
+normal physics step. Maintainers can inspect the narrow
+[Rapier query-refresh dependency](../../vendor/rapier-query-refresh/README.md).
+
 Choose the helper when its complete human kit matches the task. Otherwise bind
 the required subject and abilities through the general world API. Subject routes
 guide this choice; they are not mutually exclusive SDK entity classes.

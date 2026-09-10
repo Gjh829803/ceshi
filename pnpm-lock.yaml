@@ -132,8 +132,8 @@ importers:
   packages/three-world:
     dependencies:
       '@dimforge/rapier3d-compat':
-        specifier: 0.20.0
-        version: 0.20.0
+        specifier: file:../../vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz
+        version: file:vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
@@ -190,8 +190,9 @@ packages:
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
-  '@dimforge/rapier3d-compat@0.20.0':
-    resolution: {integrity: sha512-X4W9pJBdGRX5CO3c/gUNjBFEFG2fn4nYxp9k8STdBDaLa0/w5XTW2ArpayS+9jGFojTi3uFSOWAElCd4rkpekA==}
+  '@dimforge/rapier3d-compat@file:vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz':
+    resolution: {integrity: sha512-pVnzrwSJN0SMnT2RopZZfnSSP4AKlmTZcyNT1sT5FVLcTtX9TmCCldeGEJIEf4rQGG4j8Qoc2Ccrlko4g/mkKw==, tarball: file:vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz}
+    version: 0.20.0-whitebox-query.1
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -3134,7 +3135,7 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@dimforge/rapier3d-compat@0.20.0': {}
+  '@dimforge/rapier3d-compat@file:vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz': {}
 
   '@emnapi/runtime@1.11.3':
     dependencies:

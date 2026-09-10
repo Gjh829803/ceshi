@@ -1,0 +1,63 @@
+diff --git a/src/pipeline/query_pipeline.rs b/src/pipeline/query_pipeline.rs
+index 124c0d7..21f4577 100644
+--- a/src/pipeline/query_pipeline.rs
++++ b/src/pipeline/query_pipeline.rs
+@@ -685 +685,3 @@ impl QueryFilter<'_> {
+-        self.exclude_collider != Some(handle)
++        collider.flags.enabled != crate::geometry::ColliderEnabled::Disabled
++            && collider.parent.and_then(|p| bodies.get(p.handle)).map(|body| body.is_enabled()).unwrap_or(true)
++            && self.exclude_collider != Some(handle)
+diff --git a/typescript/src.ts/pipeline/world.ts b/typescript/src.ts/pipeline/world.ts
+index 4c919fd..5d70554 100644
+--- a/typescript/src.ts/pipeline/world.ts
++++ b/typescript/src.ts/pipeline/world.ts
+@@ -298,10 +298,10 @@ export class World {
+-    // TODO: This needs to trigger a broad-phase update but without emitting collision events?
+-    // /**
+-    //  * Ensure subsequent scene queries take into account the collider positions set before this method is called.
+-    //  *
+-    //  * This does not step the physics simulation forward.
+-    //  */
+-    // public updateSceneQueries() {
+-    //     this.propagateModifiedBodyPositionsToColliders();
+-    //     this.queryPipeline.update(this.colliders);
+-    // }
++    /** Refresh scene queries without advancing simulation or consuming collision events. */
++    public updateSceneQueries(handles?: readonly ColliderHandle[]) {
++        this.propagateModifiedBodyPositionsToColliders();
++        const update = (handle: ColliderHandle) =>
++            this.broadPhase.raw.updateColliderAabb(
++                this.integrationParameters.raw, this.bodies.raw, this.colliders.raw, handle,
++            );
++        if (handles) handles.forEach(update);
++        else this.colliders.forEach((collider) => update(collider.handle));
++    }
+diff --git a/typescript/src/geometry/broad_phase.rs b/typescript/src/geometry/broad_phase.rs
+index f85a776..2ef3e86 100644
+--- a/typescript/src/geometry/broad_phase.rs
++++ b/typescript/src/geometry/broad_phase.rs
+@@ -1 +1 @@
+-use crate::dynamics::RawRigidBodySet;
++use crate::dynamics::{RawIntegrationParameters, RawRigidBodySet};
+@@ -25,0 +26,21 @@ impl RawBroadPhase {
++    /// Refresh one live collider in the existing query BVH without stepping physics.
++    /// Pair change detection remains deferred to the ordinary physics pipeline.
++    pub fn updateColliderAabb(
++        &mut self,
++        params: &RawIntegrationParameters,
++        bodies: &RawRigidBodySet,
++        colliders: &RawColliderSet,
++        handle: FlatHandle,
++    ) {
++        let handle = utils::collider_handle(handle);
++        if let Some(collider) = colliders.0.get(handle) {
++            if !QueryFilter::default().test(&bodies.0, handle, collider) {
++                return;
++            }
++            let aabb = collider.compute_aabb();
++            if aabb.mins.is_finite() && aabb.maxs.is_finite() {
++                self.0.set_aabb(&params.0, handle, aabb);
++            }
++        }
++    }
++

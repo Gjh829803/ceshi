@@ -1,3 +1,6 @@
+import {PhysicsColliderBindings} from '../../physics-collider-bindings';
+import type {BorrowedPhysicsWorld} from '../../physics-host';
+import {DYNAMIC_PROP_COLLISION_GROUPS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import { Euler,Quaternion,Vector3 } from 'three';
@@ -55,6 +58,11 @@ export interface ActorQueryBody {id:string;actorId?:string;physical?:boolean;pos
 /** The map owns one world. Borrowed character rigs and interaction bodies share its fixed tick. */
 export class EnvironmentQueries {
   private world:RAPIER.World;
+  readonly colliderBindings:PhysicsColliderBindings;
+  private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
+  borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h)};}
+  beforePhysicsSubstep(callback:(fraction:number)=>void){this.physicsSubsteps.add(callback);return()=>{this.physicsSubsteps.delete(callback);};}
+
   private vehicleRigs=new Map<string,VehicleRigidRig>();
   private vehicleColliderIds=new Map<number,string>();
   private controller:RAPIER.KinematicCharacterController;
@@ -80,6 +88,7 @@ export class EnvironmentQueries {
   constructor(readonly map:EnvironmentDefinition){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
     this.world=new RAPIER.World({x:0,y:-18,z:0});
+    this.colliderBindings=new PhysicsColliderBindings(this.world);
     const groups=new Map<string,typeof map.boxes[number][]>();
     for(const box of map.boxes)if(box.rigidGroup){const g=box.rigidGroup;if(box.collision===false||!g.id||!Number.isFinite(g.massKg)||g.massKg<=0)throw new Error('HUMANOID_PROP_INVALID');const list=groups.get(g.id)??[];list.push(box);groups.set(g.id,list);}
     for(const [id,boxes] of groups){
@@ -90,7 +99,7 @@ export class EnvironmentQueries {
       this.propBodies.set(id,{body,origin});
       for(const b of boxes){const p=new Vector3(...b.position).sub(origin),rotation=new Quaternion().setFromEuler(new Euler(...(b.rotation??[0,0,0])));
         // 排除载具查询代理（第 3 组）；只与真正的动态车身求解，避免重复的静态包围盒卡住物品。
-        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(b.size[0]/2,b.size[1]/2,b.size[2]/2).setTranslation(p.x,p.y,p.z).setRotation(rotation).setDensity(mass/volume).setFriction(.55).setRestitution(.08).setCollisionGroups(0x0001ffeb),body);
+        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(b.size[0]/2,b.size[1]/2,b.size[2]/2).setTranslation(p.x,p.y,p.z).setRotation(rotation).setDensity(mass/volume).setFriction(.55).setRestitution(.08).setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS),body);
         this.staticColliders.set(b.id,collider);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
       }
     }
@@ -110,8 +119,8 @@ export class EnvironmentQueries {
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
     }
-    // Rapier 0.20 updates the scene query acceleration structure during a world step.
-    this.world.step();
+    // Publish the initial map without integrating props or consuming simulation time.
+    this.world.updateSceneQueries();
     this.controller=this.world.createCharacterController(.015);
     this.controller.setMaxSlopeClimbAngle(Math.PI/3);
     this.controller.setMinSlopeSlideAngle(Math.PI/3);
@@ -121,6 +130,7 @@ export class EnvironmentQueries {
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
   colliderId(handle:number):string{
     this.assertLive();
+    const externalId=this.colliderBindings.owner(handle);if(externalId!==undefined)return externalId;
     const environmentId=this.staticColliderIds.get(handle);if(environmentId!==undefined)return environmentId;
     const vehicleId=this.vehicleColliderIds.get(handle);if(vehicleId!==undefined)return vehicleId;
     for(const entry of this.actorColliders.values())if(entry.collider.handle===handle)return entry.actorId;
@@ -138,7 +148,7 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id);}
   propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
@@ -155,7 +165,7 @@ export class EnvironmentQueries {
   }
   releaseHumanoidRig(rig:HumanoidRig){
     if(this.disposed||!this.rigs.delete(rig))return;
-    this.queryExcluded.delete(rig.capsule.handle);
+    this.queryExcluded.delete(rig.capsule.handle);this.colliderBindings.removed(rig.capsule);
     this.world.removeCharacterController(rig.controller);this.world.removeRigidBody(rig.body);
   }
   syncActorBodies(actors:readonly ActorQueryBody[]){
@@ -386,7 +396,7 @@ export class EnvironmentQueries {
     });
     return normals;
   }
-  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}}
+  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){
@@ -470,7 +480,7 @@ export class EnvironmentQueries {
     const hit=probeHumanoidCamera(this.world,from,to,radius,undefined,filter,.015);
     // Preserve the vehicle query's historical 0.002 of the swept segment margin.
     const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
-    return {...hit,distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};
+    return {...hit,...(hit.colliderEntityId?{colliderEntityId:this.colliderId(Number(hit.colliderEntityId))}:{}),distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};
   }
   cameraCast(from:Vector3,to:Vector3,radius=.25):Vector3 {
     const solver=new CameraCollisionSolver((a,b,r)=>this.cameraProbe(a,b,r));

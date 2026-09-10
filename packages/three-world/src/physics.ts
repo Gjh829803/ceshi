@@ -1,4 +1,5 @@
-import {DEFAULT_CHARACTER_OPTIONS} from './config/physics';
+import {registerPhysicsHost,type BorrowedPhysicsWorld} from './physics-host';
+import {DEFAULT_CHARACTER_OPTIONS,DYNAMIC_PROP_COLLISION_GROUPS} from './config/physics';
 import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
 import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
@@ -49,19 +50,30 @@ export class ThreePhysics implements PhysicsPort {
   private readonly maximumColliders: number;
   private readonly maximumTriangles: number;
   private disposed = false;
+  private pendingProposals: CharacterProposal[] | undefined;
+  private substepTargets: {body:RigidBody;from:THREE.Vector3;to:THREE.Vector3;rotationFrom:THREE.Quaternion;rotationTo:THREE.Quaternion}[] = [];
+  static borrow(binding:BorrowedPhysicsWorld,options:PhysicsOptions={}):ThreePhysics {return new ThreePhysics(options,binding);}
+
 
   static async create(options: PhysicsOptions = {}): Promise<ThreePhysics> {
     initialization ??= RAPIER.init();
     await initialization;
     return new ThreePhysics(options);
   }
-  private constructor(options: PhysicsOptions) {
+  private constructor(options: PhysicsOptions,private readonly borrowed?:BorrowedPhysicsWorld) {
     this.gravity = Object.freeze([...(options.gravityMetersPerSecondSquared ?? [0, -9.81, 0])]) as Vec3;
     validateVec(this.gravity, 'gravityMetersPerSecondSquared');
     this.maximumColliders = options.maximumColliderCount ?? 4096;
     this.maximumTriangles = options.maximumTriangleCount ?? 1_000_000;
     if (!Number.isSafeInteger(this.maximumColliders) || this.maximumColliders < 1 || !Number.isSafeInteger(this.maximumTriangles) || this.maximumTriangles < 1) geometryError('PHYSICS_BUDGET_INVALID', 'Physics budgets must be positive integers.');
-    this.world = new RAPIER.World({ x: this.gravity[0], y: this.gravity[1], z: this.gravity[2] });
+    if(borrowed && (this.gravity[0]!==0 || this.gravity[2]!==0 || borrowed.world.gravity.x!==0 || borrowed.world.gravity.z!==0 || borrowed.world.gravity.y===0))throw new Error('PHYSICS_SHARED_GRAVITY_UNSUPPORTED');
+    this.world = borrowed?.world ?? new RAPIER.World({ x: this.gravity[0], y: this.gravity[1], z: this.gravity[2] });
+    registerPhysicsHost(this,{
+      prepareStep:(dt,drives)=>this.prepareStep(dt,drives),
+      prepareSubstep:fraction=>{for(const target of this.substepTargets){target.body.setNextKinematicTranslation(target.from.clone().lerp(target.to,fraction));target.body.setNextKinematicRotation(target.rotationFrom.clone().slerp(target.rotationTo,fraction));}},
+      finishStep:()=>this.finishStep(),
+      fork:binding=>this.fork(binding),
+    });
   }
   private live(): void { if (this.disposed) geometryError('PHYSICS_DISPOSED', 'The physics world has been disposed.'); }
   private entry(id: string): Entity { this.live(); const entry = this.entries.get(id); if (!entry) geometryError('PHYSICS_ENTITY_UNKNOWN', `Unknown physics entity: ${id}`); return entry; }
@@ -115,6 +127,7 @@ export class ThreePhysics implements PhysicsPort {
       const append = (descriptor: ColliderDesc | null): void => {
         if (!descriptor) geometryError('PHYSICS_CONVEX_HULL_INVALID', 'The visible mesh does not define a convex volume.');
         descriptor.setFriction(friction).setRestitution(restitution);
+        if(this.borrowed&&options.kind==='dynamic')descriptor.setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS);
         if (options.kind === 'dynamic') descriptor.setMass(mass / geometry.geometries.length);
         descriptors.push(descriptor); sourceObjects.push(mesh.sourceObject);
       };
@@ -149,6 +162,7 @@ export class ThreePhysics implements PhysicsPort {
     const bodyDescriptor = kind === 'fixed' ? RAPIER.RigidBodyDesc.fixed() : kind === 'dynamic' ? RAPIER.RigidBodyDesc.dynamic().setCcdEnabled(true) : RAPIER.RigidBodyDesc.kinematicPositionBased();
     bodyDescriptor.setTranslation(plan.pose.position.x, plan.pose.position.y, plan.pose.position.z).setEnabled(false);
     if (kind !== 'character') bodyDescriptor.setRotation(plan.pose.rotation);
+    if(kind==='dynamic' && this.borrowed)bodyDescriptor.setGravityScale(this.gravity[1]/this.world.gravity.y);
     let body: RigidBody | undefined, controller: KinematicCharacterController | undefined;
     try {
       body = this.world.createRigidBody(bodyDescriptor);
@@ -174,7 +188,7 @@ export class ThreePhysics implements PhysicsPort {
   }
   private destroy(entry: Entity): void {
     this.queryDirty.delete(entry.id);
-    for (const collider of entry.colliders) { this.colliderOwners.delete(collider.handle); this.colliderSources.delete(collider.handle); }
+    for (const collider of entry.colliders) { this.borrowed?.colliderRemoved?.(entry.id,collider); this.colliderOwners.delete(collider.handle); this.colliderSources.delete(collider.handle); }
     if (entry.character) this.world.removeCharacterController(entry.character.controller);
     this.world.removeRigidBody(entry.body);
   }
@@ -184,10 +198,12 @@ export class ThreePhysics implements PhysicsPort {
     for (let i = 0; i < entry.colliders.length; i++) {
       const collider = entry.colliders[i]!;
       this.colliderOwners.set(collider.handle, entry.id);
+      this.borrowed?.colliderAdded?.(entry.id,collider);
       this.colliderSources.set(collider.handle, entry.sourceObjects?.[i] ?? entry.object);
     }
     entry.body.setEnabled(entry.enabled && entry.colliders.length > 0);
     this.queryDirty.add(entry.id);
+    this.borrowed?.colliderChanged?.(entry.id,entry.colliders);
     this.world.propagateModifiedBodyPositionsToColliders();
   }
   addRigid(id: string, object: THREE.Object3D, options: RigidPhysics): void {
@@ -254,7 +270,7 @@ export class ThreePhysics implements PhysicsPort {
   setEnabled(id: string, enabled: boolean): void {
     const entry = this.entry(id); if (typeof enabled !== 'boolean') geometryError('PHYSICS_OPTION_INVALID', 'enabled must be boolean.');
     entry.enabled = enabled; entry.body.setEnabled(enabled && entry.colliders.length > 0);
-    this.queryDirty.add(id);
+    this.queryDirty.add(id);this.borrowed?.colliderChanged?.(id,entry.colliders);
     if (enabled && entry.character) entry.character.needsClearance = true;
     if (!enabled && entry.character) { entry.character.verticalVelocity = 0; entry.character.grounded = false; entry.character.collisions = []; }
   }
@@ -269,7 +285,7 @@ export class ThreePhysics implements PhysicsPort {
     setLocalPosition(entry.object, local);
     if (entry.character) { entry.character.verticalVelocity = 0; entry.character.grounded = false; entry.character.collisions = []; entry.character.needsClearance = true; }
     this.world.propagateModifiedBodyPositionsToColliders();
-    this.queryDirty.add(id);
+    this.queryDirty.add(id);this.borrowed?.colliderChanged?.(id,entry.colliders);
   }
   applyImpulse(id: string, impulseNewtonSecondsXYZ: Vec3): void {
     const entry = this.entry(id); validateVec(impulseNewtonSecondsXYZ, 'impulseNewtonSecondsXYZ');
@@ -579,6 +595,13 @@ export class ThreePhysics implements PhysicsPort {
     }
   }
   step(deltaSeconds: number, drives: Readonly<Record<string, CharacterDrive>>): void {
+    if(this.borrowed)throw new Error('PHYSICS_SHARED_OWNER_REQUIRED');
+    this.prepareStep(deltaSeconds,drives);
+    if(deltaSeconds===0)return;
+    this.world.step();this.finishStep();
+  }
+  private prepareStep(deltaSeconds: number, drives: Readonly<Record<string, CharacterDrive>>): void {
+    if(this.pendingProposals)throw new Error('PHYSICS_STEP_ALREADY_PREPARED');
     this.live(); validateNumber(deltaSeconds, 0, 'deltaSeconds'); if (deltaSeconds > .1) geometryError('PHYSICS_TIMESTEP_INVALID', 'Use fixed steps of at most 0.1 seconds.');
     if (!drives || typeof drives !== 'object' || Array.isArray(drives)) geometryError('PHYSICS_DRIVE_INVALID', 'drives must be an entity-indexed record.');
     for (const [id, drive] of Object.entries(drives)) {
@@ -588,6 +611,7 @@ export class ThreePhysics implements PhysicsPort {
       } else if (!Array.isArray(drive.velocityMetersPerSecondXZ) || !finiteVector(drive.velocityMetersPerSecondXZ, 2) || (drive.jumpPressed !== undefined && typeof drive.jumpPressed !== 'boolean') || Object.keys(drive).some(key => !['velocityMetersPerSecondXZ', 'jumpPressed'].includes(key))) geometryError('PHYSICS_DRIVE_INVALID', 'Ground drive needs finite XZ velocity and an optional jump edge.');
     }
     if (deltaSeconds === 0) return;
+    if(this.borrowed && this.entries.size===0)return;
     const updates: { previous: Entity; plan: Plan }[] = [];
     const poses = new Map<string, WorldPose>();
     for (const entry of this.entries.values()) {
@@ -605,7 +629,7 @@ export class ThreePhysics implements PhysicsPort {
     try { for (const update of updates) staged.push({ previous: update.previous, entry: this.construct(update.previous.id, update.previous.object, update.previous.kind, update.plan, update.previous.options, update.previous.initial, update.previous) }); }
     catch (error) { for (const { entry } of staged) this.destroy(entry); throw error; }
     for (const { previous, entry } of staged) this.publish(entry, previous);
-    this.world.timestep = deltaSeconds;
+    if(!this.borrowed)this.world.timestep = deltaSeconds;
     for (const entry of this.entries.values()) {
       entry.body.setEnabled(entry.enabled && entry.colliders.length > 0);
       if (!entry.body.isEnabled()) continue;
@@ -662,7 +686,15 @@ export class ThreePhysics implements PhysicsPort {
       const before = proposal.entry.body.translation();
       proposal.entry.body.setNextKinematicTranslation({ x: before.x + proposal.movement.x, y: before.y + proposal.movement.y, z: before.z + proposal.movement.z });
     }
-    this.world.step();
+    this.substepTargets=[...this.entries.values()].filter(entry=>entry.body.isKinematic()&&entry.body.isEnabled()).map(({body})=>({body,
+      from:new THREE.Vector3().copy(body.translation()),to:new THREE.Vector3().copy(body.nextTranslation()),
+      rotationFrom:new THREE.Quaternion().copy(body.rotation()),rotationTo:new THREE.Quaternion().copy(body.nextRotation())}));
+    for(const id of this.queryDirty){const entry=this.entries.get(id);if(entry)this.borrowed?.colliderChanged?.(id,entry.colliders);}
+    this.pendingProposals=proposed;
+  }
+  private finishStep():void {
+    const proposed=this.pendingProposals;if(!proposed)return;
+    this.pendingProposals=undefined;this.substepTargets=[];
     this.queryDirty.clear();
     for (const proposal of proposed) if (proposal.supportNeedsRefresh) {
       const controller = proposal.entry.character!.controller;
@@ -687,7 +719,7 @@ export class ThreePhysics implements PhysicsPort {
   state(id: string): PhysicsEntityState | undefined {
     this.live(); const entry = this.entries.get(id); if (!entry) return undefined;
     const collisions = new Set(entry.character?.collisions ?? []);
-    if (!entry.character) for (const collider of entry.colliders) this.world.contactPairsWith(collider, other => { const owner = this.colliderOwners.get(other.handle); if (owner && owner !== id) collisions.add(owner); });
+    if (!entry.character) for (const collider of entry.colliders) this.world.contactPairsWith(collider, other => { const owner = this.colliderOwners.get(other.handle)??this.borrowed?.colliderOwner?.(other.handle); if (owner && owner !== id) collisions.add(owner); });
     return Object.freeze({ id, positionMetersXYZ: vec(entry.body.translation()), velocityMetersPerSecondXYZ: vec(entry.body.linvel()), isGrounded: entry.body.isEnabled() && (entry.character?.grounded ?? false), collisionEntityIds: Object.freeze([...collisions].sort()) });
   }
   audit(): PhysicsAudit {
@@ -705,5 +737,25 @@ export class ThreePhysics implements PhysicsPort {
     } catch (error) { for (const { entry } of staged) this.destroy(entry); throw error; }
     for (const { previous, entry } of staged) { restoreLocal(entry.object, entry.initial.local); this.publish(entry, previous); }
   }
-  dispose(): void { if (this.disposed) return; this.disposed = true; this.entries.clear(); this.colliderOwners.clear(); this.colliderSources.clear(); this.queryDirty.clear(); this.world.free(); }
+  private fork(binding:BorrowedPhysicsWorld):ThreePhysics {
+    this.live();const next=ThreePhysics.borrow(binding,{gravityMetersPerSecondSquared:this.gravity,maximumColliderCount:this.maximumColliders,maximumTriangleCount:this.maximumTriangles});
+    try {
+      for(const entry of this.entries.values()){
+        if(entry.character)next.addCharacter(entry.id,entry.object,entry.character.settings);else next.addRigid(entry.id,entry.object,entry.options!);
+        const copy=next.entries.get(entry.id)!;copy.initial=entry.initial;copy.enabled=entry.enabled;copy.body.setEnabled(entry.body.isEnabled());
+        if(entry.kind==='dynamic'||entry.kind==='kinematic'){
+          copy.body.setTranslation(entry.body.translation(),false);copy.body.setRotation(entry.body.rotation(),false);
+          if(entry.kind==='kinematic'){copy.body.setNextKinematicTranslation(entry.body.nextTranslation());copy.body.setNextKinematicRotation(entry.body.nextRotation());}
+        }
+        copy.body.setLinvel(entry.body.linvel(),false);copy.body.setAngvel(entry.body.angvel(),false);
+        if(entry.body.isSleeping())copy.body.sleep();
+      }
+      next.world.updateSceneQueries();return next;
+    }catch(error){next.dispose();throw error;}
+  }
+  dispose(): void { if (this.disposed) return;
+    if(this.borrowed)for(const entry of this.entries.values())this.destroy(entry);
+    this.disposed = true; this.entries.clear(); this.colliderOwners.clear(); this.colliderSources.clear(); this.queryDirty.clear();
+    this.pendingProposals=undefined;this.substepTargets=[];if(!this.borrowed)this.world.free();
+  }
 }

@@ -49,13 +49,17 @@
 - [ ] 按包检查报告分列 registered/policy-allowed/compiled/behavior-verified/visual-reviewed/released；证据键包含闭包/runtime/配置/检查器/输入。
 - [ ] 通过实际 discovery、示例编译和本地浏览器/Episode 验证；阶段提交与验证记录。
 
-## R1：共享模拟服务
+## R1：共享模拟服务（本地完成）
 
 文件：`engine.ts`、`physics.ts`、`humanoid-runtime/environment/queries.ts`、`humanoid-runtime/simulation.ts`、`humanoid-runtime/runtime.ts`。
 
-- [ ] 先写两入口物体/人物共享接触、子步计数、借用释放的失败测试。
-- [ ] 提取实际 Rapier 生命周期和推进 owner，完整人形与通用 rigid 使用同一世界；保留现有碰撞过滤和求解算法。
-- [ ] 普通物体碰撞、骑乘和 reset 浏览器复核；SDK/Creator/Episode 相关测试、typecheck/census/prebuild；阶段提交与验证记录。
+- [x] 先写两入口物体/人物共享接触、子步计数、借用释放的失败测试。
+- [x] 提取实际 Rapier 生命周期和推进 owner，完整人形与通用 rigid 使用同一世界；保留现有碰撞过滤和求解算法。
+- [x] 普通物体碰撞、骑乘和 reset 浏览器复核；SDK/Creator/Episode 相关测试、typecheck/census/prebuild；记录原有下游失败与性能复测。
+
+证据见 [R1 验证记录](../../reviews/2026-09-10-extensible-world-r1.md)。Rapier JS 缺少
+非积分查询刷新，采用可独立重建且 hash 锁定的窄范围原生补丁；未保留 JS 位移裁剪。
+SDK 741 tests 通过；下游原有潜艇路线失败已用原始源码/依赖复现，R6 仍需处理。
 
 ## R2：Actor 与导航
 

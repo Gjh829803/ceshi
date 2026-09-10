@@ -1,0 +1,11 @@
+{
+  "upstreamRepository": "https://github.com/dimforge/rapier",
+  "upstreamCommit": "3e12c2679cb1940a876bde93af9cec0cf2f57944",
+  "version": "0.20.0-whitebox-query.1",
+  "archive": "rapier3d-compat-0.20.0-whitebox-query.1-71f14fda73dc30cf.tgz",
+  "sha256": "71f14fda73dc30cf48660cae0875d82f4264052db5754bb33cbf8ff2ba486743",
+  "patchSha256": "d839f31c521ffaad45765337c0ad866f02ad748d8484393ef09aeaba95b75c33",
+  "rustc": "1.92.0",
+  "wasmPack": "0.12.1",
+  "typescript": "5.9.2"
+}

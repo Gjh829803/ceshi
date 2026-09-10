@@ -1,3 +1,5 @@
+import {ThreePhysics} from '../physics';
+import {physicsHost} from '../physics-host';
 import {resolveConfiguredFlyingCreatureFeel} from './motion-families/flying-creature/state';
 import type {FlyingCreatureVisual} from './motion-families/flying-creature/visual';
 import {readCameraWorldPose} from '../camera-observation';
@@ -234,11 +236,16 @@ export class HumanoidRuntime implements PhysicsPort {
     }
     await initEnvironmentQueries();return new HumanoidRuntime(options,camera);
   }
+  private ordinaryPhysics:ThreePhysics;
+  private releaseOrdinarySubstep:()=>void;
   private constructor(readonly options:HumanoidRuntimeOptions,readonly camera:THREE.PerspectiveCamera){
     this.currentMap=options.map;
     this.specs=options.vehicles.map(v=>({...structuredClone(v.spec),id:v.instanceId}));
     this.environment=new EnvironmentQueries(this.instanceMap(options.map));
+    this.ordinaryPhysics=ThreePhysics.borrow(this.environment.borrowPhysics());
+    this.releaseOrdinarySubstep=this.environment.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
     this.simulation=new Simulation(this.environment,this.specs);
+    this.environment.colliderBindings.added(options.character.instanceId,this.simulation.humanoid.capsule);
     this.followCamera=new FollowCamera(camera,this.environment,options.vehicles);
     this.followCamera.eyePosition=target=>options.character.animation?.eyePosition(target)??false;
     this.followCamera.configureTuning(options.cameraTuning??{});this.initialCamera=new THREE.PerspectiveCamera().copy(camera,false);
@@ -479,7 +486,11 @@ export class HumanoidRuntime implements PhysicsPort {
     const profile=this.prepareProfile(this.profile);validateEnvironment(map);
     const replacement=new EnvironmentQueries(this.instanceMap(map));
     const previous=this.environment;
-    let staged:Simulation;try{staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);}catch(error){replacement.dispose();throw error;}
+    let staged:Simulation,ordinary:ThreePhysics|undefined;
+    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);replacement.colliderBindings.added(this.options.character.instanceId,staged.humanoid.capsule);}
+    catch(error){ordinary?.dispose();replacement.dispose();throw error;}
+    this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.ordinaryPhysics=ordinary;
+    this.releaseOrdinarySubstep=replacement.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
     this.simulation.adoptEnvironment(staged);this.currentMap=map;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();
     for(const notify of this.simulationReplacements)notify();
     this.clearInputOwned();this.restoreDefaultCameraMode();this.sync(0);
@@ -535,6 +546,7 @@ export class HumanoidRuntime implements PhysicsPort {
     if(input.cameraTogglePressed&&this.profile.view.keyboardToggleEnabled&&!this.authored)this.setCameraModeOwned((this.followCamera.mode+1)%3 as 0|1|2);
     if(!this.authored)this.followCamera.beforeFixedUpdate();
     const previousBinding=this.presentation.active,previousRevision=this.presentation.revision;
+    physicsHost(this.ordinaryPhysics).prepareStep(dt,{});
     this.presentation.beforeStep(this.simulation);
     const controls=this.input??input.humanoid??{...emptyInput(),forward:-(input.moveZRatio??0),steer:input.moveXRatio??0,lift:input.moveYRatio??0,boost:!!input.run,jump:input.jumpPressed??!!(input.jump&&!this.previousJump)};
     if(!this.input&&(input.interactPressed??!!(input.interact&&!this.previousInteract))){if(this.simulation.interact())this.sync(0);}
@@ -542,6 +554,7 @@ export class HumanoidRuntime implements PhysicsPort {
     if(pointer.distanceDeltaMeters)this.followCamera.zoomByMeters(pointer.distanceDeltaMeters,this.simulation);
     if(input.cameraYawRatio||input.cameraPitchRatio)this.followCamera.orbitRadians((input.cameraYawRatio??0)*dt*1.2,(input.cameraPitchRatio??0)*dt,this.simulation.time,this.simulation);
     this.simulation.step(controls,dt,this.followCamera.yaw);
+    physicsHost(this.ordinaryPhysics).finishStep();
     this.lastApplied={source:this.input?this.inputSource:input.humanoid?'world.humanoid':'world-input',input:structuredClone(controls),simulationSeconds:this.simulation.time};
     this.presentation.afterStep(this.simulation);this.sync(dt);
     if(!this.authored){this.followCamera.update(this.simulation,dt);this.followCamera.capturePresentationPose(this.simulation,previousBinding!==this.simulation.active||previousRevision!==this.simulation.teleportRevision);}
@@ -691,7 +704,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   state(id:string):PhysicsEntityState|undefined{
     if(id===this.options.character.instanceId){const p=this.simulation.player,h=this.simulation.humanoid,contacts:string[]=[];if(h&&!this.simulation.vehicle)for(let i=0;i<h.controller.numComputedCollisions();i++){const collision=h.controller.computedCollision(i);if(collision?.collider)contacts.push(this.environment.colliderId(collision.collider.handle));}return {id,positionMetersXYZ:tuple(this.logicalPose(id)!.position),velocityMetersPerSecondXYZ:tuple(this.simulation.vehicle?.velocity??p.velocity),isGrounded:this.simulation.vehicle?.grounded??p.grounded,collisionEntityIds:[...new Set(contacts)]};}
-    const v=this.simulation.vehicles.find(v=>v.spec.id===id);return v?{id,positionMetersXYZ:tuple(v.position),velocityMetersPerSecondXYZ:tuple(v.velocity),isGrounded:v.grounded,collisionEntityIds:[]}:undefined;
+    const v=this.simulation.vehicles.find(v=>v.spec.id===id);return v?{id,positionMetersXYZ:tuple(v.position),velocityMetersPerSecondXYZ:tuple(v.velocity),isGrounded:v.grounded,collisionEntityIds:[]}:this.ordinaryPhysics.state(id);
   }
   addCharacter(id:string,object:THREE.Object3D,_options?:CharacterOptions):void{
     if(!this.objects.has(id)||this.objects.get(id)!==object)throw Object.assign(new Error(`HUMANOID_CONTENT_REGISTER_IN_OPTIONS: ${id} cannot be registered as physical content after Humanoid creation.`),{
@@ -700,14 +713,28 @@ export class HumanoidRuntime implements PhysicsPort {
       suggestedAction:"Register map collision, vehicles and characters through createHumanoidWorld options. For a pure capture landmark whose collision already exists, use role:'decoration' and omit physics.",
     });
   }
-  addRigid(id:string,object:THREE.Object3D,_options:RigidPhysics):void{this.addCharacter(id,object);}
-  remove(_id:string):void{}
-  validateBatch(candidates:readonly PhysicsCandidate[],removed:readonly string[]=[]):void{if(candidates.length||removed.length)throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');}
-  refresh(_id:string):void{throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');}
-  refreshMany(ids:readonly string[]):void{if(ids.length)throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');}
-  setEnabled(_id:string,_enabled:boolean):void{throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');}
-  teleport(id:string,position:Vec3):void{this.assertExternalMutation();if(id!==this.options.character.instanceId||!this.prepareCharacterOwned(position,this.simulation.player.yaw))throw new Error('HUMANOID_START_BLOCKED');}
-  applyImpulse(_id:string,_impulse:Vec3):void{throw new Error('HUMANOID_IMPULSE_UNSUPPORTED');}
+  private assertRigidIds(ids:readonly string[],environment=this.environment):void{
+    if(ids.some(id=>this.objects.has(id)||environment.colliderForId(id)))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');
+  }
+  addRigid(id:string,object:THREE.Object3D,options:RigidPhysics):void{
+    this.assertRigidIds([id]);
+    this.ordinaryPhysics.addRigid(id,object,options);
+  }
+  remove(id:string):void{this.ordinaryPhysics.remove(id);}
+  validateBatch(candidates:readonly PhysicsCandidate[],removed:readonly string[]=[]):void{
+    if(candidates.some(c=>c.kind==='character'||this.objects.has(c.id))||removed.some(id=>this.objects.has(id)))throw new Error('HUMANOID_USE_RUNTIME_COMMANDS');
+    this.assertRigidIds(candidates.map(candidate=>candidate.id));
+    this.ordinaryPhysics.validateBatch(candidates,removed);
+  }
+  refresh(id:string):void{this.ordinaryPhysics.refresh(id);}
+  refreshMany(ids:readonly string[]):void{this.ordinaryPhysics.refreshMany(ids);}
+  setEnabled(id:string,enabled:boolean):void{this.ordinaryPhysics.setEnabled(id,enabled);}
+  teleport(id:string,position:Vec3):void{
+    this.assertExternalMutation();
+    if(id===this.options.character.instanceId){if(!this.prepareCharacterOwned(position,this.simulation.player.yaw))throw new Error('HUMANOID_START_BLOCKED');}
+    else this.ordinaryPhysics.teleport(id,position);
+  }
+  applyImpulse(id:string,impulse:Vec3):void{this.assertExternalMutation();this.ordinaryPhysics.applyImpulse(id,impulse);}
   step():void{throw new Error('HUMANOID_REQUIRES_ENGINE_INPUT');}
   characterSettings(_id:string):Required<CharacterOptions>{const c=this.simulation.characterControl;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speed/3.8,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
   probeCharacterStart(id:string,position:Vec3):EpisodeStartProbe{
@@ -717,16 +744,24 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   castCameraArm(target:Vec3,eye:Vec3,radius:number){return this.environment.cameraProbe(target,eye,radius);}
   probe(origin:Vec3,direction:Vec3,distance:number){const result=this.environment.raycast(new THREE.Vector3(...origin),new THREE.Vector3(...direction),distance);return result?{entityId:result.id,distanceMeters:result.distance,normalWorldXYZ:tuple(result.normal)}:null;}
-  audit():PhysicsAudit{return {engine:'rapier',entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:id===this.options.character.instanceId?'character':'vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};}
+  audit():PhysicsAudit{
+    const ordinary=this.ordinaryPhysics.audit(),base={engine:'rapier' as const,entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:id===this.options.character.instanceId?'character':'vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};
+    return {...base,entityCount:base.entityCount+ordinary.entityCount,triangleCount:ordinary.triangleCount,
+      entities:[...base.entities,...ordinary.entities],diagnostics:[...ordinary.diagnostics]};
+  }
   private resetOwned():void{
     const profile=this.prepareProfile(this.baselineProfile);validateEnvironment(this.currentMap);
     const replacement=new EnvironmentQueries(this.instanceMap(this.currentMap)),previous=this.environment;
-    let staged:Simulation;try{staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);}catch(error){replacement.dispose();throw error;}
+    let staged:Simulation,ordinary:ThreePhysics|undefined;
+    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);replacement.colliderBindings.added(this.options.character.instanceId,staged.humanoid.capsule);}
+    catch(error){ordinary?.dispose();replacement.dispose();throw error;}
+    this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.ordinaryPhysics=ordinary;
+    this.releaseOrdinarySubstep=replacement.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
     this.simulation.adoptEnvironment(staged);this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();this.clearInputOwned();
     for(const notify of this.simulationReplacements)notify();
     this.authored=this.baselineAuthored;this.camera.copy(this.initialCamera,false);
     if(!this.authored)this.camera.fov=this.followCamera.tuning.baseFovDegrees;
     this.camera.updateProjectionMatrix();this.restoreDefaultCameraMode();this.sync(0);
   }
-  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.followCamera.dispose();this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.environment.dispose();this.options.character.animation?.dispose();for(const vehicle of this.options.vehicles){disposeSubmersibleVisual(vehicle.object);disposeJetSkiVisual(vehicle.object);vehicle.visual?.dispose();vehicle.flyingVisual?.dispose();}}
+  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.followCamera.dispose();this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.environment.dispose();this.options.character.animation?.dispose();for(const vehicle of this.options.vehicles){disposeSubmersibleVisual(vehicle.object);disposeJetSkiVisual(vehicle.object);vehicle.visual?.dispose();vehicle.flyingVisual?.dispose();}}
 }

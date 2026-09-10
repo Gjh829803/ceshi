@@ -108,5 +108,14 @@
       "episode.json",
       "whitebox-materials.ts"
     ]
+  },
+  "shared-physics": {
+    "root": "examples/three-creator/shared-physics",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
   }
 }

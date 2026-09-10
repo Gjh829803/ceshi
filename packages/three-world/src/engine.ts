@@ -596,6 +596,10 @@ export class WorldEngine {
       setEntityBoundary(entity.object, true); this.entities.set(id, entity); this.retired.delete(entity);
     }
     this.scene.updateWorldMatrix(true, true, true);
+    this.controlled = this.controlledInitial;
+    if (this.cameraInitial) { this.camera.copy(this.cameraInitial, false); if (this.cameraInitialParent) this.cameraInitialParent.add(this.camera); else this.camera.removeFromParent(); }
+    this.cameraRig.reset();
+    if(this.humanoid)humanoidHost(this.humanoid).reset();
     for (const [id, entity] of this.baseline!) {
       if (entity.character) this.physics.addCharacter(id, entity.object, entity.character); else if (entity.options.physics?.kind !== 'none' && entity.options.physics) this.physics.addRigid(id, entity.object, entity.options.physics);
       entity.asset?.mixer.stopAllAction(); if (entity.asset?.actionIds.includes('idle')) entity.asset.play('idle');
@@ -603,10 +607,6 @@ export class WorldEngine {
       // not the bind pose restored by AnimationMixer.stopAllAction().
       entity.asset?.update(0);
     }
-    this.controlled = this.controlledInitial;
-    if (this.cameraInitial) { this.camera.copy(this.cameraInitial, false); if (this.cameraInitialParent) this.cameraInitialParent.add(this.camera); else this.camera.removeFromParent(); }
-    this.cameraRig.reset();
-    if(this.humanoid)humanoidHost(this.humanoid).reset();
     this.tick = 0; this.revision += 1; this.failures.length = 0; this.keyboard.transcript.length = 0; this.navigationDirty = true;
     for (const callback of this.resets) callback(); this.render(); if (wasRunning) this.start();
   }
