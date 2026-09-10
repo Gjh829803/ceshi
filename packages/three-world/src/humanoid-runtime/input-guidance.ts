@@ -72,7 +72,7 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
   plane: {
     forward:'Positive pitches the nose down; negative pitches up. This is not throttle.',
     steer:'Positive turns right and adds bank.',roll:'Adds signed bank around local Z.',
-    boost:'Increases persistent throttle while held.',slow:'Decreases persistent throttle while held.',
+    boost:'Increases persistent throttle while held.',slow:'Decreases persistent throttle and applies wheel brakes on ground.',brake:'Applies wheel brakes; no airborne braking force.',
   },
   glider: {
     forward:'Positive pitches the nose down; negative pitches up.',

@@ -1016,7 +1016,7 @@ function updateUI() {
             : v.spec.mode === "glider" && !v.launched
               ? "等待释放"
               : v.spec.mode === "plane"
-                ? `油门 ${Math.round(v.throttle * 100)}%`
+                ? `${v.aircraft?.hardLanding?"重着陆":v.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
                 : "驾驶中"
       : p.swimming
         ? "游泳"
@@ -1041,9 +1041,9 @@ function updateUI() {
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
           ? "<kbd>Shift</kbd>从高台释放，开始滑翔"
-          : v.spec.mode === "plane" && v.speed < 14
-            ? "<kbd>Shift</kbd>按住加油门，速度达到后按 S 拉起"
-            : `<kbd>F</kbd>${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
+          : v.spec.mode === "plane" && v.grounded
+            ? "<kbd>Shift</kbd>加油门，约 90 km/h 轻按 S 拉起 · Ctrl 收油并刹车 · T 驾驶舱"
+            : v.spec.mode === "plane" ? "W / S 俯仰 · A / D 协调转弯 · 松开回平 · Ctrl 收油 · T 切视角" : `<kbd>F</kbd>${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
     );
   else
     setHTML(
@@ -1154,7 +1154,8 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
       active: n === sim.active,
     });
     if (n === sim.active)
-      vis.rotors.forEach((r) => (r.rotation.z += (state.speed + 4) * dt * 4));
+      vis.aircraftCockpit?.update(state,sim.time);
+    if(n===sim.active)vis.rotors.forEach((r) => (r.rotation.z += (state.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
     vis.label.visible =
       n !== sim.active &&
       camera.position.distanceToSquared(state.position) < 8100;
@@ -1246,6 +1247,7 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    flight:sim.vehicle?.aircraft?{...sim.vehicle.aircraft,throttle:sim.vehicle.throttle,grounded:sim.vehicle.grounded}:undefined,
     vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain?{...(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
 
     mapId: session.map.id,

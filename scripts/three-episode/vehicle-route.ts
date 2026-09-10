@@ -1,3 +1,4 @@
+import {AIRCRAFT} from '../../packages/three-world/src/config/aircraft';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
@@ -48,7 +49,9 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
     input.lift=clamp((delta.y-velocity[1]*.8)/3);input.forward=horizontal<.5?0:input.forward;
   } else if(family==='plane'||family==='glider'){
     const pitch=Math.atan2(delta.y+(family==='glider'?1.2:0),Math.max(5,horizontal));
-    input.forward=clamp(-pitch/.62);input.boost=family==='glider'||Math.hypot(...velocity)<26;input.slow=family==='plane'&&Math.hypot(...velocity)>36;
+    input.forward=clamp(-(pitch-(family==='plane'?Math.atan2(velocity[1]!,Math.max(1,Math.hypot(velocity[0]!,velocity[2]!))):0))/(family==='plane'?.27:.62));input.boost=family==='glider'||Math.hypot(...velocity)<32;input.slow=family==='plane'&&Math.hypot(...velocity)>40;
+    if(family==='plane'){const speed=Math.hypot(velocity[0]!,velocity[2]!),course=speed>3?Math.atan2(velocity[0]!,velocity[2]!):yaw;
+      const acceleration=2*speed*speed*Math.sin(desiredYaw-course)/Math.max(15,Math.min(horizontal,speed*1.3));input.steer=clamp(-acceleration/Math.max(speed,16)/AIRCRAFT.turnRate);}
   } else if(family==='sled'||family==='ski'){
     // Foot propulsion is only useful near walking speed; brake before a tight
     // bend or the stopping distance, while leaving a coasting route unpowered.

@@ -1,4 +1,5 @@
 import {createBodyPhysics,stepBodyVehicle,validateBodyPhysics,type BodyPhysicsState} from './vehicle-dynamics';
+import {createAircraftState,stepAircraft,type AircraftState} from './aircraft';
 import {createWheelPhysics,stepWheelVehicle,validateWheelPhysics,type WheelPhysicsState} from './wheel-physics';
 import { VEHICLE_ATTITUDE } from '../config/vehicle';
 
@@ -84,7 +85,7 @@ export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b
 export interface HumanoidActionInput {toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
 export interface Input { forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;actions?:HumanoidActionInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
-export interface VehicleState {bodyPhysics?:BodyPhysicsState|undefined;wheelPhysics?:WheelPhysicsState|undefined; spec:VehicleSpec & MovementSettings; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
+export interface VehicleState {aircraft?:AircraftState|undefined;bodyPhysics?:BodyPhysicsState|undefined;wheelPhysics?:WheelPhysicsState|undefined; spec:VehicleSpec & MovementSettings; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSettings {
   if(spec.wheelPhysics){if(spec.mode!=='wheeled'&&spec.mode!=='bike'&&spec.mode!=='bus')throw new Error('VEHICLE_WHEEL_MODE_INVALID');validateWheelPhysics(spec.wheelPhysics);}
   if(spec.bodyPhysics){if(spec.wheelPhysics)throw new Error('VEHICLE_PHYSICS_OWNER_CONFLICT');validateBodyPhysics(spec.bodyPhysics);}
@@ -102,6 +103,7 @@ export function createVehicle(spec:VehicleSpec):VehicleState {
   if(spec.archetype==='atv')state.atv=createAtvState();
   if(spec.mode==='tank')state.tank=createTankState();
   state.bodyPhysics=spec.bodyPhysics?createBodyPhysics(state.spec.bodyPhysics!):undefined;
+  if(spec.mode==='plane')state.aircraft=createAircraftState();
   state.wheelPhysics=spec.wheelPhysics?createWheelPhysics(state.spec.wheelPhysics):undefined;resetCreatureState(state);return state;
 }
 function actorFootprints(v:VehicleState){return creatureBodies(v).map((part,index)=>{
@@ -115,6 +117,7 @@ function actorBlocksPlayer(v:VehicleState,p:Vector3,margin:number){return actorF
 const forward=new Vector3(),right=new Vector3(),up=new Vector3(),scratch=new Vector3();
 const euler=new Euler(0,0,0,'YXZ');
 export function stepVehicle(v:VehicleState,i:Input,dt:number,time:number,environment:EnvironmentQueries) {
+  if(v.aircraft){stepAircraft(v,i,dt,environment);return;}
   if(v.spec.wheelPhysics&&v.wheelPhysics){stepWheelVehicle(v,i,dt,environment);return;}
   if(v.bodyPhysics){stepBodyVehicle(v,i,dt,time,environment);return;}
   if(v.creature){stepCreature(v,i,dt,environment);return;}
@@ -140,7 +143,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
   if(mode==='kayak'){stepKayak(v,i,dt,q);return;}
   if(mode==='bus'){stepBus(v,i,dt,q);return;}
   if(mode==='sled'||mode==='ski'){stepSled(v,i,dt,q);return;}
-  const isAircraft=mode==='plane'||mode==='glider';
+  const isAircraft=mode==='glider';
   if(mode==='space') {
     const angular=new Quaternion().setFromEuler(new Euler(i.pitch*s.steer*dt,-v.steering*s.steer*dt,i.roll*s.steer*dt,'YXZ'));
     v.rotation.multiply(angular).normalize();
@@ -160,14 +163,13 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
       if(i.boost) {v.launched=true;v.speed=s.launchSpeed;v.grounded=false;v.position.y=Math.max(v.position.y,groundHeight(v.position.x,v.position.z)+1.25);}
       else {v.speed=0;v.velocity.set(0,0,0);return;}
     }
-    if(mode==='plane') v.throttle=clamp(v.throttle+(Number(i.boost)-Number(i.slow))*s.throttleResponse*dt,0,1);
     const pitchInput=-i.forward;
     const desiredPitch=pitchInput*.62;
     v.pitch=damp(v.pitch,desiredPitch,s.pitchResponse,dt);
     v.roll=damp(v.roll,clamp(v.steering*.6+i.roll*.8,-.9,.9),s.rollResponse,dt);
     const flying=mode==='glider'||v.speed>14||!v.grounded;
     v.yaw-=v.steering*s.steer*dt*(flying?1:.35)+Math.sin(v.roll)*.20*dt;
-    const thrust=mode==='plane'?v.throttle*s.accel:0;
+    const thrust=0;
     const drag=s.drag+v.speed*v.speed*s.dragQuadratic;
     v.speed=clamp(v.speed+(thrust-drag-9.8*Math.sin(v.pitch))*dt,Math.min(s.minimumSpeed,s.speed),s.speed);
     forward.set(Math.sin(v.yaw)*Math.cos(v.pitch),Math.sin(v.pitch),Math.cos(v.yaw)*Math.cos(v.pitch));
@@ -352,7 +354,7 @@ export class Simulation {
     staged.characterControl={...this.characterControl};staged.setHumanoidAssets(this.humanoidClips,this.humanoidMotions);return staged;
   }
   adoptEnvironment(staged:Simulation):void{this.dispose();Object.assign(this,staged);}
-  private syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.wheelPhysics||v.bodyPhysics)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.wheelPhysics||v.bodyPhysics),...part}))));}
+  private syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.wheelPhysics||v.bodyPhysics||v.aircraft)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.wheelPhysics||v.bodyPhysics||v.aircraft),...part}))));}
   private syncHumanoidPlayer(){
     const h=this.humanoid,p=this.player;
     p.position.copy(h.position);p.velocity.copy(h.velocity);p.velocity.y=h.vertical;p.yaw=Math.atan2(h.facing.x,h.facing.z);
@@ -605,6 +607,7 @@ export class Simulation {
       // 找到稳定支撑并验证净空后才替换；保留驾驶关系、配置和当前测试点。
       q.releaseVehicleRig(v.spec.id);v.position.copy(safe);v.rotation.copy(rotation);v.yaw=yaw;v.pitch=v.roll=0;
       v.velocity.set(0,0,0);v.speed=v.steering=v.throttle=0;v.grounded=false;v.submerged=false;
+      if(v.aircraft)v.aircraft=createAircraftState();
       if(v.spec.wheelPhysics)v.wheelPhysics=createWheelPhysics(v.spec.wheelPhysics);
       if(v.spec.bodyPhysics)v.bodyPhysics=createBodyPhysics(v.spec.bodyPhysics);
       this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;
@@ -614,7 +617,7 @@ export class Simulation {
     this.humanoid.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));
     this.syncActorBodies();
     this.stepActors(i,dt,cameraYaw);
-    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();if(this.vehicle&&(this.vehicle.wheelPhysics||this.vehicle.bodyPhysics)){this.player.position.copy(this.vehicle.position);this.player.yaw=this.vehicle.yaw;}this.humanoid.skills.syncDropped();this.humanoid.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));
+    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();if(this.vehicle&&(this.vehicle.wheelPhysics||this.vehicle.bodyPhysics||this.vehicle.aircraft)){this.player.position.copy(this.vehicle.position);this.player.yaw=this.vehicle.yaw;}this.humanoid.skills.syncDropped();this.humanoid.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));
   }
   private stepActors(i:Input,dt:number,cameraYaw=0) {
     this.time+=dt;this.transition=Math.max(0,this.transition-dt);
@@ -624,7 +627,7 @@ export class Simulation {
       // 只有驾驶中的载具接收输入；四轮车停车后仍计算重力、悬架和驻车制动。
       if (v === this.vehicle && this.transition === 0)
         stepVehicle(v, i, dt, this.time, this.environment);
-      else if ((v.wheelPhysics||v.bodyPhysics)&&this.available(v))
+      else if ((v.wheelPhysics||v.bodyPhysics||v.aircraft)&&this.available(v))
         stepVehicle(v,{...emptyInput(),brake:true},dt,this.time,this.environment);
       else if (
         (v !== this.vehicle || v.spec.mode === 'kayak' || !!v.jetski || !!v.submersible) &&
@@ -664,7 +667,7 @@ export class Simulation {
         }
       }
     }
-    if(this.vehicle&&!this.vehicle.wheelPhysics&&!this.vehicle.bodyPhysics&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;if(this.vehicle.atv&&before!.atv){this.vehicle.atv.wheelAngles=[...before!.atv.wheelAngles];this.vehicle.atv.suspension=[...before!.atv.suspension];}if(this.vehicle.submersible&&before!.submersible)this.vehicle.submersible=before!.submersible;if(this.vehicle.jetski&&before!.jetski){this.vehicle.jetski=before!.jetski;finishJetSkiStep(this.vehicle,vehicleBefore,dt,this.time);}this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;if(this.vehicle.unicycle&&before!.unicycle){this.vehicle.unicycle=before!.unicycle;finishUnicycleStep(this.vehicle,vehicleBefore,i,dt,this.environment);}}}
+    if(this.vehicle&&!this.vehicle.wheelPhysics&&!this.vehicle.bodyPhysics&&!this.vehicle.aircraft&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;if(this.vehicle.atv&&before!.atv){this.vehicle.atv.wheelAngles=[...before!.atv.wheelAngles];this.vehicle.atv.suspension=[...before!.atv.suspension];}if(this.vehicle.submersible&&before!.submersible)this.vehicle.submersible=before!.submersible;if(this.vehicle.jetski&&before!.jetski){this.vehicle.jetski=before!.jetski;finishJetSkiStep(this.vehicle,vehicleBefore,dt,this.time);}this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;if(this.vehicle.unicycle&&before!.unicycle){this.vehicle.unicycle=before!.unicycle;finishUnicycleStep(this.vehicle,vehicleBefore,i,dt,this.environment);}}}
     const p=this.player;
     if (this.vehicle) {
       p.position.copy(this.vehicle.position);

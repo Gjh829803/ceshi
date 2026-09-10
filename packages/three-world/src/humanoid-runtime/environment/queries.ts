@@ -322,15 +322,15 @@ export class EnvironmentQueries {
   }
   releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders)this.queryExcluded.delete(collider.handle);this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
   retainVehicleRigs(ids:ReadonlySet<string>){for(const id of this.vehicleRigs.keys())if(!ids.has(id))this.releaseVehicleRig(id);}
-  vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number,parts?:readonly {body:QueryBody;rotation?:Quaternion}[],friction=.6,restitution=.08):VehicleRigidRig {
+  vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number,parts?:readonly {body:QueryBody;rotation?:Quaternion}[],friction=.6,restitution=.08,airframe?:{stops?:readonly {radius:number;center:Vector3}[];boxes:readonly {halfExtents:readonly [number,number,number];offset:readonly [number,number,number]}[];inertia:Vector3;center:Vector3}):VehicleRigidRig {
     this.assertLive();const previous=this.vehicleRigs.get(id);if(previous?.token===token)return previous;if(previous)this.releaseVehicleRig(id);
-    const inertia={x:mass*(4*halfLength*halfLength+1)/12,y:mass*(4*halfWidth*halfWidth+4*halfLength*halfLength)/12,z:mass*(4*halfWidth*halfWidth+1)/12};
-    const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x,position.y,position.z).setRotation(rotation).setGravityScale(9.81/18).setCcdEnabled(true).setAngularDamping(.7).setAdditionalMassProperties(mass,{x:0,y:centerOfMassHeight,z:0},inertia,{x:0,y:0,z:0,w:1}));
+    const inertia=airframe?.inertia??{x:mass*(4*halfLength*halfLength+1)/12,y:mass*(4*halfWidth*halfWidth+4*halfLength*halfLength)/12,z:mass*(4*halfWidth*halfWidth+1)/12};
+    const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x,position.y,position.z).setRotation(rotation).setGravityScale(9.81/18).setCcdEnabled(true).setAngularDamping(.7).setAdditionalMassProperties(mass,airframe?.center??{x:0,y:centerOfMassHeight,z:0},inertia,{x:0,y:0,z:0,w:1}));
     // 下车身两端收窄并斜切；驾驶舱另设碰撞体，避免整个包围盒形成巨大平底车头。
     const points:number[]=[];for(const side of [-1,1])for(const x of [-halfWidth,halfWidth]){points.push(x,.32,side*halfLength*.64,x,1.02,side*halfLength*.64,x*.88,.52,side*halfLength,x*.88,.72,side*halfLength);}
     const hull=RAPIER.ColliderDesc.convexHull(new Float32Array(points));if(!hull){this.world.removeRigidBody(body);throw new Error('HUMANOID_CHASSIS_HULL_INVALID');}
     const cabin=RAPIER.ColliderDesc.cuboid(halfWidth*.72,Math.max(.2,(height-1.02)/2),halfLength*.4).setTranslation(0,(height+1.02)/2,-.15);
-    const shapes=parts?parts.map(part=>{
+    const shapes=airframe?[...airframe.boxes.map(b=>RAPIER.ColliderDesc.cuboid(...b.halfExtents).setTranslation(...b.offset)),...(airframe.stops??[]).map(s=>RAPIER.ColliderDesc.ball(s.radius).setTranslation(s.center.x,s.center.y,s.center.z))]:parts?parts.map(part=>{
       const b=part.body,r=b.kind==='box'?Math.min(.2,...b.halfExtents.map(n=>n*.25)):0;
       // Rounded authored hull edges slide across adjoining terrain slabs instead
       // of catching their internal edges; the outer dimensions stay unchanged.

@@ -1,3 +1,4 @@
+import {AIRCRAFT} from '../config/aircraft';
 import type {SimulatedWheel} from './wheel-physics';
 import {copyUnicycleState,blendUnicycleState,type UnicycleState} from './unicycle';
 import {copySubmersibleState,type SubmersibleState} from './submersible';
@@ -36,7 +37,7 @@ function read(sim:Simulation,player:MotionPose,vehicles:MotionPose[]){
     if(sim.vehicle?.unicycle)player.humanoid.unicyclePose=copyUnicycleState(sim.vehicle.unicycle);
     if(sim.vehicle?.atv)player.humanoid.atvSteeringAngle=sim.vehicle.atv.steeringAngle;
     if(sim.vehicle?.sled)player.humanoid.sledPose={...sim.vehicle.sled};}
-  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.wheelPhysics?.wheels.map(w=>({...w}));p.creature=copyCreature(v.creature);p.unicycle=copyUnicycleState(v.unicycle);p.submersible=copySubmersibleState(v.submersible);p.raft=v.raft?{...v.raft}:undefined;p.jetski=copyJetSkiState(v.jetski);p.atv=copyAtvState(v.atv);p.kayak=v.kayak?{...v.kayak}:undefined;p.tank=v.tank?{...v.tank}:undefined;});
+  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.wheelPhysics?.wheels.map(w=>({...w}))??v.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.creature);p.unicycle=copyUnicycleState(v.unicycle);p.submersible=copySubmersibleState(v.submersible);p.raft=v.raft?{...v.raft}:undefined;p.jetski=copyJetSkiState(v.jetski);p.atv=copyAtvState(v.atv);p.kayak=v.kayak?{...v.kayak}:undefined;p.tank=v.tank?{...v.tank}:undefined;});
 }
 function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.position.lerpVectors(a.position,b.position,alpha);out.rotation.slerpQuaternions(a.rotation,b.rotation,alpha);out.velocity.lerpVectors(a.velocity,b.velocity,alpha);out.yaw=a.yaw+angleDelta(a.yaw,b.yaw)*alpha;out.speed=a.speed+(b.speed-a.speed)*alpha;out.steering=a.steering+(b.steering-a.steering)*alpha;
   out.humanoid=blendHumanoid(a.humanoid,b.humanoid,alpha);out.cameraHeight=(a.cameraHeight??1.25)+((b.cameraHeight??1.25)-(a.cameraHeight??1.25))*alpha;
