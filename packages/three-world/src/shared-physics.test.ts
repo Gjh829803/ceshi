@@ -107,3 +107,61 @@ it('contacts the real vehicle chassis without colliding with its fixed query pro
   }
   expect(contacts).toContain(2);expect(contacts).not.toContain(4);expect(contacts).not.toContain(16);
 });
+
+it('retires running ordinary work when the map is replaced, before it can write into the new simulation',async()=>{
+ const world=await setup(),marker=box(3,2,0);world.addEntity({id:'marker',object:marker,role:'decoration'});world.step();
+ const receipt=await world.execute({type:'entity.set-position',entityId:'marker',positionWorldMetersXYZ:[13,2,0],durationSeconds:2});expect(receipt.status).toBe('accepted');if(receipt.status!=='accepted')return;
+ world.step({},10);const before=world.getEntityState('marker').positionWorldMetersXYZ;
+ world.humanoid!.switchMap({...map,id:'next'});
+ expect(world.operations.get(receipt.operationId)).toMatchObject({status:'cancelled',phase:'simulation-replaced'});
+ world.step({},120);expect(world.getEntityState('marker').positionWorldMetersXYZ).toEqual(before);
+});
+
+it('invalidates queued commands and asynchronous task scopes on map replacement',async()=>{
+ const world=await setup(),marker=box(3,2,0);world.addEntity({id:'marker',object:marker,role:'decoration'});await world.start();
+ let resume!:()=>void,signal!:AbortSignal;const gate=new Promise<void>(resolve=>resume=resolve);
+ const pendingTask=world.runTask(async scope=>{signal=scope.signal;await gate;scope.addEntity({id:'late',object:new THREE.Group(),role:'decoration'});});
+ const queued=world.execute({type:'entity.set-visible',entityId:'marker',isVisible:false});await Promise.resolve();await Promise.resolve();
+ world.humanoid!.switchMap({...map,id:'next'});expect(signal.aborted).toBe(true);
+ resume();await expect(pendingTask).rejects.toMatchObject({code:'STALE_TASK'});
+ world.step();expect(await queued).toMatchObject({status:'rejected',error:{code:'STALE_TASK'}});expect(marker.visible).toBe(true);
+ expect(()=>world.getEntityState('late')).toThrow();
+});
+
+it('preserves running work when candidate map validation rejects replacement',async()=>{
+ const world=await setup(),marker=box(3,2,0);world.addEntity({id:'marker',object:marker,role:'decoration'});world.step();
+ const receipt=await world.execute({type:'entity.set-position',entityId:'marker',positionWorldMetersXYZ:[4,2,0],durationSeconds:.1});if(receipt.status!=='accepted')throw new Error(JSON.stringify(receipt));
+ expect(()=>world.humanoid!.switchMap({...map,boxes:[map.boxes[0]!,map.boxes[0]!]})).toThrow();
+ expect(world.operations.get(receipt.operationId).status).toBe('running');world.step({},10);expect(world.operations.get(receipt.operationId).status).toBe('succeeded');
+});
+
+it('rejects a player command scheduled against the previous map generation',async()=>{
+ const world=await setup();world.step();
+ const request=world.execute({type:'humanoid.set-input',input:{...emptyInput(),forward:1}},{commandId:'old-map-input'});
+ world.humanoid!.switchMap({...map,id:'next'});
+ expect(await request).toMatchObject({status:'rejected',error:{code:'STALE_TASK'}});
+ const before=world.getEntityState('player').positionWorldMetersXYZ;world.step({},60);
+ expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(before[2],3);
+});
+
+it('pauses map-specific autonomy until explicitly resumed, and restores it through world reset',async()=>{
+ const world=await createWorld({assetDefinitions:{},humanoid:{map,vehicles:[],character:{instanceId:'player',object:new THREE.Group()}}});worlds.push(world);
+ const actor=new THREE.Group();actor.position.set(3,.04,0);world.addCharacter({id:'npc',object:actor,body:{heightMeters:1.6,radiusMeters:.25}});
+ world.setAutonomy('npc',{kind:'patrol',waypointPositionsWorldMetersXYZ:[[15,.04,0],[3,.04,0]]});world.step({},60);
+ expect(world.getEntityState('npc').positionWorldMetersXYZ[0]).toBeGreaterThan(3.5);
+ world.humanoid!.switchMap({...map,id:'next'});const before=world.getEntityState('npc').positionWorldMetersXYZ;
+ world.step({},60);expect(world.getEntityState('npc').positionWorldMetersXYZ[0]).toBeCloseTo(before[0],3);
+ expect((await world.execute({type:'actor.resume-autonomy',entityId:'npc'})).status).toBe('applied');world.step({},60);
+ expect(world.getEntityState('npc').positionWorldMetersXYZ[0]).toBeGreaterThan(before[0]+.5);
+ await world.reset();world.step({},60);expect(world.getEntityState('npc').positionWorldMetersXYZ[0]).toBeGreaterThan(3.5);
+});
+
+it('keeps explicit actor input independent when keyboard control switches to another subject',async()=>{
+ const world=await setup(),ordinary=new THREE.Group();ordinary.position.set(4,.04,0);
+ world.addCharacter({id:'ordinary',object:ordinary,body:{heightMeters:1.5,radiusMeters:.25}});world.step();
+ expect((await world.execute({type:'humanoid.set-input',actorId:'player',input:{...emptyInput(),forward:1}})).status).toBe('applied');
+ world.setControlledEntity('ordinary');
+ expect(world.humanoid!.inspectControls('player').override?.input.forward).toBe(1);
+ const before=world.getEntityState('player').positionWorldMetersXYZ;world.step({},60);const after=world.getEntityState('player').positionWorldMetersXYZ;
+ expect(Math.hypot(after[0]-before[0],after[2]-before[2])).toBeGreaterThan(1);
+});

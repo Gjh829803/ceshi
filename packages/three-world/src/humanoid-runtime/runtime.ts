@@ -223,7 +223,7 @@ export class HumanoidRuntime implements PhysicsPort {
   private readonly initialCamera:THREE.PerspectiveCamera;
   private currentMap:EnvironmentDefinition;
   private readonly visualUpdates=new Set<(deltaSeconds:number,sample:HumanoidDisplaySample)=>void>();
-  private readonly simulationReplacements=new Set<()=>void>();
+  private readonly simulationReplacements=new Set<(reason:'map'|'reset')=>void>();
   static async create(options:HumanoidRuntimeOptions,camera:THREE.Camera):Promise<HumanoidRuntime>{
     validateEnvironment(options.map);
     if(Object.keys(options.cameraTuning??{}).some(k=>!Object.hasOwn(DEFAULT_CAMERA_TUNING,k)))throw new Error('HUMANOID_PROFILE_INVALID');
@@ -506,7 +506,7 @@ export class HumanoidRuntime implements PhysicsPort {
       issues:this.followCamera.mode===2&&offset&&edge?[{code:'SHOULDER_FRAMING_OFFSET_REVIEW',message:'The head anchor projects near or outside the frame with additional profile.camera offsets. Compare a current-view capture with targetHeightOffset and horizontalOffset at 0; these are additions to the SDK posture anchor, not eye height. Orbit and collision may also affect framing. Projection alone does not prove pixel visibility.'}]:[]};
   }
   onVisualUpdate(callback:(deltaSeconds:number,sample:HumanoidDisplaySample)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
-  onSimulationReplaced(callback:()=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
+  onSimulationReplaced(callback:(reason:'map'|'reset')=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
   switchMap(map:EnvironmentDefinition):void{this.assertExternalMutation();
     const profile=this.prepareProfile(this.profile);validateEnvironment(map);
     const replacement=new EnvironmentQueries(this.instanceMap(map));
@@ -517,7 +517,7 @@ export class HumanoidRuntime implements PhysicsPort {
     this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.ordinaryPhysics=ordinary;
     this.releaseOrdinarySubstep=replacement.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
     this.lifecycleGeneration++;this.simulation.dispose();this.currentSimulation=staged!;this.currentMap=map;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();
-    for(const notify of this.simulationReplacements)notify();
+    for(const notify of this.simulationReplacements)notify('map');
     this.clearInputOwned();this.restoreDefaultCameraMode();this.sync(0);
   }
   sealInitialState():void{
@@ -779,7 +779,7 @@ export class HumanoidRuntime implements PhysicsPort {
   private finishResetOwned():void{
     this.cameraActor=this.baselineCameraActor&&this.hasActor(this.baselineCameraActor)?this.baselineCameraActor:undefined;
     this.restoreDefaultCameraMode();this.sync(0);
-    if(this.replacementPending){this.replacementPending=false;for(const notify of this.simulationReplacements)notify();}
+    if(this.replacementPending){this.replacementPending=false;for(const notify of this.simulationReplacements)notify('reset');}
   }
   private resetOwned():void{
     const profile=this.prepareProfile(this.baselineProfile);validateEnvironment(this.currentMap);

@@ -167,7 +167,9 @@ export class WorldEngine {
     this.entities.set(options.id, entity); if(binding)humanoidHost(this.humanoid!).commitCharacterOwnership(options.id); this.navigationDirty = true; this.revision += 1;
     return options.object;
   }
-  setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.previousJump=false;this.previousInteract=false;this.pointerInput={}; }
+  setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
+  clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
+  private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
   private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>!!this.controlledHumanoid?.simulation.controlledActor.vehicle:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
@@ -579,7 +581,7 @@ export class WorldEngine {
     };
     this.frameId = requestAnimationFrame(frame);
   }
-  stop(): void { this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.running = false; this.inputRouter.clear(); this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
+  stop(): void { this.running = false; this.clearInput(); this.frameGeneration += 1; this.keyboard.enabled = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(alpha=1): void {
     if(this.disposed)return;
     this.withPresentation(()=>this.renderer?.render(this.scene,this.camera),alpha);

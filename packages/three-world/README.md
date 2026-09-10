@@ -835,6 +835,14 @@ actor ends its operations at that same boundary without requiring another tick.
 World operation IDs are distinct from Creator tool
 operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
+Successful `world.humanoid.switchMap(map)` retires the previous simulation's tasks,
+queued commands, asynchronous task scopes and entity generations. Old work cannot
+write into replacement actors or bodies. Failed candidate validation preserves the
+current world and its tasks. `onSimulationReplaced` reports `map` or `reset`.
+Map replacement pauses patrol until an explicit `actor.resume-autonomy`; world
+reset restores the sealed autonomy configuration. Switching keyboard control
+preserves other actors' explicitly assigned inputs.
+
 NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
 Mounting ends foot-navigation operations and pauses patrol. Mounted actors reject
 ground-navigation requests; send explicit humanoid vehicle input to drive, then

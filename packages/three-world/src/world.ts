@@ -77,7 +77,7 @@ export class ThreeWorld implements API.World {
   this.state=new StateRegistry(id=>{const owner=this.owners.get(`state:${id}`);if(owner&&owner!==this.activeWriter)throw failure('STATE_OWNED_BY_PARAMETER',`Set parameter ${owner} instead.`);this.notifyChange();});
   engine.onUpdate(({deltaSeconds,simulationTick})=>this.beforeTick(deltaSeconds,simulationTick));
   engine.onAfterUpdate(()=>this.afterTick());
-  engine.humanoid?.onSimulationReplaced(()=>this.retireHumanoidActivities());
+  engine.humanoid?.onSimulationReplaced(reason=>this.simulationReplaced(reason));
   engine.setResetHandler(()=>{void this.reset().catch(error=>this.fault(error,'reset'));});
   engine.setDriveProvider((id,input,direction,dt)=>this.movementDrive(id,input,direction,dt));
  }
@@ -412,8 +412,9 @@ export class ThreeWorld implements API.World {
   const commandId=options.commandId??`world-command-${++this.nextCommand}`,body=JSON.stringify(command),previous=this.requests.get(commandId);
   if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))return Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('EPISODE_CAPTURE_OWNS_CLOCK')});
   if(previous)return previous.body===body?previous.promise:Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('COMMAND_ID_CONFLICT')});
+  const epoch=this.epoch;
   const promise=Promise.resolve().then(():API.CommandReceipt=>{try{
-   this.alive();if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');
+   this.alive();if(epoch!==this.epoch)throw failure('STALE_TASK');if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');
    if(options.expectedWorldRevision!==undefined&&options.expectedWorldRevision!==this.revision)throw failure('STALE_CONTEXT');
    const result=lease?humanoidHost(this.humanoid).command(cloneJson(command)):this.humanoid.command(cloneJson(command));
    if(result?.status==='rejected')throw failure(result.code,result.message);this.pauseMountedNavigation();this.touch();
@@ -558,6 +559,22 @@ export class ThreeWorld implements API.World {
   this.operations.update(id,{status:cancelled?'cancelled':'succeeded',phase:cancelled?'cancelled':'completed',...(!cancelled?{outcome:activity.actorSteps.size?'reached' as const:'completed' as const}:{}),steps:activity.steps});
   for(const parameterId of activity.parameters){const parameter=this.parameters.get(parameterId);if(parameter?.operationId===id)parameter.status='settled';}
   this.activities.delete(id);return true;
+ }
+ private simulationReplaced(reason:'map'|'reset'):void{
+  this.epoch++;this.startGeneration++;this.starting=undefined;
+  for(const scope of this.scopes)scope.abort();this.scopes.clear();
+  this.retireHumanoidActivities();
+  for(const item of this.queued.splice(0)){
+   this.releasePreparedSpawns(item.prepared.spawned);this.operations.update(item.operationId,{status:'cancelled',phase:'simulation-replaced'});
+   item.resolve({status:'rejected',commandId:item.commandId,worldRevision:this.revision,error:failure('STALE_TASK')});
+  }
+  for(const id of [...this.activities.keys()]){this.cancelActivity(id);this.operations.update(id,{status:'cancelled',phase:'simulation-replaced'});}
+  for(const entry of this.entries.values()){
+   entry.generation=++this.nextGeneration;
+   if(entry.body)this.engineCommand({type:'actor.stop',entityId:entry.id});
+  }
+  if(reason==='map')for(const autonomy of this.autonomies.values())autonomy.paused=true;
+  this.engine.clearInput();this.touch();
  }
  private retireHumanoidActivities(actorId?:string):void{for(const [id,activity] of this.humanoidActivities)if(actorId===undefined||activity.actorId===actorId){this.operations.update(id,{status:'cancelled',phase:actorId===undefined?'simulation-replaced':'actor-removed'});this.humanoidActivities.delete(id);}}
  private copyEntry(entry:Registration):Registration{return {...entry,movementState:cloneJson(entry.movementState)};}
