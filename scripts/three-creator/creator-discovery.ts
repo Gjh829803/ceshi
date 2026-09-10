@@ -42,7 +42,7 @@ export class CreatorDiscovery {
     const humanoidExampleTopic = includesHumanoid && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
     const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
-    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
+    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid-runtime/humanoid/action-schema.ts', 'humanoid-runtime/simulation.ts');
     const humanoidSourceContracts = includesHumanoid && wants('humanoidSourceContracts') ? Object.fromEntries(await Promise.all(
       sourceFiles.filter(name=>guidance.shouldDescribeSource(name)).map(async name => [name, runtimeContractSource(await guidance.source(name))]),

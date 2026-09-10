@@ -4,8 +4,6 @@ export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families
 export {SUBMERSIBLE_WATER} from './motion-families/underwater/submersible';
 export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
 export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
-export * as surfaceVessel from './motion-families/surface-vessel/public';
-// Preserve flat SDK imports used by existing Creator and Episode consumers.
 export * from './motion-families/surface-vessel/public';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';

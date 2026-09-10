@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './atv';
+import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './motion-families/ground-vehicle/atv';
 import {Character} from './character';
 import {ATV_SPEC,ATV_SOCKETS} from '../../../../shared/preset-content/atv';
 import {buildAtvModel} from '../../../../shared/preset-content/atv-model';

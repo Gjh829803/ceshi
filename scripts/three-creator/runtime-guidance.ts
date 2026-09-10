@@ -6,7 +6,7 @@ import {REPOSITORY_ROOT,type ThreeCompiler} from './compiler.js';
 import {readWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 
 const OPTIONAL_GUIDANCE_FILES=new Set(['humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts']);
-const DEFINITION_FILES = ['humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','config/aircraft.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera.ts','humanoid-runtime/humanoid/action-schema.ts','humanoid-runtime/input.ts','humanoid-runtime/input-guidance.ts','humanoid-runtime/character-capabilities.ts','humanoid-runtime/runtime.ts'] as const;
+const DEFINITION_FILES = ['humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','config/aircraft.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera.ts','humanoid-runtime/humanoid/action-schema.ts','humanoid-runtime/input.ts','humanoid-runtime/input-guidance.ts','humanoid-runtime/character-capabilities.ts','humanoid-runtime/runtime.ts'] as const;
 
 /** One validated source snapshot per discovery call; never import author modules. */
 export class RuntimeGuidance {

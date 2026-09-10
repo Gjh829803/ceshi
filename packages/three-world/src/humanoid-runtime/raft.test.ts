@@ -4,8 +4,8 @@ import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environme
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
-import {sampleRaftVisual} from './raft';
-import {CANOE_WATER} from './kayak';
+import {sampleRaftVisual} from './motion-families/surface-vessel/raft';
+import {CANOE_WATER} from './motion-families/surface-vessel/paddling';
 beforeAll(initEnvironmentQueries);
 function fixture(water=false,slope=false,wall=false){
  const angle=Math.atan(.2);

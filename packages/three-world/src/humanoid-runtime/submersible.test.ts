@@ -8,7 +8,7 @@ import {PerspectiveCamera,Group,Vector3,SkinnedMesh} from 'three';
 import {createWorld} from '../world';
 import {initEnvironmentQueries,EnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
-import {SUBMERSIBLE_WATER,createSubmersibleState} from './submersible';
+import {SUBMERSIBLE_WATER,createSubmersibleState} from './motion-families/underwater/submersible';
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
 import {SUBMERSIBLE_SPEC} from '../../../../shared/preset-content/submersible';
 import {buildSubmersibleModel} from '../../../../shared/preset-content/submersible-model';

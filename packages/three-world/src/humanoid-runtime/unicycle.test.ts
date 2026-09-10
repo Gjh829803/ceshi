@@ -7,7 +7,7 @@ import {createWorld} from '../index';
 import {Character} from './character';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createUnicycleState,unicyclePedal,sampleUnicycleVisual,copyUnicycleState} from './unicycle';
+import {createUnicycleState,unicyclePedal,sampleUnicycleVisual,copyUnicycleState} from './motion-families/ground-vehicle/unicycle';
 import {UNICYCLE_SPEC} from '../../../../shared/preset-content/unicycle';
 import {buildUnicycleModel} from '../../../../shared/preset-content/unicycle-model';
 beforeAll(initEnvironmentQueries);

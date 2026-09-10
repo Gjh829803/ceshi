@@ -1,7 +1,7 @@
 import * as publicHumanoid from './public';
 import {getMap} from '../../../../shared/preset-content/environment/maps';
 import {SPECS as playgroundVehicles} from '../../../../shared/preset-content/config';
-import {createRoadPhysicsProfile} from './wheel-physics';
+import {createRoadPhysicsProfile} from './motion-families/ground-vehicle/wheel-physics';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {Vector3,Group,Quaternion,Mesh,BoxGeometry,MeshStandardMaterial} from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
