@@ -121,7 +121,7 @@ export function runtimeContractSource(source:string):string {
    node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));
  }
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HumanoidRuntime');
- if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','onVisualUpdate']);
+ if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
   declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');

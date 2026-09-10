@@ -117,6 +117,12 @@ for details. Workspace SDK guidance points to current source and matching runtim
 inspection; Host values are not authority for edited SDKs. Standalone nonhuman
 guidance uses `setCameraFollow({view})`; raw guidance does not claim Humanoid support.
 
+For an authored opening, `cameraAuthoring.openingExample` points to the optional
+scene keyboard handoff using `presentation.inputSurface` and the existing
+`world.humanoid.setCameraMode` method. Creator key steps exercise the scene listener;
+semantic plans can issue `humanoid.set-camera-mode` explicitly. Starting the clock
+does not by itself switch an authored camera. Episode chooses its own segment view.
+
 `assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
 20 maximum. Empty query lists permitted assets; continue with `nextOffset` until
 null. Search by name, action or scene need such as `滑铲`, `游泳` or `pickup`.

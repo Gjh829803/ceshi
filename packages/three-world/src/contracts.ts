@@ -372,6 +372,8 @@ export interface ModelOutput {
 }
 export interface WorldPresentation {
  readonly ui:PresentationUI;readonly modelInput:ModelInput;readonly output:ModelOutput;
+ /** Existing focusable gameplay surface, separate from UI and renderer pixels. Attach scene DOM listeners; do not replace it or take over SDK input. */
+ readonly inputSurface:HTMLElement;
  status():PresentationStatus;
  focus():void;
  dispose():void;

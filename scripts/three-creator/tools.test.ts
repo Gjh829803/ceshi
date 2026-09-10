@@ -309,12 +309,16 @@ describe('v2 command and discovery boundary', () => {
       expect(initial.cameraAuthoring).toMatchObject({scope:'humanoid-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
       expect(initial.cameraAuthoring.startWithDefaults).toMatch(/whitebox/i);
       expect(initial.cameraAuthoring.opening).toContain('useAuthoredCamera');
+      expect(initial.cameraAuthoring.opening).toContain('world.humanoid.setCameraMode');
+      expect(initial.cameraAuthoring.opening).not.toContain('play: humanoid.camera');
+      const openingExample=await discoveryCall(service,initial.cameraAuthoring.openingExample.tool,initial.cameraAuthoring.openingExample.arguments);
+      expect(openingExample.files['opening-camera.ts']).toContain('world.getKeyBindings()');
       expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
       expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}});
       expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
       for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
       expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.humanoid.configuration.effective.camera.framing'});
-      for(const request of [initial.cameraAuthoring.verify.selectView,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
+      for(const request of [initial.cameraAuthoring.openingExample,initial.cameraAuthoring.verify.selectView,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
         const tool=THREE_CREATOR_TOOLS.find(tool=>tool.name===request.tool);
         expect(tool,request.tool).toBeDefined();
         expect(new Ajv({strict:false}).compile(tool!.inputSchema)(request.arguments),request.tool).toBe(true);
@@ -322,6 +326,10 @@ describe('v2 command and discovery boundary', () => {
       for(const [topic,sections] of [['humanoid',['guide']],['mounted-interaction',['humanoid']],['control',['commands']],['getting-started',['all']]] as const){
         const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic,sections});
         expect(selected.cameraAuthoring).toEqual(initial.cameraAuthoring);
+        if(topic==='mounted-interaction'){
+          const declarations=selected.humanoidSourceContracts['humanoid-runtime/runtime.ts'];
+          for(const method of ['inspectBoarding','inspectControls','inputGuide'])expect(declarations).toContain(`${method}(`);
+        }
       }
       for(const args of [{},{topic:'vehicle-camera',files:[]}]){
         const example=await discoveryCall(service,'creator_get_examples',args);
