@@ -16,7 +16,7 @@
 - `flight.ts`：输入到飞行请求，松键与 Ctrl 刹停后保持零速悬停。
 - `controller.ts` / `collision-probes.ts`：现有 Rapier 世界中的完整姿态与位移扫掠；以真实蒙皮、翼拍、尾部和混合动作标定球组。
 - `visual.ts` / `flame.ts`：GLTFLoader、Three 动画混合、仅颌骨叠加喷火、固定步粒子历史、真实座位和缰绳。
-- `HumanoidRuntime`：唯一固定步、呈现插值、角色座位与相机生命周期。第一视角由现有 FollowCamera 读取稳定骑乘观察点，T 沿用三视角切换。
+- `HumanoidRuntime`：唯一固定步、呈现插值、角色座位与相机生命周期。第一视角与越肩视角由现有 FollowCamera 读取完成座位对齐后的真实骑手眼位，T 沿用三视角切换。
 - `shared/preset-content/environment/dragon-training.ts`：地图几何、障碍与人物/飞机准备区；与飞机共用同一个物理世界。
 
 这些飞行公式是本项目依据已有资产与行为分析重建的实现，不是恢复出的 Century C++ 源码。当前碰撞是保守球组的运动学扫掠，不等同于原游戏的完整碰撞组件或动力学布料。

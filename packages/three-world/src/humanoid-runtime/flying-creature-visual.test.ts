@@ -1,3 +1,9 @@
+import {fileURLToPath} from 'node:url';
+import {Character} from './character';
+import {createWorld} from '../world';
+import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
+import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
+import {emptyInput} from './simulation';
 import {readFileSync} from 'node:fs';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as T from 'three';
@@ -54,4 +60,39 @@ it('flame history advances only on commits and clears on reset',()=>{
     expect(count).toBeGreaterThan(20);flame.sample(.95,root);expect(flame.object.geometry.drawRange.count).toBe(count);expect(Array.from(flame.object.geometry.attributes.position!.array)).toEqual(positions);
     flame.commit(2,0,0,0,new T.Vector3(),new T.Vector3(0,0,1),new T.Vector3());flame.sample(0,root);expect(flame.object.geometry.drawRange.count).toBe(0);
   }finally{flame.dispose();}
+});
+
+it('keeps native mounted views at the real Source101 eyes through orbit, flight and T switches',async()=>{
+  const {visual}=await fixture();
+  vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{
+    const bytes=readFileSync(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  });
+  vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(readFileSync(fileURLToPath(String(input)))));
+  const rider=new Character();await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  const world=await createWorld({camera:new T.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
+    character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:createFlyingCreatureSpec('dragon'),object:visual.root,flyingVisual:visual}]}});
+  try{
+    const runtime=world.humanoid!;runtime.applyProfile({view:{keyboardToggleEnabled:true}});
+    runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
+    const meshes:T.SkinnedMesh[]=[];rider.root.traverse(n=>{if(n instanceof T.SkinnedMesh)meshes.push(n);});
+    const full=meshes.map(mesh=>mesh.geometry.index?.count??0);
+    const eye=()=>{const point=new T.Vector3();expect(rider.eyePosition(point)).toBe(true);return point;};
+    for(const direction of [-1,1]){
+      world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
+      expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
+      for(let n=0;n<60;n++){
+        world.step({cameraYawRatio:direction,cameraPitchRatio:direction,humanoid:{...emptyInput(),steer:direction,boost:true}},1);
+        expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
+      }
+      expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true);
+      world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
+      expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
+      const vehicle=runtime.simulation.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
+      expect(offset.x).toBeLessThan(-.3);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
+      world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(0);
+      expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
+    }
+    runtime.setCameraMode(1);runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,cameraMode:1}});
+    expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
+  }finally{world.dispose();vi.unstubAllGlobals();}
 });

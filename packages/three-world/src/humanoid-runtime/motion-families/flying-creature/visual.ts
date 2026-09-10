@@ -105,10 +105,6 @@ export class FlyingCreatureVisual {
       positions.needsUpdate=true;
     }
   }
-  /** 固定头部参考，不从翼拍与头颈动画累计相机旋转。 */
-  eyePosition(target:T.Vector3):boolean{
-    this.root.updateWorldMatrix(true,false);target.set(0,3.7,1.6).applyMatrix4(this.root.matrixWorld);return true;
-  }
   inspect(){return {sampleTimeSeconds:this.sampleTime,flameParticles:this.flame?.object.geometry.drawRange.count??0,
     clips:[...this.actions.entries()].filter(([,action])=>action.getEffectiveWeight()>0).map(([name,action])=>({name,weight:action.getEffectiveWeight(),time:action.time})),
     attachments:Object.fromEntries(['Seat','Head','Jaw','CenturyFireSocket'].map(name=>[name,this.body?.getObjectByName(name)?.getWorldPosition(new T.Vector3()).toArray()]))};}

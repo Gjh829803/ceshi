@@ -240,10 +240,7 @@ export class HumanoidRuntime implements PhysicsPort {
     this.environment=new EnvironmentQueries(this.instanceMap(options.map));
     this.simulation=new Simulation(this.environment,this.specs);
     this.followCamera=new FollowCamera(camera,this.environment,options.vehicles);
-    this.followCamera.eyePosition=target=>{
-      const mounted=this.simulation.active>=0?this.options.vehicles[this.simulation.active]:undefined;
-      return mounted?.flyingVisual?.eyePosition(target)??options.character.animation?.eyePosition(target)??false;
-    };
+    this.followCamera.eyePosition=target=>options.character.animation?.eyePosition(target)??false;
     this.followCamera.configureTuning(options.cameraTuning??{});this.initialCamera=new THREE.PerspectiveCamera().copy(camera,false);
     this.profile={view:{...DEFAULT_HUMANOID_VIEW},character:{...this.simulation.characterControl},camera:{...options.cameraTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readMovementSettings(v.spec),camera:v.spec.camera}]))};
     this.commitProfile(this.prepareProfile({}));
@@ -575,18 +572,16 @@ export class HumanoidRuntime implements PhysicsPort {
     if(dt===0){
       this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;
       this.options.character.animation?.capturePresentationPose();
-      if(!this.authored){
-        if(snapCamera){
-          this.followCamera.beforeFixedUpdate();
-          this.followCamera.update(this.simulation,0);
-        }
-        this.followCamera.capturePresentationPose(this.simulation,true);
-      }
     }
     const display=this.presentation.sample(1,this.presentationEpoch,0,0);
     this.sampleHorses(display);
     this.options.vehicles.forEach((instance,index)=>instance.flyingVisual?.commit(display.vehicles[index]!,display.epoch,display.timeSeconds));
     this.alignHorseRider();this.sampleSkiEquipment();
+    // 相机读取完成座位对齐后的真实骑手眼位，包括复位与地图切换的零时步。
+    if(dt===0&&!this.authored){
+      if(snapCamera){this.followCamera.beforeFixedUpdate();this.followCamera.update(this.simulation,0);}
+      this.followCamera.capturePresentationPose(this.simulation,true);
+    }
   }
   private sampleHorses(sample: HumanoidDisplaySample): void {
     this.options.vehicles.forEach((instance, index) => {
