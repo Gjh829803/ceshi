@@ -1,9 +1,10 @@
-import {afterEach,expect,it} from 'vitest';
+import {afterEach,expect,it,vi} from 'vitest';
 import {mkdtemp,readFile,writeFile,rm,access,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import ts from 'typescript';
 import {ThreeCreatorTools} from './tools';
+import {RuntimeGuidance} from './runtime-guidance';
 import {executeThreeCreatorTool} from './mcp';
 
 const services:ThreeCreatorTools[]=[];
@@ -155,4 +156,19 @@ it('does not relabel the synthetic Host factory signature as a workspace contrac
  const schema=await call(service,'creator_get_authoring_schema',{sections:['contracts']});
  expect(schema.sdkContracts).not.toContain('export declare function createWorld(');
  expect(schema.runtimeDefinitions['world.ts']).toContain('auditFactoryOption');
+});
+
+it('keeps workspace provenance in guide-only reads without parsing unrequested declarations',async()=>{
+ const service=await fixture();
+ const source=vi.spyOn(RuntimeGuidance.prototype,'source'),definitions=vi.spyOn(RuntimeGuidance.prototype,'definitions');
+ try {
+  const guide=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['guide']});
+  expect(guide.runtimeGuidance.kind).toBe('workspace-sdk-source');
+  expect(guide.sdkGuide).toContain('workspace SDK source');
+  expect(source).not.toHaveBeenCalled();expect(definitions).not.toHaveBeenCalled();
+  const detail=await call(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid']});
+  expect(definitions).toHaveBeenCalled();
+  expect(detail.runtimeGuidance).toEqual(guide.runtimeGuidance);
+  expect(detail.availableSections).toEqual(guide.availableSections);
+ } finally {source.mockRestore();definitions.mockRestore();}
 });

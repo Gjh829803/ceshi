@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThreeCreatorTools } from './tools';
+import { RuntimeGuidance } from './runtime-guidance';
 import { executeThreeCreatorTool } from './mcp';
 import { createAssetPolicySnapshot, assetPolicyHash } from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
@@ -622,4 +623,24 @@ it('contains hostile proxies in public diagnostics and persisted failed operatio
     expect(operation).toMatchObject({status:'failed',error:response.error,errorDetails:response.errorDetails});
     await expect.poll(async()=>JSON.parse(await readFile(path.join(tools.evidenceRoot,'operations',`${started.operationId}.json`),'utf8'))).toMatchObject({errorDetails:response.errorDetails});
   }
+});
+
+it('materializes declarations only for requested sections without hiding available sections', async () => {
+  const tools = await service();
+  const source = vi.spyOn(RuntimeGuidance.prototype, 'source');
+  const definitions = vi.spyOn(RuntimeGuidance.prototype, 'definitions');
+  try {
+    const guide = await schema(tools, {topic:'mounted-interaction',sections:['guide']});
+    expect(source).not.toHaveBeenCalled();
+    expect(definitions).not.toHaveBeenCalled();
+    expect(guide.availableSections).toContain('contracts');
+    expect(guide.availableSections).toContain('humanoid');
+    const declarations = await schema(tools, {topic:'mounted-interaction',sections:['contracts','humanoid']});
+    expect(source).toHaveBeenCalledWith('contracts.ts');
+    expect(source).toHaveBeenCalledWith('humanoid-runtime/road-vehicle.ts');
+    const full = await schema(tools, {topic:'mounted-interaction',sections:['all']});
+    expect(declarations.sdkContracts).toBe(full.sdkContracts);
+    expect(declarations.humanoidSourceContracts).toEqual(full.humanoidSourceContracts);
+    expect(guide.availableSections).toEqual(full.availableSections);
+  } finally { source.mockRestore(); definitions.mockRestore(); }
 });

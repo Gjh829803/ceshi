@@ -1,3 +1,4 @@
+import {readCameraWorldPose} from './camera-observation';
 import {FOLLOW_CAMERA_DEFAULTS} from './config/follow-camera';
 import * as THREE from 'three';
 import { CameraCollisionSolver, type CameraHardDecolliderTransactionStateV1 } from '@whitebox-world/camera-collision';
@@ -32,9 +33,9 @@ export type CameraRigState = Readonly<{
   mode: 'authored' | 'follow-pending' | 'follow';
   positionWorldMetersXYZ: Vec3;
   orientationWorldQuaternionXYZW: readonly [number, number, number, number];
-  desiredPositionWorldMetersXYZ: Vec3;
-  desiredYawRadians: number;
-  desiredPitchRadians: number;
+  desiredPositionWorldMetersXYZ: Vec3 | null;
+  desiredYawRadians: number | null;
+  desiredPitchRadians: number | null;
   desiredArmDistanceMeters?: number;
   safeArmDistanceMeters?: number;
   actualArmDistanceMeters?: number;
@@ -316,9 +317,8 @@ export class ThreeCameraRig {
     this.applyWorldPose(eye, orientation);
   }
   snapshot(): CameraRigState {
-    const position = this.camera.getWorldPosition(new THREE.Vector3()), follow = this.memory.follow;
-    const quaternion = this.camera.getWorldQuaternion(new THREE.Quaternion());
-    const direction = this.camera.getWorldDirection(new THREE.Vector3());
+    const {position,rotation:quaternion,direction}=readCameraWorldPose(this.camera), follow = this.memory.follow;
+    if(this.mode==='authored')return {mode:'authored',positionWorldMetersXYZ:tuple(position),orientationWorldQuaternionXYZW:[quaternion.x,quaternion.y,quaternion.z,quaternion.w],desiredPositionWorldMetersXYZ:null,desiredYawRadians:null,desiredPitchRadians:null};
     const subject = follow ? this.subject(follow.targetEntityId) : undefined;
     const target = follow ? this.memory.smoothedSubject.clone().add(new THREE.Vector3(0, follow.targetHeightMeters, 0)) : undefined;
     return { mode: this.mode, positionWorldMetersXYZ: tuple(position), orientationWorldQuaternionXYZW: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],

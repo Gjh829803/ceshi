@@ -26,7 +26,8 @@ const sectionFields = {
 export class CreatorDiscovery {
   constructor(private readonly compiler: ThreeCompiler) {}
   private get profile() { return this.compiler.profile; }
-  async schema(topic: AuthoringTopic = 'getting-started') {
+  async schema(topic: AuthoringTopic = 'getting-started', requestedFields?: ReadonlySet<string>) {
+    const wants = (field: string) => !requestedFields || requestedFields.has(field);
     if (!AUTHORING_TOPICS.includes(topic)) throw new Error('THREE_SCHEMA_TOPIC_UNKNOWN');
     const guidance=await readRuntimeGuidance(this.compiler);
     const policy = this.compiler.assetPolicy().policy;
@@ -43,19 +44,19 @@ export class CreatorDiscovery {
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
     if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid-runtime/humanoid/action-schema.ts', 'humanoid-runtime/simulation.ts');
-    const humanoidSourceContracts = includesHumanoid ? Object.fromEntries(await Promise.all(
+    const humanoidSourceContracts = includesHumanoid && wants('humanoidSourceContracts') ? Object.fromEntries(await Promise.all(
       sourceFiles.map(async name => [name, runtimeContractSource(await guidance.source(name))]),
     )) : undefined;
     const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
-      sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace}),
-      ...(!nonhuman?{sdkFactoryContracts: humanoidFactoryContractSource(await guidance.source('humanoid.ts'))}:{}),
-      sdkGuide: guidance.isWorkspace
+      ...(wants('sdkContracts') ? {sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace})} : {}),
+      ...(!nonhuman&&wants('sdkFactoryContracts')?{sdkFactoryContracts: humanoidFactoryContractSource(await guidance.source('humanoid.ts'))}:{}),
+      ...(wants('sdkGuide') ? {sdkGuide: guidance.isWorkspace
         ? 'This project uses workspace SDK source. Request contracts/humanoid sections for current declarations and runtimeDefinitions. Capability conditions and bindings must come from this source or world_inspect, not Host baseline examples. Host command transport and admission rules stay fixed.'
         : guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic)
         .replace(/<!-- asset-info:([a-zA-Z0-9._,+-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,
-          (_match, ids: string, body: string) => ids.split(',').every(id => policy.allowedAssetIds.includes(id)) ? body : ''),
+          (_match, ids: string, body: string) => ids.split(',').every(id => policy.allowedAssetIds.includes(id)) ? body : '')} : {}),
     } : {};
-    return {
+    const result = {
       topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance,
       ...(cameraAuthoring?{cameraAuthoring}:{}),
       ...(!nonhuman?{humanAuthoring:humanAuthoringGuidance(policy,this.profile)}:{}),
@@ -72,12 +73,21 @@ export class CreatorDiscovery {
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.',
       ...sdk,
       ...(includesCommands ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
-      ...(guidance.isWorkspace?{runtimeDefinitions:await guidance.definitions(includesHumanoid||includesCommands)}:{}),
+      ...(guidance.isWorkspace&&wants('runtimeDefinitions')?{runtimeDefinitions:await guidance.definitions(includesHumanoid||includesCommands)}:{}),
       ...(humanoidSourceContracts ? { humanoidSourceContracts } : {}),
       ...(isSdk&&!guidance.isWorkspace&&['humanoid','mounted-interaction','all'].includes(topic)?{roadVehicleConfigurations:{car:humanoid.createRoadVehicleSpec('car'),motorcycle:humanoid.createRoadVehicleSpec('motorcycle')}}:{}),
       ...(humanoidExampleTopic ? { humanoidExampleTopic } : {}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.',
     };
+    // Advertise available declarations even when this request did not materialize them.
+    const availableFields = new Set(Object.entries(result).filter(([, value]) => value !== undefined).map(([key]) => key));
+    if (isSdk) { availableFields.add('sdkContracts'); availableFields.add('sdkGuide'); }
+    if (isSdk && !nonhuman) availableFields.add('sdkFactoryContracts');
+    if (includesHumanoid) availableFields.add('humanoidSourceContracts');
+    if (guidance.isWorkspace) availableFields.add('runtimeDefinitions');
+    const availableSections = Object.entries(sectionFields)
+      .filter(([, fields]) => fields.some(field => availableFields.has(field))).map(([section]) => section);
+    return {...result, availableSections};
   }
 
   private exampleRoot(topic: ExampleTopic) {
@@ -169,17 +179,17 @@ export class CreatorDiscovery {
   }
 
   async selectedSchema(topic: AuthoringTopic = 'getting-started', sections: readonly SchemaSection[] = ['guide']) {
-    const full = await this.schema(topic);
+    const requestedFields = sections.includes('all') ? undefined : new Set<string>(
+      sections.flatMap(section => section === 'all' ? [] : sectionFields[section]));
+    const full = await this.schema(topic, requestedFields);
     const source: Record<string, unknown> = full;
-    const availableSections = Object.entries(sectionFields)
-      .filter(([, fields]) => fields.some(field => source[field] !== undefined))
-      .map(([section]) => section);
+    const availableSections = full.availableSections;
     const selected = sections.includes('all') ? source : Object.fromEntries(
       sections.flatMap(section => section === 'all' ? [] : sectionFields[section])
         .filter(field => source[field] !== undefined).map(field => [field, source[field]]),
     );
     return { topic, availableTopics: AUTHORING_TOPICS, availableSections, runtimeGuidance:full.runtimeGuidance, ...selected,
-      readHint: 'Request sections for only the contracts you need; sections:["all"] returns the complete topic. Read creator_get_examples for runnable source.',
+      readHint: 'General conventions: topic getting-started. Request only needed sections; sections:["all"] returns the complete topic. Read creator_get_examples for runnable source.',
     };
   }
 

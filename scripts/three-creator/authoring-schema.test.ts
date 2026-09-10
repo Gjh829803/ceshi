@@ -286,3 +286,10 @@ it('publishes portable humanoid namespace references for generated authoring con
  expect(selected).toContain("import('@worldkit/three').humanoid.HumanoidRuntime");
  expect(selected).not.toContain("import('./humanoid-runtime/");
 });
+
+it('keeps shared conventions at the entry point and returns every matching topic section',()=>{
+ const markdown='Shared conventions\n<!-- topic:getting-started -->Start\n<!-- topic:humanoid -->First\n<!-- topic:observation -->Observe\n<!-- topic:humanoid -->Second';
+ expect(guideTopic(markdown,'getting-started')).toBe('Shared conventions\nStart');
+ expect(guideTopic(markdown,'humanoid')).toBe('First\nSecond');
+ expect(guideTopic(markdown,'all')).toBe(markdown);
+});

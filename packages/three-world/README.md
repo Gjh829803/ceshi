@@ -939,6 +939,11 @@ For repeated objects, choose one complete representative:
 `{entityId, representative:{kind:"instance", object:instancedMesh, instanceIndex}}`.
 Registration alone does not select an object for capture. Snapshots retain all entities, actual motion/animation,
 worldRevision, tick, camera and structured errors; describe is the controller view.
+Camera pose fields are world-space measurements. In authored mode, desired position,
+yaw and pitch are `null`; follow arm distances and collision phase are absent because
+SDK follow intent is not applicable. Humanoid collision/raycast IDs resolve known
+map objects (including ground tiles), vehicles and actors to their declared identities;
+an unmapped collider keeps its `collider-<handle>` fallback, not an inferred entity.
 
 Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views
 then apply the object's complete world quaternion, including parent rotation.

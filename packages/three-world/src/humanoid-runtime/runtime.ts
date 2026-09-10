@@ -1,3 +1,4 @@
+import {readCameraWorldPose} from '../camera-observation';
 import {vehicleDriveTelemetry,type VehicleDriveTelemetry} from './vehicle-dynamics';
 import {
   DEFAULT_HUMANOID_VIEW,
@@ -353,7 +354,12 @@ export class HumanoidRuntime implements PhysicsPort {
   characterCapabilities():CharacterCapabilityState[]{const restriction=this.characterRestriction();return characterCapabilities(this.simulation.humanoid??undefined).map(card=>restriction?{...card,eligible:false,reason:restriction.code,message:restriction.message}:card);}
   actionIds(id:string):readonly string[]{return id===this.options.character.instanceId?[...this.options.character.animation?.availableHumanoidClips??[]]:[];}
   animationState(id:string):import('../contracts').EntityState['animation']{if(id!==this.options.character.instanceId)return;const source=this.options.character.animation?.sourceCharacter;if(!source)return;const key=Object.keys(source.weights).sort((a,b)=>(source.weights[b]??0)-(source.weights[a]??0))[0];if(!key||!source.actions[key])return;const action=source.actions[key];return {actionId:key,clipName:action.getClip().name,timeSeconds:action.time};}
-  cameraSnapshot():import('../contracts').CameraState{const c=this.followCamera,q=this.camera.quaternion;return {mode:this.cameraMode,positionWorldMetersXYZ:tuple(this.camera.position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w],desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.desiredPosition.distanceTo(c.target),actualArmDistanceMeters:c.presentationTarget.distanceTo(this.camera.position),collisionPhase:c.collisionLimited?'constrained':'clear'};}
+  cameraSnapshot():import('../contracts').CameraState{
+    const c=this.followCamera,{position,rotation:q}=readCameraWorldPose(this.camera);
+    const actual={mode:this.cameraMode,positionWorldMetersXYZ:tuple(position),orientationWorldQuaternionXYZW:[q.x,q.y,q.z,q.w] as const};
+    if(this.authored)return {...actual,desiredPositionWorldMetersXYZ:null,desiredYawRadians:null,desiredPitchRadians:null};
+    return {...actual,desiredPositionWorldMetersXYZ:tuple(c.desiredPosition),desiredYawRadians:c.yaw,desiredPitchRadians:c.pitch,desiredArmDistanceMeters:c.desiredPosition.distanceTo(c.target),actualArmDistanceMeters:c.presentationTarget.distanceTo(position),collisionPhase:c.collisionLimited?'constrained':'clear'};
+  }
   useAuthoredCamera():void{this.assertExternalMutation();this.authored=true;this.options.character.animation?.setFirstPerson(false);}
   private setCameraModeOwned(mode:0|1|2):void{if(![0,1,2].includes(mode))throw new Error('HUMANOID_CAMERA_MODE_INVALID');this.authored=false;this.followCamera.mode=mode;this.followCamera.reset(this.simulation);this.options.character.animation?.setFirstPerson(mode===1);this.followCamera.update(this.simulation,0);this.followCamera.capturePresentationPose(this.simulation,true);}
   validateInput(input:Input):void{
