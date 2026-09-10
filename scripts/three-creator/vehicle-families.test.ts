@@ -11,7 +11,8 @@ const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec }
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
 const families = ['paddled_boat', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'bus', 'sled', 'ski', 'hover', 'boat', 'submarine', 'glider', 'plane', 'spacecraft', 'mount', 'carriage', 'dragon'] as const;
 type Family = typeof families[number];
-const representative = (family: Family) => assets.find(asset => asset.vehicle.spec.mode === family)!;
+const representativeIds:Record<Family,string>={paddled_boat:'vehicle.canoe',tank:'vehicle.tank',wheeled:'vehicle.rover',motorcycle:'vehicle.bike',unicycle:'vehicle.unicycle',skateboard:'vehicle.slide',bus:'vehicle.bus',sled:'vehicle.sled',ski:'vehicle.ski',hover:'vehicle.hover',boat:'vehicle.boat',submarine:'vehicle.sub',glider:'vehicle.glider',plane:'vehicle.plane',spacecraft:'vehicle.space',mount:'creature.horse',carriage:'vehicle.carriage',dragon:'creature.dragon'};
+const representative = (family: Family) => assets.find(asset => asset.id === representativeIds[family])!;
 const barrierFront = 59;
 
 function course(family: Family | 'character', barrier = false): EnvironmentDefinition {
@@ -58,8 +59,8 @@ function drive(family: Family) {
 }
 
 describe('catalog humanoid families in an independent physical world', () => {
-  it('covers the catalog 30 vehicle assets and all eighteen runtime families', () => {
-    expect(assets).toHaveLength(30);
+  it('covers every supported runtime family with an explicit catalog fixture', () => {
+    for(const family of families)expect(representative(family).vehicle.spec.mode).toBe(family);
     expect([...new Set(assets.map(asset => asset.vehicle.spec.mode))].sort()).toEqual([...families].sort());
   });
 
@@ -69,12 +70,12 @@ describe('catalog humanoid families in an independent physical world', () => {
       try {
         expect(runtime.probeEpisodeStart(start).isValid).toBe(true);
         runtime.prepareEpisodeStart(start);
-        const origin = runtime.simulation.vehicle!.position.clone();
-        const revision = runtime.simulation.teleportRevision;
+        const origin = runtime.simulation.controlledActor.vehicle!.position.clone();
+        const revision = runtime.simulation.controlledActor.teleportRevision;
         let travelled = 0, previous = origin.clone();
         for (let sample = 0; sample < 60; sample++) {
           const snapshot = world.step(drive(family), 30);
-          const actor = runtime.simulation.vehicle!;
+          const actor = runtime.simulation.controlledActor.vehicle!;
           expect(snapshot.errors).toEqual([]);
           expect(snapshot.humanoid?.mountedInstanceId).toBe('subject');
           expect([...actor.position.toArray(), ...actor.velocity.toArray(), ...actor.rotation.toArray()].every(Number.isFinite)).toBe(true);
@@ -82,7 +83,7 @@ describe('catalog humanoid families in an independent physical world', () => {
           travelled += actor.position.distanceTo(previous); previous.copy(actor.position);
         }
         expect(world.simulationTick).toBe(1800);
-        expect(runtime.simulation.teleportRevision).toBe(revision);
+        expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
         expect(travelled).toBeGreaterThan(20);
         expect(previous.distanceTo(origin)).toBeGreaterThan(20);
         if (family === 'boat') expect(Math.abs(previous.y)).toBeLessThan(.5);
@@ -102,19 +103,19 @@ describe('catalog humanoid families in an independent physical world', () => {
         expect(runtime.probeEpisodeStart({ ...start, positionWorldMetersXYZ: [0, start.positionWorldMetersXYZ[1], 60] }).isValid).toBe(false);
         expect(runtime.probeEpisodeStart(start).isValid).toBe(true);
         runtime.prepareEpisodeStart(start);
-        const revision = runtime.simulation.teleportRevision;
-        let furthestForward = runtime.simulation.vehicle!.position.z;
+        const revision = runtime.simulation.controlledActor.teleportRevision;
+        let furthestForward = runtime.simulation.controlledActor.vehicle!.position.z;
         for (let sample = 0; sample < 60; sample++) {
           const snapshot = world.step(drive(family), 30);
           expect(snapshot.errors).toEqual([]);
-          expect(runtime.simulation.vehicle!.position.z).toBeLessThan(barrierFront);
-          furthestForward = Math.max(furthestForward, runtime.simulation.vehicle!.position.z);
+          expect(runtime.simulation.controlledActor.vehicle!.position.z).toBeLessThan(barrierFront);
+          furthestForward = Math.max(furthestForward, runtime.simulation.controlledActor.vehicle!.position.z);
         }
-        const actor = runtime.simulation.vehicle!;
+        const actor = runtime.simulation.controlledActor.vehicle!;
         // Dynamic aircraft can rebound or turn after impact; prove approach separately from containment.
         expect(furthestForward).toBeGreaterThan(20);
         expect(actor.position.z).toBeLessThan(barrierFront);
-        expect(runtime.simulation.teleportRevision).toBe(revision);
+        expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
       } finally { world.dispose(); }
     }, 20_000);
   }
@@ -127,12 +128,12 @@ describe('catalog humanoid families in an independent physical world', () => {
     try {
       const runtime = world.humanoid!, start = { positionWorldMetersXYZ: [0, .03, 0] as const, facingYawRadians: Math.PI };
       expect(runtime.probeEpisodeStart(start).isValid).toBe(true); runtime.prepareEpisodeStart(start);
-      const revision = runtime.simulation.teleportRevision;
+      const revision = runtime.simulation.controlledActor.teleportRevision;
       for (let sample = 0; sample < 60; sample++) world.step({ humanoid: { ...humanoid.emptyInput(), forward: 1 } }, 30);
       const state = world.getEntityState('person');
       expect(world.snapshot().errors).toEqual([]);
       expect(world.simulationTick).toBe(1800);
-      expect(runtime.simulation.teleportRevision).toBe(revision);
+      expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
       expect(state.positionWorldMetersXYZ[2]).toBeGreaterThan(58);
       expect(state.positionWorldMetersXYZ[2]).toBeLessThan(barrierFront);
       expect(state.motion?.isGrounded).toBe(true);
@@ -168,12 +169,12 @@ describe('catalog humanoid families in an independent physical world', () => {
     try {
       expect(runtime.probeEpisodeStart(start).isValid).toBe(true);
       runtime.prepareEpisodeStart(start); world.step({}, 60);
-      const position = runtime.simulation.player.position.clone();
-      const revision = runtime.simulation.teleportRevision;
+      const position = runtime.simulation.controlledActor.player.position.clone();
+      const revision = runtime.simulation.controlledActor.teleportRevision;
       expect(runtime.exit()).toBe(false);
       expect(runtime.snapshot().mountedInstanceId).toBe('subject');
-      expect(runtime.simulation.player.position.distanceTo(position)).toBe(0);
-      expect(runtime.simulation.teleportRevision).toBe(revision);
+      expect(runtime.simulation.controlledActor.player.position.distanceTo(position)).toBe(0);
+      expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
       expect(world.snapshot().errors).toEqual([]);
     } finally { world.dispose(); }
   });

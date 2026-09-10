@@ -9,12 +9,12 @@ it("hands off solved velocity and continues both bodies during the exit transiti
     const runtime = world.humanoid!;
     expect(runtime.enter("horse-1")).toBe(true);
     world.step({}, 31);
-    const horse = runtime.simulation.vehicle!;
+    const horse = runtime.simulation.controlledActor.vehicle!;
     horse.velocity.set(0, 0, 1.5);
     horse.speed = 1.5;
     horse.grounded = true;
     expect(runtime.exit()).toBe(true);
-    const human = runtime.simulation.humanoid!;
+    const human = runtime.simulation.controlledActor.controller!;
     expect(human.velocity.z).toBeCloseTo(1.5);
     const humanZ = human.position.z,
       horseZ = horse.position.z;
@@ -32,9 +32,9 @@ function physicalState(
   world: Awaited<ReturnType<typeof createMountedFixture>>,
 ) {
   const s = world.humanoid!.simulation,
-    h = s.humanoid!;
+    h = s.controlledActor.controller!;
   return {
-    active: s.active,
+    active: s.controlledActor.vehicleIndex,
     position: h.position.toArray(),
     velocity: h.velocity.toArray(),
     vertical: h.vertical,
@@ -43,11 +43,11 @@ function physicalState(
     capsule: h.capsule.isEnabled(),
     count: s.environment!.colliderCount,
     player: {
-      position: s.player.position.toArray(),
-      velocity: s.player.velocity.toArray(),
-      yaw: s.player.yaw,
+      position: s.controlledActor.player.position.toArray(),
+      velocity: s.controlledActor.player.velocity.toArray(),
+      yaw: s.controlledActor.player.yaw,
     },
-    transition: s.transition,
+    transition: s.controlledActor.transition,
     vehicles: s.vehicles.map((v) => ({
       position: v.position.toArray(),
       velocity: v.velocity.toArray(),
@@ -59,10 +59,10 @@ it("checks an explicit simulation interaction through the atomic mount gate", as
   const world = await createMountedFixture();
   try {
     const simulation = world.humanoid!.simulation;
-    simulation.humanoid.position.set(0, 0.025, 2.4);
+    simulation.controlledActor.controller.position.set(0, 0.025, 2.4);
     const before = physicalState(world);
-    expect(simulation.interact("horse-1")).toBe(false);
-    expect(simulation.failureCode).toBe("VEHICLE_MOUNT_SIDE_REQUIRED");
+    expect(simulation.controlledActor.interact("horse-1")).toBe(false);
+    expect(simulation.controlledActor.failureCode).toBe("VEHICLE_MOUNT_SIDE_REQUIRED");
     expect(physicalState(world)).toEqual(before);
   } finally {
     world.dispose();
@@ -75,15 +75,15 @@ it("enters the explicit farther instance and preserves repeated-request state", 
   try {
     const r = world.humanoid!;
     expect(r.enter("horse-2")).toBe(true);
-    expect(r.simulation.vehicle!.spec.id).toBe("horse-2");
+    expect(r.simulation.controlledActor.vehicle!.spec.id).toBe("horse-2");
     const before = physicalState(world);
     expect(r.enter("horse-1")).toBe(false);
-    expect(r.simulation.failureCode).toBe("HUMANOID_TRANSITION_ACTIVE");
+    expect(r.simulation.controlledActor.failureCode).toBe("HUMANOID_TRANSITION_ACTIVE");
     expect(physicalState(world)).toEqual(before);
     world.step({}, 31);
     const mounted = physicalState(world);
     expect(r.enter("horse-1")).toBe(false);
-    expect(r.simulation.failureCode).toBe("HUMANOID_ALREADY_MOUNTED");
+    expect(r.simulation.controlledActor.failureCode).toBe("HUMANOID_ALREADY_MOUNTED");
     expect(physicalState(world)).toEqual(mounted);
   } finally {
     world.dispose();
@@ -99,15 +99,13 @@ it.each([
 ])("boards side %s at yaw %s", async (side, yaw) => {
   const world = await createMountedFixture();
   try {
-    const r = world.humanoid!,
-      v = r.simulation.vehicles[0]!;
-    v.yaw = yaw!;
-    v.rotation.setFromAxisAngle(new Vector3(0, 1, 0), yaw!);
-    r.prepareCharacter([
+    const r = world.humanoid!;
+    expect(r.prepare('horse-1',{id:'side-entry',name:'Side entry',position:[0,.025,0],yaw:yaw!,regionId:'mount'})).toBe(true);
+    expect(r.prepareCharacter([
       side! * 1.45 * Math.cos(yaw!),
       0.025,
       -side! * 1.45 * Math.sin(yaw!),
-    ]);
+    ])).toBe(true);
     expect(r.enter("horse-1")).toBe(true);
   } finally {
     world.dispose();
@@ -117,35 +115,35 @@ it.each([
   [
     "head",
     (s: Simulation): void => {
-      s.humanoid!.position.set(0, 0.025, 2.4);
+      s.controlledActor.controller!.position.set(0, 0.025, 2.4);
     },
     "VEHICLE_MOUNT_SIDE_REQUIRED",
   ],
   [
     "tail",
     (s: Simulation): void => {
-      s.humanoid!.position.set(0, 0.025, -2.4);
+      s.controlledActor.controller!.position.set(0, 0.025, -2.4);
     },
     "VEHICLE_MOUNT_SIDE_REQUIRED",
   ],
   [
     "overlap",
     (s: Simulation): void => {
-      s.humanoid!.position.set(0.9, 0.025, 0);
+      s.controlledActor.controller!.position.set(0.9, 0.025, 0);
     },
     "VEHICLE_MOUNT_SPACE_BLOCKED",
   ],
   [
     "far",
     (s: Simulation): void => {
-      s.humanoid!.position.set(10, 0.025, 0);
+      s.controlledActor.controller!.position.set(10, 0.025, 0);
     },
     "VEHICLE_MOUNT_OUT_OF_REACH",
   ],
   [
     "airborne rider",
     (s: Simulation): void => {
-      s.humanoid!.position.y = 1;
+      s.controlledActor.controller!.position.y = 1;
     },
     "VEHICLE_MOUNT_GROUND_REQUIRED",
   ],
@@ -166,7 +164,7 @@ it.each([
   [
     "busy",
     (s: Simulation): void => {
-      s.humanoid!.stance = "crouch";
+      s.controlledActor.controller!.stance = "crouch";
     },
     "HUMANOID_CHARACTER_BUSY",
   ],
@@ -189,7 +187,7 @@ it.each([
   [
     "no support",
     (s: Simulation): void => {
-      s.humanoid!.world.colliders.forEach((c) => {
+      s.controlledActor.controller!.world.colliders.forEach((c) => {
         if (c.translation().y < 0) c.setEnabled(false);
       });
     },
@@ -204,7 +202,7 @@ it.each([
       change(r.simulation);
       const before = physicalState(world);
       expect(r.enter("horse-1")).toBe(false);
-      expect(r.simulation.failureCode).toBe(code);
+      expect(r.simulation.controlledActor.failureCode).toBe(code);
       expect(physicalState(world)).toEqual(before);
     } finally {
       world.dispose();
@@ -215,10 +213,10 @@ it.each([
   { id: "wall", position: [1.25, 1, 0], size: [0.1, 2, 2] },
   { id: "ceiling", position: [0, 3.1, 0], size: [2, 0.2, 4] },
 ] as const)("rejects $id without moving the rider", async (box) => {
-  const world = await createMountedFixture({ boxes: [box] });
+  const world = await createMountedFixture({ boxes: [box],playerSpawn:[1.7,.025,0] });
   try {
     const r = world.humanoid!;
-    r.simulation.humanoid!.position.set(1.7, 0.025, 0);
+    r.simulation.controlledActor.controller!.position.set(1.7, 0.025, 0);
     const before = physicalState(world);
     expect(r.enter("horse-1")).toBe(false);
     expect(physicalState(world)).toEqual(before);
@@ -232,7 +230,7 @@ it("keeps binding and collider disabled when both exits are blocked", async () =
     const r = world.humanoid!;
     expect(r.enter("horse-1")).toBe(true);
     world.step({}, 31);
-    const h = r.simulation.humanoid!,
+    const h = r.simulation.controlledActor.controller!,
       q = r.simulation.environment!;
     for (const x of [-1.12, 1.12])
       h.world.createCollider(
@@ -240,7 +238,7 @@ it("keeps binding and collider disabled when both exits are blocked", async () =
       );
     const before = physicalState(world);
     expect(r.exit()).toBe(false);
-    expect(r.simulation.failureCode).toBe("VEHICLE_DISMOUNT_NO_SAFE_POINT");
+    expect(r.simulation.controlledActor.failureCode).toBe("VEHICLE_DISMOUNT_NO_SAFE_POINT");
     expect(physicalState(world)).toEqual(before);
     expect(q.colliderCount).toBe(before.count);
   } finally {
@@ -278,11 +276,11 @@ it("collides with a wall beyond the exit while suppressing active jump and movem
     const r = world.humanoid!;
     expect(r.enter("horse-1")).toBe(true);
     world.step({}, 31);
-    const v = r.simulation.vehicle!;
+    const v = r.simulation.controlledActor.vehicle!;
     v.velocity.set(0, 0, 1.5);
     v.speed = 1.5;
     expect(r.exit()).toBe(true);
-    const h = r.simulation.humanoid!,
+    const h = r.simulation.controlledActor.controller!,
       x = h.position.x;
     h.world.createCollider(
       RAPIER.ColliderDesc.cuboid(0.2, 1, 0.04).setTranslation(x, 1, 0.4),
@@ -303,13 +301,13 @@ it.each(["fast", "air", "water"] as const)(
       const r = world.humanoid!;
       expect(r.enter("horse-1")).toBe(true);
       world.step({}, 31);
-      const v = r.simulation.vehicle!;
+      const v = r.simulation.controlledActor.vehicle!;
       if (reason === "fast") v.velocity.z = 5.01;
       else if (reason === "air") v.grounded = false;
       else v.submerged = true;
       const before = physicalState(world);
       expect(r.exit()).toBe(false);
-      expect(r.simulation.failureCode).toBe(
+      expect(r.simulation.controlledActor.failureCode).toBe(
         reason === "fast"
           ? "VEHICLE_MOUNT_TOO_FAST"
           : "VEHICLE_MOUNT_GROUND_REQUIRED",
@@ -343,7 +341,7 @@ it("hands off the full solved world velocity on a supported upward step", async 
     const runtime = world.humanoid!;
     expect(runtime.enter("horse-1")).toBe(true);
     world.step({}, 31);
-    const horse = runtime.simulation.vehicle!;
+    const horse = runtime.simulation.controlledActor.vehicle!;
     let upwardVelocity: Vector3 | undefined;
     for (let tick = 0; tick < 60; tick++) {
       const before = horse.position.clone();
@@ -357,15 +355,15 @@ it("hands off the full solved world velocity on a supported upward step", async 
     expect(upwardVelocity).toBeDefined();
     expect(horse.velocity.y).toBeCloseTo(upwardVelocity!.y, 6);
     expect(runtime.exit()).toBe(true);
-    expect(runtime.simulation.humanoid!.vertical).toBeCloseTo(
+    expect(runtime.simulation.controlledActor.controller!.vertical).toBeCloseTo(
       upwardVelocity!.y,
       6,
     );
-    expect(runtime.simulation.humanoid!.velocity.x).toBeCloseTo(
+    expect(runtime.simulation.controlledActor.controller!.velocity.x).toBeCloseTo(
       upwardVelocity!.x,
       6,
     );
-    expect(runtime.simulation.humanoid!.velocity.z).toBeCloseTo(
+    expect(runtime.simulation.controlledActor.controller!.velocity.z).toBeCloseTo(
       upwardVelocity!.z,
       6,
     );
@@ -382,10 +380,10 @@ it("rejects command-driven roll during exit without storing or advancing an acti
     world.step({}, 31);
     expect(runtime.exit()).toBe(true);
     world.step({}, 3);
-    const human = runtime.simulation.humanoid!;
+    const human = runtime.simulation.controlledActor.controller!;
     human.skills.availableClips.add("roll");
     expect(human.grounded).toBe(true);
-    expect(runtime.simulation.transition).toBeGreaterThan(0);
+    expect(runtime.simulation.controlledActor.transition).toBeGreaterThan(0);
     const request = { requestId: "exit-roll", action: "roll" as const };
     expect(() => runtime.command({ type: "humanoid.perform-action", request })).toThrow(
       "HUMANOID_TRANSITION_ACTIVE",

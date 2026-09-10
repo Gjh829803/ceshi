@@ -454,9 +454,18 @@ omitting it selects the current input actor. Accepted actions remain bound to th
 actor and its generation across input switches. `setInput()` release callbacks
 release only their own override. Full humanoid bindings accept ground walk/run/jump
 speed settings; custom movement adapters and arbitrary body dimensions are not
-accepted for this controller. Vehicle interactions currently belong to the initial
-character. Use [multiple-actors](../../examples/three-creator/multiple-actors/main.ts)
+accepted for this controller. Vehicle commands also accept `actorId`; omitting it
+selects the current input actor. A rider retains its vehicle across input switches,
+and another actor cannot board or prepare that occupied vehicle. Use [multiple-actors](../../examples/three-creator/multiple-actors/main.ts)
 for complete rigs and autonomous navigation.
+
+Every actor, including the initial character, uses the same controller, binding and
+lifecycle. `humanoid.createCharacter()` retains a source factory independent of
+individual models; deleting the initial character does not disable future creation.
+Each `onVisualUpdate` sample contains `actors[id]` and `vehicles`, sharing the same
+epoch, fixed interval and interpolation time. The actor pose names its
+`mountedInstanceId`; visual callbacks read this sample rather than another actor
+or a separately maintained previous pose.
 
 ### Brake-turn drift for authored vehicles
 

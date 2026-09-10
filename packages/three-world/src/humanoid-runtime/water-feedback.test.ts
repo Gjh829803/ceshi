@@ -37,7 +37,7 @@ it('reports actual collider-limited shallow depth without turning sufficient imm
   const world = await fixture(pool({ water: [{ id: 'shallow', min: [-5, -1, -5], max: [5, 2, 5], surface: 1.2 }] }));
   try {
     world.step({}, 20);
-    expect(world.humanoid!.simulation.humanoid!.swimming).toBe(false);
+    expect(world.humanoid!.simulation.controlledActor.controller!.swimming).toBe(false);
     const water = world.snapshot().humanoid!.water;
     expect(water).toMatchObject({ controllerActive: true, swimming: false, contact: {
       volumeId: 'shallow', surfaceHeightMeters: 1.2, depthCheckPassed: false,
@@ -54,14 +54,14 @@ it('shows insufficient immersion before an actual falling character enters deep 
   const world = await fixture(pool({ playerSpawn: [0, 1.5, 0] }));
   try {
     world.step({}, 1);
-    expect(world.humanoid!.simulation.humanoid!.swimming).toBe(false);
+    expect(world.humanoid!.simulation.controlledActor.controller!.swimming).toBe(false);
     const before = world.snapshot().humanoid!.water;
     expect(before).toMatchObject({ swimming: false, contact: {
       depthCheckPassed: true, immersionCheckPassed: false, wasSwimmingAtSample: false, entrySerial: 0,
     } });
     expect(before.contact!.feetBelowSurfaceMeters).toBeLessThan(0.95);
     world.step({}, 90);
-    expect(world.humanoid!.simulation.humanoid!.swimming).toBe(true);
+    expect(world.humanoid!.simulation.controlledActor.controller!.swimming).toBe(true);
     const after = world.snapshot().humanoid!.water;
     expect(after).toMatchObject({ swimming: true, contact: {
       depthCheckPassed: true, immersionCheckPassed: true, wasSwimmingAtSample: true, entrySerial: 1,
@@ -80,13 +80,13 @@ it('follows real horizontal water entry and exit while retaining detached earlie
     world.step({}, 10);
     const dry = world.snapshot().humanoid!.water;
     expect(dry).toMatchObject({ swimming: false, contact: null });
-    for (let tick = 0; tick < 180 && !world.humanoid!.simulation.humanoid!.swimming; tick++) world.step(forward, 1);
-    expect(world.humanoid!.simulation.humanoid!.swimming).toBe(true);
+    for (let tick = 0; tick < 180 && !world.humanoid!.simulation.controlledActor.controller!.swimming; tick++) world.step(forward, 1);
+    expect(world.humanoid!.simulation.controlledActor.controller!.swimming).toBe(true);
     const inside = world.snapshot().humanoid!.water;
     const saved = structuredClone(inside);
     expect(inside).toMatchObject({ swimming: true, contact: { volumeId: 'pool', entrySerial: 1 } });
     expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThanOrEqual(-5);
-    for (let tick = 0; tick < 600 && world.humanoid!.simulation.humanoid!.swimming; tick++) world.step(forward, 1);
+    for (let tick = 0; tick < 600 && world.humanoid!.simulation.controlledActor.controller!.swimming; tick++) world.step(forward, 1);
     expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(5);
     expect(world.snapshot().humanoid!.water).toEqual({ declaredVolumeCount: 1, controllerActive: true, swimming: false, contact: null });
     expect(inside).toEqual(saved);
@@ -134,9 +134,9 @@ it('suppresses an old swimming contact when control is handed to a real mounted 
   try {
     world.step({}, 30);
     const runtime = world.humanoid!;
-    expect(runtime.simulation.humanoid!.swimming).toBe(true);
+    expect(runtime.simulation.controlledActor.controller!.swimming).toBe(true);
     expect(runtime.enter('boat-1')).toBe(true);
-    expect(runtime.simulation.humanoid!.water).not.toBeNull(); // Last controller sample is deliberately retained internally.
+    expect(runtime.simulation.controlledActor.controller!.water).not.toBeNull(); // Last controller sample is deliberately retained internally.
     expect(world.snapshot().humanoid!.water).toEqual({ declaredVolumeCount: 1, controllerActive: false, swimming: false, contact: null });
     world.step({}, 2);
     expect(world.snapshot().humanoid!.water.contact).toBeNull();
@@ -151,7 +151,7 @@ it('retains a swimmer over a 1.2 metre shelf that cannot admit a fresh swimmer',
   const world = await fixture(shelf);
   try {
     world.step({}, 90);
-    expect(world.humanoid!.simulation.humanoid!.swimming).toBe(true);
+    expect(world.humanoid!.simulation.controlledActor.controller!.swimming).toBe(true);
     world.step(forward, 130);
     const retained = world.snapshot().humanoid!.water;
     expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(0.5);

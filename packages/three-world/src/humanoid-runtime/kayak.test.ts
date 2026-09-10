@@ -71,7 +71,7 @@ describe('kayak water and paddle mechanics',()=>{
    const boat=spec.id==='raft'?buildRaftModel():spec.id==='canoe'?buildCanoeModel():buildKayakModel(),world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'kayak',assetId:'vehicle.kayak',object:boat,spec:{...spec,spawn:[0,.07,0],yaw:Math.PI/2}}]}});
    try{world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.07,0],facingYawRadians:Math.PI/2,humanoid:{vehicleInstanceId:'kayak',mounted:true}});world.step({humanoid:{...emptyInput(),forward:1}},90);
     expect(world.humanoid!.inputGuide().family).toBe('paddled_boat');
-    const v=world.humanoid!.simulation.vehicle!,p=kayakPaddlePose(v.motion.kayak!);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(v.motion.kayak!,side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3()).distanceTo(target)).toBeLessThan(.035);}
+    const v=world.humanoid!.simulation.controlledActor.vehicle!,p=kayakPaddlePose(v.motion.kayak!);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(v.motion.kayak!,side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3()).distanceTo(target)).toBeLessThan(.035);}
    }finally{world.dispose();}
   }finally{rider.dispose();loader.mockRestore();transport.mockRestore();}
  });

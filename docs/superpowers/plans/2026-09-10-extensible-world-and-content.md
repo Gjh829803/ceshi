@@ -79,7 +79,10 @@ SDK 741 tests 通过；下游原有潜艇路线失败已用原始源码/依赖�
 单人物推箱/reset 通过；记录在 `.codex-tmp/r0/r2-source-*` 和 `.codex-tmp/r2-source-browser`。
 多 Actor 输入、完整动画实例、输入/相机目标分离、基于实际 collider 的导航及
 Creator/Episode 三人物示例现已实现。参见 [R2 验证记录](../../reviews/2026-09-11-extensible-world-r2.md)。
-确定性绕让和完整人形 prototype 消费仍待后续收尾，不将实际碰撞停住描述成已完成绕让。
+完整人形 prototype 消费与候选场景事务已通过本地验证。初始人物与 NPC 已迁移为统一
+Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消费者回归已完成；
+参见 [统一 Actor 验证](../../reviews/2026-09-11-unified-actors.md)。
+确定性绕让仍待收尾，不将实际碰撞停住描述成已完成绕让。
 
 - [x] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [ ] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。

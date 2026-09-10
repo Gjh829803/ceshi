@@ -107,12 +107,12 @@ it('uses Episode starts and common collision ownership, snapshots and reset with
   const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:['driver','parked'].map(instanceId=>({instanceId,assetId:'vehicle.unicycle',spec:UNICYCLE_SPEC,object:buildUnicycleModel()})),character:{instanceId:'person',object:new Group()}}});
   try{
     world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-    world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!,angle=v.motion.unicycle!.wheelAngle,prior=v.position.clone();
+    world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.controlledActor.vehicle!,angle=v.motion.unicycle!.wheelAngle,prior=v.position.clone();
     world.step({humanoid:{...emptyInput(),forward:1}},60);expect(v.motion.unicycle!.wheelAngle-angle).toBeCloseTo(v.position.clone().sub(prior).dot(new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)))/.36,3);world.step({humanoid:emptyInput()},120);expect(v.motion.unicycle!.phase).toBe('supported');expect(world.snapshot().humanoid!.mountedInstanceId).toBe('driver');
     const snapshot=world.humanoid!.snapshot();snapshot.vehicleDynamics[0]!.unicycle!.supportLocal![0]=999;expect(v.motion.unicycle!.supportLocal![0]).not.toBe(999);
     world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,-20],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true,velocityWorldMetersPerSecondXYZ:[0,0,2]}});
-    expect(world.humanoid!.simulation.vehicle!.motion.unicycle!.footDown).toBe(0);
-    world.step({humanoid:{...emptyInput(),forward:1}},6);expect(world.humanoid!.simulation.vehicle!.speed).toBeGreaterThan(2);
+    expect(world.humanoid!.simulation.controlledActor.vehicle!.motion.unicycle!.footDown).toBe(0);
+    world.step({humanoid:{...emptyInput(),forward:1}},6);expect(world.humanoid!.simulation.controlledActor.vehicle!.speed).toBeGreaterThan(2);
     await world.reset();expect(world.humanoid!.simulation.vehicles[0]!.motion.unicycle).toEqual(createUnicycleState());expect(world.snapshot().humanoid!.mountedInstanceId).toBeNull();
   }finally{world.dispose();f.q.dispose();}
 });

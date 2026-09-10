@@ -56,7 +56,7 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
     expect(foot.min.y-.74,name+' sole gap').toBeLessThan(.01);
    }
    const prop=visuals[i]!.rotors[0]!;
-   for(let angle=0;angle<Math.PI*2;angle+=Math.PI/24){prop.rotation.z=angle;root.updateMatrixWorld(true);const bounds=new Box3().setFromObject(prop);expect(bounds.min.y-runtime.simulation.vehicle!.position.y).toBeGreaterThan(.29);}
+   for(let angle=0;angle<Math.PI*2;angle+=Math.PI/24){prop.rotation.z=angle;root.updateMatrixWorld(true);const bounds=new Box3().setFromObject(prop);expect(bounds.min.y-runtime.simulation.controlledActor.vehicle!.position.y).toBeGreaterThan(.29);}
    for(const rig of visuals[i]!.wheelRigs){expect(rig.steering.position.y-rig.radius).toBeCloseTo(0,5); const wheelBounds=new Box3().setFromObject(rig.steering);root.traverse(o=>{if(['aircraft-floor','aircraft-side','aircraft-nose','aircraft-tail'].includes(o.name))expect(wheelBounds.intersectsBox(new Box3().setFromObject(o)),o.name+' wheel penetration').toBe(false);});}
    const cushion=visuals[i]!.root.getObjectByName('seat-cushion');
    expect(cushion,`${spec.id} cushion`).toBeDefined();

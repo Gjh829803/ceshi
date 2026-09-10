@@ -1,99 +1,98 @@
-import {isHumanoidActorCommand,validateCharacterBinding} from './character-binding';
-import {claimCharacter} from './character-ownership';
-import type {ActorInput} from './humanoid/actor';
-import {ThreePhysics} from '../physics';
-import {physicsHost} from '../physics-host';
-import {resolveConfiguredFlyingCreatureFeel} from './motion-families/flying-creature/state';
-import type {FlyingCreatureVisual} from './motion-families/flying-creature/visual';
-import {readCameraWorldPose} from '../camera-observation';
-import {vehicleDriveTelemetry,type VehicleDriveTelemetry} from './vehicle-dynamics';
+import { readCameraWorldPose } from '../camera-observation';
 import {
-  DEFAULT_HUMANOID_VIEW,
-  HUMANOID_VIEW_SCHEMA_PROPERTIES,
-  type HumanoidViewSettings,
+DEFAULT_HUMANOID_VIEW,
+HUMANOID_VIEW_SCHEMA_PROPERTIES,
+type HumanoidViewSettings,
 } from '../config/camera';
+import { ThreePhysics } from '../physics';
+import { physicsHost } from '../physics-host';
+import { isHumanoidActorCommand,validateActorBinding } from './character-binding';
+import { claimCharacter } from './character-ownership';
+import type { ActorInput } from './humanoid/actor';
+import { resolveConfiguredFlyingCreatureFeel } from './motion-families/flying-creature/state';
+import type { FlyingCreatureVisual } from './motion-families/flying-creature/visual';
+import { vehicleDriveTelemetry,type VehicleDriveTelemetry } from './vehicle-dynamics';
 
 import {
-  controlFields,
-  controlSchemaForFamily,
+controlFields,
+controlSchemaForFamily,
 } from '../config/control-fields';
 
 import {
-  HUMANOID_INPUT_GUIDES,
-  VEHICLE_APPROACH_DESCRIPTION,
-  type HumanoidInputGuide,
+HUMANOID_INPUT_GUIDES,
+VEHICLE_APPROACH_DESCRIPTION,
+type HumanoidInputGuide,
 } from './input-guidance';
 
 import { submersibleDiagnostics } from './motion-families/underwater/submersible';
 
 import {
-  sampleSubmersibleVisual,
-  disposeSubmersibleVisual,
+disposeSubmersibleVisual,
+sampleSubmersibleVisual,
 } from './submersible-visual';
 
 import {
-  sampleRaftVisual,
-  type RaftState,
+sampleRaftVisual,
+type RaftState,
 } from './motion-families/surface-vessel/raft';
 
 import { jetSkiDiagnostics } from './motion-families/surface-vessel/jetski';
 
 import {
-  sampleJetSkiVisual,
-  disposeJetSkiVisual,
+disposeJetSkiVisual,
+sampleJetSkiVisual,
 } from './jetski-visual';
 
-import {paddleRiderBody,type KayakState} from './motion-families/surface-vessel/paddling';
 import { sampleKayakVisual } from './kayak-visual';
+import { paddleRiderBody,type KayakState } from './motion-families/surface-vessel/paddling';
 
 import {
-  copyUnicycleState,
-  sampleUnicycleVisual,
-  refreshUnicycleSupport,
-  UNICYCLE_TIMING,
-  type UnicycleState,
+copyUnicycleState,
+refreshUnicycleSupport,
+sampleUnicycleVisual,
+UNICYCLE_TIMING,
+type UnicycleState,
 } from './motion-families/ground-vehicle/unicycle';
 
 import {
-  copyAtvState,
-  sampleAtvVisual,
-  type AtvState,
+copyAtvState,
+sampleAtvVisual,
+type AtvState,
 } from './motion-families/ground-vehicle/atv';
 
 import * as THREE from 'three';
-import {sampleTankVisual} from './tank-visual';
-import type {TankState} from './motion-families/ground-vehicle/tank';
-import {sampleSkiEquipment} from './ski-visual';
-import { registerHumanoidHost } from './host-access';
-import { PresentationState, type HumanoidDisplaySample } from './presentation';
-import { Simulation, emptyInput, createVehicle, resolveVehicleSpec, type Input } from './simulation';
-import { canPlaceCreature, resetCreatureState } from './creatures/controller';
-import { EnvironmentQueries, initEnvironmentQueries, vehicleBody } from './environment/queries';
+import type { CameraRigInput } from '../camera';
+import type { CameraTuning } from '../config/camera';
+import { CAMERA_DISTANCE_METERS_SCHEMA,CAMERA_SCHEMA_PROPERTIES,DEFAULT_CAMERA_TUNING,parseCameraTuning,VEHICLE_CAMERA_DISTANCE_SCHEMA } from '../config/camera';
+import { CONTROL_RANGES,parseMovementSettings,readMovementSettings,type MovementSettings } from '../config/control';
+import { DEFAULT_CHARACTER_OPTIONS } from '../config/physics';
+import type { CharacterDrive,CharacterOptions,PhysicsAudit,PhysicsCandidate,PhysicsEntityState,PhysicsPort,RigidPhysics,Vec3,WorldInput } from '../engine-contracts';
+import type { EpisodeCapabilities,EpisodeStart,EpisodeStartProbe } from '../episode-contracts';
 import { FollowCamera,type CameraSubject } from './camera';
 import { Character } from './character';
-import type { HorseVisual, SeatAnchor } from './horse';
-import { readHumanoid } from './humanoid/render-state';
-import { readInteractionTargets } from './humanoid/render-state';
-import {characterCapabilities,type CharacterCapabilityState,type CharacterCapabilityAvailability} from './character-capabilities';
-import type { EnvironmentDefinition, MapSpawn } from './environment/types';
+import { characterCapabilities,type CharacterCapabilityAvailability,type CharacterCapabilityState } from './character-capabilities';
 import type { VehicleSpec } from './config';
-import {CONTROL_RANGES,CONTROL_SCHEMA_PROPERTIES,parseMovementSettings,readMovementSettings,type MovementSettings} from '../config/control';
-import type { CameraTuning } from '../config/camera';
-import { parseCameraTuning, DEFAULT_CAMERA_TUNING, CAMERA_SCHEMA_PROPERTIES, CAMERA_DISTANCE_METERS_SCHEMA, VEHICLE_CAMERA_DISTANCE_SCHEMA } from '../config/camera';
+import { canPlaceCreature,resetCreatureState } from './creatures/controller';
+import { EnvironmentQueries,initEnvironmentQueries,vehicleBody } from './environment/queries';
+import type { EnvironmentDefinition,MapSpawn } from './environment/types';
+import type { HorseVisual,SeatAnchor } from './horse';
+import { registerHumanoidHost } from './host-access';
+import type { SkillRequest,SkillResult } from './humanoid/action-schema';
+import { CENTER,HUMANOID_BODY,RADIUS } from './humanoid/controller';
+import { readHumanoid,readInteractionTargets } from './humanoid/render-state';
+import { HUMANOID_ACTION_INPUT_FIELDS } from './input';
 import { validateEnvironment } from './map-validation';
-import { DEFAULT_CHARACTER_OPTIONS } from '../config/physics';
-import type { PhysicsPort, PhysicsCandidate, CharacterDrive, CharacterOptions, RigidPhysics, Vec3, WorldInput, PhysicsEntityState, PhysicsAudit } from '../engine-contracts';
-import type { EpisodeStartProbe, EpisodeStart, EpisodeCapabilities } from '../episode-contracts';
-import type { CameraRigInput } from '../camera';
-import {HUMANOID_ACTION_INPUT_FIELDS} from './input';
-import {HUMANOID_BODY,RADIUS,CENTER} from './humanoid/controller';
-import type { SkillRequest, SkillResult } from './humanoid/action-schema';
+import type { TankState } from './motion-families/ground-vehicle/tank';
+import { PresentationState,type HumanoidDisplaySample } from './presentation';
+import { createVehicle,emptyInput,resolveVehicleSpec,Simulation,type Input } from './simulation';
+import { sampleSkiEquipment } from './ski-visual';
+import { sampleTankVisual } from './tank-visual';
 
 export type HumanoidCommand =
- | {readonly type:'vehicle.prepare';readonly instanceId:string;readonly spawn:MapSpawn}
- | {readonly type:'vehicle.approach'|'vehicle.enter';readonly instanceId:string}
- | {readonly type:'vehicle.exit'}
- | {readonly type:'vehicle.recover'}
+ | {readonly type:'vehicle.prepare';readonly actorId?:string;readonly instanceId:string;readonly spawn:MapSpawn}
+ | {readonly type:'vehicle.approach'|'vehicle.enter';readonly actorId?:string;readonly instanceId:string}
+ | {readonly type:'vehicle.exit';readonly actorId?:string}
+ | {readonly type:'vehicle.recover';readonly actorId?:string}
  | {readonly type:'humanoid.set-camera-mode';readonly mode:0|1|2}
  | {readonly type:'humanoid.set-input';readonly actorId?:string;readonly input:Input|null}
  | {readonly type:'humanoid.apply-profile';readonly profile:HumanoidProfile}
@@ -191,21 +190,18 @@ const tuple=(v:THREE.Vector3):Vec3=>[v.x,v.y,v.z];
 /** SDK-owned actor solver. The engine supplies every fixed tick and owns rendering. */
 export class HumanoidRuntime implements PhysicsPort {
   environment:EnvironmentQueries;
-  readonly simulation:Simulation;
+  private currentSimulation:Simulation;
+  get simulation():Simulation{return this.currentSimulation;}
+  private replacementPending=false;
   readonly followCamera:FollowCamera;
-  private input:Input|undefined;
-  private inputGeneration=0;
-  private inputSource:'humanoid.set-input'|'setInput'='setInput';
-  private lastApplied:HumanoidInputObservation['lastApplied']=null;
-  private readonly actors=new Map<string,{animation:Character;movement:CharacterOptions;initialPosition:THREE.Vector3;initialYaw:number;previousPosition:THREE.Vector3;previousRotation:THREE.Quaternion}>();
-  private controlledActor:string|undefined;
+  private readonly actors=new Map<string,{object:THREE.Object3D;animation?:Character;spawn?:'map';movement:CharacterOptions;initialPosition:THREE.Vector3;initialYaw:number}>();
   private cameraActor:string|undefined;
-  get inputActorId(){return this.controlledActor??this.options.character.instanceId;}
-  get cameraTargetId(){return this.cameraActor??this.options.character.instanceId;}
-  private get cameraSubject():CameraSubject{const actor=this.simulation.actors.get(this.cameraTargetId);return actor?{humanoid:actor.controller,player:actor.player,vehicle:undefined,time:this.simulation.time,teleportRevision:actor.teleportRevision,active:-1}:this.simulation;}
-  private actorAnimation(id:string){return id===this.options.character.instanceId?this.options.character.animation:this.actors.get(id)?.animation;}
+  get inputActorId(){return this.simulation.controlledActorId;}
+  get cameraTargetId(){return this.cameraActor??this.inputActorId;}
+  private get cameraSubject():CameraSubject{return this.simulation.actor(this.cameraTargetId);}
+  private actorAnimation(id:string){return this.actors.get(id)?.animation;}
   setControlledActor(id:string):void{this.assertExternalMutation();this.setControlledActorOwned(id);}
-  private setControlledActorOwned(id:string):void{this.actorController(id);this.controlledActor=id;this.previousJump=false;this.previousInteract=false;}
+  private setControlledActorOwned(id:string):void{this.actorController(id);this.simulation.controlledActorId=id;this.previousJump=false;this.previousInteract=false;}
   setCameraTarget(id:string):void{this.assertExternalMutation();this.actorController(id);this.actorAnimation(this.cameraTargetId)?.setFirstPerson(false);this.cameraActor=id;this.setCameraModeOwned(this.followCamera.mode as 0|1|2);}
   private readonly actorInputs=new Map<string,{input:Input;source:'humanoid.set-input'|'setInput'}>();
   private readonly actorLastInputs=new Map<string,HumanoidInputObservation['lastApplied']>();
@@ -254,27 +250,28 @@ export class HumanoidRuntime implements PhysicsPort {
     const release=options.character.animation?claimCharacter(options.character.animation):()=>{};
     try{await initEnvironmentQueries();return new HumanoidRuntime(options,camera,release);}catch(error){release();throw error;}
   }
+  private readonly characterFactory:(()=>Promise<Character>)|undefined;
   private ordinaryPhysics:ThreePhysics;
   private releaseOrdinarySubstep:()=>void;
-  private constructor(readonly options:HumanoidRuntimeOptions,readonly camera:THREE.PerspectiveCamera,private readonly releaseCharacterOwnership:()=>void){
+  private constructor(readonly options:HumanoidRuntimeOptions,readonly camera:THREE.PerspectiveCamera,private releaseCharacterOwnership:(()=>void)|undefined){
+    this.characterFactory=options.character.animation?.createFactory();
     this.currentMap=options.map;
     this.specs=options.vehicles.map(v=>({...structuredClone(v.spec),id:v.instanceId}));
     this.environment=new EnvironmentQueries(this.instanceMap(options.map));
     this.ordinaryPhysics=ThreePhysics.borrow(this.environment.borrowPhysics());
     this.releaseOrdinarySubstep=this.environment.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
-    this.simulation=new Simulation(this.environment,this.specs);
-    this.environment.colliderBindings.added(options.character.instanceId,this.simulation.humanoid.capsule);
+    this.currentSimulation=new Simulation(this.environment,this.specs);
+    this.cameraActor=options.character.instanceId;
     this.followCamera=new FollowCamera(camera,this.environment,options.vehicles);
     this.followCamera.eyePosition=target=>this.actorAnimation(this.cameraTargetId)?.eyePosition(target)??false;
     this.followCamera.configureTuning(options.cameraTuning??{});this.initialCamera=new THREE.PerspectiveCamera().copy(camera,false);
     this.profile={view:{...DEFAULT_HUMANOID_VIEW},character:{...this.simulation.characterControl},camera:{...options.cameraTuning},vehicles:Object.fromEntries(this.simulation.vehicles.map(v=>[v.spec.id,{...readMovementSettings(v.spec),camera:v.spec.camera}]))};
     this.commitProfile(this.prepareProfile({}));
-    this.objects.set(options.character.instanceId,options.character.object);
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
-    const animation=options.character.animation;
-    if(animation)this.simulation.setHumanoidAssets(animation.availableHumanoidClips,animation.motionSources);
     this.presentation=new PresentationState(this.simulation);
     registerHumanoidHost(this, {
+      claimCharacter:(id,character)=>id===this.options.character.instanceId&&character===this.options.character.animation&&this.releaseCharacterOwnership?this.releaseCharacterOwnership:claimCharacter(character),
+      commitCharacterOwnership:id=>{if(id===this.options.character.instanceId)this.releaseCharacterOwnership=undefined;},
       bindCharacter:(id,character,settings,prevalidated)=>this.bindCharacter(id,character,settings,prevalidated),
       isDisposed: () => this.disposed,
       command: command => { this.assertLive(); return this.commandOwned(command); },
@@ -287,7 +284,7 @@ export class HumanoidRuntime implements PhysicsPort {
       prepareEpisodeStart: start => { this.assertLive(); this.prepareEpisodeStartOwned(start); },
       present: (alpha,tick,view) => { this.assertLive(); return this.present(alpha,tick,view); },
     });
-    this.followCamera.reset(this.cameraSubject);this.sync(0,false);
+    options.character.object.position.copy(this.environment.safeSpawn(new THREE.Vector3(...options.map.playerSpawn),HUMANOID_BODY)??new THREE.Vector3(...options.map.playerSpawn));
   }
   private instanceMap(map:EnvironmentDefinition):EnvironmentDefinition {
     return {...map,spawns:map.spawns.flatMap(spawn=>{
@@ -311,15 +308,16 @@ export class HumanoidRuntime implements PhysicsPort {
   get cameraMode():'authored'|'follow'{return this.authored?'authored':'follow';}
   command(command:HumanoidCommand):SkillResult|undefined{this.assertExternalMutation();return this.commandOwned(command);}
   private commandOwned(command:HumanoidCommand):SkillResult|undefined{
-    const fields:Record<HumanoidCommand['type'],readonly string[]>={'vehicle.prepare':['instanceId','spawn'],'vehicle.approach':['instanceId'],'vehicle.enter':['instanceId'],'vehicle.exit':[],'vehicle.recover':[],'humanoid.set-camera-mode':['mode'],'humanoid.set-input':['input','actorId'],'humanoid.apply-profile':['profile'],'humanoid.perform-action':['request','actorId']};
+    const fields:Record<HumanoidCommand['type'],readonly string[]>={'vehicle.prepare':['instanceId','spawn','actorId'],'vehicle.approach':['instanceId','actorId'],'vehicle.enter':['instanceId','actorId'],'vehicle.exit':['actorId'],'vehicle.recover':['actorId'],'humanoid.set-camera-mode':['mode'],'humanoid.set-input':['input','actorId'],'humanoid.apply-profile':['profile'],'humanoid.perform-action':['request','actorId']};
     if(!Object.hasOwn(fields,command.type)||Object.keys(command).some(k=>k!=='type'&&!fields[command.type].includes(k)))throw new Error('HUMANOID_COMMAND_INVALID');
+    const actorId='actorId' in command?command.actorId??this.inputActorId:this.inputActorId;
     let accepted=true;
     switch(command.type){
-      case 'vehicle.prepare':if(!command.spawn||!Array.isArray(command.spawn.position)||command.spawn.position.length!==3||command.spawn.position.some(n=>!Number.isFinite(n))||!Number.isFinite(command.spawn.yaw))throw new Error('HUMANOID_SPAWN_INVALID');accepted=this.prepareOwned(command.instanceId,command.spawn);break;
-      case 'vehicle.approach':accepted=this.approachOwned(command.instanceId);break;
-      case 'vehicle.enter':accepted=this.enterOwned(command.instanceId);break;
-      case 'vehicle.exit':accepted=this.exitOwned();break;
-      case 'vehicle.recover':accepted=this.recoverVehicleOwned();break;
+      case 'vehicle.prepare':if(!command.spawn||!Array.isArray(command.spawn.position)||command.spawn.position.length!==3||command.spawn.position.some(n=>!Number.isFinite(n))||!Number.isFinite(command.spawn.yaw))throw new Error('HUMANOID_SPAWN_INVALID');accepted=this.prepareOwned(command.instanceId,command.spawn,actorId);break;
+      case 'vehicle.approach':accepted=this.approachOwned(command.instanceId,actorId);break;
+      case 'vehicle.enter':accepted=this.enterOwned(command.instanceId,actorId);break;
+      case 'vehicle.exit':accepted=this.exitOwned(actorId);break;
+      case 'vehicle.recover':accepted=this.recoverVehicleOwned(actorId);break;
       case 'humanoid.set-camera-mode':this.setCameraModeOwned(command.mode);break;
       case 'humanoid.set-input':this.setActorInputOwned(command.actorId??this.inputActorId,command.input??undefined,'humanoid.set-input');break;
       case 'humanoid.apply-profile':this.applyProfileOwned(command.profile);break;
@@ -327,7 +325,7 @@ export class HumanoidRuntime implements PhysicsPort {
         // A command must obey the same restriction as per-tick humanoid input.
         // Reject before request() so no action or request identity gets queued.
         const actorId=command.actorId??this.inputActorId;
-        const restriction=actorId===this.options.character.instanceId?this.characterRestriction():undefined;
+        const restriction=this.characterRestriction(actorId);
         if(restriction)throw new Error(`${restriction.code}: ${restriction.message}`);
         const result = this.actorController(actorId).skills.request(command.request);
         if (!result) throw new Error('HUMANOID_CHARACTER_UNAVAILABLE');
@@ -336,55 +334,55 @@ export class HumanoidRuntime implements PhysicsPort {
     }
     if (!accepted) {
       const interaction = command.type === 'vehicle.enter' || command.type === 'vehicle.exit';
-      const code = interaction ? this.simulation.failureCode ?? 'HUMANOID_COMMAND_BLOCKED' : 'HUMANOID_COMMAND_BLOCKED';
-      throw new Error(`${code}: ${this.simulation.message}`);
+      const code = interaction ? this.simulation.actor(actorId).failureCode ?? 'HUMANOID_COMMAND_BLOCKED' : 'HUMANOID_COMMAND_BLOCKED';
+      throw new Error(`${code}: ${this.simulation.actor(actorId).message}`);
     }
   }
-  inputGuide(actorId=this.inputActorId):HumanoidInputGuide{
-    const vehicle=actorId===this.options.character.instanceId?this.simulation.vehicle:undefined;
+  inputGuide(actorId:string=this.inputActorId):HumanoidInputGuide{
+    const vehicle=this.simulation.actor(actorId).vehicle;
     const family=vehicle?.spec.mode??'character';
     return {family,fields:vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.'}:{...HUMANOID_INPUT_GUIDES[family]}};
   }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
     const object=(properties:Record<string,import('../contracts').JsonValue>,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false});
+    const create=(type:HumanoidCommand['type'],properties:Record<string,import('../contracts').JsonValue>,optional:readonly string[]=[]):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties},['type',...Object.keys(properties).filter(key=>!optional.includes(key))]),...(type==='vehicle.approach'?{description:VEHICLE_APPROACH_DESCRIPTION}:{})}});
+    if(!this.hasActor(id))return this.options.vehicles.some(vehicle=>vehicle.instanceId===id)?[create('vehicle.prepare',{instanceId:{const:id},actorId:{type:'string'},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])},['actorId']),create('vehicle.approach',{instanceId:{const:id},actorId:{type:'string'}},['actorId']),create('vehicle.enter',{instanceId:{const:id},actorId:{type:'string'}},['actorId'])]:[];
     const guide=this.inputGuide(id);
     const meaning=(key:string)=>guide.fields[key as keyof Input]??'Ignored for this control family; leave neutral.';
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow','primary','secondary'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['actions',object(Object.fromEntries(HUMANOID_ACTION_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
-    const create=(type:HumanoidCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='vehicle.approach'?{description:VEHICLE_APPROACH_DESCRIPTION}:{})}});
-    if(!this.hasActor(id))return this.options.vehicles.some(vehicle=>vehicle.instanceId===id)?[create('vehicle.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('vehicle.approach',{instanceId:{const:id}}),create('vehicle.enter',{instanceId:{const:id}})]:[];
     const profile=object({view:object(HUMANOID_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.motion.flyingCreature?'flying-creature':vehicle.spec.mode,!!(vehicle.motion.wheelPhysics||vehicle.motion.body?.powertrain)),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
-    return [...(id===this.options.character.instanceId?[create('vehicle.exit',{}),create('vehicle.recover',{})]:[]),create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{actorId:{const:id},input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{actorId:{const:id},request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
+    return [...[create('vehicle.exit',{actorId:{const:id}}),create('vehicle.recover',{actorId:{const:id}})],create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{actorId:{const:id},input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{actorId:{const:id},request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():HumanoidSnapshot{
-    const s=this.simulation,h=s.humanoid,tr=h?.traversal,surface=h?.surface;
+    const s=this.simulation,h=s.controlledActor.controller,tr=h?.traversal,surface=h?.surface;
     const targets=new Map(h?.skills.listTargets().map(target=>[target.id,target])??[]);
-    const waterControllerActive=Boolean(h&&!s.vehicle&&!tr),contact=waterControllerActive?h?.water:null;
+    const waterControllerActive=Boolean(h&&!s.controlledActor.vehicle&&!tr),contact=waterControllerActive?h?.water:null;
     return {
       view:{...this.profile.view},
       controls:{character:readMovementSettings(s.characterControl),vehicles:Object.fromEntries(s.vehicles.map(v=>[v.spec.id,readMovementSettings(v.spec)]))},
-      mapId:this.currentMap.id,timeSeconds:s.time,cameraMode:this.followCamera.mode as 0|1|2,mountedInstanceId:s.vehicle?.spec.id??null,message:s.message,
+      mapId:this.currentMap.id,timeSeconds:s.time,cameraMode:this.followCamera.mode as 0|1|2,mountedInstanceId:s.controlledActor.vehicle?.spec.id??null,message:s.controlledActor.message,
       water:{declaredVolumeCount:this.currentMap.water.length,controllerActive:waterControllerActive,swimming:waterControllerActive&&Boolean(h?.swimming),
         contact:contact?{volumeId:contact.volumeId,surfaceHeightMeters:contact.surfaceY,depthMeters:contact.depth,submersionRatio:contact.submersion,
           feetBelowSurfaceMeters:contact.feetBelowSurfaceMeters,requiredDepthMeters:contact.requiredDepthMeters,requiredFeetBelowSurfaceMeters:contact.requiredFeetBelowSurfaceMeters,
           depthCheckPassed:contact.depthCheckPassed,immersionCheckPassed:contact.immersionCheckPassed,wasSwimmingAtSample:contact.wasSwimmingAtSample,
           entrySpeedMetersPerSecond:contact.entrySpeed,entrySerial:contact.entrySerial}:null},
       characterCapabilities:this.characterCapabilities().map(({id,eligible,reason,message,targetId})=>({id,eligible,reason,message,...(targetId?{targetId}:{})})),
-      character:{swimStyle:h?.swimStyle??'breaststroke',instanceId:this.options.character.instanceId,state:h?.state??s.player.animation,swimming:!s.vehicle&&s.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
+      character:{swimStyle:h?.swimStyle??'breaststroke',instanceId:this.inputActorId,state:h?.state??s.controlledActor.player.animation,swimming:!s.controlledActor.vehicle&&s.controlledActor.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
       vehicles:s.vehicles.map((v,i)=>({instanceId:v.spec.id,assetId:this.options.vehicles[i]!.assetId,mode:v.spec.mode,available:s.available(v),speedMetersPerSecond:v.velocity.length(),throttle:v.throttle,steering:v.steering,grounded:v.grounded,submerged:v.submerged})),
-      transition:{kind:s.transitionKind,remainingSeconds:s.transition},
+      transition:{kind:s.controlledActor.transitionKind,remainingSeconds:s.controlledActor.transition},
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},
       interactionTargets:readInteractionTargets(h).filter(t=>targets.has(t.id)).map(t=>({id:t.id,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:targets.get(t.id)!.approach,facingYawRadians:targets.get(t.id)!.yaw,eligible:targets.get(t.id)!.eligible,reason:targets.get(t.id)!.reason,message:targets.get(t.id)!.message,positionWorldMetersXYZ:tuple(t.position),rotationWorldQuaternionXYZW:t.rotation?[t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w]:[0,0,0,1]})),
       vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?{...v.motion.flyingCreature}:null,drive:vehicleDriveTelemetry(v),physicsOwner:v.motion.wheelPhysics||v.motion.body||v.motion.aircraft?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
     };
   }
-  private characterRestriction():{code:string;message:string}|undefined{
-    if(this.simulation.transition>0)return {code:'HUMANOID_TRANSITION_ACTIVE',message:'骑乘切换尚未完成'};
-    if(this.simulation.vehicle?.spec.mode==='mount')return {code:'HUMANOID_ALREADY_MOUNTED',message:'人物已经骑乘'};
+  private characterRestriction(actorId:string=this.inputActorId):{code:string;message:string}|undefined{
+    if(this.simulation.actor(actorId).transition>0)return {code:'HUMANOID_TRANSITION_ACTIVE',message:'骑乘切换尚未完成'};
+    if(this.simulation.actor(actorId).vehicle?.spec.mode==='mount')return {code:'HUMANOID_ALREADY_MOUNTED',message:'人物已经骑乘'};
     return;
   }
-  characterCapabilities(actorId=this.inputActorId):CharacterCapabilityState[]{const restriction=actorId===this.options.character.instanceId?this.characterRestriction():undefined;return characterCapabilities(this.actorController(actorId)).map(card=>restriction?{...card,eligible:false,reason:restriction.code,message:restriction.message}:card);}
+  characterCapabilities(actorId:string=this.inputActorId):CharacterCapabilityState[]{const restriction=this.characterRestriction(actorId);return characterCapabilities(this.actorController(actorId)).map(card=>restriction?{...card,eligible:false,reason:restriction.code,message:restriction.message}:card);}
   actionIds(id:string):readonly string[]{return [...this.actorAnimation(id)?.availableHumanoidClips??[]];}
   animationState(id:string):import('../contracts').EntityState['animation']{const source=this.actorAnimation(id)?.sourceCharacter;if(!source)return;const key=Object.keys(source.weights).sort((a,b)=>(source.weights[b]??0)-(source.weights[a]??0))[0];if(!key||!source.actions[key])return;const action=source.actions[key];return {actionId:key,clipName:action.getClip().name,timeSeconds:action.time};}
   cameraSnapshot():import('../contracts').CameraState{
@@ -407,42 +405,33 @@ export class HumanoidRuntime implements PhysicsPort {
   setInput(input:undefined):void;
   setInput(input:Input|undefined):(()=>void)|void;
   setInput(input:Input|undefined):(()=>void)|void{this.assertExternalMutation();return this.setActorInputOwned(this.inputActorId,input);}
-  inspectBoarding(instanceId:string):BoardingObservation {
-    this.assertLive();this.index(instanceId);return this.simulation.inspectBoarding(instanceId);
+  inspectBoarding(instanceId:string,actorId:string=this.inputActorId):BoardingObservation {
+    this.assertLive();this.index(instanceId);return this.simulation.actor(actorId).inspectBoarding(instanceId);
   }
-  inspectControls(actorId=this.inputActorId):HumanoidInputObservation {
+  inspectControls(actorId:string=this.inputActorId):HumanoidInputObservation{
     this.actorController(actorId);const override=this.actorInputs.get(actorId);
-    return actorId===this.options.character.instanceId?structuredClone({override:this.input?{source:this.inputSource,input:this.input}:null,lastApplied:this.lastApplied}):structuredClone({override:override?{source:override.source,input:override.input}:null,lastApplied:this.actorLastInputs.get(actorId)??null});
+    return structuredClone({override:override?{source:override.source,input:override.input}:null,lastApplied:this.actorLastInputs.get(actorId)??null});
   }
   private setActorInputOwned(id:string,input:Input|undefined,source:'humanoid.set-input'|'setInput'='setInput'):(()=>void)|void{
-    this.actorController(id);if(id===this.options.character.instanceId)return this.setInputOwned(input,source);
-    this.actorLastInputs.delete(id);if(input===undefined){this.actorInputs.delete(id);return;}
+    this.actorController(id);this.actorLastInputs.delete(id);if(input===undefined){this.actorInputs.delete(id);return;}
     this.validateInput(input);const entry={input:structuredClone(input),source};this.actorInputs.set(id,entry);
     return()=>{this.assertExternalMutation();if(this.actorInputs.get(id)===entry){this.actorInputs.delete(id);this.actorLastInputs.delete(id);}};
   }
-  private setInputOwned(input:Input|undefined,source:'humanoid.set-input'|'setInput'='setInput'):(()=>void)|void{
-    if(input===undefined){this.input=undefined;this.inputGeneration++;this.lastApplied=null;return;}
-    this.validateInput(input);const generation=++this.inputGeneration;
-    this.input=structuredClone(input);this.inputSource=source;this.lastApplied=null;
-    return()=>{this.assertExternalMutation();if(this.inputGeneration===generation){this.input=undefined;this.inputGeneration++;this.lastApplied=null;}};
-  }
-  private clearInputOwned():void{this.actorInputs.clear();this.actorLastInputs.clear();this.input=undefined;this.inputGeneration++;this.lastApplied=null;this.previousJump=false;this.previousInteract=false;}
+  private clearInputOwned():void{this.actorInputs.clear();this.actorLastInputs.clear();this.previousJump=false;this.previousInteract=false;}
   private index(id:string):number{const n=this.options.vehicles.findIndex(v=>v.instanceId===id);if(n<0)throw new Error(`HUMANOID_INSTANCE_UNKNOWN: ${id}`);return n;}
   prepare(id:string,spawn:MapSpawn):boolean{this.assertExternalMutation();return this.prepareOwned(id,spawn);}
-  private prepareOwned(id:string,spawn:MapSpawn):boolean{const ok=this.simulation.prepare(this.index(id),spawn);this.sync(0);return ok;}
-  private approachOwned(id:string):boolean{this.index(id);const ok=this.simulation.approach(id);this.sync(0);return ok;}
+  private prepareOwned(id:string,spawn:MapSpawn,actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).prepare(this.index(id),spawn);this.sync(0);return ok;}
+  private approachOwned(id:string,actorId:string=this.inputActorId):boolean{this.index(id);const ok=this.simulation.actor(actorId).approach(id);this.sync(0);return ok;}
   recoverVehicle():boolean{this.assertExternalMutation();return this.recoverVehicleOwned();}
-  private recoverVehicleOwned():boolean{const ok=this.simulation.recoverVehicle();if(ok){this.clearInputOwned();this.presentation.snap(this.simulation);this.followCamera.reset(this.cameraSubject);this.sync(0);}return ok;}
-  interact():boolean{this.assertExternalMutation();const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
+  private recoverVehicleOwned(actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).recoverVehicle();if(ok){this.setActorInputOwned(actorId,undefined);this.presentation.snap(this.simulation);if(this.cameraTargetId===actorId)this.followCamera.reset(this.cameraSubject);this.sync(0);}return ok;}
+  interact():boolean{this.assertExternalMutation();const ok=this.simulation.controlledActor.interact();if(ok)this.sync(0);return ok;}
   enter(id:string):boolean{this.assertExternalMutation();return this.enterOwned(id);}
-  private enterOwned(id:string):boolean{const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
+  private enterOwned(id:string,actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).enter(id);if(ok)this.sync(0);return ok;}
   exit():boolean{this.assertExternalMutation();return this.exitOwned();}
-  private exitOwned():boolean{const ok=this.simulation.exit();if(ok)this.sync(0);return ok;}
-  private prepareCharacterOwned(position:Vec3,yaw=0,actorId=this.inputActorId):boolean{
-    if(actorId===this.options.character.instanceId){const ok=this.simulation.prepareCharacter(new THREE.Vector3(...position),yaw);this.sync(0);return ok;}
-    const actor=this.simulation.actors.get(actorId);if(!actor)throw new Error('HUMANOID_ACTOR_UNKNOWN');
-    const safe=this.environment.safeSpawn(new THREE.Vector3(...position),HUMANOID_BODY);if(!safe)return false;
-    actor.resetAt(safe,yaw);this.actorInputs.delete(actorId);this.actorLastInputs.delete(actorId);this.sync(0);return true;
+  private exitOwned(actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).exit();if(ok)this.sync(0);return ok;}
+  private prepareCharacterOwned(position:Vec3,yaw=0,actorId:string=this.inputActorId):boolean{
+    const actor=this.simulation.actor(actorId),ok=actor.prepareCharacter(new THREE.Vector3(...position),yaw);
+    if(ok){this.actorInputs.delete(actorId);this.actorLastInputs.delete(actorId);this.sync(0);}return ok;
   }
   private defaultCameraMode():0|1{return this.profile.view.defaultPerspective==='first-person'?1:0;}
   private restoreDefaultCameraMode():void{
@@ -471,8 +460,8 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   private configureSimulation(simulation:Simulation,profile:ReturnType<HumanoidRuntime['prepareProfile']>):void{
     simulation.characterControl={...profile.character};
-    const h=simulation.humanoid,c=simulation.characterControl;if(h)h.movementTuning={speedScale:c.speed/3.8,accelerationScale:c.accel/12,airControlScale:c.grip/3,turnScale:c.steer/14,maxSpeed:c.maxSpeed,slowSpeed:c.slowSpeed,coastDeceleration:c.coastDeceleration,jumpSpeed:c.jumpSpeed};
-    for(const [id,actor] of simulation.actors){Object.assign(actor.controller.movementTuning,h.movementTuning);this.applyActorMovement(actor.controller,this.actors.get(id)?.movement??{});}
+    const c=simulation.characterControl;
+    for(const [id,actor] of simulation.actors){actor.controller.movementTuning={speedScale:c.speed/3.8,accelerationScale:c.accel/12,airControlScale:c.grip/3,turnScale:c.steer/14,maxSpeed:c.maxSpeed,slowSpeed:c.slowSpeed,coastDeceleration:c.coastDeceleration,jumpSpeed:c.jumpSpeed};this.applyActorMovement(actor.controller,this.actors.get(id)?.movement??{});}
     for(const v of simulation.vehicles)Object.assign(v.spec,profile.vehicles[v.spec.id]);
   }
   private commitProfile(profile:ReturnType<HumanoidRuntime['prepareProfile']>):void{
@@ -488,10 +477,10 @@ export class HumanoidRuntime implements PhysicsPort {
   /** Export the replayable profile; camera contains explicit overrides, not mode defaults. */
   exportProfile():HumanoidProfile{return structuredClone(this.profile);}
   inspectConfiguration():HumanoidConfiguration{
-    const vehicle=this.simulation.vehicle,family=vehicle?.spec.mode??'character';
+    const vehicle=this.simulation.controlledActor.vehicle,family=vehicle?.spec.mode??'character';
     const controls=vehicle?.spec??this.simulation.characterControl;
     return {profile:this.exportProfile(),effective:{
-      subjectId:vehicle?.spec.id??this.options.character.instanceId,family,
+      subjectId:vehicle?.spec.id??this.inputActorId,family,
       control:Object.fromEntries(controlFields(family,!!(vehicle?.motion.wheelPhysics||vehicle?.motion.body?.powertrain)).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
       camera:{owner:this.authored?'authored':'follow',mode:this.followCamera.mode as 0|1|2,settings:this.followCamera.getEffectiveTuning(this.cameraSubject),framing:this.inspectCameraFraming()},
     }};
@@ -522,12 +511,12 @@ export class HumanoidRuntime implements PhysicsPort {
     const profile=this.prepareProfile(this.profile);validateEnvironment(map);
     const replacement=new EnvironmentQueries(this.instanceMap(map));
     const previous=this.environment;
-    let staged:Simulation,ordinary:ThreePhysics|undefined;
-    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);this.restoreActors(staged);replacement.colliderBindings.added(this.options.character.instanceId,staged.humanoid.capsule);}
-    catch(error){ordinary?.dispose();replacement.dispose();throw error;}
+    let staged:Simulation|undefined,ordinary:ThreePhysics|undefined;
+    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=new Simulation(replacement,this.simulation.vehicles.map(v=>structuredClone(v.spec)));this.configureSimulation(staged,profile);this.restoreActors(staged,profile);}
+    catch(error){staged?.dispose();ordinary?.dispose();replacement.dispose();throw error;}
     this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.ordinaryPhysics=ordinary;
     this.releaseOrdinarySubstep=replacement.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
-    this.lifecycleGeneration++;this.simulation.adoptEnvironment(staged);this.currentMap=map;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();
+    this.lifecycleGeneration++;this.simulation.dispose();this.currentSimulation=staged!;this.currentMap=map;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();
     for(const notify of this.simulationReplacements)notify();
     this.clearInputOwned();this.restoreDefaultCameraMode();this.sync(0);
   }
@@ -557,12 +546,12 @@ export class HumanoidRuntime implements PhysicsPort {
       if(config.velocityWorldMetersPerSecondXYZ&&(!Array.isArray(config.velocityWorldMetersPerSecondXYZ)||config.velocityWorldMetersPerSecondXYZ.length!==3||config.velocityWorldMetersPerSecondXYZ.some(v=>!Number.isFinite(v))))throw new Error('HUMANOID_START_INVALID');
     }
     if(!config?.vehicleInstanceId)return this.probeCharacterStart(this.inputActorId,start.positionWorldMetersXYZ);
-    if(this.inputActorId!==this.options.character.instanceId)throw new Error('HUMANOID_ACTOR_VEHICLE_UNSUPPORTED');
     const {candidate,index}=this.episodeCandidate(start),q=this.environment,safe=q.safeSpawn(candidate.position,vehicleBody(candidate.spec),candidate.rotation);
     let valid=!!safe&&safe.distanceTo(candidate.position)<=.35;
     if(safe)candidate.position.copy(safe);
     valid=valid&&canPlaceCreature(candidate,q);
-    if(config.mounted!==false&&candidate.spec.bodyPhysics?.kind==='paddle')valid=valid&&!q.bodyOverlap({position:candidate.position,rotation:candidate.rotation,body:paddleRiderBody(candidate.spec.seat)},{excludedActorIds:new Set([candidate.spec.id]),excludedColliderHandles:new Set([this.simulation.humanoid.capsule.handle])});
+    if(config.mounted!==false)valid=valid&&![...this.simulation.actors.values()].some(actor=>actor.id!==this.inputActorId&&actor.vehicle?.spec.id===candidate.spec.id);
+    if(config.mounted!==false&&candidate.spec.bodyPhysics?.kind==='paddle')valid=valid&&!q.bodyOverlap({position:candidate.position,rotation:candidate.rotation,body:paddleRiderBody(candidate.spec.seat)},{excludedActorIds:new Set([candidate.spec.id]),excludedColliderHandles:new Set([this.simulation.controlledActor.controller.capsule.handle])});
     if(candidate.spec.archetype!=='raft'&&['paddled_boat','boat','submarine'].includes(candidate.spec.mode))valid=valid&&q.waterContains(candidate.position,candidate.spec.radius);
     // Start relocation cannot overwrite another parked actor's occupied envelope.
     valid=valid&&!this.simulation.vehicles.some((v,i)=>i!==index&&this.simulation.available(v)&&Math.abs(v.position.y-candidate.position.y)<2&&Math.hypot(v.position.x-candidate.position.x,v.position.z-candidate.position.z)<v.spec.radius+candidate.spec.radius);
@@ -574,81 +563,61 @@ export class HumanoidRuntime implements PhysicsPort {
     if(config?.vehicleInstanceId){
       const {candidate,index}=this.episodeCandidate({...start,positionWorldMetersXYZ:probe.resolvedPositionWorldMetersXYZ});Object.assign(this.simulation.vehicles[index]!,candidate);
       if(config.mounted===false){if(!this.approachOwned(config.vehicleInstanceId))throw new Error('HUMANOID_START_EXIT_BLOCKED');}
-      else{if(!this.simulation.humanoid?.setMounted(true))throw new Error('HUMANOID_START_MOUNT_BLOCKED');this.simulation.active=index;this.simulation.transition=0;this.simulation.transitionKind='';this.simulation.player.position.copy(candidate.position).add(new THREE.Vector3(...candidate.spec.seat).applyQuaternion(candidate.rotation));this.simulation.player.yaw=candidate.yaw;}
+      else{if(!this.simulation.controlledActor.controller?.setMounted(true))throw new Error('HUMANOID_START_MOUNT_BLOCKED');this.simulation.controlledActor.vehicleIndex=index;this.simulation.controlledActor.transition=0;this.simulation.controlledActor.transitionKind='';this.simulation.controlledActor.player.position.copy(candidate.position).add(new THREE.Vector3(...candidate.spec.seat).applyQuaternion(candidate.rotation));this.simulation.controlledActor.player.yaw=candidate.yaw;}
     }else if(!this.prepareCharacterOwned(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians+Math.PI))throw new Error('HUMANOID_START_BLOCKED');
-    this.simulation.teleportRevision++;this.setCameraModeOwned(config?.cameraMode??this.defaultCameraMode());this.followCamera.reset(this.cameraSubject);this.sync(0);
+    this.simulation.controlledActor.teleportRevision++;this.setCameraModeOwned(config?.cameraMode??this.defaultCameraMode());this.followCamera.reset(this.cameraSubject);this.sync(0);
   }
   private advanceOwned(input:WorldInput,dt:number,pointer:CameraRigInput={},drives:Readonly<Record<string,CharacterDrive>>={}):void{
-    if(this.disposed)throw new Error('HUMANOID_DISPOSED');
+    this.assertLive();
     if(input.cameraTogglePressed&&this.profile.view.keyboardToggleEnabled&&!this.authored)this.setCameraModeOwned((this.followCamera.mode+1)%3 as 0|1|2);
     if(!this.authored)this.followCamera.beforeFixedUpdate();
-    const previousBinding=this.presentation.active,previousRevision=this.presentation.revision;
-    physicsHost(this.ordinaryPhysics).prepareStep(dt,{});
-    this.presentation.beforeStep(this.simulation);
+    const cameraBefore={revision:this.cameraSubject.teleportRevision,vehicle:this.cameraSubject.vehicleIndex};
+    physicsHost(this.ordinaryPhysics).prepareStep(dt,{});this.presentation.beforeStep(this.simulation);
     const sampled=input.humanoid??{...emptyInput(),forward:-(input.moveZRatio??0),steer:input.moveXRatio??0,lift:input.moveYRatio??0,boost:!!input.run,jump:input.jumpPressed??!!(input.jump&&!this.previousJump)};
-    const controls=this.input??(this.inputActorId===this.options.character.instanceId?sampled:this.driveInput(this.options.character.instanceId,drives[this.options.character.instanceId]));
-    if(this.inputActorId===this.options.character.instanceId&&!this.input&&(input.interactPressed??!!(input.interact&&!this.previousInteract))){if(this.simulation.interact())this.sync(0);}
     if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbitRadians(pointer.yawDeltaRadians??0,pointer.pitchDeltaRadians??0,this.simulation.time,this.cameraSubject);
     if(pointer.distanceDeltaMeters)this.followCamera.zoomByMeters(pointer.distanceDeltaMeters,this.cameraSubject);
     if(input.cameraYawRatio||input.cameraPitchRatio)this.followCamera.orbitRadians((input.cameraYawRatio??0)*dt*1.2,(input.cameraPitchRatio??0)*dt,this.simulation.time,this.cameraSubject);
     const actorInputs=new Map<string,ActorInput>();
-    for(const [id,binding] of this.actors){const actor=this.simulation.actors.get(id)!;binding.previousPosition.copy(actor.player.position);binding.previousRotation.setFromAxisAngle(new THREE.Vector3(0,1,0),actor.player.yaw);const actorInput=this.actorInputs.get(id)?.input??(id===this.inputActorId?sampled:this.driveInput(id,drives[id]));actorInputs.set(id,{input:id===this.inputActorId&&(input.interactPressed??!!(input.interact&&!this.previousInteract))?{...actorInput,actions:{...actorInput.actions,interact:true}}:actorInput,yaw:id===this.inputActorId?this.followCamera.yaw:0});}
-    this.simulation.step(controls,dt,this.inputActorId===this.options.character.instanceId||this.input?this.followCamera.yaw:0,actorInputs);
-    for(const [id,value] of actorInputs)this.actorLastInputs.set(id,{input:structuredClone(value.input),source:this.actorInputs.get(id)?.source??'world-input',simulationSeconds:this.simulation.time});
-    for(const value of this.actorInputs.values())value.input={...value.input,jump:false,actions:{}};
-    physicsHost(this.ordinaryPhysics).finishStep();
-    this.lastApplied={source:this.input?this.inputSource:input.humanoid?'world.humanoid':'world-input',input:structuredClone(controls),simulationSeconds:this.simulation.time};
-    this.presentation.afterStep(this.simulation);this.sync(dt);
-    if(!this.authored){this.followCamera.update(this.cameraSubject,dt);this.followCamera.capturePresentationPose(this.cameraSubject,previousBinding!==this.simulation.active||previousRevision!==this.simulation.teleportRevision);}
-    this.previousJump=!!input.jump;this.previousInteract=!!input.interact;
-    // One-shot commands are consumed exactly once even during multi-tick frames.
-    if(this.input)this.input={...this.input,jump:false,actions:{}};
-  }
-  private sync(dt:number,snapCamera=true):void {
-    for(const v of this.simulation.vehicles){const object=this.objects.get(v.spec.id)!;object.position.copy(v.position);object.quaternion.copy(v.rotation);object.visible=this.simulation.available(v);}
-    const p=this.simulation.player,object=this.options.character.object;
-    this.options.character.animation?.setFirstPerson(this.cameraTargetId===this.options.character.instanceId&&!this.authored&&this.followCamera.mode===1);
-    object.position.copy(p.position);object.rotation.set(0,p.yaw,0);
-    const mounted=this.simulation.vehicle;
-    if(dt===0&&mounted?.motion.unicycle){
-      const support=refreshUnicycleSupport(mounted,this.environment);
-      if(!support||mounted.speed>UNICYCLE_TIMING.stoppedSpeed){mounted.motion.unicycle.footDown=0;mounted.motion.unicycle.phase=mounted.grounded?'riding':'airborne';}
+    for(const [id,actor] of this.simulation.actors){
+      const override=this.actorInputs.get(id),selected=id===this.inputActorId;
+      const controls=override?.input??(selected?sampled:this.driveInput(id,drives[id]));
+      if(selected&&!override&&(input.interactPressed??!!(input.interact&&!this.previousInteract)))actor.interact();
+      actorInputs.set(id,{input:controls,yaw:selected||override?this.followCamera.yaw:0});
     }
-    if(mounted){object.position.copy(mounted.position).add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation));object.quaternion.copy(mounted.rotation);}
-    const pose=readHumanoid(this.simulation.humanoid);
-    if(pose){pose.mounted=mounted?(mounted.spec.characterPose??'drive'):null;
+    this.simulation.step(dt,actorInputs);
+    for(const [id,value] of actorInputs)this.actorLastInputs.set(id,{input:structuredClone(value.input),source:this.actorInputs.get(id)?.source??(id===this.inputActorId&&input.humanoid?'world.humanoid':'world-input'),simulationSeconds:this.simulation.time});
+    for(const value of this.actorInputs.values())value.input={...value.input,jump:false,actions:{}};
+    physicsHost(this.ordinaryPhysics).finishStep();this.presentation.afterStep(this.simulation);this.sync(dt);
+    if(!this.authored){this.followCamera.update(this.cameraSubject,dt);this.followCamera.capturePresentationPose(this.cameraSubject,cameraBefore.vehicle!==this.cameraSubject.vehicleIndex||cameraBefore.revision!==this.cameraSubject.teleportRevision);}
+    this.previousJump=!!input.jump;this.previousInteract=!!input.interact;
+  }
+  private sync(dt:number,snapCamera=true):void{
+    for(const v of this.simulation.vehicles){const object=this.objects.get(v.spec.id)!;object.position.copy(v.position);object.quaternion.copy(v.rotation);object.visible=this.simulation.available(v);}
+    for(const [id,binding] of this.actors){
+      const actor=this.simulation.actor(id),mounted=actor.vehicle,logical=this.logicalPose(id)!;
+      binding.object.position.copy(logical.position);binding.object.quaternion.copy(logical.rotation);
+      if(dt===0&&mounted?.motion.unicycle){const support=refreshUnicycleSupport(mounted,this.environment);if(!support||mounted.speed>UNICYCLE_TIMING.stoppedSpeed){mounted.motion.unicycle.footDown=0;mounted.motion.unicycle.phase=mounted.grounded?'riding':'airborne';}}
+      const pose=readHumanoid(actor.controller)!;pose.mounted=mounted?(mounted.spec.characterPose??'drive'):null;
       if(mounted?.motion.kayak)pose.kayakPose={...mounted.motion.kayak};
       if(mounted?.motion.jetski)pose.atvSteeringAngle=mounted.motion.jetski.steeringAngle;
       if(mounted?.motion.unicycle)pose.unicyclePose=copyUnicycleState(mounted.motion.unicycle);
       if(mounted?.motion.atv)pose.atvSteeringAngle=mounted.motion.atv.steeringAngle;
-      if(mounted?.motion.sled)pose.sledPose={...mounted.motion.sled};}
-    if(pose)this.options.character.animation?.update(dt,pose);
-    for(const [id,binding] of this.actors){const actor=this.simulation.actors.get(id)!;const root=binding.animation.root;
-      root.position.copy(actor.player.position);root.rotation.set(0,actor.player.yaw,0);binding.animation.setFirstPerson(this.cameraTargetId===id&&!this.authored&&this.followCamera.mode===1);
-      binding.animation.update(dt,readHumanoid(actor.controller)!);binding.animation.capturePresentationPose();
-      if(dt===0){binding.previousPosition.copy(root.position);binding.previousRotation.copy(root.quaternion);binding.animation.capturePresentationPose();}
+      if(mounted?.motion.sled)pose.sledPose={...mounted.motion.sled};
+      binding.animation?.setFirstPerson(this.cameraTargetId===id&&!this.authored&&this.followCamera.mode===1);
+      binding.animation?.update(dt,pose);binding.animation?.capturePresentationPose();if(dt===0)binding.animation?.capturePresentationPose();
     }
     for(const object of this.objects.values())object.updateWorldMatrix(true,true);
-    this.options.character.animation?.capturePresentationPose();
-    if(dt===0){
-      this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;
-      this.options.character.animation?.capturePresentationPose();
-    }
-    const display=this.presentation.sample(1,this.presentationEpoch,0,0);
-    this.sampleHorses(display);
+    if(dt===0){this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;}
+    const display=this.presentation.sample(1,this.presentationEpoch,0,0);this.sampleHorses(display);
     this.options.vehicles.forEach((instance,index)=>instance.flyingVisual?.commit(display.vehicles[index]!,display.epoch,display.timeSeconds));
-    this.alignHorseRider();this.sampleSkiEquipment();
-    // 相机读取完成座位对齐后的真实骑手眼位，包括复位与地图切换的零时步。
-    if(dt===0&&!this.authored){
-      if(snapCamera){this.followCamera.beforeFixedUpdate();this.followCamera.update(this.cameraSubject,0);}
-      this.followCamera.capturePresentationPose(this.cameraSubject,true);
-    }
+    this.alignHorseRiders();this.sampleSkiEquipment();
+    if(dt===0&&!this.authored){if(snapCamera){this.followCamera.beforeFixedUpdate();this.followCamera.update(this.cameraSubject,0);}this.followCamera.capturePresentationPose(this.cameraSubject,true);}
   }
   private sampleHorses(sample: HumanoidDisplaySample): void {
     this.options.vehicles.forEach((instance, index) => {
       const pose = sample.vehicles[index]!;
       instance.flyingVisual?.sample(pose,sample.timeSeconds);
-      if(index!==this.simulation.active)instance.flyingVisual?.sampleReins(null);
+      if(![...this.simulation.actors.values()].some(actor=>actor.vehicleIndex===index))instance.flyingVisual?.sampleReins(null);
       if(pose.submersible)sampleSubmersibleVisual(instance.object,pose.submersible,sample.timeSeconds);
       if(pose.raft)sampleRaftVisual(instance.object,pose.raft);
       if(pose.jetski)sampleJetSkiVisual(instance.object,pose.jetski,sample.timeSeconds);
@@ -660,40 +629,25 @@ export class HumanoidRuntime implements PhysicsPort {
         phase:pose.creature?.phase ?? 0,speedMetersPerSecond:pose.speed,gait:pose.creature?.gait ?? 'graze'});
     });
   }
-  private sampleSkiEquipment():void {
-    this.options.vehicles.forEach((instance,index)=>{
-      if(instance.spec.mode==='ski')sampleSkiEquipment(instance.object,index===this.simulation.active?this.options.character.object:null);
-    });
+  private sampleSkiEquipment():void{
+    this.options.vehicles.forEach((instance,index)=>{if(instance.spec.mode==='ski'){const rider=[...this.simulation.actors.values()].find(actor=>actor.vehicleIndex===index);sampleSkiEquipment(instance.object,rider?this.actors.get(rider.id)!.object:null);}});
   }
-  private alignHorseRider(): void {
-    const index = this.simulation.active;
-    if (index < 0) return;
-    const instance = this.options.vehicles[index]!;
-    if(instance.flyingVisual){this.options.character.animation?.alignMountedPelvis(instance.flyingVisual.readSeatWorld());instance.flyingVisual.sampleReins(this.options.character.object);return;}
-    if (!instance.visual) return;
-    instance.object.updateWorldMatrix(true, true);
-    const anchor = instance.visual.readSeatAnchor(this.simulation.vehicles[index]!.spec.seat, instance.seatAnchor);
-    this.options.character.animation?.alignMountedPelvis(instance.object.matrixWorld.clone().multiply(anchor));
-  }
-  /** Canonical copies: physical observations never read a temporary display root. */
-  logicalPose(id:string):{position:THREE.Vector3;rotation:THREE.Quaternion}|undefined {
-    if(id===this.options.character.instanceId){
-      const mounted=this.simulation.vehicle;
-      if(mounted)return {
-        position:mounted.position.clone().add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation)),
-        rotation:mounted.rotation.clone(),
-      };
-      return {
-        position:this.simulation.player.position.clone(),
-        rotation:new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),this.simulation.player.yaw),
-      };
+  private alignHorseRiders():void{
+    for(const [id,actor] of this.simulation.actors){
+      const index=actor.vehicleIndex;if(index<0)continue;const instance=this.options.vehicles[index]!,binding=this.actors.get(id)!;
+      if(instance.flyingVisual){binding.animation?.alignMountedPelvis(instance.flyingVisual.readSeatWorld());instance.flyingVisual.sampleReins(binding.object);continue;}
+      if(!instance.visual)continue;instance.object.updateWorldMatrix(true,true);const anchor=instance.visual.readSeatAnchor(actor.vehicle!.spec.seat,instance.seatAnchor);
+      binding.animation?.alignMountedPelvis(instance.object.matrixWorld.clone().multiply(anchor));
     }
-    const actor=this.simulation.actors.get(id);if(actor)return {position:actor.player.position.clone(),rotation:new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),actor.player.yaw)};
-    const vehicle=this.simulation.vehicles.find(value=>value.spec.id===id);
-    return vehicle?{position:vehicle.position.clone(),rotation:vehicle.rotation.clone()}:undefined;
+  }
+  /** Physical observations never read temporarily interpolated roots. */
+  logicalPose(id:string):{position:THREE.Vector3;rotation:THREE.Quaternion}|undefined{
+    const actor=this.simulation.actors.get(id);
+    if(actor){const mounted=actor.vehicle;return mounted?{position:mounted.position.clone().add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation)),rotation:mounted.rotation.clone()}:{position:actor.player.position.clone(),rotation:new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),actor.player.yaw)};}
+    const vehicle=this.simulation.vehicles.find(v=>v.spec.id===id);return vehicle?{position:vehicle.position.clone(),rotation:vehicle.rotation.clone()}:undefined;
   }
   private present(alpha:number,tick:number,view:'world'|'object'='world'):()=>void {
-    if(this.presentation.revision!==this.simulation.teleportRevision||this.presentation.active!==this.simulation.active){
+    if(this.presentation.hasDiscontinuity(this.simulation)){
       this.presentation.snap(this.simulation);this.presentationEpoch++;this.visualSample=undefined;this.presentationCutTick=undefined;
     }
     // A cut fixes every owner at the current sample until a new fixed interval.
@@ -716,10 +670,9 @@ export class HumanoidRuntime implements PhysicsPort {
         object.position.copy(logical.position);
         object.quaternion.copy(logical.rotation);
       }
-      this.options.character.animation?.applyPresentationPose(1);
-      for(const binding of this.actors.values())binding.animation.applyPresentationPose(1);
+      for(const binding of this.actors.values())binding.animation?.applyPresentationPose(1);
       this.sampleHorses(this.presentation.sample(1,this.presentationEpoch,tick,tick));
-      this.alignHorseRider();this.sampleSkiEquipment();
+      this.alignHorseRiders();this.sampleSkiEquipment();
       for(const object of this.objects.values())object.updateWorldMatrix(true,true);
     };
     try {
@@ -729,36 +682,26 @@ export class HumanoidRuntime implements PhysicsPort {
         object.position.copy(pose.position);object.quaternion.copy(pose.rotation);
       });
       this.sampleHorses(sample);
-      const character=this.options.character.object;
-      character.position.copy(sample.player.position);character.quaternion.copy(sample.player.rotation);
-      this.options.character.animation?.applyPresentationPose(sample.alpha);
-      for(const [id,binding] of this.actors){const logical=this.logicalPose(id)!;binding.animation.root.position.lerpVectors(binding.previousPosition,logical.position,sample.alpha);binding.animation.root.quaternion.slerpQuaternions(binding.previousRotation,logical.rotation,sample.alpha);binding.animation.applyPresentationPose(sample.alpha);}
+      for(const [id,binding] of this.actors){const pose=sample.actors[id]!;binding.object.position.copy(pose.position);binding.object.quaternion.copy(pose.rotation);binding.animation?.applyPresentationPose(sample.alpha);}
       const last=this.visualSample;
       if(!last||last.epoch!==sample.epoch||last.previousTick!==sample.previousTick||last.currentTick!==sample.currentTick||last.alpha!==sample.alpha){
         const elapsed=last&&last.epoch===sample.epoch?sample.timeSeconds-last.timeSeconds:0;
         for(const update of this.visualUpdates)update(elapsed,sample);
         this.visualSample=sample;
       }
-      // Rider placement follows visual callbacks and uses the same vehicle sample.
-      const index=this.simulation.active;
-      if(index>=0){
-        const vehicle=sample.vehicles[index]!,seat=this.simulation.vehicles[index]!.spec.seat;
-        character.position.copy(vehicle.position).add(new THREE.Vector3(...seat).applyQuaternion(vehicle.rotation));
-        character.quaternion.copy(vehicle.rotation);
-      }
-      for(const object of this.objects.values())object.updateWorldMatrix(true,true);
-      this.alignHorseRider();this.sampleSkiEquipment();
-      if(!this.authored&&this.followCamera.initialized){const actor=this.actors.get(this.cameraTargetId),state=this.simulation.actors.get(this.cameraTargetId);const pose=actor&&state?{...sample.player,position:actor.animation.root.position.clone(),rotation:actor.animation.root.quaternion.clone(),velocity:state.player.velocity.clone(),yaw:state.player.yaw}:index>=0?sample.vehicles[index]!:sample.player;this.followCamera.present(pose,sample.alpha);}
+      for(const [id,actor] of this.simulation.actors){if(actor.vehicleIndex<0)continue;const vehicle=sample.vehicles[actor.vehicleIndex]!,binding=this.actors.get(id)!;binding.object.position.copy(vehicle.position).add(new THREE.Vector3(...actor.vehicle!.spec.seat).applyQuaternion(vehicle.rotation));binding.object.quaternion.copy(vehicle.rotation);}
+      for(const object of this.objects.values())object.updateWorldMatrix(true,true);this.alignHorseRiders();this.sampleSkiEquipment();
+      if(!this.authored&&this.followCamera.initialized){const actor=this.simulation.actor(this.cameraTargetId);this.followCamera.present(actor.vehicleIndex>=0?sample.vehicles[actor.vehicleIndex]!:sample.actors[actor.id]!,sample.alpha);}
       return restore;
     } catch(error){restore();throw error;}
   }
   state(id:string):PhysicsEntityState|undefined{
-    if(id===this.options.character.instanceId){const p=this.simulation.player,h=this.simulation.humanoid,contacts:string[]=[];if(h&&!this.simulation.vehicle)for(let i=0;i<h.controller.numComputedCollisions();i++){const collision=h.controller.computedCollision(i);if(collision?.collider)contacts.push(this.environment.colliderId(collision.collider.handle));}return {id,positionMetersXYZ:tuple(this.logicalPose(id)!.position),velocityMetersPerSecondXYZ:tuple(this.simulation.vehicle?.velocity??p.velocity),isGrounded:this.simulation.vehicle?.grounded??p.grounded,collisionEntityIds:[...new Set(contacts)]};}
-    const actor=this.simulation.actors.get(id);if(actor){const h=actor.controller,contacts:string[]=[];for(let n=0;n<h.controller.numComputedCollisions();n++){const collider=h.controller.computedCollision(n)?.collider;if(collider)contacts.push(this.environment.colliderId(collider.handle));}return {id,positionMetersXYZ:tuple(actor.player.position),velocityMetersPerSecondXYZ:tuple(actor.player.velocity),isGrounded:actor.player.grounded,collisionEntityIds:[...new Set(contacts)]};}
+    const actor=this.simulation.actors.get(id);
+    if(actor){const h=actor.controller,contacts:string[]=[];if(!actor.vehicle)for(let n=0;n<h.controller.numComputedCollisions();n++){const collider=h.controller.computedCollision(n)?.collider;if(collider)contacts.push(this.environment.colliderId(collider.handle));}return {id,positionMetersXYZ:tuple(this.logicalPose(id)!.position),velocityMetersPerSecondXYZ:tuple(actor.vehicle?.velocity??actor.player.velocity),isGrounded:actor.vehicle?.grounded??actor.player.grounded,collisionEntityIds:[...new Set(contacts)]};}
     const v=this.simulation.vehicles.find(v=>v.spec.id===id);return v?{id,positionMetersXYZ:tuple(v.position),velocityMetersPerSecondXYZ:tuple(v.velocity),isGrounded:v.grounded,collisionEntityIds:[]}:this.ordinaryPhysics.state(id);
   }
-  hasActor(id:string):boolean{return id===this.options.character.instanceId||this.actors.has(id);}
-  allowsWorldCommand(type:string,id:string):boolean{return this.hasActor(id)&&isHumanoidActorCommand(type)&&(type!=='entity.despawn'||this.actors.has(id));}
+  hasActor(id:string):boolean{return this.actors.has(id);}
+  allowsWorldCommand(type:string,id:string):boolean{return this.hasActor(id)&&isHumanoidActorCommand(type);}
   private driveInput(id:string,drive:CharacterDrive|undefined):Input{
     if(!drive)return emptyInput();if(!('velocityMetersPerSecondXZ' in drive))throw new Error('HUMANOID_GROUND_DRIVE_REQUIRED');
     const [x,z]=drive.velocityMetersPerSecondXZ,tuning=this.actorController(id).movementTuning,walk=3.1*tuning.speedScale;
@@ -770,24 +713,28 @@ export class HumanoidRuntime implements PhysicsPort {
     if(movement.runSpeedMetersPerSecond!==undefined)controller.movementTuning.maxSpeed=movement.runSpeedMetersPerSecond;
     if(movement.jumpSpeedMetersPerSecond!==undefined)controller.movementTuning.jumpSpeed=movement.jumpSpeedMetersPerSecond;
   }
-  private restoreActors(simulation:Simulation):void{
-    for(const [id,binding] of this.actors){if(simulation.environment.colliderForId(id))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');const actor=simulation.addActor(id,binding.initialPosition,binding.initialYaw);actor.controller.setAvailableClips(binding.animation.availableHumanoidClips,binding.animation.motionSources);Object.assign(actor.controller.movementTuning,simulation.humanoid.movementTuning);this.applyActorMovement(actor.controller,binding.movement);simulation.environment.colliderBindings.added(id,actor.controller.capsule);}
+  private restoreActors(simulation:Simulation,profile:ReturnType<HumanoidRuntime['prepareProfile']>):void{
+    for(const [id,binding] of this.actors){if(simulation.environment.colliderForId(id))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');const actor=simulation.addActor(id,binding.spawn==='map'?new THREE.Vector3(...simulation.environment.map.playerSpawn):binding.initialPosition,binding.initialYaw);if(binding.animation)actor.controller.setAvailableClips(binding.animation.availableHumanoidClips,binding.animation.motionSources);simulation.environment.colliderBindings.added(id,actor.controller.capsule);}
+    this.configureSimulation(simulation,profile);simulation.controlledActorId=simulation.actors.has(this.inputActorId)?this.inputActorId:simulation.actors.keys().next().value??'';
   }
   async createCharacter():Promise<Character>{
-    this.assertExternalMutation();const source=this.options.character.animation;if(!source)throw new Error('HUMANOID_SOURCE_UNAVAILABLE');
-    const generation=this.lifecycleGeneration,character=await source.createInstance();
+    this.assertExternalMutation();const factory=this.characterFactory;if(!factory)throw new Error('HUMANOID_SOURCE_UNAVAILABLE');
+    const generation=this.lifecycleGeneration,character=await factory();
     if(this.disposed||generation!==this.lifecycleGeneration){character.dispose();throw new Error('HUMANOID_ACTOR_LOAD_STALE');}return character;
   }
-  actorController(id:string){const controller=id===this.options.character.instanceId?this.simulation.humanoid:this.simulation.actors.get(id)?.controller;if(!controller)throw new Error(`HUMANOID_ACTOR_UNKNOWN: ${id}`);return controller;}
-  private bindCharacter(id:string,animation:Character,movement:CharacterOptions={},prevalidated=false):void{
+  actorController(id:string){return this.simulation.actor(id).controller;}
+  private bindCharacter(id:string,binding:import('./character-binding').RuntimeActorBinding,movement:CharacterOptions={},prevalidated=false):void{
     this.assertLive();this.assertRigidIds([id]);
-    if(!animation.loaded||animation===this.options.character.animation||[...this.actors.values()].some(binding=>binding.animation===animation))throw new Error('HUMANOID_CHARACTER_BINDING_INVALID');
-    const {position,rotation,yaw}=validateCharacterBinding(animation,movement),root=animation.root;
+    if(binding.spawn==='map')binding.object.position.set(...this.environment.map.playerSpawn);
+    const {position,yaw}=validateActorBinding(binding,movement),{object,animation}=binding;
     const actor=this.simulation.addActor(id,position,yaw,prevalidated);
-    try{actor.controller.setAvailableClips(animation.availableHumanoidClips,animation.motionSources);Object.assign(actor.controller.movementTuning,this.simulation.humanoid.movementTuning);this.environment.colliderBindings.added(id,actor.controller.capsule);}
+    try{if(animation)actor.controller.setAvailableClips(animation.availableHumanoidClips,animation.motionSources);this.environment.colliderBindings.added(id,actor.controller.capsule);}
     catch(error){this.simulation.removeActor(id);throw error;}
-    this.applyActorMovement(actor.controller,movement);
-    this.actors.set(id,{animation,movement:{...movement},initialPosition:actor.player.position.clone(),initialYaw:actor.player.yaw,previousPosition:position,previousRotation:rotation});this.objects.set(id,root);
+    const firstActor=this.actors.size===0;
+    this.actors.set(id,{object,...(animation?{animation}:{}),...(binding.spawn?{spawn:binding.spawn}:{}),movement:{...movement},initialPosition:actor.player.position.clone(),initialYaw:actor.player.yaw});this.objects.set(id,object);
+    if(!this.simulation.controlledActorId)this.simulation.controlledActorId=id;
+    this.configureSimulation(this.simulation,this.prepareProfile(this.profile));
+    if(this.simulation.actors.has(this.cameraTargetId)){if(firstActor)this.followCamera.reset(this.cameraSubject);this.sync(0,!firstActor);}
   }
   addCharacter(id:string,object:THREE.Object3D,_options?:CharacterOptions):void{
     if(!this.objects.has(id)||this.objects.get(id)!==object)throw Object.assign(new Error(`HUMANOID_CONTENT_REGISTER_IN_OPTIONS: ${id} cannot be registered as physical content after Humanoid creation.`),{
@@ -814,12 +761,12 @@ export class HumanoidRuntime implements PhysicsPort {
   setEnabled(id:string,enabled:boolean):void{this.ordinaryPhysics.setEnabled(id,enabled);}
   teleport(id:string,position:Vec3):void{
     this.assertExternalMutation();
-    if(id===this.options.character.instanceId){if(!this.prepareCharacterOwned(position,this.simulation.player.yaw,id))throw new Error('HUMANOID_START_BLOCKED');}
+    if(this.hasActor(id)){if(!this.prepareCharacterOwned(position,this.simulation.actor(id).player.yaw,id))throw new Error('HUMANOID_START_BLOCKED');}
     else this.ordinaryPhysics.teleport(id,position);
   }
   applyImpulse(id:string,impulse:Vec3):void{this.assertExternalMutation();this.ordinaryPhysics.applyImpulse(id,impulse);}
   step():void{throw new Error('HUMANOID_REQUIRES_ENGINE_INPUT');}
-  characterSettings(id:string):Required<CharacterOptions>{const c=this.hasActor(id)?this.actorController(id).movementTuning:this.simulation.humanoid.movementTuning;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speedScale,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
+  characterSettings(id:string):Required<CharacterOptions>{const c=this.hasActor(id)?this.actorController(id).movementTuning:this.simulation.controlledActor.controller.movementTuning;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speedScale,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
   probeCharacterStart(id:string,position:Vec3):EpisodeStartProbe{
     this.actorController(id);
     const safe=this.environment.safeSpawn(new THREE.Vector3(...position),HUMANOID_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35&&!this.environment.bodyOverlap({position:safe,rotation:new THREE.Quaternion(),body:HUMANOID_BODY},{excludedColliderHandles:new Set([this.actorController(id).capsule.handle])},.015);
@@ -828,27 +775,28 @@ export class HumanoidRuntime implements PhysicsPort {
   castCameraArm(target:Vec3,eye:Vec3,radius:number){return this.environment.cameraProbe(target,eye,radius);}
   probe(origin:Vec3,direction:Vec3,distance:number){const result=this.environment.raycast(new THREE.Vector3(...origin),new THREE.Vector3(...direction),distance);return result?{entityId:result.id,distanceMeters:result.distance,normalWorldXYZ:tuple(result.normal)}:null;}
   audit():PhysicsAudit{
-    const ordinary=this.ordinaryPhysics.audit(),base={engine:'rapier' as const,entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:id===this.options.character.instanceId||this.actors.has(id)?'character':'vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};
+    const ordinary=this.ordinaryPhysics.audit(),base={engine:'rapier' as const,entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:this.actors.has(id)?'character':'vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};
     return {...base,entityCount:base.entityCount+ordinary.entityCount,triangleCount:ordinary.triangleCount,
       entities:[...base.entities,...ordinary.entities],diagnostics:[...ordinary.diagnostics]};
   }
   private finishResetOwned():void{
     this.cameraActor=this.baselineCameraActor&&this.hasActor(this.baselineCameraActor)?this.baselineCameraActor:undefined;
     this.restoreDefaultCameraMode();this.sync(0);
+    if(this.replacementPending){this.replacementPending=false;for(const notify of this.simulationReplacements)notify();}
   }
   private resetOwned():void{
     const profile=this.prepareProfile(this.baselineProfile);validateEnvironment(this.currentMap);
     const replacement=new EnvironmentQueries(this.instanceMap(this.currentMap)),previous=this.environment;
-    let staged:Simulation,ordinary:ThreePhysics|undefined;
-    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=this.simulation.prepareEnvironment(replacement);this.configureSimulation(staged,profile);this.restoreActors(staged);replacement.colliderBindings.added(this.options.character.instanceId,staged.humanoid.capsule);}
-    catch(error){ordinary?.dispose();replacement.dispose();throw error;}
+    let staged:Simulation|undefined,ordinary:ThreePhysics|undefined;
+    try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=new Simulation(replacement,this.simulation.vehicles.map(v=>structuredClone(v.spec)));this.configureSimulation(staged,profile);this.restoreActors(staged,profile);}
+    catch(error){staged?.dispose();ordinary?.dispose();replacement.dispose();throw error;}
     this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.ordinaryPhysics=ordinary;
     this.releaseOrdinarySubstep=replacement.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
-    this.lifecycleGeneration++;this.simulation.adoptEnvironment(staged);this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();this.clearInputOwned();
-    for(const notify of this.simulationReplacements)notify();
+    this.lifecycleGeneration++;this.simulation.dispose();this.currentSimulation=staged!;this.environment=replacement;this.followCamera.environment=replacement;this.commitProfile(profile);previous.dispose();this.clearInputOwned();
+    this.replacementPending=true;
     this.authored=this.baselineAuthored;this.camera.copy(this.initialCamera,false);
     if(!this.authored)this.camera.fov=this.followCamera.tuning.baseFovDegrees;
-    this.camera.updateProjectionMatrix();this.finishResetOwned();
+    this.camera.updateProjectionMatrix();if(this.actors.size)this.finishResetOwned();
   }
-  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.followCamera.dispose();this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.environment.dispose();try{this.options.character.animation?.dispose();}finally{this.releaseCharacterOwnership();}for(const vehicle of this.options.vehicles){disposeSubmersibleVisual(vehicle.object);disposeJetSkiVisual(vehicle.object);vehicle.visual?.dispose();vehicle.flyingVisual?.dispose();}}
+  dispose():void{if(this.disposed)return;this.clearInputOwned();this.episodeOwned=false;this.disposed=true;this.followCamera.dispose();this.visualUpdates.clear();this.simulationReplacements.clear();this.simulation.dispose();this.releaseOrdinarySubstep();this.ordinaryPhysics.dispose();this.environment.dispose();if(this.releaseCharacterOwnership){try{this.options.character.animation?.dispose();}finally{this.releaseCharacterOwnership();this.releaseCharacterOwnership=undefined;}}for(const vehicle of this.options.vehicles){disposeSubmersibleVisual(vehicle.object);disposeJetSkiVisual(vehicle.object);vehicle.visual?.dispose();vehicle.flyingVisual?.dispose();}}
 }

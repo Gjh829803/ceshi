@@ -97,15 +97,13 @@ export class Character {
   private static fromLease(lease:SourceCharacterLease):Character {
     try{
       const instance=new Character(lease.model,lease.entries,lease.dispose);
-      instance.createResourceInstance=async()=>Character.fromLease(await lease.createInstance());
+      const factory=lease.factory;instance.createResourceInstance=async()=>Character.fromLease(await factory());
       return instance;
     }catch(error){try{lease.dispose();}catch{/* Preserve binding failure. */}throw error;}
   }
-  /** Fresh state from the same immutable source, independent of this live pose. */
-  async createInstance():Promise<Character>{
-    if(this.disposed)throw new Error('SOURCE_CHARACTER_DISPOSED');
-    if(!this.createResourceInstance)throw new Error('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');
-    return this.createResourceInstance();
+  /** The immutable source factory survives the lifetime of any individual model. */
+  createFactory():(()=>Promise<Character>)|undefined{
+    if(this.disposed)throw new Error('SOURCE_CHARACTER_DISPOSED');return this.createResourceInstance;
   }
 
   constructor(model: Group, entries: CharacterClipEntry[],releaseResources?:()=>void) {

@@ -173,7 +173,7 @@ try {
       const w = (window as any).__BASELINE_WORLD__, engine = w.engine;
       const port = (window as any).__WORLDKIT_EVAL__.episode;
       const physics = w.humanoid.simulation.environment.world;
-      const mixers=[w.humanoid.options.character.animation.sourceCharacter.mixer,...[...w.humanoid.actors.values()].map((binding:any)=>binding.animation.sourceCharacter.mixer)];
+      const mixers=[...w.humanoid.actors.values()].flatMap((binding:any)=>binding.animation?[binding.animation.sourceCharacter.mixer]:[]);
       const updates=mixers.map(mixer=>mixer.update);
       const fixed = engine.fixedStep, render = w.renderer.render, step = physics.step;
       let fixedSamples: number[] = [], renderSamples: number[] = [], mixerEvaluations = 0, physicsSteps = 0;

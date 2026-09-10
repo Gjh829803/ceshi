@@ -93,7 +93,7 @@ it('keeps native mounted views at the real Source101 eyes through orbit, flight 
       expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
-      const vehicle=runtime.simulation.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
+      const vehicle=runtime.simulation.controlledActor.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
       expect(offset.x).toBeLessThan(-.3);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(0);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);

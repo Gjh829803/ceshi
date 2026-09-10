@@ -1,21 +1,21 @@
-import {isHumanoidActorCommand,validateCharacterBinding} from './humanoid-runtime/character-binding';
-import {inspectVehicle,type VehicleInspectionQuery} from './humanoid-runtime/vehicle-inspection';
-import { humanoidHost } from './humanoid-runtime/host-access';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import { WorldEngine, type WorldOptions as EngineOptions } from './engine.js';
-import {resolveShadowSettings} from './config/presentation';
-import {applyRendererShadows,applyDirectionalShadows} from './shadows';
-import { ThreePresentation } from './presentation.js';
-import { normalizeCaptureSelection, observeCaptureSelection, type SelectedCaptureTarget } from './capture-selection.js';
 import { WorldAssets } from './assets-library.js';
-import { OperationLedger, StateRegistry, actionArguments, cloneJson, failure, objectSchema, requireId, runtimeError, scalarSchema, scalarValue, synchronous } from './control-support.js';
-import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
+import { normalizeCaptureSelection,observeCaptureSelection,type SelectedCaptureTarget } from './capture-selection.js';
+import { resolveShadowSettings } from './config/presentation';
 import type * as API from './contracts.js';
-import type { AssetDefinition, EntityOptions as EngineEntityOptions, CharacterOptions as EngineBody, WorldCommand as EngineCommand } from './engine-contracts.js';
-import type { EpisodeRuntimePort, EpisodeStart } from './episode-contracts.js';
+import { OperationLedger,StateRegistry,actionArguments,cloneJson,failure,objectSchema,requireId,runtimeError,scalarSchema,scalarValue,synchronous } from './control-support.js';
+import type { AssetDefinition,CharacterOptions as EngineBody,WorldCommand as EngineCommand } from './engine-contracts.js';
+import { WorldEngine,type WorldOptions as EngineOptions } from './engine.js';
+import type { EpisodeRuntimePort,EpisodeStart } from './episode-contracts.js';
+import { geometrySignature,isWorldVisible,setEntityBoundary,worldPose } from './geometry.js';
+import { isHumanoidActorCommand,validateActorBinding } from './humanoid-runtime/character-binding';
+import { humanoidHost } from './humanoid-runtime/host-access';
+import { isHumanoidCommand,type HumanoidCommand } from './humanoid-runtime/runtime.js';
+import { inspectVehicle,type VehicleInspectionQuery } from './humanoid-runtime/vehicle-inspection';
 import { MAXIMUM_EPISODE_START_ALIGNMENT_METERS } from './physics.js';
-import { isHumanoidCommand, type HumanoidCommand } from './humanoid-runtime/runtime.js';
+import { ThreePresentation } from './presentation.js';
+import { applyDirectionalShadows,applyRendererShadows } from './shadows';
 
 type Registration = {
  id:string;object:THREE.Object3D;options:API.EntityOptions|API.CharacterOptions;role:API.EntityState['role'];
@@ -94,7 +94,7 @@ export class ThreeWorld implements API.World {
    const world=new ThreeWorld(engine,assets,shadows);
    if(options.humanoid){
     for(const v of options.humanoid.vehicles)world.addCharacter({id:v.instanceId,name:v.spec.name,object:v.object,body:{heightMeters:Math.max(.1,v.spec.envelope.halfExtents[1]*2),radiusMeters:v.spec.radius},tags:['vehicle',v.assetId],frontYawRadians:Math.PI});
-    const c=options.humanoid.character;world.addCharacter({id:c.instanceId,object:c.object,body:{heightMeters:1.68,radiusMeters:.28},tags:['humanoid-character'],frontYawRadians:Math.PI});world.setControlledEntity(c.instanceId);
+    const c=options.humanoid.character;world.addCharacterInternal({id:c.instanceId,...(c.animation?{humanoid:c.animation}:{object:c.object,body:{heightMeters:1.68,radiusMeters:.28}}),tags:['humanoid-character'],frontYawRadians:Math.PI},false,{...c,spawn:'map'});world.setControlledEntity(c.instanceId);
    }
    if(world.renderer)world.restoreRendererShadows=applyRendererShadows(world.renderer,world.scene,shadows);
    return world;
@@ -151,7 +151,7 @@ export class ThreeWorld implements API.World {
   this.entries.set(options.id,{id:options.id,object:options.object,options,role:options.role,generation:++this.nextGeneration,geometryVersion:0,movementId:'ground',movementState:null,physicsKind:physics.kind});this.touch();return options.object;
  }
  addCharacter(options:API.CharacterOptions):THREE.Object3D{return this.addCharacterInternal(options);}
- private addCharacterInternal(options:API.CharacterOptions,prevalidated=false):THREE.Object3D{
+ private addCharacterInternal(options:API.CharacterOptions,prevalidated=false,runtimeActor?:import('./humanoid-runtime/character-binding').RuntimeActorBinding):THREE.Object3D{
   this.alive();requireId(options.id);
   const asset=options.asset;const object=options.humanoid?.root??asset?.object??options.object;
   if(!object||(asset&&options.object))throw failure('CHARACTER_SOURCE_INVALID');
@@ -162,7 +162,7 @@ export class ThreeWorld implements API.World {
   if(movementId!=='ground'&&!this.movements.has(movementId))throw failure('MOVEMENT_NOT_REGISTERED');
   if(options.locomotionBindingId){const info=this.assets.search('').find(item=>item.assetId===asset?.assetId);if(!info?.locomotionBindingIds.includes(options.locomotionBindingId))throw failure('LOCOMOTION_BINDING_UNAVAILABLE');}
   const character=this.engineCharacter(options,body);
-  const {asset:_asset,...metadata}=options;this.engine.addCharacter({...metadata,object,character,...(asset?{asset:this.assets.internal(asset)}:{})},prevalidated);
+  const {asset:_asset,humanoid:_humanoid,...metadata}=options;const binding=runtimeActor??(options.humanoid?{object,animation:options.humanoid}:undefined);this.engine.addCharacter({...metadata,object,character,...(binding?{runtimeActor:binding}:{}),...(asset?{asset:this.assets.internal(asset)}:{})},prevalidated);
   this.entries.set(options.id,{id:options.id,object,options,role:'actor',body,...(asset?{asset}:{}),generation:++this.nextGeneration,geometryVersion:0,movementId,movementState:movementId==='ground'?null:cloneJson(this.movements.get(movementId)!.initialState),physicsKind:'character'});this.touch();return object;
  }
  setControlledEntity(id:string):void{this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
@@ -390,7 +390,7 @@ export class ThreeWorld implements API.World {
    }
    this.scene.updateWorldMatrix(true,true,true);
    const affected=[...candidates.values()].filter(entry=>!removed.has(entry.id)&&entry.physicsKind!=='none'&&[...physical].some(id=>this.within(entry.object,entity(id).object)||this.within(entity(id).object,entry.object)));
-   for(const entry of affected)if('humanoid' in entry.options&&entry.options.humanoid){if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');validateCharacterBinding(entry.options.humanoid,this.engineCharacter(entry.options,entry.body!));}
+   for(const entry of affected)if('humanoid' in entry.options&&entry.options.humanoid){if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');validateActorBinding({object:entry.options.humanoid.root,animation:entry.options.humanoid},this.engineCharacter(entry.options,entry.body!));}
    this.engine.physics.validateBatch(affected.map(entry=>entry.body?{kind:'character' as const,id:entry.id,object:entry.object,options:this.engineCharacter(entry.options as API.CharacterOptions,entry.body)}:{kind:'rigid' as const,id:entry.id,object:entry.object,options:this.enginePhysics(entry.options as API.EntityOptions)}),[...removed].filter(id=>Boolean(this.engine.physics.state(id))));
   }finally{
    for(const prior of stored){if(prior.parent)prior.parent.add(prior.entry.object);else prior.entry.object.removeFromParent();prior.entry.object.position.copy(prior.position);prior.entry.object.quaternion.copy(prior.quaternion);prior.entry.object.scale.copy(prior.scale);prior.entry.object.matrix.copy(prior.matrix);prior.entry.object.visible=prior.visible;if(prior.geometry)(prior.entry.object as THREE.Mesh).geometry=prior.geometry;}
@@ -414,10 +414,11 @@ export class ThreeWorld implements API.World {
   const promise=Promise.resolve().then(():API.CommandReceipt=>{try{
    this.alive();if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');
    if(options.expectedWorldRevision!==undefined&&options.expectedWorldRevision!==this.revision)throw failure('STALE_CONTEXT');
+   const actorId='actorId' in command?command.actorId??this.humanoid.inputActorId:this.humanoid.inputActorId;
    const result=lease?humanoidHost(this.humanoid).command(cloneJson(command)):this.humanoid.command(cloneJson(command));
    if(result?.status==='rejected')throw failure(result.code,result.message);this.touch();
-   if(result?.status==='running'){const actorId=command.type==='humanoid.perform-action'?command.actorId??this.humanoid.inputActorId:this.humanoid.inputActorId;const controller=this.humanoid.actorController(actorId),generation=this.entity(actorId).generation;const requestId=result.requestId;const operationId=this.operations.create('humanoid-action',()=>{const cancelled=controller.skills.cancel(requestId);if(cancelled?.status==='running')throw failure(cancelled.code,cancelled.message);this.humanoidActivities.delete(operationId);});this.humanoidActivities.set(operationId,{requestId,actorId,generation,controller});this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
-   const resultInfo=command.type==='vehicle.approach'?{kind:'relocation' as const,entityId:this.humanoid.options.character.instanceId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(this.humanoid.options.character.instanceId).positionWorldMetersXYZ}:undefined;
+   if(result?.status==='running'){const controller=this.humanoid.actorController(actorId),generation=this.entity(actorId).generation;const requestId=result.requestId;const operationId=this.operations.create('humanoid-action',()=>{const cancelled=controller.skills.cancel(requestId);if(cancelled?.status==='running')throw failure(cancelled.code,cancelled.message);this.humanoidActivities.delete(operationId);});this.humanoidActivities.set(operationId,{requestId,actorId,generation,controller});this.operations.update(operationId,{status:'running'});return {status:'accepted',commandId,worldRevision:this.revision,operationId};}
+   const resultInfo=command.type==='vehicle.approach'?{kind:'relocation' as const,entityId:actorId,vehicleInstanceId:command.instanceId,positionWorldMetersXYZ:this.getEntityState(actorId).positionWorldMetersXYZ}:undefined;
    return {status:'applied',commandId,worldRevision:this.revision,...(resultInfo?{result:resultInfo}:{})};
   }catch(error){return {status:'rejected',commandId,worldRevision:this.revision,error:runtimeError(error)};}});
   this.requests.set(commandId,{body,promise});return promise;
@@ -658,7 +659,7 @@ export class ThreeWorld implements API.World {
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
-  return {...(this.humanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>entry.id!==this.humanoid!.options.character.instanceId&&this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
+  return {...(this.humanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
    entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
     if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');

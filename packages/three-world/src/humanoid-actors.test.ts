@@ -5,16 +5,18 @@ import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {createHumanoidWorld} from './humanoid';
 import type {ThreeWorld} from './world';
 import {emptyInput} from './humanoid-runtime/simulation';
+import {createRoadVehicleSpec} from './humanoid-runtime/road-vehicle';
+import {Character} from './humanoid-runtime/character';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 
 const worlds:ThreeWorld[]=[];
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const map:EnvironmentDefinition={id:'three-actors',name:'Three actors',description:'',bounds:{min:[-20,-5,-20],max:[20,10,20]},boxes:[{id:'floor',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[-4,.04,0]};
-async function setup(renderer?:THREE.WebGLRenderer){
+async function setup(renderer?:THREE.WebGLRenderer,options:Partial<Parameters<typeof createHumanoidWorld>[0]>={}){
   const paths=new Map(catalog.assets.find(a=>a.id==='humanoid.source-101')!.resources!.map(r=>[r.path,r.sourcePath]));
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
   vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{const uri=typeof input==='string'?input:input instanceof URL?input.href:input.url;const path=paths.get(decodeURIComponent(new URL(uri).pathname.slice(1)));if(!path)throw new Error(uri);return new Response(await readFile(path));});
-  const world=await createHumanoidWorld({map,...(renderer?{renderer}:{}),resourceUrl:path=>`https://actors.test/${path}`});worlds.push(world);return world;
+  const world=await createHumanoidWorld({map,...options,...(renderer?{renderer}:{}),resourceUrl:path=>`https://actors.test/${path}`});worlds.push(world);return world;
 }
 
 it('binds three full rigs, routes explicit actor input and preserves independent mixer ownership',async()=>{
@@ -103,11 +105,41 @@ it('consumes per-actor ground speed and rejects unsupported movement before bind
   const z=world.getEntityState('a').positionWorldMetersXYZ[2];expect(z).toBeGreaterThan(1.8);expect(z).toBeLessThan(2.1);
 });
 
+it('keeps an NPC at the wheel after input returns to another actor and rejects a second driver',async()=>{
+  const spec=createRoadVehicleSpec('car'),world=await setup(undefined,{map:{...map,spawns:[{id:'car-spawn',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}]},vehicles:[{instanceId:'car',assetId:'custom.car',spec,object:new THREE.Group()}]});
+  const npc=await world.humanoid!.createCharacter();npc.root.position.set(7,.04,0);world.addCharacter({id:'driver',humanoid:npc});
+  const approach=await world.execute({type:'vehicle.approach',instanceId:'car',actorId:'driver'});expect(approach.status,JSON.stringify(approach)).toBe('applied');expect(approach).toMatchObject({result:{entityId:'driver'}});
+  expect((await world.execute({type:'vehicle.enter',instanceId:'car',actorId:'driver'})).status).toBe('applied');world.step({},35);
+  const before=world.getEntityState('car').positionWorldMetersXYZ,player=world.getEntityState('player').positionWorldMetersXYZ;
+  world.setControlledEntity('player');
+  expect((await world.execute({type:'vehicle.enter',instanceId:'car'})).status).toBe('rejected');
+  expect((await world.execute({type:'vehicle.prepare',instanceId:'car',spawn:{id:'move-car',name:'Move occupied car',position:[10,.1,0],yaw:0,regionId:'road'}})).status).toBe('rejected');
+  expect(world.getEntityState('car').positionWorldMetersXYZ).toEqual(before);
+  await world.execute({type:'humanoid.set-input',actorId:'driver',input:{...emptyInput(),forward:1}});world.step({},60);
+  expect(world.humanoid!.simulation.actor('driver').vehicle?.spec.id).toBe('car');expect(world.humanoid!.simulation.actor('player').vehicle).toBeUndefined();
+  expect(world.getEntityState('car').positionWorldMetersXYZ[2]-before[2]).toBeGreaterThan(.5);
+  expect(Math.hypot(...world.getEntityState('player').positionWorldMetersXYZ.map((v,i)=>v-player[i]!))).toBeLessThan(.05);
+  await world.reset();expect(world.humanoid!.simulation.actor('driver').vehicle).toBeUndefined();expect(world.humanoid!.simulation.actor('player').vehicle).toBeUndefined();
+});
+
+it('despawns and restores the initial actor through the same lifecycle as later actors',async()=>{
+  const world=await setup(),other=await world.humanoid!.createCharacter();other.root.position.set(3,.04,0);world.addCharacter({id:'other',humanoid:other});world.setControlledEntity('other');world.step({},0);
+  const initial=world.humanoid!.simulation.actor('player').controller.body;
+  expect((await world.execute({type:'entity.despawn',entityId:'player'})).status).toBe('applied');expect(initial.isValid()).toBe(false);expect(world.humanoid!.hasActor('player')).toBe(false);
+  world.step({},1);await world.reset();expect(world.humanoid!.hasActor('player')).toBe(true);expect(world.humanoid!.simulation.actors.size).toBe(2);world.step({},1);
+});
+
+it('creates from the default content after the initial instance is removed before baseline sealing',async()=>{
+  const world=await setup(),initial=world.humanoid!.options.character.animation!,other=await world.humanoid!.createCharacter();other.root.position.set(3,.04,0);world.addCharacter({id:'other',humanoid:other});world.setControlledEntity('other');
+  expect((await world.execute({type:'entity.despawn',entityId:'player'})).status).toBe('applied');expect(initial.loaded).toBe(false);
+  const created=await world.humanoid!.createCharacter();expect(created.loaded).toBe(true);created.dispose();world.step({},1);
+});
+
 it('releases an asynchronously created instance when reset invalidates its request',async()=>{
-  const world=await setup(),source=world.humanoid!.options.character.animation!,create=source.createInstance.bind(source);
+  const create=Character.prototype.createFactory;
   let resolve!:()=>void;const gate=new Promise<void>(done=>{resolve=done;});let dispose:ReturnType<typeof vi.spyOn>|undefined;
-  vi.spyOn(source,'createInstance').mockImplementation(async()=>{await gate;const instance=await create();dispose=vi.spyOn(instance,'dispose');return instance;});
-  const pending=world.humanoid!.createCharacter();await world.reset();resolve();
+  vi.spyOn(Character.prototype,'createFactory').mockImplementation(function(this:Character){const factory=create.call(this);return factory?async()=>{await gate;const instance=await factory();dispose=vi.spyOn(instance,'dispose');return instance;}:undefined;});
+  const world=await setup(),pending=world.humanoid!.createCharacter();await world.reset();resolve();
   await expect(pending).rejects.toThrow('HUMANOID_ACTOR_LOAD_STALE');expect(dispose).toHaveBeenCalledOnce();
 });
 

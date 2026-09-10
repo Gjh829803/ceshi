@@ -60,16 +60,16 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
    expect(()=>runtime.command({type:'vehicle.recover'})).toThrow('HUMANOID_COMMAND_BLOCKED');
    runtime.approach('car-1');expect(runtime.enter('car-1')).toBe(true);runtime.setCameraMode(2);
-   const v=runtime.simulation.vehicle!;v.position.set(-20,2,-20);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.velocity.set(2,0,3);
+   const v=runtime.simulation.controlledActor.vehicle!;v.position.set(-20,2,-20);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.velocity.set(2,0,3);
    runtime.command({type:'vehicle.recover'});expect(v.position.x).toBe(-20);expect(v.position.z).toBe(-20);expect(v.velocity.length()).toBe(0);
    expect(runtime.snapshot().mountedInstanceId).toBe('car-1');expect(runtime.snapshot().cameraMode).toBe(2);
   }finally{world.dispose();}
  });
  it('reports a real boarding approach and the same enter eligibility without moving or clearing failure state',async()=>{
   const world=await fixture();try{const r=world.humanoid!,s=r.simulation;
-   world.step({});const before=world.getEntityState('player');const time=s.time;s.message='preserve observation state';
+   world.step({});const before=world.getEntityState('player');const time=s.time;s.controlledActor.message='preserve observation state';
    const far=r.inspectBoarding('car-1');expect(far).toMatchObject({eligible:false,reason:'VEHICLE_MOUNT_OUT_OF_REACH'});expect(far.approachPositionWorldMetersXYZ).not.toBeNull();
-   expect(world.getEntityState('player')).toEqual(before);expect(s.time).toBe(time);expect(s.message).toBe('preserve observation state');
+   expect(world.getEntityState('player')).toEqual(before);expect(s.time).toBe(time);expect(s.controlledActor.message).toBe('preserve observation state');
    r.approach('car-1');expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(far.approachPositionWorldMetersXYZ);
    expect(r.inspectBoarding('car-1').eligible).toBe(true);expect(r.enter('car-1')).toBe(true);
    expect(r.inspectBoarding('car-2')).toMatchObject({eligible:false,reason:'HUMANOID_TRANSITION_ACTIVE'});
@@ -80,19 +80,19 @@ describe('SDK humanoid runtime',()=>{
  it('shares mounted boarding eligibility with execution and keeps the query read-only',async()=>{
   const world=await createMountedFixture();try{const r=world.humanoid!,s=r.simulation;
    expect(r.inspectBoarding('horse-1').eligible).toBe(true);
-   s.humanoid.position.set(0,.025,2.4);const before=world.snapshot();
+   s.controlledActor.controller.position.set(0,.025,2.4);const before=world.snapshot();
    expect(r.inspectBoarding('horse-1')).toMatchObject({eligible:false,reason:'VEHICLE_MOUNT_SIDE_REQUIRED'});
-   expect(world.snapshot()).toEqual(before);expect(r.enter('horse-1')).toBe(false);expect(s.failureCode).toBe('VEHICLE_MOUNT_SIDE_REQUIRED');
+   expect(world.snapshot()).toEqual(before);expect(r.enter('horse-1')).toBe(false);expect(s.controlledActor.failureCode).toBe('VEHICLE_MOUNT_SIDE_REQUIRED');
   }finally{world.dispose();}
  });
  it('applies explicit humanoid response and collision radius independently of distance',async()=>{
   const world=await fixture();try{const r=world.humanoid!,c=r.followCamera;
-   world.step({});c.reset(r.simulation);c.update(r.simulation,0);const target=c.target.y;
-   r.applyProfile({camera:{targetHeightOffset:.5,followResponsePerSecond:11}});c.update(r.simulation,.1);
+   world.step({});c.reset(r.simulation.controlledActor);c.update(r.simulation.controlledActor,0);const target=c.target.y;
+   r.applyProfile({camera:{targetHeightOffset:.5,followResponsePerSecond:11}});c.update(r.simulation.controlledActor,.1);
    expect(c.target.y-target).toBeCloseTo(.5*(1-Math.exp(-1.1)),8);
    r.applyProfile({camera:{targetHeightOffset:0,collisionRadiusMeters:.7}});
    r.switchMap({...map,boxes:[map.boxes[0]!,{id:'eye-block',position:[0,2.5,-8],size:[1,5,1]}]});world.step({});
-   const h=r.simulation.humanoid!;
+   const h=r.simulation.controlledActor.controller!;
    expect(h.world.intersectionWithShape(c.camera.position,new Quaternion(),new RAPIER.Ball(.69),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
   }finally{world.dispose();}
  });
@@ -259,21 +259,21 @@ describe('SDK humanoid runtime',()=>{
  it('keeps a physical slide low under a ceiling until continued movement clears the exit',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
    runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'low-roof',position:[0,1.35,5.5],size:[4,.3,5]}]});
-   runtime.simulation.setHumanoidAssets(new Set(['slide-start','slide-loop','slide-exit']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),forward:1,boost:true}},30);
+   runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['slide-start','slide-loop','slide-exit']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),forward:1,boost:true}},30);
    const start=await world.execute({type:'humanoid.perform-action',request:{requestId:'tunnel-slide',action:'slide'}});if(start.status!=='accepted')throw new Error('Slide was not accepted');
-   world.step({},180);expect(world.operations.get(start.operationId).status).toBe('running');expect(runtime.simulation.humanoid!.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);
+   world.step({},180);expect(world.operations.get(start.operationId).status).toBe('running');expect(runtime.simulation.controlledActor.controller!.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);
    const stopped=world.getEntityState('player').positionWorldMetersXYZ[2];world.step({},30);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(stopped);
-   world.step({humanoid:{...emptyInput(),forward:1}},420);expect(world.operations.get(start.operationId).status).toBe('succeeded');expect(runtime.simulation.humanoid!.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(8.25);
+   world.step({humanoid:{...emptyInput(),forward:1}},420);expect(world.operations.get(start.operationId).status).toBe('succeeded');expect(runtime.simulation.controlledActor.controller!.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(8.25);
   }finally{world.dispose();}
  });
  it('rejects mounted skills immediately and shares rejection conditions with the capability query',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.setHumanoidAssets(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);
+  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);
    expect(runtime.characterCapabilities().find(c=>c.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW',parameters:{minimumSpeedMetersPerSecond:ACTION_TUNING.slideMinimumSpeedMetersPerSecond}});
    expect(runtime.approach('car-1')).toBe(true);expect(runtime.enter('car-1')).toBe(true);
    const request={requestId:'mounted-roll',action:'roll' as const};
    expect(runtime.characterCapabilities().find(c=>c.id==='roll')).toMatchObject({eligible:false,reason:'HUMANOID_TRANSITION_ACTIVE'});
    expect(await world.execute({type:'humanoid.perform-action',request})).toMatchObject({status:'rejected',error:{code:'HUMANOID_TRANSITION_ACTIVE'}});
-   expect(runtime.simulation.humanoid!.skills.status(request.requestId)).toBeNull();world.step({},60);
+   expect(runtime.simulation.controlledActor.controller!.skills.status(request.requestId)).toBeNull();world.step({},60);
    const result=await world.execute({type:'humanoid.perform-action',request});
    expect(result).toMatchObject({status:'rejected',error:{code:'MOUNTED'}});expect(runtime.characterCapabilities().find(c=>c.id==='roll')).toMatchObject({eligible:false,reason:'MOUNTED'});
    world.step({},180);expect(world.snapshot().humanoid?.character.activeAction).toBeNull();
@@ -282,7 +282,7 @@ describe('SDK humanoid runtime',()=>{
  it('returns authored approach anchors and exactly the eligibility used by target execution',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
    runtime.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',position:[5,.5,5],approach:[5,.03,4],yaw:.4}]});
-   runtime.simulation.setHumanoidAssets(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
    const before=world.getEntityState('player').positionWorldMetersXYZ,target=runtime.snapshot().interactionTargets[0]!;
    expect(target).toMatchObject({id:'seat',approachPositionWorldMetersXYZ:[5,.03,4],facingYawRadians:.4,eligible:false,reason:'OUT_OF_REACH'});
    const result=await world.execute({type:'humanoid.perform-action',request:{requestId:'distant-seat',action:'sit',targetId:'seat'}});
@@ -293,7 +293,7 @@ describe('SDK humanoid runtime',()=>{
  it('moves seat anchors with a compound prop and rejects a toppled seat',async()=>{
   const world=await fixture();try{const r=world.humanoid!;
    r.switchMap({...map,boxes:[map.boxes[0]!,{id:'chair-shape',position:[5,.5,5],size:[1,1,1],rigidGroup:{id:'chair',massKg:8}}],interactions:[{id:'chair-seat',label:'Seat',kind:'seat',position:[5,1,5],approach:[5,0,4],yaw:0,colliderIds:['chair-shape']}]});
-   r.simulation.setHumanoidAssets(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   r.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
    const body=r.environment.colliderForId('chair-shape')!.parent()!;body.setTranslation({x:8,y:.5,z:5},true);body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2),true);world.step({},1);
    const target=r.snapshot().interactionTargets[0]!;expect(target.positionWorldMetersXYZ[0]).toBeGreaterThan(7);expect(target.reason).toBe('SEAT_UNSTABLE');
    r.environment.resetProps();world.step({},1);expect(r.snapshot().interactionTargets[0]!.positionWorldMetersXYZ[0]).toBeCloseTo(5,2);
@@ -302,7 +302,7 @@ describe('SDK humanoid runtime',()=>{
  it('uses E to enter a collider-backed climb, Space to attempt the top and crouch to release',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
    runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'climb-wall',position:[0,1.5,1],size:[3,3,1]}],climbSurfaces:[{id:'face',colliderId:'climb-wall',kind:'wall',center:[0,1.5,.5],normal:[0,0,-1],width:3,minY:0,maxY:3}]});
-   runtime.simulation.setHumanoidAssets(new Set(['hang-enter','hang-exit','hang-idle','hang-left','hang-right','climb-up','climb-down']),[]);world.step({},30);
+   runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['hang-enter','hang-exit','hang-idle','hang-left','hang-right','climb-up','climb-down']),[]);world.step({},30);
    expect(runtime.characterCapabilities().find(c=>c.id==='climb')).toMatchObject({eligible:true});
    world.step({humanoid:{...emptyInput(),actions:{interact:true}}},1);expect(runtime.snapshot().surface).toMatchObject({mode:'climbing',surfaceId:'face'});
    world.step({},180);world.step({humanoid:{...emptyInput(),jump:true}},1);expect(runtime.snapshot().surface.mode).toBe('climbing');
@@ -311,22 +311,22 @@ describe('SDK humanoid runtime',()=>{
  });
  it('consumes Space as standing up from crouch before allowing another jump',async()=>{
   const world=await fixture();try{world.step({},30);world.step({humanoid:{...emptyInput(),actions:{toggleCrouch:true}}},1);expect(world.snapshot().humanoid?.character.stance).toBe('crouch');
-   world.step({humanoid:{...emptyInput(),jump:true}},1);expect(world.snapshot().humanoid?.character.stance).toBe('stand');expect(world.humanoid!.simulation.humanoid!.vertical).toBe(0);
-   world.step({humanoid:{...emptyInput(),jump:true}},1);expect(world.humanoid!.simulation.humanoid!.vertical).toBeGreaterThan(0);
+   world.step({humanoid:{...emptyInput(),jump:true}},1);expect(world.snapshot().humanoid?.character.stance).toBe('stand');expect(world.humanoid!.simulation.controlledActor.controller!.vertical).toBe(0);
+   world.step({humanoid:{...emptyInput(),jump:true}},1);expect(world.humanoid!.simulation.controlledActor.controller!.vertical).toBeGreaterThan(0);
   }finally{world.dispose();}
  });
 
  it('replaces overview with a near right-shoulder camera, keeps actor translation and recovers speed framing',async()=>{
   const world=await fixture();try{
    const r=world.humanoid!,s=r.simulation,c=r.followCamera;for(let i=0;i<20;i++)r.advance({},1/60);
-   r.setCameraMode(2);expect(c.distance).toBeCloseTo(2);expect(c.camera.position.x).toBeLessThan(s.player.position.x-.3);
-   expect(c.camera.position.distanceTo(s.player.position)).toBeLessThan(3);
-   const relative=c.camera.position.clone().sub(s.player.position);
-   s.player.position.x+=4;c.update(s,1/60);expect(c.camera.position.clone().sub(s.player.position).distanceTo(relative)).toBeLessThan(.01);
-   s.player.velocity.set(0,0,5.8);for(let i=0;i<120;i++)c.update(s,1/60);
+   r.setCameraMode(2);expect(c.distance).toBeCloseTo(2);expect(c.camera.position.x).toBeLessThan(s.controlledActor.player.position.x-.3);
+   expect(c.camera.position.distanceTo(s.controlledActor.player.position)).toBeLessThan(3);
+   const relative=c.camera.position.clone().sub(s.controlledActor.player.position);
+   s.controlledActor.player.position.x+=4;c.update(s.controlledActor,1/60);expect(c.camera.position.clone().sub(s.controlledActor.player.position).distanceTo(relative)).toBeLessThan(.01);
+   s.controlledActor.player.velocity.set(0,0,5.8);for(let i=0;i<120;i++)c.update(s.controlledActor,1/60);
    expect(c.distance).toBeGreaterThan(2.25);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees+4,1);
-   s.player.velocity.set(0,0,0);for(let i=0;i<120;i++)c.update(s,1/60);expect(c.distance).toBeCloseTo(2,1);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees,1);
-   c.zoomByMeters(-30,s);c.update(s,1/60);expect(c.distance).toBeCloseTo(1.3);
+   s.controlledActor.player.velocity.set(0,0,0);for(let i=0;i<120;i++)c.update(s.controlledActor,1/60);expect(c.distance).toBeCloseTo(2,1);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees,1);
+   c.zoomByMeters(-30,s.controlledActor);c.update(s.controlledActor,1/60);expect(c.distance).toBeCloseTo(1.3);
    r.setCameraMode(1);expect(c.distance).toBe(0);r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);
   }finally{world.dispose();}
  });
@@ -357,11 +357,11 @@ describe('SDK humanoid runtime',()=>{
  });
  it('samples framing from the displayed camera time without changing collision recovery',async()=>{
   const world=await fixture();try{const r=world.humanoid!,c=r.followCamera,s=r.simulation;
-   r.setCameraMode(2);c.capturePresentationPose(s,true);c.beforeFixedUpdate();
-   s.time+=1/60;s.player.position.x+=1;c.update(s,1/60);c.capturePresentationPose(s);
+   r.setCameraMode(2);c.capturePresentationPose(s.controlledActor,true);c.beforeFixedUpdate();
+   s.time+=1/60;s.controlledActor.player.position.x+=1;c.update(s.controlledActor,1/60);c.capturePresentationPose(s.controlledActor);
    const state=c.collisionState;
    for(const alpha of [.25,.8,1]){
-    c.present({position:new Vector3(alpha,s.player.position.y,0),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0},alpha);
+    c.present({position:new Vector3(alpha,s.controlledActor.player.position.y,0),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0},alpha);
     const framing=r.inspectConfiguration().effective.camera.framing;
     expect(framing.sampleSimulationSeconds).toBeCloseTo(alpha/60);expect(framing.headPositionWorldMetersXYZ![0]).toBeCloseTo(alpha);
     expect(framing.headScreenPositionNormalizedXY![1]).toBeCloseTo(.5);expect(framing.issues).toEqual([]);expect(c.collisionState).toEqual(state);
@@ -383,12 +383,12 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('uses the swimming posture eye for shoulder framing after real water entry',async()=>{
-  const world=await fixture();try{const r=world.humanoid!,s=r.simulation,c=r.followCamera;
-   r.switchMap({...map,water:[{id:'pool',min:[-10,-2,-10],max:[10,4,10],surface:2}]});world.step({},120);
-   expect(s.humanoid!.swimming).toBe(true);r.applyProfile({camera:{targetHeightOffset:1}});r.setCameraMode(2);
+  const world=await fixture();try{const r=world.humanoid!,c=r.followCamera;
+   r.switchMap({...map,water:[{id:'pool',min:[-10,-2,-10],max:[10,4,10],surface:2}]});world.step({},120);const s=r.simulation;
+   expect(s.controlledActor.controller!.swimming).toBe(true);r.applyProfile({camera:{targetHeightOffset:1}});r.setCameraMode(2);
    const framing=r.inspectConfiguration().effective.camera.framing;
-   expect(framing.headPositionWorldMetersXYZ![1]-s.player.position.y).toBeCloseTo(1.35);
-   c.camera.updateMatrixWorld(true);const head=s.player.position.clone().add(new Vector3(0,1.35,0)).project(c.camera);
+   expect(framing.headPositionWorldMetersXYZ![1]-s.controlledActor.player.position.y).toBeCloseTo(1.35);
+   c.camera.updateMatrixWorld(true);const head=s.controlledActor.player.position.clone().add(new Vector3(0,1.35,0)).project(c.camera);
    expect(framing.headScreenPositionNormalizedXY![1]).toBeCloseTo((1-head.y)/2);
    expect(framing.issues).toEqual([expect.objectContaining({code:'SHOULDER_FRAMING_OFFSET_REVIEW'})]);
   }finally{world.dispose();}
@@ -396,9 +396,9 @@ describe('SDK humanoid runtime',()=>{
  it('retracts the shoulder arm against a wall and restores it after leaving',async()=>{
   const world=await fixture();try{
    const r=world.humanoid!,s=r.simulation,c=r.followCamera;
-   s.player.position.set(0,0,8);s.player.yaw=Math.PI;r.setCameraMode(2);
+   s.controlledActor.player.position.set(0,0,8);s.controlledActor.player.yaw=Math.PI;r.setCameraMode(2);
    expect(c.collisionLimited).toBe(true);expect(c.camera.position.z).toBeLessThan(9.5);expect(c.distance).toBeLessThan(1.5);
-   s.player.position.z=5;for(let i=0;i<120;i++)c.update(s,1/60);
+   s.controlledActor.player.position.z=5;for(let i=0;i<120;i++)c.update(s.controlledActor,1/60);
    expect(c.camera.position.z).toBeLessThan(9.5);expect(c.distance).toBeCloseTo(2,1);
   }finally{world.dispose();}
  });
@@ -417,12 +417,12 @@ describe('SDK humanoid runtime',()=>{
    const r=world.humanoid!,c=r.followCamera,s=r.simulation;
    for(let i=0;i<20;i++)r.advance({},1/60);
    r.setCameraMode(1);expect(c.distance).toBe(0);expect(c.camera.near).toBe(.035);
-   expect(c.camera.position.y-s.player.position.y).toBeCloseTo(s.humanoid!.capsuleHeight-.12);
-   const standing=c.camera.position.y;c.orbitRadians(-.4,.28,s.time,s);c.update(s,0);
+   expect(c.camera.position.y-s.controlledActor.player.position.y).toBeCloseTo(s.controlledActor.controller!.capsuleHeight-.12);
+   const standing=c.camera.position.y;c.orbitRadians(-.4,.28,s.time,s.controlledActor);c.update(s.controlledActor,0);
    expect(c.yaw).toBeCloseTo(-.4);expect(c.pitch).toBeCloseTo(.28);
    for(let i=0;i<45;i++)r.advance({humanoid:{...emptyInput(),actions:i===0?{toggleCrouch:true}:{}}},1/60);
    expect(c.camera.position.y).toBeLessThan(standing-.2);
-   c.zoomByMeters(6.3,s);expect(c.distance).toBe(0);
+   c.zoomByMeters(6.3,s.controlledActor);expect(c.distance).toBe(0);
    r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);expect(c.camera.near).toBe(.08);
    r.setCameraMode(1);await world.reset();expect(c.mode).toBe(0);expect(c.distance).toBeGreaterThan(3);
   }finally{world.dispose();}
@@ -430,14 +430,14 @@ describe('SDK humanoid runtime',()=>{
  it('keeps seat look independent of steering and inherits vehicle rotation exactly once',async()=>{
   const world=await fixture();try{
    const r=world.humanoid!,s=r.simulation,c=r.followCamera;
-   expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);r.setCameraMode(1);const v=s.vehicle!;
-   c.orbitRadians(-.4,0,s.time,s);c.update(s,0);const initialYaw=v.yaw;
-   v.yaw+=.7;v.rotation.setFromEuler(new Euler(-.2,v.yaw,.3,'YXZ'));c.update(s,0);
+   expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);r.setCameraMode(1);const v=s.controlledActor.vehicle!;
+   c.orbitRadians(-.4,0,s.time,s.controlledActor);c.update(s.controlledActor,0);const initialYaw=v.yaw;
+   v.yaw+=.7;v.rotation.setFromEuler(new Euler(-.2,v.yaw,.3,'YXZ'));c.update(s.controlledActor,0);
    const actual=c.camera.getWorldDirection(new Vector3());
    const expected=new Vector3(0,0,1).applyQuaternion(new Quaternion().setFromEuler(new Euler(0,-.4,0,'YXZ'))).applyQuaternion(v.rotation);
    expect(actual.distanceTo(expected)).toBeLessThan(1e-6);expect(c.yaw).toBeCloseTo(initialYaw+.3);
    expect(v.steering).toBe(0);expect(v.throttle).toBe(0);
-   c.orbitRadians(-400,-400,s.time,s);c.update(s,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
+   c.orbitRadians(-400,-400,s.time,s.controlledActor);c.update(s.controlledActor,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
   }finally{world.dispose();}
  });
  it.each(['plane','submarine','spacecraft','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
@@ -446,7 +446,7 @@ describe('SDK humanoid runtime',()=>{
    const sceneMap:EnvironmentDefinition={...map,boxes:[map.boxes[0]!],water:mode==='submarine'?[{id:'pool',min:[-90,-5,-90],max:[90,40,90],surface:40}]:[],regions:[{...map.regions[0]!,modes:[mode]}],spawns:[]};
    const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:sceneMap,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'craft',assetId:'craft',spec:{...spec,mode,spawn:[-20,mode==='mount'?.03:25,-20]},object:new Group()}]}});
    try{const r=world.humanoid!;const tuning:Partial<MovementSettings>=mode==='plane'?{drag:stronger?5:0,dragQuadratic:0}:mode==='submarine'?{verticalAcceleration:stronger?12:2}:mode==='spacecraft'?{grip:0,brakeDamping:stronger?8:0}:mode==='dragon'?{groundDeceleration:stronger?8:1}:{coastDeceleration:stronger?8:1};
-    r.applyProfile({vehicles:{craft:tuning}});r.simulation.active=0;r.simulation.transition=0;const v=r.simulation.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='submarine'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
+    r.applyProfile({vehicles:{craft:tuning}});r.simulation.controlledActor.vehicleIndex=0;r.simulation.controlledActor.transition=0;const v=r.simulation.controlledActor.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='submarine'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
     world.step({humanoid:{...emptyInput(),lift:mode==='submarine'?1:0,boost:mode==='spacecraft'}},30);speeds.push(mode==='submarine'?v.velocity.y:v.velocity.z);
     expect(r.snapshot().controls.vehicles.craft).toMatchObject(tuning);
    }finally{world.dispose();}
@@ -458,7 +458,7 @@ describe('SDK humanoid runtime',()=>{
    r.applyProfile({vehicles:{'car-1':{coastDeceleration:1},'car-2':{coastDeceleration:8}}});
    r.applyProfile({vehicles:{'car-1':{directionChangeDeceleration:4,groundDeceleration:3}}});
    const velocities=[];
-   for(const id of ['car-1','car-2']){r.simulation.active=id==='car-1'?0:1;r.simulation.transition=0;const v=r.simulation.vehicle!;v.velocity.set(0,0,10);world.step({humanoid:emptyInput()},30);velocities.push(v.velocity.z);}
+   for(const id of ['car-1','car-2']){r.simulation.controlledActor.vehicleIndex=id==='car-1'?0:1;r.simulation.controlledActor.transition=0;const v=r.simulation.controlledActor.vehicle!;v.velocity.set(0,0,10);world.step({humanoid:emptyInput()},30);velocities.push(v.velocity.z);}
    expect(velocities[0]).toBeCloseTo(9.5,1);expect(velocities[1]).toBeCloseTo(6,1);
    expect(r.exportProfile().vehicles?.['car-1']?.accel).toBe(10);
    await world.reset();expect(r.exportProfile().vehicles?.['car-1']?.coastDeceleration).toBe(1);
@@ -468,9 +468,9 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{const r=world.humanoid!;
    r.applyProfile({vehicles:{'car-1':{speed:4,maxSpeed:7,reverseSpeed:2,steeringResponse:3,steeringReturn:20}},character:{coastDeceleration:1}});
    const before=r.exportProfile();expect(()=>r.applyProfile({vehicles:{'car-1':{coastDeceleration:-1}},character:{speed:99}})).toThrow();expect(r.exportProfile()).toEqual(before);
-   r.simulation.active=0;r.simulation.transition=0;world.step({humanoid:{...emptyInput(),forward:1}},90);expect(r.simulation.vehicle!.velocity.z).toBeCloseTo(4,1);
-   world.step({humanoid:{...emptyInput(),forward:1,boost:true}},60);expect(r.simulation.vehicle!.velocity.z).toBeCloseTo(7,1);
-   r.simulation.active=-1;r.prepareCharacter([0,.03,-20]);world.step({moveZRatio:-1},60);const speed=r.simulation.player.velocity.length();world.step({},30);expect(r.simulation.player.velocity.length()).toBeGreaterThan(speed-.7);
+   r.simulation.controlledActor.vehicleIndex=0;r.simulation.controlledActor.transition=0;world.step({humanoid:{...emptyInput(),forward:1}},90);expect(r.simulation.controlledActor.vehicle!.velocity.z).toBeCloseTo(4,1);
+   world.step({humanoid:{...emptyInput(),forward:1,boost:true}},60);expect(r.simulation.controlledActor.vehicle!.velocity.z).toBeCloseTo(7,1);
+   r.simulation.controlledActor.vehicleIndex=-1;r.prepareCharacter([0,.03,-20]);world.step({moveZRatio:-1},60);const speed=r.simulation.controlledActor.player.velocity.length();world.step({},30);expect(r.simulation.controlledActor.player.velocity.length()).toBeGreaterThan(speed-.7);
    r.switchMap({...map,id:'tuning-map'});expect(r.exportProfile().vehicles?.['car-1']?.maxSpeed).toBe(7);
   }finally{world.dispose();}
  });
@@ -498,7 +498,7 @@ describe('SDK humanoid runtime',()=>{
    r.switchMap({...map,id:'eye-wall',boxes:[map.boxes[0]!,{id:'eye-post',position:[0,4,-8.25],size:[.1,6,.4]}]});world.step({},1);
    expect(world.camera.position.z).toBeGreaterThan(-7.9);expect(r.followCamera.collisionLimited).toBe(true);
    const eye=world.camera.position.clone();world.render();expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-9);
-   const h=r.simulation.humanoid!;
+   const h=r.simulation.controlledActor.controller!;
    expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
   }finally{world.dispose();}
  });
@@ -516,7 +516,7 @@ describe('SDK humanoid runtime',()=>{
    engine.render(.5);
    const distance=c.presentationTarget.distanceTo(world.camera.position);
    if(blocked)expect(distance).toBeLessThan(8.6);else expect(distance).toBeCloseTo(8.8);
-   const h=r.simulation.humanoid!;
+   const h=r.simulation.controlledActor.controller!;
    expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.2),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
    expect({yaw:c.yaw,pitch:c.pitch,distance:c.distance,lastOrbit:c.lastOrbit,target:c.target}).toEqual(controls);
    world.render();expect(world.camera.position.distanceTo(canonical)).toBeLessThan(1e-9);
@@ -525,8 +525,8 @@ describe('SDK humanoid runtime',()=>{
  it('sweeps the actual camera trajectory instead of teleporting through a pillar during orbit',async()=>{
   const world=await fixture();try{const r=world.humanoid!,c=r.followCamera;
    r.switchMap({...map,id:'orbit-wall',boxes:[map.boxes[0]!,{id:'eye-post',position:[0,3,-8],size:[.1,6,2]}]});world.step({},1);
-   c.yaw=-.3;c.initialized=false;c.update(r.simulation,1/60);expect(world.camera.position.x).toBeGreaterThan(2);
-   c.yaw=.3;c.update(r.simulation,1/60);expect(world.camera.position.x).toBeGreaterThan(.2);
+   c.yaw=-.3;c.initialized=false;c.update(r.simulation.controlledActor,1/60);expect(world.camera.position.x).toBeGreaterThan(2);
+   c.yaw=.3;c.update(r.simulation.controlledActor,1/60);expect(world.camera.position.x).toBeGreaterThan(.2);
   }finally{world.dispose();}
  });
  it('preserves pointer orbit direction, character pitch limits and manual recenter grace',async()=>{
@@ -542,12 +542,12 @@ describe('SDK humanoid runtime',()=>{
  });
  it('inherits character translation without stretching the follow arm or changing FOV',async()=>{
   const world=await fixture();try{world.step({},30);const r=world.humanoid!,c=r.followCamera;
-   const relative=world.camera.position.clone().sub(r.simulation.player.position),fov=c.camera.fov;
+   const relative=world.camera.position.clone().sub(r.simulation.controlledActor.player.position),fov=c.camera.fov;
    world.step({moveZRatio:1},90);
-   expect(world.camera.position.clone().sub(r.simulation.player.position).distanceTo(relative)).toBeLessThan(.015);
+   expect(world.camera.position.clone().sub(r.simulation.controlledActor.player.position).distanceTo(relative)).toBeLessThan(.015);
    expect(c.camera.fov).toBe(fov);expect(c.desiredPosition.distanceTo(c.target)).toBeCloseTo(8.8);
    world.step({moveZRatio:-1},90);
-   expect(world.camera.position.clone().sub(r.simulation.player.position).distanceTo(relative)).toBeLessThan(.015);
+   expect(world.camera.position.clone().sub(r.simulation.controlledActor.player.position).distanceTo(relative)).toBeLessThan(.015);
   }finally{world.dispose();}
  });
  it('clips a shoulder offset before it enters a narrow wall, while still retracting for a real obstruction',async()=>{
@@ -562,22 +562,22 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('retires map-owned operations on replacement and preserves a refused cancellation until reset',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.setHumanoidAssets(new Set(['roll']),[]);world.step({},30);
+  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);world.step({},30);
    const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:'map-roll',action:'roll'}});if(receipt.status!=='accepted')throw new Error('roll unavailable');
-   const cancel=vi.spyOn(runtime.simulation.humanoid!.skills,'cancel').mockReturnValue({requestId:'map-roll',action:'roll',status:'running',code:'HEADROOM_BLOCKED',message:'cannot cancel safely'});
-   expect(()=>world.operations.cancel(receipt.operationId)).toThrow('cannot cancel safely');expect(world.operations.get(receipt.operationId).status).toBe('running');await world.reset();expect(world.operations.get(receipt.operationId).status).toBe('cancelled');cancel.mockRestore();
+   const cancel=vi.spyOn(runtime.simulation.controlledActor.controller!.skills,'cancel').mockReturnValue({requestId:'map-roll',action:'roll',status:'running',code:'HEADROOM_BLOCKED',message:'cannot cancel safely'});
+   expect(()=>world.operations.cancel(receipt.operationId)).toThrow('cannot cancel safely');expect(world.operations.get(receipt.operationId).status).toBe('running');await world.reset();expect(world.operations.get(receipt.operationId).status).toBe('cancelled');cancel.mockRestore();runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
    world.step({},30);const next=await world.execute({type:'humanoid.perform-action',request:{requestId:'replace-roll',action:'roll'}});if(next.status!=='accepted')throw new Error('roll unavailable');runtime.switchMap({...map,id:'new-map'});expect(world.operations.get(next.operationId).status).toBe('cancelled');expect(world.snapshot().humanoid?.character.activeAction).toBeNull();
   }finally{world.dispose();}
  });
  it('observes source surface progress and map interaction targets without mutable references',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!;runtime.switchMap({...map,interactions:[{id:'parcel',label:'Parcel',kind:'pickup',position:[5,.5,5],approach:[5,.03,4],yaw:0,size:[.5,.5,.5]}]});runtime.simulation.setHumanoidAssets(new Set(['prone-enter','prone-exit','prone-idle','prone-forward']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),actions:{prone:true}}},1);
+  const world=await fixture();try{const runtime=world.humanoid!;runtime.switchMap({...map,interactions:[{id:'parcel',label:'Parcel',kind:'pickup',position:[5,.5,5],approach:[5,.03,4],yaw:0,size:[.5,.5,.5]}]});runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['prone-enter','prone-exit','prone-idle','prone-forward']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),actions:{prone:true}}},1);
    const snapshot=runtime.snapshot();expect(snapshot.surface.mode).toBe('prone');expect(snapshot.surface.pose?.actionId).toBe('prone-enter');expect(snapshot.interactionTargets[0]).toMatchObject({id:'parcel',state:'available',positionWorldMetersXYZ:[5,.5,5]});expect(snapshot.traversal).toBeNull();expect(snapshot.vehicleDynamics[0]?.launched).toBe(false);
    world.step({},180);expect(snapshot.surface.pose?.actionId).toBe('prone-enter');expect(runtime.snapshot().surface.pose?.actionId).toBe('prone-idle');await world.reset();expect(runtime.snapshot().surface.mode).toBe('none');
   }finally{world.dispose();}
  });
  it('keeps the original simulation alive when later map staging fails',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!,environment=runtime.environment,humanoid=runtime.simulation.humanoid!,dispose=vi.spyOn(humanoid,'dispose');world.step({},2);const before=world.snapshot();
-   const prepare=vi.spyOn(Simulation.prototype,'setHumanoidAssets').mockImplementationOnce(()=>{throw new Error('staged assets failed');});
+  const world=await fixture();try{const runtime=world.humanoid!,environment=runtime.environment,humanoid=runtime.simulation.controlledActor.controller!,dispose=vi.spyOn(humanoid,'dispose');world.step({},2);const before=world.snapshot();
+   const prepare=vi.spyOn(Simulation.prototype,'addActor').mockImplementationOnce(()=>{throw new Error('staged assets failed');});
    expect(()=>runtime.switchMap({...map,id:'replacement'})).toThrow('staged assets failed');prepare.mockRestore();expect(dispose).not.toHaveBeenCalled();expect(runtime.environment).toBe(environment);expect(world.snapshot()).toEqual(before);world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(1);
   }finally{world.dispose();}
  });
@@ -594,7 +594,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('rejects invalid map and profile updates without disposing the live controller',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!,original=runtime.environment,humanoid=runtime.simulation.humanoid!,dispose=vi.spyOn(humanoid,'dispose');world.step({},2);const before=world.snapshot();
+  const world=await fixture();try{const runtime=world.humanoid!,original=runtime.environment,humanoid=runtime.simulation.controlledActor.controller!,dispose=vi.spyOn(humanoid,'dispose');world.step({},2);const before=world.snapshot();
    expect(()=>runtime.switchMap({...map,id:'invalid',interactions:[null] as never})).toThrow();expect(dispose).not.toHaveBeenCalled();expect(runtime.environment).toBe(original);expect(world.snapshot()).toEqual(before);
    const profile=runtime.exportProfile();expect(()=>runtime.applyProfile({character:{speed:8},camera:{baseFovDegrees:Infinity}})).toThrow();expect(runtime.exportProfile()).toEqual(profile);expect(runtime.simulation.characterControl.speed).toBe(profile.character!.speed);
    world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(1);
@@ -621,8 +621,8 @@ describe('SDK humanoid runtime',()=>{
    expect(await port.execute({type:'vehicle.exit'})).toMatchObject({status:'applied'});port.advance({},120);
    expect(await port.execute({type:'vehicle.enter',instanceId:'car-1'})).toMatchObject({status:'applied'});port.advance({},120);
    expect(world.snapshot().humanoid?.mountedInstanceId).toBe('car-1');port.release();
-   world.humanoid!.simulation.setHumanoidAssets(new Set(['roll']),[]);
-   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});port.advance({},30);
+   world.humanoid!.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
+   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});world.humanoid!.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);port.advance({},30);
    const ticks=world.simulationTick;
    expect(await world.execute({type:'humanoid.set-input',input:emptyInput()})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
    expect(await world.execute({type:'actor.stop',entityId:'player'})).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
@@ -635,11 +635,11 @@ describe('SDK humanoid runtime',()=>{
    await port.execute({type:'humanoid.set-input',input:{...emptyInput(),actions:{cancel:true}}});port.advance({},1);expect(port.operation(cancelled.operationId).status).toBe('cancelled');
    await port.execute({type:'humanoid.set-input',input:null});port.advance({},30);
    const resetAction=await port.execute({type:'humanoid.perform-action',request:{requestId:'episode-reset',action:'roll'}});if(resetAction.status!=='accepted')throw new Error('Episode action rejected');
-   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});expect(port.operation(resetAction.operationId).status).toBe('cancelled');
+   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});expect(port.operation(resetAction.operationId).status).toBe('cancelled');world.humanoid!.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
    port.advance({},30);const releaseAction=await port.execute({type:'humanoid.perform-action',request:{requestId:'episode-release',action:'roll'}});if(releaseAction.status!=='accepted')throw new Error('Episode action rejected');
    port.release();expect(world.operations.get(releaseAction.operationId).status).toBe('cancelled');expect(()=>port.execute({type:'humanoid.set-input',input:null})).toThrow('EPISODE_SEGMENT_NOT_PREPARED');
    await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
-   const interactions=vi.spyOn(runtime.simulation,'interact');port.advance({interact:true},1);
+   const interactions=vi.spyOn(runtime.simulation.controlledActor,'interact');port.advance({interact:true},1);
    expect(interactions).toHaveBeenCalledTimes(1);expect(()=>world.stop()).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
    port.advance({interact:true},1);expect(interactions).toHaveBeenCalledTimes(1);
    const visual=vi.fn();runtime.onVisualUpdate(visual);port.advance({},1);
@@ -648,7 +648,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();vi.unstubAllGlobals();}
  });
  it('tracks a physical character action through terminal operation status and clears it on reset',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.setHumanoidAssets(new Set(['roll']),[]);world.step({},30);
+  const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);world.step({},30);
    const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:'roll-1',action:'roll'}});expect(receipt.status).toBe('accepted');
    if(receipt.status!=='accepted')throw new Error('action was not accepted');expect(world.snapshot().humanoid?.character.activeAction?.requestId).toBe('roll-1');
    world.step({},120);expect(world.operations.get(receipt.operationId).status).toBe('succeeded');expect(world.snapshot().humanoid?.character.activeAction).toBeNull();
@@ -659,7 +659,7 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{world.step({moveZRatio:-1},60);const baseline=world.getEntityState('player').positionWorldMetersXYZ[2];await world.reset();const runtime=world.humanoid!;
    runtime.applyProfile({character:{speed:7.6},vehicles:{'car-1':{speed:12}}});runtime.applyProfile({camera:{baseFovDegrees:65},cameraDistanceMeters:9});
    expect(runtime.exportProfile().vehicles?.['car-1']?.speed).toBe(12);world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(baseline*1.5);
-   await world.reset();expect(runtime.simulation.humanoid!.movementTuning.speedScale).toBe(2);expect(runtime.camera.fov).toBe(65);expect(runtime.followCamera.tuning.baseFovDegrees).toBe(65);expect(runtime.followCamera.baseDistance).toBe(9);expect(runtime.simulation.vehicles[0]!.spec.speed).toBe(12);
+   await world.reset();expect(runtime.simulation.controlledActor.controller!.movementTuning.speedScale).toBe(2);expect(runtime.camera.fov).toBe(65);expect(runtime.followCamera.tuning.baseFovDegrees).toBe(65);expect(runtime.followCamera.baseDistance).toBe(9);expect(runtime.simulation.vehicles[0]!.spec.speed).toBe(12);
   }finally{world.dispose();}
  });
  it('routes all player keys through SDK input and consumes action edges once',()=>{
@@ -680,7 +680,7 @@ describe('SDK humanoid runtime',()=>{
  });
  it('initializes real vehicle Episode state and then advances solely through input',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!,start={positionWorldMetersXYZ:[-20,.03,-20] as const,facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'car-1',mounted:true,cameraMode:1 as const,velocityWorldMetersPerSecondXYZ:[0,0,4] as const,throttle:.6}};
-   expect(runtime.probeEpisodeStart(start).isValid).toBe(true);runtime.prepareEpisodeStart(start);expect(runtime.snapshot().mountedInstanceId).toBe('car-1');expect(runtime.simulation.vehicle!.velocity.z).toBe(4);expect(runtime.simulation.vehicle!.throttle).toBe(.6);
+   expect(runtime.probeEpisodeStart(start).isValid).toBe(true);runtime.prepareEpisodeStart(start);expect(runtime.snapshot().mountedInstanceId).toBe('car-1');expect(runtime.simulation.controlledActor.vehicle!.velocity.z).toBe(4);expect(runtime.simulation.controlledActor.vehicle!.throttle).toBe(.6);
    world.step({humanoid:{...emptyInput(),forward:1}},60);expect(world.getEntityState('car-1').positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(runtime.episodeCapabilities().vehicles).toHaveLength(2);
    expect(runtime.probeEpisodeStart({...start,positionWorldMetersXYZ:[0,1,10]}).isValid).toBe(false);
   }finally{world.dispose();}
@@ -690,7 +690,7 @@ describe('SDK humanoid runtime',()=>{
   try{expect(create).not.toHaveBeenCalled();const physics=vi.spyOn(world.humanoid!.environment,'stepPhysics');world.step({moveZRatio:-1},240);expect(physics).toHaveBeenCalledTimes(240);const p=world.getEntityState('player');expect(p.positionWorldMetersXYZ[2]).toBeGreaterThan(3);expect(p.positionWorldMetersXYZ[2]).toBeLessThan(9.3);expect(p.motion?.isGrounded).toBe(true);expect(world.simulationTick).toBe(240);}finally{world.dispose();create.mockRestore();}
  });
  it('keeps duplicate asset instances independent and supports physical driving, cameras and complete reset',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!,second=runtime.simulation.vehicles[1]!.position.clone();expect(runtime.approach('car-1')).toBe(true);expect(runtime.enter('car-1')).toBe(true);runtime.setInput({...emptyInput(),forward:1});world.step({},120);expect(runtime.simulation.vehicles[0]!.velocity.length()).toBeGreaterThan(1);expect(runtime.simulation.vehicles[1]!.position.distanceTo(second)).toBeLessThan(.1);for(const mode of [0,1,2] as const){runtime.setCameraMode(mode);world.step({},1);expect(world.snapshot().camera.mode).toBe('follow');expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);}await world.reset();expect(world.simulationTick).toBe(0);expect(runtime.simulation.active).toBe(-1);expect(runtime.simulation.vehicles.every(v=>v.velocity.length()===0)).toBe(true);expect(runtime.followCamera.mode).toBe(0);world.step({},1);expect(runtime.simulation.vehicles[0]!.speed).toBe(0);}finally{world.dispose();}
+  const world=await fixture();try{const runtime=world.humanoid!,second=runtime.simulation.vehicles[1]!.position.clone();expect(runtime.approach('car-1')).toBe(true);expect(runtime.enter('car-1')).toBe(true);runtime.setInput({...emptyInput(),forward:1});world.step({},120);expect(runtime.simulation.vehicles[0]!.velocity.length()).toBeGreaterThan(1);expect(runtime.simulation.vehicles[1]!.position.distanceTo(second)).toBeLessThan(.1);for(const mode of [0,1,2] as const){runtime.setCameraMode(mode);world.step({},1);expect(world.snapshot().camera.mode).toBe('follow');expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);}await world.reset();expect(world.simulationTick).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);expect(runtime.simulation.vehicles.every(v=>v.velocity.length()===0)).toBe(true);expect(runtime.followCamera.mode).toBe(0);world.step({},1);expect(runtime.simulation.vehicles[0]!.speed).toBe(0);}finally{world.dispose();}
  });
  it('resets the active map and rejects unsupported clock rates',async()=>{
   const world=await fixture();try{world.humanoid!.switchMap({...map,id:'second',playerSpawn:[20,.03,20]});world.step({moveZRatio:-1},10);await world.reset();expect(world.humanoid!.environment.map.id).toBe('second');expect(world.getEntityState('player').positionWorldMetersXYZ[0]).toBeCloseTo(20);}finally{world.dispose();}
@@ -734,8 +734,8 @@ it('uses a committed fallback so an emergency display is independent of earlier 
   Object.defineProperty(c,'collision',{value:new CameraCollisionSolver((a,b)=>a[0]>1&&a[2]>-5?
    {distanceMeters:0,startedOverlapping:true,normalWorldXYZ:[1,0,0],penetrationDepthMeters:.01,colliderEntityId:'narrow-gap'}:
    {distanceMeters:Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])})});
-  r.simulation.player.position.set(0,0,0);c.target.set(0,1,0);c.camera.position.set(0,3,-8);c.capturePresentationPose(r.simulation,true);c.beforeFixedUpdate();
-  r.simulation.player.position.set(2,0,0);c.target.set(2,1,0);c.camera.position.set(2,3,-8);c.capturePresentationPose(r.simulation);
+  r.simulation.controlledActor.player.position.set(0,0,0);c.target.set(0,1,0);c.camera.position.set(0,3,-8);c.capturePresentationPose(r.simulation.controlledActor,true);c.beforeFixedUpdate();
+  r.simulation.controlledActor.player.position.set(2,0,0);c.target.set(2,1,0);c.camera.position.set(2,3,-8);c.capturePresentationPose(r.simulation.controlledActor);
   const pose=(alpha:number)=>({position:new Vector3(2*alpha,0,0),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0,cameraHeight:1});
   c.present(pose(.8),.8);const direct=c.camera.position.clone(),state=c.collisionState;
   c.present(pose(.2),.2);expect(c.camera.position.distanceTo(direct)).toBeGreaterThan(.1);
@@ -765,8 +765,8 @@ it('separates the saved profile from active resolved camera settings without mut
 
  it.each(['wheeled','motorcycle'] as const)('%s opts into brake-turn slip, retains momentum and recovers without affecting low-speed steering',async(mode)=>{
   const trial=async(drift:boolean,speed:number,brake:boolean)=>{const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:{...map,regions:[{...map.regions[0]!,modes:[mode]}],bounds:{min:[-500,-10,-500],max:[500,50,500]},boxes:[{id:'ground',position:[0,-.5,0],size:[1000,1,1000]}]},character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',object:new Group(),spec:{...spec,mode,brakeDrift:drift,brakeDeceleration:8,coastDeceleration:1.5,brakeDamping:.65}}]}});try{
-   const r=world.humanoid!,sim=r.simulation;sim.active=0;sim.transition=0;
-   const v=sim.vehicle!;v.position.set(-30,.03,-50);v.velocity.set(0,0,speed);v.spec.brakeDrift=drift;v.spec.brakeDeceleration=8;v.spec.coastDeceleration=1.5;v.spec.brakeDamping=.65;
+   const r=world.humanoid!,sim=r.simulation;sim.controlledActor.vehicleIndex=0;sim.controlledActor.transition=0;
+   const v=sim.controlledActor.vehicle!;v.position.set(-30,.03,-50);v.velocity.set(0,0,speed);v.spec.brakeDrift=drift;v.spec.brakeDeceleration=8;v.spec.coastDeceleration=1.5;v.spec.brakeDamping=.65;
    const slip=()=>Math.abs(v.velocity.x*Math.cos(v.yaw)-v.velocity.z*Math.sin(v.yaw));
    world.step({humanoid:{...emptyInput(),forward:brake?-1:0,steer:1}},36);
    const during={slip:slip(),speed:v.velocity.length(),yaw:v.yaw};

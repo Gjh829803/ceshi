@@ -39,10 +39,10 @@ export function prepareCourse(sim:Simulation,map:EnvironmentDefinition,regionId:
   if(isCharacter){
    position.y=water?water.surface-1.25:floor?.height??position.y;
    const safe=q.safeSpawn(position);if(!safe||sim.vehicles.some(v=>v.position.distanceTo(safe)<v.spec.radius+1))continue;
-   if(sim.humanoid){if(!sim.prepareCharacter(safe,spawn.yaw))continue;sim.message=`已准备 ${region.name} · WASD 自由探索`;return;}
-   sim.active=-1;sim.transition=0;sim.transitionKind='';sim.teleportRevision++;sim.player.position.copy(safe);sim.player.velocity.set(0,0,0);
-   Object.assign(sim.player,{yaw:spawn.yaw,grounded:!water,swimming:!!water,coyote:water?0:.1,jumpBuffer:0,landTimer:0,animation:water?'Swim_Idle_Loop':'Idle_Loop'});
-   sim.message=`已准备 ${region.name} · WASD 自由探索`;return;
+   if(sim.controlledActor.controller){if(!sim.controlledActor.prepareCharacter(safe,spawn.yaw))continue;sim.controlledActor.message=`已准备 ${region.name} · WASD 自由探索`;return;}
+   sim.controlledActor.vehicleIndex=-1;sim.controlledActor.transition=0;sim.controlledActor.transitionKind='';sim.controlledActor.teleportRevision++;sim.controlledActor.player.position.copy(safe);sim.controlledActor.player.velocity.set(0,0,0);
+   Object.assign(sim.controlledActor.player,{yaw:spawn.yaw,grounded:!water,swimming:!!water,coyote:water?0:.1,jumpBuffer:0,landTimer:0,animation:water?'Swim_Idle_Loop':'Idle_Loop'});
+   sim.controlledActor.message=`已准备 ${region.name} · WASD 自由探索`;return;
   }
   const v=vehicle!,body=vehicleBody(v.spec),mode=v.spec.mode;
   const clearance=body.kind==='box'?Math.max(0,body.halfExtents[1]-body.offset[1]):0;
@@ -54,7 +54,7 @@ export function prepareCourse(sim:Simulation,map:EnvironmentDefinition,regionId:
   const radius=body.kind==='box'?Math.hypot(body.halfExtents[0],body.halfExtents[2]):body.radius;
   if(sim.vehicles.some(other=>other!==v&&Math.hypot(other.position.x-safe.x,other.position.z-safe.z)<radius+other.spec.radius+1))continue;
   const prepared:MapSpawn={...spawn,id:`${spawn.id}:${assetId}`,vehicleId:assetId,position:[safe.x,safe.y,safe.z]};
-  if(sim.prepare(index,prepared)){sim.message=`已准备 ${region.name} / ${v.spec.name} · 按 F 驾驶`;return;}
+  if(sim.controlledActor.prepare(index,prepared)){sim.controlledActor.message=`已准备 ${region.name} / ${v.spec.name} · 按 F 驾驶`;return;}
  }
  throw new Error('该区域没有足够的安全准备空间');
 }
@@ -62,7 +62,7 @@ export function prepareCourse(sim:Simulation,map:EnvironmentDefinition,regionId:
 export function applyScenario(sim:Simulation,id:string):Scenario{
  const scenario=SCENARIOS.find(s=>s.id===id);if(!scenario)throw new Error('未找到训练场景');
  if(sim.environment){prepareCourse(sim,sim.environment.map,scenario.regionId!,scenario.vehicleId??'character');return scenario;}
- if(scenario.vehicleId){const vehicle=sim.vehicles.find(v=>v.spec.id===scenario.vehicleId);if(!vehicle)throw new Error('场景所需载具未加载');Object.assign(vehicle,createVehicle(vehicle.spec));vehicle.position.set(...scenario.position);if(vehicle.spec.mode==='hover')vehicle.position.y+=1.3;vehicle.yaw=scenario.yaw;vehicle.rotation.setFromAxisAngle(new Vector3(0,1,0),scenario.yaw);if(!sim.approach(scenario.vehicleId))throw new Error(sim.message);}
- else{sim.active=-1;sim.transition=0;sim.transitionKind='';sim.teleportRevision++;sim.player.position.set(...scenario.position);sim.player.velocity.set(0,0,0);Object.assign(sim.player,{grounded:true,swimming:false,coyote:.1,jumpBuffer:0,landTimer:0,animation:'Idle_Loop',yaw:scenario.yaw});}
- sim.message=`已准备 ${scenario.name}`;return scenario;
+ if(scenario.vehicleId){const vehicle=sim.vehicles.find(v=>v.spec.id===scenario.vehicleId);if(!vehicle)throw new Error('场景所需载具未加载');Object.assign(vehicle,createVehicle(vehicle.spec));vehicle.position.set(...scenario.position);if(vehicle.spec.mode==='hover')vehicle.position.y+=1.3;vehicle.yaw=scenario.yaw;vehicle.rotation.setFromAxisAngle(new Vector3(0,1,0),scenario.yaw);if(!sim.controlledActor.approach(scenario.vehicleId))throw new Error(sim.controlledActor.message);}
+ else{sim.controlledActor.vehicleIndex=-1;sim.controlledActor.transition=0;sim.controlledActor.transitionKind='';sim.controlledActor.teleportRevision++;sim.controlledActor.player.position.set(...scenario.position);sim.controlledActor.player.velocity.set(0,0,0);Object.assign(sim.controlledActor.player,{grounded:true,swimming:false,coyote:.1,jumpBuffer:0,landTimer:0,animation:'Idle_Loop',yaw:scenario.yaw});}
+ sim.controlledActor.message=`已准备 ${scenario.name}`;return scenario;
 }

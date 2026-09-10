@@ -23,7 +23,7 @@ it('maps rigid vehicle parts to the instance and retires IDs with the rig',async
 });
 it('reports actor identity instead of the query-part key, preserving unknown colliders',async()=>{
   const world=await createMountedFixture();try{
-    const q=world.humanoid!.simulation.environment,h=world.humanoid!.simulation.humanoid!;
+    const q=world.humanoid!.simulation.environment,h=world.humanoid!.simulation.controlledActor.controller!;
     q.syncActorBodies([{id:'proxy-part',actorId:'custom-actor',position:new Vector3(15,1,15),rotation:new Quaternion(),body:{kind:'box',offset:[0,0,0],halfExtents:[1,1,1]}}]);
     let found=false;h.world.forEachCollider(c=>{if(c.translation().x===15){expect(q.colliderId(c.handle)).toBe('custom-actor');found=true;}});expect(found).toBe(true);
     const unknown=h.world.createCollider(RAPIER.ColliderDesc.ball(.1));expect(q.colliderId(unknown.handle)).toBe(`collider-${unknown.handle}`);
@@ -56,7 +56,7 @@ it("checks live actor poses without creating colliders", async () => {
   try {
     const sim = world.humanoid!.simulation,
       q = sim.environment!,
-      h = sim.humanoid!,
+      h = sim.controlledActor.controller!,
       count = q.colliderCount;
     const horse = sim.vehicles[1]!;
     horse.position.set(5, 0.025, 0);
@@ -83,7 +83,7 @@ it("checks live actor poses without creating colliders", async () => {
 it("ignores enabled sensors, rejects initial penetration and blocked mid-path with clear endpoints", async () => {
   const world = await createMountedFixture();
   try {
-    const h = world.humanoid!.simulation.humanoid!,
+    const h = world.humanoid!.simulation.controlledActor.controller!,
       q = world.humanoid!.simulation.environment!,
       filter = { excludedColliderHandles: new Set([h.capsule.handle]) },
       pose = (x: number, z = 8) => ({
@@ -118,7 +118,7 @@ it("rejects low ceilings and invalid inputs without entering WASM or changing co
   try {
     const s = world.humanoid!.simulation,
       q = s.environment!,
-      body = s.humanoid!.standingQueryBody,
+      body = s.controlledActor.controller!.standingQueryBody,
       count = q.colliderCount;
     expect(
       q.bodyOverlap({
@@ -157,7 +157,7 @@ it("requires the rider slope instead of the generic environment slope", async ()
       q.standingSupport(
         new Vector3(8, 4, 8),
         3,
-        s.humanoid!.controller.maxSlopeClimbAngle(),
+        s.controlledActor.controller!.controller.maxSlopeClimbAngle(),
       ),
     ).toBeNull();
     expect(

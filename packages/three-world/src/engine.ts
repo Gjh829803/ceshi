@@ -1,19 +1,18 @@
-import {claimCharacter} from './humanoid-runtime/character-ownership';
-import {runtimeError} from './control-support';
-import { emptyInput } from './humanoid-runtime/simulation';
-import { humanoidHost } from './humanoid-runtime/host-access';
 import * as THREE from 'three';
-import { ThreePhysics } from './physics.js';
-import {DEFAULT_CHARACTER_OPTIONS} from './config/physics';
-import { ThreeNavigation } from './navigation.js';
-import { ThreeCameraRig, type CameraRigInput } from './camera.js';
-import { ownViewport } from './viewport.js';
-import { WorldKeyboard, WorldInputRouter } from './input.js';
-import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
-import { LocomotionAnimation } from './locomotion-animation.js';
 import { playLocomotion } from './assets.js';
-import { HumanoidRuntime, type HumanoidRuntimeOptions } from './humanoid-runtime/runtime.js';
-import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
+import { ThreeCameraRig,type CameraRigInput } from './camera.js';
+import { DEFAULT_CHARACTER_OPTIONS } from './config/physics';
+import { runtimeError } from './control-support';
+import type { AssetInstance,CharacterDrive,CharacterEntityOptions,CharacterOptions,EntityOptions,EntityState,PhysicsOptions,Vec3,WorldCommand,WorldInput,WorldObservation,WorldSnapshot } from './engine-contracts.js';
+import { geometrySignature,setEntityBoundary,worldPose } from './geometry.js';
+import { humanoidHost } from './humanoid-runtime/host-access';
+import { HumanoidRuntime,type HumanoidRuntimeOptions } from './humanoid-runtime/runtime.js';
+import { emptyInput } from './humanoid-runtime/simulation';
+import { WorldInputRouter,WorldKeyboard } from './input.js';
+import { LocomotionAnimation } from './locomotion-animation.js';
+import { ThreeNavigation } from './navigation.js';
+import { ThreePhysics } from './physics.js';
+import { ownViewport } from './viewport.js';
 
 type Entity = {
   releaseHumanoid?:()=>void;
@@ -106,7 +105,7 @@ export class WorldEngine {
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
-    if(this.humanoid)this.keyboard.setHumanoidMode(()=>!!this.humanoid!.simulation.vehicle);
+    if(this.humanoid)this.keyboard.setHumanoidMode(()=>!!this.humanoid!.simulation.controlledActor.vehicle);
     this.inputRouter = new WorldInputRouter(this.keyboard, {
       isRunning: () => this.running,
       canZoom: () => this.humanoid
@@ -143,9 +142,9 @@ export class WorldEngine {
     if (!(options.object instanceof THREE.Object3D) || [...this.entities.values()].some(e => e.object === options.object)) throw new Error('WORLD_OBJECT_INVALID_OR_REGISTERED');
     if (options.frontYawRadians !== undefined && !Number.isFinite(options.frontYawRadians)) throw new Error('WORLD_FRONT_YAW_INVALID');
     if (options.role === 'terrain' && options.physics?.kind === 'none') throw new Error('WORLD_TERRAIN_REQUIRES_COLLISION');
-    const binding=(options as CharacterEntityOptions).humanoid;
+    const binding=(options as CharacterEntityOptions).runtimeActor;
     if(binding&&!this.humanoid)throw new Error('HUMANOID_RUNTIME_REQUIRED');
-    const releaseHumanoid=binding?claimCharacter(binding):undefined;
+    const releaseHumanoid=binding?.animation?humanoidHost(this.humanoid!).claimCharacter(options.id,binding.animation):undefined;
     const previousParent = options.object.parent;
     if (!previousParent) this.scene.add(options.object);
     const physics = options.physics ?? (options.role === 'terrain' || options.role === 'obstacle' ? { kind: 'fixed' as const } : { kind: 'none' as const });
@@ -162,7 +161,7 @@ export class WorldEngine {
       initialParent: options.object.parent, initialPosition: options.object.position.clone(), initialQuaternion: options.object.quaternion.clone(), initialScale: options.object.scale.clone(), initialVisible: options.object.visible,
       initialMatrix: options.object.matrix.clone(), initialMatrixAutoUpdate: options.object.matrixAutoUpdate,
       ...(character === undefined ? {} : { character }), ...(asset === undefined ? {} : { asset }) };
-    this.entities.set(options.id, entity); this.navigationDirty = true; this.revision += 1;
+    this.entities.set(options.id, entity); if(binding)humanoidHost(this.humanoid!).commitCharacterOwnership(options.id); this.navigationDirty = true; this.revision += 1;
     return options.object;
   }
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); this.humanoid?.setControlledActor(id);this.controlled = id; this.keyboard.clear(); this.previousJump = false; }
@@ -175,7 +174,7 @@ export class WorldEngine {
   }
   interact(id: string, actorEntityId = this.controlled): void { this.entity(id); for (const handler of this.interactions.get(id) ?? []) handler({ world: this, entityId: id, ...(actorEntityId ? { actorEntityId } : {}) }); }
   setCameraFollow(options: CameraFollow = {}): void {
-    if(this.humanoid){this.humanoid.setCameraTarget(options.targetEntityId??this.controlled??this.humanoid.options.character.instanceId);this.humanoid.setCameraMode(0);return;}
+    if(this.humanoid){this.humanoid.setCameraTarget(options.targetEntityId??this.controlled??this.humanoid.inputActorId);this.humanoid.setCameraMode(0);return;}
     const targetEntityId=options.targetEntityId??this.controlled;
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
     this.cameraRig.setFollow({...options,targetEntityId});
@@ -214,7 +213,7 @@ export class WorldEngine {
   private sealInitialState(): void {
     if (this.baseline) return;
     this.baseline = new Map(this.entities);
-    for (const entity of this.entities.values()) { entity.initialParent = entity.object.parent; entity.initialPosition.copy(entity.object.position); entity.initialQuaternion.copy(entity.object.quaternion); entity.initialScale.copy(entity.object.scale); entity.initialVisible = entity.object.visible; entity.initialMatrix.copy(entity.object.matrix); entity.initialMatrixAutoUpdate = entity.object.matrixAutoUpdate; }
+    for (const entity of this.entities.values()) { entity.initialParent = entity.object.parent; if(!(entity.options as CharacterEntityOptions).runtimeActor){entity.initialPosition.copy(entity.object.position); entity.initialQuaternion.copy(entity.object.quaternion);} entity.initialScale.copy(entity.object.scale); entity.initialVisible = entity.object.visible; entity.initialMatrix.copy(entity.object.matrix); entity.initialMatrixAutoUpdate = entity.object.matrixAutoUpdate; }
     this.scene.updateMatrixWorld(true); this.camera.updateWorldMatrix(true, false);
     this.cameraInitial = this.camera.clone(); this.cameraInitialParent = this.camera.parent; this.controlledInitial = this.controlled;
     this.cameraRig.sealInitialState();
@@ -489,9 +488,9 @@ export class WorldEngine {
     }
   }
   private retireEntity(entity:Entity):void{
-    const binding=(entity.options as CharacterEntityOptions).humanoid;
-    if(binding&&this.baseline?.get(entity.options.id)!==entity){
-      try{binding.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error,entity.options.id);}finally{entity.releaseHumanoid?.();}
+    const binding=(entity.options as CharacterEntityOptions).runtimeActor;
+    if(binding?.animation&&this.baseline?.get(entity.options.id)!==entity){
+      try{binding.animation.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error,entity.options.id);}finally{entity.releaseHumanoid?.();}
       this.retired.delete(entity);
     }else this.retired.add(entity);
   }
@@ -619,7 +618,7 @@ export class WorldEngine {
     this.cameraRig.reset();
     if(this.humanoid)humanoidHost(this.humanoid).reset();
     for (const [id, entity] of this.baseline!) {
-      if (entity.character) {const binding=(entity.options as CharacterEntityOptions).humanoid;if(binding)humanoidHost(this.humanoid!).bindCharacter(id,binding,(entity.options as CharacterEntityOptions).character);this.physics.addCharacter(id, entity.object, entity.character);} else if (entity.options.physics?.kind !== 'none' && entity.options.physics) this.physics.addRigid(id, entity.object, entity.options.physics);
+      if (entity.character) {const binding=(entity.options as CharacterEntityOptions).runtimeActor;if(binding)humanoidHost(this.humanoid!).bindCharacter(id,binding,(entity.options as CharacterEntityOptions).character);this.physics.addCharacter(id, entity.object, entity.character);} else if (entity.options.physics?.kind !== 'none' && entity.options.physics) this.physics.addRigid(id, entity.object, entity.options.physics);
       entity.asset?.mixer.stopAllAction(); if (entity.asset?.actionIds.includes('idle')) entity.asset.play('idle');
       // A paused opening capture must contain the selected pose at tick zero,
       // not the bind pose restored by AnimationMixer.stopAllAction().
@@ -652,7 +651,7 @@ export class WorldEngine {
     if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.keyboard.detach(); this.renders.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
-    const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).humanoid;return binding?[binding]:[];}));
+    const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).runtimeActor?.animation;return binding?[binding]:[];}));
     for(const character of humanoids)try{character.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error);}
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }

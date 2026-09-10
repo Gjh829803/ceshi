@@ -4,7 +4,7 @@ import type {EnvironmentDefinition} from '../../../shared/preset-content/environ
 import type {DisplayContext,DisplayRoot} from './display-context';
 import type {DisplayObjectRow,DisplayType} from './display-settings';
 
-export function resolveDisplayColliderId(physics:HumanoidRuntime['simulation']['humanoid'],fallback:(handle:number)=>string,handle:number):string {
+export function resolveDisplayColliderId(physics:HumanoidRuntime['simulation']['controlledActor']['controller'],fallback:(handle:number)=>string,handle:number):string {
   if(physics){
     if(physics.capsule.handle===handle)return 'person';
     for(const target of physics.skills.targets.values())if(target.collider?.handle===handle)return target.definition.id;

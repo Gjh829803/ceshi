@@ -19,13 +19,27 @@ function actor(q:EnvironmentQueries,x:number){const actor=new HumanoidController
 function step(q:EnvironmentQueries,actors:HumanoidController[],ticks:number){for(let i=0;i<ticks;i++){for(const actor of actors)actor.step(new Vector3(),false,false,false);q.stepPhysics(1/60);}}
 
 it('restores world interactions and crates at the simulation reset entry',()=>{
-  const q=setup(),simulation=new Simulation(q);controllers.push(simulation.humanoid);
+  const q=setup(),simulation=new Simulation(q,[],{id:'player'});controllers.push(simulation.controlledActor.controller);
   const target=q.interactions.targets.get('cup')!;
   target.state='placed';target.position.set(5,2,4);target.body!.setTranslation(target.position,true);
   const crate=q.interactions.crates[0]!;crate.body.setTranslation({x:6,y:4,z:2},true);
   simulation.reset();
   expect(target.state).toBe('available');expect(target.position.toArray()).toEqual(map.interactions![0]!.position);
   expect(crate.body.translation()).toMatchObject({x:5,y:2,z:0});
+});
+
+it('keeps another actor holding its target during actor relocation, and clears every owner on world reset',()=>{
+  const q=setup(),simulation=new Simulation(q,[],{id:'player'}),holder=simulation.addActor('holder',new Vector3(0,.04,0));
+  controllers.push(simulation.controlledActor.controller,holder.controller);holder.controller.setAvailableClips(new Set(ACTION_CLIP_IDS),[]);simulation.controlledActor.controller.setAvailableClips(new Set(ACTION_CLIP_IDS),[]);
+  for(let n=0;n<30;n++)simulation.step(1/60);
+  expect(holder.controller.skills.request({requestId:'hold',action:'pickup',targetId:'cup'}).status).toBe('running');
+  for(let n=0;n<120;n++)simulation.step(1/60);
+  const body=q.interactions.targets.get('cup')!.body;
+  expect(holder.controller.skills.carrying).toBe('cup');
+  expect(simulation.controlledActor.prepareCharacter(new Vector3(-3,.04,0),0)).toBe(true);
+  expect(holder.controller.skills.carrying).toBe('cup');expect(q.interactions.targets.get('cup')!.body).toBe(body);
+  expect(q.interactions.unavailable('cup')).toBe(true);
+  simulation.reset();expect(holder.controller.skills.carrying).toBeNull();expect(q.interactions.targets.get('cup')!.state).toBe('available');
 });
 
 it('uses declared crate identities independent of array order',()=>{

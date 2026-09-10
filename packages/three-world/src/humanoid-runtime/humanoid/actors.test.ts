@@ -8,36 +8,37 @@ const map:EnvironmentDefinition={id:'actors',name:'Actors',description:'',bounds
 const sims:Simulation[]=[],queries:EnvironmentQueries[]=[];
 beforeAll(initEnvironmentQueries);
 afterEach(()=>{for(const sim of sims.splice(0))sim.dispose();for(const q of queries.splice(0))q.dispose();});
-function setup(){const q=new EnvironmentQueries(map);queries.push(q);const sim=new Simulation(q);sims.push(sim);return {q,sim};}
+function setup(){const q=new EnvironmentQueries(map);queries.push(q);const sim=new Simulation(q,[],{id:'player'});sims.push(sim);return {q,sim};}
 
 it('steps three independent controllers on one world tick and removes only one actor rig',()=>{
   const {q,sim}=setup();
   const a=sim.addActor('a',new Vector3(0,.04,0)),b=sim.addActor('b',new Vector3(4,.04,0));
+  expect(sim.actors.size).toBe(3);expect(sim.actors.get('player')?.controller).toBe(sim.controlledActor.controller);
   const initial=q.physicsStepSequence;
-  for(let n=0;n<60;n++)sim.step(emptyInput(),1/60,0,new Map([['a',{input:{...emptyInput(),forward:1},yaw:0}],['b',{input:{...emptyInput(),forward:-1},yaw:0}]]));
+  for(let n=0;n<60;n++)sim.step(1/60,new Map([['a',{input:{...emptyInput(),forward:1},yaw:0}],['b',{input:{...emptyInput(),forward:-1},yaw:0}]]));
   expect(q.physicsStepSequence-initial).toBe(60);expect(a.player.position.z).toBeGreaterThan(1);expect(b.player.position.z).toBeLessThan(-1);
-  expect(sim.player.position.z).toBeCloseTo(0);expect(a.controller).not.toBe(b.controller);
+  expect(sim.controlledActor.player.position.z).toBeCloseTo(0);expect(a.controller).not.toBe(b.controller);
   const bBody=b.controller.body,count=q.colliderCount;sim.removeActor('a');expect(q.colliderCount).toBe(count-1);expect(bBody.isValid()).toBe(true);
-  sim.step(emptyInput(),1/60);expect(q.physicsStepSequence-initial).toBe(61);
+  sim.step(1/60);expect(q.physicsStepSequence-initial).toBe(61);
 });
 
 it('keeps per-actor reset scoped and disposes added actors on environment replacement',()=>{
   const {q,sim}=setup(),a=sim.addActor('a',new Vector3(0,.04,0)),b=sim.addActor('b',new Vector3(4,.04,0));
   a.resetAt(new Vector3(0,.04,3),0);expect(b.player.position.x).toBe(4);
   const old=a.controller.body,replacement=new EnvironmentQueries(map);queries.push(replacement);
-  sim.setEnvironment(replacement);expect(old.isValid()).toBe(false);expect(sim.actors.size).toBe(0);expect(q.colliderCount).toBe(1);
+  sim.dispose();const next=new Simulation(replacement,[],{id:'player'});sims.push(next);expect(old.isValid()).toBe(false);expect(next.actors.size).toBe(1);expect(q.colliderCount).toBe(1);
 });
 
 it('steps after preparing an actor twice before the first physics integration',()=>{
   const {sim}=setup(),actor=sim.addActor('a',new Vector3(3,.04,0));
   actor.resetAt(new Vector3(3,.03,5),Math.PI);
-  sim.step(emptyInput(),1/60,0);
+  sim.step(1/60);
   expect(actor.player.position.z).toBeCloseTo(5);
 });
 
 it('keeps approaching actors separated by their real capsules',()=>{
   const {sim}=setup(),a=sim.addActor('a',new Vector3(-1,.04,0)),b=sim.addActor('b',new Vector3(1,.04,0));
-  for(let n=0;n<90;n++)sim.step(emptyInput(),1/60,0,new Map([['a',{input:{...emptyInput(),steer:-1},yaw:0}],['b',{input:{...emptyInput(),steer:1},yaw:0}]]));
+  for(let n=0;n<90;n++)sim.step(1/60,new Map([['a',{input:{...emptyInput(),steer:-1},yaw:0}],['b',{input:{...emptyInput(),steer:1},yaw:0}]]));
   expect(b.player.position.x-a.player.position.x).toBeGreaterThanOrEqual(.55);
 });
 

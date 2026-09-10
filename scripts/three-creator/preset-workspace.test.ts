@@ -27,26 +27,26 @@ describe('player workspace configuration',()=>{
   expect(profile!.control.brakeDeceleration).toBeGreaterThan(0);expect(profile!.control.brakeDamping).toBeGreaterThan(0);
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(s=>({instanceId:s.id,assetId:s.id,spec:s,object:new Group()}))}});
   try{
-   const runtime=world.humanoid!,sim=runtime.simulation;
+   const runtime=world.humanoid!;let sim=runtime.simulation;runtime.onSimulationReplaced(()=>{sim=runtime.simulation;});
    for(const mapId of ['campus','grand-prix']){
     const map=getMap(mapId);runtime.switchMap(map);
     expect(runtime.approach(id)).toBe(true);expect(runtime.enter(id)).toBe(true);world.step({},40);expect(runtime.exit()).toBe(true);
     prepareCourse(sim,map,mapId==='grand-prix'?'gp-straight':'staging',id);
     expect(runtime.enter(id)).toBe(true);applyControlProfile(runtime,profile!);
-    const origin=sim.vehicle!.position.clone();
+    const origin=sim.controlledActor.vehicle!.position.clone();
     // Torque curves and gear changes give each preset a different launch time.
     // Keep the same distance requirement, with a bounded six-second driving window.
-    for(let frame=0;frame<360&&sim.vehicle!.position.distanceTo(origin)<=15;frame++)world.step({humanoid:{...humanoid.emptyInput(),forward:1}},1);
-    expect(sim.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
-    expect(sim.vehicle!.motion.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
+    for(let frame=0;frame<360&&sim.controlledActor.vehicle!.position.distanceTo(origin)<=15;frame++)world.step({humanoid:{...humanoid.emptyInput(),forward:1}},1);
+    expect(sim.controlledActor.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
+    expect(sim.controlledActor.vehicle!.motion.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
     // Space remains a brake at parking speed; S intentionally becomes reverse below 1 m/s.
-    const speed=sim.vehicle!.speed;world.step({humanoid:{...humanoid.emptyInput(),brake:true}},30);
-    expect(Math.abs(sim.vehicle!.speed)).toBeLessThan(speed);
-    expect(sim.vehicle!.grounded).toBe(true);
-    expect(runtime.environment.safeSpawn(sim.vehicle!.position,humanoid.vehicleBody(spec!),sim.vehicle!.rotation)).not.toBeNull();
+    const speed=sim.controlledActor.vehicle!.speed;world.step({humanoid:{...humanoid.emptyInput(),brake:true}},30);
+    expect(Math.abs(sim.controlledActor.vehicle!.speed)).toBeLessThan(speed);
+    expect(sim.controlledActor.vehicle!.grounded).toBe(true);
+    expect(runtime.environment.safeSpawn(sim.controlledActor.vehicle!.position,humanoid.vehicleBody(spec!),sim.controlledActor.vehicle!.rotation)).not.toBeNull();
     const edited=structuredClone(profile!);edited.control.speed=17;applyControlProfile(runtime,edited);
     expect(runtime.exportProfile().vehicles?.[id]?.speed).toBe(17);
-    await world.reset();expect(sim.vehicle).toBeFalsy();
+    await world.reset();expect(sim.controlledActor.vehicle).toBeFalsy();
    }
    runtime.switchMap(getMap('campus'));
    const others=sim.vehicles.filter(v=>v.spec.id!==id).map(v=>v.position.clone());
@@ -55,16 +55,16 @@ describe('player workspace configuration',()=>{
    expect(staged.position.x).toBeCloseTo(27);expect(staged.position.z).toBeCloseTo(139);
    expect(sim.vehicles.filter(v=>v.spec.id!==id).map(v=>v.position.clone())).toEqual(others);
    expect(runtime.enter(id)).toBe(true);
-   for(let frame=0;frame<360&&sim.vehicle!.position.z<150;frame++)world.step({humanoid:{...humanoid.emptyInput(),forward:1}},1);
-   expect(sim.vehicle!.position.z).toBeGreaterThanOrEqual(150);
-   expect(sim.vehicle!.position.y).toBeGreaterThan(.1);
+   for(let frame=0;frame<360&&sim.controlledActor.vehicle!.position.z<150;frame++)world.step({humanoid:{...humanoid.emptyInput(),forward:1}},1);
+   expect(sim.controlledActor.vehicle!.position.z).toBeGreaterThanOrEqual(150);
+   expect(sim.controlledActor.vehicle!.position.y).toBeGreaterThan(.1);
   }finally{world.dispose();}
  });
  it('prepares every circuit driving section on supported clear ground and drives past the old campus boundary',async()=>{
   const map=getMap('grand-prix'),spec=SPECS.find(s=>s.id==='racer')!;
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'racer',assetId:'racer',spec,object:new Group()}]}});
   try{
-   const runtime=world.humanoid!,sim=runtime.simulation;
+   const runtime=world.humanoid!;let sim=runtime.simulation;runtime.onSimulationReplaced(()=>{sim=runtime.simulation;});
    // Catch barriers cutting into the visual road, unsupported joins and pinched
    // turns across the entire loop, including the width of the driven car.
    for(const {position,tangent,normal} of GRAND_PRIX.samples){
@@ -85,12 +85,12 @@ describe('player workspace configuration',()=>{
    }
    prepareCourse(sim,map,'gp-straight','racer');
    expect(runtime.enter('racer')).toBe(true);
-   const before=sim.vehicle!.position.clone();
+   const before=sim.controlledActor.vehicle!.position.clone();
    for(let i=0;i<300;i++)world.step({humanoid:{forward:1,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},1);
-   expect(sim.vehicle!.position.z-before.z).toBeGreaterThan(40);
-   expect(sim.vehicle!.position.x).toBeLessThan(-500);
-   expect(Math.abs(sim.vehicle!.position.y)).toBeLessThan(.15);
-   await world.reset();expect(sim.vehicle).toBeFalsy();
+   expect(sim.controlledActor.vehicle!.position.z-before.z).toBeGreaterThan(40);
+   expect(sim.controlledActor.vehicle!.position.x).toBeLessThan(-500);
+   expect(Math.abs(sim.controlledActor.vehicle!.position.y)).toBeLessThan(.15);
+   await world.reset();expect(sim.controlledActor.vehicle).toBeFalsy();
    runtime.switchMap(getMap('campus'));runtime.switchMap(map);
    expect(runtime.environment.support(new Vector3(...map.playerSpawn))?.height).toBeCloseTo(0,2);
   }finally{world.dispose();}
@@ -98,7 +98,7 @@ describe('player workspace configuration',()=>{
  it('shows the live collider pose and dimensions, hiding disabled colliders and releasing its scene object',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
   const scene=new Scene(),debug=createCapsuleDebug(scene);
-  try{const h=world.humanoid!.simulation.humanoid!,c=h.capsule;
+  try{const h=world.humanoid!.simulation.controlledActor.controller!,c=h.capsule;
    debug.update(c,false);expect(debug.mesh.visible).toBe(false);
    debug.update(c,true);expect(debug.mesh.visible).toBe(true);
    expect(debug.mesh.geometry.parameters.radius).toBe(c.radius());
@@ -119,13 +119,13 @@ describe('player workspace configuration',()=>{
  it('renders all live Rapier shapes only in all mode and follows map replacement',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
   const scene=new Scene(),debug=createCollisionDebug(scene);
-  try{const h=world.humanoid!.simulation.humanoid!,spy=vi.spyOn(h.world,'debugRender');
+  try{const h=world.humanoid!.simulation.controlledActor.controller!,spy=vi.spyOn(h.world,'debugRender');
    debug.update(h,'off');expect(spy).not.toHaveBeenCalled();expect(scene.children.every(o=>!o.visible)).toBe(true);
    debug.update(h,'person');expect(spy).not.toHaveBeenCalled();expect(debug.person.mesh.visible).toBe(true);expect(debug.all.visible).toBe(false);
    debug.update(h,'all');expect(debug.person.mesh.visible).toBe(false);expect(debug.all.visible).toBe(true);
    expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(h.world.debugRender().vertices));
    expect(debug.all.geometry.getAttribute('position').count).toBeGreaterThan(100);
-   world.humanoid!.switchMap(getMap('indoor-lab'));const next=world.humanoid!.simulation.humanoid!;
+   world.humanoid!.switchMap(getMap('indoor-lab'));const next=world.humanoid!.simulation.controlledActor.controller!;
    debug.update(next,'all');expect(Array.from(debug.all.geometry.getAttribute('position').array)).toEqual(Array.from(next.world.debugRender().vertices));
    debug.update(next,'off');expect(scene.children.every(o=>!o.visible)).toBe(true);
   }finally{debug.dispose();world.dispose();}
@@ -139,7 +139,7 @@ describe('player workspace configuration',()=>{
   ]};
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
   const scene=new Scene(),debug=createCollisionDebug(scene);
-  try{const h=world.humanoid!.simulation.humanoid!,count=h.world.colliders.len();
+  try{const h=world.humanoid!.simulation.controlledActor.controller!,count=h.world.colliders.len();
    debug.update(h,'all',map.boxes);
    const ground=new Set<number>();h.world.forEachCollider(c=>{if(c.translation().y===-2.5)ground.add(c.handle);});
    const expected=h.world.debugRender(undefined,c=>!ground.has(c.handle));
@@ -187,7 +187,7 @@ describe('player workspace configuration',()=>{
   try{const r=world.humanoid!,boat=r.simulation.vehicles.find(v=>v.spec.id==='patrol-boat')!;
    const before=boat.position.clone();expect(r.environment.waterAt(before)).not.toBeNull();
    expect(r.approach('patrol-boat')).toBe(true);expect(boat.position.equals(before)).toBe(true);
-   expect(r.environment.waterAt(r.simulation.player.position)).not.toBeNull();expect(r.simulation.player.position.distanceTo(before)).toBeLessThan(4);
+   expect(r.environment.waterAt(r.simulation.controlledActor.player.position)).not.toBeNull();expect(r.simulation.controlledActor.player.position.distanceTo(before)).toBeLessThan(4);
   }finally{world.dispose();}
  });
  it('opens the character workshop at its authored action entrance, not the vehicle parking area',async()=>{
@@ -196,7 +196,7 @@ describe('player workspace configuration',()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
   try{world.step({},1);world.humanoid!.advance({},1/60,{yawDeltaRadians:.7});
    prepareCourse(world.humanoid!.simulation,map,defaultRegion(map,'person').id,'person');world.step({},1);
-   const p=world.humanoid!.simulation.player;expect(p.position.x).toBeCloseTo(-32);expect(p.position.z).toBeCloseTo(23);expect(Math.cos(p.yaw)).toBeCloseTo(-1);
+   const p=world.humanoid!.simulation.controlledActor.player;expect(p.position.x).toBeCloseTo(-32);expect(p.position.z).toBeCloseTo(23);expect(Math.cos(p.yaw)).toBeCloseTo(-1);
    expect(Math.cos(world.humanoid!.followCamera.yaw)).toBeCloseTo(-1);
   }finally{world.dispose();}
  });
@@ -236,12 +236,12 @@ it('installs the calibrated Playground movement before any profile call and rest
   // Captured pre-refactor Playground values and its existing calibration formula.
   const baseline={speed:3.1,accel:14,grip:5,steer:8};
   reference.humanoid!.applyProfile({character:humanoid.defaultMovementSettings('character',baseline)});
-  const actual=world.humanoid!.simulation.humanoid!.movementTuning;
+  const actual=world.humanoid!.simulation.controlledActor.controller!.movementTuning;
   expect(actual).toMatchObject({speedScale:3.1/3.8,accelerationScale:14/12,airControlScale:5/3,turnScale:8/14,maxSpeed:5.8*3.1/3.8});
-  expect(actual).toEqual(reference.humanoid!.simulation.humanoid!.movementTuning);
+  expect(actual).toEqual(reference.humanoid!.simulation.controlledActor.controller!.movementTuning);
   world.step({moveZRatio:-1},90);reference.step({moveZRatio:-1},90);
   expect(world.getEntityState('person').positionWorldMetersXYZ).toEqual(reference.getEntityState('person').positionWorldMetersXYZ);
   await world.reset();
-  expect(world.humanoid!.simulation.humanoid!.movementTuning).toEqual(actual);
+  expect(world.humanoid!.simulation.controlledActor.controller!.movementTuning).toEqual(actual);
  }finally{world.dispose();reference.dispose();}
 });

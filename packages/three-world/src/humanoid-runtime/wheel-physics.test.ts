@@ -192,28 +192,28 @@ describe('per-wheel road vehicle',()=>{
  });
  it('moves off a split-height ledge and remains supported after recovery',()=>{
   const q=new EnvironmentQueries({...map,boxes:[...map.boxes,{id:'ledge',position:[3,.35,0],size:[6,.7,30]}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}]});
-  const sim=new Simulation(q,[spec]);try{sim.active=0;sim.humanoid.setMounted(true);const v=sim.vehicle!;
+  const sim=new Simulation(q,[spec],{id:'player'});try{sim.controlledActor.vehicleIndex=0;sim.controlledActor.controller.setMounted(true);const v=sim.controlledActor.vehicle!;
    v.position.set(-.2,.1,0);v.rotation.setFromAxisAngle(new Vector3(0,0,1),.3);
-   expect(sim.recoverVehicle()).toBe(true);expect(sim.message).toContain('附近安全地面');expect(v.position.x).toBeLessThan(-1.6);
-   for(let n=0;n<180;n++)sim.step({...emptyInput(),brake:true},1/60);
+   expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(sim.controlledActor.message).toContain('附近安全地面');expect(v.position.x).toBeLessThan(-1.6);
+   for(let n=0;n<180;n++)sim.step(1/60,new Map([['player',{input:{...emptyInput(),brake:true},yaw:0}]]));
    expect(v.motion.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);expect(Math.abs(v.roll)).toBeLessThan(.01);
-   const before=v.position.clone();for(let n=0;n<120;n++)sim.step({...emptyInput(),forward:1},1/60);expect(v.position.distanceTo(before)).toBeGreaterThan(3);
+   const before=v.position.clone();for(let n=0;n<120;n++)sim.step(1/60,new Map([['player',{input:{...emptyInput(),forward:1},yaw:0}]]));expect(v.position.distanceTo(before)).toBeGreaterThan(3);
   }finally{sim.dispose();q.dispose();}
  });
  it.each([90,180,270])('recovers a %s degree rollover in place and can drive again',degrees=>{
   const q=new EnvironmentQueries({...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}]});
-  const sim=new Simulation(q,[spec]);try{
-   sim.active=0;sim.humanoid.setMounted(true);const v=sim.vehicle!;v.position.set(10,2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),degrees*Math.PI/180);v.velocity.set(3,1,4);v.motion.wheelPhysics!.angularVelocity.set(2,1,3);
-   const oldWheelState=v.motion.wheelPhysics;expect(sim.recoverVehicle()).toBe(true);expect(sim.active).toBe(0);
+  const sim=new Simulation(q,[spec],{id:'player'});try{
+   sim.controlledActor.vehicleIndex=0;sim.controlledActor.controller.setMounted(true);const v=sim.controlledActor.vehicle!;v.position.set(10,2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),degrees*Math.PI/180);v.velocity.set(3,1,4);v.motion.wheelPhysics!.angularVelocity.set(2,1,3);
+   const oldWheelState=v.motion.wheelPhysics;expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(sim.controlledActor.vehicleIndex).toBe(0);
    expect(v.position.x).toBe(10);expect(v.position.z).toBe(15);expect(new Vector3(0,1,0).applyQuaternion(v.rotation).y).toBeCloseTo(1);
    expect(v.velocity.length()).toBe(0);expect(v.motion.wheelPhysics).not.toBe(oldWheelState);expect(v.motion.wheelPhysics!.angularVelocity.length()).toBe(0);
-   for(let n=0;n<120;n++)sim.step({...emptyInput(),forward:1},1/60);expect(v.position.z).toBeGreaterThan(17);expect(v.grounded).toBe(true);
+   for(let n=0;n<120;n++)sim.step(1/60,new Map([['player',{input:{...emptyInput(),forward:1},yaw:0}]]));expect(v.position.z).toBeGreaterThan(17);expect(v.grounded).toBe(true);
   }finally{sim.dispose();q.dispose();}
  });
  it('rejects recovery with no driver, no ground or blocked headroom without changing the car',()=>{
-  const q=new EnvironmentQueries({...map,boxes:[...map.boxes,{id:'roof',position:[10,1.8,15],size:[30,.3,30]}]});const sim=new Simulation(q,[spec]);
-  try{expect(sim.recoverVehicle()).toBe(false);sim.active=0;sim.humanoid.setMounted(true);const v=sim.vehicle!;v.position.set(0,20,0);expect(sim.recoverVehicle()).toBe(false);expect(v.position.y).toBe(20);
-   v.position.set(10,.2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);const before=v.rotation.clone();expect(sim.recoverVehicle()).toBe(false);expect(v.position.toArray()).toEqual([10,.2,15]);expect(v.rotation.equals(before)).toBe(true);
+  const q=new EnvironmentQueries({...map,boxes:[...map.boxes,{id:'roof',position:[10,1.8,15],size:[30,.3,30]}]});const sim=new Simulation(q,[spec],{id:'player'});
+  try{expect(sim.controlledActor.recoverVehicle()).toBe(false);sim.controlledActor.vehicleIndex=0;sim.controlledActor.controller.setMounted(true);const v=sim.controlledActor.vehicle!;v.position.set(0,20,0);expect(sim.controlledActor.recoverVehicle()).toBe(false);expect(v.position.y).toBe(20);
+   v.position.set(10,.2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);const before=v.rotation.clone();expect(sim.controlledActor.recoverVehicle()).toBe(false);expect(v.position.toArray()).toEqual([10,.2,15]);expect(v.rotation.equals(before)).toBe(true);
   }finally{sim.dispose();q.dispose();}
  });
  it.each([1,-1])('continues rotating after a fast nose contact (%s) and loses sliding speed',sign=>{
@@ -270,7 +270,7 @@ describe('per-wheel road vehicle',()=>{
   finally{f.q.dispose();}
  });
  it('reads road friction and produces less acceleration on a slippery surface',()=>{const a=fixture([],40),b=fixture([],40);try{b.q.colliderForId('floor')!.setFriction(.08);run(a,90,{...emptyInput(),forward:1});run(b,90,{...emptyInput(),forward:1});expect(a.v.position.z).toBeGreaterThan(b.v.position.z*2);}finally{a.q.dispose();b.q.dispose();}});
- it('interpolates wheel state at the body timestamp without mutating physics',()=>{const f=fixture();const sim=new Simulation(f.q,[spec]);try{const p=new PresentationState(sim);sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.angle=2;sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.length=.1;p.afterStep(sim);const middle=p.sample(.5,0,0,1);expect(middle.vehicles[0]!.wheels![0]!.angle).toBe(1);expect(middle.vehicles[0]!.wheels![0]!.length).toBeCloseTo(.175);p.sample(.9,0,0,1);expect(sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.angle).toBe(2);}finally{sim.dispose();f.q.dispose();}});
+ it('interpolates wheel state at the body timestamp without mutating physics',()=>{const f=fixture();const sim=new Simulation(f.q,[spec],{id:'player'});try{const p=new PresentationState(sim);sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.angle=2;sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.length=.1;p.afterStep(sim);const middle=p.sample(.5,0,0,1);expect(middle.vehicles[0]!.wheels![0]!.angle).toBe(1);expect(middle.vehicles[0]!.wheels![0]!.length).toBeCloseTo(.175);p.sample(.9,0,0,1);expect(sim.vehicles[0]!.motion.wheelPhysics!.wheels[0]!.angle).toBe(2);}finally{sim.dispose();f.q.dispose();}});
  it('supports chassis weight, remains still and recreates clean wheel state on reset',()=>{const f=fixture();try{run(f,180);expect(f.v.position.y).toBeCloseTo(0,1);expect(f.v.velocity.length()).toBeLessThan(.05);expect(f.v.motion.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);expect(f.v.motion.wheelPhysics!.wheels.reduce((s,w)=>s+w.load,0)).toBeCloseTo(1600*9.81,0);const clean=createVehicle(spec);expect(clean.motion.wheelPhysics!.wheels.every(w=>w.angle===0)).toBe(true);}finally{f.q.dispose();}});
  it('drives using tyre forces, steers left and brakes without reversing',()=>{const f=fixture();try{run(f,120,{...emptyInput(),forward:1});expect(f.v.position.z).toBeGreaterThan(5);expect(f.v.speed).toBeGreaterThan(5);run(f,90,{...emptyInput(),forward:1,steer:1});expect(f.v.yaw).toBeLessThan(-.1);expect(f.v.position.x).toBeLessThan(-1);run(f,240,{...emptyInput(),brake:true});expect(f.v.speed).toBeLessThan(.5);expect(f.v.position.toArray().every(Number.isFinite)).toBe(true);}finally{f.q.dispose();}});
  it('compresses one side independently on a raised wheel contact',()=>{const f=fixture([{id:'bump',position:[-1.1,.06,1.27],size:[.6,.12,.6]}]);try{run(f,1);const w=f.v.motion.wheelPhysics!.wheels;expect(w[1]!.length).toBeLessThan(w[3]!.length-.05);expect(w[1]!.load).toBeGreaterThan(w[3]!.load);run(f,60);expect(Math.abs(f.v.roll)).toBeGreaterThan(.005);}finally{f.q.dispose();}});

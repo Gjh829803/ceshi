@@ -53,6 +53,14 @@ it('releases all loaded model resources on a partial bundle failure and permits 
   expect(counts.get('humanoid/source/gasp-research/idle-loop.metadata.json')).toBe(2);
 });
 
+it('keeps the source factory usable after every model lease and its geometry are released',async()=>{
+  const {resolve,counts}=resources(),actor=new Character();characters.push(actor);await actor.load(resolve);
+  const factory=actor.createFactory()!,geometry=mesh(actor.sourceCharacter!).geometry,disposed=vi.spyOn(geometry,'dispose');
+  actor.dispose();expect(disposed).toHaveBeenCalledOnce();
+  const replacement=await factory();characters.push(replacement);expect(replacement.loaded).toBe(true);
+  expect(mesh(replacement.sourceCharacter!).geometry).not.toBe(geometry);expect(Math.max(...counts.values())).toBe(2);
+});
+
 it('does not adopt an asynchronously loaded source after the character was disposed',async()=>{
   let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});const {resolve}=resources({gate});
   const actor=new Character(),survivor=new Character();characters.push(actor,survivor);

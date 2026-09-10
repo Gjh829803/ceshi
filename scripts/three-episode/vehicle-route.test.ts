@@ -52,7 +52,7 @@ describe('actual player capture controller and humanoid physics integration',()=
     expect(world.snapshot().humanoid!.vehicles[0]!.mode).toBe(spec.mode);
     const controller=new PlayerCaptureController(segment,{kind:'ground',walkSpeedMetersPerSecond:3.1,runSpeedMetersPerSecond:5.8,heightMeters:1.68,radiusMeters:.28},'follow',async start=>runtime.probeEpisodeStart(start));
     const frames:{snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[]=[];
-    const revision=runtime.simulation.teleportRevision;let tick=0;
+    const revision=runtime.simulation.controlledActor.teleportRevision;let tick=0;
     for(let frame=0;frame<720;frame++){
      const snapshot=world.snapshot(),forward:[number,number,number]=[Math.sin(runtime.followCamera.yaw),0,Math.cos(runtime.followCamera.yaw)];
      const decision=await controller.step(snapshot,forward,frame/24);
@@ -62,13 +62,13 @@ describe('actual player capture controller and humanoid physics integration',()=
     }
     const reachedIndex=Math.max(...frames.map(f=>f.decision.waypointIndex));
     const evidence=summarizePlayerBehavior(frames);
-    const health={family,reachedIndex,lastPosition:runtime.simulation.vehicle!.position.toArray(),lastDistance:frames.at(-1)!.decision.distanceToTargetMeters,
+    const health={family,reachedIndex,lastPosition:runtime.simulation.controlledActor.vehicle!.position.toArray(),lastDistance:frames.at(-1)!.decision.distanceToTargetMeters,
      failures:frames.filter(f=>f.decision.mode==='failed').map(f=>f.decision.diagnostic?.code),yawTravel:evidence.renderedYawTravelDegrees};
     console.info('vehicle-route-physical-health',JSON.stringify(health));
     expect(health.failures,JSON.stringify(health)).toEqual([]);
     expect(reachedIndex,JSON.stringify(health)).toBeGreaterThanOrEqual(2);
     expect(evidence.renderedYawTravelDegrees).toBeGreaterThan(10);
-    expect(world.simulationTick).toBe(1800);expect(runtime.simulation.teleportRevision).toBe(revision);
+    expect(world.simulationTick).toBe(1800);expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
     expect(frames.every(f=>f.snapshot.errors.length===0&&f.decision.positionWorldMetersXYZ.every(Number.isFinite))).toBe(true);
     expect(new Vector3(...world.getEntityState('subject').positionWorldMetersXYZ).distanceTo(new Vector3(...segment.start.positionWorldMetersXYZ))).toBeGreaterThan(family==='unicycle'?40:family==='observation-sub'?40:family==='canoe'?20:family==='raft'||family==='kayak'?30:100);
    }finally{world.dispose();}

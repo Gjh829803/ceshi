@@ -9,7 +9,7 @@ export * as surfaceVessel from './motion-families/surface-vessel/public';
 export * from './motion-families/surface-vessel/public';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
-export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
+export { type Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
 export type { VehicleSpec } from './config';
 export * from '../config/control';
 export type * from './environment/types';

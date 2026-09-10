@@ -54,13 +54,13 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const descriptors=JSON.stringify(runtime.commandDescriptors('person'));
     expect(descriptors).toContain('松键减速度');expect(descriptors).toContain('振翅加速度');
-    const originalSpeed=runtime.simulation.vehicle!.spec.speed;
+    const originalSpeed=runtime.simulation.controlledActor.vehicle!.spec.speed;
     expect(()=>runtime.applyProfile({vehicles:{dragon:{speed:40,maxSpeed:20}}})).toThrow('CREATURE_FEEL_SPEED_ORDER_INVALID');
-    expect(runtime.simulation.vehicle!.spec.speed).toBe(originalSpeed);
+    expect(runtime.simulation.controlledActor.vehicle!.spec.speed).toBe(originalSpeed);
     const release=runtime.setInput({...emptyInput(),primary:true});world.step({},60);release();
-    expect(runtime.simulation.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.vehicle!.speed).toBe(0);
+    expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.controlledActor.vehicle!.speed).toBe(0);
     runtime.applyProfile({view:{keyboardToggleEnabled:true}});world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
-    const snapshot=structuredClone(runtime.simulation.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.motion.flyingCreature).toEqual(snapshot);
-    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
+    const snapshot=structuredClone(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature).toEqual(snapshot);
+    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);
   }finally{world.dispose();}
 });

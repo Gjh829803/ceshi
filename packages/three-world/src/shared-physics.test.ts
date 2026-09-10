@@ -90,7 +90,7 @@ it('rejects standing into a newly registered low ceiling without a refresh tick'
   world.step({humanoid:{...emptyInput(),actions:{toggleCrouch:true}}},1);
   const ceiling=box(0,1.9,0);world.addEntity({id:'ceiling',object:ceiling,role:'obstacle',physics:{kind:'fixed',shape:'box'}});
   const tick=world.snapshot().simulationTick;
-  expect(world.humanoid!.simulation.humanoid.crouchEligibility().eligible).toBe(false);
+  expect(world.humanoid!.simulation.controlledActor.controller.crouchEligibility().eligible).toBe(false);
   expect(world.snapshot().simulationTick).toBe(tick);
 });
 it('contacts the real vehicle chassis without colliding with its fixed query proxies',async()=>{

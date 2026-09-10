@@ -210,10 +210,13 @@ export class Character {
     this.loading=loading;
     try{await loading;}finally{if(this.loading===loading)delete this.loading;}
   }
-  /** Creates a fresh actor visual using this character's immutable resource closure. */
-  async createInstance():Promise<Character>{
+  /** Captures source identity without retaining this actor's model or mixer. */
+  createFactory():(()=>Promise<Character>)|undefined{
     if(this.disposed||!this.loaded||!this.source)throw new Error('CHARACTER_NOT_LOADED');
-    return new Character(await this.source.createInstance());
+    const factory=this.source.createFactory();return factory?async()=>new Character(await factory()):undefined;
+  }
+  async createInstance():Promise<Character>{
+    const factory=this.createFactory();if(!factory)throw new Error('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');return factory();
   }
   dispose():void{
     if(this.disposed)return;this.disposed=true;this.loaded=false;

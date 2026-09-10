@@ -9,9 +9,12 @@ interface Template {model:Group;entries:CharacterClipEntry[]}
 export interface SourceCharacterLease {
   readonly model:Group;readonly entries:CharacterClipEntry[];
   dispose():void;
-  createInstance():Promise<SourceCharacterLease>;
+  readonly factory:()=>Promise<SourceCharacterLease>;
 }
 interface CacheEntry {promise:Promise<Template>;users:number;template?:Template}
+function sourceFactory(urls:ReadonlyMap<string,string>):()=>Promise<SourceCharacterLease>{
+  return ()=>leaseSourceCharacter(logical=>urls.get(logical.slice('humanoid/source/'.length))!);
+}
 const cache=new Map<string,CacheEntry>();
 const paths=[...CHARACTER_ASSET_IDS.flatMap(id=>[`gasp-research/${id}.experimental.glb`,`gasp-research/${id}.metadata.json`]),
   ...SWIMMING_ASSET_IDS.map(id=>`swimming/${id}.clip.json`),...[...ACTION_CLIP_IDS,...SURFACE_CLIP_IDS].map(id=>`actions/${id}.clip.json`)];
@@ -100,6 +103,6 @@ export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:str
     model.traverse(object=>{if(object instanceof Mesh)object.material=Array.isArray(object.material)?object.material.map(cloneMaterial):cloneMaterial(object.material);});
     let disposed=false;
     return {model,entries:template.entries,dispose(){if(disposed)return;disposed=true;try{disposeResources(owned);}finally{release();}},
-      createInstance(){if(disposed)throw new Error('SOURCE_LEASE_DISPOSED');return leaseSourceCharacter(logical=>urls.get(logical.slice('humanoid/source/'.length))!);}};
+      factory:sourceFactory(urls)};
   }catch(error){try{disposeResources(owned);}catch{/* Preserve construction failure. */}try{release();}catch{/* Preserve construction failure. */}throw error;}
 }
