@@ -65,8 +65,9 @@ export interface GroundMovement {
  readonly maximumSlopeRadians?:number;
 }
 export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMovement|{readonly kind:'custom';readonly movementId:string};readonly locomotionBindingId?:string} & (
- | {readonly asset:AssetInstance;readonly object?:never;readonly body?:CharacterBody}
- | {readonly object:THREE.Object3D;readonly asset?:never;readonly body:CharacterBody}
+ | {readonly asset:AssetInstance;readonly object?:never;readonly humanoid?:never;readonly body?:CharacterBody}
+ | {readonly object:THREE.Object3D;readonly asset?:never;readonly humanoid?:never;readonly body:CharacterBody}
+ | {readonly humanoid:import('./humanoid-runtime/character').Character;readonly movement?:Pick<GroundMovement,'kind'|'walkSpeedMetersPerSecond'|'runSpeedMetersPerSecond'|'jumpSpeedMetersPerSecond'>;readonly asset?:never;readonly object?:never;readonly body?:never}
 );
 export type CameraPerspective='first-person'|'third-person';
 export interface CameraFollowViewOptions {

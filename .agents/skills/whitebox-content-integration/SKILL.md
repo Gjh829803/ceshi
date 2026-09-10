@@ -9,6 +9,12 @@ description: 将 Playground 已调好的 Whitebox 模型、生物、动画绑定
 Episode 能使用同一运行时复现。按内容实际需要编辑资源、binding、配置、代码与说明；
 不要求所有内容包装成统一 manifest、自动注册或独立 npm 包。
 
+同一完整人物需要多个实例时，在已有 humanoid world 调用 `createCharacter()`，
+通过 `world.addCharacter({id,humanoid:character})` 绑定；使用稳定的实例 ID 指定输入和动作。
+共享源资源，不复用同一个 root/mixer。角色输入目标与相机跟随目标分开设置，
+NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `humanoid` topic 与
+`multiple-actors` 示例；自动导航、可执行动作及尚未支持的组合以实际接口为准。
+
 先读取仓库 `AGENTS.md` 与 [架构](../../../docs/three-sdk-architecture.md)。以当前源码和实际
 消费者为准；下面路径均相对仓库根。遵循用户指定 worktree 与修改范围。
 

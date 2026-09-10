@@ -1,3 +1,4 @@
+import {readNavigationGeometry} from '../../physics-navigation';
 import {WorldInteractions} from '../humanoid/world-interactions';
 import {validateEnvironmentIdentities} from '../map-validation';
 import {PhysicsColliderBindings} from '../../physics-collider-bindings';
@@ -64,6 +65,7 @@ export class EnvironmentQueries {
   readonly interactions:WorldInteractions;
   private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
   borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h)};}
+  navigationGeometry(){this.assertLive();return readNavigationGeometry(this.world,collider=>!this.queryExcluded.has(collider.handle));}
   beforePhysicsSubstep(callback:(fraction:number)=>void){this.physicsSubsteps.add(callback);return()=>{this.physicsSubsteps.delete(callback);};}
 
   private vehicleRigs=new Map<string,VehicleRigidRig>();
@@ -257,6 +259,12 @@ export class EnvironmentQueries {
         other.rotation(),
         0,
       );
+      // Native capsule contact can report zero depth for coincident segments.
+      // A slightly inset intersection distinguishes penetration from mere contact.
+      if(hit?.distance===0&&pose.body.kind==='capsule'&&other.shapeType()===RAPIER.ShapeType.Capsule){
+        const radius=pose.body.radius;
+        return other.intersectsShape(new RAPIER.Capsule(pose.body.height/2-radius,radius-Math.min(1e-5,radius*.001)),c,pose.rotation);
+      }
       // Only upward support contact receives KCC numerical tolerance. Walls never do.
       return (
         !!hit &&

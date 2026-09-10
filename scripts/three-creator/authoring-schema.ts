@@ -22,7 +22,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
- humanoid:['inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ humanoid:['addCharacter','setControlledEntity','setCameraFollow','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
  'mounted-interaction':['inspectVehicles','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
@@ -121,7 +121,7 @@ export function runtimeContractSource(source:string):string {
    node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));
  }
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HumanoidRuntime');
- if(runtime){const allowed=new Set(['characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
+ if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
   declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');

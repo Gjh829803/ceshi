@@ -69,11 +69,13 @@ SDK 741 tests 通过；下游原有潜艇路线失败已用原始源码/依赖�
 纹理对象独立；最后 lease 释放共享几何。部分加载、克隆、adopt 和清理监听器失败，
 以及异步加载晚于角色 dispose 都有真实资源测试。116 项相关测试与 Creator/Episode
 单人物推箱/reset 通过；记录在 `.codex-tmp/r0/r2-source-*` 和 `.codex-tmp/r2-source-browser`。
-这只完成 R2 的资源基础，不代表多 Actor 输入、导航或共享交互已完成。
+多 Actor 输入、完整动画实例、输入/相机目标分离、基于实际 collider 的导航及
+Creator/Episode 三人物示例现已实现。参见 [R2 验证记录](../../reviews/2026-09-11-extensible-world-r2.md)。
+确定性绕让和完整人形 prototype 消费仍待后续收尾，不将实际碰撞停住描述成已完成绕让。
 
-- [ ] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
+- [x] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [ ] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
-- [ ] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
+- [x] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
 - [ ] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段提交与验证记录。
 
 ## R3：共享目标与资源

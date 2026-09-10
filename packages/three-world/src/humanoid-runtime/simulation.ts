@@ -1,3 +1,4 @@
+import {HumanoidActor,syncPlayer,stepHumanoidInput,type ActorInput} from './humanoid/actor';
 import { resolveConfiguredFlyingCreatureFeel } from './motion-families/flying-creature/state';
 import { copyAtvState } from './motion-families/ground-vehicle/atv';
 import { copyUnicycleState,finishUnicycleStep } from './motion-families/ground-vehicle/unicycle';
@@ -66,6 +67,14 @@ export interface PlayerState { position:Vector3; velocity:Vector3; yaw:number; g
 export class Simulation {
   environment:EnvironmentQueries;
   humanoid!:HumanoidController;
+  readonly actors=new Map<string,HumanoidActor>();
+  addActor(id:string,position:Vector3,yaw=0):HumanoidActor{
+    if(!id.trim()||this.actors.has(id))throw new Error('HUMANOID_ACTOR_ID_CONFLICT');
+    const safe=this.environment.safeSpawn(position,HUMANOID_BODY);
+    if(!safe||this.environment.bodyOverlap({position:safe,rotation:new Quaternion(),body:HUMANOID_BODY},undefined,.015))throw new Error('HUMANOID_ACTOR_SPAWN_BLOCKED');
+    const actor=new HumanoidActor(this.environment,safe,yaw);this.actors.set(id,actor);return actor;
+  }
+  removeActor(id:string):void{const actor=this.actors.get(id);if(actor){this.actors.delete(id);actor.dispose();}}
   private humanoidClips:ReadonlySet<string>=new Set();
   private humanoidMotions:readonly MotionSource[]=[];
   characterControl=defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE);
@@ -74,7 +83,7 @@ export class Simulation {
   vehicles:VehicleState[]=[];active=-1;time=0;transition=0;transitionKind:''|'enter'|'exit'='';message='';teleportRevision=0;
   player:PlayerState={position:new Vector3(),velocity:new Vector3(),yaw:0,grounded:true,swimming:false,coyote:.1,jumpBuffer:0,animation:'Idle_Loop',landTimer:0};
   constructor(environment:EnvironmentQueries,specs:readonly VehicleSpec[]=[]){this.environment=environment;this.vehicles=specs.map(createVehicle);this.setEnvironment(environment);}
-  dispose(){this.humanoid.dispose();for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
+  dispose(){for(const id of this.actors.keys())this.removeActor(id);this.humanoid.dispose();for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
   setHumanoidAssets(clips:ReadonlySet<string>,motions:readonly MotionSource[]){this.humanoidClips=clips;this.humanoidMotions=motions;this.humanoid?.setAvailableClips(clips,motions);}
   prepareEnvironment(q:EnvironmentQueries,specs:readonly VehicleSpec[]=this.vehicles.map(v=>v.spec)):Simulation{
     const staged=new Simulation(q,specs.map(spec=>structuredClone(spec)));
@@ -82,12 +91,7 @@ export class Simulation {
   }
   adoptEnvironment(staged:Simulation):void{this.dispose();Object.assign(this,staged);}
   private syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft),...part}))));}
-  private syncHumanoidPlayer(){
-    const h=this.humanoid,p=this.player;
-    p.position.copy(h.position);p.velocity.copy(h.velocity);p.velocity.y=h.vertical;p.yaw=Math.atan2(h.facing.x,h.facing.z);
-    p.grounded=h.grounded;p.swimming=h.swimming;p.coyote=h.coyote;p.jumpBuffer=h.jumpBuffer;
-    p.animation=h.state;p.landTimer=h.animationEvent?.kind==='land'?Math.max(0,.45-h.animationEvent.elapsed):0;
-  }
+  private syncHumanoidPlayer(){syncPlayer(this.humanoid,this.player);}
   private canRelocate(){if(this.active<0&&!this.humanoid.canBoard){this.message=this.humanoid.boardingReason;return false;}return true;}
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
   prepareCharacter(position:Vector3,yaw:number){
@@ -97,6 +101,7 @@ export class Simulation {
   }
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
   setEnvironment(q:EnvironmentQueries){
+    for(const id of this.actors.keys())this.removeActor(id);
     this.humanoid?.dispose();for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);
     this.environment=q;this.prepared.clear();this.active=-1;this.transition=0;this.transitionKind='';this.time=0;this.teleportRevision++;
     let parked=0;
@@ -340,10 +345,14 @@ export class Simulation {
       this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;
       this.transition=0;this.transitionKind='';this.teleportRevision++;this.syncActorBodies();this.message=relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
     }
-    step(i:Input,dt:number,cameraYaw=0) {
+    step(i:Input,dt:number,cameraYaw=0,actorInputs:ReadonlyMap<string,ActorInput>=new Map()) {
     this.humanoid.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));
     this.syncActorBodies();
     this.stepActors(i,dt,cameraYaw);
+    for(const [id,actor] of this.actors){
+      actor.controller.skills.syncSeats((target,point)=>this.environment.propAnchor(target,point));
+      const controls=actorInputs.get(id);actor.step(controls?.input??emptyInput(),controls?.yaw??0);
+    }
     this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();if(this.vehicle&&(this.vehicle.motion.wheelPhysics||this.vehicle.motion.body||this.vehicle.motion.aircraft)){this.player.position.copy(this.vehicle.position);this.player.yaw=this.vehicle.yaw;}this.humanoid.skills.syncDropped();this.humanoid.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));
   }
   private stepActors(i:Input,dt:number,cameraYaw=0) {
@@ -406,14 +415,7 @@ export class Simulation {
     }
     // A dismount transition suppresses input while gravity and inherited velocity continue.
     if (this.transition > 0) i = emptyInput();
-    const h=this.humanoid;
-    // On walls, source controls follow the registered wall tangent regardless of orbit.
-    const surface=h.surface.surface;
-    const direction=surface?new Vector3(i.steer,0,-i.forward).applyAxisAngle(new Vector3(0,1,0),Math.atan2(surface.normal[0],surface.normal[2])):new Vector3(-i.steer,0,i.forward).applyAxisAngle(new Vector3(0,1,0),cameraYaw);
-    if(direction.lengthSq()>1)direction.normalize();
-    if(i.actions?.toggleSwimStyle&&h.swimming)h.swimStyle=h.swimStyle==='freestyle'?'breaststroke':'freestyle';
-    if(i.actions?.cancel&&h.skills.active)h.skills.cancel(h.skills.active.requestId);
-    const previousSerial=h.motionSerial;h.step(direction,i.boost,i.slow,i.jump,i.actions);this.syncHumanoidPlayer();
-    if(h.motionSerial!==previousSerial&&!h.traversal&&!h.completedMotion)this.teleportRevision++;
+    if(stepHumanoidInput(this.humanoid,i,cameraYaw))this.teleportRevision++;
+    this.syncHumanoidPlayer();
   }
 }

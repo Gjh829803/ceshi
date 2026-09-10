@@ -1,0 +1,1 @@
+{"schemaVersion":2,"targets":[],"steps":[{"durationSeconds":3},{"keysDown":["w"],"durationSeconds":1},{"keysUp":["w"],"durationSeconds":1},{"lifecycle":"reset","durationSeconds":0.2},{"lifecycle":"start","durationSeconds":1}]}

@@ -1,3 +1,4 @@
+import type {NavigationGeometry} from './physics-navigation';
 import { Detour, NavMeshQuery, Raw, init, statusDetail, type NavMesh } from '@recast-navigation/core';
 import { generateTiledNavMesh } from '@recast-navigation/generators';
 import { Box3, Vector3, type Object3D } from 'three';
@@ -47,7 +48,7 @@ export class ThreeNavigation {
     return new ThreeNavigation();
   }
 
-  rebuild(objects: readonly Object3D[], options: NavigationOptions = {}): void {
+  rebuild(objects: readonly Object3D[] | NavigationGeometry, options: NavigationOptions = {}): void {
     if (this.disposed) throw new Error('NAVIGATION_DISPOSED');
     // Once geometry changes, the previous mesh must never authorize a stale route.
     this.clear();
@@ -64,8 +65,9 @@ export class ThreeNavigation {
     const cellHeight = Math.min(0.1, height / 10);
     this.cellSizeMeters = cellSize;
     this.verticalSearchMeters = Math.max(0.2, step + cellHeight * 2);
-    const sources: ReturnType<typeof extractWorldTriangles>[] = [];
+    const sources: NavigationGeometry[] = [];
     let triangleCount = 0;
+    if('positions' in objects){if(objects.indices.length%3||objects.positions.length%3||objects.indices.length/3>MAXIMUM_TRIANGLES||!objects.positions.every(Number.isFinite)||objects.indices.some(index=>index>=objects.positions.length/3))throw new Error('NAVIGATION_GEOMETRY_INVALID');sources.push(objects);triangleCount=objects.indices.length/3;}else{
     const seen = new Set<Object3D>();
     const visibleObjects = objects;
     // Registered entity boundaries exclude independent child subtrees from parents.
@@ -82,6 +84,7 @@ export class ThreeNavigation {
       });
       triangleCount += source.triangleCount;
       sources.push(source);
+    }
     }
     if (!triangleCount) { this.unavailableReason = 'NAVIGATION_EMPTY'; return; }
     const positions = new Float32Array(sources.reduce((sum, source) => sum + source.positions.length, 0));

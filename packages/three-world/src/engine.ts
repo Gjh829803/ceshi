@@ -1,3 +1,4 @@
+import {claimCharacter} from './humanoid-runtime/character-ownership';
 import {runtimeError} from './control-support';
 import { emptyInput } from './humanoid-runtime/simulation';
 import { humanoidHost } from './humanoid-runtime/host-access';
@@ -15,6 +16,7 @@ import { HumanoidRuntime, type HumanoidRuntimeOptions } from './humanoid-runtime
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
 type Entity = {
+  releaseHumanoid?:()=>void;
   options: EntityOptions; object: THREE.Object3D; character?: CharacterOptions; asset?: AssetInstance;
   initialParent: THREE.Object3D | null; initialPosition: THREE.Vector3; initialQuaternion: THREE.Quaternion; initialScale: THREE.Vector3; initialVisible: boolean;
   initialMatrix: THREE.Matrix4; initialMatrixAutoUpdate: boolean;
@@ -124,7 +126,7 @@ export class WorldEngine {
     if(options.humanoid&&!options.camera)options={...options,camera:new THREE.PerspectiveCamera(55,16/9,.05,3000)};
     const physics = options.humanoid?await HumanoidRuntime.create(options.humanoid,options.camera!):await ThreePhysics.create(options.physics);
     let navigation: ThreeNavigation | undefined;
-    try { navigation = options.humanoid||options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation); }
+    try { navigation = options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation); }
     catch (error) { navigation?.dispose(); physics.dispose(); throw error; }
   }
   get simulationTick(): number { return this.tick; }
@@ -141,23 +143,29 @@ export class WorldEngine {
     if (!(options.object instanceof THREE.Object3D) || [...this.entities.values()].some(e => e.object === options.object)) throw new Error('WORLD_OBJECT_INVALID_OR_REGISTERED');
     if (options.frontYawRadians !== undefined && !Number.isFinite(options.frontYawRadians)) throw new Error('WORLD_FRONT_YAW_INVALID');
     if (options.role === 'terrain' && options.physics?.kind === 'none') throw new Error('WORLD_TERRAIN_REQUIRES_COLLISION');
+    const binding=(options as CharacterEntityOptions).humanoid;
+    if(binding&&!this.humanoid)throw new Error('HUMANOID_RUNTIME_REQUIRED');
+    const releaseHumanoid=binding?claimCharacter(binding):undefined;
     const previousParent = options.object.parent;
     if (!previousParent) this.scene.add(options.object);
     const physics = options.physics ?? (options.role === 'terrain' || options.role === 'obstacle' ? { kind: 'fixed' as const } : { kind: 'none' as const });
     setEntityBoundary(options.object, true);
     try {
-      if (character !== undefined) this.physics.addCharacter(options.id, options.object, character);
+      if (character !== undefined) {
+        if(binding)humanoidHost(this.humanoid!).bindCharacter(options.id,binding,(options as CharacterEntityOptions).character);
+        this.physics.addCharacter(options.id, options.object, character);
+      }
       else if (physics.kind !== 'none') this.physics.addRigid(options.id, options.object, physics);
       this.physics.refreshMany(this.physicalAncestors(options.object));
-    } catch (error) { this.physics.remove(options.id); setEntityBoundary(options.object, false); if (!previousParent) options.object.removeFromParent(); throw error; }
-    const entity: Entity = { options: { ...options, physics }, object: options.object,
+    } catch (error) { this.physics.remove(options.id);releaseHumanoid?.(); setEntityBoundary(options.object, false); if (!previousParent) options.object.removeFromParent(); throw error; }
+    const entity: Entity = { ...(releaseHumanoid?{releaseHumanoid}:{}),options: { ...options, physics }, object: options.object,
       initialParent: options.object.parent, initialPosition: options.object.position.clone(), initialQuaternion: options.object.quaternion.clone(), initialScale: options.object.scale.clone(), initialVisible: options.object.visible,
       initialMatrix: options.object.matrix.clone(), initialMatrixAutoUpdate: options.object.matrixAutoUpdate,
       ...(character === undefined ? {} : { character }), ...(asset === undefined ? {} : { asset }) };
     this.entities.set(options.id, entity); this.navigationDirty = true; this.revision += 1;
     return options.object;
   }
-  setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); this.controlled = id; this.keyboard.clear(); this.previousJump = false; }
+  setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); this.humanoid?.setControlledActor(id);this.controlled = id; this.keyboard.clear(); this.previousJump = false; }
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
   onReset(callback: () => void): () => void { this.resets.add(callback); return () => { this.resets.delete(callback); }; }
@@ -167,7 +175,7 @@ export class WorldEngine {
   }
   interact(id: string, actorEntityId = this.controlled): void { this.entity(id); for (const handler of this.interactions.get(id) ?? []) handler({ world: this, entityId: id, ...(actorEntityId ? { actorEntityId } : {}) }); }
   setCameraFollow(options: CameraFollow = {}): void {
-    if(this.humanoid){this.humanoid.setCameraMode(0);return;}
+    if(this.humanoid){this.humanoid.setCameraTarget(options.targetEntityId??this.controlled??this.humanoid.options.character.instanceId);this.humanoid.setCameraMode(0);return;}
     const targetEntityId=options.targetEntityId??this.controlled;
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
     this.cameraRig.setFollow({...options,targetEntityId});
@@ -242,7 +250,7 @@ export class WorldEngine {
     return tuple(forward.normalize());
   }
   prepareEpisodeStart(positionWorldMetersXYZ: Vec3, facingYawRadians: number): void {
-    if(this.humanoid){if(!this.humanoid.prepareCharacter(positionWorldMetersXYZ,facingYawRadians+Math.PI))throw new Error('HUMANOID_START_BLOCKED');this.humanoid.followCamera.reset(this.humanoid.simulation);this.keyboard.clear();this.pointerInput={};return;}
+    if(this.humanoid){if(!this.humanoid.prepareCharacter(positionWorldMetersXYZ,facingYawRadians+Math.PI))throw new Error('HUMANOID_START_BLOCKED');this.humanoid.setCameraTarget(this.controlled??this.humanoid.inputActorId);this.keyboard.clear();this.pointerInput={};return;}
     this.alive(); if (this.running) throw new Error('EPISODE_LIVE_CLOCK_ACTIVE');
     if (!this.controlled) throw new Error('EPISODE_CONTROL_REQUIRED');
     finiteVec(positionWorldMetersXYZ, 'episode start'); if (!Number.isFinite(facingYawRadians)) throw new Error('EPISODE_START_FACING_INVALID');
@@ -264,7 +272,9 @@ export class WorldEngine {
       for (const update of this.updates) { const result: unknown = update({ world: this, deltaSeconds: dt, simulationTick: this.tick + 1 }); if (result && typeof (result as Promise<unknown>).then === 'function') throw new Error('WORLD_ASYNC_UPDATE_UNSUPPORTED: prepare async content before a fixed update'); }
       if(this.humanoid){
         const mode=this.humanoid.followCamera.mode;
-        humanoidHost(this.humanoid).advance(input,dt,this.pointerInput);
+        const drives:Record<string,CharacterDrive>={};
+        for(const [id,goal] of this.goals)if(id!==this.controlled&&this.entities.has(id))drives[id]=this.goalDrive(id,goal,dt);
+        humanoidHost(this.humanoid).advance(input,dt,this.pointerInput,drives);
         if(mode!==this.humanoid.followCamera.mode)this.inputRouter.releasePointerLock();
         this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;
       }
@@ -332,10 +342,11 @@ export class WorldEngine {
     const body = this.physics.characterSettings(actor.options.id);
     const settings = { radiusMeters: body.radiusMeters, heightMeters: body.heightMeters,
       maximumStepHeightMeters: body.maximumStepHeightMeters, maximumSlopeDegrees: THREE.MathUtils.radToDeg(body.maximumSlopeRadians) };
-    const geometryState = objects.map(root => { const signature = geometrySignature(root); return [root.uuid, root.matrixWorld.elements, signature]; });
+    const native=this.humanoid?.environment.navigationGeometry();
+    const geometryState = native?[Array.from(native.positions),Array.from(native.indices)]:objects.map(root => { const signature = geometrySignature(root); return [root.uuid, root.matrixWorld.elements, signature]; });
     const signature = JSON.stringify({ settings, geometryState });
     if (this.navigationDirty || signature !== this.navigationSignature) {
-      this.navigation.rebuild(objects, settings);
+      this.navigation.rebuild(native??objects, settings);
       this.navigationDirty = false; this.navigationSignature = signature;
     }
     return this.navigation;
@@ -375,7 +386,7 @@ export class WorldEngine {
     if (current.distanceTo(goal.lastPosition) < 0.001) goal.stagnantSeconds += dt; else goal.stagnantSeconds = 0;
     goal.lastPosition.copy(current);
     if (goal.stagnantSeconds > 4) { this.recordError('WORLD_ACTOR_BLOCKED', new Error('Actor made no progress along its physical route'), id);this.taskResults.set(id,{status:'failed',error:'WORLD_ACTOR_BLOCKED'}); this.goals.delete(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
-    const delta = new THREE.Vector3(next[0] - current.x, 0, next[2] - current.z); const distance = delta.length(); delta.normalize(); this.faceDirection(actor, delta);
+    const delta = new THREE.Vector3(next[0] - current.x, 0, next[2] - current.z); const distance = delta.length(); delta.normalize(); if(!this.humanoid?.hasActor(id))this.faceDirection(actor, delta);
     const speed = Math.min(distance / dt, goal.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4);
     return { velocityMetersPerSecondXZ: [delta.x * speed, delta.z * speed] };
   }
@@ -477,10 +488,17 @@ export class WorldEngine {
       default: throw new Error('WORLD_COMMAND_UNKNOWN');
     }
   }
+  private retireEntity(entity:Entity):void{
+    const binding=(entity.options as CharacterEntityOptions).humanoid;
+    if(binding&&this.baseline?.get(entity.options.id)!==entity){
+      try{binding.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error,entity.options.id);}finally{entity.releaseHumanoid?.();}
+      this.retired.delete(entity);
+    }else this.retired.add(entity);
+  }
   private removeTree(id: string): void {
     const entity = this.entity(id);
     for (const [childId, child] of [...this.entities]) if (childId !== id) { let parent = child.object.parent; while (parent && parent !== entity.object) parent = parent.parent; if (parent === entity.object) this.removeTree(childId); }
-    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.goals.delete(id); this.manualActions.delete(id); this.locomotionAnimations.delete(id); this.jumped.delete(id); this.retired.add(entity); this.navigationDirty = true;
+    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.goals.delete(id); this.manualActions.delete(id); this.locomotionAnimations.delete(id); this.jumped.delete(id); this.retireEntity(entity); this.navigationDirty = true;
   }
   private physicalAncestors(object: THREE.Object3D): string[] {
     const ancestors = new Set<THREE.Object3D>(); for (let parent = object.parent; parent; parent = parent.parent) ancestors.add(parent);
@@ -588,7 +606,7 @@ export class WorldEngine {
   capabilities(): unknown { return [...this.entities].map(([id, e]) => ({ entityId: id, name: e.options.name ?? id, tags: e.options.tags ?? [], commands: ['entity.set-visible', 'entity.set-position', 'entity.set-scale', ...(id === this.controlled ? [] : ['entity.despawn']), ...(this.navigation && e.character && id !== this.controlled ? ['actor.move-to', 'actor.follow', 'actor.stop'] : []), ...(e.asset?.clips.length ? ['entity.play-action'] : []), ...(e.options.physics?.kind === 'dynamic' ? ['entity.apply-impulse'] : [])], actions: e.asset?.clips.map(c => c.name) ?? [] })); }
   reset(): void {
     this.alive(); this.sealInitialState(); const wasRunning = this.running; this.stop(); this.goals.clear(); this.taskResults.clear();this.jumped.clear();this.manualActions.clear();this.locomotionAnimations.clear();
-    for (const [id, entity] of this.entities) { this.physics.remove(id); setEntityBoundary(entity.object, false); if (this.baseline!.get(id) !== entity) { entity.object.removeFromParent(); this.retired.add(entity); } }
+    for (const [id, entity] of this.entities) { this.physics.remove(id); setEntityBoundary(entity.object, false); if (this.baseline!.get(id) !== entity) { entity.object.removeFromParent(); this.retireEntity(entity); } }
     this.entities.clear();
     for (const [id, entity] of this.baseline!) {
       entity.initialParent?.add(entity.object); entity.object.position.copy(entity.initialPosition); entity.object.quaternion.copy(entity.initialQuaternion); entity.object.scale.copy(entity.initialScale); entity.object.visible = entity.initialVisible;
@@ -601,12 +619,13 @@ export class WorldEngine {
     this.cameraRig.reset();
     if(this.humanoid)humanoidHost(this.humanoid).reset();
     for (const [id, entity] of this.baseline!) {
-      if (entity.character) this.physics.addCharacter(id, entity.object, entity.character); else if (entity.options.physics?.kind !== 'none' && entity.options.physics) this.physics.addRigid(id, entity.object, entity.options.physics);
+      if (entity.character) {const binding=(entity.options as CharacterEntityOptions).humanoid;if(binding)humanoidHost(this.humanoid!).bindCharacter(id,binding,(entity.options as CharacterEntityOptions).character);this.physics.addCharacter(id, entity.object, entity.character);} else if (entity.options.physics?.kind !== 'none' && entity.options.physics) this.physics.addRigid(id, entity.object, entity.options.physics);
       entity.asset?.mixer.stopAllAction(); if (entity.asset?.actionIds.includes('idle')) entity.asset.play('idle');
       // A paused opening capture must contain the selected pose at tick zero,
       // not the bind pose restored by AnimationMixer.stopAllAction().
       entity.asset?.update(0);
     }
+    if(this.humanoid&&this.controlled){humanoidHost(this.humanoid).setControlledActor(this.controlled);humanoidHost(this.humanoid).finishReset();}
     this.tick = 0; this.revision += 1; this.failures.length = 0; this.keyboard.transcript.length = 0; this.navigationDirty = true;
     for (const callback of this.resets) callback(); this.render(); if (wasRunning) this.start();
   }
@@ -633,8 +652,11 @@ export class WorldEngine {
     if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.keyboard.detach(); this.renders.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
+    const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).humanoid;return binding?[binding]:[];}));
+    for(const character of humanoids)try{character.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error);}
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
+    for(const entity of [...this.entities.values(),...this.retired])entity.releaseHumanoid?.();
     this.navigation?.dispose(); this.physics.dispose(); if (this.ownsRenderer) this.renderer?.dispose();
     this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); this.goals.clear(); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.locomotionAnimations.clear();this.jumped.clear();
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }

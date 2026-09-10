@@ -15,24 +15,27 @@ const example = process.argv[3] ?? 'character-actions';
 const recordActions = process.argv.includes('--record-actions');
 const skipPerformance = process.argv.includes('--skip-performance');
 const skipCreator = process.argv.includes('--skip-creator');
+const actorCount=Number(process.argv.find(value=>value.startsWith('--actors='))?.split('=')[1]??1);
+if(![1,3,10].includes(actorCount)||(actorCount>1&&example!=='custom-vehicle'))throw new Error('BASELINE_ACTOR_COUNT_INVALID');
 if (process.env.WORLDKIT_CAPTURE_GPU === '1') throw new Error('BASELINE_REQUIRES_SWIFTSHADER: unset WORLDKIT_CAPTURE_GPU');
 if (!['character-actions', 'custom-vehicle'].includes(example)) throw new Error('Unsupported baseline example');
 await mkdir(output, {recursive: false});
 const workspace = path.join(output, 'workspace');
 await cp(path.resolve('examples/three-creator', example), workspace, {recursive: true,
   filter: source => !source.includes('.three-creator')});
-await writeFile(path.join(workspace, 'main.ts'), (await readFile(path.join(workspace, 'main.ts'), 'utf8')) +
-  '\n(window as any).__BASELINE_WORLD__ = world;\n');
+let mainSource=await readFile(path.join(workspace,'main.ts'),'utf8');
+if(actorCount>1)mainSource=mainSource.replace('await world.start();',`for(let n=1;n<${actorCount};n++){const actor=await world.humanoid!.createCharacter();actor.root.position.set(10+(n%3)*3,.04,8+Math.floor(n/3)*3);world.addCharacter({id:'benchmark-actor-'+n,humanoid:actor});}\nawait world.start();`);
+await writeFile(path.join(workspace,'main.ts'),mainSource+'\n(window as any).__BASELINE_WORLD__ = world;\n');
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const report: Record<string, unknown> = {
-  kind: 'local-runtime-baseline', schemaVersion: 1, example, startedAt: new Date().toISOString(),
+  kind: 'local-runtime-baseline', schemaVersion: 1, example, actorCount, startedAt: new Date().toISOString(),
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim(),
   sourceDiffSha256: hash(execFileSync('git', ['diff', 'HEAD'])),
   harnessSha256: hash(await readFile(new URL(import.meta.url))),
   environment: {platform: os.platform(), release: os.release(), arch: os.arch(), cpu: os.cpus()[0]?.model,
     node: process.version, viewport: [1280, 720], deviceScaleFactor: 1, rendering: 'Episode SwiftShader'},
   limitations: ['render CPU measures submission, not GPU execution', 'JS heap is not total process/GPU memory',
-    'single actor only; no historical multi-actor baseline', 'automated behavior is not human visual acceptance'],
+    'no historical multi-actor baseline', 'automated behavior is not human visual acceptance'],
 };
 const save = () => writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
 const service = new ThreeCreatorTools(workspace, 'three-sdk');
@@ -170,12 +173,13 @@ try {
       const w = (window as any).__BASELINE_WORLD__, engine = w.engine;
       const port = (window as any).__WORLDKIT_EVAL__.episode;
       const physics = w.humanoid.simulation.environment.world;
-      const mixer = w.humanoid.options.character.animation.sourceCharacter.mixer;
-      const fixed = engine.fixedStep, render = w.renderer.render, update = mixer.update, step = physics.step;
+      const mixers=[w.humanoid.options.character.animation.sourceCharacter.mixer,...[...w.humanoid.actors.values()].map((binding:any)=>binding.animation.sourceCharacter.mixer)];
+      const updates=mixers.map(mixer=>mixer.update);
+      const fixed = engine.fixedStep, render = w.renderer.render, step = physics.step;
       let fixedSamples: number[] = [], renderSamples: number[] = [], mixerEvaluations = 0, physicsSteps = 0;
       engine.fixedStep = function (...args: any[]) {const t = performance.now(); try {return fixed.apply(this, args);} finally {fixedSamples.push(performance.now() - t);}};
       w.renderer.render = function (...args: any[]) {const t = performance.now(); try {return render.apply(this, args);} finally {renderSamples.push(performance.now() - t);}};
-      mixer.update = function (...args: any[]) {mixerEvaluations++; return update.apply(this, args);};
+      mixers.forEach((mixer,index)=>{mixer.update=function(...args:any[]){mixerEvaluations++;return updates[index].apply(this,args);};});
       physics.step = function (...args: any[]) {physicsSteps++; return step.apply(this, args);};
       const summarize = (samples: number[]) => {const sorted = [...samples].sort((a,b) => a-b); return {count: sorted.length,
         p50Milliseconds: sorted[Math.ceil(sorted.length*.5)-1], p95Milliseconds: sorted[Math.ceil(sorted.length*.95)-1], samplesMilliseconds: samples};};
@@ -190,8 +194,8 @@ try {
             bodyCount: physics.bodies.len(), colliderCount: physics.colliders.len(),
             jsHeapUsedBytes: (performance as any).memory?.usedJSHeapSize ?? null, rendererMemory: {...w.renderer.info.memory}});
         }
-      } finally {engine.fixedStep = fixed; w.renderer.render = render; mixer.update = update; physics.step = step;}
-      return {scenario: 'stationary single Source101; fixed 60 Hz; 600 frames per round', rounds};
+      } finally {engine.fixedStep = fixed; w.renderer.render = render; mixers.forEach((mixer,index)=>{mixer.update=updates[index];}); physics.step = step;}
+      return {scenario: `stationary ${mixers.length} Source101 actors; fixed 60 Hz; 600 frames per round`, rounds};
     }, {neutral});
     }
     report.episodeErrors = [...session.errors]; await save();

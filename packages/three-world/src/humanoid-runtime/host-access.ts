@@ -7,11 +7,14 @@ import type { SkillResult } from './humanoid/action-schema';
 /** Engine/World capability, deliberately absent from the public barrels. */
 export interface HumanoidHostAccess {
   isDisposed(): boolean;
+  bindCharacter(id:string,character:import('./character').Character,settings?:import('../engine-contracts').CharacterOptions):void;
   command(command: HumanoidCommand): SkillResult | undefined;
   setEpisodeOwned(owned: boolean): void;
-  advance(input: WorldInput, dt: number, pointer?: CameraRigInput): void;
+  advance(input: WorldInput, dt: number, pointer?: CameraRigInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>): void;
   reset(): void;
+  finishReset():void;
   clearInput(): void;
+  setControlledActor(id:string):void;
   prepareEpisodeStart(start: EpisodeStart): void;
   present(alpha: number, tick: number, view?:'world'|'object'): () => void;
 }

@@ -117,5 +117,14 @@
       "project.json",
       "episode.json"
     ]
+  },
+  "multiple-actors": {
+    "root": "examples/three-creator/multiple-actors",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
   }
 }

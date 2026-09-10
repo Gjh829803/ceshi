@@ -19,9 +19,9 @@ const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optiona
 export const WORLD_COMMAND_SCHEMA={oneOf:[
  command('vehicle.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
  {...command('vehicle.approach',{instanceId:string}),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string}),command('vehicle.exit',{}),command('vehicle.recover',{}),
- command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{input:{anyOf:[humanoidInput,{type:'null'}]}}),
+ command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{actorId:string,input:{anyOf:[humanoidInput,{type:'null'}]}},['actorId']),
  command('humanoid.apply-profile',{profile:humanoidProfile}),
- command('humanoid.perform-action',{request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])}),
+ command('humanoid.perform-action',{actorId:string,request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])},['actorId']),
  command('entity.set-visible',{entityId:string,isVisible:boolean}),
  command('entity.set-scale',{entityId:string,scaleLocalXYZ:vec3,durationSeconds:duration},['durationSeconds']),
  command('entity.set-position',{entityId:string,positionWorldMetersXYZ:vec3,durationSeconds:duration},['durationSeconds']),

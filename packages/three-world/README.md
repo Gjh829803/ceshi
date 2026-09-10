@@ -47,6 +47,14 @@ Failed loads/bindings release partial resources, and a disposed character cannot
 be revived by an in-flight load. This resource sharing does not itself register
 additional physical actors or provide autonomous behavior.
 
+To create another complete actor in a humanoid world, call
+`await world.humanoid.createCharacter()` and then `world.addCharacter({id,humanoid:character})`.
+Registration transfers the instance lifecycle to the world. An instance can belong
+to only one world; create another instance to reuse its source. Actors present at
+the initial seal are retained for reset. Later actors release their resources on
+despawn. Keep a caller-created instance only if registration failed, and dispose
+it if it will not be retried.
+
 `WorldObservation.controlledObject` is the current controlled entity's live
 `THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
 It is separate from `world.humanoid`; observers expose runtime state through
@@ -411,6 +419,35 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 <!-- /asset-info -->
 
 <!-- topic:humanoid -->
+
+## Multiple complete humanoids
+
+```ts
+const guide = await world.humanoid!.createCharacter();
+guide.root.position.set(4, 0.04, 0);
+world.addCharacter({id:'guide', humanoid:guide,
+  movement:{kind:'ground', walkSpeedMetersPerSecond:2.4}});
+world.setAutonomy('guide', {kind:'patrol',
+  waypointPositionsWorldMetersXYZ:[[4,0,7],[4,0,-3]], pauseSeconds:0.5});
+world.setCameraFollow({targetEntityId:'guide'});
+// Input selection is independent of the camera target.
+world.setControlledEntity('person');
+```
+
+Each actor has its own controller, skeleton, mixer and action state. All actors
+share the physics world, interaction targets and fixed clock. Ground navigation
+uses committed fixed/kinematic collider geometry, including map surfaces without
+visual meshes. Actual dynamic obstacles and other characters remain subject to
+live collision; an obstructed route can fail with a blocked result.
+
+`humanoid.set-input` and `humanoid.perform-action` accept optional `actorId`;
+omitting it selects the current input actor. Accepted actions remain bound to that
+actor and its generation across input switches. `setInput()` release callbacks
+release only their own override. Full humanoid bindings accept ground walk/run/jump
+speed settings; custom movement adapters and arbitrary body dimensions are not
+accepted for this controller. Vehicle interactions currently belong to the initial
+character. Use [multiple-actors](../../examples/three-creator/multiple-actors/main.ts)
+for complete rigs and autonomous navigation.
 
 ### Brake-turn drift for authored vehicles
 

@@ -196,6 +196,7 @@ it('exposes the actual humanoid factory options and signature without runtime im
 it('publishes Player runtime methods as declarations consumable beside their real source imports',()=>{
  const runtimeUrl=new URL('../../packages/three-world/src/humanoid-runtime/runtime.ts',import.meta.url);
  const runtimeSource=readFileSync(runtimeUrl,'utf8');
+ expect(runtimeContractSource(runtimeSource)).toContain('createCharacter(): Promise<Character>');
  const parsed=ts.createSourceFile('runtime.ts',runtimeSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  const imports=parsed.statements.filter(ts.isImportDeclaration).map(node=>node.getText(parsed)).join('\n');
  const filename=fileURLToPath(new URL('../../packages/three-world/src/humanoid-runtime/.authoring-runtime-contract.ts',import.meta.url));

@@ -109,6 +109,7 @@ export type EntityOptions = Readonly<{
   frontYawRadians?: number;
 }>;
 export type CharacterEntityOptions = EntityOptions & Readonly<{
+  humanoid?: import('./humanoid-runtime/character').Character;
   character?: CharacterOptions;
   asset?: AssetInstance;
 }>;
