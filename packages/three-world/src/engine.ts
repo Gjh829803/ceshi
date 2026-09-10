@@ -1,3 +1,4 @@
+import {runtimeError} from './control-support';
 import { emptyInput } from './humanoid-runtime/simulation';
 import { humanoidHost } from './humanoid-runtime/host-access';
 import * as THREE from 'three';
@@ -52,7 +53,7 @@ export class WorldEngine {
   private readonly resets = new Set<() => void>();
   private readonly disposals = new Set<() => void>();
   private readonly interactions = new Map<string, Set<(context: { world: WorldEngine; entityId: string; actorEntityId?: string }) => void>>();
-  private readonly failures: { code: string; message: string; simulationTick: number; entityId?: string }[] = [];
+  private readonly failures: WorldSnapshot['errors'][number][] = [];
   private readonly retired = new Set<Entity>();
   private baseline: Map<string, Entity> | undefined;
   private cameraInitial: THREE.Camera | undefined;
@@ -570,7 +571,7 @@ export class WorldEngine {
       return { id, name: entity.options.name ?? id, role: entity.options.role ?? 'decoration', tags: entity.options.tags ?? [], positionMetersXYZ: tuple(logical?.position??position(entity.object)), rotationEulerRadiansXYZ: [rotation.x, rotation.y, rotation.z], scaleXYZ: tuple(entity.object.getWorldScale(new THREE.Vector3())), visible: entity.object.visible,
         ...(parentEntityId ? { parentEntityId } : {}), ...(physics ? { physics } : {}), ...(entity.asset?.currentActionId ? { actionId: entity.asset.currentActionId } : {}), ...(entity.asset?.currentClipName ? { clipName: entity.asset.currentClipName } : {}) };
     });
-    return { schemaVersion: 1, simulationTick: this.tick, simulationSeconds: this.tick * this.fixedTimeStepSeconds, revision: this.revision, isRunning: this.running, ...(this.controlled ? { controlledEntityId: this.controlled } : {}), entities: states, errors: [...this.failures] };
+    return { schemaVersion: 1, simulationTick: this.tick, simulationSeconds: this.tick * this.fixedTimeStepSeconds, revision: this.revision, isRunning: this.running, ...(this.controlled ? { controlledEntityId: this.controlled } : {}), entities: states, errors: structuredClone(this.failures) };
   }
   inspect(): unknown { return { snapshot: this.snapshot(), physics: this.physics.audit(), inputTranscript: [...this.keyboard.transcript], prototypes: [...this.prototypes.keys()], capabilities: this.capabilities() }; }
   capabilities(): unknown { return [...this.entities].map(([id, e]) => ({ entityId: id, name: e.options.name ?? id, tags: e.options.tags ?? [], commands: ['entity.set-visible', 'entity.set-position', 'entity.set-scale', ...(id === this.controlled ? [] : ['entity.despawn']), ...(this.navigation && e.character && id !== this.controlled ? ['actor.move-to', 'actor.follow', 'actor.stop'] : []), ...(e.asset?.clips.length ? ['entity.play-action'] : []), ...(e.options.physics?.kind === 'dynamic' ? ['entity.apply-impulse'] : [])], actions: e.asset?.clips.map(c => c.name) ?? [] })); }
@@ -607,7 +608,16 @@ export class WorldEngine {
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; target.__WORLDKIT_EVAL__ = observer; target.__WORLDKIT_CREATOR__ = observer; }
     return observer;
   }
-  private recordError(code: string, error: unknown, entityId?: string): void { if (this.failures.length < 128) this.failures.push({ code, message: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown failure', simulationTick: this.tick, ...(entityId ? { entityId } : {}) }); }
+  private recordError(code: string, error: unknown, entityId?: string): void {
+    if(this.failures.length>=128)return;
+    let diagnostic:import('./contracts').RuntimeError;
+    try {
+      const detail=runtimeError(error,code,entityId?[entityId]:[]);
+      diagnostic={code:detail.code,message:detail.message.slice(0,2000),category:detail.category,phase:code,entityIds:[...detail.entityIds],
+        ...(detail.suggestedAction?{suggestedAction:detail.suggestedAction}:{}),...(detail.cause?{cause:{...detail.cause}}:{})};
+    } catch { diagnostic=runtimeError('Unserializable runtime failure',code,entityId?[entityId]:[]); }
+    this.failures.push({code,message:diagnostic.message,simulationTick:this.tick,...(entityId?{entityId}:{}),diagnostic});
+  }
   dispose(): void {
     if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.keyboard.detach(); this.renders.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));

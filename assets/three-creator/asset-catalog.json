@@ -1311,7 +1311,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.slide"
+        "locomotion.skateboard"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -1319,7 +1319,7 @@
           "id": "slide",
           "name": "贴面滑板",
           "en": "SKIM",
-          "mode": "slide",
+          "mode": "skateboard",
           "kernel": "K04",
           "color": "#f39eae",
           "spawn": [
@@ -1341,7 +1341,7 @@
           "camera": 6,
           "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
           "characterPose": "stand",
-          "archetype": "slide",
+          "archetype": "skateboard",
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -1630,7 +1630,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.sub"
+        "locomotion.submarine"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -1638,7 +1638,7 @@
           "id": "sub",
           "name": "探索潜艇",
           "en": "DEEP",
-          "mode": "sub",
+          "mode": "submarine",
           "kernel": "K07",
           "color": "#f4ca58",
           "spawn": [
@@ -1659,7 +1659,7 @@
           ],
           "camera": 9,
           "hint": "W / S 推进 · A / D 转向 · Space 上浮 · Ctrl 下潜 · Q / E 横滚 · Shift 制动",
-          "archetype": "sub",
+          "archetype": "submarine",
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -1948,7 +1948,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.space"
+        "locomotion.spacecraft"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -1956,7 +1956,7 @@
           "id": "space",
           "name": "无重力飞行器",
           "en": "ORBIT",
-          "mode": "space",
+          "mode": "spacecraft",
           "kernel": "K10",
           "color": "#a398eb",
           "spawn": [
@@ -1977,7 +1977,7 @@
           ],
           "camera": 9,
           "hint": "W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · ↑↓ 俯仰 / ←→ 侧移 · Shift 制动",
-          "archetype": "space",
+          "archetype": "spacecraft",
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -2589,7 +2589,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.space"
+        "locomotion.spacecraft"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -2597,7 +2597,7 @@
           "id": "survey-space",
           "name": "轨道测绘艇",
           "en": "SURVEYOR",
-          "mode": "space",
+          "mode": "spacecraft",
           "kernel": "K10",
           "color": "#64c8d0",
           "spawn": [
@@ -2618,7 +2618,7 @@
           ],
           "camera": 10,
           "hint": "W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · 方向键姿态 · Shift 制动",
-          "archetype": "space",
+          "archetype": "spacecraft",
           "visualVariant": "survey",
           "envelope": {
             "kind": "box",
@@ -4112,7 +4112,7 @@
           "id": "kayak",
           "name": "单人皮划艇",
           "en": "KAYAK",
-          "mode": "kayak",
+          "mode": "paddled_boat",
           "archetype": "kayak",
           "kernel": "K17",
           "color": "#b84047",
@@ -4133,7 +4133,7 @@
             -0.35
           ],
           "camera": 6,
-          "characterPose": "kayak",
+          "characterPose": "paddling",
           "maxSpeed": 4.6,
           "reverseSpeed": 1.8,
           "coastDeceleration": 0.16,
@@ -4279,9 +4279,8 @@
           "id": "canoe",
           "name": "单桨木舟",
           "en": "CANOE",
-          "mode": "kayak",
-          "archetype": "kayak",
-          "visualVariant": "canoe",
+          "mode": "paddled_boat",
+          "archetype": "canoe",
           "kernel": "K17",
           "color": "#95643a",
           "spawn": [
@@ -4297,7 +4296,7 @@
             -0.45
           ],
           "camera": 6.5,
-          "characterPose": "kayak",
+          "characterPose": "paddling",
           "hint": "W 单侧划桨 · S 倒划 · A / D 换侧扫桨转向 · Space 压桨减速 · F 上下舟 · T 切换视角",
           "bodyPhysics": {
             "kind": "paddle",
@@ -4670,8 +4669,8 @@
           "id": "observation-sub",
           "name": "单人观景潜艇",
           "en": "SUBMERSIBLE",
-          "mode": "sub",
-          "archetype": "sub",
+          "mode": "submarine",
+          "archetype": "submarine",
           "visualVariant": "bubble-sub",
           "kernel": "K07",
           "color": "#d4ad38",
@@ -4688,7 +4687,7 @@
             0.25
           ],
           "camera": 6.5,
-          "characterPose": "sub",
+          "characterPose": "submarine",
           "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
           "bodyPhysics": {
             "kind": "submersible",
@@ -4852,9 +4851,8 @@
           "id": "raft",
           "name": "橡皮艇",
           "en": "INFLATABLE BOAT",
-          "mode": "kayak",
+          "mode": "paddled_boat",
           "archetype": "raft",
-          "visualVariant": "canoe",
           "kernel": "K17",
           "color": "#343b40",
           "spawn": [
@@ -4870,7 +4868,7 @@
             -0.45
           ],
           "camera": 7,
-          "characterPose": "kayak",
+          "characterPose": "paddling",
           "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
           "bodyPhysics": {
             "kind": "paddle",

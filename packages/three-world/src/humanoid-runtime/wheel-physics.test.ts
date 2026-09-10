@@ -107,7 +107,7 @@ describe('per-wheel road vehicle',()=>{
   try{run(f,180);expect(f.v.wheelPhysics!.wheels).toHaveLength(6);expect(f.v.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);run(f,120,{...emptyInput(),forward:1});expect(f.v.speed).toBeGreaterThan(5);}
   finally{f.q.dispose();}
  });
- it.each(['motorcycle','slide','hover'] as const)('lets a %s push dynamic furniture while fixed walls still stop it',mode=>{
+ it.each(['motorcycle','skateboard','hover'] as const)('lets a %s push dynamic furniture while fixed walls still stop it',mode=>{
   const f=fixture([{id:'prop',position:[0,1.5,6],size:[1.2,3,.6],rigidGroup:{id:'prop',massKg:8}},{id:'wall',position:[0,3,18],size:[30,6,.5]}]);
   const {wheelPhysics,...controllerSpec}=spec;f.v=createVehicle({...controllerSpec,mode});
   try{for(let n=0;n<360;n++){f.q.syncActorBodies([{id:"controller-proxy",position:f.v.position,rotation:f.v.rotation,body:spec.envelope}]);run(f,1,{...emptyInput(),forward:1});}expect(f.q.colliderForId('prop')!.translation().z).toBeGreaterThan(7);expect(f.v.position.z).toBeGreaterThan(6);expect(f.v.position.z).toBeLessThan(16);expect(f.q.colliderForId('wall')!.translation().z).toBe(18);}

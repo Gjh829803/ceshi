@@ -95,7 +95,7 @@ export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSetti
   return {...structuredClone(spec),...control};
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {
-  const state:VehicleState={...(spec.mode==='kayak'?{kayak:{...createKayakState(),...(spec.visualVariant==='canoe'?{craft:'canoe' as const,side:-1}:{})}}:{}),spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
+  const state:VehicleState={...(spec.mode==='paddled_boat'?{kayak:{...createKayakState(),...((spec.archetype==='canoe'||spec.archetype==='raft')?{craft:'canoe' as const,side:-1}:{})}}:{}),spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
   if((spec.mode==='sled'||spec.mode==='ski'))state.sled={phase:0,push:0,brake:0,steer:0};
   if(spec.visualVariant==='bubble-sub'){state.submersible=createSubmersibleState();state.grounded=false;}
   if(spec.archetype==='raft')state.raft=createRaftState();
@@ -137,11 +137,11 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
   if(v.unicycle){stepUnicycle(v,i,dt,q);return;}
   if(s.archetype==='atv'){stepAtv(v,i,dt,q);return;}
   if(mode==='tank'){stepTank(v,i,dt,q);return;}
-  if(mode==='kayak'){stepKayak(v,i,dt,q);return;}
+  if(mode==='paddled_boat'){stepKayak(v,i,dt,q);return;}
   if(mode==='bus'){stepBus(v,i,dt,q);return;}
   if(mode==='sled'||mode==='ski'){stepSled(v,i,dt,q);return;}
   const isAircraft=mode==='glider';
-  if(mode==='space') {
+  if(mode==='spacecraft') {
     const angular=new Quaternion().setFromEuler(new Euler(i.pitch*s.steer*dt,-v.steering*s.steer*dt,i.roll*s.steer*dt,'YXZ'));
     v.rotation.multiply(angular).normalize();
     forward.set(0,0,1).applyQuaternion(v.rotation);right.set(-1,0,0).applyQuaternion(v.rotation);up.set(0,1,0).applyQuaternion(v.rotation);
@@ -177,7 +177,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
     } else {v.velocity.y=0;v.pitch=0;v.roll*=.5;}
     v.position.addScaledVector(v.velocity,dt);
     v.rotation.setFromEuler(euler.set(-v.pitch,v.yaw,v.roll,'YXZ'));
-  } else if(mode==='sub') {
+  } else if(mode==='submarine') {
     v.yaw-=v.steering*s.steer*dt;v.roll+=i.roll*dt;
     v.pitch=damp(v.pitch,i.lift*.25,s.pitchResponse,dt);
     forward.set(Math.sin(v.yaw)*Math.cos(v.pitch),Math.sin(v.pitch),Math.cos(v.yaw)*Math.cos(v.pitch));
@@ -218,7 +218,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
     v.yaw-=v.steering*yawRate*dt*(driftEnabled?1+drift*.35:i.brake&&mode==='wheeled'?1.25:1);
     if(mode==='hover') side-=i.roll*s.accel*dt;
     const newF=scratch.set(Math.sin(v.yaw),0,Math.cos(v.yaw));
-    if(mode==='wheeled'||mode==='slide'||(mode==='motorcycle'&&drift>0)) {
+    if(mode==='wheeled'||mode==='skateboard'||(mode==='motorcycle'&&drift>0)) {
       // Integrate drive along the old forward axis, then remove lateral slip
       // relative to the new heading. Repeatedly scaling the WHOLE velocity by
       // its forward projection caused low-grip turns to bleed speed every tick.
@@ -231,7 +231,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
       side*=Math.exp(-s.grip*dt);
       v.velocity.x=newF.x*speed+Math.cos(v.yaw)*side;v.velocity.z=newF.z*speed-Math.sin(v.yaw)*side;
     }
-    if(mode==='slide') {const sx=(groundHeight(old.x+.3,old.z)-groundHeight(old.x-.3,old.z))/.6,sz=(groundHeight(old.x,old.z+.3)-groundHeight(old.x,old.z-.3))/.6;if(Math.abs(sx)<2)v.velocity.x-=sx*9.8*dt;if(Math.abs(sz)<2)v.velocity.z-=sz*9.8*dt;}
+    if(mode==='skateboard') {const sx=(groundHeight(old.x+.3,old.z)-groundHeight(old.x-.3,old.z))/.6,sz=(groundHeight(old.x,old.z+.3)-groundHeight(old.x,old.z-.3))/.6;if(Math.abs(sx)<2)v.velocity.x-=sx*9.8*dt;if(Math.abs(sz)<2)v.velocity.z-=sz*9.8*dt;}
     v.position.addScaledVector(v.velocity,dt);
     if(mode==='boat') {
       if(!footprintWet(v.position.x,v.position.z,s.radius)) {v.position.copy(old);v.velocity.x=0;v.velocity.z=0;}
@@ -268,7 +268,7 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
   stepVehicleControls(v,i,dt,time,q);
   const incoming=v.velocity.clone();
   const body=vehicleBody(v.spec),mode=v.spec.mode;
-  const ground=!!v.raft||['wheeled','bus','tank','motorcycle','unicycle','slide','sled','ski'].includes(mode);
+  const ground=!!v.raft||['wheeled','bus','tank','motorcycle','unicycle','skateboard','sled','ski'].includes(mode);
   // Low-speed taxiing rests on wheels too; airborne attitude keeps its original
   // oriented hull and lift path, including the transition into takeoff.
   const taxi=mode==='plane'&&v.grounded&&v.speed<=14&&v.velocity.y<=0;
@@ -314,7 +314,7 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
   // normals every tick would erase speed while holding the vehicle on the ramp.
   stopIntoNormals(v.velocity,horizontal?horizontal.normals.filter(n=>n.y<.5):hit.normals);
   if(horizontal){if(hit.grounded)v.velocity.y=0;if(vertical.normals.some(n=>n.y<-.25))v.velocity.y=Math.min(0,v.velocity.y);}
-  if(ground||mode==='kayak'||v.jetski||v.submersible)v.grounded=hit.grounded;
+  if(ground||mode==='paddled_boat'||v.jetski||v.submersible)v.grounded=hit.grounded;
   if(mode==='plane'||mode==='glider'){
     // The asset origin may be metres above its wheels. Use the swept hull contact,
     // including a short resting probe, and keep airborne lift free to leave ground.
@@ -331,7 +331,7 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
   if(v.atv)finishAtvStep(v,old,oldYaw,q);
   if(v.unicycle)finishUnicycleStep(v,old,i,dt,q);
   if(hit.blocked)v.speed=Math.min(v.speed,v.velocity.length());
-  if(!v.submersible&&!v.jetski&&(mode==='boat'||mode==='sub')&&!q.waterContains(v.position,v.spec.radius)){v.position.copy(old);v.velocity.set(0,0,0);v.speed=0;}
+  if(!v.submersible&&!v.jetski&&(mode==='boat'||mode==='submarine')&&!q.waterContains(v.position,v.spec.radius)){v.position.copy(old);v.velocity.set(0,0,0);v.speed=0;}
 }
 export class Simulation {
   environment:EnvironmentQueries;
@@ -404,8 +404,8 @@ export class Simulation {
     const q=this.environment;const body=vehicleBody(v.spec);
     const rx=body.kind==='box'?body.halfExtents[0]+(v.submersible?1.35:.9):v.spec.radius+1.2,rz=body.kind==='box'?body.halfExtents[2]+(v.submersible?1.35:.9):v.spec.radius+1.2;
     const offsets=[[rx,0],[-rx,0],[0,-rz],[0,rz]];
-    // Prefer a dry pontoon when boarding a kayak; retain swimming exits offshore.
-    for(const dryOnly of (v.spec.mode==='kayak'||v.submersible?[true,false]:[false]))for(const [x=0,z=0] of offsets){
+    // Prefer a dry pontoon when boarding a paddle craft; retain swimming exits offshore.
+    for(const dryOnly of (v.spec.mode==='paddled_boat'||v.submersible?[true,false]:[false]))for(const [x=0,z=0] of offsets){
       const p=new Vector3(x,0,z).applyAxisAngle(new Vector3(0,1,0),v.yaw).add(v.position);
       const floor=q.support(p,4,.45),water=q.waterAt(p);
       if(dryOnly){if(!floor||(water&&floor.height<water.surface)||Math.abs(floor.height-v.position.y)>1)continue;p.y=floor.height+.025;}
@@ -571,7 +571,7 @@ export class Simulation {
   }
     recoverVehicle():boolean {
       const v=this.vehicle,q=this.environment;
-      if(!v||!['wheeled','motorcycle','unicycle','slide'].includes(v.spec.mode)){this.message='请先进入地面车辆，再使用原地扶正';return false;}
+      if(!v||!['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode)){this.message='请先进入地面车辆，再使用原地扶正';return false;}
       const forward=new Vector3(0,0,1).applyQuaternion(v.rotation);
       const yaw=Math.hypot(forward.x,forward.z)>.05?Math.atan2(forward.x,forward.z):v.yaw;
       const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),yaw),body=vehicleBody(v.spec);
@@ -627,8 +627,8 @@ export class Simulation {
       else if ((v.wheelPhysics||v.bodyPhysics||v.aircraft)&&this.available(v))
         stepVehicle(v,{...emptyInput(),brake:true},dt,this.time,this.environment);
       else if (
-        (v !== this.vehicle || v.spec.mode === 'kayak' || !!v.jetski || !!v.submersible) &&
-        (!!v.submersible || !!v.jetski || v.spec.mode === "kayak" || v.spec.mode === "mount" || v.spec.mode === "sled" || v.spec.mode === "ski") &&
+        (v !== this.vehicle || v.spec.mode === 'paddled_boat' || !!v.jetski || !!v.submersible) &&
+        (!!v.submersible || !!v.jetski || v.spec.mode === "paddled_boat" || v.spec.mode === "mount" || v.spec.mode === "sled" || v.spec.mode === "ski") &&
         this.available(v) &&
         (!!v.submersible || !!v.jetski || v.velocity.lengthSq() > 1e-8 ||
           !v.grounded ||

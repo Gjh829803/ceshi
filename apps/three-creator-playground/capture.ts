@@ -124,6 +124,7 @@ export function captureObjectViews(world:CaptureWorld,view:'top-down'|'entity-tr
   catch(error){failed=true;throw error;}
   finally{
     // The object-view override must end before restoring the primary framebuffer.
+    // eslint-disable-next-line no-unsafe-finally -- Report restore failure only when capture itself succeeded.
     if(renderPrimary)try{withCapturePresentation(world,()=>world.renderer.render(world.scene,world.camera));}catch(error){if(!failed)throw error;}
   }
 }
@@ -179,6 +180,7 @@ function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-
     for(const [object,state] of objectState)restore(()=>{object.visible=state.visible;object.layers.mask=state.layers;if(state.lodAutoUpdate!==undefined)(object as THREE.LOD).autoUpdate=state.lodAutoUpdate;});
     restore(()=>{scene.background=old.background;scene.fog=old.fog;renderer.autoClear=old.autoClear;renderer.xr.enabled=old.xr;renderer.shadowMap.enabled=old.shadows;});
     restore(()=>renderer.setPixelRatio(old.pixelRatio));restore(()=>renderer.setSize(old.size.x,old.size.y,false));restore(()=>renderer.setRenderTarget(old.renderTarget,old.cubeFace,old.mipmapLevel));restore(()=>renderer.setViewport(old.viewport));restore(()=>renderer.setScissor(old.scissor));restore(()=>renderer.setScissorTest(old.scissorTest));
+    // eslint-disable-next-line no-unsafe-finally -- Preserve a primary failure; otherwise fail an incomplete restore.
     if(!hasPrimaryFailure&&cleanupErrors.length)throw cleanupErrors[0];
   }
 }

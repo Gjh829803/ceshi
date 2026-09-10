@@ -332,13 +332,13 @@ function CameraEditor({
           默认配置；下方基准参数与实际速度的换算见字段说明。
         </p>
       )}
-      {mode === "space" && (
+      {mode === "spacecraft" && (
         <p className="wb-note">
           默认启用平移稳定辅助：松开某个方向会消除该方向的漂移，Shift
           强制制动。辅助设为 0 可测试纯惯性；已输入的方向仍能加速到最高速度。
         </p>
       )}
-      {mode === "sub" && (
+      {mode === "submarine" && (
         <p className="wb-note">
           侧向阻尼控制转向后的横滑。Space 上浮、Ctrl 下潜，Shift 独立制动。
         </p>

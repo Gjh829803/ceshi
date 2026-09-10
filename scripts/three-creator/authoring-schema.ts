@@ -51,7 +51,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic, optio
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;
  const sections=markdown.split(/<!-- topic:([a-z-]+) -->/);
- let selected=sections[0]??'';
+ let selected=topic==='getting-started'?sections[0]??'':'';
  for(let i=1;i<sections.length;i+=2) if(sections[i]===topic) selected+=sections[i+1]??'';
  return selected.trim();
 }

@@ -375,7 +375,8 @@ export class HumanoidController {
       const tangent=new Vector3(normal.z,0,-normal.x);
       const handsFit=[-.24,.24].every(side=>{
         const o=front.clone().addScaledVector(normal,-.13).addScaledVector(tangent,side);o.y=top.y+.1;
-        return this.ray(o,new Vector3(0,-1,0),.2,c=>c.handle===obstacle.handle)?.normal.y!>.7;
+        const support=this.ray(o,new Vector3(0,-1,0),.2,c=>c.handle===obstacle.handle);
+        return support!==null&&support.normal.y>.7;
       });
       if(occupied || !handsFit){kind='blocked';reason=occupied?'落点胶囊空间被占用':'墙沿不足以支撑双手';}
     }

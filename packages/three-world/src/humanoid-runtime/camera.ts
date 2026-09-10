@@ -213,18 +213,18 @@ export class FollowCamera {
     }
     if(this.sourceCharacter){this.sourceCharacter=false;this.zoom=1;}
     if(this.camera.near!==this.originalNear){this.camera.near=this.originalNear;this.camera.updateProjectionMatrix();}
-    const airborne=v&&['space','plane','glider','sub','dragon'].includes(v.spec.mode);
+    const airborne=v&&['spacecraft','plane','glider','submarine','dragon'].includes(v.spec.mode);
     if(v&&this.mode!==1&&sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8){this.yaw+=angleDelta(this.yaw,yaw)*(1-Math.exp(-this.tuning.recenterResponsePerSecond*(airborne?1.3/1.9:1)*dt));this.pitch=damp(this.pitch,airborne?.2:.28,1.2*this.tuning.recenterResponsePerSecond/1.9,dt);}
     this.anchor.copy(position);this.anchor.y+=(v?(v.spec.mode==='tank'?2.3:v.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
     this.anchor.x+=Math.cos(this.yaw)*this.tuning.horizontalOffset;this.anchor.z-=Math.sin(this.yaw)*this.tuning.horizontalOffset;this.aim.copy(this.anchor);
-    this.targetUp.set(0,1,0);if(v?.spec.mode==='space'&&rotation)this.targetUp.applyQuaternion(rotation);
+    this.targetUp.set(0,1,0);if(v?.spec.mode==='spacecraft'&&rotation)this.targetUp.applyQuaternion(rotation);
     this.up.lerp(this.targetUp,1-Math.exp(-5*dt)).normalize();
     const idealDistance=(this.baseDistance??(v?v.spec.camera:5.5))*this.zoom+Math.min(speed*.075,4);
     this.distance=this.initialized?damp(this.distance,idealDistance,idealDistance>this.distance?3:1.2,dt):idealDistance;
     {
-      const distance=this.distance,orbit=v?.spec.mode==='space'?angleDelta(yaw,this.yaw):this.yaw;
+      const distance=this.distance,orbit=v?.spec.mode==='spacecraft'?angleDelta(yaw,this.yaw):this.yaw;
       this.offset.set(-Math.sin(orbit)*Math.cos(this.pitch)*distance,Math.sin(this.pitch)*distance,-Math.cos(orbit)*Math.cos(this.pitch)*distance);
-      if(v?.spec.mode==='space'&&rotation)this.offset.applyQuaternion(rotation);
+      if(v?.spec.mode==='spacecraft'&&rotation)this.offset.applyQuaternion(rotation);
       this.desired.copy(this.anchor).add(this.offset);
     }
     if(!this.initialized){this.camera.position.copy(this.desired);this.target.copy(this.aim);this.lastAnchor.copy(this.anchor);this.initialized=true;}

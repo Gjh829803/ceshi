@@ -2,6 +2,33 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { it, expect } from "vitest";
 import { Quaternion, Vector3 } from "three";
 import { createMountedFixture } from "../mounted-test-fixture";
+import {EnvironmentQueries, initEnvironmentQueries} from './queries';
+const observationMap={id:'ids',name:'IDs',description:'',bounds:{min:[-120,-10,-120],max:[120,30,120]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]} as const;
+it('identifies every tile of an authored slab without advancing the solver',async()=>{
+  await initEnvironmentQueries();const q=new EnvironmentQueries(observationMap);
+  try{const count=q.colliderCount;for(const x of [-80,0,80])for(const z of [-80,0,80]){
+    const hit=q.raycast(new Vector3(x,5,z),new Vector3(0,-1,0),10);
+    expect(hit?.id).toBe('ground');expect(hit?.distance).toBeCloseTo(5,5);
+  }expect(q.colliderCount).toBe(count);}finally{q.dispose();}
+});
+it('maps rigid vehicle parts to the instance and retires IDs with the rig',async()=>{
+  await initEnvironmentQueries();const q=new EnvironmentQueries(observationMap);
+  try{const create=(id:string)=>q.vehicleRig(id,{},new Vector3(10,0,10),new Quaternion(),1000,.9,2,1.8,.6);
+    const car=create('custom-car'),handles=car.colliders.map(c=>c.handle),count=q.colliderCount;
+    for(const handle of handles)expect(q.colliderId(handle)).toBe('custom-car');
+    expect(q.colliderCount).toBe(count);q.releaseVehicleRig('custom-car');
+    for(const handle of handles)expect(q.colliderId(handle)).toBe(`collider-${handle}`);
+    const next=create('replacement');for(const collider of next.colliders)expect(q.colliderId(collider.handle)).toBe('replacement');
+  }finally{q.dispose();}
+});
+it('reports actor identity instead of the query-part key, preserving unknown colliders',async()=>{
+  const world=await createMountedFixture();try{
+    const q=world.humanoid!.simulation.environment,h=world.humanoid!.simulation.humanoid!;
+    q.syncActorBodies([{id:'proxy-part',actorId:'custom-actor',position:new Vector3(15,1,15),rotation:new Quaternion(),body:{kind:'box',offset:[0,0,0],halfExtents:[1,1,1]}}]);
+    let found=false;h.world.forEachCollider(c=>{if(c.translation().x===15){expect(q.colliderId(c.handle)).toBe('custom-actor');found=true;}});expect(found).toBe(true);
+    const unknown=h.world.createCollider(RAPIER.ColliderDesc.ball(.1));expect(q.colliderId(unknown.handle)).toBe(`collider-${unknown.handle}`);
+  }finally{world.dispose();}
+});
 it("detects a moved collider directly before the next broadphase update", async () => {
   await RAPIER.init();
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 });

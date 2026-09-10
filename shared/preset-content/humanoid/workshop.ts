@@ -2,7 +2,7 @@ import { block, ramp } from '../environment/modules';
 import type { CharacterTrial, EnvironmentBox, MapClimbSurface, EnvironmentDefinition, MapInteraction, MapRegion, Vec3 } from '../environment/types';
 
 const mint = '#71d6b2', blue = '#74a9ec', amber = '#f5ad67', violet = '#a394ec';
-const groundModes = ['character', 'wheeled', 'motorcycle', 'unicycle', 'slide', 'hover', 'mount', 'carriage'];
+const groundModes = ['character', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'hover', 'mount', 'carriage'];
 const trial = (id: string, name: string, description: string, position: Vec3, action: string, yaw = Math.PI): CharacterTrial =>
   ({ id, name, description, position, yaw, action });
 

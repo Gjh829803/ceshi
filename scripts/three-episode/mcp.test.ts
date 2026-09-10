@@ -11,6 +11,8 @@ import sharp from 'sharp';
 import { ThreeCompiler, hashTree, type Candidate } from '../three-creator/compiler.js';
 import { canonicalHash, SEGMENT_SCHEMA, type EpisodePlan, type EpisodeSourceManifest } from './contracts.js';
 import { EpisodePlannerTools, EPISODE_TOOLS } from './mcp.js';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import { loadEpisodeSource, saveEpisodeSource } from './source.js';
 import { createHash } from 'node:crypto';
 
@@ -124,3 +126,28 @@ describe('Three Episode planner MCP boundary',()=>{
   }finally{await client.close();await transport.close();}
  },60_000);
 });
+
+it('probes an authored view using actual camera facing without advancing the world',async()=>{
+ const workspace=path.join(root,'authored-camera');await mkdir(workspace);
+ for(const filename of ['main.ts','index.html']) {
+  const text=await readFile(path.join(root,'author',filename),'utf8');
+  await writeFile(path.join(workspace,filename),text.replace("world.setCameraFollow({targetEntityId:'actor'});",''));
+ }
+ const compiled=await new ThreeCompiler(workspace,'three-sdk').prepare();
+ // Run the actual TSX consumer: Vitest rewrites dynamic imports inside page.evaluate.
+ const runner=path.join(workspace,'probe.mjs');
+ await writeFile(runner,`import {openEpisodeBrowser} from ${JSON.stringify(pathToFileURL(path.join(repository,'scripts/three-episode/browser.ts')).href)};
+ const browser=await openEpisodeBrowser({playableRoot:${JSON.stringify(compiled.playableRoot)}});
+ try {
+  const observed=await browser.observe({view:'top-down'});
+  const point=await browser.pick(observed.viewId,[.3,.5]);
+  const after=await browser.observe({view:'current'});
+  console.log(JSON.stringify({observed:observed.snapshot,point,after:after.snapshot}));
+ } finally {await browser.close();}`);
+ const {stdout}=await promisify(execFile)(process.execPath,['--import',path.join(repository,'node_modules/tsx/dist/loader.mjs'),runner],{cwd:repository,env:{...process.env,TSX_DISABLE_CACHE:'1'},timeout:25_000});
+ const {observed,point,after}=JSON.parse(stdout.trim());
+ expect(observed.camera.mode).toBe('authored');expect(observed.camera.desiredYawRadians).toBeNull();
+ expect(point.startProbe.isValid).toBe(true);
+ expect(observed.simulationTick).toEqual(expect.any(Number));
+ expect(after.simulationTick).toBe(observed.simulationTick);expect(after.simulationSeconds).toBe(observed.simulationSeconds);expect(after.camera).toEqual(observed.camera);
+},30_000);

@@ -10,6 +10,10 @@ it('assigns every current mode exactly once to seven categories and keeps catalo
  const families=listMotionFamilies();expect(families.map(f=>f.id)).toEqual(['human','ground-vehicle','surface-vessel','aircraft','flying-creature','underwater','space']);
  for(const spec of SPECS)expect(families.filter(f=>f.modes.includes(spec.mode))).toHaveLength(1);
  expect(motionFamilyForMode('character')).toBe('human');expect(motionFamilyForMode('plane')).toBe('aircraft');expect(motionFamilyForMode('dragon')).toBe('flying-creature');
+ for(const [mode,category] of [['skateboard','ground-vehicle'],['paddled_boat','surface-vessel'],['submarine','underwater'],['spacecraft','space']] as const)expect(motionFamilyForMode(mode)).toBe(category);
+ const raft=families.find(f=>f.id==='surface-vessel')!.subtypes.find(s=>s.id==='surface-vessel.raft')!;
+ expect(raft).toMatchObject({mode:'paddled_boat',controlFamily:'raft'});
+ expect(motionSubtypeControlFields('surface-vessel','surface-vessel.paddled_boat').find(f=>f.key==='accel')?.label).toBe('划桨峰值加速度');
  families[0]!.subtypes[0]!.name='changed';expect(listMotionFamilies()[0]!.subtypes[0]!.name).toBe('人物');
  expect(motionSubtypeControlFields('aircraft','aircraft.rotorcraft')).toEqual([]);
 });

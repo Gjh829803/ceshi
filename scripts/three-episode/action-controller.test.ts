@@ -183,7 +183,7 @@ it('brakes before exit and waits for measured rest and any existing transition',
 });
 
 it('uses each mounted family stop input while waiting and changing view', async () => {
-  for (const kind of ['mount', 'view'] as const) for (const mode of ['space', 'sub', 'dragon'] as const) {
+  for (const kind of ['mount', 'view'] as const) for (const mode of ['spacecraft', 'submarine', 'dragon'] as const) {
     const f = fixture(goal(kind === 'mount' ? { kind, action: 'exit' } : { kind, perspective: 'first-person' }));
     f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
     const snapshot = { ...f.snapshot(), humanoid: { ...f.snapshot().humanoid!, cameraMode: 0, mountedInstanceId: 'craft',
