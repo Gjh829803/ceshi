@@ -3,9 +3,6 @@ import { vehicleImpactMass } from '../../config';
 import { creatureBodies } from '../../creatures/controller';
 import { vehicleBody,type EnvironmentQueries,type MoveResult,type QueryBody } from '../../environment/queries';
 import type { Input,VehicleState } from '../../simulation';
-import { createCreatureState } from './physics-state';
-export const CARRIAGE_TOW_DISTANCE = 4.8;
-export const LEAD_HORSE_BODY = { kind: 'box' as const, halfExtents: [.8, 1.65, 1.9] as const, offset: [0, 1.65, 0] as const };
 const UP = new Vector3(0, 1, 0);
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const approach = (a: number, b: number, amount: number) => a + clamp(b - a, -amount, amount);
@@ -47,8 +44,6 @@ function stopInWater(v: VehicleState) {
     v.grounded = false;
     v.motion.creature!.flying = false;
     v.motion.creature!.gait = 'rest';
-    if (v.motion.creature!.leadPosition)
-        v.motion.creature!.leadVerticalSpeed = 0;
 }
 /** Test the turning volume as well as the final box, so thin walls cannot be crossed by yaw. */
 function turnIsClear(position: Vector3, body: QueryBody, fromYaw: number, toYaw: number, q: EnvironmentQueries) {
@@ -107,7 +102,7 @@ function moveBody(position: Vector3, delta: Vector3, body: QueryBody, yaw: numbe
     const exact = result.position.clone();
     exact.x = position.x + delta.x;
     exact.z = position.z + delta.z;
-    // Floor normals have small X/Z roundoff; do not let that noise stretch a towbar.
+    // Floor normals have small X/Z roundoff; preserve the requested horizontal travel.
     if (distance(result.position) < .005 && result.normals.every(normal => normal.y > .25) && clearBody(exact, body, rotation, q))
         result.position.copy(exact);
     result.blocked = result.position.clone().sub(position).distanceToSquared(delta) > 1e-6;
@@ -150,10 +145,10 @@ function stepDragon(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries
     v.roll = 0;
     v.rotation.copy(rotationAt(v.yaw));
 }
-export function stepCreature(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
+export function stepGroundedFlight(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
     if (!Number.isFinite(dt) || dt <= 0)
         return;
-    v.motion.creature ??= createCreatureState(v.spec, v.position, v.rotation, v.yaw);
+    if(v.motion.family!=='flying-creature')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
     // These creatures stop on water contact until reset.
     if (v.submerged || touchesWater(v, q)) {
         stopInWater(v);
@@ -161,21 +156,18 @@ export function stepCreature(v: VehicleState, i: Input, dt: number, q: Environme
     }
     const duration = Math.min(dt, .25), steps = Math.max(1, Math.ceil(duration * 60)), slice = duration / steps;
     for (let n = 0; n < steps; n++) {
-        const previous = { position: v.position.clone(), rotation: v.rotation.clone(), yaw: v.yaw, pitch: v.pitch, roll: v.roll, leadPosition: v.motion.creature.leadPosition?.clone(), leadYaw: v.motion.creature.leadYaw };
+        const previous = { position: v.position.clone(), rotation: v.rotation.clone(), yaw: v.yaw, pitch: v.pitch, roll: v.roll };
         v.steering += (clamp(i.steer, -1, 1) - v.steering) * (1 - Math.exp(-(Math.abs(i.steer) > .01 ? v.spec.steeringResponse : v.spec.steeringReturn) * slice));
         v.throttle = i.forward;
         stepDragon(v, i, slice, q);
         if (touchesWater(v, q)) {
             // Cancel only the boundary-crossing advance. Keeping the last clear pose
-            // avoids a teleport to shore and preserves the complete carriage drawbar.
+            // avoids a teleport to shore.
             v.position.copy(previous.position);
             v.rotation.copy(previous.rotation);
             v.yaw = previous.yaw;
             v.pitch = previous.pitch;
             v.roll = previous.roll;
-            if (previous.leadPosition)
-                v.motion.creature.leadPosition!.copy(previous.leadPosition);
-            v.motion.creature.leadYaw = previous.leadYaw;
             stopInWater(v);
             return;
         }

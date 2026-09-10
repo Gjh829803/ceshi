@@ -5,6 +5,7 @@ import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {creatureBodies} from './creatures/controller';
+import {CREATURE_SPECS} from '../../../../shared/preset-content/creatures/specs';
 import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
@@ -63,4 +64,19 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     const snapshot=structuredClone(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature).toEqual(snapshot);
     runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);
   }finally{world.dispose();}
+});
+
+it('keeps the catalog grounded-flight mount walking, taking off and landing with its own envelope',()=>{
+  const map=createDragonTrainingMap();map.boxes=map.boxes.filter(box=>box.id==='dragon-ground');
+  const q=new EnvironmentQueries(map),v=createVehicle(CREATURE_SPECS.find(spec=>spec.mode==='dragon')!);
+  v.position.set(0,.225,0);v.grounded=true;
+  const step=(input:Partial<Input>,count:number)=>{for(let n=0;n<count;n++){stepVehicle(v,{...emptyInput(),...input},1/60,n/60,q);q.stepPhysics(1/60);}};
+  try{
+    expect(v.motion.flyingCreature).toBeUndefined();step({forward:1},120);
+    expect(v.position.z).toBeGreaterThan(2);expect(v.grounded).toBe(true);expect(v.motion.creature!.gait).toBe('walk');
+    step({lift:1},120);expect(v.position.y).toBeGreaterThan(8);expect(v.motion.creature!.flying).toBe(true);
+    step({},120);expect(v.velocity.y).toBeCloseTo(0);step({lift:-1},240);
+    expect(v.grounded).toBe(true);expect(v.motion.creature!.flying).toBe(false);expect(v.position.y).toBeLessThan(.3);
+    const reset=createVehicle(v.spec);expect(reset.motion.creature!.gait).toBe('rest');expect(reset.motion.creature!.flying).toBe(false);
+  }finally{q.dispose();}
 });
