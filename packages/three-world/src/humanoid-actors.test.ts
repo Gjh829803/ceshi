@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
+import {Raw} from '@recast-navigation/core';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {createHumanoidWorld} from './humanoid';
 import type {ThreeWorld} from './world';
@@ -61,16 +62,16 @@ it('navigates a complete NPC using map collision even without rendered terrain',
 });
 
 it('releases post-baseline actor instances through 50 spawn/despawn cycles while preserving the player source',async()=>{
-  const world=await setup(),runtime=world.humanoid!;world.step({},1);const count=runtime.environment.colliderCount;
+  const world=await setup(),runtime=world.humanoid!;world.step({},1);const count=runtime.environment.colliderCount,allocate=vi.spyOn(Raw.Detour,'allocCrowd'),free=vi.spyOn(Raw.Detour,'freeCrowd');
   for(let n=0;n<50;n++){
     const actor=await runtime.createCharacter();actor.root.position.set(3,.04,0);
     const dispose=vi.spyOn(actor,'dispose'),uncache=vi.spyOn(actor.sourceCharacter!.mixer,'uncacheRoot');
-    world.addCharacter({id:'temporary',humanoid:actor});world.step({},1);
+    world.addCharacter({id:'temporary',humanoid:actor});expect((await world.execute({type:'actor.move-to',entityId:'temporary',targetPositionWorldMetersXYZ:[3,0,1]})).status).toBe('accepted');world.step({},1);
     const receipt=await world.execute({type:'entity.despawn',entityId:'temporary'});
     expect(receipt.status,JSON.stringify(receipt)).toBe('applied');expect(dispose).toHaveBeenCalledOnce();expect(uncache).toHaveBeenCalledOnce();expect(runtime.environment.colliderCount).toBe(count);
     dispose.mockRestore();uncache.mockRestore();
   }
-  expect(runtime.options.character.animation!.loaded).toBe(true);world.step({},1);
+  expect(runtime.options.character.animation!.loaded).toBe(true);world.step({},1);world.dispose();expect(allocate).toHaveBeenCalledTimes(50);expect(free).toHaveBeenCalledTimes(50);
 },30000);
 
 it('rejects binding a live character into another world without damaging its owner',async()=>{
@@ -267,4 +268,24 @@ it('preserves a completed navigation step when that actor receives a new goal',a
   expect((await world.execute({type:'actor.move-to',entityId:'a',targetPositionWorldMetersXYZ:[0,0,3]})).status).toBe('accepted');
   expect(world.operations.get(group.operationId).steps![0]!.status).toBe('succeeded');world.step({},360);
   expect(world.operations.get(group.operationId)).toMatchObject({status:'succeeded',steps:[{status:'succeeded'},{status:'succeeded'}]});
+});
+
+it('steers two full NPCs past each other and reproduces their route after reset',async()=>{
+  const world=await setup();for(const [id,x] of [['left',-3],['right',3]] as const){const actor=await world.humanoid!.createCharacter();actor.root.position.set(x,.04,0);world.addCharacter({id,humanoid:actor});}
+  await world.start();world.stop();const traces:number[][][]=[];
+  for(let run=0;run<2;run++){
+    if(run)await world.reset();
+    const receipts=[];for(const [id,x] of [['left',3],['right',-3]] as const)receipts.push(await world.execute({type:'actor.move-to',entityId:id,targetPositionWorldMetersXYZ:[x,0,0]}));
+    expect(receipts.map(result=>result.status)).toEqual(['accepted','accepted']);
+    const sequence=world.humanoid!.environment.physicsStepSequence;const trace:number[][]=[];let minDistance=Infinity,maxLateral=0;
+    for(let tick=0;tick<720;tick++){
+      world.step({},1);const a=world.getEntityState('left').positionWorldMetersXYZ,b=world.getEntityState('right').positionWorldMetersXYZ;
+      minDistance=Math.min(minDistance,Math.hypot(a[0]-b[0],a[2]-b[2]));maxLateral=Math.max(maxLateral,Math.abs(a[2]),Math.abs(b[2]));
+      if(tick%30===0)trace.push([...a,...b].map(value=>Math.round(value*1000)/1000));
+    }
+    expect(world.humanoid!.environment.physicsStepSequence-sequence).toBe(720);
+    for(const receipt of receipts)if(receipt.status==='accepted')expect(world.operations.get(receipt.operationId).status).toBe('succeeded');
+    expect(minDistance).toBeGreaterThan(.62);expect(maxLateral).toBeGreaterThan(.3);expect(world.snapshot().errors).toEqual([]);traces.push(trace);
+  }
+  expect(traces[1]).toEqual(traces[0]);
 });

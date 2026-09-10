@@ -437,8 +437,13 @@ world.setControlledEntity('person');
 Each actor has its own controller, skeleton, mixer and action state. All actors
 share the physics world, interaction targets and fixed clock. Ground navigation
 uses committed fixed/kinematic collider geometry, including map surfaces without
-visual meshes. Actual dynamic obstacles and other characters remain subject to
-live collision; an obstructed route can fail with a blocked result.
+visual meshes. Ground NPCs use Detour Crowd to steer around nearby characters from committed
+positions and velocities; their existing controllers still resolve every physical
+move. Controlled input and custom movement are not overwritten by avoidance.
+Crowd processing uses stable actor identity order and is rebuilt with navigation.
+Dynamic obstacles still require live collision; a persistently obstructed route
+can fail with a blocked result. An actor outside the navigation mesh fails only
+its own navigation task, without stopping other actors or the world.
 
 Full humanoid roots use unit scale, yaw-only rotation and automatic local matrix
 updates, directly under an untransformed Scene or without a parent. Set the root

@@ -82,12 +82,17 @@ Creator/Episode 三人物示例现已实现。参见 [R2 验证记录](../../rev
 完整人形 prototype 消费与候选场景事务已通过本地验证。初始人物与 NPC 已迁移为统一
 Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消费者回归已完成；
 参见 [统一 Actor 验证](../../reviews/2026-09-11-unified-actors.md)。
-确定性绕让仍待收尾，不将实际碰撞停住描述成已完成绕让。
+局部绕让已复用 Detour Crowd，保持角色控制器和共享 Rapier 的唯一实际位移归属；
+真实对向通行、复位轨迹、50 次导航/删除、3/10 角色巡逻及 Creator/Episode 已通过，
+见 [绕让验证](../../reviews/2026-09-11-actor-navigation-avoidance.md)。
+进一步检查发现 Humanoid world 的普通 Mesh character 注册/推进仍有旧限制，
+混合角色能力需要继续收敛，不能把单独 createWorld 的可用性当作混合世界已完成。
 
 - [x] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
-- [ ] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
+- [x] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
 - [x] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
-- [ ] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段提交与验证记录。
+- [x] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段提交与验证记录。
+- [ ] 同一个 Humanoid world 的普通 Mesh/AssetInstance 角色与完整人形共享物理、输入/自主移动及动画；清除旧注册限制，明确相机与 Episode 选择归属。
 
 ## R3：共享目标与资源
 

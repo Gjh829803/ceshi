@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NavMesh, NavMeshQuery } from '@recast-navigation/core';
+import { Crowd, NavMesh, NavMeshQuery, Raw } from '@recast-navigation/core';
 import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
-import { ThreeNavigation } from './navigation';
+import { ThreeNavigation,type NavigationActor } from './navigation';
 import type { Vec3 } from './contracts';
 import { setEntityBoundary } from './geometry';
 
@@ -127,4 +127,39 @@ describe('ThreeNavigation with real Recast and native mesh geometry', () => {
     expect(nav.findPath([16, 0, -10], [24, 0, -10]).reason).toBe('NAVIGATION_EMPTY');
   });
 
+});
+
+describe('installed Detour crowd resource ownership',()=>{
+  it('releases temporary native parameters on add, update and capacity rejection',async()=>{
+    const nav=await create();nav.rebuild([floor()]);const crowd=new Crowd((nav as unknown as {navMesh:NavMesh}).navMesh,{maxAgents:1,maxAgentRadius:.3});
+    const Constructor=Raw.Module.dtCrowdAgentParams,allocated:unknown[]=[],freed:unknown[]=[];const destroy=Raw.destroy;
+    const constructor=vi.spyOn(Raw.Module,'dtCrowdAgentParams').mockImplementation(function(){const params=new Constructor();allocated.push(params);return params;});
+    const release=vi.spyOn(Raw,'destroy').mockImplementation(value=>{freed.push(value);destroy(value);});
+    try{
+      const agent=crowd.addAgent({x:0,y:0,z:0},{radius:.3,height:1.8});
+      for(let tick=0;tick<60;tick++)agent.updateParameters({maxSpeed:2+tick/60});
+      expect(()=>crowd.addAgent({x:2,y:0,z:0},{radius:.3,height:1.8})).toThrow('RECAST_CROWD_AGENT_CAPACITY');
+      expect(allocated.length).toBe(62);for(const value of allocated)expect(freed.filter(item=>item===value)).toHaveLength(1);
+      expect(agent.maxSpeed).toBeCloseTo(2+59/60);expect(crowd.getActiveAgentCount()).toBe(1);
+    }finally{constructor.mockRestore();release.mockRestore();crowd.destroy();}
+  });
+  it('releases its borrowed query wrapper and owned filter without freeing the borrowed query twice',async()=>{
+    const nav=await create();nav.rebuild([floor()]);const crowd=new Crowd((nav as unknown as {navMesh:NavMesh}).navMesh,{maxAgents:2,maxAgentRadius:.3});
+    const borrowed=crowd.navMeshQuery.raw,filter=crowd.navMeshQuery.defaultFilter.raw,destroy=vi.spyOn(Raw,'destroy'),queryDestroy=vi.spyOn(crowd.navMeshQuery,'destroy'),free=vi.spyOn(Raw.Detour,'freeCrowd');let disposed=false;
+    try{crowd.destroy();disposed=true;expect(destroy.mock.calls.filter(([value])=>value===borrowed)).toHaveLength(1);expect(destroy.mock.calls.filter(([value])=>value===filter)).toHaveLength(1);expect(queryDestroy).not.toHaveBeenCalled();crowd.destroy();expect(free).toHaveBeenCalledOnce();expect(nav.findPath([-2,0,0],[2,0,0]).status).toBe('success');}
+    finally{destroy.mockRestore();queryDestroy.mockRestore();free.mockRestore();if(!disposed)crowd.destroy();}
+  });
+});
+
+it('isolates an off-mesh actor and leaves the supplied physical poses untouched',async()=>{
+  const nav=await create();nav.rebuild([floor()]);
+  const actors:NavigationActor[]=[{id:'off-mesh',positionWorldMetersXYZ:[20,3,0],velocityWorldMetersPerSecondXYZ:[0,0,0],radiusMeters:.3,heightMeters:1.8,desiredVelocityMetersPerSecondXZ:[1,0]},
+    {id:'walking',positionWorldMetersXYZ:[0,0,0],velocityWorldMetersPerSecondXYZ:[0,0,0],radiusMeters:.3,heightMeters:1.8,desiredVelocityMetersPerSecondXZ:[0,1]}];
+  const before=structuredClone(actors),result=nav.steer(actors,1/60);
+  expect(result.get('off-mesh')).toEqual({velocityMetersPerSecondXZ:[0,0],error:'NAVIGATION_AVOIDANCE_OFF_MESH'});expect(result.get('walking')?.error).toBeUndefined();expect(actors).toEqual(before);
+});
+it('cleans up a Crowd whose native initialization fails',async()=>{
+  const nav=await create();nav.rebuild([floor()]);const raw=Raw.Detour.allocCrowd(),init=vi.spyOn(raw,'init').mockReturnValue(false),allocate=vi.spyOn(Raw.Detour,'allocCrowd').mockReturnValue(raw),free=vi.spyOn(Raw.Detour,'freeCrowd');
+  try{expect(()=>new Crowd((nav as unknown as {navMesh:NavMesh}).navMesh,{maxAgents:2,maxAgentRadius:.3})).toThrow('RECAST_CROWD_INIT_FAILED');expect(free).toHaveBeenCalledOnce();expect(nav.findPath([-2,0,0],[2,0,0]).status).toBe('success');}
+  finally{init.mockRestore();allocate.mockRestore();free.mockRestore();}
 });

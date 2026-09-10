@@ -102,11 +102,11 @@ it.each([
   object.geometry.dispose();object.material.dispose();
 });
 
-async function fixture() {
+async function fixture(navigation=false) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, .05, 100);
   camera.position.set(0, 4, 8); camera.lookAt(0, 1, 0);
-  const world = await createWorld({ scene, camera, navigation: false });
+  const world = await createWorld({ scene, camera, navigation });
   liveWorlds.push(world);
   const ground = box(40, 1, 40); ground.position.y = -.5;
   world.addEntity({ id: 'ground', object: ground, role: 'terrain' });
@@ -470,4 +470,11 @@ it('preserves a structured update failure through engine capture and returns ind
  (first[0]!.entityIds as string[]).push('must-not-persist');
  expect(world.snapshot().errors[0]!.entityIds).toEqual(['hero']);
  unsubscribe();await world.reset();expect(world.snapshot().errors).toEqual([]);
+});
+
+it('keeps NPC navigation running when the controlled actor leaves the navmesh',async()=>{
+  const {world}=await fixture(true),npc=new THREE.Group();npc.position.set(4,.05,0);world.addCharacter({id:'walker',object:npc,body:{heightMeters:1.8,radiusMeters:.3}});
+  await sealPaused(world);const route=operationId(await world.execute({type:'actor.move-to',entityId:'walker',targetPositionWorldMetersXYZ:[4,0,6]}));
+  expect((await world.execute({type:'entity.set-position',entityId:'hero',positionWorldMetersXYZ:[25,3,0]})).status).toBe('applied');
+  expect(()=>world.step({},360)).not.toThrow();expect(world.operations.get(route).status).toBe('succeeded');expect(world.snapshot().errors).toEqual([]);
 });

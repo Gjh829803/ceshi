@@ -15,7 +15,9 @@ const example = process.argv[3] ?? 'character-actions';
 const recordActions = process.argv.includes('--record-actions');
 const skipPerformance = process.argv.includes('--skip-performance');
 const skipCreator = process.argv.includes('--skip-creator');
+const patrolActors=process.argv.includes('--patrol-actors');
 const actorCount=Number(process.argv.find(value=>value.startsWith('--actors='))?.split('=')[1]??1);
+if(patrolActors&&actorCount<3)throw new Error('PATROL_REQUIRES_MULTIPLE_ACTORS');
 if(![1,3,10].includes(actorCount)||(actorCount>1&&example!=='custom-vehicle'))throw new Error('BASELINE_ACTOR_COUNT_INVALID');
 if (process.env.WORLDKIT_CAPTURE_GPU === '1') throw new Error('BASELINE_REQUIRES_SWIFTSHADER: unset WORLDKIT_CAPTURE_GPU');
 if (!['character-actions', 'custom-vehicle'].includes(example)) throw new Error('Unsupported baseline example');
@@ -24,11 +26,11 @@ const workspace = path.join(output, 'workspace');
 await cp(path.resolve('examples/three-creator', example), workspace, {recursive: true,
   filter: source => !source.includes('.three-creator')});
 let mainSource=await readFile(path.join(workspace,'main.ts'),'utf8');
-if(actorCount>1)mainSource=mainSource.replace('await world.start();',`for(let n=1;n<${actorCount};n++){const actor=await world.humanoid!.createCharacter();actor.root.position.set(10+(n%3)*3,.04,8+Math.floor(n/3)*3);world.addCharacter({id:'benchmark-actor-'+n,humanoid:actor});}\nawait world.start();`);
+if(actorCount>1)mainSource=mainSource.replace('await world.start();',`for(let n=1;n<${actorCount};n++){const actor=await world.humanoid!.createCharacter();actor.root.position.set(10+(n%3)*3,.04,8+Math.floor(n/3)*3);world.addCharacter({id:'benchmark-actor-'+n,humanoid:actor});${patrolActors?`const {x,z}=actor.root.position;world.setAutonomy('benchmark-actor-'+n,{kind:'patrol',waypointPositionsWorldMetersXYZ:[[x+.65,0,z+.65],[x-.65,0,z+.65],[x-.65,0,z-.65],[x+.65,0,z-.65]]});`:''}}\nawait world.start();`);
 await writeFile(path.join(workspace,'main.ts'),mainSource+'\n(window as any).__BASELINE_WORLD__ = world;\n');
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const report: Record<string, unknown> = {
-  kind: 'local-runtime-baseline', schemaVersion: 1, example, actorCount, startedAt: new Date().toISOString(),
+  kind: 'local-runtime-baseline', schemaVersion: 1, example, actorCount, patrolActors, startedAt: new Date().toISOString(),
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim(),
   sourceDiffSha256: hash(execFileSync('git', ['diff', 'HEAD'])),
   harnessSha256: hash(await readFile(new URL(import.meta.url))),
@@ -169,7 +171,7 @@ try {
     // tsx keepNames emits __name calls inside serialized page functions.
     // Supply that no-op naming helper in this isolated test page only.
     await session.page.evaluate('globalThis.__name = (fn) => fn');
-    report.performance = await session.page.evaluate(({neutral}) => {
+    report.performance = await session.page.evaluate(({neutral,patrolActors}) => {
       const w = (window as any).__BASELINE_WORLD__, engine = w.engine;
       const port = (window as any).__WORLDKIT_EVAL__.episode;
       const physics = w.humanoid.simulation.environment.world;
@@ -188,15 +190,19 @@ try {
         for(let round=0; round<3; round++) {
           fixedSamples = []; renderSamples = []; mixerEvaluations = 0; physicsSteps = 0;
           const start = w.snapshot().simulationTick;
-          for(let frame=0; frame<600; frame++) {port.advance(neutral, 1); engine.render();}
+          const travel=Object.fromEntries([...w.humanoid.actors.keys()].map((id:string)=>[id,0]));
+          const previous=new Map<string,any>([...w.humanoid.actors].map(([id,binding]:[string,any]):[string,any]=>[id,binding.object.position.clone()]));
+          for(let frame=0; frame<600; frame++) {port.advance(neutral, 1); engine.render();for(const [id,binding] of w.humanoid.actors){const last=previous.get(id);travel[id]+=binding.object.position.distanceTo(last);last.copy(binding.object.position);}}
+          if(patrolActors&&Object.entries(travel).some(([id,distance])=>id.startsWith('benchmark-actor-')&&(distance as number)<.5))throw new Error('PATROL_BENCHMARK_DID_NOT_MOVE');
+          if(w.snapshot().errors.length)throw new Error(JSON.stringify(w.snapshot().errors));
           rounds.push({round, fromTick: start, toTick: w.snapshot().simulationTick, fixed: summarize(fixedSamples),
-            render: summarize(renderSamples), mixerEvaluations, physicsSteps,
+            render: summarize(renderSamples), mixerEvaluations, physicsSteps, actorTravelMeters:travel,
             bodyCount: physics.bodies.len(), colliderCount: physics.colliders.len(),
             jsHeapUsedBytes: (performance as any).memory?.usedJSHeapSize ?? null, rendererMemory: {...w.renderer.info.memory}});
         }
       } finally {engine.fixedStep = fixed; w.renderer.render = render; mixers.forEach((mixer,index)=>{mixer.update=updates[index];}); physics.step = step;}
-      return {scenario: `stationary ${mixers.length} Source101 actors; fixed 60 Hz; 600 frames per round`, rounds};
-    }, {neutral});
+      return {scenario: `${mixers.length} Source101 actors; ${patrolActors?'NPC patrol loops':'stationary'}; fixed 60 Hz; 600 frames per round`, rounds};
+    }, {neutral,patrolActors});
     }
     report.episodeErrors = [...session.errors]; await save();
     assert.deepEqual(session.errors, [], 'Episode browser errors');

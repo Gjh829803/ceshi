@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@recast-navigation/core@0.43.1':
-    hash: 7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd
+    hash: 3a53408878a25c418799a5f4439e13ea6e5121a2e87e7812ca05483bfaf46fb1
     path: patches/@recast-navigation__core@0.43.1.patch
   '@recast-navigation/generators@0.43.1':
     hash: 6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6
@@ -139,7 +139,7 @@ importers:
         version: 1.8.0
       '@recast-navigation/core':
         specifier: 0.43.1
-        version: 0.43.1(patch_hash=7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd)
+        version: 0.43.1(patch_hash=3a53408878a25c418799a5f4439e13ea6e5121a2e87e7812ca05483bfaf46fb1)
       '@recast-navigation/generators':
         specifier: 0.43.1
         version: 0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)
@@ -4214,13 +4214,13 @@ snapshots:
 
   '@radix-ui/rect@1.1.3': {}
 
-  '@recast-navigation/core@0.43.1(patch_hash=7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd)':
+  '@recast-navigation/core@0.43.1(patch_hash=3a53408878a25c418799a5f4439e13ea6e5121a2e87e7812ca05483bfaf46fb1)':
     dependencies:
       '@recast-navigation/wasm': 0.43.1
 
   '@recast-navigation/generators@0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)':
     dependencies:
-      '@recast-navigation/core': 0.43.1(patch_hash=7a330d1418a92699943cf161cdcb47c6e144a6858bb0cfbcb33aa91dd1de33dd)
+      '@recast-navigation/core': 0.43.1(patch_hash=3a53408878a25c418799a5f4439e13ea6e5121a2e87e7812ca05483bfaf46fb1)
       '@recast-navigation/wasm': 0.43.1
 
   '@recast-navigation/wasm@0.43.1': {}

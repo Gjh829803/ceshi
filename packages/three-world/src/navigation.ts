@@ -1,5 +1,5 @@
 import type {NavigationGeometry} from './physics-navigation';
-import { Detour, NavMeshQuery, Raw, init, statusDetail, type NavMesh } from '@recast-navigation/core';
+import { Crowd, type CrowdAgent, Detour, NavMeshQuery, Raw, init, statusDetail, type NavMesh } from '@recast-navigation/core';
 import { generateTiledNavMesh } from '@recast-navigation/generators';
 import { Box3, Vector3, type Object3D } from 'three';
 import type { Vec3 } from './contracts';
@@ -11,6 +11,12 @@ type NavigationOptions = {
   maximumStepHeightMeters?: number;
   maximumSlopeDegrees?: number;
 };
+export interface NavigationActor {
+  id:string;positionWorldMetersXYZ:Vec3;velocityWorldMetersPerSecondXYZ:Vec3;
+  radiusMeters:number;heightMeters:number;
+  desiredVelocityMetersPerSecondXZ?:readonly [number,number];
+}
+export interface NavigationSteering {velocityMetersPerSecondXZ:readonly [number,number];error?:string}
 type PathResult = { status: 'success' | 'unreachable'; points: Vec3[]; reason?: string };
 const MAXIMUM_TRIANGLES = 250_000;
 const MAXIMUM_GRID_CELLS = 4_000_000;
@@ -32,6 +38,9 @@ function cleanupAll(operations: (() => void)[]): void {
 /** Recast ground navigation derived from the same visible triangles as rigid collision. */
 export class ThreeNavigation {
   private navMesh: NavMesh | undefined;
+  private crowd:Crowd|undefined;
+  private readonly crowdActors=new Map<string,CrowdAgent>();
+  private crowdCapacity=0;private crowdRadius=0;
   private query: NavMeshQuery | undefined;
   private disposed = false;
   private unavailableReason = 'NAVIGATION_NOT_BUILT';
@@ -187,10 +196,48 @@ export class ThreeNavigation {
     } finally { corridor.polys.destroy(); }
   }
 
+  /** Detour predicts avoidance; only the SDK character controller commits displacement. */
+  steer(actors:readonly NavigationActor[],dt:number):Map<string,NavigationSteering>{
+    const result=new Map<string,NavigationSteering>();
+    for(const actor of actors)if(actor.desiredVelocityMetersPerSecondXZ)result.set(actor.id,{velocityMetersPerSecondXZ:actor.desiredVelocityMetersPerSecondXZ});
+    if(!this.navMesh||actors.length<2||!result.size)return result;
+    const radius=Math.max(...actors.map(actor=>actor.radiusMeters));
+    if(!this.crowd||actors.length>this.crowdCapacity||radius>this.crowdRadius){
+      this.clearCrowd();this.crowdCapacity=2**Math.ceil(Math.log2(actors.length));this.crowdRadius=radius;
+      this.crowd=new Crowd(this.navMesh,{maxAgents:this.crowdCapacity,maxAgentRadius:radius});
+    }
+    const crowd=this.crowd,ids=new Set(actors.map(actor=>actor.id));
+    for(const [id,agent] of this.crowdActors)if(!ids.has(id)){crowd.removeAgent(agent);this.crowdActors.delete(id);}
+    for(const actor of [...actors].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0)){
+      const [x,y,z]=actor.positionWorldMetersXYZ,desired=actor.desiredVelocityMetersPerSecondXZ??[actor.velocityWorldMetersPerSecondXYZ[0],actor.velocityWorldMetersPerSecondXYZ[2]];
+      const speed=Math.hypot(...desired),params={radius:actor.radiusMeters,height:actor.heightMeters,maxSpeed:speed,collisionQueryRange:Math.max(actor.radiusMeters*12,speed*1.5),separationWeight:2};
+      let agent=this.crowdActors.get(actor.id);
+      if(!agent){agent=crowd.addAgent({x,y,z},params);this.crowdActors.set(actor.id,agent);}
+      else agent.updateParameters(params);
+      agent.teleport({x,y,z});
+      // Feed committed velocity into prediction; acceleration remains the movement owner's job.
+      for(let axis=0;axis<3;axis++)agent.raw.set_vel(axis,actor.velocityWorldMetersPerSecondXYZ[axis]!);
+      agent.requestMoveVelocity({x:desired[0]!,y:0,z:desired[1]!});
+    }
+    crowd.update(dt);
+    for(const actor of actors)if(actor.desiredVelocityMetersPerSecondXZ){
+      const agent=this.crowdActors.get(actor.id)!;
+      if(agent.state()===0){result.set(actor.id,{velocityMetersPerSecondXZ:[0,0],error:'NAVIGATION_AVOIDANCE_OFF_MESH'});continue;}
+      const velocity=agent.desiredVelocityObstacleAdjusted();
+      result.set(actor.id,{velocityMetersPerSecondXZ:[velocity.x,velocity.z]});
+    }
+    return result;
+  }
+  private clearCrowd():void{
+    const crowd=this.crowd;this.crowd=undefined;this.crowdActors.clear();this.crowdCapacity=0;this.crowdRadius=0;
+    crowd?.destroy();
+  }
+
   private clear(): void {
     const query = this.query, mesh = this.navMesh;
     this.query = undefined; this.navMesh = undefined;
     cleanupAll([
+      ()=>this.clearCrowd(),
       ...(query ? [() => query.destroy(), () => Raw.destroy(query.raw), () => Raw.destroy(query.defaultFilter.raw)] : []),
       ...(mesh ? [() => mesh.destroy()] : []),
     ]);

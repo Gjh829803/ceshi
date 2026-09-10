@@ -10,7 +10,7 @@ import { HumanoidRuntime,type HumanoidRuntimeOptions } from './humanoid-runtime/
 import { emptyInput } from './humanoid-runtime/simulation';
 import { WorldInputRouter,WorldKeyboard } from './input.js';
 import { LocomotionAnimation } from './locomotion-animation.js';
-import { ThreeNavigation } from './navigation.js';
+import { ThreeNavigation,type NavigationSteering } from './navigation.js';
 import { ThreePhysics } from './physics.js';
 import { ownViewport } from './viewport.js';
 
@@ -273,7 +273,7 @@ export class WorldEngine {
         const mode=this.humanoid.followCamera.mode;
         const drives:Record<string,CharacterDrive>={};
         for(const [id,goal] of this.goals)if(id!==this.controlled&&this.entities.has(id))drives[id]=this.goalDrive(id,goal,dt);
-        humanoidHost(this.humanoid).advance(input,dt,this.pointerInput,drives);
+        this.steerNavigation(drives,dt);humanoidHost(this.humanoid).advance(input,dt,this.pointerInput,drives);
         if(mode!==this.humanoid.followCamera.mode)this.inputRouter.releasePointerLock();
         this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;
       }
@@ -294,6 +294,7 @@ export class WorldEngine {
       }
       for (const [id, goal] of this.goals) if (id !== this.controlled && this.entities.has(id)) drives[id] = this.goalDrive(id, goal, dt);
       for(const [id,e] of this.entities)if(e.character){const custom=this.driveProvider?.(id,id===this.controlled?input:{},id===this.controlled?desiredDirection:[0,0,0],dt);if(custom){drives[id]=custom.drive;if(custom.facing)this.faceDirection(e,new THREE.Vector3().fromArray(custom.facing));if(custom.actionId)customActions.set(id,custom.actionId);}}
+      this.steerNavigation(drives,dt);
       this.physics.step(dt, drives); this.tick += 1;
       this.previousJump = Boolean(input.jump); this.previousInteract = Boolean(input.interact);
       for (const [id, entity] of this.entities) if (entity.asset) {
@@ -354,6 +355,19 @@ export class WorldEngine {
     const actor = this.entity(id); if (!actor.character) throw new Error('WORLD_ACTOR_REQUIRED');
     const path = this.ensureNavigation(actor).findPath(tuple(position(actor.object)), target);
     if (path.status !== 'success' || !path.points.length) throw new Error(`WORLD_PATH_UNREACHABLE: ${path.reason ?? id}`); return path.points;
+  }
+  private steerNavigation(drives:Record<string,CharacterDrive>,dt:number):void{
+    if(!this.navigation||!Object.keys(drives).length)return;
+    const vehicles=new Set(this.humanoid?.options.vehicles.map(vehicle=>vehicle.instanceId));
+    const actors=[...this.entities.values()].filter(entity=>entity.character&&!vehicles.has(entity.options.id)&&!(this.humanoid?.hasActor(entity.options.id)&&this.humanoid.actorController(entity.options.id).isMounted));
+    let steered:Map<string,NavigationSteering>;
+    try{steered=this.navigation.steer(actors.map(entity=>{
+      const id=entity.options.id,body=this.physics.characterSettings(id),state=this.physics.state(id),drive=drives[id];
+      return {id,positionWorldMetersXYZ:tuple(position(entity.object)),velocityWorldMetersPerSecondXYZ:state?.velocityMetersPerSecondXYZ??[0,0,0],radiusMeters:body.radiusMeters,heightMeters:body.heightMeters,...(id!==this.controlled&&this.goals.has(id)&&drive&&'velocityMetersPerSecondXZ' in drive?{desiredVelocityMetersPerSecondXZ:drive.velocityMetersPerSecondXZ}:{})};
+    }),dt);}catch(error){
+      steered=new Map(Object.entries(drives).filter(([id,drive])=>id!==this.controlled&&this.goals.has(id)&&'velocityMetersPerSecondXZ' in drive).map(([id])=>[id,{velocityMetersPerSecondXZ:[0,0] as const,error:`NAVIGATION_AVOIDANCE_FAILED: ${String(error)}`} ]));
+    }
+    for(const [id,result] of steered){const drive=drives[id];if(drive&&'velocityMetersPerSecondXZ' in drive)drives[id]={...drive,velocityMetersPerSecondXZ:result.velocityMetersPerSecondXZ};if(result.error){this.taskResults.set(id,{status:'failed',error:result.error});this.goals.delete(id);}}
   }
   private goalDrive(id: string, goal: ActorGoal, dt: number): CharacterDrive {
     const actor = this.entity(id); const current = position(actor.object); goal.repathSeconds += dt;
