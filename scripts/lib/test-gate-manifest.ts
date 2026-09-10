@@ -67,6 +67,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/humanoid-runtime/vehicle-inspection.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/water-feedback.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/wheel-physics.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/humanoid-source-lifecycle.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "packages/three-world/src/humanoid.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/input.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/three-world/src/locomotion-animation.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

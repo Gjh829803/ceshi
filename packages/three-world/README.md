@@ -37,6 +37,16 @@ world interfaces. `humanoid` input and snapshot fields refer to this runtime.
 uses the supplied object and optional animation. Available actions follow those
 actual bindings and scene conditions.
 
+Complete humanoid loads share a template keyed by the resolved resource URL
+closure. Keep those URLs immutable for their content version. Each instance has
+independent skeletons, inverse-bind matrices, mixer clips, materials and texture
+objects; geometry is shared read-only. Clone geometry explicitly before editing
+it and retain ownership of that authored copy. Disposing one character releases
+its instance resources; the final instance releases the shared template.
+Failed loads/bindings release partial resources, and a disposed character cannot
+be revived by an in-flight load. This resource sharing does not itself register
+additional physical actors or provide autonomous behavior.
+
 `WorldObservation.controlledObject` is the current controlled entity's live
 `THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
 It is separate from `world.humanoid`; observers expose runtime state through

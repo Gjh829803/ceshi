@@ -65,6 +65,12 @@ SDK 741 tests 通过；下游原有潜艇路线失败已用原始源码/依赖�
 
 文件：`world.ts`、`contracts.ts`、`engine.ts`、`navigation.ts`、`assets.ts`、Humanoid runtime/controller、Creator command schema、Episode contracts/action-controller、Playground 与多人样例。
 
+资源基础已完成：完整人物按资源 URL 闭包共享模板，骨架/逆绑定矩阵/mixer/clip/材质/
+纹理对象独立；最后 lease 释放共享几何。部分加载、克隆、adopt 和清理监听器失败，
+以及异步加载晚于角色 dispose 都有真实资源测试。116 项相关测试与 Creator/Episode
+单人物推箱/reset 通过；记录在 `.codex-tmp/r0/r2-source-*` 和 `.codex-tmp/r2-source-browser`。
+这只完成 R2 的资源基础，不代表多 Actor 输入、导航或共享交互已完成。
+
 - [ ] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [ ] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
 - [ ] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
