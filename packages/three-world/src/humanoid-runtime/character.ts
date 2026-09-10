@@ -35,7 +35,7 @@ export class MountedRiderPose {
     for (const { bone, base } of this.entries) bone.quaternion.copy(base);
     this.applied = false;
   }
-  apply(weight = 1, mode: 'unicycle' | 'ride' | 'drive' | 'sled' | 'ski' | 'kayak' = 'ride', sled?:HumanoidRenderState['sledPose'], unicycle?:HumanoidRenderState['unicyclePose']) {
+  apply(weight = 1, mode: 'unicycle' | 'ride' | 'drive' | 'sled' | 'ski' | 'paddling' = 'ride', sled?:HumanoidRenderState['sledPose'], unicycle?:HumanoidRenderState['unicyclePose']) {
     this.restore(); this.actor.updateWorldMatrix(true, true);
     this.actor.getWorldQuaternion(this.actorRotation).normalize();
     for (const { bone, child, side, joint, base } of this.entries) {
@@ -60,7 +60,7 @@ export class MountedRiderPose {
         else if(joint==='upperarm')this.targetDirection.set(side*.6,-.8,.25-push*.25);
         else this.targetDirection.set(side*.12,-.25,.9-push*.45);
       }
-      else if(mode==='kayak'){
+      else if(mode==='paddling'){
         if(joint==='thigh')this.targetDirection.set(side*.12,-.04,1);
         else if(joint==='calf')this.targetDirection.set(0,-.08,1);
         else if(joint==='foot')this.targetDirection.set(0,.1,1);
@@ -231,10 +231,10 @@ export class Character {
     const smoothing=source.smoothing;
     // An enclosed driver must have its calibrated full sitting pose even on the
     // entry/reset boundary. Do not blend a standing body through the cabin roof.
-    if(mode==='unicycle'||mode==='sub'||mode==='tank'||mode==='atv')source.smoothing=false;
+    if(mode==='unicycle'||mode==='submarine'||mode==='tank'||mode==='atv')source.smoothing=false;
     try{source.update(dt,this.frame);}finally{source.smoothing=smoothing;}
     if (mounted && mode !== 'stand') {
-      this.overlay!.apply(1, mode === 'unicycle' ? 'unicycle' : mode === 'kayak' ? 'kayak' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
+      this.overlay!.apply(1, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
       // Align the true source pelvis with the host's seat/saddle attachment.
       this.actor.updateWorldMatrix(true, true);
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);
@@ -253,6 +253,6 @@ export class Character {
       if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
     }
     this.root.updateWorldMatrix(true, true);
-    if(mode==='kayak'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);
+    if(mode==='paddling'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);
   }
 }

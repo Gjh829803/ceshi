@@ -280,9 +280,10 @@ export interface CameraState {
  readonly framingMode?:'preserve-opening'|'target';
  readonly positionWorldMetersXYZ:Vec3;
  readonly orientationWorldQuaternionXYZW:readonly [number,number,number,number];
- readonly desiredPositionWorldMetersXYZ:Vec3;
- readonly desiredYawRadians:number;
- readonly desiredPitchRadians:number;
+ /** Follow intent; null when authored mode has no SDK follow target. Read actual pose above. */
+ readonly desiredPositionWorldMetersXYZ:Vec3|null;
+ readonly desiredYawRadians:number|null;
+ readonly desiredPitchRadians:number|null;
  readonly desiredArmDistanceMeters?:number;
  readonly safeArmDistanceMeters?:number;
  readonly actualArmDistanceMeters?:number;

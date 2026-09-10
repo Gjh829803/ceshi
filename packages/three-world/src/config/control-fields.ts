@@ -18,11 +18,11 @@ export function controlFields(family:string,powertrain=false):ControlField[]{
  if(powertrain&&family==='tank')return controlFields('tank',false).map(f=>({...f,disabled:['accel','coastDeceleration','throttleResponse'].includes(f.key),note:['accel','coastDeceleration','throttleResponse'].includes(f.key)?'由发动机、变速箱和履带阻力决定。':f.note}));
  if(powertrain&&family==='jetski')return controlFields('jetski',false).map(f=>({...f,disabled:['accel','throttleResponse'].includes(f.key),note:['accel','throttleResponse'].includes(f.key)?'由发动机与喷泵传动决定。':f.note}));
  if(family==='unicycle')return controlFields('wheeled').filter(f=>['speed','maxSpeed','reverseSpeed','accel','coastDeceleration','brakeDeceleration','steer','steeringResponse','steeringReturn','pitchResponse','rollResponse'].includes(f.key)).map(f=>({...f,note:f.key==='accel'?'收脚回踏板后建立踩踏推进；悬空时无推进。':f.key==='coastDeceleration'?'松键自动减速；停稳后左脚寻找真实地面支撑。':f.key==='steer'?'依靠重心转向；原地不转动，低速转向减弱。':f.note,label:f.key==='steer'?'平衡转向速率':f.label,unit:f.key==='steer'?'rad/s':f.unit}));
- if(family==='raft')return [...controlFields('kayak').map(f=>({...f,note:f.key==='speed'?'单人划行限速；Shift 提高划桨频率。':f.key==='accel'?'桨叶入水时产生推进；地面只受重力和摩擦。':f.note})),{key:'brakeDeceleration',label:'陆地制动',unit:'m/s²',step:.1,note:'Space 拖地制动；松键仍可沿坡面滑动。',section:'加速与减速'}];
- if(family==='kayak')return [
+ if(family==='raft')return [...controlFields('paddled_boat').map(f=>({...f,note:f.key==='speed'?'单人划行限速；Shift 提高划桨频率。':f.key==='accel'?'桨叶入水时产生推进；地面只受重力和摩擦。':f.note})),{key:'brakeDeceleration',label:'陆地制动',unit:'m/s²',step:.1,note:'Space 拖地制动；松键仍可沿坡面滑动。',section:'加速与减速'}];
+ if(family==='paddled_boat')return [
   {key:'speed',label:'前划限速',unit:'m/s',step:.1,note:'划桨速度上限；Shift 不增加动力。',section:'速度范围'},
   {key:'reverseSpeed',label:'倒划限速',unit:'m/s',step:.1,note:'反向划桨先抵消前进动量。',section:'速度范围'},
-  {key:'accel',label:'划桨峰值加速度',unit:'m/s²',step:.1,note:'每 1.12 秒一次单侧划桨；回桨不推进。',section:'加速与减速'},
+  {key:'accel',label:'划桨峰值加速度',unit:'m/s²',step:.1,note:'桨叶有效入水阶段产生推进；回桨不推进。',section:'加速与减速'},
   {key:'coastDeceleration',label:'线性水阻',unit:'/s',step:.01,note:'无输入时保留动量并逐渐滑停。',section:'加速与减速'},
   {key:'dragQuadratic',label:'速度平方水阻',unit:'1/m',step:.001,note:'高速时阻力更明显。',section:'加速与减速'},
   {key:'brakeDamping',label:'压桨制动阻尼',unit:'/s',step:.1,note:'Space 将桨叶压入水中减速。',section:'加速与减速'},
@@ -53,7 +53,7 @@ export function controlFields(family:string,powertrain=false):ControlField[]{
   {key:'steer',label:'拖脚转向速率',unit:'rad/s',step:.01,note:'随速度建立转向效果；静止不能原地转圈。',section:'转向与稳定'},
   ...(['steeringResponse','steeringReturn','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回弹',pitchResponse:'顺坡俯仰响应',rollResponse:'横坡姿态响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
  ];
- const person=family==='character',road=['wheeled','motorcycle'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','motorcycle','slide','hover','boat'].includes(family);
+ const person=family==='character',road=['wheeled','motorcycle'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='submarine',space=family==='spacecraft',surface=['wheeled','motorcycle','skateboard','hover','boat'].includes(family);
  const fields:ControlField[]=[];
  const add=(key:Key,label:string,unit:string,note:string,section:ControlField['section'],step=.1,disabled=false)=>fields.push({key,label,unit,note,section,step,disabled});
  add('speed',person?'基础移速基准':creature?'步态速度基准':air||sub||space?'最大移速':'基础移速上限','m/s',person?'实际常速 = 基准 × 3.1 / 3.8；蹲行同基准缩放，冲刺与慢走独立。':creature?'普通步态速度 = 基准 × 0.58；加速步态独立使用最大移速。':air?'飞行速度上限；俯冲与推力仍受此限速。':'基础输入下的速度上限，不会在起步时瞬间赋速。','速度范围');

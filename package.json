@@ -39,7 +39,9 @@
     "prepare:dragon-training": "tsx apps/three-playground/scripts/prepare-dragon-training.ts",
     "verify:dragon-training": "tsx apps/three-playground/scripts/dragon-training-smoke.ts",
     "build:editor": "pnpm --filter @worldkit/three-playground build",
-    "test:editor:browser": "tsx apps/three-playground/scripts/browser-smoke.ts"
+    "test:editor:browser": "tsx apps/three-playground/scripts/browser-smoke.ts",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",
@@ -48,16 +50,20 @@
     "three": "0.185.1"
   },
   "devDependencies": {
-    "@types/three": "0.185.4",
-    "esbuild": "0.28.2",
+    "@eslint/js": "10.0.1",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.3.0",
+    "@types/three": "0.185.4",
     "@vitest/coverage-v8": "^3.2.4",
     "ajv": "8.17.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
     "playwright": "^1.62.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2",
+    "typescript-eslint": "8.70.0",
     "vitest": "^3.2.4"
   }
 }

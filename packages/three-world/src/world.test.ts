@@ -264,3 +264,12 @@ it('separates arrow orbit from WASD movement and Shift repeat never toggles run'
   keyboard.keyDown('Space'); keyboard.keyUp('Space'); expect(keyboard.sample().jump).toBe(true); expect(keyboard.sample().jump).toBe(false); keyboard.clear();
   keyboard.keyDown('Space', true); keyboard.keyDown('KeyW', true); expect(keyboard.sample()).toMatchObject({ jump: false, jumpPressed: false, moveZRatio: 0 });
 });
+
+it.each([new Error('callback failed'),'string callback failure'])('retains runtime messages from ordinary and string exceptions',async error=>{
+ const world=await fixture();try{
+  world.onUpdate(()=>{throw error;});
+  let thrown:unknown;try{world.step({},1);}catch(value){thrown=value;}
+  expect(thrown).toBe(error);
+  expect(world.snapshot().errors[0]?.message).toBe(error instanceof Error?error.message:error);
+ }finally{world.dispose();}
+});

@@ -202,7 +202,12 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
           const positionWorldMetersXYZ = hit.point.toArray();
           const normal = hit.face?.normal.clone().transformDirection(hit.object.matrixWorld).toArray() ?? null;
           let startProbe: unknown;
-          try { startProbe = observer.episode.probeStart({ positionWorldMetersXYZ, facingYawRadians: observer.snapshot().camera.desiredYawRadians }); }
+          try {
+            const yaw = observer.snapshot().camera.desiredYawRadians;
+            const direction = observer.camera.getWorldDirection(new THREE.Vector3());
+            startProbe = observer.episode.probeStart({ positionWorldMetersXYZ,
+              facingYawRadians: Number.isFinite(yaw) ? yaw : Math.atan2(-direction.x, -direction.z) });
+          }
           catch (error) { startProbe = { isValid: false, diagnostics: [{ code: 'EPISODE_POINT_PROBE_FAILED', message: String(error) }] }; }
           return { viewId, pixelUv, visualHit: { positionWorldMetersXYZ, normalWorldXYZ: normal, entityId: entityId ?? null, objectName: hit.object.name, distanceMeters: hit.distance }, startProbe };
         }, { viewId, pixelUv });

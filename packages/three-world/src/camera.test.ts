@@ -1,3 +1,4 @@
+import {readCameraWorldPose} from './camera-observation';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ThreeCameraRig } from './camera.js';
@@ -16,6 +17,13 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('marks follow-only diagnostics not applicable after returning to authored camera',()=>{
+    const {camera,rig}=fixture();rig.setFollow({targetEntityId:'hero',distanceMeters:6,activateOnInput:false});rig.update(1/60);rig.useAuthoredCamera();
+    const pose=camera.position.clone(),rotation=camera.quaternion.clone();
+    expect(rig.snapshot()).toMatchObject({mode:'authored',desiredPositionWorldMetersXYZ:null,desiredYawRadians:null,desiredPitchRadians:null});
+    expect(rig.snapshot()).not.toHaveProperty('collisionPhase');expect(rig.snapshot()).not.toHaveProperty('desiredArmDistanceMeters');
+    expect(camera.position).toEqual(pose);expect(camera.quaternion.equals(rotation)).toBe(true);
+  });
   it('activates pending follow from the same jump edge used by locomotion',async()=>{
     const world=await createWorld({navigation:false});try{
       const ground=new THREE.Mesh(new THREE.BoxGeometry(20,1,20));ground.position.y=-.5;
@@ -221,7 +229,7 @@ describe('ThreeCameraRig', () => {
     rig.updateDesired({ cameraYawRatio: 1, cameraPitchRatio: -.5, yawDeltaRadians: .1 }, .25);
     expect(rig.desiredYawRadians).toBeCloseTo(yaw + .6, 10);
     expect(camera.quaternion.equals(before)).toBe(true);
-    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(initialPitch - .25, 10);
+    expect(initialPitch).not.toBeNull();expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(initialPitch! - .25, 10);
   });
 
   it('does not consume orbit or zoom in authored mode and reacquires from the current pose', () => {
@@ -640,4 +648,15 @@ describe('ThreeCameraRig', () => {
     expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
     expect(new THREE.Quaternion(...state.orientationWorldQuaternionXYZW).angleTo(camera.getWorldQuaternion(new THREE.Quaternion()))).toBeLessThan(1e-7);
   });
+});
+
+it('observes manual local/world camera matrices without mutating them',()=>{
+ const parent=new THREE.Group(),camera=new THREE.PerspectiveCamera();parent.add(camera);
+ parent.matrixAutoUpdate=false;parent.matrix.makeTranslation(7,8,9);
+ camera.matrixAutoUpdate=false;camera.matrix.makeTranslation(1,2,3);
+ expect(readCameraWorldPose(camera).position.toArray()).toEqual([8,10,12]);
+ expect(camera.matrixWorld.elements).toEqual(new THREE.Matrix4().elements);
+ camera.matrixWorldAutoUpdate=false;camera.matrixWorld.makeTranslation(20,30,40);
+ expect(readCameraWorldPose(camera).position.toArray()).toEqual([20,30,40]);
+ expect(camera.matrix.elements).toEqual(new THREE.Matrix4().makeTranslation(1,2,3).elements);
 });

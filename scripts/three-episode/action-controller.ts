@@ -24,7 +24,7 @@ function stoppedInput(snapshot: WorldSnapshot): WorldInput {
   const mounted = snapshot.humanoid.mountedInstanceId;
   const family = mounted ? snapshot.humanoid.vehicles.find(vehicle => vehicle.instanceId === mounted)?.mode : undefined;
   const input = emptyHumanoidInput();
-  if (family === 'space' || family === 'sub') input.boost = true;
+  if (family === 'spacecraft' || family === 'submarine') input.boost = true;
   else if (family !== 'dragon') { input.brake = true; input.slow = true; }
   return { humanoid: input };
 }

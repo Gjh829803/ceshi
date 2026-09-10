@@ -18,8 +18,8 @@ describe('player family route input',()=>{
   expect(vehicleDirectionInput('wheeled',[0,0,0],[0,Math.PI/2,0],[0,0,0],[10,0,0]).humanoid!.steer).toBeCloseTo(0);
  });
  it('uses depth for submarines and independent body-local axes for spacecraft',()=>{
-  expect(vehicleDirectionInput('sub',[0,-5,0],[0,0,0],[0,0,0],[0,-15,20]).humanoid!.lift).toBe(-1);
-  const space=vehicleDirectionInput('space',[0,0,0],[0,0,0],[0,0,0],[8,8,0]).humanoid!;
+  expect(vehicleDirectionInput('submarine',[0,-5,0],[0,0,0],[0,0,0],[0,-15,20]).humanoid!.lift).toBe(-1);
+  const space=vehicleDirectionInput('spacecraft',[0,0,0],[0,0,0],[0,0,0],[8,8,0]).humanoid!;
   expect(space.strafe).toBe(-1);expect(space.lift).toBe(1);expect(space.forward).toBe(0);
  });
  it('uses elevator input and throttle for aircraft instead of ground walking',()=>{
@@ -30,11 +30,11 @@ describe('player family route input',()=>{
 
 describe('actual player capture controller and humanoid physics integration',()=>{
  const assets=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;vehicle?:{spec:VehicleSpec}}[];
- for(const family of ['motorcycle','unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','sub','space'] as const){
+ for(const family of ['motorcycle','unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','submarine','spacecraft'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
-   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-sub'?a.id==='vehicle.observation-sub':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
-   const aquatic=family==='raft'||family==='jetski'||family==='observation-sub'||family==='sub'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
-   const y=(family==='raft'||family==='jetski'||family==='kayak'||family==='canoe')?.1:aquatic?-15:flight||family==='space'?100:.03;
+   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-sub'?a.id==='vehicle.observation-sub':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':family==='kayak'?a.vehicle?.spec.archetype==='kayak':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
+   const aquatic=family==='raft'||family==='jetski'||family==='observation-sub'||family==='submarine'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
+   const y=(family==='raft'||family==='jetski'||family==='kayak'||family==='canoe')?.1:aquatic?-15:flight||family==='spacecraft'?100:.03;
    const floor=aquatic?-80:0;
    const map:EnvironmentDefinition={id:`capture-route-${family}`,name:'Independent capture route',description:'',bounds:{min:[-2000,-100,-2000],max:[2000,1000,2000]},
     boxes:[{id:'floor',position:[0,floor-1,0],size:[4000,2,4000]}],
@@ -44,7 +44,7 @@ describe('actual player capture controller and humanoid physics integration',()=
    const segment:EpisodeSegmentPlan={id:'segment-00',purpose:'Controller integration; not rendered video acceptance',endBehavior:'stop',
     start:{positionWorldMetersXYZ:[0,y,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'subject',mounted:true,
      ...(flight?{velocityWorldMetersPerSecondXYZ:[0,0,30],throttle:.7,launched:true}:{})}},
-    waypoints:family==='unicycle'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:family==='observation-sub'?[{positionWorldMetersXYZ:[2,y-2,15],gait:'walk'},{positionWorldMetersXYZ:[4,y-4,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,120],gait:'walk'}]:family==='canoe'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:(family==='raft'||family==='kayak')?[{positionWorldMetersXYZ:[2,y,15],gait:'walk'},{positionWorldMetersXYZ:[4,y,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:[{positionWorldMetersXYZ:[5,y+(aquatic&&family!=='jetski'?-5:flight||family==='space'?5:0),100],gait:'walk'},
+    waypoints:family==='unicycle'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:family==='observation-sub'?[{positionWorldMetersXYZ:[2,y-2,15],gait:'walk'},{positionWorldMetersXYZ:[4,y-4,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,120],gait:'walk'}]:family==='canoe'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:(family==='raft'||family==='kayak')?[{positionWorldMetersXYZ:[2,y,15],gait:'walk'},{positionWorldMetersXYZ:[4,y,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:[{positionWorldMetersXYZ:[5,y+(aquatic&&family!=='jetski'?-5:flight||family==='spacecraft'?5:0),100],gait:'walk'},
      {positionWorldMetersXYZ:[15,y,250],gait:'walk'},{positionWorldMetersXYZ:[0,y,1500],gait:'walk'}]};
    const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:asset.id,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
    try{

@@ -9,13 +9,13 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 const catalog = JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
-const families = ['kayak', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'slide', 'bus', 'sled', 'ski', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;
+const families = ['paddled_boat', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'bus', 'sled', 'ski', 'hover', 'boat', 'submarine', 'glider', 'plane', 'spacecraft', 'mount', 'carriage', 'dragon'] as const;
 type Family = typeof families[number];
 const representative = (family: Family) => assets.find(asset => asset.vehicle.spec.mode === family)!;
 const barrierFront = 59;
 
 function course(family: Family | 'character', barrier = false): EnvironmentDefinition {
-  const aquatic = family === 'kayak' || family === 'boat' || family === 'sub';
+  const aquatic = family === 'paddled_boat' || family === 'boat' || family === 'submarine';
   const floor = aquatic ? -80 : 0;
   return {
     id: `independent-${family}`, name: 'Independent physical integration course', description: '',
@@ -30,8 +30,8 @@ function course(family: Family | 'character', barrier = false): EnvironmentDefin
 
 function vehicleStart(family: Family, spec: VehicleSpec, instanceId = 'subject'): EpisodeStart {
   const clearance = Math.max(0, spec.envelope.halfExtents[1] - spec.envelope.offset[1]);
-  const y = (family === 'boat'||family === 'kayak') ? .1 : family === 'sub' ? -15 : family === 'hover' ? 1.3 :
-    ['plane', 'glider', 'space', 'dragon'].includes(family) ? 100 : clearance + .03;
+  const y = (family === 'boat'||family === 'paddled_boat') ? .1 : family === 'submarine' ? -15 : family === 'hover' ? 1.3 :
+    ['plane', 'glider', 'spacecraft', 'dragon'].includes(family) ? 100 : clearance + .03;
   return { positionWorldMetersXYZ: [0, y, 0], facingYawRadians: Math.PI,
     humanoid: { vehicleInstanceId: instanceId, mounted: true, cameraMode: 0,
       ...(['plane', 'glider'].includes(family) ? { velocityWorldMetersPerSecondXYZ: [0, 0, 30] as const, throttle: .7, launched: true } : {}),
@@ -86,8 +86,8 @@ describe('catalog humanoid families in an independent physical world', () => {
         expect(travelled).toBeGreaterThan(20);
         expect(previous.distanceTo(origin)).toBeGreaterThan(20);
         if (family === 'boat') expect(Math.abs(previous.y)).toBeLessThan(.5);
-        if (family === 'sub') expect(previous.y).toBeLessThan(-1);
-        if (['plane', 'glider', 'space', 'dragon'].includes(family)) expect(previous.y).toBeGreaterThan(20);
+        if (family === 'submarine') expect(previous.y).toBeLessThan(-1);
+        if (['plane', 'glider', 'spacecraft', 'dragon'].includes(family)) expect(previous.y).toBeGreaterThan(20);
         await world.reset();
         expect(world.simulationTick).toBe(0);
         expect(runtime.snapshot().mountedInstanceId).toBeNull();

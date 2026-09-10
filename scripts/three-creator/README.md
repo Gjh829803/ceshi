@@ -97,7 +97,8 @@ environment in `onVisualUpdate` and copies world poses to the visuals.
 `creator_get_authoring_schema({topic})` returns a short guide by default, with
 `availableSections` and `runtimeGuidance` identifying its source. Select `sections` from guide, contracts,
 project, episode, observation, commands or humanoid; `["all"]` returns the complete
-selected topic. For example, `{topic:"mounted-interaction", sections:["humanoid"]}`
+selected topic. Only requested declarations are parsed. Shared SDK conventions are in
+`getting-started`; other topic guides contain only their topic sections. For example, `{topic:"mounted-interaction", sections:["humanoid"]}`
 returns Humanoid declaration excerpts from the indicated source files. Selected
 public types within `contracts.ts` use an AST-selected dependency closure.
 Humanoid excerpts retain public type references; they are not standalone declaration packages.

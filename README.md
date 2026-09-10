@@ -47,4 +47,20 @@ pnpm dev
 pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime
 ```
 
+维护代码可运行：
+
+```sh
+pnpm lint
+pnpm lint:fix  # 可选：执行规则提供的自动修复，提交前查看 diff
+pnpm typecheck
+```
+
+ESLint 10 使用 flat config，覆盖仓库的 JS/TS/TSX、脚本、示例与测试；忽略依赖、
+构建产物、临时 case 和 worktree。开发环境使用受支持的 Node 20（≥20.19）、
+Node 22（≥22.13）或 Node ≥24，CI 固定为 24.3.0。
+规则侧重重复分支、无效表达式、不安全可选链和 finally 控制流；暂不统一格式、
+清理 unused/any 或启用需要类型分析的 Promise 规则。已有清理/交付错误优先级
+保留带理由的局部豁免。`pnpm lint` 在 CI 中执行，警告也会失败。
+这是仓库维护检查，不增加 Creator 作品生成门禁；运行时副作用仍需测试和真实试跑验证。
+
 构建与本地验证不启动云生产。外部运行配置和任务身份见各组件说明。

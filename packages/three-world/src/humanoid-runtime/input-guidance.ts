@@ -29,7 +29,7 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
     jump: 'Jump/action edge; traversal and swimming interpret it in the current movement context.',
     actions: 'Optional semantic action edges; inspect characterCapabilities for current eligibility.',
   },
-    kayak: {
+  paddled_boat: {
     forward: 'Positive paddles forward; negative paddles backward.',
     steer: 'Positive turns right by changing paddle side or stroke strength.',
     boost: 'Requests faster paddling when supported by the selected craft.',
@@ -70,7 +70,7 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
     boost: 'Requests faster pedalling and maxSpeed while driving forward.',
     brake: 'Brakes the wheel; releasing drive slows to a stop and plants the left foot on nearby ground.',
   },
-  slide: GROUND_INPUT_FIELDS,
+  skateboard: GROUND_INPUT_FIELDS,
   boat: GROUND_INPUT_FIELDS,
   hover: {...GROUND_INPUT_FIELDS,roll:'Positive applies lateral thrust toward local -X; this is not angular roll.'},
   mount: MOUNT_INPUT_FIELDS,
@@ -85,12 +85,12 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
     steer:'Positive turns right and adds bank.',roll:'Adds signed bank around local Z.',
     boost:'Launches an unlaunched glider once; has no throttle effect after launch.',
   },
-  space: {
+  spacecraft: {
     forward:'Signed local +Z thrust.',strafe:'Signed local -X thrust.',lift:'Signed local +Y thrust.',
     steer:'Positive rotates about local -Y.',pitch:'Signed angular input about local X.',roll:'Signed angular input about local Z.',
     boost:'Brakes velocity through damping; does not increase thrust.',
   },
-  sub: {
+  submarine: {
     forward:'Signed forward thrust.',steer:'Positive turns right about world Y.',roll:'Signed angular roll.',
     lift:'Positive ascends and pitches up; negative descends and pitches down.',
     boost:'Brakes velocity through damping; does not increase thrust.',

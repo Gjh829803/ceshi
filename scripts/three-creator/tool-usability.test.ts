@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThreeCreatorTools } from './tools';
+import { RuntimeGuidance } from './runtime-guidance';
 import { executeThreeCreatorTool } from './mcp';
 import { createAssetPolicySnapshot, assetPolicyHash } from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
@@ -101,7 +102,21 @@ it('discovers handling configurations without offering vehicle models', async ()
   expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
   expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
   expect(selected.humanoidSourceContracts['humanoid-runtime/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
-
+  const vehicleContract=selected.humanoidSourceContracts['humanoid-runtime/config.ts'];
+  expect(vehicleContract).toContain("'skateboard'");
+  expect(vehicleContract).toContain("'paddled_boat'");
+  expect(vehicleContract).toContain("'submarine'");
+  expect(vehicleContract).toContain("'spacecraft'");
+  expect(vehicleContract).not.toMatch(/['"](?:sub|space|slide|paddle)['"](?=\s*\|)/);
+  expect(vehicleContract).toContain('Driving family and map-region permission key');
+  expect(vehicleContract).toContain('Rider pose, not propulsion');
+  expect(vehicleContract).toContain('canoe and raft use single-blade strokes');
+  expect(vehicleContract).toContain("kind: 'paddle'");
+  const guide=await schema(tools,{topic:'humanoid',sections:['guide']});
+  expect(guide.sdkGuide).toContain('| Canoe | `paddled_boat` | `canoe` |');
+  expect(guide.sdkGuide).toContain("characterPose: 'paddling'");
+  expect(guide.sdkGuide).toContain('| Submarine | `submarine` | `submarine` |');
+  expect(guide.sdkGuide).toContain('| Spacecraft | `spacecraft` | `spacecraft` |');
 });
 
 it('returns a readable schema guide first and actual source contracts only when requested', async () => {
@@ -622,4 +637,24 @@ it('contains hostile proxies in public diagnostics and persisted failed operatio
     expect(operation).toMatchObject({status:'failed',error:response.error,errorDetails:response.errorDetails});
     await expect.poll(async()=>JSON.parse(await readFile(path.join(tools.evidenceRoot,'operations',`${started.operationId}.json`),'utf8'))).toMatchObject({errorDetails:response.errorDetails});
   }
+});
+
+it('materializes declarations only for requested sections without hiding available sections', async () => {
+  const tools = await service();
+  const source = vi.spyOn(RuntimeGuidance.prototype, 'source');
+  const definitions = vi.spyOn(RuntimeGuidance.prototype, 'definitions');
+  try {
+    const guide = await schema(tools, {topic:'mounted-interaction',sections:['guide']});
+    expect(source).not.toHaveBeenCalled();
+    expect(definitions).not.toHaveBeenCalled();
+    expect(guide.availableSections).toContain('contracts');
+    expect(guide.availableSections).toContain('humanoid');
+    const declarations = await schema(tools, {topic:'mounted-interaction',sections:['contracts','humanoid']});
+    expect(source).toHaveBeenCalledWith('contracts.ts');
+    expect(source).toHaveBeenCalledWith('humanoid-runtime/road-vehicle.ts');
+    const full = await schema(tools, {topic:'mounted-interaction',sections:['all']});
+    expect(declarations.sdkContracts).toBe(full.sdkContracts);
+    expect(declarations.humanoidSourceContracts).toEqual(full.humanoidSourceContracts);
+    expect(guide.availableSections).toEqual(full.availableSections);
+  } finally { source.mockRestore(); definitions.mockRestore(); }
 });

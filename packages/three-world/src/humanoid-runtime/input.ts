@@ -51,7 +51,7 @@ export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boole
   return i;
 }
 export function cameraOrbitInput(held:ReadonlySet<string>,mode:string,dt:number):[number,number]{
-  if(mode==='space'||mode==='tank')return [0,0];
+  if(mode==='spacecraft'||mode==='tank')return [0,0];
   const key=(code:string)=>held.has(code)?1:0;
   return [(key('ArrowRight')-key('ArrowLeft'))*dt*260,(key('ArrowDown')-key('ArrowUp'))*dt*220];
 }

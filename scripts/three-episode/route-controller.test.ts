@@ -99,3 +99,14 @@ it('resumes custom route progress timing after an action pause',async()=>{
  for(let time=1;time<=6;time+=.25)decision=await controller.step(snapshot([0,3,0]),[0,0,-1],time);
  expect(decision?.mode).toBe('failed');
 });
+
+it('skips follow intent after the live snapshot switches to authored mode',async()=>{
+ const controller=new PlayerCaptureController(segment({waypoints:[{positionWorldMetersXYZ:[0,0,-200],gait:'walk'}]}),movement,'follow',async start=>({isValid:true,requestedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,resolvedPositionWorldMetersXYZ:start.positionWorldMetersXYZ,diagnostics:[]}));
+ for(let i=0;i<360;i++) {
+  const initial=snapshot([0,0,-i/12]);
+  const state:WorldSnapshot={...initial,camera:{...initial.camera,mode:'authored',desiredPositionWorldMetersXYZ:null,desiredYawRadians:null,desiredPitchRadians:null}};
+  const decision=await controller.step(state,[0,0,-1],i/24);
+  expect(decision.input.cameraYawRatio??0).toBe(0);
+  expect(decision.input.cameraPitchRatio??0).toBe(0);
+ }
+});

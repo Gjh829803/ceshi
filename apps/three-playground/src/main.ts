@@ -978,7 +978,7 @@ function updateUI() {
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
   const drive=v?humanoid.vehicleDriveTelemetry(v):null;
-  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','slide'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
+  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
@@ -991,7 +991,7 @@ function updateUI() {
     setText(
       "category",
       v
-        ? `${["plane", "glider", "space", "dragon"].includes(v.spec.mode) ? "FLIGHT" : ["sub", "boat", "kayak"].includes(v.spec.mode) ? "WATER" : "GROUND"} / ${v.spec.kernel}`
+        ? `${["plane", "glider", "spacecraft", "dragon"].includes(v.spec.mode) ? "FLIGHT" : ["submarine", "boat", "paddled_boat"].includes(v.spec.mode) ? "WATER" : "GROUND"} / ${v.spec.kernel}`
         : "ON FOOT / K01",
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
@@ -1011,7 +1011,7 @@ function updateUI() {
     setText(
       "cameraNote",
       v
-        ? v.spec.mode === "space"
+        ? v.spec.mode === "spacecraft"
           ? "相机随飞行器上方向旋转。拖动鼠标自由观察。"
           : "方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。"
         : "方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。",
@@ -1064,7 +1064,7 @@ function updateUI() {
         ? `体力 ${Math.round(v.flyingCreature.staminaRatio*100)}% · 顶部地图菜单切换训练场`
         : v.submersible && v.submersible.depth > .4
         ? `深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
-        : v.submerged && v.spec.mode !== "sub"
+        : v.submerged && v.spec.mode !== "submarine"
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
           ? "<kbd>Shift</kbd>从高台释放，开始滑翔"

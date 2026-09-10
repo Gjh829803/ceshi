@@ -458,3 +458,16 @@ describe('public Three SDK v2 authoring and control contracts', () => {
     expect(world.snapshot().errors).toEqual([]);
   });
 });
+
+it('preserves a structured update failure through engine capture and returns independent snapshots',async()=>{
+ const {world}=await fixture();
+ const diagnostic={code:'CAMERA_CHANNEL_OWNED',message:'Read callback changed the camera',category:'content' as const,phase:'control',entityIds:['hero'],suggestedAction:'Use the active camera owner.'};
+ const unsubscribe=world.onUpdate(()=>{throw diagnostic;});
+ let thrown:unknown;try{world.step({},1);}catch(error){thrown=error;}
+ expect(thrown).toBe(diagnostic);expect(world.isRunning).toBe(false);
+ const first=world.snapshot().errors;
+ expect(first).toContainEqual({...diagnostic,phase:'WORLD_FIXED_STEP_FAILED'});
+ (first[0]!.entityIds as string[]).push('must-not-persist');
+ expect(world.snapshot().errors[0]!.entityIds).toEqual(['hero']);
+ unsubscribe();await world.reset();expect(world.snapshot().errors).toEqual([]);
+});

@@ -118,11 +118,14 @@ export async function launch(argv, runtimePath = path.join(here, 'episode-runtim
   } catch (error) { report.status = 'failed'; report.error = String(error.message); throw error; }
   finally {
     report.finishedAt = new Date().toISOString();
+    // eslint-disable-next-line no-unsafe-finally -- A changed output root must abort diagnostic publication even after task failure.
     if (await realpath(outputs) !== outputs) throw new Error('EPISODE_OUTPUT_ROOT_CHANGED');
     report.diagnosticsOwnership = 'host-private-until-process-exit';
     report.discardedModelDiagnosticPaths = [];
+    // eslint-disable-next-line no-unsafe-finally -- Host diagnostic publication errors must fail the launcher.
     for (const name of diagnosticNames) { try { await lstat(path.join(outputs, name)); report.discardedModelDiagnosticPaths.push(name); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
     await writeFile(reportFile, JSON.stringify(report, null, 2));
+    // eslint-disable-next-line no-unsafe-finally -- Host diagnostic publication errors must fail the launcher.
     for (const name of diagnosticNames) { try { await rename(path.join(diagnosticsRoot, name), path.join(outputs, name)); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
     await rm(diagnosticsRoot, { recursive: true, force: true });
   }
