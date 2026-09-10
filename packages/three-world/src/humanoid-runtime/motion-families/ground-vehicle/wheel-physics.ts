@@ -1,3 +1,4 @@
+import type {SolverSample} from '../../solver-sample';
 import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleBody,type EnvironmentQueries } from '../../environment/queries';
 import { createPowertrain,DEFAULT_POWERTRAIN,stepPowertrain,validatePowertrain,type PowertrainConfig,type PowertrainState } from '../../powertrain';
@@ -8,7 +9,7 @@ export interface WheelLayout {x:number;z:number;steering:boolean;driven:boolean}
 /** centerOfMassHeight：相对模型原点的米数；tireFriction：地面摩擦倍率；steeringGripRatio：汽车转向轴抓地比例（默认 0.85）。 */
 export interface WheelPhysicsConfig {chassis?:import('../../config').CollisionEnvelope;steeringGripRatio?:number;centerOfMassHeight?:number;tireFriction?:number;wheels?:WheelLayout[];balanceAssist?:boolean;mass:number;radius:number;halfTrack:number;halfWheelbase:number;hubHeight:number;maxRaise?:number;maxDrop?:number;wheelWidth?:number;powertrain?:PowertrainConfig}
 export interface SimulatedWheel {hubHeight?:number;contact:boolean;length:number;load:number;steer:number;angle:number;omega:number;slip:number;force:number}
-export interface WheelPhysicsState {angularVelocity:Vector3;wheels:SimulatedWheel[];powertrain:PowertrainState}
+export interface WheelPhysicsState {sample?:SolverSample;angularVelocity:Vector3;wheels:SimulatedWheel[];powertrain:PowertrainState}
 export function createWheelPhysics(c?:WheelPhysicsConfig):WheelPhysicsState{return {angularVelocity:new Vector3(),powertrain:createPowertrain(c?.powertrain),wheels:Array.from({length:c?wheelLayout(c).length:4},()=>({hubHeight:c?.hubHeight??.52,contact:false,length:.25,load:0,steer:0,angle:0,omega:0,slip:0,force:0}))};}
 export function validateWheelPhysics(c:WheelPhysicsConfig):void{if(c.chassis&&(c.chassis.kind!=='box'||c.chassis.halfExtents.some(n=>!Number.isFinite(n)||n<=0)||c.chassis.offset.some(n=>!Number.isFinite(n))))throw new Error('VEHICLE_CHASSIS_CONFIG_INVALID');for(const k of ['mass','radius','halfTrack','halfWheelbase','hubHeight'] as const){const v=c[k];if(!Number.isFinite(v)||v<=0)throw new Error(`VEHICLE_WHEEL_CONFIG_INVALID:${k}`);}for(const [name,value,max] of [['steeringGripRatio',c.steeringGripRatio,1],['centerOfMassHeight',c.centerOfMassHeight,3],['tireFriction',c.tireFriction,3],['maxRaise',c.maxRaise,.24],['maxDrop',c.maxDrop,.4],['wheelWidth',c.wheelWidth,1]] as const)if(value!==undefined&&(!Number.isFinite(value)||value<=0||value>max))throw new Error('VEHICLE_WHEEL_CONFIG_INVALID:'+name);if(c.mass<100||c.radius<.1||c.radius>2||c.halfTrack<.2||c.halfWheelbase<.4)throw new Error('VEHICLE_WHEEL_CONFIG_INVALID');if(c.wheels){if(c.wheels.length<2||c.wheels.length>12||c.wheels.some(w=>!Number.isFinite(w.x)||!Number.isFinite(w.z)||typeof w.steering!=="boolean"||typeof w.driven!=="boolean")||!c.wheels.some(w=>w.driven)||new Set(c.wheels.map(w=>`${w.x}:${w.z}`)).size!==c.wheels.length)throw new Error("VEHICLE_WHEEL_LAYOUT_INVALID");}if(c.balanceAssist!==undefined&&typeof c.balanceAssist!=="boolean")throw new Error("VEHICLE_WHEEL_BALANCE_INVALID");if(c.powertrain)validatePowertrain(c.powertrain);}
 export function wheelLayout(c:WheelPhysicsConfig):WheelLayout[]{return c.wheels??[-c.halfTrack,c.halfTrack].flatMap(x=>[-c.halfWheelbase,c.halfWheelbase].map(z=>({x,z,steering:z>0,driven:true})));}
@@ -25,6 +26,7 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
   const rig=q.vehicleRig(v.spec.id,state,v.position,v.rotation,c.mass,width,length,height,comHeight,c.chassis?[{body:c.chassis}]:undefined),body=rig.body;
   body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(state.angularVelocity,true);
   rig.beforeStep=(h:number)=>{
+    state.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
     const up=Y.clone().applyQuaternion(v.rotation),down=up.clone().negate();
     const forward=new Vector3(0,0,1).applyQuaternion(v.rotation),comLocal=new Vector3(0,comHeight,0),com=comLocal.clone().applyQuaternion(v.rotation).add(v.position);
     const velocityForward=v.velocity.dot(forward),water=q.waterAt(v.position);

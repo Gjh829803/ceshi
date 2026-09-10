@@ -59,6 +59,8 @@ export class EnvironmentQueries {
   private vehicleColliderIds=new Map<number,string>();
   private controller:RAPIER.KinematicCharacterController;
   private disposed=false;
+  private completedPhysicsSteps=0;
+  get physicsStepSequence(){return this.completedPhysicsSteps;}
   private staticColliders=new Map<string,RAPIER.Collider>();
   private staticColliderIds=new Map<number,string>();
   private propBodies=new Map<string,{body:RAPIER.RigidBody;origin:Vector3}>();
@@ -384,7 +386,7 @@ export class EnvironmentQueries {
     });
     return normals;
   }
-  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();for(const rig of this.vehicleRigs.values())rig.afterStep();}}
+  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){

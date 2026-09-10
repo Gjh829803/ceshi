@@ -1,3 +1,4 @@
+import {createRoadVehicleSpec} from './road-vehicle';
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
 import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,PCFShadowMap,type WebGLRenderer} from 'three';
@@ -20,6 +21,32 @@ const map:EnvironmentDefinition={id:'test',name:'Test',description:'',bounds:{mi
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK humanoid runtime',()=>{
+ it('invalidates measured wheel evidence on reset while retaining the world physics sequence',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
+   character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'road',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new Group()}]}});
+  try{
+   expect(world.inspectVehicles({detail:'wheels'}).vehicles[0]).toMatchObject({sample:{status:'unmeasured'},wheels:null});
+   world.step({},3);const measured=world.inspectVehicles({detail:'wheels'});
+   expect(measured.physicsStepSequence).toBe(6);expect(measured.vehicles[0]!.sample).toMatchObject({status:'sampled',solver:{physicsStepSequence:6,phase:'pre-integration',deltaSeconds:1/120}});
+   await world.reset();expect(world.inspectVehicles({detail:'wheels'}).vehicles[0]).toMatchObject({sample:{status:'unmeasured'},wheels:null});
+  }finally{world.dispose();}
+ });
+
+ it('filters opt-in vehicle observations and preserves pause, reset and returned copies',async()=>{
+  const world=await fixture();try{
+   const before=world.snapshot();
+   expect(world.inspectVehicles({entityIds:[]}).vehicles).toEqual([]);
+   expect(world.inspectVehicles({query:'car-2'}).vehicles.map(v=>v.instanceId)).toEqual(['car-2']);
+   const result=world.inspectVehicles({entityIds:['car-1'],detail:'wheels'});
+   expect(result.vehicles).toHaveLength(1);expect(result.vehicles[0]!.wheels).toBeNull();
+   result.vehicles[0]!.instanceId='changed';
+   expect(world.inspectVehicles({entityIds:['car-1']}).vehicles[0]!.instanceId).toBe('car-1');
+   expect(world.snapshot()).toEqual(before);
+   world.step({},2);expect(world.inspectVehicles().simulationTick).toBe(2);
+   await world.reset();expect(world.inspectVehicles()).toMatchObject({simulationTick:0,isRunning:false});
+  }finally{world.dispose();}
+ });
+
  it('rejects the old nested action field and exposes the new action contract',async()=>{
   const world=await fixture();try{
    const runtime=world.humanoid!;

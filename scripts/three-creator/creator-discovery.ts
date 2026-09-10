@@ -19,7 +19,7 @@ const sectionFields = {
   guide: ['entryPoint', 'sdkGuide', 'cameraAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
-  humanoid: ['roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
+  humanoid: ['aircraftConfigurations', 'roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
 } as const;
 
 /** Read-only guidance over the compiler's frozen catalog; no browser/evidence ownership. */
@@ -42,10 +42,10 @@ export class CreatorDiscovery {
     const humanoidExampleTopic = includesHumanoid && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
     const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
-    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
+    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid-runtime/humanoid/action-schema.ts', 'humanoid-runtime/simulation.ts');
     const humanoidSourceContracts = includesHumanoid && wants('humanoidSourceContracts') ? Object.fromEntries(await Promise.all(
-      sourceFiles.map(async name => [name, runtimeContractSource(await guidance.source(name))]),
+      sourceFiles.filter(name=>guidance.shouldDescribeSource(name)).map(async name => [name, runtimeContractSource(await guidance.source(name))]),
     )) : undefined;
     const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
       ...(wants('sdkContracts') ? {sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace})} : {}),
@@ -75,7 +75,7 @@ export class CreatorDiscovery {
       ...(includesCommands ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
       ...(guidance.isWorkspace&&wants('runtimeDefinitions')?{runtimeDefinitions:await guidance.definitions(includesHumanoid||includesCommands)}:{}),
       ...(humanoidSourceContracts ? { humanoidSourceContracts } : {}),
-      ...(isSdk&&!guidance.isWorkspace&&['humanoid','mounted-interaction','all'].includes(topic)?{roadVehicleConfigurations:{car:humanoid.createRoadVehicleSpec('car'),motorcycle:humanoid.createRoadVehicleSpec('motorcycle')}}:{}),
+      ...(isSdk&&!guidance.isWorkspace&&['humanoid','mounted-interaction','all'].includes(topic)?{aircraftConfigurations:{plane:humanoid.createAircraftSpec('plane')},roadVehicleConfigurations:{car:humanoid.createRoadVehicleSpec('car'),motorcycle:humanoid.createRoadVehicleSpec('motorcycle')}}:{}),
       ...(humanoidExampleTopic ? { humanoidExampleTopic } : {}),
       episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.',
     };
@@ -92,9 +92,8 @@ export class CreatorDiscovery {
 
   private exampleRoot(topic: ExampleTopic) {
     if (topic === 'preset-assets' || topic === 'environment-maps') return path.join(REPOSITORY_ROOT, 'shared/preset-content');
-    const folder = topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : (topic === 'custom-vehicle' || topic === 'presentation-ui') ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
-      topic === 'character-actions' ? 'character-actions' :
-      'vehicle-sandbox';
+    const folder = topic === 'custom-aircraft' ? 'custom-aircraft' : topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : (topic === 'custom-vehicle' || topic === 'presentation-ui') ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
+      topic === 'character-actions' ? 'character-actions' : 'vehicle-sandbox';
     return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
   }
 

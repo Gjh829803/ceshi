@@ -22,8 +22,8 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
- humanoid:['humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
- 'mounted-interaction':['humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
+ humanoid:['inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'mounted-interaction':['inspectVehicles','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
@@ -115,7 +115,7 @@ export function runtimeContractSource(source:string):string {
  const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
- for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&node.name?.text==='createRoadVehicleSpec'){
+ for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&['createRoadVehicleSpec','createAircraftSpec'].includes(node.name?.text??'')){
   declarations.push(declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.updateFunctionDeclaration(node,
    [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
    node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));

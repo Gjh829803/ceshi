@@ -1071,6 +1071,26 @@ presentation switches stay out of public profile fields. Config changes require
 rebuilding the SDK; authored Three geometry and gameplay remain ordinary code.
 
 <!-- topic:humanoid -->
+## Opt-in vehicle diagnostics
+
+`world.inspectVehicles({entityIds:['my-vehicle'],detail:'wheels'})` reads detached
+vehicle state without advancing simulation. Omit `detail` for a compact summary;
+`query` matches entity id/name/tags, omitted IDs select all, and `[]` selects none.
+Creator exposes the same read through `world_inspect({sections:['vehicles'],
+entityIds:['my-vehicle'],vehicleDetail:'wheels'})`; standard inspections omit it.
+
+The result includes world revision, tick/time and physics step sequence. Each
+vehicle reports speed, signed throttle input, existing engine telemetry, wheel
+counts and available aircraft state. `sample.status` distinguishes unmeasured,
+sampled, stale and not-applicable solver data. Solver contacts/forces are from
+`sample.solver.phase:'pre-integration'` of the identified last substep; pose/speed
+are current committed state. They are not recomputed by inspection. Before the
+first solver step or after reset, detailed solver values are null. Wheel lengths
+are metres, loads/forces newtons, angles radians and slip a longitudinal speed
+difference in m/s, not a ratio. Unsupported measurements are null. Landing flags
+refer to the last landing. Contact loss or slip alone is not a failure diagnosis.
+Host results additionally carry source/runtime hashes; diagnostic failure is local.
+
 ## Configuration-first vehicle authoring
 
 Creator vehicles use Agent-authored Three geometry. Select their handling before
@@ -1318,6 +1338,27 @@ seating. Pickup objects use independent dynamic bodies while unheld, so removing
 their table support lets them fall. Their existing rotation lock is retained for
 the authored carrying animation. This supports moving and tipping whole props;
 it does not implement fracture or a full Chaos vehicle solver.
+
+## Self-drawn fixed-wing aircraft
+
+`humanoid.createAircraftSpec('plane')` returns a fresh model-free light fixed-wing
+spec. Read it through the humanoid schema's `aircraftConfigurations.plane`, or use
+`creator_get_examples({topic:'custom-aircraft'})` for the complete example.
+Bind its Three root and spec through the same `createHumanoidWorld({vehicles})`
+path as a car. Keep the supplied person separate and use `spec.seat` as the pelvis
+anchor. Map regions must permit `plane`.
+
+`spec.airframe` describes the existing solver's fixed mass, inertia, collision
+boxes and ordered landing wheels (+Y up, +Z forward, metres/kg/seconds). It is a
+read-only authoring reference, not per-instance physics overrides; modifying it
+or scaling the root does not change that solver. Movement parameters remain
+configurable. Use the ordered wheel groups with `onVisualUpdate` and
+`updateVehicleWheels` for suspension, steering and spin.
+
+Shift increases persistent throttle, Ctrl decreases it, W/S pitch down/up, A/D
+request coordinated turns, Q/E add bank, and Space brakes on the ground. The SDK
+owns thrust, lift/drag, stall and landing physics. This factory does not supply
+rotorcraft/VTOL, propeller RPM/dynamics or automatic aerial navigation.
 
 ## Configurable road vehicle physics
 

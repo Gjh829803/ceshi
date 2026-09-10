@@ -403,6 +403,19 @@ describe('v2 command and discovery boundary', () => {
       expect(example.runtimeGuidance.runtimeSourceHash).toBe(selected.runtimeGuidance.runtimeSourceHash);
     }finally{await service.close();}
   });
+  it('omits absent optional workspace modules without substituting Host aircraft configuration',async()=>{
+    const service=new ThreeCreatorTools(await fixture(),'three-sdk');
+    try{
+      await service.materializeRuntime();
+      for(const file of ['aircraft-spec.ts','vehicle-inspection.ts'])await rm(path.join(service.workspace,'sdk/three-world/src/humanoid-runtime',file));
+      const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid','contracts']});
+      expect(selected).not.toHaveProperty('aircraftConfigurations');
+      expect(selected.humanoidSourceContracts).not.toHaveProperty('humanoid-runtime/aircraft-spec.ts');
+      expect(selected.runtimeDefinitions).not.toHaveProperty('humanoid-runtime/vehicle-inspection.ts');
+      expect(selected.runtimeDefinitions['humanoid-runtime/road-vehicle.ts']).toContain('createRoadVehicleSpec');
+      expect(selected.runtimeGuidance.runtimeSourceHash).toMatch(/^[a-f0-9]{64}$/);
+    }finally{await service.close();}
+  });
   it('keeps Player camera offsets out of raw and standalone nonhuman guidance',async()=>{
     const raw=new ThreeCreatorTools(await fixture(),'three-raw'),sdk=new ThreeCreatorTools(await fixture(),'three-sdk');
     try{

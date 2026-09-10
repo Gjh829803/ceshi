@@ -1,9 +1,11 @@
+import type {SolverSample} from '../../solver-sample';
 import { Euler,Vector3 } from 'three';
 import { AIRCRAFT as C } from '../../../config/aircraft';
 import type { EnvironmentQueries } from '../../environment/queries';
 import type { Input,VehicleState } from '../../simulation';
 const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 export interface AircraftState {
+ sample?:SolverSample;
  angularVelocity:Vector3;airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;
  stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;
  wheels:{contact:boolean;compression:number;load:number;angle:number;steer:number}[];
@@ -15,6 +17,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
  const rig=q.vehicleRig(v.spec.id,a,v.position,v.rotation,C.mass,4,3.35,2.3,C.center[1],undefined,.6,.08,{boxes:C.boxes,stops:C.wheels.map(w=>({radius:w.radius,center:new Vector3(w.x,w.y+C.travel,w.z)})),inertia:new Vector3(...C.inertia),center:new Vector3(...C.center)}),body=rig.body;
  body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(a.angularVelocity,true);body.setAngularDamping(.1);
  rig.beforeStep=h=>{
+  a.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
   const forward=new Vector3(0,0,1).applyQuaternion(v.rotation),up=new Vector3(0,1,0).applyQuaternion(v.rotation),right=new Vector3(1,0,0).applyQuaternion(v.rotation);
   const com=new Vector3(...C.center).applyQuaternion(v.rotation).add(v.position),force=new Vector3(),torque=new Vector3();
   const speed=v.velocity.length(),along=v.velocity.dot(forward),qS=.5*C.density*speed*speed*C.area;

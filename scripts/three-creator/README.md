@@ -209,10 +209,12 @@ update a running job.
 `sections:['snapshot']` for current actor/camera state, or `['description']` with
 `entityIds` for selected entities, parameters and boarding eligibility. `hierarchy`
 adds object bounds and renderer details; `diagnostics` adds physics/input audit.
-Omitting sections inspects all sections. Select sections to avoid unrelated
+`sections:['vehicles']` adds opt-in vehicle diagnostics, filtered by `query` and
+`entityIds`; `vehicleDetail:'wheels'` expands per-wheel evidence. Omitted sections
+inspect standard sections only. Select sections to avoid unrelated
 hierarchy traversal and duplicate diagnostics. `query` uses the SDK case-insensitive
 substring match on entity id/name/tags. Omit `entityIds` to select all entities;
-`entityIds:[]` selects none. These filters affect description queries, not snapshot
+`entityIds:[]` selects none. These filters affect description and vehicle queries, not snapshot
 or hierarchy contents. The Host returns the current SDK description directly.
 Every response includes sample revision/tick/time; unavailable values are null.
 Water/continuity feedback is populated only with the snapshot section.
@@ -300,7 +302,8 @@ mounting, riding, dismounting and reset; custom vehicle geometry never includes 
 replacement rider. `humanAuthoring` in environment/schema/asset detail responses
 states this requirement independently of the project's editable SDK source.
 `creator_get_authoring_schema({topic:'humanoid',sections:['humanoid']})` returns
-model-free `roadVehicleConfigurations` for car and motorcycle on the Host SDK
+model-free `roadVehicleConfigurations` for car/motorcycle and
+`aircraftConfigurations.plane` for a light fixed wing on the Host SDK
 baseline. Workspace SDKs return their source definitions instead. Call
 `humanoid.createRoadVehicleSpec('car' | 'motorcycle')` for a fresh configuration,
 then author the chassis, wheel groups and seat to those dimensions.
@@ -308,10 +311,18 @@ then author the chassis, wheel groups and seat to those dimensions.
 `vehicle-camera` provides a self-drawn car. Both select only the preset human asset and remain usable when custom external
 asset files are disabled: procedural Three geometry is allowed.
 
-Road physics and movable props are integrated. Detailed drivetrain/wheel telemetry
-still requires SDK state access; standard Agent observation tools do not yet
-return it directly. The self-drawn examples do not include an engine dashboard.
-See [integration status and follow-ups](../../docs/reviews/2026-09-09-creator-vehicle-integration-status.md).
+Call `humanoid.createAircraftSpec('plane')` and use
+`creator_get_examples({topic:'custom-aircraft'})` for a self-drawn plane. Its
+`airframe` is the solver's fixed physical authoring reference, not per-instance
+physics overrides. The SDK supplies thrust, flight and landing gear; it does not
+supply rotorcraft/VTOL or propeller dynamics.
+
+Road physics and movable props are integrated. `world_inspect` with
+`sections:['vehicles']` provides targeted drivetrain and aircraft state; add
+`vehicleDetail:'wheels'` for measured wheel data. Unmeasured/unsupported values are
+null, with solver phase/sequence separate from current tick/time. Diagnostics do
+not advance simulation. The self-drawn examples do not include an engine dashboard.
+See [integration status and validation](../../docs/reviews/2026-09-10-vehicle-diagnostics-aircraft-agent.md).
 
 For seat-fit details, `creator_get_authoring_schema({topic:'mounted-interaction'})`
 provides the SDK's [vehicle seat fit guidance](../../packages/three-world/README.md#vehicle-seat-fit).

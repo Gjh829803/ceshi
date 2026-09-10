@@ -97,6 +97,9 @@ it('discovers handling configurations without offering vehicle models', async ()
   const result = await search(tools, { query: 'humanoid.wheeled', limit: 20 });
   expect(result.assets).toEqual([]);
   const selected=await schema(tools,{topic:'humanoid',sections:['humanoid']});
+  expect(selected.aircraftConfigurations!.plane.mode).toBe('plane');
+  expect(selected.aircraftConfigurations!.plane.airframe.wheels).toHaveLength(3);
+  expect(selected.humanoidSourceContracts['humanoid-runtime/aircraft-spec.ts']).toContain('export declare function createAircraftSpec');
   expect(selected.roadVehicleConfigurations!.car.mode).toBe('wheeled');
   expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('motorcycle');
   expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);

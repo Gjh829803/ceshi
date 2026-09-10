@@ -422,6 +422,7 @@ export interface World {
  execute(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;
  runTask<T>(task:(scope:TaskScope)=>Promise<T>):Promise<T>;
  describe(query?:{readonly query?:string;readonly entityIds?:readonly string[]}):WorldDescription;
+ inspectVehicles(query?:import('./humanoid-runtime/vehicle-inspection').VehicleInspectionQuery):import('./humanoid-runtime/vehicle-inspection').VehicleInspectionResult;
  snapshot():WorldSnapshot;
  getEntityState(entityId:string):EntityState;
  /** Awaits resources and initial shader compilation, renders the opening without stepping, then starts and exposes Host observation. Pending start rejects as STALE_TASK after stop/reset/dispose. */
@@ -448,6 +449,7 @@ export interface WorldObservation {
  readonly captureTargetIds?:readonly string[];
  readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;
+ inspectVehicles?(query?:import('./humanoid-runtime/vehicle-inspection').VehicleInspectionQuery):import('./humanoid-runtime/vehicle-inspection').VehicleInspectionResult;
  snapshot?():WorldSnapshot; inspect?():unknown; capabilities?(query?:{readonly query?:string;readonly entityIds?:readonly string[]}):WorldDescription;
  execute?(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;
  operation?(operationId:string):OperationStatus;

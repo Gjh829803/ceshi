@@ -123,3 +123,31 @@ it.each([['custom-vehicle','custom-bike'],['vehicle-camera','rover']] as const)(
   }finally{await episode.close();}
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },30000);
+
+it('discovers, compiles and flies a self-drawn fixed wing using the Episode owner',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'plane-episode-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await service.examples('custom-aircraft');
+  for(const [file,source] of Object.entries(example.files))await writeFile(path.join(root,file),source);
+  const candidate=await service.compiler.prepare();
+  const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
+  try{
+   await episode.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,humanoid:{vehicleInstanceId:'custom-plane',mounted:true,cameraMode:0}},{widthPixels:640,heightPixels:360});
+   await episode.advance({humanoid:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:true,brake:false,slow:false,jump:false}},600);
+   const after=await episode.advance({humanoid:{forward:-.3,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);
+   expect(after.entities.find(e=>e.id==='custom-plane')!.positionWorldMetersXYZ[1]).toBeGreaterThan(2);
+   await episode.frame('image/png');
+   const wheels=await episode.page.evaluate(()=>{
+    const observer=(window as any).__WORLDKIT_EVAL__,report=observer.inspectVehicles({entityIds:['custom-plane'],detail:'wheels'});
+    const root=observer.targets['custom-plane'];
+    return {sample:report.vehicles[0].sample,actual:report.vehicles[0].wheels,visual:[0,1,2].map(i=>({y:root.getObjectByName(`wheel.${i}.steer`).position.y,steer:root.getObjectByName(`wheel.${i}.steer`).rotation.y,angle:root.getObjectByName(`wheel.${i}.spin`).rotation.x}))};
+   });
+   expect(wheels.sample.status).toBe('sampled');
+   for(const [i,w] of wheels.actual.entries()){
+    expect(wheels.visual[i]!.y).toBeCloseTo((i===2?.26:.32)+w.compressionMeters);
+    expect(wheels.visual[i]!.steer).toBeCloseTo(w.steeringRadians);expect(wheels.visual[i]!.angle).toBeCloseTo(w.rotationRadians);
+   }
+
+  }finally{await episode.close();}
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},60000);
