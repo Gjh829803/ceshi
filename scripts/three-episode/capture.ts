@@ -1,4 +1,3 @@
-import {ARBORIST_CAPTURE_ADAPTER} from './custom-movement.js';
 import { createHash } from 'node:crypto';
 import { readdir, lstat, readFile, mkdir, writeFile, rename, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -94,7 +93,7 @@ function inputBasis(frame: EpisodeFrame): Vec3 {
 function movementForCapture(capabilities: EpisodeCapabilities,session:EpisodeCaptureSession): RouteMovement {
   if (!capabilities.movement) throw new Error('EPISODE_CONTROLLED_MOVEMENT_UNAVAILABLE');
   const movement = capabilities.movement;
-  if (movement.kind !== 'ground' && !(movement.episodeInput==='custom'&&session.routeInput) && !capabilities.humanoid && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
+  if (movement.kind !== 'ground' && !(movement.episodeInput==='custom'&&session.routeInput) && !capabilities.humanoid) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
   if (!(movement.walkSpeedMetersPerSecond > 0) || !(movement.runSpeedMetersPerSecond > 0)) throw new Error('EPISODE_CONTROLLED_MOVEMENT_SPEED_UNAVAILABLE');
   return movement as RouteMovement;
 }

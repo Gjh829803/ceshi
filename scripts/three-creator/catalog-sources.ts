@@ -37,7 +37,7 @@ export async function writeCatalogSources(root:string,entries:readonly CatalogSo
   }
   if(replace)for(const entry of existing)if(!entries.some(next=>next.id===entry.id))await rm(path.join(directory,`${entry.id}.json`));
 }
-/** The existing Host catalog is a derived compatibility view, not a second source. */
+/** The Host catalog is derived from the independent asset definitions. */
 export async function syncAssetCatalog(root:string,check=false) {
   const entries=await readCatalogSources(root),file=path.join(root,'assets/three-creator/asset-catalog.json');
   const text=`${JSON.stringify({schemaVersion:1,assets:entries},null,2)}\n`;

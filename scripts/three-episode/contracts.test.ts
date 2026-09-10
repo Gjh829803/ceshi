@@ -6,9 +6,9 @@ const plan = (): EpisodePlan => ({ kind: 'worldkit-three-episode-plan', schemaVe
   segments: Array.from({ length: 6 }, (_, i) => ({ id: `segment-0${i}`, start: { positionWorldMetersXYZ: [i, i % 2, 0], facingYawRadians: .37 },
     waypoints: [{ positionWorldMetersXYZ: [i + .13, i % 2, -20.57], gait: 'walk' }], endBehavior: 'stop', purpose: 'Observe the world' })) });
 describe('Three Episode agent plan and production boundary', () => {
-  it('retains historical coverage annotations without interpreting them as commands',()=>{
-    const value=plan();value.segments[0]!.coverageTargetIds=['unresolved-legacy-label'];
-    expect(validateEpisodePlan(value,{worldBuildHash:hash}).segments[0]!.coverageTargetIds).toEqual(['unresolved-legacy-label']);
+  it('rejects removed coverage annotations instead of accepting an unused contract',()=>{
+    const value=plan();Object.assign(value.segments[0]!,{coverageTargetIds:['unused-label']});
+    expect(()=>validateEpisodePlan(value,{worldBuildHash:hash})).toThrow('PLAN_INVALID');
   });
   it('accepts free metric coordinates without a navigation catalog or region extraction', () => {
     expect(validateEpisodePlan(plan(), { worldBuildHash: hash }).segments).toHaveLength(6);

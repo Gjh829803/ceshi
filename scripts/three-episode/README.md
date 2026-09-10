@@ -23,6 +23,9 @@ copy. Project-owned SDK runtime bytes remain authoritative. Source, playable,
 reference images, target views and declared context form a portable dependency
 closure; verify it again after archive transport/extraction. The output directory
 must be new or empty. `source.json` records actual source/runtime/playable hashes.
+Every source carries `assetPolicySha256`, the matching `asset-policy.json` and
+`asset-definitions.json`; import verifies that carried snapshot without reading
+the current Host policy. Sources missing this contract are rejected.
 
 Use `--reference-image FILE --reference-image-sha256 HASH` to carry the exact user
 original for the source-reference style. Do not substitute a generated concept or
@@ -36,8 +39,7 @@ approaches, collision and water before planning. The plan schema is
 `kind:"worldkit-three-episode-plan", schemaVersion:2`, with the actual
 `worldBuildHash` and six ordered, distinct-start segments `segment-00`–`segment-05`.
 Each segment has `start`, `waypoints`, `endBehavior`, `purpose` and optional
-`actionGoals`; see [contracts.ts](contracts.ts). Historical `coverageTargetIds`
-remains accepted as annotation only: it does not steer the camera or measure visibility.
+`actionGoals`; see [contracts.ts](contracts.ts).
 
 Each waypoint supplies `positionWorldMetersXYZ` and `gait:"walk"|"run"`.
 Walk is never promoted to running; run may downshift during observation, jumps

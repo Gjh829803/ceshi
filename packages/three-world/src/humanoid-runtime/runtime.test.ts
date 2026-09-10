@@ -156,10 +156,10 @@ describe('SDK humanoid runtime',()=>{
    }
   }finally{world.dispose();}
  });
- it('keeps a configured zero vehicle arm finite for canonical and legacy zoom',async()=>{
+ it('keeps a configured zero vehicle arm finite for meter-based zoom',async()=>{
   const world=await fixture();try{const r=world.humanoid!;r.applyProfile({vehicles:{'car-1':{camera:0}}});r.approach('car-1');r.enter('car-1');r.advance({},1/60);
    r.advance({},1/60,{distanceDeltaMeters:1});expect(r.followCamera.zoom).toBe(1);
-   r.followCamera.scroll(100,r.simulation);expect(r.followCamera.zoom).toBeCloseTo(1.07);
+   r.advance({},1/60,{distanceDeltaMeters:-1});expect(r.followCamera.zoom).toBe(1);
   }finally{world.dispose();}
  });
  it('uses meters for the mounted nominal arm distance',async()=>{
@@ -326,7 +326,7 @@ describe('SDK humanoid runtime',()=>{
    s.player.velocity.set(0,0,5.8);for(let i=0;i<120;i++)c.update(s,1/60);
    expect(c.distance).toBeGreaterThan(2.25);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees+4,1);
    s.player.velocity.set(0,0,0);for(let i=0;i<120;i++)c.update(s,1/60);expect(c.distance).toBeCloseTo(2,1);expect(c.camera.fov).toBeCloseTo(c.tuning.baseFovDegrees,1);
-   c.scroll(-10000,s);c.update(s,1/60);expect(c.distance).toBeCloseTo(1.3);
+   c.zoomByMeters(-30,s);c.update(s,1/60);expect(c.distance).toBeCloseTo(1.3);
    r.setCameraMode(1);expect(c.distance).toBe(0);r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);
   }finally{world.dispose();}
  });
@@ -418,11 +418,11 @@ describe('SDK humanoid runtime',()=>{
    for(let i=0;i<20;i++)r.advance({},1/60);
    r.setCameraMode(1);expect(c.distance).toBe(0);expect(c.camera.near).toBe(.035);
    expect(c.camera.position.y-s.player.position.y).toBeCloseTo(s.humanoid!.capsuleHeight-.12);
-   const standing=c.camera.position.y;c.orbit(100,70,s.time,s);c.update(s,0);
+   const standing=c.camera.position.y;c.orbitRadians(-.4,.28,s.time,s);c.update(s,0);
    expect(c.yaw).toBeCloseTo(-.4);expect(c.pitch).toBeCloseTo(.28);
    for(let i=0;i<45;i++)r.advance({humanoid:{...emptyInput(),actions:i===0?{toggleCrouch:true}:{}}},1/60);
    expect(c.camera.position.y).toBeLessThan(standing-.2);
-   c.scroll(900,s);expect(c.distance).toBe(0);
+   c.zoomByMeters(6.3,s);expect(c.distance).toBe(0);
    r.setCameraMode(0);expect(c.distance).toBeGreaterThan(3);expect(c.camera.near).toBe(.08);
    r.setCameraMode(1);await world.reset();expect(c.mode).toBe(0);expect(c.distance).toBeGreaterThan(3);
   }finally{world.dispose();}
@@ -431,13 +431,13 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{
    const r=world.humanoid!,s=r.simulation,c=r.followCamera;
    expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);r.setCameraMode(1);const v=s.vehicle!;
-   c.orbit(100,0,s.time,s);c.update(s,0);const initialYaw=v.yaw;
+   c.orbitRadians(-.4,0,s.time,s);c.update(s,0);const initialYaw=v.yaw;
    v.yaw+=.7;v.rotation.setFromEuler(new Euler(-.2,v.yaw,.3,'YXZ'));c.update(s,0);
    const actual=c.camera.getWorldDirection(new Vector3());
    const expected=new Vector3(0,0,1).applyQuaternion(new Quaternion().setFromEuler(new Euler(0,-.4,0,'YXZ'))).applyQuaternion(v.rotation);
    expect(actual.distanceTo(expected)).toBeLessThan(1e-6);expect(c.yaw).toBeCloseTo(initialYaw+.3);
    expect(v.steering).toBe(0);expect(v.throttle).toBe(0);
-   c.orbit(1e5,-1e5,s.time,s);c.update(s,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
+   c.orbitRadians(-400,-400,s.time,s);c.update(s,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
   }finally{world.dispose();}
  });
  it.each(['plane','submarine','spacecraft','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{

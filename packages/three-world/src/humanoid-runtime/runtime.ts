@@ -343,7 +343,7 @@ export class HumanoidRuntime implements PhysicsPort {
   inputGuide(actorId=this.inputActorId):HumanoidInputGuide{
     const vehicle=actorId===this.options.character.instanceId?this.simulation.vehicle:undefined;
     const family=vehicle?.spec.mode??'character';
-    return {family,fields:vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.',roll:'Legacy fallback: positive flame, negative evade when dedicated actions are absent.'}:{...HUMANOID_INPUT_GUIDES[family]}};
+    return {family,fields:vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.'}:{...HUMANOID_INPUT_GUIDES[family]}};
   }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};

@@ -44,7 +44,7 @@ export function createDisplayOverlays(scene:T.Scene,read:()=>{physics:PhysicsSou
         const id=data.colliderId?.(c.handle)??'collider-'+c.handle;
         if(colliderScope.ids?.has(id)||settings.colliderScope==='nearby'&&(data.colliderDistance?.(c.handle,colliderScope.centers)??Infinity)<=settings.nearbyMeters)selectedHandles.add(c.handle);
       });
-      // The legacy person-only lab control still selects the actual capsule.
+      // The person-only display selects the actual capsule.
       collisions.update(physics,settings.colliders,map.boxes,settings.ground,needsFilter?c=>selectedHandles.has(c.handle):undefined);
       if(settings.colliders==='person'&&needsFilter&&physics) {
         const capsule=physics.capsule as typeof physics.capsule&{handle:number};

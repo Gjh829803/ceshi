@@ -3,7 +3,7 @@ import type { Input } from '../../simulation';
 import { FLYING_CREATURE_ABILITIES_V1 as abilities,type FlyingCreatureCommandV1,type FlyingCreatureFeelV1,type FlyingCreatureStateV1 } from './state';
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 const moveTowards=(a:number,b:number,d:number)=>a+clamp(b-a,-d,d);
-export function compileFlyingCreatureCommandV1(i:Input):FlyingCreatureCommandV1{return {pitchRatio:-i.forward,turnRatio:i.steer,boostRequested:i.boost,brakeRequested:i.slow,glideRequested:i.brake,primaryRequested:i.primary??i.roll>0,secondaryRequested:i.secondary??i.roll<0};}
+export function compileFlyingCreatureCommandV1(i:Input):FlyingCreatureCommandV1{return {pitchRatio:-i.forward,turnRatio:i.steer,boostRequested:i.boost,brakeRequested:i.slow,glideRequested:i.brake,primaryRequested:i.primary??false,secondaryRequested:i.secondary??false};}
 
 /** 一次固定步只计算请求；碰撞结果由 Runtime 提交，不读取场景或设备。 */
 export function stepFlyingCreatureV1(state: FlyingCreatureStateV1, command: FlyingCreatureCommandV1,

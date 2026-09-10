@@ -167,17 +167,6 @@ export class FollowCamera {
       if(base>0)this.zoom=clamp(this.zoom+delta/base,.45,2.5);
     }
   }
-  /** Legacy pointer pixels, retained for direct integrations. */
-  orbit(dx:number,dy:number,time:number,sim?:CameraSubject){
-    const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
-    this.orbitRadians(-dx*.004,dy*((this.mode===1||this.mode===2||character) ? .004 : .003),time,sim);
-  }
-  scroll(deltaY:number,sim:CameraSubject){
-    if(this.mode===1)return;
-    if(this.mode===2){this.zoomByMeters(deltaY*.003,sim);return;}
-    if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
-    else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
-  }
   reset(sim: CameraSubject) {
     this.activeSubject = sim.vehicle ? 'vehicle' : 'character';
     this.tuning = this.selectTuning(sim);

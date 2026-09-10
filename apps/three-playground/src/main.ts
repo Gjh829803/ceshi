@@ -3,7 +3,7 @@ import { toast as notify } from "sonner";
 import * as T from "three";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
-import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
+import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
@@ -120,7 +120,7 @@ try {
   throw error;
 }
 const mapIds = MAPS.map(map => map.id);
-const initialMap = getMap(readInitialMap(location.hash, location.search, mapIds));
+const initialMap = getMap(readMapHash(location.hash, mapIds));
 writeMapHash(window, initialMap.id, true);
 const sdk = await createWorld({
   scene,

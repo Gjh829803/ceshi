@@ -443,7 +443,7 @@ export interface WorldObservation {
  readonly renderer:THREE.WebGLRenderer;
  /** Live object for the current controlled entity; available for human and nonhuman subjects. */
  readonly controlledObject:THREE.Object3D;
- /** Same active presentation for application transport/UI integration; absent for raw/legacy worlds. */
+ /** Same active presentation for application transport/UI integration; absent when no presentation layer is installed. */
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;

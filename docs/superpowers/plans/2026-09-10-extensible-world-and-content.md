@@ -48,12 +48,14 @@ SDK、Playground、Creator、Episode、示例、Skill 与实际测试；不增�
 
 文件 owner：`assets/three-creator/` 包源；`scripts/three-creator/asset-catalog.ts` 和实际导入/导出脚本；`example-files.ts`、`creator-discovery.ts`、`scripts/cloud/three-capsule.mjs`；SDK action-schema/action-system 与 vehicle factory；`shared/preset-content/config.ts`。
 
-- [ ] 先测试重复 ID、依赖缺失/循环、精确闭包、确定性输出、未授权包不可被策略扩权。
-- [ ] 将 Source101 模型、交互动作 binding、汽车/摩托/固定翼配置登记为独立包。manifest 只引用受信定义与静态路径，不运行命令。
-- [ ] 生成目录、Agent 索引、例子 topic/打包清单；迁移条目从聚合源移出，未迁移条目只读旧目录。编译器自动展开已准入的精确依赖。
-- [ ] pickup descriptor/binding 引用真实原因码、tuning 和 clip roles；测试实际拒绝结果。Playground 与 SDK 引用同一规范默认值。
-- [ ] 按包检查报告分列 registered/policy-allowed/compiled/behavior-verified/visual-reviewed/released；证据键包含闭包/runtime/配置/检查器/输入。
-- [ ] 通过实际 discovery、示例编译和本地浏览器/Episode 验证；阶段提交与验证记录。
+- [x] 每项资产独立源文件，Host 聚合目录由这些定义确定性生成；保留原资产身份与字节。
+- [x] 仓库接入 Skill 描述 Playground 调参、内容修改、SDK 绑定、Creator 和 Episode 的实际消费路径。
+- [x] 示例发现与离线 capsule 打包共享入口，实际资源闭包及策略校验通过。
+- [ ] 动作 binding、SDK/Playground 配置和默认值收敛到各自唯一来源，消除按资产 ID 扩展核心的分支。
+- [ ] 用动作变体与载具配置接入证明扩展成本；将行为验证、人工视觉审阅与发布状态分别记录。
+
+资产包 manifest、包版本求解和通用注册框架不作为固定交付项；独立源、代码 binding
+与 Skill 已能满足的内容直接维护。所有实际消费者同步迁移，不保留旧聚合源或旧目录读取分支。
 
 ## R1：共享模拟服务（本地完成）
 

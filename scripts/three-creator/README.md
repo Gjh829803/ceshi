@@ -367,7 +367,7 @@ skinned body identity and renderability; rigid equipment is excluded. The playte
 changes even if the author restores the person before the last frame. It is
 advisory, with no change to v0.2 technical admission. It cannot prove preset
 provenance, detect every extra rider, or measure seat/hand/foot fit; use relevant
-frames when such a problem needs investigation. Legacy/raw worlds without Humanoid
+frames when such a problem needs investigation. Worlds without Humanoid
 telemetry are explicitly unobserved, not passed.
 
 ## Verify and deliver

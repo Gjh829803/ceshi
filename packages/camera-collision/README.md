@@ -7,7 +7,7 @@ world, clock, input or camera object.
 resolves the pivot, projects the safe arm and commits retraction/recovery and
 contact state. An optional eye sweep constrains actual orbit travel. All geometry
 is in world-space metres; time is seconds. Adapters preserve native filtering and
-return unpadded contact distances, unless their legacy query contract says otherwise.
+return unpadded contact distances.
 
 `project(request)` performs the same spatial checks without reading or writing
 recovery state. Display callers supply snapshot-derived fallback positions, never
@@ -19,6 +19,5 @@ Ordinary and Humanoid policies choose recovery parameters independently. Each
 controller owns a separate solver and resets it on incompatible actor/mode/start
 transitions. Failed solves restore the prior transaction state.
 
-`CameraHardDecolliderV1` remains the temporal primitive and supports existing
-consumers. New integrations use the shared geometry/temporal solver so they do
-not duplicate pivot separation, arm correction or recovery.
+The solver uses `CameraHardDecolliderV1` internally for temporal recovery.
+World camera controllers consume the solver directly.

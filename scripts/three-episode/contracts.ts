@@ -34,8 +34,6 @@ export interface EpisodeSegmentPlan {
   start: EpisodeStart;
   waypoints: EpisodeWaypoint[];
   endBehavior: 'stop' | 'reverse' | 'loop';
-  /** Legacy annotation only; does not steer or measure visibility. */
-  coverageTargetIds?: string[];
   purpose: string;
   actionGoals?: EpisodeActionGoal[];
 }
@@ -53,8 +51,8 @@ export interface EpisodeSourceManifest {
   worldId: string; sourceHash: string; worldBuildHash: string; runtimeHash: string;
   sourceWorldBuildHash: string; sourceRuntimeHash: string; sourceDeliveryManifestSha256: string;
   runtimeSourceHash?: string | null;
-  /** Pinned Creator policy; absent only for historical policy-less deliveries. */
-  assetPolicySha256?: string;
+  /** Hash of the Creator asset policy snapshot carried by every source bundle. */
+  assetPolicySha256: string;
   sourceRoot: string; playableRoot: string; sourceFiles: Record<string, string>;
   playableFiles: Record<string, string>; opening: EpisodeFile;
   targets: EpisodeVisualTarget[]; referenceImage?: EpisodeFile; worldPlan?: EpisodeFile;
@@ -89,7 +87,6 @@ export const SEGMENT_SCHEMA = object({
   start: EPISODE_START_SCHEMA,
   waypoints: { type: 'array', minItems: 1, maxItems: 256, items: object({ positionWorldMetersXYZ: vec3, gait: { enum: ['walk', 'run'] } }) },
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
-  coverageTargetIds: { description: 'Optional annotation only; does not steer the camera or validate target visibility.', type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
   purpose: { type: 'string', minLength: 1, maxLength: 2000 },
   actionGoals: { type: 'array', minItems: 1, maxItems: 32, items: ACTION_GOAL_SCHEMA },
 }, ['id', 'start', 'waypoints', 'endBehavior', 'purpose']);

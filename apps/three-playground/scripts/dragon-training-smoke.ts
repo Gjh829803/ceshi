@@ -32,7 +32,7 @@ try{
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');
   await page.goBack();await waitMap('flying-creature-training');assert.equal((await state()).activeVehicle,'dragon');
   await page.goForward();await waitMap('aircraft-training');
-  await page.goto(new URL('/?map=flying-creature-training',base).href);await waitMap('flying-creature-training');assert.equal((await state()).activeVehicle,'dragon');
+  await page.goto(new URL('/#/scenes/flying-creature-training',base).href);await waitMap('flying-creature-training');assert.equal((await state()).activeVehicle,'dragon');
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');await page.reload();await waitMap('aircraft-training');
   assert.equal(page.frames().length,1);assert(![...requests].some(url=>/Havok|babylon|:5186|:5191/.test(url)));
   assert.deepEqual(errors,[]);await writeFile(path.join(output,'result.json'),JSON.stringify({initial,flame,reset,errors,requests:[...requests]},null,2));

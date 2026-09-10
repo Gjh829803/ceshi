@@ -1,3 +1,4 @@
+import {writeFixtureAssetPolicy} from './test-fixtures/asset-policy';
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -52,6 +53,7 @@ async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'three-episode-capture-test-')); tempRoots.push(root);
   const playableRoot = path.join(root, 'playable'), outputRoot = path.join(root, 'capture'); await mkdir(playableRoot);
   await writeFile(path.join(playableRoot, 'index.html'), '<canvas></canvas>');
+  const assetPolicySha256=await writeFixtureAssetPolicy(playableRoot);
   const plan: EpisodePlan = { kind: 'worldkit-three-episode-plan', schemaVersion: 2, worldBuildHash: 'a'.repeat(64), segments: Array.from({ length: 6 }, (_, index) => ({ id: `segment-0${index}`, start: { positionWorldMetersXYZ: [index * 10, 0, 0], facingYawRadians: 0 }, waypoints: [{ positionWorldMetersXYZ: [index * 10, 0, -500], gait: 'walk' }], endBehavior: 'stop', purpose: 'long route' })) };
   const fake = fakeSession(), openBrowser = vi.fn(async () => fake.session);
   let encoded = 0;
@@ -60,7 +62,7 @@ async function fixture() {
     write: async () => { encoded += 1; }, finish: async () => { await writeFile(outputPath, 'fixture encoded media'); }, abort,
   });
   const inspectVideo = async () => ({ widthPixels: 1280, heightPixels: 720, codec: 'h264', pixelFormat: 'yuv420p', frameRate: '24/1', averageFrameRate: '24/1', frameCount: 720, durationSeconds: 30, hasAudio: false });
-  return { root, plan, fake, openBrowser, abort, get encoded() { return encoded; }, options: { playableRoot, outputRoot, plan, openBrowser, encoderFactory, inspectVideo } };
+  return { root, plan, fake, assetPolicySha256, openBrowser, abort, get encoded() { return encoded; }, options: { playableRoot, outputRoot, plan, openBrowser, encoderFactory, inspectVideo } };
 }
 
 describe('Three episode deterministic production capture', () => {
@@ -186,7 +188,7 @@ it('resumes an admitted six-clip boundary without a planner or GPU job and rejec
  const summary=await runCaptureSegments({...setup.options,runtimeHash});
  const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'fixture source');
  const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
- const source={kind:'three-episode-source' as const,schemaVersion:1 as const,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash,sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:runtimeHash,sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]};
+ const source={assetPolicySha256:setup.assetPolicySha256,kind:'three-episode-source' as const,schemaVersion:1 as const,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash,sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:runtimeHash,sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]};
  const sourceManifestPath=path.join(setup.root,'source.json'),planPath=path.join(setup.root,'plan.json');await saveEpisodeSource(sourceManifestPath,source);await writeFile(planPath,JSON.stringify(setup.plan));
  await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify(summary));
  await writeFile(path.join(setup.root,'episode.json'),JSON.stringify({episodeId:'fixture-episode',worldBuildHash:source.worldBuildHash,worldId:source.worldId,profile:PRE_SEEDANCE_PROFILE,planPath,planHash:canonicalHash(setup.plan),segments:summary.segments,status:'failed',stage:'style-planning',planRepairsBySegment:{}}));
@@ -215,7 +217,7 @@ it('rejects a prior-route candidate from another source before dispatching the c
  const hash=(value:string)=>createHash('sha256').update(value).digest('hex');setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);
  const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'unchanged author source');
  const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
- const sourceManifestPath=path.join(setup.root,'source.json');await saveEpisodeSource(sourceManifestPath,{kind:'three-episode-source',schemaVersion:1,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash:'b'.repeat(64),sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:'b'.repeat(64),sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]});
+ const sourceManifestPath=path.join(setup.root,'source.json');await saveEpisodeSource(sourceManifestPath,{assetPolicySha256:setup.assetPolicySha256,kind:'three-episode-source',schemaVersion:1,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash:'b'.repeat(64),sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:'b'.repeat(64),sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]});
  const candidatePath=path.join(setup.root,'prior-route.json'),candidate=JSON.stringify(setup.plan);await writeFile(candidatePath,candidate);
  const runCodex=vi.fn(async()=>{throw new Error('unexpected cloud dispatch');}),capture=vi.fn(async()=>{throw new Error('unexpected capture');});
  const options={sourceManifestPath,outputRoot:path.join(setup.root,'new-runtime'),episodeId:'fixture-rerun',stopBeforeSeedance:true as const,until:'plan' as const,capture,cloud:{runCodex} as any,runtimeConfig:{routePlanCandidate:{path:candidatePath,sha256:hash(candidate),sourceHash:'e'.repeat(64)}}};
