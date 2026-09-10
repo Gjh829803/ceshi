@@ -10,7 +10,7 @@ const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(50,innerW
 const renderer=new THREE.WebGLRenderer();renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
 const parent=new THREE.Group();parent.rotation.set(-0.28,0.91,0.19);scene.add(parent);
 const specimen=new THREE.Mesh(new THREE.BoxGeometry(1,2,0.6),[0x00ff00,0xffff00,0xff00ff,0x00ffff,0x0000ff,0xff0000].map(color=>new THREE.MeshBasicMaterial({color})));specimen.rotation.set(0.23,-0.37,-0.16);parent.add(specimen);
-const render=()=>renderer.render(scene,camera);window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,player:specimen,targets:{specimen},${semanticYaw === null ? '' : `targetFrontYawRadiansById:{specimen:${semanticYaw}},`}startLive:render,stopLive:()=>{},reset:render};render();`;
+const render=()=>renderer.render(scene,camera);window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,controlledObject:specimen,targets:{specimen},${semanticYaw === null ? '' : `targetFrontYawRadiansById:{specimen:${semanticYaw}},`}startLive:render,stopLive:()=>{},reset:render};render();`;
 const cases = [
   { id: 'default-local-minus-z', semanticYaw: null, override: undefined, expected: [[255, 0, 0], [0, 255, 0], [0, 0, 255]] },
   { id: 'entity-yaw-through-player-alias', semanticYaw: Math.PI / 2, override: undefined, expected: [[255, 255, 0], [255, 0, 0], [0, 255, 0]] },

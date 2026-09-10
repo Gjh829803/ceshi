@@ -7,7 +7,7 @@ const output=path.resolve('outputs/submersible/browser');await mkdir(output,{rec
 const browser=await launchChromiumWithSystemFallback({headless:true,args:['--enable-unsafe-swiftshader']});
 const page=await browser.newPage({viewport:{width:1440,height:960}}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
 const state=()=>page.evaluate(()=>(window as any).trainingGround.getState());
-const dynamics=()=>page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().training.vehicleDynamics.find((v:any)=>v.instanceId==='observation-sub').submersible);
+const dynamics=()=>page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='observation-sub').submersible);
 const elapsed=async(seconds:number)=>{const t=(await state()).simulationTime;await page.waitForFunction(({t,seconds})=>(window as any).trainingGround.getState().simulationTime>=t+seconds,{t,seconds},{timeout:60000});};
 const hold=async(key:string,seconds:number)=>{await page.keyboard.down(key);await elapsed(seconds);await page.keyboard.up(key);};
 const capture=(name:string)=>page.screenshot({path:path.join(output,name+'.png')});

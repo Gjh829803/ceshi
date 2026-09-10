@@ -69,6 +69,9 @@ async function fixture(parentedCamera = false,custom=false) {
  world.addCharacter({id:'player',object:actor,...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{}),body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
  world.setControlledEntity('player');world.setCameraFollow({targetEntityId:'player'});await world.start();
  const observer=(windowTarget as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__;
+ expect(observer.controlledObject).toBe(actor);
+ expect(observer).not.toHaveProperty('player');
+ expect(world.humanoid).toBeUndefined();
  return {world,actor,camera,renderer,canvas,frames,observer,port:observer.episode!};
 }
 describe('Episode observer ownership and relative opening',()=>{

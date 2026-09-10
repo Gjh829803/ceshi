@@ -15,16 +15,16 @@ function frame(now){if(!running)return; const dt=previous?Math.min((now-previous
 function startLive(){if(running)return;running=true;previous=0;frameId=requestAnimationFrame(frame);}
 function stopLive(){running=false;cancelAnimationFrame(frameId);keys.clear();}
 function reset(){stopLive();player.position.set(0,0,0);renderer.render(scene,camera);}
-window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,player,targets:{player},startLive,stopLive,reset};reset();startLive();
+window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,controlledObject:player,targets:{player},startLive,stopLive,reset};reset();startLive();
 `;
 export const SDK_EXAMPLE = `import * as THREE from 'three';
-import {createHumanoidWorld, type TrainingMap} from '@worldkit/three';
+import {createHumanoidWorld, type EnvironmentDefinition} from '@worldkit/three';
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#eeeeee');
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1000);
 camera.position.set(7,6,10); camera.lookAt(0,0.7,0);
 const canvas = document.createElement('canvas'); document.body.append(canvas);
 scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,2));
-const map:TrainingMap={id:'world',name:'World',description:'Exploration',
+const map:EnvironmentDefinition={id:'world',name:'World',description:'Exploration',
  bounds:{min:[-30,-5,-30],max:[30,30,30]},
  boxes:[{id:'ground',position:[0,-.1,0],size:[60,.2,60],color:'#cccccc'}],
  water:[],regions:[],spawns:[],playerSpawn:[0,0,0]};
@@ -39,9 +39,10 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'play
 world.setCaptureTargets(['player']);
 await world.start();
 // Add scene conditions for contextual actions: see character-actions capability cards.
+// Choose dynamic objects for your scene; character-actions shows rigidGroup and physical pose display.
 // Custom nonhuman subjects may use createWorld + addCharacter({object,body,movement}).
 // For a custom vehicle, keep this preset person and read the custom-vehicle example.
-// For a preset rover with transparent whitebox glass and SDK T switching, read vehicle-camera.
+// For a self-drawn car using a model-free configuration and SDK T switching, read vehicle-camera.
 `;
 
 export function sdkExample(_assetId: string): string { return SDK_EXAMPLE; }

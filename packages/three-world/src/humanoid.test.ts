@@ -4,11 +4,11 @@ import * as THREE from 'three';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {createHumanoidWorld,type HumanoidAssetDefinition} from './humanoid';
 import {createWorld,type ThreeWorld} from './world';
-import type {MapDefinition} from './training/environment/types';
-import {Character} from './training/character';
+import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
+import {Character} from './humanoid-runtime/character';
 
 const worlds:ThreeWorld[]=[];
-const map:MapDefinition={id:'room',name:'Room',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
+const map:EnvironmentDefinition={id:'room',name:'Room',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();});
 
 it('uses explicit standalone resources without requiring a Creator catalog',async()=>{
@@ -35,20 +35,29 @@ it('loads the complete humanoid and performs a physical action through the publi
   }));
   const camera=new THREE.PerspectiveCamera(55,1,.05,200);camera.position.set(3,3,6);camera.lookAt(0,1,0);
   const world=await createHumanoidWorld({scene:new THREE.Scene(),camera,map,characterId:'person',assetDefinitions:{[definition.id]:definition as unknown as HumanoidAssetDefinition},resourceUrl:path=>`https://humanoid.test/${path}`});worlds.push(world);
-  const animation=world.training!.options.character.animation!;
+  expect(world).toHaveProperty('humanoid');
+  const animation=world.humanoid!.options.character.animation!;
   expect(animation.availableHumanoidClips.size).toBe(48);
   expect(world.snapshot().controlledEntityId).toBe('person');
   const bounds=new THREE.Box3().setFromObject(animation.root,true);expect(bounds.getSize(new THREE.Vector3()).y).toBeGreaterThan(1.5);
   world.step({},30);
   const start=world.getEntityState('person').positionWorldMetersXYZ;
-  const receipt=await world.execute({type:'training.action',request:{requestId:'roll-once',action:'roll'}});
+  const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:'roll-once',action:'roll'}});
   expect(receipt.status).toBe('accepted');world.step({},120);
   if(receipt.status==='accepted')expect(world.operations.get(receipt.operationId).status).toBe('succeeded');
   const end=world.getEntityState('person').positionWorldMetersXYZ;
   expect(Math.hypot(end[0]-start[0],end[2]-start[2])).toBeGreaterThan(1);
   await world.reset();world.step({},30);
-  expect(world.snapshot().training?.character.activeAction).toBeNull();
+  expect(world.snapshot().humanoid?.character.activeAction).toBeNull();
   expect(world.snapshot().errors).toEqual([]);
+  // Breaking API rename: old commands must not reach the controller.
+  expect(await world.execute({type:'training.action',request:{requestId:'legacy-roll',action:'roll'}} as never)).toMatchObject({status:'rejected'});
+  expect(world).not.toHaveProperty('training');
+  expect(world).not.toHaveProperty('player');
+  expect(await world.execute({type:'character.perform-action',request:{requestId:'old-character-roll',action:'roll'}} as never)).toMatchObject({status:'rejected'});
+  expect(world.snapshot()).not.toHaveProperty('player');
+  expect(world.snapshot()).not.toHaveProperty('training');
+
 });
 
 it('binds an authored non-human mesh to a custom movement intent with real collision',async()=>{

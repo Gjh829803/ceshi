@@ -50,10 +50,10 @@ describe('Three Episode planner MCP boundary',()=>{
  it('accepts the same full vehicle start for probing and plan submission',()=>{
   const schema=EPISODE_TOOLS.find(tool=>tool.name==='episode_probe')!.inputSchema;
   const check=new Ajv({strict:false}).compile(schema);
-  const start={positionWorldMetersXYZ:[0,15,0],facingYawRadians:.4,cameraPerspective:'first-person',training:{vehicleInstanceId:'plane',mounted:true,cameraMode:1,velocityWorldMetersPerSecondXYZ:[0,0,20],pitchRadians:.2,rollRadians:.1,throttle:.7,launched:true}};
+  const start={positionWorldMetersXYZ:[0,15,0],facingYawRadians:.4,cameraPerspective:'first-person',humanoid:{vehicleInstanceId:'plane',mounted:true,cameraMode:1,velocityWorldMetersPerSecondXYZ:[0,0,20],pitchRadians:.2,rollRadians:.1,throttle:.7,launched:true}};
   expect(check({kind:'start',start})).toBe(true);
   expect((schema as any).oneOf[0].properties.start).toBe(SEGMENT_SCHEMA.properties.start);
-  expect(check({kind:'start',start:{...start,training:{...start.training,throttle:2}}})).toBe(false);
+  expect(check({kind:'start',start:{...start,humanoid:{...start.humanoid,throttle:2}}})).toBe(false);
  });
 
  it('keeps the original image portable and rejects its changed bytes',async()=>{

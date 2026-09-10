@@ -2,7 +2,7 @@ import {expect,it} from 'vitest';
 import {Vector3,Quaternion,Euler} from 'three';
 import {CAMERA_PARAMETERS,CAMERA_SCHEMA_PROPERTIES,DEFAULT_CAMERA_TUNING,parseCameraTuning} from './camera';
 import {CAMERA_EFFECTS,DEFAULT_SHADOW_SETTINGS,resolveShadowSettings} from './presentation';
-import {applyVehicleCameraRoll} from '../training/camera-roll';
+import {applyVehicleCameraRoll} from '../humanoid-runtime/camera-roll';
 
 it('resolves JSON shadow overrides into independent immutable settings',()=>{
  const input=JSON.parse('{"enabled":false,"coverageMeters":90,"mapSizePixels":4096,"type":"basic","radius":0,"intensity":0.4}');
@@ -48,10 +48,10 @@ it('disables roll without changing vehicle attitude and remains finite at a vert
 
 it('exposes controller-specific fields without turning inactive stored values into new gates',async()=>{
  const {controlSchemaForFamily,controlFields}=await import('./control-fields');
- const {defaultTrainingControl,parseTrainingControl,DEFAULT_CHARACTER_CONTROL_BASE,CONTROL_RANGES}=await import('./control');
+ const {defaultMovementSettings,parseMovementSettings,DEFAULT_CHARACTER_CONTROL_BASE,CONTROL_RANGES}=await import('./control');
  expect(controlSchemaForFamily('bike')).not.toHaveProperty('rollResponse');
  expect(controlSchemaForFamily('plane')).toHaveProperty('rollResponse');
  expect(controlFields('glider').find(field=>field.key==='accel')?.disabled).toBe(true);
- expect(parseTrainingControl({rollResponse:4},defaultTrainingControl('character',DEFAULT_CHARACTER_CONTROL_BASE)).rollResponse).toBe(4);
+ expect(parseMovementSettings({rollResponse:4},defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE)).rollResponse).toBe(4);
  expect(Object.isFrozen(CONTROL_RANGES.speed)).toBe(true);
 });

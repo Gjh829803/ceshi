@@ -10,12 +10,12 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { training } from "@worldkit/three";
+import { humanoid } from "@worldkit/three";
 import type {
   AssetProfile,
   ProfileCameraTuning,
   ControlTuning,
-} from "../../../shared/training-content/platform/profiles";
+} from "../../../shared/preset-content/platform/profiles";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Slider } from "./components/ui/slider";
@@ -47,6 +47,7 @@ export type InspectorTelemetry = {
 };
 export type InspectorTab = "movement" | "camera";
 export type InspectorMovement = {
+  powertrain?:boolean;
   family: string;
   control: ControlTuning;
   velocity: readonly number[];
@@ -231,7 +232,7 @@ function Inspector({
   const person = assetId === "person",
     shoulder = camera.mode === 2,
     cockpit = camera.mode === 1;
-  const descriptions = training.controlFields(movement.family);
+  const descriptions = humanoid.controlFields(movement.family,movement.powertrain);
   const hasChanges =
     dirty.has(`${assetId}:movement`) || dirty.has(`${assetId}:camera`);
   const markDirty = (target: InspectorTab) =>
@@ -273,13 +274,13 @@ function Inspector({
     const definition =
       key === "distance"
         ? { label: "基础距离", unit: "m", step: 0.1 }
-        : training.CAMERA_PARAMETERS[key];
+        : humanoid.CAMERA_PARAMETERS[key];
     const bounds: readonly [number, number] =
       key === "distance"
         ? person
           ? [3.2, 12]
           : [1, 40]
-        : training.CAMERA_TUNING_RANGES[key];
+        : humanoid.CAMERA_TUNING_RANGES[key];
     return (
       <NumericField
         key={`${assetId}:${key}`}
@@ -403,7 +404,7 @@ function Inspector({
                         step={d.step}
                         note={d.note}
                         value={profile.control[d.key]}
-                        bounds={training.CONTROL_RANGES[d.key]}
+                        bounds={humanoid.CONTROL_RANGES[d.key]}
                         disabled={!!d.disabled}
                         reason={d.note}
                         onChange={(value) => apply(d.key, value, "control")}

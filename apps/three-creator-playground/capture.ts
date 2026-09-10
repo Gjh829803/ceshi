@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type {CaptureTargetRepresentative, WorldObservation} from '@worldkit/three';
 
-type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'player'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'|'withPresentation'>;
+type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'controlledObject'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'|'withPresentation'>;
 export type CaptureTargetDescriptor={id:string;sourceEntityId:string;representative?:{kind:'object'|'instance';objectUuid:string;instanceIndex?:number}};
 type Selection={descriptor:CaptureTargetDescriptor;object:THREE.Object3D;representative?:CaptureTargetRepresentative};
 function fail(code:string):never{throw new Error(`THREE_CAPTURE_${code}`);}
@@ -13,20 +13,20 @@ function ownValue<T>(values:Readonly<Record<string,T>>|undefined,id:string):T|un
   return values&&Object.hasOwn(values,id)?values[id]:undefined;
 }
 function selections(world:CaptureWorld):Selection[] {
-  if(!world.player?.isObject3D||!belongs(world.player,world.scene))fail('PLAYER_NOT_IN_SCENE');
-  const entries=Object.entries(world.targets),sourceId=entries.find(([id,object])=>object===world.player&&id!=='player')?.[0]??entries.find(([,object])=>object===world.player)?.[0]??'player';
+  if(!world.controlledObject?.isObject3D||!belongs(world.controlledObject,world.scene))fail('CONTROLLED_OBJECT_NOT_IN_SCENE');
+  const entries=Object.entries(world.targets),sourceId=entries.find(([id,object])=>object===world.controlledObject&&id!=='player')?.[0]??entries.find(([,object])=>object===world.controlledObject)?.[0]??'player';
   const subjectRepresentative=ownValue(world.targetRepresentativesById,sourceId);
-  if(subjectRepresentative&&(subjectRepresentative.kind!=='object'||subjectRepresentative.object!==world.player))fail('SUBJECT_MUST_BE_COMPLETE');
-  const result:Selection[]=[{descriptor:{id:'player',sourceEntityId:sourceId},object:world.player}];
-  const seenObjects=new Set<THREE.Object3D>([world.player]),seenInstances=new Map<THREE.InstancedMesh,Set<number>>();
+  if(subjectRepresentative&&(subjectRepresentative.kind!=='object'||subjectRepresentative.object!==world.controlledObject))fail('SUBJECT_MUST_BE_COMPLETE');
+  const result:Selection[]=[{descriptor:{id:'player',sourceEntityId:sourceId},object:world.controlledObject}];
+  const seenObjects=new Set<THREE.Object3D>([world.controlledObject]),seenInstances=new Map<THREE.InstancedMesh,Set<number>>();
   const ids=world.captureTargetIds??entries.map(([id])=>id);
   if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'||!id))fail('TARGET_ORDER_INVALID');
   for(const id of ids){
     const root=Object.hasOwn(world.targets,id)?world.targets[id]:undefined;
     if(!root?.isObject3D||!belongs(root,world.scene))fail('TARGET_NOT_IN_SCENE');
     const representative=ownValue(world.targetRepresentativesById,id);
-    if(root===world.player){
-      if(representative&&(representative.kind!=='object'||representative.object!==world.player))fail('SUBJECT_MUST_BE_COMPLETE');
+    if(root===world.controlledObject){
+      if(representative&&(representative.kind!=='object'||representative.object!==world.controlledObject))fail('SUBJECT_MUST_BE_COMPLETE');
       continue;
     }
     if(id==='player')fail('PLAYER_ALIAS_CONFLICT');

@@ -1,6 +1,6 @@
 # Optional humanoid attachments
 
-`TrainingCharacter` exposes rigid visual slots after loading Source101:
+`HumanoidCharacter` exposes rigid visual slots after loading Source101:
 `head`, `back`, `handLeft`, `handRight`, `footLeft`, `footRight`.
 `attachmentPoints` lists the available slots.
 They follow the existing animated skeleton and display interpolation without
@@ -15,7 +15,7 @@ These presets target Source101. Custom rigs require compatible bone names, units
 and a validated initial reference pose; this API does not perform retargeting.
 
 ```ts
-const character = new TrainingCharacter();
+const character = new HumanoidCharacter();
 const world = await createHumanoidWorld({ scene, camera, canvas, map, character });
 const detach = character.attach('head', hat, {
   positionMetersXYZ: [0, 0.02, 0],

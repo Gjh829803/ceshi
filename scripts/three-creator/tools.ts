@@ -8,11 +8,12 @@ import path from 'node:path';
 import Ajv from 'ajv';
 import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assertNoSymlinks, type Candidate, type AssetPolicyOptions } from './compiler.js';
 import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from './contracts.js';
-import { training, type WorldCommand } from '@worldkit/three';
+import { humanoid, type WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, type AuthoringTopic } from './authoring-schema.js';
 import { readRuntimeGuidance } from './runtime-guidance.js';
 import { CreatorDiscovery, type SchemaSection } from './creator-discovery.js';
 import { creatorToolDiagnostic, type CreatorToolDiagnostic } from './tool-errors.js';
+import { browserDiagnosticsScript, HostDiagnosticError, serializeDiagnostic, type HostDiagnosticContext, type SerializedDiagnostic } from './diagnostic-serialization.js';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import type { ExampleTopic } from './example-files.js';
 import {summarizeCharacterContinuity} from '../../apps/three-creator-playground/character-continuity.js';
@@ -22,13 +23,14 @@ import {cameraAuthoringGuidance} from './camera-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
+import {measureEpisodeTargets} from './target-feedback.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const json = async (file: string, value: unknown) => { await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${randomUUID()}.tmp`; await writeFile(temporary, JSON.stringify(value, null, 2)); await rename(temporary, file); };
 export type Operation = { id: string; type: string; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; createdAt: string; updatedAt: string; result?: any; error?: string; errorDetails?: CreatorToolDiagnostic; progress?: unknown };
-type Session = { candidate: Candidate; browser: Browser; context: BrowserContext; page: Page; server: Server; errors: string[]; networkErrors: string[]; close: () => Promise<void> };
+type Session = { candidate: Candidate; browser: Browser; context: BrowserContext; page: Page; server: Server; errors: string[]; networkErrors: string[]; collectionError?: SerializedDiagnostic; close: () => Promise<void> };
 type Evidence = { root: string; files: Record<string, string>; report: any };
 export async function withStageDeadline<T>(work: () => Promise<T>, milliseconds: number, errorCode: string, onTimeout: () => Promise<void>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -123,7 +125,7 @@ export class ThreeCreatorTools {
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
-      observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
+      observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,controlledObject,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
       delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a complete nonempty real episode with captured keydown and keyup, valid video and no browser/SDK errors, and real player/target front-right-back captures. Choose the episode length needed to demonstrate the requested behavior. Route success is a measurement, not semantic or visual acceptance.',
       discovery: 'Asset search returns ranked, paginated summaries; assets_describe supplies complete details. Schema defaults to guide; request sections for contracts as needed.',
@@ -143,7 +145,7 @@ export class ThreeCreatorTools {
       if (this.cancelled.has(id)) { operation.status = 'cancelled'; return; }
       this.activeOperationId = id; operation.status = 'running'; operation.updatedAt = new Date().toISOString();
       try { operation.result = await run(id); operation.status = this.cancelled.has(id) ? 'cancelled' : 'succeeded'; }
-      catch (error) { operation.status = this.cancelled.has(id) ? 'cancelled' : 'failed'; operation.error = errorMessage(error); operation.errorDetails = creatorToolDiagnostic(error); }
+      catch (error) { operation.status = this.cancelled.has(id) ? 'cancelled' : 'failed'; operation.errorDetails = creatorToolDiagnostic(error); operation.error = operation.errorDetails.message; }
       finally { operation.updatedAt = new Date().toISOString(); delete this.activeOperationId; await json(path.join(this.evidenceRoot, 'operations', `${id}.json`), operation); }
     }).catch(() => { /* Every operation owns its own diagnostic result; a failed persistence write does not poison the serial queue. */ });
     return { operationId: id, status: operation.status };
@@ -179,18 +181,36 @@ export class ThreeCreatorTools {
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('THREE_HTTP_START_FAILED'); const origin = `http://127.0.0.1:${address.port}`;
     const browserEnv: Record<string, string> = {}; for (const key of ['PATH', 'TMPDIR', 'TEMP', 'TMP', 'SYSTEMROOT', 'DISPLAY', 'XDG_RUNTIME_DIR', 'LD_LIBRARY_PATH', 'FONTCONFIG_FILE', 'FONTCONFIG_PATH', 'LANG', 'LC_ALL', 'PLAYWRIGHT_BROWSERS_PATH']) if (process.env[key]) browserEnv[key] = process.env[key]!;
     const home = path.join(this.compiler.outputRoot, 'browser-home'); await mkdir(home, { recursive: true }); browserEnv.HOME = home;
-    let browser: Browser;
-    const launchOptions = { headless: true, env: browserEnv, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--disable-dev-shm-usage'] };
-    try { browser = await chromium.launch(launchOptions); } catch (bundledError) { try { browser = await chromium.launch({ ...launchOptions, channel: 'chrome' }); } catch (fallbackError) { server.close(); throw new AggregateError([bundledError, fallbackError], 'THREE_BROWSER_UNAVAILABLE'); } }
-    const context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1, ...(recordRoot ? { recordVideo: { dir: recordRoot, size: { width: 960, height: 540 } } } : {}) });
-    await context.route('**/*', async route => { const url = route.request().url(); if (url.startsWith(`${origin}/`) || /^(?:data|blob):/.test(url)) await route.continue(); else { networkErrors.push(url.replace(/\?.*/, '')); await route.abort('blockedbyclient'); } });
-    const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => { if (message.type() === 'error') errors.push(`console.error: ${message.text().slice(0, 4000)}`); });
-    const session: Session = { candidate, browser, context, page, server, errors, networkErrors, close: async () => { await context.close().catch(() => {}); await browser.close().catch(() => {}); await new Promise<void>(resolve => server.close(() => resolve())); } };
-    this.session = session;
+    let browser: Browser | undefined, context: BrowserContext | undefined, page: Page | undefined;
+    let hostPhase = 'browser.launch';
+    const host = (): HostDiagnosticContext => ({phase:hostPhase,candidate:{id:candidate.id,sourceHash:candidate.sourceHash,runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash,worldBuildHash:candidate.worldBuildHash}});
+    const fallbackErrors: SerializedDiagnostic[] = [];
+    let collectionError: SerializedDiagnostic | undefined;
+    let closing: Promise<void> | undefined;
+    const close = () => closing ??= (async () => {
+      await context?.close().catch(() => {}); await browser?.close().catch(() => {});
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    })();
     try {
+      const launchOptions = { headless: true, env: browserEnv, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--disable-dev-shm-usage'] };
+      try { browser = await chromium.launch(launchOptions); } catch (bundledError) { try { browser = await chromium.launch({ ...launchOptions, channel: 'chrome' }); } catch (fallbackError) { throw new AggregateError([bundledError, fallbackError], 'THREE_BROWSER_UNAVAILABLE'); } }
+      hostPhase = 'browser.context';
+      context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1, ...(recordRoot ? { recordVideo: { dir: recordRoot, size: { width: 960, height: 540 } } } : {}) });
+      await context.route('**/*', async route => { const url = route.request().url(); if (url.startsWith(`${origin}/`) || /^(?:data|blob):/.test(url)) await route.continue(); else { networkErrors.push(url.replace(/\?.*/, '')); await route.abort('blockedbyclient'); } });
+      hostPhase = 'browser.page';
+      page = await context.newPage(); page.on('pageerror', error => { errors.push(error.message); if(fallbackErrors.length < 20) fallbackErrors.push(serializeDiagnostic(error)); });
+      await page.addInitScript({content:browserDiagnosticsScript});
+      page.on('console', message => { if (message.type() === 'error') errors.push(`console.error: ${message.text().slice(0, 4000)}`); });
+      const session: Session = { candidate, browser, context, page, server, errors, networkErrors, close };
+      this.session = session;
+      hostPhase = 'browser.startup';
       await page.goto(`${origin}${mountPath}`, { waitUntil: 'domcontentloaded', timeout: 60_000 }); const deadline = Date.now() + 60_000;
       for (;;) {
+        let diagnostics: SerializedDiagnostic[] = [];
+        try { diagnostics = await page.evaluate(() => (window as any).__THREE_CREATOR_DIAGNOSTICS__?.records ?? []); }
+        catch (failure) { session.collectionError = collectionError = serializeDiagnostic(failure); }
+        const firstDiagnostic = diagnostics[0];
+        if (firstDiagnostic) throw new HostDiagnosticError(firstDiagnostic,host());
         if (errors.length) throw new Error(`THREE_BROWSER_STARTUP: ${errors.join('\n')}`);
         const state = await page.evaluate(() => ({ ready: Boolean((window as any).__THREE_CREATOR_HOST__?.ready()), exposed: Boolean((window as any).__WORLDKIT_EVAL__?.ready) }));
         if (state.ready) break;
@@ -199,12 +219,33 @@ export class ThreeCreatorTools {
         await sleep(50);
       }
       assertSdkObservationVersion(this.profile, (await this.bridge(session, 'read')).snapshotSchemaVersion);
+      return session;
+    } catch (error) {
+      let records: SerializedDiagnostic[] = [];
+      if (page) try { records = await page.evaluate(() => (window as any).__THREE_CREATOR_DIAGNOSTICS__?.records ?? []); }
+      catch (failure) { collectionError = serializeDiagnostic(failure); }
+      await this.closeSession();
+      await close();
+      const original = error instanceof HostDiagnosticError ? error.diagnostic : serializeDiagnostic(error);
+      const primary = original.message.startsWith('THREE_BROWSER_STARTUP:') ? records[0] ?? original : original;
+      const nested = error instanceof HostDiagnosticError ? error : undefined;
+      throw new HostDiagnosticError(primary, nested?.host ?? host(),
+        records.length ? records : fallbackErrors.length ? fallbackErrors : nested?.browserErrors,
+        collectionError ?? nested?.collectionError);
     }
-    catch (error) { await this.closeSession(); throw new Error(`THREE_BROWSER_STARTUP_FAILED: ${errorMessage(error)}\n${errors.join('\n')}`); }
-    return session;
   }
   private async bridge(session: Session, method: string, args: unknown[] = []): Promise<any> {
-    return session.page.evaluate(`window.__THREE_CREATOR_HOST__[${JSON.stringify(method)}](...${JSON.stringify(args)})`);
+    const candidate = session.candidate;
+    const host: HostDiagnosticContext = {phase:'browser.bridge',method,candidate:{id:candidate.id,sourceHash:candidate.sourceHash,runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash,worldBuildHash:candidate.worldBuildHash}};
+    let response: any;
+    try {
+      response = await session.page.evaluate(async ({method,args}) => {
+        try { return {ok:true,result:await (window as any).__THREE_CREATOR_HOST__[method](...args)}; }
+        catch (error) { return {ok:false,error:(window as any).__THREE_CREATOR_DIAGNOSTICS__.serialize(error)}; }
+      }, {method,args});
+    } catch (error) { throw new HostDiagnosticError(serializeDiagnostic(error),{...host,phase:'browser.transport'}); }
+    if (!response.ok) throw new HostDiagnosticError(response.error,host);
+    return response.result;
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
   async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
@@ -217,7 +258,7 @@ export class ThreeCreatorTools {
       observation,
       feedback: {
         characterContinuity: observation.characterContinuity,
-        water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.training?.water) : undefined,
+        water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.humanoid?.water) : undefined,
       },
       pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors],
     };
@@ -359,14 +400,18 @@ export class ThreeCreatorTools {
     const samples = trace.samples as any[], errors = samples.flatMap(sample => sample.errors ?? []); const validSamples = samples.filter(sample => Array.isArray(sample.positionMetersXYZ) && sample.positionMetersXYZ.length === 3 && sample.positionMetersXYZ.every((value: unknown) => typeof value === 'number' && Number.isFinite(value)));
     if (samples.length !== validSamples.length) failure ??= 'THREE_PLAYTEST_OBSERVATION_INVALID: missing or nonfinite actual player position';
     let travelledMeters = 0; for (let i = 1; i < validSamples.length; i++) { const a = validSamples[i - 1]!.positionMetersXYZ, b = validSamples[i]!.positionMetersXYZ; travelledMeters += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
-    const targetResults = input.episode.targets.map(target => { const nearestDistanceMeters = Math.min(...validSamples.map(sample => Math.hypot(...target.positionMetersXYZ.map((value, index) => value - sample.positionMetersXYZ[index])))); return { ...target, nearestDistanceMeters: Number.isFinite(nearestDistanceMeters) ? nearestDistanceMeters : null, reached: nearestDistanceMeters <= target.toleranceMeters }; });
+    const targetResults = measureEpisodeTargets(input.episode.targets, samples);
     const capturedInput = trace.keyboardEvents.some((event: any) => event.type === 'keydown' && event.isTrusted) && trace.keyboardEvents.some((event: any) => event.type === 'keyup' && event.isTrusted);
     const isCompleteEpisode = completedSteps === input.episode.steps.length && budget.mode === 'full-episode';
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.training?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
-    const report = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
+    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
+    const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
+    const report = {...recording, recordingReadiness: {scope: 'recording-only' as const,
+      checkedAt: new Date().toISOString(), creatorOperationId: operationId, ...identity,
+      ...playtestSubmissionReadiness(recording, identity)}};
     await json(path.join(root, 'trace.json'), trace); await json(path.join(root, 'playtest.json'), report); await writeFile(path.join(root, 'episode.json'), input.bytes);
     this.playtestEvidence = { root, files: await hashTree(root), report }; return report;
   }

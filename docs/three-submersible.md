@@ -2,7 +2,7 @@
 
 资产库搜索“单人观景潜艇”，点击“前往资产”。潜艇默认浮在综合园区
 `[205, -1.88, -105]` 米的深水泊位，低码头通过缓坡与西岸相连。
-保留原探索潜艇，新资产 ID 为 `training.observation-sub`。
+保留原探索潜艇，新资产 ID 为 `vehicle.observation-sub`。
 
 - F：水面登艇、离艇；水下舱门保持关闭，提示先上浮。
 - W / S：前进、倒航；反向输入先抵消已有惯性。
@@ -28,13 +28,13 @@
 
 实现与验证：
 
-- [模型](../shared/training-content/submersible-model.ts)
-- [驾驶配置](../shared/training-content/submersible.ts)
-- [浮力、压载及推进](../packages/three-world/src/training/submersible.ts)
-- [推进器和水粒子](../packages/three-world/src/training/submersible-visual.ts)
-- [物理、重置、舱门及真实人物验证](../packages/three-world/src/training/submersible.test.ts)
+- [模型](../shared/preset-content/submersible-model.ts)
+- [驾驶配置](../shared/preset-content/submersible.ts)
+- [浮力、压载及推进](../packages/three-world/src/humanoid-runtime/submersible.ts)
+- [推进器和水粒子](../packages/three-world/src/humanoid-runtime/submersible-visual.ts)
+- [物理、重置、舱门及真实人物验证](../packages/three-world/src/humanoid-runtime/submersible.test.ts)
 - [浏览器按键录像脚本](../scripts/three-creator/submersible-browser-smoke.ts)
-- [Episode 路线验证](../scripts/three-episode/training-route.test.ts)
+- [Episode 路线验证](../scripts/three-episode/vehicle-route.test.ts)
 
 运行 `pnpm exec tsx scripts/three-creator/export-submersible.ts` 更新 GLB 和目录哈希。
 SDK 改动后执行 `pnpm build` 并重启预览。

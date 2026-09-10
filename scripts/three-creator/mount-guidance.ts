@@ -8,8 +8,8 @@ export function mountUsage(asset:AssetCatalogEntry,profile:CreatorProfile,allowe
  const assetAvailable=allowedIds.includes(asset.id),integrationReady=profile==='three-sdk'&&missingAssetIds.length===0&&!workspaceRuntime;
  return {assetId:asset.id,...metadata,assetAvailable,missingAssetIds,integrationReady,
   runtimeAuthority:workspaceRuntime?'workspace-sdk-source':'host-sdk-baseline',
-  ...(workspaceRuntime?{integrationStatus:'unverified-workspace-runtime',runtimeDefinitionsTool:{tool:'creator_get_authoring_schema',arguments:{topic:'mounted-interaction',sections:['training']}}}:{}),
+  ...(workspaceRuntime?{integrationStatus:'unverified-workspace-runtime',runtimeDefinitionsTool:{tool:'creator_get_authoring_schema',arguments:{topic:'mounted-interaction',sections:['humanoid']}}}:{}),
   ...(integrationReady?{schemaTopic:'mounted-interaction',exampleTopic:'mounted-interaction'}:{}),
-  limitations:[...asset.limitations,...(profile==='three-raw'?['This raw profile has no Training controller; loading model clips alone supplies no mounted gameplay.']:[])],
+  limitations:[...asset.limitations,...(profile==='three-raw'?['This raw profile has no Player controller; loading model clips alone supplies no mounted gameplay.']:[])],
  };
 }

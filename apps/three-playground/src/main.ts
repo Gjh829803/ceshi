@@ -3,21 +3,21 @@ import * as T from "three";
 import { mountShell } from "./shell";
 import "./styles.css";
 
-import { controlsFor } from "../../../shared/training-content/ui/shortcuts";
-import { renderAssetThumbnails } from "../../../shared/training-content/ui/thumbnails";
+import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
+import { renderAssetThumbnails } from "../../../shared/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
-import { SPECS, vehicleControlFamily } from "../../../shared/training-content/config";
-import presentationConfig from "../../../shared/training-content/presentation.json";
+import { SPECS, vehicleControlFamily } from "../../../shared/preset-content/config";
+import presentationConfig from "../../../shared/preset-content/presentation.json";
 import {
   getMap,
   MAPS,
-} from "../../../shared/training-content/environment/maps";
-import { GRAND_PRIX } from "../../../shared/training-content/environment/grand-prix";
+} from "../../../shared/preset-content/environment/maps";
+import { GRAND_PRIX } from "../../../shared/preset-content/environment/grand-prix";
 import {
   applyControlProfile,
   applyCameraProfile,
   readEffectiveProfile,
-} from "../../../shared/training-content/platform/profile-runtime";
+} from "../../../shared/preset-content/platform/profile-runtime";
 import {
   getDefaultProfile,
   loadAssetProfile,
@@ -25,48 +25,48 @@ import {
   clearAssetProfile,
   parseAssetProfile,
   type AssetProfile,
-} from "../../../shared/training-content/platform/profiles";
-import { buildVehicle } from "../../../shared/training-content/models";
-import { FrameRateMeter } from "../../../shared/training-content/fps";
+} from "../../../shared/preset-content/platform/profiles";
+import { buildVehicle } from "../../../shared/preset-content/models";
+import { FrameRateMeter } from "../../../shared/preset-content/fps";
 import {
   updateVehicleWheels,
   resetVehicleWheels,
-} from "../../../shared/training-content/vehicle-animation";
+} from "../../../shared/preset-content/vehicle-animation";
 import {
   buildWorkspaceCatalog,
   type AssetEntry,
-} from "../../../shared/training-content/platform/catalog";
+} from "../../../shared/preset-content/platform/catalog";
 import { mountAssetLibrary } from "./library";
 import { mountWorkbench } from "./workbench";
 import {
   defaultRegion,
   prepareCourse,
-} from "../../../shared/training-content/platform/scenarios";
-import { buildInteractionVisuals } from "../../../shared/training-content/humanoid/interaction-visuals";
-import { createAccessoryPreview } from "../../../shared/training-content/humanoid/accessories";
+} from "../../../shared/preset-content/platform/scenarios";
+import { buildInteractionVisuals } from "../../../shared/preset-content/humanoid/interaction-visuals";
+import { createAccessoryPreview } from "../../../shared/preset-content/humanoid/accessories";
 import { mountEquipmentPanel } from "./equipment-panel";
 import { mountHumanoidLab } from "./humanoid-panel";
 import {
   createCollisionDebug,
   type CollisionDebugMode,
-} from "../../../shared/training-content/humanoid/capsule-debug";
+} from "../../../shared/preset-content/humanoid/capsule-debug";
 import {
   HumanoidDemo,
   humanoidTraversalReady,
-} from "../../../shared/training-content/humanoid/demo";
-import type { CharacterTrial } from "../../../shared/training-content/environment/types";
+} from "../../../shared/preset-content/humanoid/demo";
+import type { CharacterTrial } from "../../../shared/preset-content/environment/types";
 import "./styles/workspace.css";
 
-import { createWorld, resolveShadowSettings, training } from "@worldkit/three";
-import { buildWorld } from "../../../shared/training-content/world";
+import { createWorld, resolveShadowSettings, humanoid } from "@worldkit/three";
+import { buildWorld } from "../../../shared/preset-content/world";
 import {
-  resolveTrainingResource,
+  resolvePresetResource,
   definitions,
-} from "../../../shared/training-content/assets/resources";
-import effectiveProfiles from "../../../shared/training-content/profiles.json";
-const { emptyInput, actionForKey, readControls } = training;
-type HumanoidInput = training.HumanoidInput;
-type SkillRequest = training.SkillRequest;
+} from "../../../shared/preset-content/assets/resources";
+import effectiveProfiles from "../../../shared/preset-content/profiles.json";
+const { emptyInput, actionForKey, readControls } = humanoid;
+type HumanoidActionInput = humanoid.HumanoidActionInput;
+type SkillRequest = humanoid.SkillRequest;
 const FIXED_STEP = 1 / 60;
 const shell = mountShell(document.querySelector<HTMLDivElement>("#app")!);
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!,
@@ -88,10 +88,10 @@ const camera = new T.PerspectiveCamera(
   2100,
 );
 const visuals = SPECS.map(buildVehicle),
-  character = new training.Character();
+  character = new humanoid.HumanoidCharacter();
 try {
   await Promise.all([
-    character.load(resolveTrainingResource),
+    character.load(resolvePresetResource),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -106,11 +106,11 @@ const sdk = await createWorld({
   canvas,
   assetDefinitions: definitions,
   shadows: resolveShadowSettings(presentationConfig.shadows),
-  training: {
+  humanoid: {
     map: getMap("campus"),
     vehicles: SPECS.map((spec, n) => ({
       instanceId: spec.id,
-      assetId: "training." + spec.id,
+      assetId: `${spec.mode === 'mount' || spec.mode === 'dragon' ? 'creature' : 'vehicle'}.${spec.id}`,
       spec,
       object: visuals[n]!.root,
     })),
@@ -121,7 +121,7 @@ const sdk = await createWorld({
     },
   },
 });
-const runtime = sdk.training!,
+const runtime = sdk.humanoid!,
   sim = runtime.simulation,
   follow = runtime.followCamera;
 runtime.applyProfile({ view: { keyboardToggleEnabled: true } });
@@ -202,7 +202,7 @@ const presentation = {
     return sim.player;
   },
   get targets() {
-    return training.readInteractionTargets(sim.humanoid);
+    return humanoid.readInteractionTargets(sim.humanoid);
   },
   snap(_sim: unknown) {},
 };
@@ -212,7 +212,7 @@ let jumpPressed = false,
   ready = true,
   lastMessage = "",
   lastActive = -99;
-let humanCommands: HumanoidInput = {},
+let humanCommands: HumanoidActionInput = {},
   humanDemo: HumanoidDemo | null = null;
 let collisionMode: CollisionDebugMode = "off";
 let disposeThumbnails: (() => void) | undefined;
@@ -353,6 +353,7 @@ function setCameraMode(mode: number) {
 function cycleCamera() {
   setCameraMode((follow.mode + 1) % 3);
 }
+function recoverVehicle(){if(!ready)return;if(runtime.recoverVehicle())syncTeleport();toast(sim.message);}
 function interact() {
   if (!ready || paused || panelOpen) return;
   humanDemo = null;
@@ -375,7 +376,7 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (
     ["forward", "backward", "left", "right", "jump"].some((action) =>
-      sdk.getKeyBindings()[action as training.ControlAction].includes(e.code),
+      sdk.getKeyBindings()[action as humanoid.ControlAction].includes(e.code),
     )
   )
     humanDemo = null;
@@ -385,6 +386,7 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (paused || !ready) return;
+    if(e.code==='KeyR'&&!e.ctrlKey&&sim.vehicle&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes('KeyR'))){e.preventDefault();recoverVehicle();return;}
     if (
       /^Digit[1-6]$/.test(e.code) &&
       !Object.values(sdk.getKeyBindings()).some((codes) =>
@@ -401,6 +403,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && ready) pause(true);
 });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
 shell.on("resetButton", async () => {
   await sdk.reset();
@@ -606,8 +609,9 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
+    powertrain:!!v?.wheelPhysics,
     family: vehicleControlFamily(v?.spec),
-    control: training.readTrainingControl(c),
+    control: humanoid.readMovementSettings(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
     grounded: v?.grounded ?? sim.player.grounded,
   };
@@ -950,6 +954,8 @@ function updateUI() {
     p = sim.player,
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
+  const drive=v?.wheelPhysics?.powertrain;
+  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{rpm:drive.rpm,maxRpm:v!.spec.wheelPhysics!.powertrain?.maxRpm??6200,gear:drive.gear<0?'R':drive.gear===0?'N':'D'+drive.gear,speed:Math.round(speed*3.6),throttle:Math.round(drive.throttle*100),shifting:drive.shiftRemaining>0}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
@@ -1136,12 +1142,12 @@ function updateCreatureVisual(n: number, dt: number) {
       dt,
     );
 }
-function updateVisuals(dt: number) {
+function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   collisionDebug.update(sim.humanoid, collisionMode, session.map.boxes);
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
     updateCreatureVisual(n, dt);
-    updateVehicleWheels(vis, state, {
+    updateVehicleWheels(vis, sample?.vehicles[n]??state, {
       grounded: state.grounded && !state.submerged,
       dt,
       revision: sim.teleportRevision,
@@ -1155,7 +1161,7 @@ function updateVisuals(dt: number) {
   });
   const held = character.carriedAttachment;
   interactionVisuals.update(
-    training
+    humanoid
       .readInteractionTargets(sim.humanoid)
       .map((target) =>
         held && target.id === held.id && target.state === "carried"
@@ -1168,6 +1174,7 @@ function updateVisuals(dt: number) {
     sim.vehicle?.position ?? sim.player.position,
     follow.underwater,
   );
+  for(const box of session.map.boxes)if(box.rigidGroup){const pose=sim.environment.propBoxPose(box.id),mesh=world.root.getObjectByName(box.id);if(pose&&mesh){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}}
   updateUI();
 }
 runtime.onVisualUpdate(updateVisuals);
@@ -1236,9 +1243,11 @@ shell.on("exportProfiles", () => {
   setTimeout(() => URL.revokeObjectURL(uri), 1000);
   toast("将 profiles.json 放回项目目录后重新编译，交付才会使用这些参数");
 });
-// Small local command surface for repeatable training selections and state inspection.
+// Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?.wheelPhysics?{...sim.vehicle.wheelPhysics.powertrain}:undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),
+
     mapId: session.map.id,
     activeVehicle: sim.vehicle?.spec.id ?? null,
     mode: sim.vehicle?.spec.mode ?? "character",
@@ -1282,7 +1291,7 @@ const labAPI = {
     capabilities: runtime.characterCapabilities(),
   }),
 };
-Object.assign(window, { trainingGround: labAPI });
+Object.assign(window, { playground: labAPI });
 type ModelContext = {
   registerTool: (
     tool: {
@@ -1318,20 +1327,20 @@ if (context?.registerTool) {
           },
           { signal: lifecycle.signal },
         ),
-      ).catch((error) => console.warn("Training tool unavailable", error));
+      ).catch((error) => console.warn("Playground tool unavailable", error));
     } catch (error) {
-      console.warn("Training tool unavailable", error);
+      console.warn("Playground tool unavailable", error);
     }
   };
   register(
-    "inspect_training_ground",
+    "inspect_playground",
     "Read current vehicle, location, speed and character state.",
     { type: "object", properties: {}, additionalProperties: false },
     true,
     () => labAPI.getState(),
   );
   register(
-    "inspect_humanoid_training",
+    "inspect_character",
     "Read the character action, rig, interaction target eligibility and recent traversal events.",
     { type: "object", properties: {}, additionalProperties: false },
     true,
@@ -1395,7 +1404,7 @@ if (context?.registerTool) {
     },
     false,
     (input) =>
-      sdk.execute({ type: "training.action", request: input as SkillRequest }),
+      sdk.execute({ type: "humanoid.perform-action", request: input as SkillRequest }),
   );
   register(
     "get_character_operation",
@@ -1419,7 +1428,7 @@ if (context?.registerTool) {
     },
   );
   register(
-    "prepare_training_vehicle",
+    "prepare_vehicle",
     "Restore the selected vehicle at its staging point and move the character next to it. Does not board the vehicle.",
     {
       type: "object",
@@ -1431,7 +1440,7 @@ if (context?.registerTool) {
     },
     false,
     (input) => {
-      if (!ready) throw new Error("Training ground is still loading");
+      if (!ready) throw new Error("Playground is still loading");
       if (
         !input ||
         typeof input !== "object" ||
@@ -1445,13 +1454,13 @@ if (context?.registerTool) {
     },
   );
   register(
-    "enter_or_exit_training_vehicle",
+    "toggle_vehicle",
     "Board the nearest stationary vehicle, or exit the currently occupied vehicle when speed and landing clearance allow.",
     { type: "object", properties: {}, additionalProperties: false },
     false,
     () => {
       if (!ready || paused)
-        throw new Error("Resume the loaded training ground first");
+        throw new Error("Resume the loaded playground first");
       humanDemo = null;
       if (!runtime.interact()) throw new Error(sim.message);
       updateUI();

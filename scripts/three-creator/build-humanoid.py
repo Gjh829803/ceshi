@@ -12,7 +12,7 @@ from pathlib import Path
 import struct
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / 'assets/three-creator/training/humanoid/source'
+SOURCE = ROOT / 'assets/three-creator/presets/humanoid/source'
 DEST = ROOT / 'assets/three-creator/humanoid/source-101'
 CLIPS = {'idle': 'idle-loop', 'walk': 'walk-loop', 'run': 'run-loop',
          'jump': 'jump-stand', 'fall': 'fall-loop'}
@@ -89,7 +89,7 @@ def build():
             values = floats(src, data, sampler['output'])
             width = 4 if target['path'] == 'rotation' else 3
             assert len(values) == len(times) * width
-            # Same yaw removal as the preserved Training source loader.
+            # Same yaw removal as the preserved Player source loader.
             if bone == 'root' and target['path'] == 'rotation':
                 for i in range(0, len(values), 4):
                     x, y, z, w = values[i:i + 4]
@@ -135,7 +135,7 @@ def main():
              'uri': f'./assets/subjects/{digest(model)}.glb', 'sha256': digest(model), 'byteLength': len(model),
              'sourcePath': str((DEST / 'model.glb').relative_to(ROOT)),
              'recommendedBody': {'heightMeters': 1.8, 'radiusMeters': .35},
-             'locomotionBindingIds': ['ground.standard', 'training.humanoid'],
+             'locomotionBindingIds': ['ground.standard', 'locomotion.humanoid'],
              'rootTransform': {'positionMetersXYZ': [0, 0, 0], 'rotationEulerRadiansXYZ': [0, math.pi, 0], 'scaleXYZ': [1, 1, 1]},
              'actions': {action: {'clipName': action, 'loop': action != 'jump', 'blendSeconds': .1,
                                   'timeScale': {'walk': 2.4/2, 'run': 4.8/5}.get(action, 1)} for action in CLIPS}}

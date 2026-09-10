@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import {training, type WorldCommand} from '@worldkit/three';
+import {humanoid, type WorldCommand} from '@worldkit/three';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { objectSchema } from './schema-helpers.js';
 export { objectSchema } from './schema-helpers.js';
@@ -20,7 +20,7 @@ export type Episode = {
   steps: EpisodeStep[];
   targets: { id: string; positionMetersXYZ: [number, number, number]; toleranceMeters: number }[];
 };
-export const KEY_NAMES = [...new Set([...training.SUPPORTED_KEY_CODES, 'Escape', ...training.SUPPORTED_KEY_CODES.flatMap(code=>
+export const KEY_NAMES = [...new Set([...humanoid.SUPPORTED_KEY_CODES, 'Escape', ...humanoid.SUPPORTED_KEY_CODES.flatMap(code=>
   /^Key[A-Z]$/.test(code)?[code.slice(3).toLowerCase(),code.slice(3)]:/^Digit[0-9]$/.test(code)?[code.slice(5)]:/^(Shift|Control|Alt)(Left|Right)$/.test(code)?[code.replace(/Left$|Right$/,'')]:[])])];
 const number = { type: 'number' };
 const keys = { type: 'array', items: { type: 'string', enum: KEY_NAMES }, maxItems: 20 };

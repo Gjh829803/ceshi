@@ -36,10 +36,10 @@ describe('ThreeWorld', () => {
     const world = await fixture();
     try {
       world.setCameraFollow({ distanceMeters: 6, pitchRadians: .3, activateOnInput: true }); world.step({}, 30);
-      const playerBefore = point(world); const cameraBefore = world.camera.quaternion.clone();
+      const humanoidBefore = point(world); const cameraBefore = world.camera.quaternion.clone();
       world.keyboard.enabled = true; world.keyboard.keyDown('ArrowRight');
       for (let i = 0; i < 60; i++) world.advance(1 / 60);
-      expect(point(world)[0]).toBeCloseTo(playerBefore[0], 4); expect(point(world)[2]).toBeCloseTo(playerBefore[2], 4);
+      expect(point(world)[0]).toBeCloseTo(humanoidBefore[0], 4); expect(point(world)[2]).toBeCloseTo(humanoidBefore[2], 4);
       expect(world.camera.quaternion.angleTo(cameraBefore)).toBeGreaterThan(.5);
       world.keyboard.keyUp('ArrowRight'); const stopped = world.camera.quaternion.clone();
       for (let i = 0; i < 30; i++) world.advance(1 / 60);

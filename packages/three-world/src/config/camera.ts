@@ -42,7 +42,7 @@ export const CAMERA_SCHEMA_PROPERTIES = Object.freeze(Object.fromEntries(Object.
 /** Playground editor range, deliberately narrower than runtime capability. */
 export const CAMERA_DISTANCE_EDITOR_RANGE=Object.freeze([1,40] as const);
 export const CHARACTER_CAMERA_DISTANCE_METERS=8.8;
-/** World-wide override; null is handled by TrainingProfile and restores per-subject defaults. */
+/** World-wide override; null is handled by HumanoidProfile and restores per-subject defaults. */
 export const CAMERA_DISTANCE_METERS_SCHEMA=Object.freeze({type:'number',exclusiveMinimum:0,maximum:100,description:'Nominal follow distance in meters, only for mode 0. Mode 1 ignores it; mode 2 has independent distance. Omit to keep the current setting; null restores the subject default.'});
 /** A vehicle may deliberately use a zero nominal arm. This is not the world override. */
 export const VEHICLE_CAMERA_DISTANCE_SCHEMA=Object.freeze({type:'number',minimum:0,description:'Vehicle nominal follow distance in meters, only for mode 0 when no world distance override is set. Mode 1 ignores distance; mode 2 has an independent shoulder distance.'});
@@ -63,11 +63,11 @@ export function parseCameraTuning(input:unknown):CameraTuning {
   return result;
 }
 
-export interface TrainingViewSettings {
+export interface HumanoidViewSettings {
   readonly defaultPerspective:'first-person'|'third-person';
   readonly keyboardToggleEnabled:boolean;
 }
-export const DEFAULT_TRAINING_VIEW:TrainingViewSettings=Object.freeze({defaultPerspective:'third-person',keyboardToggleEnabled:false});
-export const TRAINING_VIEW_SCHEMA_PROPERTIES=Object.freeze({
+export const DEFAULT_HUMANOID_VIEW:HumanoidViewSettings=Object.freeze({defaultPerspective:'third-person',keyboardToggleEnabled:false});
+export const HUMANOID_VIEW_SCHEMA_PROPERTIES=Object.freeze({
   defaultPerspective:Object.freeze({enum:Object.freeze(['first-person','third-person'])}),keyboardToggleEnabled:Object.freeze({type:'boolean'}),
 });

@@ -1,4 +1,4 @@
-import type {Mode} from '../training/config';
+import type {Mode} from '../humanoid-runtime/config';
 
 /** Speeds: m/s; accelerations: m/s²; exponential response/damping: 1/s. */
 const range=(minimum:number,maximum:number)=>Object.freeze([minimum,maximum] as const);
@@ -11,7 +11,7 @@ export const CONTROL_RANGES=Object.freeze({
  drag:range(0,100),dragQuadratic:range(0,1),pitchResponse:range(0,50),rollResponse:range(0,50),
  throttleResponse:range(0,10),minimumSpeed:range(0,100),launchSpeed:range(0,100),jumpSpeed:range(0,30),
 });
-export interface TrainingControl {
+export interface MovementSettings {
  speed:number;accel:number;grip:number;steer:number;
  maxSpeed:number;reverseSpeed:number;slowSpeed:number;groundSpeed:number;
  coastDeceleration:number;brakeDeceleration:number;brakeDamping:number;groundDeceleration:number;directionChangeDeceleration:number;
@@ -20,22 +20,22 @@ export interface TrainingControl {
  drag:number;dragQuadratic:number;pitchResponse:number;rollResponse:number;
  throttleResponse:number;minimumSpeed:number;launchSpeed:number;jumpSpeed:number;
 }
-export type ControlKey=keyof TrainingControl;
-export type CoreControl=Pick<TrainingControl,'speed'|'accel'|'grip'|'steer'>;
+export type ControlKey=keyof MovementSettings;
+export type CoreControl=Pick<MovementSettings,'speed'|'accel'|'grip'|'steer'>;
 /** Calibrated Playground authoring values; movement conversion remains in the controller. */
 export const DEFAULT_CHARACTER_CONTROL_BASE:Readonly<CoreControl>=Object.freeze({speed:3.1,accel:14,grip:5,steer:8});
-export type ExtendedControl=Omit<TrainingControl,keyof CoreControl>;
+export type ExtendedControl=Omit<MovementSettings,keyof CoreControl>;
 export const CONTROL_SCHEMA_PROPERTIES=Object.freeze(Object.fromEntries(Object.entries(CONTROL_RANGES).map(([key,[minimum,maximum]])=>[key,Object.freeze({type:'number',minimum,maximum})])));
 
 /** Materialize family constants once per instance. Acceleration edits must not
  * silently rewrite independent coasting or braking settings. */
-export function defaultTrainingControl(mode:Mode|'character',base:CoreControl):TrainingControl{
- if(mode==='tank')return {...defaultTrainingControl('wheeled',base),maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5};
- if(mode==='kayak')return {...defaultTrainingControl('boat',base),maxSpeed:base.speed,reverseSpeed:1.8,coastDeceleration:.16,dragQuadratic:.08,brakeDamping:2.1,steeringResponse:5,steeringReturn:5,pitchResponse:4,rollResponse:4};
- if(mode==='bus')return {...defaultTrainingControl('wheeled',base),maxSpeed:base.speed,reverseSpeed:2.5,
+export function defaultMovementSettings(mode:Mode|'character',base:CoreControl):MovementSettings{
+ if(mode==='tank')return {...defaultMovementSettings('wheeled',base),maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5};
+ if(mode==='kayak')return {...defaultMovementSettings('boat',base),maxSpeed:base.speed,reverseSpeed:1.8,coastDeceleration:.16,dragQuadratic:.08,brakeDamping:2.1,steeringResponse:5,steeringReturn:5,pitchResponse:4,rollResponse:4};
+ if(mode==='bus')return {...defaultMovementSettings('wheeled',base),maxSpeed:base.speed,reverseSpeed:2.5,
   coastDeceleration:.55,brakeDeceleration:3.8,brakeDamping:0,steeringResponse:2.5,steeringReturn:3.2,
   throttleResponse:1.6,pitchResponse:3,rollResponse:2.5};
- if(mode==='sled'||mode==='ski')return {...defaultTrainingControl('slide',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
+ if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('slide',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
   coastDeceleration:.22,brakeDeceleration:6,brakeDamping:0,steeringResponse:4,steeringReturn:6,
   dragQuadratic:.006,pitchResponse:12,rollResponse:10};
  const road=mode==='wheeled'||mode==='bike',creature=mode==='mount'||mode==='carriage',person=mode==='character';
@@ -52,14 +52,14 @@ export function defaultTrainingControl(mode:Mode|'character',base:CoreControl):T
   minimumSpeed:mode==='glider'?7:0,launchSpeed:22,jumpSpeed:6.3,
  };
 }
-export function parseTrainingControl(value:unknown,defaults:TrainingControl):TrainingControl{
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(CONTROL_RANGES,k)))throw new Error('TRAINING_CONTROL_INVALID');
+export function parseMovementSettings(value:unknown,defaults:MovementSettings):MovementSettings{
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(CONTROL_RANGES,k)))throw new Error('HUMANOID_CONTROL_INVALID');
  const result={...defaults,...value};
- for(const key of Object.keys(CONTROL_RANGES) as ControlKey[]){const n=result[key],range=CONTROL_RANGES[key];if(typeof n!=='number'||!Number.isFinite(n)||n<range[0]||n>range[1])throw new Error(`TRAINING_CONTROL_INVALID: ${key}`);}
+ for(const key of Object.keys(CONTROL_RANGES) as ControlKey[]){const n=result[key],range=CONTROL_RANGES[key];if(typeof n!=='number'||!Number.isFinite(n)||n<range[0]||n>range[1])throw new Error(`HUMANOID_CONTROL_INVALID: ${key}`);}
  return result;
 }
-export function readTrainingControl(value:TrainingControl):TrainingControl{
- const result={} as TrainingControl;
+export function readMovementSettings(value:MovementSettings):MovementSettings{
+ const result={} as MovementSettings;
  for(const key of Object.keys(CONTROL_RANGES) as ControlKey[])result[key]=value[key];
  return result;
 }

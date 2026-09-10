@@ -1,6 +1,6 @@
 # 橡皮艇 / Inflatable Boat
 
-`training.raft` 已加入默认训练场、资产库和载具面板。资产库搜索“橡皮艇”，
+`vehicle.raft` 已加入默认训练场、资产库和载具面板。资产库搜索“橡皮艇”，
 选择“前往资产”，按 F 上艇，T 循环切换第三人称、第一人称与肩后视角。
 默认水域位置 `[201, -1.88, -176]` 米；实例名 `raft`。
 
@@ -20,13 +20,13 @@
 | 平地或悬空 | 没有发动机或划桨推进力 |
 | 落地、碰墙 | 损失法向动能后有限回弹，气囊压缩并恢复 |
 
-[规格与锚点](../shared/training-content/raft.ts)定义驾驶座、两处乘客预留点、
-左右入口、驾驶观察点、脚部支撑；[模型](../shared/training-content/raft-model.ts)
+[规格与锚点](../shared/preset-content/raft.ts)定义驾驶座、两处乘客预留点、
+左右入口、驾驶观察点、脚部支撑；[模型](../shared/preset-content/raft-model.ts)
 包含左右手握持锚点。当前框架控制一位驾驶者，预留座位不代表已实现多人共同划桨。
 保留原 `humanoid.source-101` 人物、骨骼及缩放。船桨与手部目标同步更新，
 气囊压缩只改变 `raft.tubes`，人物、坐板和脚撑不随气囊缩放。
 
-[运行时](../packages/three-world/src/training/raft.ts)复用 `kayak` 家族的划桨和浮力，
+[运行时](../packages/three-world/src/humanoid-runtime/raft.ts)复用 `kayak` 家族的划桨和浮力，
 通过同一 SDK 固定时钟及 Rapier 碰撞世界完成陆地接触。四点水域采样、160 kg
 等效质量、最大 0.55 m³ 排水量控制浮起。陆地坡面法线决定纵坡与横坡上的重力分量，
 基础滑动摩擦为 0.32 m/s²；下坡安全限速为 18 m/s。
@@ -35,10 +35,10 @@
 气囊压缩上限 0.12 m，弹簧系数 95 s⁻²，阻尼 15 s⁻¹；低速静置不会连续跳动。
 这是有限回弹和形变近似，不是完整软体、气压泄漏、破损或海浪模拟。
 
-[物理测试](../packages/three-world/src/training/raft.test.ts)覆盖划桨、倒划、制动、快划、
+[物理测试](../packages/three-world/src/humanoid-runtime/raft.test.ts)覆盖划桨、倒划、制动、快划、
 平地无推进、无输入顺坡入水、落地回弹、撞墙及气囊恢复。
-[人物测试](../packages/three-world/src/training/kayak.test.ts)检查原人物双侧划桨、
-旋转载具中的握桨目标及脚撑净空；[Episode 路线](../scripts/three-episode/training-route.test.ts)
+[人物测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)检查原人物双侧划桨、
+旋转载具中的握桨目标及脚撑净空；[Episode 路线](../scripts/three-episode/vehicle-route.test.ts)
 使用真实控制器输入驱动橡皮艇。
 
 [岸坡试验场](../examples/three-creator/raft-driving/main.ts)与

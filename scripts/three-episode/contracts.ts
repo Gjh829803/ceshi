@@ -80,7 +80,7 @@ export const ACTION_GOAL_SCHEMA = object({
   ] },
   timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
-export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},training:object({
+export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},humanoid:object({
     vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
   },[]) },['positionWorldMetersXYZ','facingYawRadians']);

@@ -13,22 +13,22 @@ W 交替划桨，S 倒划，A / D 单侧扫桨，Space 压桨制动。
 
 浮力使用四个船体采样点、105 kg 总质量、0.23 m³ 最大排水量、
 1000 kg/m³ 水密度和 5.5 /s 垂直阻尼。平衡吃水约 0.16 m。
-这组参数可从 SDK 的 `training.KAYAK_WATER` 读取。
+这组参数可从 SDK 的 `humanoid.KAYAK_WATER` 读取。
 固定时钟积分重力、浮力、划桨脉冲和转向惯性；没有直接将船体锁到水面高度。
 搁浅时不提供划桨动力，码头和岸边使用现有 Rapier 碰撞。
 未实现波浪、水流、翻艇或动态流体。
 
 源码：
 
-- [模型](../shared/training-content/kayak-model.ts)
-- [默认驾驶参数](../shared/training-content/kayak.ts)
-- [SDK 物理](../packages/three-world/src/training/kayak.ts)
-- [SDK 桨和水纹显示](../packages/three-world/src/training/kayak-visual.ts)
-- [物理与真实骨架测试](../packages/three-world/src/training/kayak.test.ts)
+- [模型](../shared/preset-content/kayak-model.ts)
+- [默认驾驶参数](../shared/preset-content/kayak.ts)
+- [SDK 物理](../packages/three-world/src/humanoid-runtime/kayak.ts)
+- [SDK 桨和水纹显示](../packages/three-world/src/humanoid-runtime/kayak-visual.ts)
+- [物理与真实骨架测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)
 - [浏览器键盘验证](../scripts/three-creator/kayak-browser-smoke.ts)
 
 导出 `pnpm exec tsx scripts/three-creator/export-kayak.ts` 会更新
-`assets/three-creator/training/vehicles/kayak.glb` 及 `training.kayak` 的目录哈希。
+`assets/three-creator/presets/vehicles/kayak.glb` 及 `vehicle.kayak` 的目录哈希。
 SDK 修改后执行 `pnpm build` 并重启预览服务。
 在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
 

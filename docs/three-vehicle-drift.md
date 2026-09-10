@@ -1,7 +1,8 @@
 # 轮式载具制动漂移
 
-适用于 `VehicleSpec.mode` 为 `wheeled` 或 `bike` 的载具。设置
-`brakeDrift: true` 启用。当前 Playground 的七款汽车、卡丁车和摩托车均已启用；
+适用于未配置 `wheelPhysics`、且 `VehicleSpec.mode` 为 `wheeled` 或 `bike` 的载具。
+设置 `brakeDrift: true` 启用。当前 Playground 的物理车辆使用逐轮轮胎力模型，
+保留该模型的手刹受力与既有操控参数，不启用此街机漂移路径。
 船、滑板、飞行器和坐骑不使用这套模型。
 
 ## 设计与执行归属
@@ -38,7 +39,7 @@
 ## 车型配置
 
 ```ts
-import type { training } from "@worldkit/three";
+import type { humanoid } from "@worldkit/three";
 
 const driftTuning = {
   brakeDrift: true,
@@ -49,7 +50,7 @@ const driftTuning = {
   brakeDeceleration: 6,
   brakeDamping: 0.5,
   coastDeceleration: 1.8,
-} satisfies Partial<training.VehicleSpec>;
+} satisfies Partial<humanoid.VehicleSpec>;
 // 将 ...driftTuning 放入传给 SDK 的完整 VehicleSpec 中。
 ```
 
@@ -68,8 +69,8 @@ const driftTuning = {
 上面是自建摩托/卡丁车的起始调参示例，不是每辆车的统一值。
 车辆包围盒、地面支持、坡度与障碍物也会影响实际运动结果。
 
-`brakeDrift` 放在 VehicleSpec 中；其他数值属于 TrainingControl，可通过
-`world.training.applyProfile({vehicles: {[instanceId]: numericTuning}})` 修改。
+`brakeDrift` 放在 VehicleSpec 中；其他数值属于 MovementSettings，可通过
+`world.humanoid.applyProfile({vehicles: {[instanceId]: numericTuning}})` 修改。
 不要把 `brakeDrift` 填进数值 profile。生成交付应保存开关和数值配置到源码，
 只在浏览器本地保存调试参数不会改变交付内容。旧工作区运行时需要先更新并重建 SDK。
 
@@ -87,14 +88,15 @@ const driftTuning = {
 
 ## Agent 发现入口
 
-- `creator_get_authoring_schema({topic: 'training', sections: ['guide', 'training']})`：
-  获取启用方法、单位和当前 SDK 的 VehicleSpec/TrainingControl 合同。
-- `creator_get_examples({topic: 'custom-vehicle'})`：获取可编译的自建摩托示例，
-  其中已经包含漂移配置。`training-assets` 提供七款现有轮式载具的配置。
+- `creator_get_authoring_schema({topic: 'humanoid', sections: ['guide', 'humanoid']})`：
+  获取启用方法、单位和当前 SDK 的 VehicleSpec/MovementSettings 合同。
+- `creator_get_examples({topic: 'custom-vehicle'})`：获取可编译的自绘摩托示例，
+  使用 `wheelPhysics` 逐轮模型，不启用本文的 `brakeDrift`。`preset-assets`
+  提供 Playground 现有轮式载具的配置；Creator 默认资源策略不允许加载这些载具模型。
 - 工作区自带 SDK 时，以 Creator 返回的工作区合同为准；Host 新文档不代表旧运行时
   已经具备该能力。部署云端 Host 或更新已有工作区运行时是单独的发布操作。
 
-实现：[侧滑积分](../packages/three-world/src/training/simulation.ts)、
-[配置合同](../packages/three-world/src/training/config.ts)、
-[车型参数](../shared/training-content/config.ts)、
+实现：[侧滑积分](../packages/three-world/src/humanoid-runtime/simulation.ts)、
+[配置合同](../packages/three-world/src/humanoid-runtime/config.ts)、
+[车型参数](../shared/preset-content/config.ts)、
 [完整摩托示例](../examples/three-creator/custom-vehicle/main.ts)。

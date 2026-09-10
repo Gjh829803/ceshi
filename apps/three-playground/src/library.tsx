@@ -19,7 +19,7 @@ import {
   sortAssets,
   type AssetEntry,
   type AssetSort,
-} from "../../../shared/training-content/platform/catalog";
+} from "../../../shared/preset-content/platform/catalog";
 import "./styles/platform.css";
 import { Icon } from "./components/icon";
 

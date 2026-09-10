@@ -25,7 +25,7 @@ export interface EpisodeCaptureSession {
   readonly customMovementAdapterId?: string;
   readonly errors: readonly string[];
   capabilities(): Promise<EpisodeCapabilities>;
-  boarding?(instanceId:string):Promise<import('@worldkit/three').training.TrainingBoardingObservation>;
+  boarding?(instanceId:string):Promise<import('@worldkit/three').humanoid.BoardingObservation>;
   routeInput?(request:EpisodeRouteInputRequest):Promise<WorldInput>;
   probeStart(start: EpisodeStart): Promise<EpisodeStartProbe>;
   prepareSegment(start: EpisodeStart, viewport: { widthPixels: number; heightPixels: number }): Promise<WorldSnapshot>;

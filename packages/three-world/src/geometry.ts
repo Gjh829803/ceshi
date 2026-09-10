@@ -20,7 +20,14 @@ function attributeIdentity(attribute: object | null | undefined): number {
   return identity;
 }
 
-export function geometryError(code: string, message: string): never { throw new Error(`${code}: ${message}`); }
+export function geometryError(code: string, message: string, entityIds: readonly string[] = []): never {
+  const error = new Error(`${code}: ${message}`);
+  if (code === 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED' || code === 'PHYSICS_COLLIDER_BUDGET_EXCEEDED') Object.assign(error, {
+    code, category: 'content', phase: 'physics', entityIds: [...entityIds],
+    suggestedAction: "Inspect the reported entity and budget counts. mesh (internal trimesh) and static box both use exact subdivision. For a closed convex solid whose hull is the intended collision volume, consider shape:'convex-hull'; it fills concavities and openings. For concave structures, simplify the mesh or author separate convex pieces while preserving required collisions and routes. Source geometry and world budgets still apply to every shape.",
+  });
+  throw error;
+}
 export function finiteVector(values: readonly number[], count = 3): boolean {
   return values.length === count && values.every(value => typeof value === 'number' && Number.isFinite(value) && Number.isFinite(Math.fround(value)));
 }
@@ -93,7 +100,7 @@ export function subdivideTriangles(vertices: Float32Array, indices: Uint32Array,
     if (new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).lengthSq() < 1e-20) geometryError('PHYSICS_TRIANGLE_DEGENERATE', 'Collision triangles must have nonzero area.');
     const pending: Triangle[] = [[a.clone(), b.clone(), c.clone()]];
     while (pending.length) {
-      if (outputIndices.length / 3 + pending.length > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', 'Exact surface subdivision exceeds the triangle budget.');
+      if (outputIndices.length / 3 + pending.length > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', `Exact surface subdivision needs at least ${outputIndices.length / 3 + pending.length} triangles; availableTriangleBudget=${maximumTriangles}, sourceTriangleCount=${indices.length / 3}, maximumEdgeMeters=${maximumEdgeMeters}. This is a lower bound; subdivision stopped before the final count was known.`);
       const [p, q, r] = pending.pop()!;
       const lengths = [p.distanceToSquared(q), q.distanceToSquared(r), r.distanceToSquared(p)];
       const longest = Math.max(...lengths);
@@ -124,7 +131,7 @@ export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders:
     const end = Math.min(count, start + geometry.drawRange.count);
     if (!Number.isSafeInteger(start) || start < 0 || start % 3 || end % 3 || end <= start) geometryError('PHYSICS_GEOMETRY_INVALID', 'The draw range must contain complete triangles.');
     const sourceIndices = new Uint32Array(end - start);
-    if (sourceIndices.length / 3 > maximumTriangles - triangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', 'The source triangles exceed the available budget.');
+    if (sourceIndices.length / 3 > maximumTriangles - triangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', `Source geometry exceeds the triangle budget: sourceTriangleCount=${sourceIndices.length / 3}, availableTriangleBudget=${maximumTriangles - triangles}, maximumTriangleCount=${maximumTriangles}.`);
     const referencedVertices: number[] = [], remap = new Map<number, number>();
     for (let i = start; i < end; i++) {
       const value = index ? index.getX(i) : i;
@@ -133,7 +140,7 @@ export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders:
       sourceIndices[i - start] = remap.get(value)!;
     }
     const instances = (mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh).count : 1;
-    if (!Number.isSafeInteger(instances) || instances < 0 || instances + geometries.length > maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', 'The visible hierarchy exceeds the collider budget.');
+    if (!Number.isSafeInteger(instances) || instances < 0 || instances + geometries.length > maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', `The visible hierarchy exceeds the collider budget or has an invalid instance count: instanceCount=${typeof instances === 'number' ? instances : `<invalid ${typeof instances}>`}, collectedColliderCount=${geometries.length}, maximumColliderCount=${maximumColliders}.`);
     for (let instance = 0; instance < instances; instance++) {
       const world = mesh.matrixWorld.clone();
       if ((mesh as THREE.InstancedMesh).isInstancedMesh) { const local = new THREE.Matrix4(); (mesh as THREE.InstancedMesh).getMatrixAt(instance, local); world.multiply(local); }
@@ -150,7 +157,7 @@ export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders:
       if (relative.determinant() < 0) for (let i = 0; i < indices.length; i += 3) { const swap = indices[i + 1]!; indices[i + 1] = indices[i + 2]!; indices[i + 2] = swap; }
       const shape = subdivide ? subdivideTriangles(vertices, indices, maximumTriangles - triangles) : { vertices, indices, triangleCount: indices.length / 3 };
       triangles += shape.triangleCount;
-      if (triangles > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', 'The visible hierarchy exceeds the triangle budget.');
+      if (triangles > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', `The visible hierarchy exceeds the triangle budget: collectedTriangleCount=${triangles}, maximumTriangleCount=${maximumTriangles}.`);
       geometries.push({...shape,sourceObject:mesh});
     }
   }, recursive);

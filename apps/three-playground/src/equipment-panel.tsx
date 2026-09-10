@@ -9,13 +9,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type {
-  TrainingCharacter,
+  HumanoidCharacter,
   CharacterAttachmentPoint,
 } from "@worldkit/three";
 import {
   ACCESSORY_CHOICES,
   type createAccessoryPreview,
-} from "../../../shared/training-content/humanoid/accessories";
+} from "../../../shared/preset-content/humanoid/accessories";
 import "./styles/equipment-panel.css";
 import { Button } from "./components/ui/button";
 import { Checkbox } from "./components/ui/checkbox";
@@ -42,7 +42,7 @@ function EquipmentPanel({
   onOpenChange,
   controller,
 }: {
-  character: TrainingCharacter;
+  character: HumanoidCharacter;
   accessories: Accessories;
   onOpenChange(open: boolean): void;
   controller: { current?: Controller };
@@ -293,7 +293,7 @@ function EquipmentPanel({
 }
 export function mountEquipmentPanel(
   host: HTMLElement,
-  character: TrainingCharacter,
+  character: HumanoidCharacter,
   accessories: Accessories,
   onOpenChange: (open: boolean) => void,
 ) {

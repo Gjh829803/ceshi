@@ -20,7 +20,7 @@ export interface InspectionQuery {
 }
 function observation(): WorldObservation {
   const value = window.__WORLDKIT_EVAL__;
-  if (!value?.ready || !value.scene?.isScene || !value.camera?.isCamera || !value.renderer?.domElement || typeof value.renderer.render !== 'function' || !value.player?.isObject3D || !value.targets) throw new Error('THREE_OBSERVER_NOT_READY: expose scene, camera, renderer, player, targets and lifecycle methods');
+  if (!value?.ready || !value.scene?.isScene || !value.camera?.isCamera || !value.renderer?.domElement || typeof value.renderer.render !== 'function' || !value.controlledObject?.isObject3D || !value.targets) throw new Error('THREE_OBSERVER_NOT_READY: expose scene, camera, renderer, controlledObject, targets and lifecycle methods');
   for (const key of ['startLive', 'stopLive', 'reset'] as const) if (typeof value[key] !== 'function') throw new Error(`THREE_OBSERVER_METHOD_MISSING: ${key}`);
   return value;
 }
@@ -34,9 +34,9 @@ function currentCameraObservation(world: WorldObservation) {
   let snapshot: ReturnType<NonNullable<WorldObservation['snapshot']>> | null = null;
   try { snapshot = world.snapshot?.() ?? null; } catch { /* Raw/older observers may not provide telemetry. */ }
   let framing: unknown = null, cameraOverrides: unknown = null, cameraSettings: unknown = null;
-  if (snapshot?.training) {
+  if (snapshot?.humanoid) {
     try {
-      const configuration = world.capabilities?.({entityIds: []})?.training?.configuration;
+      const configuration = world.capabilities?.({entityIds: []})?.humanoid?.configuration;
       const camera = configuration?.effective?.camera;
       cameraOverrides = configuration?.profile?.camera ?? null;
       cameraSettings = camera?.settings ?? null;
@@ -46,7 +46,7 @@ function currentCameraObservation(world: WorldObservation) {
   return {
     worldRevision: snapshot?.worldRevision ?? null, simulationTick: snapshot?.simulationTick ?? null,
     simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null,
-    camera: snapshot?.camera ?? null, trainingCameraMode: snapshot?.training?.cameraMode ?? null,
+    camera: snapshot?.camera ?? null, humanoidCameraMode: snapshot?.humanoid?.cameraMode ?? null,
     owner: snapshot?.camera?.mode ?? null, framing, cameraOverrides, cameraSettings,
   };
 }
@@ -100,7 +100,7 @@ function createBridge() {
   window.addEventListener('keydown', keyListener, true); window.addEventListener('keyup', keyListener, true);
   function sample(deltaSeconds: number) {
     const world = observation(), snapshot = world.snapshot?.(), entity = snapshot?.entities.find(e => e.id === snapshot.controlledEntityId);
-    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, characterContinuity: characterContinuity.read(world,snapshot??null), water: snapshot?.training?.water ?? null, training: snapshot?.training ?? null, errors: snapshot?.errors ?? [] };
+    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.controlledObject), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, characterContinuity: characterContinuity.read(world,snapshot??null), water: snapshot?.humanoid?.water ?? null, humanoid: snapshot?.humanoid ?? null, errors: snapshot?.errors ?? [] };
   }
   const frames: number[] = [];
   function frame(now: number) {
@@ -122,7 +122,7 @@ function createBridge() {
         const objects: ReturnType<typeof describe>[] = [];
         world.scene.traverse(object => { if (objects.length < 1000) objects.push(describe(object)); });
         return {
-          player: describe(world.player),
+          controlledObject: describe(world.controlledObject),
           camera: {...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray()},
           targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])),
           objects,
@@ -197,7 +197,7 @@ function createBridge() {
       const world = observation();
       if (view === 'opening' || view === 'current') return withCapturePresentation(world,()=>{
         world.scene.updateMatrixWorld(true);world.renderer.render(world.scene,world.camera);
-        return {view,image:world.renderer.domElement.toDataURL('image/png'),player:describe(world.player),
+        return {view,image:world.renderer.domElement.toDataURL('image/png'),controlledObject:describe(world.controlledObject),
           ...(view === 'current' ? {cameraObservation: currentCameraObservation(world)} : {})};
       });
       return captureObjectViews(world, view, entityIds, frontYawRadians);

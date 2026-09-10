@@ -34,7 +34,7 @@ describe('WorldAssets', () => {
     const subject = library.search('source-101')[0]!;
     expect(subject.recommendedBody).toEqual({heightMeters:1.8,radiusMeters:.35});
     expect(subject.actionIds).toEqual(['idle','walk','run','jump','fall']);
-    expect(subject.locomotionBindingIds).toEqual(['ground.standard','training.humanoid']);
+    expect(subject.locomotionBindingIds).toEqual(['ground.standard','locomotion.humanoid']);
     const diagnostic = library.search('quadruped')[0]!;
     expect(diagnostic.recommendedBody).toBeNull(); expect(diagnostic.locomotionBindingIds).toEqual([]);
     expect(library.search('fox')).toEqual([]); expect(fetchBytes).not.toHaveBeenCalled();

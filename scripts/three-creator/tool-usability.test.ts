@@ -83,33 +83,39 @@ it('paginates the permitted catalog deterministically without omissions or dupli
 it('keeps denied assets and dependent examples outside the frozen search and guidance', async () => {
   const tools = await service(['humanoid.source-101']);
   const result = await search(tools, { query: '骑马' });
-  expect(result.assets.map(asset => asset.id)).not.toContain('training.horse');
+  expect(result.assets.map(asset => asset.id)).not.toContain('creature.horse');
   expect(result.mountUsage).toEqual([]);
-  await expect(describeAsset(tools, { assetId: 'training.horse' })).rejects.toThrow('THREE_ASSET_UNAVAILABLE');
+  await expect(describeAsset(tools, { assetId: 'creature.horse' })).rejects.toThrow('THREE_ASSET_UNAVAILABLE');
   const guidance = await schema(tools, { topic: 'mounted-interaction' });
-  expect(guidance.trainingExampleTopic).toBeUndefined();
-  expect(guidance.sdkGuide).not.toContain('new TrainingHorse');
+  expect(guidance.humanoidExampleTopic).toBeUndefined();
+  expect(guidance.sdkGuide).not.toContain('new HorseVisual');
 });
 
-it('discovers vehicles by their maneuver and control guidance', async () => {
+it('discovers handling configurations without offering vehicle models', async () => {
   const tools = await service();
-  const result = await search(tools, { query: '漂移', limit: 20 });
-  expect(result.assets.map(asset => asset.id)).toEqual(expect.arrayContaining(['training.rover', 'training.racer']));
-  expect(result.assets.find(asset => asset.id === 'training.rover')?.useWhen).toContain('漂移');
-  const bindings = await search(tools, { query: 'training.wheeled', limit: 20 });
-  expect(bindings.assets.map(asset => asset.id)).toEqual(expect.arrayContaining(['training.rover', 'training.racer']));
+  const result = await search(tools, { query: 'humanoid.wheeled', limit: 20 });
+  expect(result.assets).toEqual([]);
+  const selected=await schema(tools,{topic:'humanoid',sections:['humanoid']});
+  expect(selected.roadVehicleConfigurations!.car.mode).toBe('wheeled');
+  expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('bike');
+  expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
+  expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
+  expect(selected.humanoidSourceContracts['humanoid-runtime/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');
+
 });
 
 it('returns a readable schema guide first and actual source contracts only when requested', async () => {
   const tools = await service();
   const guide = await schema(tools, { topic: 'mounted-interaction' });
   expect(guide.sdkGuide).toContain('Imported horse');
+  expect(guide.sdkGuide).not.toContain('## Per-wheel road simulation');
+  expect((await schema(tools, { topic: 'humanoid' })).sdkGuide).toContain('## Per-wheel road simulation');
   expect(guide).not.toHaveProperty('sdkContracts');
-  expect(guide).not.toHaveProperty('trainingSourceContracts');
-  expect(guide.availableSections).toContain('training');
+  expect(guide).not.toHaveProperty('humanoidSourceContracts');
+  expect(guide.availableSections).toContain('humanoid');
   expect(Buffer.byteLength(JSON.stringify(guide))).toBeLessThan(12000);
-  const declarations = await schema(tools, { topic: 'mounted-interaction', sections: ['training'] });
-  expect(declarations.trainingSourceContracts?.['training/horse.ts']).toContain('class TrainingHorse');
+  const declarations = await schema(tools, { topic: 'mounted-interaction', sections: ['humanoid'] });
+  expect(declarations.humanoidSourceContracts?.['humanoid-runtime/horse.ts']).toContain('class HorseVisual');
   expect(declarations).not.toHaveProperty('sdkGuide');
   const complete = await schema(tools, { topic: 'mounted-interaction', sections: ['all'] });
   expect(complete.sdkContracts).toBeDefined();
@@ -120,7 +126,7 @@ it('returns a readable schema guide first and actual source contracts only when 
   expect(controls.characterCapabilities).toBeDefined();
   expect(controls.controlBindings).toBeDefined();
   expect(complete.episode).toBeDefined();
-  expect(complete.trainingSourceContracts).toEqual(declarations.trainingSourceContracts);
+  expect(complete.humanoidSourceContracts).toEqual(declarations.humanoidSourceContracts);
 });
 
 it('keeps failed operation identity and adds actionable diagnostics to its persisted result', async () => {
@@ -156,7 +162,7 @@ it('returns correlated structured CLI errors and keeps the same session usable',
     expect(unknown.id).toBe('unknown-operation');
     expect(unknown.errorDetails.nextSteps.map((step: { instruction: string }) => step.instruction).join(' ')).toContain('Do not resubmit');
     expect(next.id).toBe('next');
-    expect(next.result.assets[0].id).toBe('training.horse');
+    expect(next.result.assets[0].id).toBe('creature.horse');
   } finally { child.kill('SIGTERM'); }
 }, 20000);
 
@@ -183,7 +189,7 @@ it('exposes structured MCP errors while keeping raw discovery on its supported a
     const schema = JSON.parse((response.content as { text: string }[])[0]!.text);
     expect(schema.project).toBeDefined();
     expect(schema).not.toHaveProperty('sdkContracts');
-    expect(schema.availableSections).not.toContain('training');
+    expect(schema.availableSections).not.toContain('humanoid');
     const assets = await client.callTool({ name: 'assets_search', arguments: { query: 'horse' } });
     const found = JSON.parse((assets.content as { text: string }[])[0]!.text);
     expect(found.assets.length).toBeGreaterThan(0);
@@ -366,3 +372,215 @@ it('keeps the operation feedback envelope in one-shot CLI output', async () => {
     expect(result.error).toContain('THREE_WORLD_COMMANDS_UNSUPPORTED');
   } finally {child.kill('SIGTERM');}
 }, 15000);
+
+
+it('preserves an initialization RuntimeError before observer publication in the original operation', async () => {
+  const tools = await service();
+  await writeFile(path.join(tools.workspace, 'project.json'), JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace, 'index.html'), '<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace, 'main.ts'), `await Promise.reject({code:'ENTITY_ROLE_REQUIRED',message:'The landmark needs an explicit role.',category:'invalid-input',phase:'control',entityIds:['landmark'],suggestedAction:'Set role to terrain, obstacle or decoration.'});`);
+  const started = tools.start('world.inspect', () => tools.inspect());
+  let operation = await tools.getOperation(started.operationId, 25);
+  if (operation.status === 'running') operation = await tools.getOperation(started.operationId,25);
+  expect(operation.status).toBe('failed');
+  expect(operation.errorDetails).toMatchObject({code:'ENTITY_ROLE_REQUIRED',message:'The landmark needs an explicit role.',category:'invalid-input',phase:'control',entityIds:['landmark'],host:{phase:'browser.startup',candidate:{sourceHash:expect.any(String),runtimeHash:expect.any(String),worldBuildHash:expect.any(String)}}});
+  expect(operation.errorDetails).not.toHaveProperty('stack');
+  expect(await tools.getOperation(started.operationId)).toEqual(operation);
+  expect(await tools.getOperation(started.operationId)).toEqual(operation);
+},60000);
+
+it('serializes only bounded diagnostic fields despite hostile thrown objects', async () => {
+  const {creatorToolErrorResponse} = await import('./tool-errors');
+  const value:any={code:'ENTITY_ROLE_REQUIRED',message:'x'.repeat(20000),entityIds:['landmark',1n],secret:'do not copy',toJSON(){throw Error('no');}};
+  value.cause=value;
+  Object.defineProperty(value,'stack',{get(){throw Error('no');}});
+  const response=creatorToolErrorResponse(value);
+  expect(response.errorDetails.code).toBe('ENTITY_ROLE_REQUIRED');
+  expect(response.errorDetails.message.length).toBeLessThanOrEqual(4000);
+  expect(JSON.stringify(response)).not.toContain('do not copy');
+  expect(JSON.stringify(response).length).toBeLessThan(20000);
+  let getterCalls=0;
+  const ordinary=new Error('guarded');
+  Object.defineProperty(ordinary,'stack',{get(){getterCalls++;throw Error('do not run');}});
+  expect(creatorToolErrorResponse(ordinary).errorDetails).not.toHaveProperty('stack');
+  expect(getterCalls).toBe(0);
+});
+
+it('preserves browser RPC throws and rejections once, with paused state unchanged and transport distinct', async () => {
+  const tools = await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),`
+    import * as THREE from 'three'; import {createWorld} from '@worldkit/three';
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),renderer=new THREE.WebGLRenderer();
+    renderer.setSize(32,32);document.body.append(renderer.domElement);
+    const world=await createWorld({scene,camera,renderer,navigation:false});
+    world.addCharacter({id:'hero',object:new THREE.Group(),body:{heightMeters:1,radiusMeters:.2}});world.setControlledEntity('hero');
+    await world.start();world.stop();
+  `);
+  const before=await tools.inspect();
+  const session=(tools as any).session;
+  await session.page.evaluate(() => {
+    const host=(window as any).__THREE_CREATOR_HOST__;
+    (window as any).calls=0;
+    host.testSync=()=>{(window as any).calls++;throw {code:'ENTITY_ROLE_REQUIRED',message:'sync',phase:'control',entityIds:['landmark']};};
+    host.testAsync=async()=>{(window as any).calls++;throw {code:'ASYNC_REJECTED',message:'async',category:'invalid-input'};};
+    host.testError=()=>{(window as any).calls++;throw new Error('ordinary error',{cause:new Error('inner cause')});};
+    host.testReceipt=()=>{(window as any).calls++;return {status:'rejected',error:{code:'ACTOR_OWNED'}};};
+  });
+  for(const [method,code] of [['testSync','ENTITY_ROLE_REQUIRED'],['testAsync','ASYNC_REJECTED'],['testError','THREE_TOOL_FAILED']]) {
+    const started=tools.start('test.rpc',()=> (tools as any).bridge(session,method));
+    const operation=await tools.getOperation(started.operationId,1);
+    expect(operation.errorDetails).toMatchObject({code,host:{phase:'browser.bridge',method}});
+    if(method==='testError') expect(operation.errorDetails).toMatchObject({stack:expect.stringContaining('ordinary error'),cause:{message:'inner cause'}});
+  }
+  expect(await (tools as any).bridge(session,'testReceipt')).toEqual({status:'rejected',error:{code:'ACTOR_OWNED'}});
+  expect(await session.page.evaluate(()=>(window as any).calls)).toBe(4);
+  const after=await tools.inspect();
+  expect(after.observation.snapshot).toEqual(before.observation.snapshot);
+  expect(after.observation.sample.simulationTick).toBe(before.observation.sample.simulationTick);
+  await session.page.close();
+  const started=tools.start('test.transport',()=> (tools as any).bridge(session,'testSync'));
+  expect((await tools.getOperation(started.operationId,1)).errorDetails).toMatchObject({host:{phase:'browser.transport',method:'testSync'}});
+},30000);
+
+it.each(['launch','context','page'])('retains %s failure causes and cleans resources without operation query retries', async stage => {
+  const {chromium}=await import('playwright');
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),'export {};');
+  const context={route:vi.fn().mockResolvedValue(undefined),newPage:vi.fn().mockRejectedValue(new Error('page unavailable')),close:vi.fn().mockResolvedValue(undefined)};
+  const browser={newContext:stage==='context'?vi.fn().mockRejectedValue(new Error('context unavailable')):vi.fn().mockResolvedValue(context),close:vi.fn().mockResolvedValue(undefined)};
+  const launch=vi.spyOn(chromium,'launch');
+  if(stage==='launch') launch.mockRejectedValueOnce(new Error('bundled unavailable')).mockRejectedValueOnce(new Error('chrome unavailable'));
+  else launch.mockResolvedValue(browser as any);
+  try {
+    const started=tools.start('world.inspect',()=>tools.inspect());
+    const operation=await tools.getOperation(started.operationId,25);
+    expect(operation.status).toBe('failed');
+    expect(operation.errorDetails?.host?.phase).toBe(`browser.${stage}`);
+    if(stage==='launch') expect(operation.errorDetails).toMatchObject({code:'THREE_BROWSER_UNAVAILABLE',causes:[{message:'bundled unavailable'},{message:'chrome unavailable'}]});
+    else expect(browser.close).toHaveBeenCalledTimes(1);
+    if(stage==='page') expect(context.close).toHaveBeenCalledTimes(1);
+    expect(await tools.getOperation(started.operationId)).toEqual(operation);
+    expect(await tools.getOperation(started.operationId)).toEqual(operation);
+    expect(launch).toHaveBeenCalledTimes(stage==='launch'?2:1);
+  } finally {launch.mockRestore();}
+},30000);
+
+it('retains the real addEntity role failure before start without inventing a stack', async () => {
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),`
+    import * as THREE from 'three';import {createWorld} from '@worldkit/three';
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),renderer=new THREE.WebGLRenderer();
+    const world=await createWorld({scene,camera,renderer,navigation:false});
+    world.addEntity({id:'landmark',object:new THREE.Group()});
+  `);
+  const started=tools.start('world.inspect',()=>tools.inspect());
+  const operation=await tools.getOperation(started.operationId,25);
+  expect(operation.errorDetails).toMatchObject({code:'ENTITY_ROLE_REQUIRED',category:'invalid-input',phase:'control',entityIds:['landmark'],suggestedAction:expect.any(String),host:{phase:'browser.startup'}});
+  expect(operation.errorDetails).not.toHaveProperty('stack');
+},30000);
+
+it('preserves legacy physics error codes instead of classifying a known budget error as generic',async()=>{
+  const {creatorToolErrorResponse}=await import('./tool-errors');
+  const response=creatorToolErrorResponse(new Error('PHYSICS_TRIANGLE_BUDGET_EXCEEDED: old workspace SDK message'));
+  expect(response.errorDetails.code).toBe('PHYSICS_TRIANGLE_BUDGET_EXCEEDED');
+});
+
+it('returns the failed entity, actual subdivision budget and conditional shape guidance from browser startup',async()=>{
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),`
+    import * as THREE from 'three';import {createWorld} from '@worldkit/three';
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),renderer=new THREE.WebGLRenderer();
+    const world=await createWorld({scene,camera,renderer,navigation:false,physics:{maximumTriangleCount:64}});
+    world.addEntity({id:'wide-floor',role:'terrain',object:new THREE.Mesh(new THREE.BoxGeometry(30,1,30)),physics:{kind:'fixed',shape:'mesh'}});
+  `);
+  const started=tools.start('world.preview',()=>tools.preview());
+  const operation=await tools.getOperation(started.operationId,25);
+  expect(operation.status).toBe('failed');
+  expect(operation.errorDetails).toMatchObject({code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED',category:'content',phase:'physics',entityIds:['wide-floor'],
+    message:expect.stringContaining('availableTriangleBudget=64'),suggestedAction:expect.stringContaining('convex-hull'),stack:expect.any(String),
+    host:{phase:'browser.startup',candidate:{worldBuildHash:expect.any(String)}}});
+  expect(operation.errorDetails?.suggestedAction).toMatch(/concav|openings/);
+  expect(operation.errorDetails?.nextSteps[0]?.instruction).toBe(operation.errorDetails?.suggestedAction);
+  expect(await tools.getOperation(started.operationId)).toEqual(operation);
+},30000);
+
+
+it('keeps navigation failure primary when auxiliary diagnostic collection fails and closes once', async () => {
+  const {chromium}=await import('playwright');
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),'export {};');
+  const page={on:vi.fn(),addInitScript:vi.fn().mockResolvedValue(undefined),goto:vi.fn().mockRejectedValue(new Error('navigation failed')),evaluate:vi.fn().mockRejectedValue(new Error('collection unavailable'))};
+  const context={route:vi.fn().mockResolvedValue(undefined),newPage:vi.fn().mockResolvedValue(page),close:vi.fn().mockResolvedValue(undefined)};
+  const browser={newContext:vi.fn().mockResolvedValue(context),close:vi.fn().mockResolvedValue(undefined)};
+  const launch=vi.spyOn(chromium,'launch').mockResolvedValue(browser as any);
+  try {
+    const started=tools.start('world.inspect',()=>tools.inspect());
+    const operation=await tools.getOperation(started.operationId,25);
+    expect(operation.errorDetails).toMatchObject({message:'navigation failed',collectionError:{message:'collection unavailable'},host:{phase:'browser.startup'}});
+    expect(context.close).toHaveBeenCalledTimes(1);expect(browser.close).toHaveBeenCalledTimes(1);
+    expect(page.addInitScript.mock.invocationCallOrder[0]).toBeLessThan(page.goto.mock.invocationCallOrder[0]!);
+  } finally {launch.mockRestore();}
+},30000);
+
+it.each(['unavailable','inspect-rpc','read-transport'])('keeps startup diagnostic sampling local and nested phase exact: %s', async mode => {
+  const {chromium}=await import('playwright');
+  const tools=await service();
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),'export {};');
+  const page={on:vi.fn(),addInitScript:vi.fn().mockResolvedValue(undefined),goto:vi.fn().mockResolvedValue(undefined),evaluate:vi.fn(async (_fn:unknown,args?:{method:string})=> {
+    if(args?.method==='inspect') return {ok:false,error:{code:'OBSERVER_INVALID',message:'inspect rejected',phase:'control'}};
+    if(args?.method==='read') {
+      if(mode==='read-transport') throw new Error('read transport unavailable');
+      return {ok:true,result:{snapshotSchemaVersion:2}};
+    }
+    if(String(_fn).includes('__THREE_CREATOR_DIAGNOSTICS__')) {
+      if(mode==='unavailable') throw new Error('optional diagnostics unavailable');
+      return [];
+    }
+    return {ready:mode!=='inspect-rpc',exposed:true};
+  })};
+  const context={route:vi.fn().mockResolvedValue(undefined),newPage:vi.fn().mockResolvedValue(page),close:vi.fn().mockResolvedValue(undefined)};
+  const browser={newContext:vi.fn().mockResolvedValue(context),close:vi.fn().mockResolvedValue(undefined)};
+  const launch=vi.spyOn(chromium,'launch').mockResolvedValue(browser as any);
+  try {
+    const started=tools.start('test.open',async()=>{await (tools as any).open(await tools.compiler.prepare());return {opened:true};});
+    const operation=await tools.getOperation(started.operationId,25);
+    if(mode==='unavailable') {
+      expect(operation).toMatchObject({status:'succeeded',result:{opened:true}});
+      expect(context.close).not.toHaveBeenCalled();
+      expect((tools as any).session.collectionError).toMatchObject({message:'optional diagnostics unavailable'});
+    } else {
+      expect(operation).toMatchObject({status:'failed',errorDetails:{host:{phase:mode==='inspect-rpc'?'browser.bridge':'browser.transport',method:mode==='inspect-rpc'?'inspect':'read'}}});
+      expect(context.close).toHaveBeenCalledTimes(1);
+    }
+    expect(await tools.getOperation(started.operationId)).toEqual(operation);
+    expect(launch).toHaveBeenCalledTimes(1);
+  } finally {launch.mockRestore();}
+},30000);
+
+it('contains hostile proxies in public diagnostics and persisted failed operations', async () => {
+  const {creatorToolErrorResponse}=await import('./tool-errors');
+  const revoked=Proxy.revocable({},{});revoked.revoke();
+  const throwing=new Proxy({}, {getPrototypeOf(){throw new Error('prototype unavailable');}});
+  const tools=await service();
+  for(const value of [revoked.proxy,throwing]) {
+    const response=creatorToolErrorResponse(value);
+    expect(response).toMatchObject({error:'Unknown thrown value',errorDetails:{code:'THREE_TOOL_FAILED'}});
+    expect(()=>JSON.stringify(response)).not.toThrow();
+    const started=tools.start('test.proxy',async()=>{throw value;});
+    const operation=await tools.getOperation(started.operationId,1);
+    expect(operation).toMatchObject({status:'failed',error:response.error,errorDetails:response.errorDetails});
+    await expect.poll(async()=>JSON.parse(await readFile(path.join(tools.evidenceRoot,'operations',`${started.operationId}.json`),'utf8'))).toMatchObject({errorDetails:response.errorDetails});
+  }
+});

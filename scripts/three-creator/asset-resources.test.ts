@@ -31,11 +31,11 @@ describe('catalog dependency closure', () => {
   });
 });
 
-describe('committed training resource declarations', () => {
+describe('committed player resource declarations', () => {
   it.each([
-    ['training.horse', ['creatures/horse.glb']],
-    ['training.carriage', ['creatures/horse.glb']],
-    ['training.dragon', ['creatures/dragon.glb']],
+    ['creature.horse', ['creatures/horse.glb']],
+    ['vehicle.carriage', ['creatures/horse.glb']],
+    ['creature.dragon', ['creatures/dragon.glb']],
   ] as const)('%s ships only the creature models its loader uses', (id, expected) => {
     const asset = catalog.assets.find(asset => asset.id === id)!;
     const models = asset.resources?.filter(resource => resource.path.endsWith('.glb')).map(resource => resource.path);

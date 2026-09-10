@@ -86,7 +86,7 @@
       ],
       "commands": [
         {
-          "type": "training.camera",
+          "type": "humanoid.camera",
           "mode": 1
         }
       ],
@@ -95,7 +95,7 @@
     {
       "commands": [
         {
-          "type": "training.camera",
+          "type": "humanoid.camera",
           "mode": 2
         }
       ],
@@ -104,7 +104,7 @@
     {
       "commands": [
         {
-          "type": "training.camera",
+          "type": "humanoid.camera",
           "mode": 0
         }
       ],

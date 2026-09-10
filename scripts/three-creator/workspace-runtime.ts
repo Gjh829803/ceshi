@@ -33,7 +33,7 @@ async function sourceTree(root:string):Promise<Map<string,Buffer>>{
 }
 export async function materializeWorkspaceRuntime(repository:string,workspace:string){
  const destination=path.join(workspace,'sdk');
- try {await lstat(destination);const existing=await readWorkspaceRuntime(repository,workspace);return {directory:'sdk',sourceHash:existing!.sourceHash,created:false};}
+ try {await lstat(destination);const existing=await readWorkspaceRuntime(repository,workspace);return {directory:'sdk',runtimeSourceHash:existing!.sourceHash,created:false};}
  catch(error:any){if(error.code!=='ENOENT')throw error;}
  const temporary=path.join(workspace,`.three-sdk-${randomUUID()}`);
  await mkdir(temporary);
@@ -53,7 +53,7 @@ export async function materializeWorkspaceRuntime(repository:string,workspace:st
   await rename(temporary,destination);
  }finally{await rm(temporary,{recursive:true,force:true});}
  const runtime=await readWorkspaceRuntime(repository,workspace);
- return {directory:'sdk',sourceHash:runtime!.sourceHash,created:true};
+ return {directory:'sdk',runtimeSourceHash:runtime!.sourceHash,created:true};
 }
 export async function readWorkspaceRuntime(repository:string,workspace:string):Promise<WorkspaceRuntime|undefined>{
  const root=path.join(workspace,'sdk');try{await lstat(root);}catch(error:any){if(error.code==='ENOENT')return;throw error;}

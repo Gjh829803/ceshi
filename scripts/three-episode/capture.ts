@@ -94,7 +94,7 @@ function inputBasis(frame: EpisodeFrame): Vec3 {
 function movementForCapture(capabilities: EpisodeCapabilities,session:EpisodeCaptureSession): RouteMovement {
   if (!capabilities.movement) throw new Error('EPISODE_CONTROLLED_MOVEMENT_UNAVAILABLE');
   const movement = capabilities.movement;
-  if (movement.kind !== 'ground' && !(movement.episodeInput==='custom'&&session.routeInput) && !capabilities.training && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
+  if (movement.kind !== 'ground' && !(movement.episodeInput==='custom'&&session.routeInput) && !capabilities.humanoid && !(movement.movementId==='arborist.ground-with-steps'&&session.customMovementAdapterId===ARBORIST_CAPTURE_ADAPTER)) throw new Error('EPISODE_MOVEMENT_UNSUPPORTED: a custom movement needs its declared capture controller');
   if (!(movement.walkSpeedMetersPerSecond > 0) || !(movement.runSpeedMetersPerSecond > 0)) throw new Error('EPISODE_CONTROLLED_MOVEMENT_SPEED_UNAVAILABLE');
   return movement as RouteMovement;
 }
@@ -162,7 +162,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
       if (actions.hasGoals) {
         for (let tick = expectedTick; tick < nextTick; tick++) {
           const tickInput = tick === expectedTick ? decision.input : { ...decision.input, jumpPressed: false, interactPressed: false,
-            ...(decision.input.training ? { training: { ...decision.input.training, jump: false, humanoid: {} } } : {}) };
+            ...(decision.input.humanoid ? { humanoid: { ...decision.input.humanoid, jump: false, actions: {} } } : {}) };
           terminalSnapshot = await session.advance(tickInput, 1);
           await actions.observe(terminalSnapshot);
         }

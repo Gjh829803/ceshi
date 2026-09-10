@@ -15,6 +15,8 @@ import { executeThreeCreatorTool, THREE_CREATOR_TOOLS } from './mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../apps/three-creator-playground/bridge.js';
 import {recordedVideoEncodingArgs} from './video.js';
+import {RAW_EXAMPLE} from './examples.js';
+import {measureEpisodeTargets} from './target-feedback.js';
 
 const roots: string[] = [];
 async function fixture(source = `import * as THREE from 'three'; window.authorScene = new THREE.Scene(); document.title = 'ordinary browser APIs work';`) {
@@ -23,7 +25,94 @@ async function fixture(source = `import * as THREE from 'three'; window.authorSc
   await writeFile(path.join(root, 'main.ts'), source); return root;
 }
 afterEach(async () => { vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+describe('sampled target feedback',()=>{
+  it('retains the first nearest sample, signed XYZ offset and original trace index without changing samples',()=>{
+    const samples=Object.freeze([
+      Object.freeze({wallSeconds:0,observationError:'missing position'}),
+      Object.freeze({wallSeconds:1,simulationTick:60,simulationSeconds:1,worldRevision:3,positionMetersXYZ:Object.freeze([4,8,12])}),
+      Object.freeze({wallSeconds:2,simulationTick:120,simulationSeconds:2,worldRevision:3,positionMetersXYZ:Object.freeze([4,8,12])}),
+      Object.freeze({wallSeconds:3,positionMetersXYZ:Object.freeze([100,100,100])}),
+    ]);
+    const targets=[{id:'gate',positionMetersXYZ:[1,12,12] as [number,number,number],toleranceMeters:2}];
+    const [result]=measureEpisodeTargets(targets,samples);
+    expect(result).toEqual({...targets[0],nearestDistanceMeters:5,reached:false,distanceOutsideToleranceMeters:3,
+      nearestSample:{traceSampleIndex:1,wallSeconds:1,simulationTick:60,simulationSeconds:1,worldRevision:3,
+        positionMetersXYZ:[4,8,12],deltaToTargetMetersXYZ:[-3,4,0]}});
+  });
+  it('keeps exact tolerance hits and reset-era sample time without inferring an in-between crossing',()=>{
+    const target={id:'gate',positionMetersXYZ:[0,0,0] as [number,number,number],toleranceMeters:1};
+    const samples=[{wallSeconds:1,simulationTick:50,simulationSeconds:5,positionMetersXYZ:[-2,0,0]},
+      {wallSeconds:2,simulationTick:1,simulationSeconds:.1,positionMetersXYZ:[1,0,0]}];
+    expect(measureEpisodeTargets([target],samples)[0]).toMatchObject({reached:true,nearestDistanceMeters:1,distanceOutsideToleranceMeters:0,
+      nearestSample:{traceSampleIndex:1,wallSeconds:2,simulationTick:1,simulationSeconds:.1}});
+    expect(measureEpisodeTargets([{...target,toleranceMeters:.1}],samples)[0]).toMatchObject({reached:false,nearestDistanceMeters:1});
+  });
+  it('leaves unavailable measurements null and ignores invalid positions without inventing time',()=>{
+    const target={id:'gate',positionMetersXYZ:[0,0,0] as [number,number,number],toleranceMeters:1};
+    const invalid=[null,{}, {positionMetersXYZ:[NaN,0,0]}, {positionMetersXYZ:[0,Infinity,0]}, {positionMetersXYZ:[0,0]}, {positionMetersXYZ:['0',0,0]}];
+    for(const samples of [[],invalid])expect(measureEpisodeTargets([target],samples)[0]).toMatchObject({reached:false,nearestDistanceMeters:null,nearestSample:null,distanceOutsideToleranceMeters:null});
+    expect(measureEpisodeTargets([target],[...invalid,{positionMetersXYZ:[0,0,0],wallSeconds:Infinity,simulationTick:'1'}])[0]).toMatchObject({reached:true,
+      nearestSample:{traceSampleIndex:6,wallSeconds:null,simulationTick:null,simulationSeconds:null,worldRevision:null}});
+  });
+});
+
 describe('Three semantic target views', () => {
+
+  it('returns trace-backed target offsets through playtest and preserves them in delivery without adding a gate', async () => {
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
+      steps:[{keysDown:['w'],durationSeconds:.5},{keysUp:['w'],durationSeconds:.15}],
+      targets:[{id:'high-gate',positionMetersXYZ:[0,20,-.5],toleranceMeters:1}]}));
+    try {
+      const started=await executeThreeCreatorTool(service,'world_playtest',{}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:true,issues:[]});
+      expect(Number.isFinite(Date.parse(report.recordingReadiness.checkedAt))).toBe(true);
+      const target=report.targetResults[0];
+      expect(target.reached).toBe(false);
+      expect(target.nearestSample).toMatchObject({traceSampleIndex:expect.any(Number),wallSeconds:expect.any(Number),simulationTick:null,simulationSeconds:null});
+      const trace=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'trace.json'),'utf8'));
+      const sample=trace.samples[target.nearestSample.traceSampleIndex];
+      expect(target.nearestSample.positionMetersXYZ).toEqual(sample.positionMetersXYZ);
+      expect(target.nearestSample.wallSeconds).toBe(sample.wallSeconds);
+      expect(target.nearestSample.deltaToTargetMetersXYZ).toEqual([0,20,-.5-sample.positionMetersXYZ[2]]);
+      expect(target.distanceOutsideToleranceMeters).toBeCloseTo(target.nearestDistanceMeters-1,10);
+      expect(target.nearestDistanceMeters).toBeCloseTo(Math.hypot(...target.nearestSample.deltaToTargetMetersXYZ),10);
+      const delivery=await service.submit();
+      expect(delivery.targetResults).toEqual(report.targetResults);
+      expect(delivery.episodeHash).toBe(report.episodeHash);expect(delivery.worldBuildHash).toBe(report.worldBuildHash);
+      const saved=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'playtest.json'),'utf8'));
+      expect(saved.recordingReadiness).toEqual(report.recordingReadiness);
+      // Historical eligibility does not approve an edited input plan.
+      const episodeFile=path.join(root,'episode.json');await writeFile(episodeFile,(await readFile(episodeFile,'utf8'))+'\n');
+      await expect(service.submit()).rejects.toThrow('EPISODE_CHANGED_AFTER_PLAYTEST');
+      expect(report.recordingReadiness.episodeHash).toBe(delivery.episodeHash);
+    } finally {await service.close();}
+  },30_000);
+
+  it('reports incomplete recording prerequisites on a technically passing debug run before submit',async()=>{
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
+      steps:[{keysDown:['w'],durationSeconds:1},{keysUp:['w'],durationSeconds:.1}],targets:[]}));
+    try {
+      const before=Date.now();
+      const started=await executeThreeCreatorTool(service,'world_playtest',{durationSeconds:.2}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      expect(report.executionMode).toBe('debug');
+      expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
+        worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:false,
+        issues:[{code:'INCOMPLETE_EPISODE',actual:false,required:true}]});
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(report.recordingReadiness.checkedAt)).toBeLessThanOrEqual(Date.now());
+      await expect(service.submit()).rejects.toThrow('INCOMPLETE_EPISODE');
+    } finally {await service.close();}
+  },30_000);
 
 
   it('packages a runnable animated humanoid in the SDK starter', async () => {
@@ -166,12 +255,12 @@ describe('Three tool operations and truthful submission', () => {
   it('discovers persistent camera defaults and admits the same view configuration for recorded commands',async()=>{
     const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
     try{
-      const schema=await service.schema('training');
+      const schema=await service.schema('humanoid');
       expect(schema.sdkGuide).toContain('defaultPerspective');expect(schema.sdkGuide).toContain('keyboardToggleEnabled');
-      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.trainingSourceContracts?.['training/runtime.ts']).toContain('TrainingViewSettings');
+      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.humanoidSourceContracts?.['humanoid-runtime/runtime.ts']).toContain('HumanoidViewSettings');
       const check=new Ajv({strict:false}).compile(WORLD_COMMAND_SCHEMA);
-      expect(check({type:'training.profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(true);
-      expect(check({type:'training.profile',profile:{view:{defaultPerspective:'invented'}}})).toBe(false);
+      expect(check({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(true);
+      expect(check({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'invented'}}})).toBe(false);
     }finally{await service.close();}
   });
   it('archives only payload files, excluding macOS AppleDouble metadata and symlinks', async () => {
@@ -217,20 +306,20 @@ describe('v2 command and discovery boundary', () => {
     try{
       const initial=await discoveryCall(service,'creator_get_authoring_schema');
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(initial.cameraAuthoring);
-      expect(initial.cameraAuthoring).toMatchObject({scope:'training-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
+      expect(initial.cameraAuthoring).toMatchObject({scope:'humanoid-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
       expect(initial.cameraAuthoring.startWithDefaults).toMatch(/whitebox/i);
       expect(initial.cameraAuthoring.opening).toContain('useAuthoredCamera');
       expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
-      expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'training.camera',mode:2}}});
+      expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}});
       expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
       for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
-      expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.training.configuration.effective.camera.framing'});
+      expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.humanoid.configuration.effective.camera.framing'});
       for(const request of [initial.cameraAuthoring.verify.selectView,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
         const tool=THREE_CREATOR_TOOLS.find(tool=>tool.name===request.tool);
         expect(tool,request.tool).toBeDefined();
         expect(new Ajv({strict:false}).compile(tool!.inputSchema)(request.arguments),request.tool).toBe(true);
       }
-      for(const [topic,sections] of [['training',['guide']],['mounted-interaction',['training']],['control',['commands']],['getting-started',['all']]] as const){
+      for(const [topic,sections] of [['humanoid',['guide']],['mounted-interaction',['humanoid']],['control',['commands']],['getting-started',['all']]] as const){
         const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic,sections});
         expect(selected.cameraAuthoring).toEqual(initial.cameraAuthoring);
       }
@@ -239,10 +328,10 @@ describe('v2 command and discovery boundary', () => {
         expect(example.cameraAuthoring).toEqual(initial.cameraAuthoring);
       }
       const commands=await discoveryCall(service,'creator_get_authoring_schema',{topic:'control',sections:['commands']});
-      const profile=commands.worldCommandSchema.oneOf.find((entry:any)=>entry.properties.type.const==='training.profile').properties.profile;
+      const profile=commands.worldCommandSchema.oneOf.find((entry:any)=>entry.properties.type.const==='humanoid.apply-profile').properties.profile;
       expect(profile.properties.camera.properties.targetHeightOffset).toMatchObject({default:0,minimum:-2,maximum:5,description:expect.stringMatching(/increment.*meters/i)});
       const check=new Ajv({strict:false}).compile(commands.worldCommandSchema);
-      for(const camera of [{targetHeightOffset:1.1,horizontalOffset:0},{targetHeightOffset:-2,horizontalOffset:-3},{targetHeightOffset:5,horizontalOffset:3}])expect(check({type:'training.profile',profile:{cameraDistanceMeters:11,camera}})).toBe(true);
+      for(const camera of [{targetHeightOffset:1.1,horizontalOffset:0},{targetHeightOffset:-2,horizontalOffset:-3},{targetHeightOffset:5,horizontalOffset:3}])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:11,camera}})).toBe(true);
     }finally{await service.close();}
   });
   it('uses current workspace source for camera guidance instead of presenting Host numeric defaults as active',async()=>{
@@ -251,7 +340,7 @@ describe('v2 command and discovery boundary', () => {
       await service.materializeRuntime();
       const file=path.join(service.workspace,'sdk/three-world/src/config/camera.ts');
       await writeFile(file,(await readFile(file,'utf8')).replace('targetHeightOffset:numeric(0,','targetHeightOffset:numeric(.4,'));
-      const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'training',sections:['guide','training']});
+      const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['guide','humanoid']});
       expect(selected.cameraAuthoring).toMatchObject({runtimeAuthority:'workspace-sdk-source'});
       expect(selected.cameraAuthoring).not.toHaveProperty('parameters');
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(selected.cameraAuthoring);
@@ -263,7 +352,7 @@ describe('v2 command and discovery boundary', () => {
       expect(example.runtimeGuidance.runtimeSourceHash).toBe(selected.runtimeGuidance.runtimeSourceHash);
     }finally{await service.close();}
   });
-  it('keeps Training camera offsets out of raw and standalone nonhuman guidance',async()=>{
+  it('keeps Player camera offsets out of raw and standalone nonhuman guidance',async()=>{
     const raw=new ThreeCreatorTools(await fixture(),'three-raw'),sdk=new ThreeCreatorTools(await fixture(),'three-sdk');
     try{
       for(const name of ['creator_describe_environment','creator_get_authoring_schema','creator_get_examples'])expect(await discoveryCall(raw,name)).not.toHaveProperty('cameraAuthoring');
@@ -272,20 +361,20 @@ describe('v2 command and discovery boundary', () => {
         expect(result.cameraAuthoring).toMatchObject({scope:'ordinary-sdk-follow'});
         expect(result.cameraAuthoring).not.toHaveProperty('parameters');
         expect(JSON.stringify(result.cameraAuthoring)).toContain('setCameraFollow');
-        expect(JSON.stringify(result.cameraAuthoring)).not.toMatch(/training\.camera|targetHeightOffset|configuration\.effective\.camera\.framing/);
+        expect(JSON.stringify(result.cameraAuthoring)).not.toMatch(/player\.camera|targetHeightOffset|configuration\.effective\.camera\.framing/);
       }
     }finally{await raw.close();await sdk.close();}
   });
   it('accepts the SDK camera distance interval through Host command transport', () => {
     const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
-    for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'training.profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(true);
-    for(const value of [0,-.1,100.1,Infinity])expect(check({type:'training.profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(false);
+    for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(true);
+    for(const value of [0,-.1,100.1,Infinity])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(false);
   });
   it('accepts expanded handling controls in Creator commands and rejects out-of-range or unknown controls',()=>{
     const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
-    expect(check({type:'training.profile',profile:{vehicles:{rover:{maxSpeed:40,coastDeceleration:2,brakeDeceleration:30}},character:{jumpSpeed:7,slowSpeed:2}}})).toBe(true);
-    expect(check({type:'training.profile',profile:{vehicles:{rover:{coastDeceleration:-1}}}})).toBe(false);
-    expect(check({type:'training.profile',profile:{character:{inventedControl:1}}})).toBe(false);
+    expect(check({type:'humanoid.apply-profile',profile:{vehicles:{rover:{maxSpeed:40,coastDeceleration:2,brakeDeceleration:30}},character:{jumpSpeed:7,slowSpeed:2}}})).toBe(true);
+    expect(check({type:'humanoid.apply-profile',profile:{vehicles:{rover:{coastDeceleration:-1}}}})).toBe(false);
+    expect(check({type:'humanoid.apply-profile',profile:{character:{inventedControl:1}}})).toBe(false);
   });
   it('does not label a legacy or missing SDK snapshot as v2, while raw remains minimal', () => {
     expect(() => assertSdkObservationVersion('three-sdk', 2)).not.toThrow();
@@ -294,7 +383,7 @@ describe('v2 command and discovery boundary', () => {
     expect(() => assertSdkObservationVersion('three-raw', null)).not.toThrow();
   });
   it('covers every declared World command discriminator and rejects old dialect/extra authority/NaN', async () => {
-    const source = await readFile('packages/three-world/src/contracts.ts', 'utf8') + '\n' + await readFile('packages/three-world/src/training/runtime.ts','utf8');
+    const source = await readFile('packages/three-world/src/contracts.ts', 'utf8') + '\n' + await readFile('packages/three-world/src/humanoid-runtime/runtime.ts','utf8');
     const file = ts.createSourceFile('contracts.ts', source, ts.ScriptTarget.Latest, true);
     const types: string[] = [];
     const visit = (node: ts.Node) => {
@@ -304,7 +393,7 @@ describe('v2 command and discovery boundary', () => {
       }
       ts.forEachChild(node, visit);
     };
-    for (const node of file.statements) if (ts.isTypeAliasDeclaration(node) && ['PrimitiveCommand','ParameterCommand','WorldCommand','TrainingCommand'].includes(node.name.text)) visit(node);
+    for (const node of file.statements) if (ts.isTypeAliasDeclaration(node) && ['PrimitiveCommand','ParameterCommand','WorldCommand','HumanoidCommand'].includes(node.name.text)) visit(node);
     expect(WORLD_COMMAND_SCHEMA.oneOf.map(schema => (schema.properties.type as {const:string}).const).sort()).toEqual(types.sort());
     const check = new Ajv({ strict:false, strictNumbers:true }).compile(WORLD_COMMAND_SCHEMA);
     for (const command of [

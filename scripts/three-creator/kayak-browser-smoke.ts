@@ -18,7 +18,7 @@ try{
  await page.mouse.click(700,500);await page.keyboard.press('f');await elapsed(.7);assert.equal((await state()).activeVehicle,'kayak');
  await page.evaluate(()=>{const stream=(document.querySelector('#viewport') as HTMLCanvasElement).captureStream(30),r=new MediaRecorder(stream,{mimeType:'video/webm'}),chunks:Blob[]=[];r.ondataavailable=e=>chunks.push(e.data);r.start();(window as any).finishKayak=()=>new Promise<string>(resolve=>{r.onstop=()=>{const reader=new FileReader();reader.onload=()=>{stream.getTracks().forEach(t=>t.stop());resolve(String(reader.result).split(',')[1]!);};reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};r.stop();});});
  const start=await state();await page.screenshot({path:path.join(output,'third-person.png')});
- const buoyancy=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().training.vehicleDynamics.find((v:any)=>v.instanceId==='kayak').kayak);
+ const buoyancy=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='kayak').kayak);
  assert.equal(buoyancy.surface,-2);assert(buoyancy.immersion>.3&&buoyancy.immersion<.6);
  await page.keyboard.down('w');await elapsed(2.5);await page.screenshot({path:path.join(output,'paddling.png')});await elapsed(3.5);await page.keyboard.up('w');const forward=await state();assert(forward.speed>1);
  await elapsed(1);const coast=await state();assert(coast.speed>.2&&coast.speed<forward.speed);

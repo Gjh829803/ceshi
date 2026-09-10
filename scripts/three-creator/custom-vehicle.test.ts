@@ -20,17 +20,17 @@ it('captures a complete rider in object views while preserving the configured fi
    host.capture('opening',[],null);
    const before=world.snapshot!(),first=host.capture('entity-triview',['player'],null).image;
    const after=world.snapshot!();
-   const meshes:import('three').SkinnedMesh[]=[];world.player.traverse(o=>{if((o as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(o as import('three').SkinnedMesh);});
+   const meshes:import('three').SkinnedMesh[]=[];world.controlledObject.traverse(o=>{if((o as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(o as import('three').SkinnedMesh);});
    const clipped=meshes.map(mesh=>mesh.geometry);
    const failedRender=world.renderer.render;
    world.renderer.render=()=>{throw new Error('object capture fixture');};
    try{host.capture('entity-triview',['player'],null);}catch{}finally{world.renderer.render=failedRender;}
    const restoredAfterFailure=meshes.every((mesh,i)=>mesh.geometry===clipped[i]);
-   await world.execute!({type:'training.camera',mode:0});
+   await world.execute!({type:'humanoid.set-camera-mode',mode:0});
    const full=host.capture('entity-triview',['player'],null).image;
    return {sameImage:first===full,before,after,restoredAfterFailure};
   });
-  expect(result.before.training!.cameraMode).toBe(1);expect(result.after).toEqual(result.before);
+  expect(result.before.humanoid!.cameraMode).toBe(1);expect(result.after).toEqual(result.before);
   expect(result.sameImage).toBe(true);expect(result.restoredAfterFailure).toBe(true);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },30000);
@@ -41,19 +41,19 @@ it('uses configured first-person defaults and SDK keyboard toggles in a generate
   const example=await service.examples('custom-vehicle');
   for(const [name,content]of Object.entries(example.files))await writeFile(path.join(root,name),name==='main.ts'?content.replace(
    'createHumanoidWorld({','createHumanoidWorld({profile:{view:{defaultPerspective:"first-person",keyboardToggleEnabled:true}},'):content);
-  const initial=await service.inspect();expect(initial.observation.snapshot.training.cameraMode).toBe(1);
+  const initial=await service.inspect();expect(initial.observation.snapshot.humanoid.cameraMode).toBe(1);
   const page=(service as unknown as {session:{page:Page}}).session.page;
-  const mode=()=>page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode);
-  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===2);
+  const mode=()=>page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode);
+  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode===2);
   await page.keyboard.down('t');expect(await mode()).toBe(2);await page.keyboard.up('t');
-  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===0);
-  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().training!.cameraMode===1);
+  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode===0);
+  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().humanoid!.cameraMode===1);
   await page.evaluate(()=>{const input=document.createElement('input');input.id='focus-fixture';document.body.append(input);input.focus();});
   await page.keyboard.press('t');expect(await mode()).toBe(1);
   await page.evaluate(()=>document.getElementById('focus-fixture')!.remove());await page.mouse.click(20,20);
-  await service.executeCommand({type:'training.profile',profile:{view:{keyboardToggleEnabled:false}}});
+  await service.executeCommand({type:'humanoid.apply-profile',profile:{view:{keyboardToggleEnabled:false}}});
   await page.keyboard.press('t');expect(await mode()).toBe(1);
-  await service.executeCommand({type:'training.camera',mode:0});expect(await mode()).toBe(0);
+  await service.executeCommand({type:'humanoid.set-camera-mode',mode:0});expect(await mode()).toBe(0);
   await page.evaluate(async()=>{await window.__THREE_CREATOR_HOST__!.reset();});expect(await mode()).toBe(1);
   await page.keyboard.press('t');expect(await mode()).toBe(1);
   const result=await service.inspect();expect(result.pageErrors).toEqual([]);
@@ -71,14 +71,14 @@ it('observes SDK first-person clipping as partial and restores full rider checks
    const host=window.__THREE_CREATOR_HOST__!,world=window.__WORLDKIT_EVAL__!;
    await host.stop();const initial=host.read().characterContinuity;
    const meshes:import('three').SkinnedMesh[]=[];
-   world.player.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
+   world.controlledObject.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
    const geometries=meshes.map(mesh=>mesh.geometry);
-   const enter=await world.execute!({type:'training.camera',mode:1});
+   const enter=await world.execute!({type:'humanoid.set-camera-mode',mode:1});
    const firstPerson=host.read().characterContinuity,clipped=meshes.some((mesh,i)=>mesh.geometry!==geometries[i]);
    const firstImage=host.capture('opening',[],null).image;
    const repeatedImage=host.capture('opening',[],null).image;
-   world.player.visible=false;const hidden=host.read().characterContinuity;world.player.visible=true;
-   const exit=await world.execute!({type:'training.camera',mode:0});
+   world.controlledObject.visible=false;const hidden=host.read().characterContinuity;world.controlledObject.visible=true;
+   const exit=await world.execute!({type:'humanoid.set-camera-mode',mode:0});
    const restored=host.read().characterContinuity,originalGeometry=meshes.every((mesh,i)=>mesh.geometry===geometries[i]);
    return {initial,enter,firstPerson,clipped,repeatedCaptureIdentical:firstImage===repeatedImage,hidden,exit,restored,originalGeometry};
   });
@@ -107,25 +107,25 @@ it('runs a custom vehicle with only the preset human asset and exposes hidden-ri
    await host.stop();host.beginTrace();
    const tick=observer.snapshot!().simulationTick;
    const start=host.read().characterContinuity;
-   const enter=await observer.execute!({type:'training.enter',instanceId:'custom-bike'});
+   const enter=await observer.execute!({type:'vehicle.enter',instanceId:'custom-bike'});
    const mounted=host.read().characterContinuity;
-   observer.player.visible=false;
+   observer.controlledObject.visible=false;
    const hidden=host.read().characterContinuity;
-   observer.player.visible=true;
+   observer.controlledObject.visible=true;
    const endTick=observer.snapshot!().simulationTick;
-   const children=[...observer.player.children];
+   const children=[...observer.controlledObject.children];
    const replacements=children.map(child=>child.clone());
-   observer.player.remove(...children);observer.player.add(...replacements);
+   observer.controlledObject.remove(...children);observer.controlledObject.add(...replacements);
    await host.start();const restarted=host.read().characterContinuity;
-   observer.player.remove(...replacements);observer.player.add(...children);
+   observer.controlledObject.remove(...replacements);observer.controlledObject.add(...children);
    return {tick,endTick,start,enter,mounted,hidden,restarted};
   });
   expect(result.enter.status,JSON.stringify(result.enter)).toBe('applied');
-  await page.waitForFunction(()=>window.__WORLDKIT_EVAL__?.snapshot?.().training?.transition.remainingSeconds===0);
+  await page.waitForFunction(()=>window.__WORLDKIT_EVAL__?.snapshot?.().humanoid?.transition.remainingSeconds===0);
   const after=await page.evaluate(async()=>{
    const observer=window.__WORLDKIT_EVAL__!,host=window.__THREE_CREATOR_HOST__!;
    await host.stop();
-   const exit=await observer.execute!({type:'training.exit'});
+   const exit=await observer.execute!({type:'vehicle.exit'});
    const dismounted=host.read().characterContinuity;
    await host.reset();const reset=host.read().characterContinuity;host.endTrace();
    return {exit,dismounted,reset};
@@ -167,10 +167,10 @@ it('matches actual rider pixels for manual transforms and material groups withou
    const world=window.__WORLDKIT_EVAL__!,host=window.__THREE_CREATOR_HOST__!;
    await host.stop();
    const meshes:import('three').SkinnedMesh[]=[];
-   world.player.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
+   world.controlledObject.traverse(object=>{if((object as import('three').SkinnedMesh).isSkinnedMesh)meshes.push(object as import('three').SkinnedMesh);});
    const saved=meshes.map(mesh=>({mesh,matrix:mesh.matrix.clone(),auto:mesh.matrixAutoUpdate,groups:structuredClone(mesh.geometry.groups),material:mesh.material}));
    const normal=host.capture('opening',[],null).image;
-   world.player.visible=false;const hidden=host.capture('opening',[],null).image;world.player.visible=true;
+   world.controlledObject.visible=false;const hidden=host.capture('opening',[],null).image;world.controlledObject.visible=true;
    for(const {mesh}of saved){mesh.matrixAutoUpdate=false;mesh.matrix.makeScale(0,0,0);mesh.matrixWorldNeedsUpdate=true;}
    const collapsed=host.capture('opening',[],null).image,matrixFeedback=host.read().characterContinuity;
    for(const s of saved){s.mesh.matrix.copy(s.matrix);s.mesh.matrixAutoUpdate=s.auto;s.mesh.matrixWorldNeedsUpdate=true;}
@@ -207,20 +207,20 @@ it('keeps the preset identity when the integrated SDK equips and removes rigid a
  try{
   const example=await service.examples('custom-vehicle');
   for(const [name,content]of Object.entries(example.files)){
-   const source=name==='main.ts'?content.replace('type TrainingMap','TrainingCharacter,type TrainingMap').replace(
+   const source=name==='main.ts'?content.replace('type EnvironmentDefinition','HumanoidCharacter,type EnvironmentDefinition').replace(
     'const world=await createHumanoidWorld({',
-    "const character=new TrainingCharacter();(window as any).__attachmentFixture={character,hat:new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.3),new THREE.MeshBasicMaterial())};\nconst world=await createHumanoidWorld({character,"):content;
+    "const character=new HumanoidCharacter();(window as any).__attachmentFixture={character,hat:new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.3),new THREE.MeshBasicMaterial())};\nconst world=await createHumanoidWorld({character,"):content;
    await writeFile(path.join(root,name),source);
   }
   await service.inspect();const page=(service as unknown as {session:{page:Page}}).session.page;
   const result=await page.evaluate(async()=>{
    const host=window.__THREE_CREATOR_HOST__!,world=window.__WORLDKIT_EVAL__!;
-   const fixture=(window as unknown as {__attachmentFixture:{character:import('@worldkit/three').TrainingCharacter;hat:import('three').Mesh}}).__attachmentFixture;
+   const fixture=(window as unknown as {__attachmentFixture:{character:import('@worldkit/three').HumanoidCharacter;hat:import('three').Mesh}}).__attachmentFixture;
    await host.stop();const before=host.read().characterContinuity;
    const detach=fixture.character.attach('head',fixture.hat),equipped=host.read().characterContinuity;
    await host.reset();const reset=host.read().characterContinuity,retained=fixture.hat.parent!==null;
    detach();const removed=host.read().characterContinuity;
-   world.player.visible=false;const hidden=host.read().characterContinuity;world.player.visible=true;
+   world.controlledObject.visible=false;const hidden=host.read().characterContinuity;world.controlledObject.visible=true;
    return {before,equipped,reset,retained,removed,hidden};
   });
   for(const state of [result.equipped,result.reset,result.removed]){

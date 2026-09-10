@@ -2,9 +2,9 @@ import type { CommandReceipt, OperationStatus, Vec3, WorldInput, WorldSnapshot }
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
- /** Optional segment view; takes precedence over a legacy training.cameraMode. */
+ /** Optional segment view; takes precedence over humanoid.cameraMode. */
  readonly cameraPerspective?:import('./contracts.js').CameraPerspective;
- readonly training?: {
+ readonly humanoid?: {
   readonly vehicleInstanceId?:string; readonly mounted?:boolean; readonly cameraMode?:0|1|2;
   readonly velocityWorldMetersPerSecondXYZ?:Vec3; readonly pitchRadians?:number;readonly rollRadians?:number;
   readonly throttle?:number;readonly launched?:boolean;
@@ -20,9 +20,9 @@ export interface EpisodeStartProbe {
  readonly diagnostics: readonly { readonly code: string; readonly message: string; readonly entityIds?: readonly string[] }[];
 }
 export interface EpisodeCapabilities {
- readonly training?:{
+ readonly humanoid?:{
   readonly mapId:string;readonly characterInstanceId:string;
-  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./training/config').Mode;readonly available:boolean}[];
+  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./humanoid-runtime/config').Mode;readonly available:boolean}[];
   readonly cameraModes:readonly (0|1|2)[];readonly inputAxes:readonly string[];
  };
  readonly schemaVersion: 1;
@@ -30,7 +30,7 @@ export interface EpisodeCapabilities {
  readonly fixedTimeStepSeconds: number;
  readonly movement: {
   readonly kind: 'ground' | 'custom'; readonly movementId: string;
-  readonly episodeInput?:'ground'|'training'|'custom'|'unsupported';readonly startSupport?:'ground'|'free';
+  readonly episodeInput?:'ground'|'humanoid'|'custom'|'unsupported';readonly startSupport?:'ground'|'free';
   readonly walkSpeedMetersPerSecond: number; readonly runSpeedMetersPerSecond: number; readonly jumpSpeedMetersPerSecond: number;
   readonly heightMeters: number; readonly radiusMeters: number;
   readonly maximumStepHeightMeters: number; readonly maximumSlopeRadians: number;
@@ -49,12 +49,12 @@ export interface EpisodeFrame {
   readonly controlForwardWorldXYZ: Vec3;
  };
 }
-export type EpisodeCommand=Extract<import('./training/runtime').TrainingCommand,{readonly type:'training.action'|'training.input'|'training.exit'}>|{readonly type:'training.enter';readonly instanceId:string}|{readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
+export type EpisodeCommand=Extract<import('./humanoid-runtime/runtime').HumanoidCommand,{readonly type:'humanoid.perform-action'|'humanoid.set-input'|'vehicle.exit'}>|{readonly type:'vehicle.enter';readonly instanceId:string}|{readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
 export interface EpisodeRouteInputRequest {readonly targetPositionWorldMetersXYZ:Vec3;readonly gait:'walk'|'run';readonly mode?:'travel'|'stop'}
 export interface EpisodeRuntimePort {
  readonly schemaVersion: 1;
  capabilities(): EpisodeCapabilities;
- boarding?(instanceId:string):import('./training/runtime').TrainingBoardingObservation;
+ boarding?(instanceId:string):import('./humanoid-runtime/runtime').BoardingObservation;
  routeInput?(request:EpisodeRouteInputRequest):WorldInput;
  probeStart(start: EpisodeStart): EpisodeStartProbe;
  prepareSegment(start: EpisodeStart, viewport: { readonly widthPixels: number; readonly heightPixels: number }): Promise<WorldSnapshot>;

@@ -18,7 +18,7 @@ try{
  await page.mouse.click(700,500);await page.keyboard.press('f');await elapsed(.7);assert.equal((await state()).activeVehicle,'raft');
  await page.evaluate(()=>{const stream=(document.querySelector('#viewport') as HTMLCanvasElement).captureStream(30),r=new MediaRecorder(stream,{mimeType:'video/webm'}),chunks:Blob[]=[];r.ondataavailable=e=>chunks.push(e.data);r.start();(window as any).finishRaft=()=>new Promise<string>(resolve=>{r.onstop=()=>{const reader=new FileReader();reader.onload=()=>{stream.getTracks().forEach(t=>t.stop());resolve(String(reader.result).split(',')[1]!);};reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};r.stop();});});
  const start=await state();await page.screenshot({path:path.join(output,'third-person.png')});
- const buoyancy=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().training.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);
+ const buoyancy=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);
  assert.equal(buoyancy.surface,-2);assert(buoyancy.immersion>.15&&buoyancy.immersion<.65);
  await page.keyboard.down('w');await elapsed(2.5);await page.screenshot({path:path.join(output,'paddling.png')});await elapsed(3.5);await page.keyboard.up('w');const forward=await state();assert(forward.speed>.5);
  await elapsed(1);const coast=await state();assert(coast.speed>.2&&coast.speed<forward.speed);
@@ -27,8 +27,8 @@ try{
  await hold(' ',3);const stopped=await state();assert(stopped.speed<.05);
  await page.keyboard.press('t');await elapsed(.3);await page.screenshot({path:path.join(output,'shoulder.png')});await page.keyboard.press('t');await elapsed(.2);
  await hold('a',4);const turn=await state();
- const turnLeft=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().training.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);assert(turnLeft.yawRate>.05);
- await hold('d',5);const turnRight=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().training.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);assert(turnRight.yawRate<-.05);
+ const turnLeft=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);assert(turnLeft.yawRate>.05);
+ await hold('d',5);const turnRight=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='raft').kayak);assert(turnRight.yawRate<-.05);
  await page.mouse.move(700,500);await page.mouse.down();await page.mouse.move(1080,440,{steps:16});await page.mouse.up();await elapsed(.3);await page.screenshot({path:path.join(output,'side.png')});
  await page.keyboard.press('f');await elapsed(.5);assert.equal((await state()).activeVehicle,null);const exit=await state();
  const video=await page.evaluate(()=>(window as any).finishRaft());await writeFile(path.join(output,'raft-input.webm'),Buffer.from(video,'base64'));

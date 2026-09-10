@@ -26,8 +26,8 @@ describe("React workbench and humanoid controls", () => {
 
       import { mountWorkbench } from './apps/three-playground/src/workbench.tsx';
       import { mountHumanoidLab } from './apps/three-playground/src/humanoid-panel.tsx';
-      import { getDefaultProfile } from './shared/training-content/platform/profiles.ts';
-      import { training } from '@worldkit/three';
+      import { getDefaultProfile } from './shared/preset-content/platform/profiles.ts';
+      import { humanoid } from '@worldkit/three';
       let profile=getDefaultProfile('person'), auto=false, smoothing=true, debug='off';
       const events=[];
       const workbench=mountWorkbench(document.body, {
@@ -39,7 +39,7 @@ describe("React workbench and humanoid controls", () => {
       });
       const lab=mountHumanoidLab(document.body, {
         onOpenChange:open=>events.push(['lab',open]),onPrepare:(...args)=>events.push(['trial',...args]),onAction:action=>events.push(['action',action]),
-        getState:()=>({marker:'actor-state'}),getKeyBindings:()=>training.DEFAULT_KEY_BINDINGS,
+        getState:()=>({marker:'actor-state'}),getKeyBindings:()=>humanoid.DEFAULT_KEY_BINDINGS,
         getAutoTraverse:()=>auto,setAutoTraverse:v=>auto=v,getSmoothing:()=>smoothing,setSmoothing:v=>smoothing=v,getDebug:()=>debug,setDebug:v=>debug=v
       });
       for(const [name,action] of [['Workbench',()=>workbench.open('camera')],['Lab',()=>lab.open()]]){

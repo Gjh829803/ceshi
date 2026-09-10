@@ -1,27 +1,27 @@
 import type { WorldCommand } from '@worldkit/three';
-import {training} from '@worldkit/three';
+import {humanoid} from '@worldkit/three';
 import { objectSchema } from './schema-helpers.js';
 const string={type:'string',minLength:1}, boolean={type:'boolean'}, number={type:'number'};
 const vec3={type:'array',items:number,minItems:3,maxItems:3};
 const duration={type:'number',minimum:0};
 const scalar={anyOf:[{type:'number'},{type:'boolean'},{type:'string'}]};
 const axis={type:'number',minimum:-1,maximum:1};
-const trainingInputShape=objectSchema({forward:axis,steer:axis,roll:axis,lift:axis,pitch:axis,strafe:axis,boost:boolean,brake:boolean,slow:boolean,jump:boolean,
- humanoid:objectSchema(Object.fromEntries(training.HUMANOID_INPUT_FIELDS.map(key=>[key,boolean])),[])},['forward','steer','roll','lift','pitch','strafe','boost','brake','slow','jump']);
-const trainingInput={...trainingInputShape,description:'Use emptyTrainingInput(), change channels described by world.describe().training.inputGuide for the active family, and release overrides after use. boost is not universally acceleration.'};
-const trainingProfile=objectSchema({character:objectSchema(training.CONTROL_SCHEMA_PROPERTIES,[]),
- view:objectSchema(training.TRAINING_VIEW_SCHEMA_PROPERTIES,[]),
- cameraDistanceMeters:{anyOf:[training.CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},
- camera:objectSchema(training.CAMERA_SCHEMA_PROPERTIES,[]),
- vehicles:{type:'object',additionalProperties:objectSchema({...training.CONTROL_SCHEMA_PROPERTIES,camera:training.VEHICLE_CAMERA_DISTANCE_SCHEMA},[])}},[]);
+const humanoidInputShape=objectSchema({forward:axis,steer:axis,roll:axis,lift:axis,pitch:axis,strafe:axis,boost:boolean,brake:boolean,slow:boolean,jump:boolean,
+ actions:objectSchema(Object.fromEntries(humanoid.HUMANOID_ACTION_INPUT_FIELDS.map(key=>[key,boolean])),[])},['forward','steer','roll','lift','pitch','strafe','boost','brake','slow','jump']);
+const humanoidInput={...humanoidInputShape,description:'Use emptyHumanoidInput(), change channels described by world.describe().humanoid.inputGuide for the active family, and release overrides after use. boost is not universally acceleration.'};
+const humanoidProfile=objectSchema({character:objectSchema(humanoid.CONTROL_SCHEMA_PROPERTIES,[]),
+ view:objectSchema(humanoid.HUMANOID_VIEW_SCHEMA_PROPERTIES,[]),
+ cameraDistanceMeters:{anyOf:[humanoid.CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},
+ camera:objectSchema(humanoid.CAMERA_SCHEMA_PROPERTIES,[]),
+ vehicles:{type:'object',additionalProperties:objectSchema({...humanoid.CONTROL_SCHEMA_PROPERTIES,camera:humanoid.VEHICLE_CAMERA_DISTANCE_SCHEMA},[])}},[]);
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
- command('training.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
- {...command('training.approach',{instanceId:string}),description:training.TRAINING_APPROACH_DESCRIPTION},command('training.enter',{instanceId:string}),command('training.exit',{}),
- command('training.camera',{mode:{enum:[0,1,2]}}),command('training.input',{input:{anyOf:[trainingInput,{type:'null'}]}}),
- command('training.profile',{profile:trainingProfile}),
- command('training.action',{request:objectSchema({requestId:string,action:{enum:training.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])}),
+ command('vehicle.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
+ {...command('vehicle.approach',{instanceId:string}),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string}),command('vehicle.exit',{}),command('vehicle.recover',{}),
+ command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{input:{anyOf:[humanoidInput,{type:'null'}]}}),
+ command('humanoid.apply-profile',{profile:humanoidProfile}),
+ command('humanoid.perform-action',{request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])}),
  command('entity.set-visible',{entityId:string,isVisible:boolean}),
  command('entity.set-scale',{entityId:string,scaleLocalXYZ:vec3,durationSeconds:duration},['durationSeconds']),
  command('entity.set-position',{entityId:string,positionWorldMetersXYZ:vec3,durationSeconds:duration},['durationSeconds']),

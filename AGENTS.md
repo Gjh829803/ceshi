@@ -35,6 +35,12 @@ turn optional observation or development regression into mandatory generation st
 
 ## Authoring and capability layers
 
+Describe SDK capabilities, configuration, binding contracts and actual execution
+conditions. The Agent decides which capabilities to use from the request and
+reference. Do not enumerate scenes or prescribe object categories, compositions
+or optional features. Examples illustrate usage, not required scene templates.
+
+
 Creator worlds use white/light-gray primitive environment forms, uniform basic
 lighting and a few identifying colors for key landmarks or interaction targets.
 Preserve broad reference composition, scale, spatial relationships and real
@@ -43,10 +49,13 @@ extra clothing/accessories, atmospheric effects, reflections and elaborate shado
 
 1. Reuse: `createHumanoidWorld` loads `humanoid.source-101` and its contextual
    controller. Keep the supplied visible humanoid model, rig and actions by default.
-   Reuse other supplied subjects when suitable.
+   Reuse other supplied creatures when suitable. Vehicles use model-free handling
+   configurations and Agent-authored geometry; do not load vehicle model assets.
+   Select car/motorcycle configuration before drawing, then match wheel layout,
+   collision dimensions, seat anchors and mechanical animation bindings.
 2. Bind: author ordinary Three Mesh/Group geometry freely. Bind custom subjects
    through `addCharacter({object,body,movement})`; bind vehicles through their
-   visual root and `TrainingVehicleInstance.spec`. Define actual colliders,
+   visual root and `VehicleInstance.spec`. Define actual colliders,
    interaction anchors, climb surfaces and water for contextual abilities.
 3. Configure: apply and export explicit movement/profile parameters with units.
 4. Implement: edit the relevant SDK source module, rebuild it for the project,

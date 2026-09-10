@@ -42,7 +42,7 @@ remains accepted as annotation only: it does not steer the camera or measure vis
 Each waypoint supplies `positionWorldMetersXYZ` and `gait:"walk"|"run"`.
 Walk is never promoted to running; run may downshift during observation, jumps
 or settling. Optional `episode_probe` accepts the same full `start` as submission,
-including Training vehicle state. It checks local placement, not route or visual quality.
+including Humanoid vehicle state. It checks local placement, not route or visual quality.
 `actionGoals` is an ordered list, triggered near a waypoint using real position.
 It contains semantic intent, never a hard-coded keyboard chord. For example,
 this segment fragment rolls at waypoint 0 and picks up at waypoint 1:
@@ -86,7 +86,7 @@ Scene constraints matter:
 - **Swimming:** approach a declared deep-water volume with an actual lower floor.
   Entry is automatic; a swim-style goal cannot make a dry character swim.
 
-Requests use `training.action` or a single semantic `training.input` pulse,
+Requests use `humanoid.perform-action` or a single semantic `humanoid.set-input` pulse,
 followed by the same fixed simulation ticks as live controls. Targets do not
 teleport actors. A validated segment start may initialize position, facing and
 mount state; subsequent movement follows actual input and collision.
@@ -214,7 +214,7 @@ actual boarding approach. Host input walks to an eligible entry and uses the SDK
 enter command; it never uses the preparation relocation as recorded travel.
 Exit brakes until the actor has stopped and waits for the actual handoff transition.
 Aircraft that cannot stop/exit in the requested situation report the real timeout.
-View goals work for both Training and ordinary subjects; nonhuman first-person
+View goals work for both Humanoid and ordinary subjects; nonhuman first-person
 still requires the authored eye position. Walking/riding route progress survives
 these transitions, including loop/reverse routes.
 

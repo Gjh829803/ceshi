@@ -369,7 +369,7 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
         finite_number(generation_minutes, 'generationMinutes')
     metrics = {'generationMinutes': generation_minutes}
     if played is not None:
-        metrics.update({'simulationSeconds': round(played['actualWallSeconds'], 2), 'actualWallSeconds': played['actualWallSeconds'], 'timeDomain': 'wall-clock',
+        metrics.update({'actualWallSeconds': played['actualWallSeconds'], 'timeDomain': 'wall-clock',
                         **{field: played[field] for field in ('activePlaySeconds', 'inputWallSeconds') if field in played},
                         'videoDurationSeconds': video_seconds, 'visitedTargets': sum(target['reached'] for target in targets), 'targetCount': len(targets),
                         'travelledMeters': finite_number(played.get('travelledMeters'), 'travelledMeters'),

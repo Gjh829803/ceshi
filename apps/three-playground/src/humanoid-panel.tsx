@@ -8,21 +8,21 @@ import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { training } from "@worldkit/three";
-import type { CollisionDebugMode } from "../../../shared/training-content/humanoid/capsule-debug";
-import type { CharacterTrial } from "../../../shared/training-content/environment/types";
-import { MAPS } from "../../../shared/training-content/environment/maps";
+import { humanoid } from "@worldkit/three";
+import type { CollisionDebugMode } from "../../../shared/preset-content/humanoid/capsule-debug";
+import type { CharacterTrial } from "../../../shared/preset-content/environment/types";
+import { MAPS } from "../../../shared/preset-content/environment/maps";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Checkbox } from "./components/ui/checkbox";
 import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
-type HumanoidInput = training.HumanoidInput;
+type HumanoidActionInput = humanoid.HumanoidActionInput;
 interface Options {
   onOpenChange(open: boolean): void;
   onPrepare(mapId: string, trial: CharacterTrial, demo: boolean): void;
-  onAction(command: HumanoidInput | "jump"): void;
+  onAction(command: HumanoidActionInput | "jump"): void;
   getState(): Record<string, unknown>;
-  getKeyBindings(): training.KeyBindings;
+  getKeyBindings(): humanoid.KeyBindings;
   getAutoTraverse(): boolean;
   setAutoTraverse(value: boolean): void;
   getSmoothing(): boolean;
@@ -30,7 +30,7 @@ interface Options {
   getDebug(): CollisionDebugMode;
   setDebug(value: CollisionDebugMode): void;
 }
-const choices: [string, HumanoidInput | "jump"][] = [
+const choices: [string, HumanoidActionInput | "jump"][] = [
   ["站立 / 蹲伏", { toggleCrouch: true }],
   ["普通跳跃（原地）", "jump"],
   ["翻滚", { roll: true }],
@@ -52,7 +52,7 @@ function HumanoidLab({
   controller: { current?: Controller };
 }) {
   const openRef = useRef(false),
-    pendingAction = useRef<HumanoidInput | "jump" | undefined>(undefined),
+    pendingAction = useRef<HumanoidActionInput | "jump" | undefined>(undefined),
     previousFocus = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [autoTraverse, setAutoTraverse] = useState(o.getAutoTraverse),
@@ -129,7 +129,7 @@ function HumanoidLab({
         </DialogDescription>
         <div className="modal-body">
           <p className="wb-note">
-            {training
+            {humanoid
               .controlHints(bindings)
               .map(([key, label]) => `${key}：${label}`)
               .join(" · ")}
@@ -140,7 +140,7 @@ function HumanoidLab({
           </p>
           <div className="wb-actions">
             {choices.map(([label, command]) => {
-              const field: training.ControlAction | undefined =
+              const field: humanoid.ControlAction | undefined =
                 command === "jump"
                   ? "jump"
                   : command.toggleCrouch || command.releaseClimb
@@ -158,9 +158,9 @@ function HumanoidLab({
                               : undefined;
               const key =
                 command !== "jump" && command.slide
-                  ? `${training.bindingLabel("sprint", bindings)} + ${training.bindingLabel("crouch", bindings)}`
+                  ? `${humanoid.bindingLabel("sprint", bindings)} + ${humanoid.bindingLabel("crouch", bindings)}`
                   : field
-                    ? training.bindingLabel(field, bindings)
+                    ? humanoid.bindingLabel(field, bindings)
                     : undefined;
               return (
                 <Button
