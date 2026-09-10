@@ -1,0 +1,2229 @@
+[
+  {
+    "id": "D02",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D02\\Body\\Body01\\D02_Body01_Naked.psk",
+        "sha256": "34fa03d0dd4b8693ea7e1d02f475a4474f7d8f86a9e7e6be8fff395bef17f90b",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D02\\Harness\\Harness01\\D02_Harness01_Mesh.psk",
+        "sha256": "3138ee0b0b9b4d8493ad7e8e6a5979aac37100cd74dee504a628160f2f998721",
+        "restErrorCm": 0.004325167786182674
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D02_Body01_1003_Green",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Body\\Body01\\Textures\\Diffuse\\Green\\T_D02_Body01_1003_Green_D.png"
+      },
+      {
+        "material": "MI_D02_Body01_1001_Green",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Body\\Body01\\Textures\\Diffuse\\Green\\T_D02_Body01_1001_Green_D.png"
+      },
+      {
+        "material": "MI_D02_Body01_1002_Green",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Body\\Body01\\Textures\\Diffuse\\Green\\T_D02_Body01_1002_Green_D.png"
+      },
+      {
+        "material": "MI_D02_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Harness\\Harness01\\Textures\\T_D02_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D02_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Base.psa",
+        "sha256": "64492dc715762c9ef139d6667003244aded4910c5b89cc88127d4e24b228e8ec",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Base_L.psa",
+        "sha256": "f143ca2c7acacf0651cf3bce9af0ea51bc483b89ac820babd7d22fc0acc5a556",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Base_R.psa",
+        "sha256": "a1c19ac9ec77c6f04077d3060b40e3aab2a21e376b45ac4e611379afe13b117b",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Base_U.psa",
+        "sha256": "65c1a26a0c64afa72b7b5e4e1fd9328578f5cb776eaad3fd476b3ce3689da63a",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Base_D.psa",
+        "sha256": "dc8e221a08cb600c9c31b0fabdf20695d1e72778807fc75b701f740e3484bc0a",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Fast.psa",
+        "sha256": "e592e21e837b3702b5f1d10d59102693b5613e42e291e4e9f538865467cca7e7",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_BoostLoop.psa",
+        "sha256": "dad236ff57367414f84bb99522c0ae687956c87c6acdeb169a41406152417b0a",
+        "sourceFramesPerSecond": 30.127119064331055,
+        "sourceFrames": 237,
+        "durationSeconds": 7.8666665569292915,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Dive.psa",
+        "sha256": "d1e61ac0cc9bb99131d715c05147732ad3cae4f09f40cbfff4ff8469eed29267",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Hovering.psa",
+        "sha256": "6728fbdf1afb45f5de2df9771706656ee8a04528494089341ce597025ef4af83",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Dodge_L.psa",
+        "sha256": "6a6f0866cefd1b1d064cf87fe474eb1297b70e2008e5551bf91e24c0ddd4e724",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Dodge_R.psa",
+        "sha256": "fb08cc60aefa2cc5a68f7b52260bff04dc40088fe1c28842721ef4653fb0be50",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Shoot_Flame.psa",
+        "sha256": "5f4442cb00fe45fb99b1d5aeb47e6214091e194034e3f832dea2a1c1c6f065a1",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Shoot_FlameLoop.psa",
+        "sha256": "a0232d8d97f7ea1494df102e8e3bef6be6cb160c5a04e260a046c024e3401c9f",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Shoot_FlameEnd.psa",
+        "sha256": "c917908c7c66c7dd7e04a2584aa9cbc81fe36c44063d3ee3e455cf46e83b3c92",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_TPOSE_Closed.psa",
+        "sha256": "1fe129dba19d814528f4dd85990dec399d19859ec1069ef76dec2185b7340fd8",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          74.68658447265625,
+          0,
+          -29.081918716430664
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          36.83937454223633,
+          -23.23294448852539,
+          -9.001384735107422
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          35.48732376098633,
+          23.924959182739258,
+          -9.923232078552246
+        ]
+      },
+      {
+        "node": "Seat",
+        "bone": "Spine2",
+        "sourceTranslationCm": [
+          65.30000305175781,
+          0,
+          77.69999694824219
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 10558052,
+    "sha256": "712408cedcf39e78c7962ff7747cd81eb7989dde181489c8fb501822f0ad898e",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -16.728008938492184,
+          -16.55167312318211,
+          -18.472390998603643
+        ],
+        "max": [
+          16.837058298415254,
+          16.818173373745164,
+          10.169689363605695
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -2.98148197625902,
+          -1.5914366479147817,
+          -1.1122110938898897
+        ],
+        "max": [
+          2.982063879603091,
+          2.132147745219128,
+          5.551174766326945
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D03",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D03\\Body\\Body01\\D03_Body01_Naked.psk",
+        "sha256": "ccae51ed8c99f44ea1ddffb151b9150c5c9f860a3dbbc894e7bcfd9ef4c33826",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D03\\Harness\\Harness01\\D03_Harness01_Mesh.psk",
+        "sha256": "b99178b98d58001465473dafcc2675578ff3e0e7f78bc5791e06f25bb637420b",
+        "restErrorCm": 0.5497927187067656
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D03_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D03_Body01_1001_Default_D.png"
+      },
+      {
+        "material": "MI_D03_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D03_Body01_1002_Default_D.png"
+      },
+      {
+        "material": "MI_D03_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D03_Body01_1003_Default_D.png"
+      },
+      {
+        "material": "MI_D03_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Harness\\Harness01\\Textures\\T_D03_Harness01_D.png"
+      },
+      {
+        "material": "MI_D03_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Harness\\Harness01\\Textures\\T_D03_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D03_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Base.psa",
+        "sha256": "e1dd579b3a62a7698108517424be8871602170c2a48cb1538cc878b0828e7604",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Base_L.psa",
+        "sha256": "56fcabfe101cd6004aff95a428e33df51bdd16450ea3642c6dba1f7fc3645703",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Base_R.psa",
+        "sha256": "afa8b40630daac9013f0c7a7704c3b066d9ffa2dfed36e8bc405549f9b4f4caf",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Base_U.psa",
+        "sha256": "fe44a96790d1fbea662a42ca3169307bed02112161b29a1dea75d6bcb1ad7007",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Base_D.psa",
+        "sha256": "97c3613e3f6040c0268061dfa277323b70616644067b4fd7b176698bceb90a6f",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Fast.psa",
+        "sha256": "da269712f71975b03597405705b632254b3eef877937000ac5185f2532dc8ccf",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_BoostLoop.psa",
+        "sha256": "b8bb2eb7d48d919120b347116c38b7963e1180706fdd379996e0226ac86a235a",
+        "sourceFramesPerSecond": 30.10309410095215,
+        "sourceFrames": 292,
+        "durationSeconds": 9.699999575484307,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Dive.psa",
+        "sha256": "80f1a2076ff9d860a783f53753caabf3b1ddd1f1c17aab7526fee8d28d46725e",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Hovering.psa",
+        "sha256": "b2ae5d5f1a40910d5f773499204cb607cdf4e0f5844ebc33b0d6c9e05850898a",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Dodge_L.psa",
+        "sha256": "31efc7cfbc4bcd5ecb46dc2d0efe19affd8f71560f57c4ad20879b1f2a472af2",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Dodge_R.psa",
+        "sha256": "156a5a2a963f0d5207ee54527431bae43d1818d51f82143664ae069cdfd785b1",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Shoot_FlameThrower.psa",
+        "sha256": "bc9df0008756b37083fcb4953c732838ba4a79b7f641e3655781725e84c83874",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Shoot_FlameThrowerLoop.psa",
+        "sha256": "3e9ae50cbc76d2b620fdb8b4d45f557a9f567a5b486aacd45abd64116f3c0ca1",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Shoot_FlameThrowerEnd.psa",
+        "sha256": "7ca0addafa9cc57434aaa6bd78f8eea546a82246d0b784983ebc969afbe56047",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D03_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_TPose_JawClosed.psa",
+        "sha256": "81fdb32b07ffaef5ca32fd58a087784fd6db85cf2549fa149abceff7759184de",
+        "sourceFramesPerSecond": 89.99999237060547,
+        "sourceFrames": 3,
+        "durationSeconds": 0.03333333615903525,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          -32.647098541259766,
+          -71.8414535522461,
+          0.0003319999959785491
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          19.120887756347656,
+          6.476262092590332,
+          -31.921979904174805
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          19.120887756347656,
+          6.476262092590332,
+          31.921979904174805
+        ]
+      },
+      {
+        "node": "Seat",
+        "bone": "Spine3",
+        "sourceTranslationCm": [
+          22.216999053955078,
+          0,
+          68.13500213623047
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 9408164,
+    "sha256": "b99e410eed381fa01679726fbad1eab1368205ca35f2efd685ef997db0e4a754",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -13.476821023104034,
+          -12.668148736736274,
+          -10.794529574374367
+        ],
+        "max": [
+          13.362719276914474,
+          12.79041453939552,
+          13.501990735550304
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -2.3137054090686786,
+          -1.4218653252541995,
+          1.4160983934901754
+        ],
+        "max": [
+          2.3137057187869496,
+          3.260221939776085,
+          5.681743934995793
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D04",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D04\\Body\\Body01\\D04_Body01_Naked.psk",
+        "sha256": "76ef2a8c95facd37005a2db16f490f9a278bbb5eee9dfaf0eba12259ff4b2cbc",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D04\\Harness\\Harness01\\D04_Harness01_Mesh.psk",
+        "sha256": "867f0639b9908eab1a0373ecabca7fe05d60d64851fc07fa59ac475b9f5f584d",
+        "restErrorCm": 0.0023027223727437574
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D04_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D04_Body01_1001_Default_D.png"
+      },
+      {
+        "material": "MI_D04_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D04_Body01_1002_Default_D.png"
+      },
+      {
+        "material": "MI_D04_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D04_Body01_1003_Default_D.png"
+      },
+      {
+        "material": "MI_D04_Harness01_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Harness\\Harness01\\Textures\\T_D04_Harness01_Default_D.png"
+      },
+      {
+        "material": "MI_D04_Harness01_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Harness\\Harness01\\Textures\\T_D04_Harness01_Default_D.png"
+      }
+    ],
+    "clips": {
+      "D04_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Base.psa",
+        "sha256": "4a2cd1fe46736b333588b536f046db17b3cc1e622be470384d1ca999b4ec7f75",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Base_L.psa",
+        "sha256": "70bcafb92ef130efeca7bb4f722e67893b19777fc99bde884db83015f5aac574",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Base_R.psa",
+        "sha256": "c9bb37d91d10c18a0e5d6e65f2d85dbdb76e245dbe59a85f12bc4a09a4f99d5e",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Base_U.psa",
+        "sha256": "0721bf57597f0386d2f1a8e3e991809ce2bbf56c40eb5f83879d1da5fcb1562d",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Base_D.psa",
+        "sha256": "3f6ba611bbdaa65c48941daff0158968db60833bde43ebfab6c52c810f8f3b63",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Fast.psa",
+        "sha256": "b6d9cf10917088f2ab42eddf3776ae68c49fec70a109cd55c861afee1f184bd6",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_BoostLoop.psa",
+        "sha256": "a3ff8fdf2f26ef7b1f111512c05b99ff2ef7b501a4136070000f36907709399d",
+        "sourceFramesPerSecond": 30.147058486938477,
+        "sourceFrames": 205,
+        "durationSeconds": 6.800000075921781,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Dive.psa",
+        "sha256": "d15393bce25d2c0554f09c0d0d464cfbc39855b158082e2506ad1c81eb09c2c8",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Hovering.psa",
+        "sha256": "feb6c7c0c0439ad66fb142cafa599fdfc9d1000f470b833a87b6bb8a2d994ff9",
+        "sourceFramesPerSecond": 31,
+        "sourceFrames": 31,
+        "durationSeconds": 1,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Dodge_L.psa",
+        "sha256": "90d69665628bdcad85d3deb4ca4657bba30c9ece65be6904923665b81b85e9ec",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Dodge_R.psa",
+        "sha256": "4af482a08fa09cc414c7e0d8b7623f42f841283f418ef94744bad841aea2d938",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Shoot_FlameThrower.psa",
+        "sha256": "788cbc546c23232212d40a8baad9a7fdbb019c187dd46434fcec4f31b3dfc868",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Shoot_FlameThrowerLoop.psa",
+        "sha256": "54c103b661187dfbc3bea23c7457e9e35d7770bdc3e66f6865b1b2d1b21b3f1c",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Shoot_FlameThrowerEnd.psa",
+        "sha256": "05a6d56b0d2439287441e7d456c1c487717a059b850fa510648dcf7d5d311953",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D04_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_TPOSE_BF.psa",
+        "sha256": "e2cca01d5da22bf4bfec26f9bdf1f56bf8db7c80dd533c5c341b79ddb472a10b",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          74.68658447265625,
+          0,
+          -29.081918716430664
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          38.97163772583008,
+          15.993611335754395,
+          -32.25056838989258
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          38.53262710571289,
+          15.922456741333008,
+          32.169254302978516
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 8624512,
+    "sha256": "7b28b4842b25a9bda0022b268dcac5af4fe7c7d2f3a9742d5a9e2e874e256d1e",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -19.26078352058755,
+          -17.52814862816609,
+          -14.291540348057618
+        ],
+        "max": [
+          19.24158618622686,
+          19.44711039952988,
+          10.963380546527734
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -1.870525013662688,
+          -0.9458299156347942,
+          -0.541261753230459
+        ],
+        "max": [
+          1.8705249035585638,
+          3.3087923746878065,
+          5.458976423277383
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D05",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D05\\Body\\Body01\\D05_Body01_Naked.psk",
+        "sha256": "ae85d9ab11d67c62ac534f15cd642f8639d7a848f2ac19b38aaa56888ec62900",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D05\\Harness\\Harness01\\D05_Harness01_Mesh.psk",
+        "sha256": "af1e7d32c4fea9d6ceaf00e5a35259cb728be98da700ba60b4756c62ce054e5a",
+        "restErrorCm": 0.00014154814987802838
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D05_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D05\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D05_Body01_1001_Default_D.png"
+      },
+      {
+        "material": "MI_D05_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D05\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D05_Body01_1002_Default_D.png"
+      },
+      {
+        "material": "MI_D05_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D05\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D05_Body01_1003_Default_D.png"
+      },
+      {
+        "material": "MI_D01_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D01\\Harness\\Harness01\\Textures\\T_D01_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D05_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Base.psa",
+        "sha256": "50c608e564f10f2dc4c463aa38b27e1a4cdbe804c55f9d23e7c1b901475d75a8",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Base_L.psa",
+        "sha256": "562bb40fe57a022d25c99231273f0008177ffee65bfba4823ca19067ae13d4e7",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Base_R.psa",
+        "sha256": "d8416b559af3f1fc881cc582cf149ae7f0a996ba6d5eb32f017855efcfb50aba",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Base_U.psa",
+        "sha256": "01d7d81a635036efe78cd77a6d3d3f144e5a090a9f0e9cd007136f2f3cad5117",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Base_D.psa",
+        "sha256": "5b419fce421de92f6c49a575451a8158ba4969d96be8abea4c265143e9a957ef",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Fast.psa",
+        "sha256": "ab1c52e0290507ca715d8e07ae1063978a67e140dc5f70f4a8b0c62553ed91d6",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_BoostLoop.psa",
+        "sha256": "6738301050720b50d113500ed1b3ef348969ebda7da564d6d4c7d45de86d722a",
+        "sourceFramesPerSecond": 30.127119064331055,
+        "sourceFrames": 237,
+        "durationSeconds": 7.8666665569292915,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Dive.psa",
+        "sha256": "90046e0581f802798ca5d9919ff7fdc9df258fe3272698a5edcfd374e15c55f0",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Hovering.psa",
+        "sha256": "762da1bf4aeac289de6a48f55c37da54b3ffa46d2766546228d47276360b6dfb",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Dodge_L.psa",
+        "sha256": "625a3075d4418baabb11715eeb4ca2f371dff27665f95f1c825f5b56f8ae7486",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Dodge_R.psa",
+        "sha256": "e57133d29c16bb8c675a4f6cfe9db92dcb8c990e9adabb27bf5b3b52fe33cea5",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Shoot_FlameThrower.psa",
+        "sha256": "a5c9fa7a9eb92d61a104aa5dca179ac7d676eab7ef8072cd930aecd4779ee55a",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Shoot_FlameThrowerLoop.psa",
+        "sha256": "df54fc1518d7ce443cdc857247323ca995ba1899717584e123fb7301c404c8f4",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Shoot_FlameThrowerEnd.psa",
+        "sha256": "2dd23e8c529c6bddb76ed3b349a39fe57072cce5085fd10c5e18ffec9fd08664",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D05_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_TPOSE_Closed.psa",
+        "sha256": "7ebecc158758ba616ad276372392534073c78541990023fc521298f7b84d7d67",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          88.1838150024414,
+          0,
+          -9.663888931274414
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          31.834138870239258,
+          -21.461429595947266,
+          -14.691811561584473
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          31.182512283325195,
+          22.154396057128906,
+          -13.315580368041992
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 9222052,
+    "sha256": "470f19029cc3bfc2424e40b28c80eca948d4c5e24eac24eecfaeaf2a8b9d1213",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -13.893939518392488,
+          -13.459918279653055,
+          -11.2172402028346
+        ],
+        "max": [
+          13.597606280805444,
+          12.127961176524902,
+          11.077795036381078
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -3.023334913814802,
+          -1.2122263568189986,
+          0.6172210859475793
+        ],
+        "max": [
+          3.0233347083109727,
+          2.3855076369597454,
+          5.880963460566822
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D06",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D06\\Body\\Body01\\D06_Body01_Naked.psk",
+        "sha256": "b6094d0b5716ac7d8c041e5ccab5c5b3e06da7b27fa4f57e42d8843f7b26b8f9",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D06\\Harness\\Harness01\\D06_Harness01_Mesh.psk",
+        "sha256": "b93ac2ba77f9abf9424ee6d0101009e1a4f7c4ca0c25259fb626422162d59c8d",
+        "restErrorCm": 0.0003255034481810278
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D06_Body01_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D06\\Body\\Body01\\Textures\\Default\\T_D06_Body01_Default_D.png"
+      },
+      {
+        "material": "MI_D06_Harness01_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D06\\Harness\\Harness01\\T_D06_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D06_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Base.psa",
+        "sha256": "573f653ecd45a0d7c454972003fd3170c7e07b645277e2a61e98d35c3f4b88eb",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Base_L.psa",
+        "sha256": "26116f3fdd363a6968d47dbbeeb154cb5605f7c113cd6b43e65c433fe822f779",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Base_R.psa",
+        "sha256": "116bb2fa5fa8cb6d2c5c4cff1a7058a2444f94bca310434d9cd7120d0bb3ba40",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Base_U.psa",
+        "sha256": "cca419f94cd114baae781cf362209668d15b0e26f6e918b36e66b10feee108d8",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Base_D.psa",
+        "sha256": "859c2e3e6ceafcf6923cc2e7f5c7f0d190f1ae0a508ca003b6657ced81227db5",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Fast.psa",
+        "sha256": "8eeeb93cf300eedbd25c631d1cd3f4000fd2319c3aa4384a1231ac6bf3058097",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_BoostLoop.psa",
+        "sha256": "1fce94bd196bce972b5af6548cd5b8d7c69caca37d87f807214907798305c894",
+        "sourceFramesPerSecond": 30.147058486938477,
+        "sourceFrames": 205,
+        "durationSeconds": 6.800000075921781,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Dive.psa",
+        "sha256": "f3c893688e3410de202e6508fc1fdb0469e1ace9d1b206551cef2cea5d0efce0",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Hovering.psa",
+        "sha256": "397660b368e08a6dc12cfe74617f604872e49438923934665b48b3b071146b96",
+        "sourceFramesPerSecond": 31,
+        "sourceFrames": 31,
+        "durationSeconds": 1,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Dodge_L.psa",
+        "sha256": "c70d26b4b73b792326727024c40961ec01f821cc4f9ee498b99c4589d909df2c",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Dodge_R.psa",
+        "sha256": "7511e1aa7ee64c9306a5224c6e7a2d25d906beb748ff273efc3ceab47deb982e",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Shoot_FlameThrower.psa",
+        "sha256": "6bf46e10b506aa4bd7859394b27ec25aa7c856916033f762c8e97bbf0e0df7b0",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Shoot_FlameThrowerLoop.psa",
+        "sha256": "6455cebbd1aef18b7309f23f793d863d00b87daaae9c2b0a17719b4a33ffb3bd",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Shoot_FlameThrowerEnd.psa",
+        "sha256": "23dc40533b87b151ccbb68850e764c52a17326a8db1055d1f6fe7a8ff1dd61f3",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D06_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_TPose_JawClosed.psa",
+        "sha256": "89e5ca0d971a44899651ef8085f9ad7540fe72d06b4d2f106c8848c6897f2d6a",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          74.68658447265625,
+          3.7988638927274887e-13,
+          -59.384456634521484
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          38.97163772583008,
+          15.993611335754395,
+          -32.25056838989258
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          38.53262710571289,
+          15.922456741333008,
+          32.169254302978516
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 5879340,
+    "sha256": "819193c584c6e5033b46b39793e04cadcd349c7f29a132b097a0e7ba3766b6b3",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -17.634574267504494,
+          -14.944529888409088,
+          -13.662805094042257
+        ],
+        "max": [
+          17.646208954647218,
+          17.132724592207882,
+          32.91916214959183
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -1.9340644606690414,
+          -0.8551665211112908,
+          -0.6432428376710979
+        ],
+        "max": [
+          1.9340643241941118,
+          3.465242530459877,
+          5.546662201676241
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D07",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D07\\Body\\Body01\\D07_Body01_Naked.psk",
+        "sha256": "2416cfa2ee2aa40c03ef3a018ae4931c6d736811d3f860c1e802b568e8d1803a",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D07\\Harness\\Harness01\\D07_Harness01_Mesh.psk",
+        "sha256": "8026549c037dacf761606e7877d342a6084a292d6bd6496817512186e5d424c1",
+        "restErrorCm": 0.00044616147001562737
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D07_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D07\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D07_Body01_1001_Default_D.png"
+      },
+      {
+        "material": "MI_D07_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D07\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D07_Body01_1002_Default_D.png"
+      },
+      {
+        "material": "MI_D07_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D07\\Body\\Body01\\Textures\\Diffuse\\Default\\T_D07_Body01_1003_Default_D.png"
+      },
+      {
+        "material": "MI_D03_HarnessSL01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D03\\Harness\\HarnessSL01\\Textures\\T_D03_HarnessSL01_D.png"
+      }
+    ],
+    "clips": {
+      "D07_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Base.psa",
+        "sha256": "34620d953d0c8ea0f1da68ea16e4e8e2125f742c2816b986eb9350d391ed22e9",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Base_L.psa",
+        "sha256": "1209d67b5c4f95564808d0a6291ab14568f5473077a00f9c5fa774d3aa325d29",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Base_R.psa",
+        "sha256": "19e2b18bcd94bc1727baf34de2b86f4c2f176501cab58e10498e0cd6b064aecb",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Base_U.psa",
+        "sha256": "bfb3ca34f83f1735982a011d3d3f68ea691672440923f8da9abdce291a6e9181",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Base_D.psa",
+        "sha256": "b35295d2d88d93e2d009aac6e43e4f15d841b057b9c4642797e94b3efe0023fa",
+        "sourceFramesPerSecond": 30.625,
+        "sourceFrames": 49,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Fast.psa",
+        "sha256": "f8514067d4372c3f9ad77a6faf27662b3b1cd2418bf7dc503626e399d342e9e1",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_BoostLoop.psa",
+        "sha256": "8b79456f03353e145c8dc9a79faf8699f7f17ceb2daf7a3e12ca21ffbaa55f56",
+        "sourceFramesPerSecond": 30.10309410095215,
+        "sourceFrames": 292,
+        "durationSeconds": 9.699999575484307,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Dive.psa",
+        "sha256": "c12d07cbbf03b63310236276efe3042f6f278f3c6339796cce34825614bed23c",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Hovering.psa",
+        "sha256": "07d043562994b22f7938c98e24d4db7d90772ea06e07c839e01f6b308580d061",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Dodge_L.psa",
+        "sha256": "3461ef077fe44261cb8108e6f561d07c5fbf7387121d451973a77dbd8a4b5d78",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Dodge_R.psa",
+        "sha256": "370396fd88e25f555a040e5c1a273b00157a51521aaeff326849c55c79844a8b",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Shoot_FlameThrower.psa",
+        "sha256": "6ccde9cf06b588efe349d5086aea1d8efb8370be3e0f639a68d2d89e32311805",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Shoot_FlameThrowerLoop.psa",
+        "sha256": "4cf8f70221f63273571a7e9b82d30b2d8ebad1a408476e4d9b1677d7aaa47a7d",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Shoot_FlameThrowerEnd.psa",
+        "sha256": "d0b18e32785c2ca1e35cd548c736e9059832ed2be758e6610f3ce9b8800df141",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D07_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_TPose_JawClosed.psa",
+        "sha256": "f56bc74819306a1fbe1d2a437b78b51da359f10fb58f80c0dec7112643e8e9d6",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          -32.647098541259766,
+          -71.8414535522461,
+          0.0003319999959785491
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          19.037822723388672,
+          -1.5263071060180664,
+          -30.81386375427246
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          14.247074127197266,
+          -1.0814108848571777,
+          34.2584228515625
+        ]
+      },
+      {
+        "node": "Seat",
+        "bone": "Spine3",
+        "sourceTranslationCm": [
+          22.216999053955078,
+          -2.199295866950335e-12,
+          87.53153991699219
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 9964620,
+    "sha256": "dbb83021e62dac384f416c2ff4c2ee1d32fc73a7719e3a198ca1929856140cda",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -17.82468344892519,
+          -16.830516081607012,
+          -13.383915363795904
+        ],
+        "max": [
+          17.78112743231427,
+          16.866787049727026,
+          17.25865334666962
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -2.3662896483556954,
+          -1.233931421782338,
+          1.313837604503493
+        ],
+        "max": [
+          2.3662894226584275,
+          3.4021544112406206,
+          5.671322940619536
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D08",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D08\\Body\\Body01\\D08_Body01_Naked.psk",
+        "sha256": "2922e264a4f59b8dc42ddda45d8954fe3767548fe11ac7d3f61462d8a99b7920",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D08\\Harness\\Harness01\\D08_Harness01_Mesh.psk",
+        "sha256": "167826c9e6396be91d60ccf7b9126bc2147b76a716a62eae59a6ee33aff03f5f",
+        "restErrorCm": 0
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D08_Body01_1001_Red",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D08\\Body\\Body01\\Textures\\T_D08_Body01_1001_Red_D.png"
+      },
+      {
+        "material": "MI_D08_Body01_1002_Red",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D08\\Body\\Body01\\Textures\\T_D08_Body01_1002_Red_D.png"
+      },
+      {
+        "material": "MI_D08_Body01_1003_Red",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D08\\Body\\Body01\\Textures\\T_D08_Body01_1003_Red_D.png"
+      },
+      {
+        "material": "MI_D04_Harness01_Copper",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D04\\Harness\\Harness01\\Textures\\T_D04_Harness01_Black_D.png"
+      }
+    ],
+    "clips": {
+      "D08_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Base.psa",
+        "sha256": "0603e1faee31ac70616c2415cb7b1ea9a9394d448329a3117b953734019b2dc5",
+        "sourceFramesPerSecond": 30.624998092651367,
+        "sourceFrames": 49,
+        "durationSeconds": 1.600000099649241,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Base_L.psa",
+        "sha256": "8f8bc76fdf63f95dedccbe811f8bf271367b4cd7edfe9642b7835623a764850c",
+        "sourceFramesPerSecond": 30.624998092651367,
+        "sourceFrames": 49,
+        "durationSeconds": 1.600000099649241,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Base_R.psa",
+        "sha256": "37500050db66857d469eabce1c6dc0796d3fb698bbfd17193041f289d012a529",
+        "sourceFramesPerSecond": 30.624998092651367,
+        "sourceFrames": 49,
+        "durationSeconds": 1.600000099649241,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Base_U.psa",
+        "sha256": "751c5fa69f8dee1c764ccb671ae4db5a854f60ff2ea3ac315e8bdd7505d2cd9e",
+        "sourceFramesPerSecond": 30.624998092651367,
+        "sourceFrames": 49,
+        "durationSeconds": 1.600000099649241,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Base_D.psa",
+        "sha256": "4baa9c8ebbd90ed916480b5442e144e514d7512babeae8fb745d85c83813c8ad",
+        "sourceFramesPerSecond": 30.624998092651367,
+        "sourceFrames": 49,
+        "durationSeconds": 1.600000099649241,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Fast.psa",
+        "sha256": "116e2b68db78df1ce6a786536487218c88c9c36e185fa42b879e7713e6999eaa",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_BoostLoop.psa",
+        "sha256": "b7560fc8a7ef6dbb14898a6f0aa4032f66e59169c08669b8a4da4d42b73cb347",
+        "sourceFramesPerSecond": 30.127656936645508,
+        "sourceFrames": 236,
+        "durationSeconds": 7.8333340191796825,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Dive.psa",
+        "sha256": "8428cd68643717aec3c1097b8e31358b5fe5cc65640b95ae84833882eafe2539",
+        "sourceFramesPerSecond": 30.68181800842285,
+        "sourceFrames": 45,
+        "durationSeconds": 1.4666666749553916,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Hovering.psa",
+        "sha256": "cfb9d1ce96d311a214b3e54beac8f9e4675816c3011fb67447dad1b748b29064",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Dodge_L.psa",
+        "sha256": "a84d7132ac0bb1d22f3cdaa03498080bbe8f5cfb1010417d83f98be623618a67",
+        "sourceFramesPerSecond": 31.249998092651367,
+        "sourceFrames": 25,
+        "durationSeconds": 0.800000048828128,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Dodge_R.psa",
+        "sha256": "e53a9ce281201747b9dd7de7dedf55c537a6b4f244c2b369c013d6106c5d64f6",
+        "sourceFramesPerSecond": 31.249998092651367,
+        "sourceFrames": 25,
+        "durationSeconds": 0.800000048828128,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Shoot_FlameThrower.psa",
+        "sha256": "7c07a452e2fc5ffe6b390df5328f00c5becaa96c6d37c138aa7b127e7b3c285d",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Shoot_FlameThrowerLoop.psa",
+        "sha256": "107a4e706adc0f4459c68f7114bead5ae44da10b2889e8bf687bf6df2565f9b2",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Shoot_FlameThrowerEnd.psa",
+        "sha256": "f9b569704e280802e9cceb1a7e3dc93ea7e720e485df1c43b47ba7c03e74f674",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D08_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_TPOSE_Closed3.psa",
+        "sha256": "9acf92be5981124c182e717053e41f1389cf87c571e1d26a22e0a380de1050e4",
+        "sourceFramesPerSecond": 29.999998092651367,
+        "sourceFrames": 1,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          88.1838150024414,
+          0,
+          -9.663888931274414
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          42.08355712890625,
+          -21.46229362487793,
+          -9.204505920410156
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          41.925357818603516,
+          22.1536922454834,
+          -9.283456802368164
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 10380476,
+    "sha256": "c75fb073c682ae41441733cc18b445e1fcb4b708f6463fe927f1cf8ed9be424c",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -19.462804842432547,
+          -18.997614714953457,
+          -15.585038905552793
+        ],
+        "max": [
+          19.413546468003272,
+          18.037912012167137,
+          14.600104496586098
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -2.7141562537288495,
+          -1.0993791150332344,
+          -0.057480806358500336
+        ],
+        "max": [
+          2.7141852554830517,
+          1.4562356317655856,
+          5.313590801636916
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D09",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D09\\Body\\Body01\\D09_Body01_Naked.psk",
+        "sha256": "6d8e8e192cc67d980ca27a58bb54b113b1a6059e56b3aa6a8cfbc6f8a5f2164b",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D09\\Harness\\Harness01\\D09_Harness01_Mesh.psk",
+        "sha256": "1b8c591587ee6824aa9d59e157afe94022350979d74b7954d71d1a91657b0df8",
+        "restErrorCm": 0.00007275305743222381
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D09_Body01_1001_Blue",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D09\\Body\\Body01\\Textures\\Blue\\T_D09_Body01_1001_Blue_D.png"
+      },
+      {
+        "material": "MI_D09_Body01_1002_Blue",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D09\\Body\\Body01\\Textures\\Blue\\T_D09_Body01_1002_Blue_D.png"
+      },
+      {
+        "material": "MI_D09_Body01_1003_Blue",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D09\\Body\\Body01\\Textures\\Blue\\T_D09_Body01_1003_Blue_D.png"
+      },
+      {
+        "material": "MI_D01_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D01\\Harness\\Harness01\\Textures\\T_D01_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D09_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Tail\\Tail01\\D09_Flight_Base.psa",
+        "sha256": "d09c90be72d6d1f3bf21526c7b863ba41832191f5c6fb4432c001fd3bda13c20",
+        "sourceFramesPerSecond": 60.625,
+        "sourceFrames": 97,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Base_L3.psa",
+        "sha256": "9b353038b355d23c45ebc45a60fc57432e2d2151896e957c73b8c64627690ba1",
+        "sourceFramesPerSecond": 30.652172088623047,
+        "sourceFrames": 47,
+        "durationSeconds": 1.5333334245974908,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Base_R.psa",
+        "sha256": "358b3d5b155900ba34a64e6e48873f5c07ab33adf59e9b54ddf34be166af1022",
+        "sourceFramesPerSecond": 60.625,
+        "sourceFrames": 97,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Base_U.psa",
+        "sha256": "595e832c3b4fd3200b31ea32fbb7b165c88f7c1feeace739f7d88c79b78f11bd",
+        "sourceFramesPerSecond": 60.625,
+        "sourceFrames": 97,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Base_D.psa",
+        "sha256": "1f95ffa1e7ade362dd6be378d633b67c1a435da3ac69062a095178ce04491b70",
+        "sourceFramesPerSecond": 60.625,
+        "sourceFrames": 97,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Fast.psa",
+        "sha256": "0fcf9272d2fb820bc42f30bd07f0ccf1ca099fb8d98fa2454c9ff9e5cfb06ff0",
+        "sourceFramesPerSecond": 61.5,
+        "sourceFrames": 41,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Fast.psa",
+        "sha256": "0fcf9272d2fb820bc42f30bd07f0ccf1ca099fb8d98fa2454c9ff9e5cfb06ff0",
+        "sourceFramesPerSecond": 61.5,
+        "sourceFrames": 41,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Dive.psa",
+        "sha256": "dd5f3268e3ee549a8958837c74ec192a37597b2453c06c172786f822fde68988",
+        "sourceFramesPerSecond": 60.66666793823242,
+        "sourceFrames": 91,
+        "durationSeconds": 1.4999999685601881,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Hovering.psa",
+        "sha256": "ed433ca697610b42d6141c234fe8af2cb3fa1f7caf1d99199442476bb261a639",
+        "sourceFramesPerSecond": 60.625,
+        "sourceFrames": 97,
+        "durationSeconds": 1.6,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Dodge_L.psa",
+        "sha256": "242f58038a831f3ee469acb4f788cc9414e371de2a0e76d34c3223c3a402bff5",
+        "sourceFramesPerSecond": 61.20000076293945,
+        "sourceFrames": 51,
+        "durationSeconds": 0.8333333229447244,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Dodge_R.psa",
+        "sha256": "6d0e6ade2ab725ba5fafe57872be4c5365bb09a7b1650299016b2be20733ad26",
+        "sourceFramesPerSecond": 61.20000076293945,
+        "sourceFrames": 51,
+        "durationSeconds": 0.8333333229447244,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Shoot_Flame.psa",
+        "sha256": "fe8ff78e3acf8e9b3ec2a1883243b1897a7bf3c979669ef56875859a06b478fc",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Shoot_FlameLoop.psa",
+        "sha256": "01a2ada9877d21e6b9a2c7512e5d3ce5acbfd44a0783d1fd6e6889f67c3c8adc",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Shoot_FlameEnd.psa",
+        "sha256": "1a4fa3cec1bf1c7c7cb0c1b9c02c45b4debec290d6f8a0fabb89854f4a8bd60a",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D09_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_TPOSE_Closed.psa",
+        "sha256": "3bd6c2202f6f1322dbbf55e7329bc9a812d643bd7c48a49cdcbe16020f37f016",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          74.68658447265625,
+          0,
+          -29.081918716430664
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          42.084693908691406,
+          -25.53969955444336,
+          0.41583237051963806
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          41.92527389526367,
+          25.930845260620117,
+          -0.2903573215007782
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 8627104,
+    "sha256": "9bd7595b6999e34a3681e0ba9e10795cf777c361527cfcfa9a5ba40ad22123cf",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -12.263180540312714,
+          -18.016375098573285,
+          -23.22557302934369
+        ],
+        "max": [
+          12.284135680136744,
+          15.538730461804843,
+          12.092995843053814
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -4.124427123050882,
+          -3.232048762556367,
+          -3.346286809498705
+        ],
+        "max": [
+          4.125003417441043,
+          3.2401368614099315,
+          6.142223872058136
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D10",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D10\\Body\\Body01\\D10_Naked.psk",
+        "sha256": "94eb800e32e7076a2017aa44b87a2f553ac42fef24828a9ebc56cb3847f28605",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D10\\Harness\\Harness01\\D10_Harness01_Mesh.psk",
+        "sha256": "c48d8c6825dc35e8cf63c0aca9551df4415434ed1857c4c8a7d7a8b1ce0d15b1",
+        "restErrorCm": 0.010104924967010398
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D10_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D10\\Body\\Body01\\Textures\\Default\\T_D10_Body01_1001_D.png"
+      },
+      {
+        "material": "MI_D10_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D10\\Body\\Body01\\Textures\\Default\\T_D10_Body01_1002_D.png"
+      },
+      {
+        "material": "MI_D10_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D10\\Body\\Body01\\Textures\\Default\\T_D10_Body01_1003_D.png"
+      },
+      {
+        "material": "MI_D02_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Harness\\Harness01\\Textures\\T_D02_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D10_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Base.psa",
+        "sha256": "e0ea64d0bc51c20af89b19d619fd50e8cdee22b74eee465d1444247b4e0d553f",
+        "sourceFramesPerSecond": 30.545454025268555,
+        "sourceFrames": 56,
+        "durationSeconds": 1.8333333645548144,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Base_L.psa",
+        "sha256": "b939d1c4a4ab66f77fb4f02a7d3190f620aeacd331b5881d98d42fae65215e86",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Base_R.psa",
+        "sha256": "e6393e38f9ffe45c0c80386c9db4ab0a9d427c7a6718a318bb922eaefd36ddb7",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Base_U.psa",
+        "sha256": "e153d0e6bf2607379bb092ce29870185f17a5c5ba9e074b30ce97b95287355de",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Base_D.psa",
+        "sha256": "2528cd6b414f021cc0ef6cbf89109d8ad4bfb966fae365bb51ea6bfdaeb7473c",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Fast.psa",
+        "sha256": "918029851360a043f7926b3c66ff4ba67498fa535983fc51f6fa48b00a927bc1",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_BoostLoop.psa",
+        "sha256": "92643c539e5bc3daa04297ebe1e2bde4f4d4779d3123ce143ac47f6891d602b3",
+        "sourceFramesPerSecond": 30.147058486938477,
+        "sourceFrames": 205,
+        "durationSeconds": 6.800000075921781,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Dive.psa",
+        "sha256": "52834023bce4cc4dff0ffa260d02b7ee115354427f552c030b282d8c44094964",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Hovering.psa",
+        "sha256": "cfdca12fcee82fca92b9e5afd7c5a3dd304b5cdeb321838a6b579f76caee3861",
+        "sourceFramesPerSecond": 31,
+        "sourceFrames": 31,
+        "durationSeconds": 1,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Dodge_L.psa",
+        "sha256": "9bf22d49cfb21c84cbfa7a8e94fe56efa4312b3a546176f824d181cde626a18c",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Dodge_R.psa",
+        "sha256": "6a935b9856ef83963d88fd25430e288fdeab9185f74da7a7df2b9c9a96423bd8",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Shoot_FlameThrower.psa",
+        "sha256": "1b55bed7da4378d6376db9bf0ad5eaf21afee2daa29917f102f1a39b8e0182c7",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Shoot_FlameThrowerLoop.psa",
+        "sha256": "2dbe71e24df3bf2d35235a7ad0f9e387bf8fa966f51d1e2ae890546a4d4bc333",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Shoot_FlameThrowerEnd.psa",
+        "sha256": "5b38938b315dc2519ca3d9b863ce11dcf1105a813a18f11998a45d67c3b88316",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D10_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\D10_TPose_JawClosed.psa",
+        "sha256": "cae1677c503509b899e920a823b4ed20042fc96f7010bb830bf2e45d1a90c1de",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          58.541019439697266,
+          -0.00006399344420060515,
+          -2.625779151916504
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          28.5915470123291,
+          18.579273223876953,
+          -16.891647338867188
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          27.831449508666992,
+          20.000036239624023,
+          19.091941833496094
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 10542588,
+    "sha256": "3bb8b19eeb7bee37166be18ffbca6d5dc67ed13e52acf35d37154e036a630229",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -14.709035246844659,
+          -12.330408083097677,
+          -11.744286058052662
+        ],
+        "max": [
+          14.654902709490912,
+          18.14754195279063,
+          17.541700303647143
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -1.8074102628341755,
+          0.48355194109977206,
+          -2.3477003373724954
+        ],
+        "max": [
+          1.807410267057746,
+          6.278742139226116,
+          4.2964207797671605
+        ]
+      },
+      "sphereCount": 64
+    }
+  },
+  {
+    "id": "D11",
+    "units": "meters",
+    "parts": [
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D11\\Body\\Body01\\D11_Naked.psk",
+        "sha256": "b7d5e664162a3cb108a38258467625a8fe400b0cce838849238293c33a035a77",
+        "restErrorCm": 0
+      },
+      {
+        "source": "MultiDragon\\PSK\\Game\\Characters\\Dragons\\D11\\Harness\\Harness01\\D11_Harness01_mesh.psk",
+        "sha256": "b78c3c696dda312ae0164f168d81e3ae4ad43899023d16aa8de100a9b965e083",
+        "restErrorCm": 0.0004019757041113126
+      }
+    ],
+    "materials": [
+      {
+        "material": "MI_D11_Body01_1001_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D11\\Body\\Body01\\Textures\\Default\\T_D11_Body01_Default_1001_D.png"
+      },
+      {
+        "material": "MI_D11_Body01_1002_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D11\\Body\\Body01\\Textures\\Default\\T_D11_Body01_Default_1002_D.png"
+      },
+      {
+        "material": "MI_D11_Body01_1003_Default",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D11\\Body\\Body01\\Textures\\Default\\T_D11_Body01_Default_1003_D.png"
+      },
+      {
+        "material": "MI_D02_Harness01",
+        "diffuse": "Models_glTF\\Game\\Characters\\Dragons\\D02\\Harness\\Harness01\\Textures\\T_D02_Harness01_D.png"
+      }
+    ],
+    "clips": {
+      "D11_Flight_Base": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Base.psa",
+        "sha256": "d4b26506fbedc6202d2542bb3cfd3a95b10d6e6ca5b5982f32ac45d3e6fa1926",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Base_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Base_L.psa",
+        "sha256": "82841f96f172e7dcb4cc5f9998dbf565b5698d0d70378aea38993a7cfaae38a3",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Base_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Base_R.psa",
+        "sha256": "88fc6a486fa18d26d9f3fb8bf076c4f1c835cd7102d5b146284c8dc3832d2e9d",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Base_U": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Base_U.psa",
+        "sha256": "413423d97bd4dded9fee7622b08d23ceec8edbe118cbee8f85a175bf9cf605f5",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Base_D": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Base_D.psa",
+        "sha256": "f17d98a05e8396e4da92405970a582a2bfc7d36d9fe5c072d99c1b64c8377868",
+        "sourceFramesPerSecond": 30.535715103149414,
+        "sourceFrames": 57,
+        "durationSeconds": 1.8666666166963646,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Fast": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Fast.psa",
+        "sha256": "83fe1e7e062521bacbae8ef51ff774601dba392a2fcbffaa382e20a74c05cadf",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_BoostLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_BoostLoop.psa",
+        "sha256": "cb3d18ba1d02fd7a0a39e5b537f9bc7288c99739af361bbbd10f7c28b356fd0f",
+        "sourceFramesPerSecond": 30.147058486938477,
+        "sourceFrames": 205,
+        "durationSeconds": 6.800000075921781,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Dive": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Dive.psa",
+        "sha256": "a3964c1a3ca833cc37b0f45590e6d3d80044b955fa3206df673b59c050f50f9a",
+        "sourceFramesPerSecond": 30.66666603088379,
+        "sourceFrames": 46,
+        "durationSeconds": 1.5000000310980761,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Flight_Hovering": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Hovering.psa",
+        "sha256": "9eb47d78ab381de1b9ef1bd7532a6b56d8d812a7ccc84dfa8691063884c6e4f2",
+        "sourceFramesPerSecond": 31,
+        "sourceFrames": 31,
+        "durationSeconds": 1,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Dodge_L": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Dodge_L.psa",
+        "sha256": "a6ea47282fe0dd57e132be93ba266c46da844391366ebe501db1d431144087d0",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Dodge_R": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Dodge_R.psa",
+        "sha256": "db04b2da733711041e0669d4443a32010b8520c44eaa9e4f6d8e422758a604ec",
+        "sourceFramesPerSecond": 31.200000762939453,
+        "sourceFrames": 26,
+        "durationSeconds": 0.8333333129556775,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Shoot_FlameThrower": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Shoot_FlameThrower.psa",
+        "sha256": "4aebd93c03a6aa35009f9b904ac81f104f3af8253d42d7c775b806c21fdef60d",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Shoot_FlameThrowerLoop": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Shoot_FlameThrowerLoop.psa",
+        "sha256": "97cd26b25dfdebf724c02ad67ea7c45881004383bff6c36e82d665857a010e5c",
+        "sourceFramesPerSecond": 31.5,
+        "sourceFrames": 21,
+        "durationSeconds": 0.6666666666666666,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_Shoot_FlameThrowerEnd": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Shoot_FlameThrowerEnd.psa",
+        "sha256": "11b25a4a24cccb29f2c48ffd230403d8a016c3352b366c1b6f4f6880ac025534",
+        "sourceFramesPerSecond": 33.33333206176758,
+        "sourceFrames": 10,
+        "durationSeconds": 0.3000000114440922,
+        "nonUnitScaleKeys": 0
+      },
+      "D11_TPOSE_Closed": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_TPOSE_BF.psa",
+        "sha256": "f5a2d9bff42daf30beff2bd8baff9a55718af810728f025f463bdd6ddb5cbd91",
+        "sourceFramesPerSecond": 59.999996185302734,
+        "sourceFrames": 2,
+        "durationSeconds": 0.033333335452609726,
+        "nonUnitScaleKeys": 0
+      }
+    },
+    "sockets": [
+      {
+        "node": "CenturyFireSocket",
+        "bone": "Head",
+        "sourceTranslationCm": [
+          61.288307189941406,
+          0.0001831045956350863,
+          -33.08966827392578
+        ]
+      },
+      {
+        "node": "CenturyLeashLeft",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          21.656192779541016,
+          -10.580282211303711,
+          -46.575408935546875
+        ]
+      },
+      {
+        "node": "CenturyLeashRight",
+        "bone": "Jaw",
+        "sourceTranslationCm": [
+          26.10042381286621,
+          -9.568862915039062,
+          48.1682243347168
+        ]
+      }
+    ],
+    "limitations": [
+      "simplified diffuse PBR; dummy material slots mapped by atlas order",
+      "no cloth or wing morph simulation",
+      "airborne riding; no boarding transition"
+    ],
+    "bytes": 10543268,
+    "sha256": "41ee6c7db3c02b87de7f7cfbbfa952a2ae7c8bb2a5329eb006e6315b181f117e",
+    "measurement": {
+      "poses": 24,
+      "bounds": {
+        "min": [
+          -17.839475755376196,
+          -16.685198685630194,
+          -11.506266106470774
+        ],
+        "max": [
+          17.698541259253634,
+          18.56555264842067,
+          10.634703021038131
+        ]
+      },
+      "seatBounds": {
+        "min": [
+          -1.8973228249674747,
+          -0.9347014037197631,
+          -0.5249315812565614
+        ],
+        "max": [
+          1.8705251599459078,
+          3.3387706429562183,
+          5.481973027345321
+        ]
+      },
+      "sphereCount": 64
+    }
+  }
+]

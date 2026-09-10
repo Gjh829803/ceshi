@@ -22,7 +22,7 @@ export function resetCreatureState(v:VehicleState){resetFamilyAuxiliaryState(v);
 
 /** The lead horse is a separate occupied body, also useful for boarding/exit checks. */
 export function creatureBodies(v:VehicleState):{position:Vector3;rotation:Quaternion;body:QueryBody}[]{
-  if(v.motion.flyingCreature)return CREATURE_COLLISION_PROBES.map(p=>({position:v.position,rotation:v.rotation,body:{kind:"capsule" as const,radius:p.radius,height:p.radius*2,offset:p.center}}));
+  if(v.motion.flyingCreature)return (v.spec.flyingCreatureCollision??CREATURE_COLLISION_PROBES).map(p=>({position:v.position,rotation:v.rotation,body:{kind:"capsule" as const,radius:p.radius,height:p.radius*2,offset:p.center}}));
   const parts=[{position:v.position,rotation:v.rotation,body:vehicleBody(v.spec)}];
   if(v.motion.tank)parts.push(tankBarrel(v));
   if(v.spec.mode==='carriage'){

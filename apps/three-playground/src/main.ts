@@ -3,6 +3,7 @@ import { toast as notify } from "sonner";
 import * as T from "three";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
+import { DRAGON_VARIANTS, readDragonVariant } from '../../../shared/preset-content/dragon-variants';
 import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
 import "./styles.css";
 
@@ -90,7 +91,11 @@ const camera = new T.PerspectiveCamera(
   0.12,
   2100,
 );
-const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),spawn:[80,40,35] as [number,number,number]}:spec);
+const dragonVariant=readDragonVariant(location.search);
+shell.update({dragonId:dragonVariant.id});
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,camera:dragonVariant.camera,
+  ...(dragonVariant.seat?{seat:dragonVariant.seat}:{}),...(dragonVariant.envelope?{envelope:dragonVariant.envelope}:{}),
+  ...(dragonVariant.collisionProbes?{flyingCreatureCollision:dragonVariant.collisionProbes}:{}),spawn:[80,40,35] as [number,number,number]}:spec);
 function getDefaultProfile(id:string):AssetProfile|undefined{
   const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
@@ -106,7 +111,7 @@ const visuals:VehicleVisual[] = SPECS.map(spec=>{
 try {
   await Promise.all([
     character.load(resolvePresetResource),
-    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/dragon.glb',flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
+    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -428,6 +433,12 @@ document.addEventListener("visibilitychange", () => {
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
+shell.on('dragonSelect',id=>{
+  if(!DRAGON_VARIANTS.some(variant=>variant.id===id)||id===dragonVariant.id)return;
+  const url=new URL(location.href);url.searchParams.set('dragon',id!);
+  // 保持地图路由，由启动流程重新创建唯一受控实例与动画拥有者。
+  location.assign(url.href);
+});
 shell.on("resetButton", async () => {
   await sdk.reset();
   if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
@@ -1305,6 +1316,7 @@ shell.on("exportProfiles", () => {
 const labAPI = {
   getState: () => ({
     flyingCreature:sim.vehicle?.motion.flyingCreature?{...sim.vehicle.motion.flyingCreature}:undefined,
+    dragonVariant:dragonVariant.id,
     dragonVisual:nativeDragon.inspect(),
     dragonSeat:nativeDragon.readSeatWorld().elements,
     riderHip:character.hip?.getWorldPosition(new T.Vector3()).toArray(),

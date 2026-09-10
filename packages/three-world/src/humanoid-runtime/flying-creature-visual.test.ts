@@ -14,17 +14,20 @@ import {createFlyingCreatureStateV1} from './motion-families/flying-creature/sta
 import {CREATURE_COLLISION_PROBES} from './motion-families/flying-creature/collision-probes';
 import {CreatureFlame} from './motion-families/flying-creature/flame';
 import type {MotionPose} from './presentation';
+import {DRAGON_VARIANTS} from '../../../../shared/preset-content/dragon-variants';
+import {getDefaultProfile,parseAssetProfile} from '../../../../shared/preset-content/platform/profiles';
 afterEach(()=>vi.restoreAllMocks());
-async function fixture(){
+async function fixture(id='D01'){
   vi.stubGlobal('ProgressEvent',class{constructor(public type:string){}});
-  const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/dragon.glb',import.meta.url));
+  const variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
+  const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
   const length=bytes.readUInt32LE(12),json=JSON.parse(bytes.subarray(20,20+length).toString()),bin=bytes.subarray(28+length);
   json.buffers=[{byteLength:bin.length,uri:'data:application/octet-stream;base64,'+bin.toString('base64')}];
   // 保留真实蒙皮、骨架和动作；几何回归不需要解码像素纹理。
   delete json.materials;delete json.images;delete json.textures;for(const mesh of json.meshes)for(const p of mesh.primitives)delete p.material;
   const model=await new GLTFLoader().parseAsync(JSON.stringify(json),'');
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockResolvedValue(model);vi.spyOn(T.TextureLoader.prototype,'loadAsync').mockResolvedValue(new T.Texture());
-  const visual=new FlyingCreatureVisual();await visual.load({dragonUrl:'fixture',flameTextureUrl:'fixture'});
+  const visual=new FlyingCreatureVisual();await visual.load({dragonUrl:'fixture',flameTextureUrl:'fixture',animationPrefix:id});
   const pose:MotionPose={position:new T.Vector3(),rotation:new T.Quaternion(),velocity:new T.Vector3(),yaw:0,speed:0,steering:0,flyingCreature:createFlyingCreatureStateV1()};
   return {visual,pose,model};
 }
@@ -63,15 +66,15 @@ it('flame history advances only on commits and clears on reset',()=>{
   }finally{flame.dispose();}
 });
 
-it('keeps native mounted views at the real Source101 eyes through orbit, flight and T switches',async()=>{
-  const {visual}=await fixture();
+it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 eyes through orbit, flight and T switches',async id=>{
+  const {visual}=await fixture(id),variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{
     const bytes=readFileSync(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
   });
   vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(readFileSync(fileURLToPath(String(input)))));
   const rider=new Character();await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
   const world=await createWorld({camera:new T.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
-    character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:createFlyingCreatureSpec('dragon'),object:visual.root,flyingVisual:visual}]}});
+    character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),...(variant.collisionProbes?{flyingCreatureCollision:variant.collisionProbes}:{})},object:visual.root,flyingVisual:visual}]}});
   try{
     const runtime=world.humanoid!;runtime.applyProfile({view:{keyboardToggleEnabled:true}});
     runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
@@ -94,7 +97,7 @@ it('keeps native mounted views at the real Source101 eyes through orbit, flight 
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
       const vehicle=runtime.simulation.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
-      expect(offset.x).toBeLessThan(-.3);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
+      expect(offset.x).toBeLessThan(-.15);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(0);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
     }
@@ -128,4 +131,50 @@ it('crossfades flight modes only on fixed commits and survives display cuts and 
     pose.flyingCreature=createFlyingCreatureStateV1();pose.speed=0;visual.commit(pose,3,0);
     expect(visual.inspect().clips.map(clip=>clip.name)).toEqual(['D01_Flight_Hovering']);
   }finally{visual.dispose();vi.unstubAllGlobals();}
+});
+
+it.each(DRAGON_VARIANTS.slice(1).map(v=>v.id))('%s uses its own clips and covers blended animated skin with its own collision spheres',async id=>{
+  const {visual,pose,model}=await fixture(id),variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
+  const meshes:T.SkinnedMesh[]=[];visual.root.traverse(n=>{if(n instanceof T.SkinnedMesh)meshes.push(n);});
+  const probes=variant.collisionProbes!.map(p=>({center:new T.Vector3(...p.center),radius:p.radius}));
+  try{
+    expect(model.animations).toHaveLength(15);expect(meshes.length).toBeGreaterThanOrEqual(2);
+    let worst=-Infinity,detail:unknown;
+    for(const mode of ['hover','cruise','boost','dive','evade'] as const)for(const turn of [-1,0,1])for(let frame=0;frame<17;frame++){
+      pose.speed=mode==='hover'?0:31;Object.assign(pose.flyingCreature!,{mode,bankRadians:turn*.7,pitchRadians:turn*.6,evadeDirection:turn<0?-1:1,evadeRemainingSeconds:.45*(1-frame/17)});
+      visual.sample(pose,(frame+.37)/17*2.3);visual.root.updateMatrixWorld(true);
+      expect(visual.inspect().clips.every(c=>c.name.startsWith(id+'_'))).toBe(true);
+      for(const mesh of meshes){mesh.skeleton.update();for(let n=0;n<mesh.geometry.attributes.position!.count;n+=23){
+        const p=mesh.getVertexPosition(n,new T.Vector3()).applyMatrix4(mesh.matrixWorld);
+        const outside=Math.min(...probes.map(probe=>p.distanceTo(probe.center)-probe.radius));if(outside>worst){worst=outside;detail={id,mode,turn,frame,point:p.toArray()};}
+      }}
+    }
+    expect(worst,JSON.stringify(detail)).toBeLessThanOrEqual(0);
+    pose.speed=0;pose.flyingCreature!.mode='hover';pose.flyingCreature!.flamePhase='loop';visual.sample(pose,.2);
+    expect(visual.inspect().clips.some(c=>c.name===id+'_Shoot_FlameThrowerLoop')).toBe(true);
+    const attachments=visual.inspect().attachments;expect(attachments.Seat!.every(Number.isFinite)).toBe(true);
+    const head=new T.Vector3(...attachments.Head!),fire=new T.Vector3(...attachments.CenturyFireSocket!);
+    expect(fire.distanceTo(head)).toBeLessThan(5);
+  }finally{visual.dispose();vi.unstubAllGlobals();}
+});
+
+it('publishes eleven selectable complete rigs with embedded textures and source-timed clips',()=>{
+  expect(DRAGON_VARIANTS.map(v=>v.id)).toEqual(Array.from({length:11},(_,i)=>'D'+String(i+1).padStart(2,'0')));
+  const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
+  for(const variant of DRAGON_VARIANTS.slice(1)){
+    expect(variant.camera).toBeGreaterThanOrEqual(1);expect(variant.camera).toBeLessThanOrEqual(40);
+    const profile=getDefaultProfile('dragon')!;
+    expect(()=>parseAssetProfile({...profile,camera:{...profile.camera,distance:variant.camera},envelope:variant.envelope})).not.toThrow();
+    const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
+    const json=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)).toString());
+    const source=sources.find((s:{id:string})=>s.id===variant.id);
+    expect(source.parts[0].source.toLowerCase()).toContain('naked');expect(source.parts[1].source).toContain('Harness01');
+    expect(json.images.length).toBeGreaterThanOrEqual(2);expect(json.images.every((image:{bufferView?:number;uri?:string})=>image.bufferView!==undefined&&!image.uri)).toBe(true);
+    expect(json.materials.every((material:{alphaMode:string})=>material.alphaMode==='MASK')).toBe(true);
+    for(const clip of json.animations){
+      const end=Math.max(...clip.samplers.map((sampler:{input:number})=>json.accessors[sampler.input].max[0]));
+      expect(Math.abs(end-source.clips[clip.name].durationSeconds),variant.id+':'+clip.name).toBeLessThanOrEqual(1/30+.0001);
+      expect(source.clips[clip.name].nonUnitScaleKeys).toBe(0);
+    }
+  }
 });

@@ -10,6 +10,8 @@ import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {
   /** 原生动力飞行标定；缺省时保留现有地面起降坐骑。 */
   flyingCreature?:import('./motion-families/flying-creature/state').FlyingCreatureTuning;
+  /** 米制局部空间的动画包络球；平移/转动扫掠与物理接触共用，缺省使用 D01 标定。 */
+  flyingCreatureCollision?:readonly {id:string;center:readonly [number,number,number];radius:number}[];
   /** Configuration identity. Asset/instance IDs are separate from driving modes. */
   id: string; name: string; en: string;
   /** Driving family and map-region permission key. paddled_boat covers kayak, canoe and raft.

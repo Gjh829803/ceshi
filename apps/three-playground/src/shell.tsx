@@ -23,6 +23,7 @@ import { Icon } from "./components/icon";
 import type { AssetEntry } from "../../../shared/preset-content/platform/catalog";
 import { MAPS } from "../../../shared/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
+import { DRAGON_VARIANTS } from '../../../shared/preset-content/dragon-variants';
 
 type Flags =
   | "libraryOpen"
@@ -42,6 +43,7 @@ export function mountShell(host: HTMLElement) {
     texts: {} as Record<string, string>,
     flags: { loading: true, debugActive: true } as Record<Flags, boolean>,
     mapId: "campus",
+    dragonId: 'D01',
     collider: "off",
     quick: [] as AssetEntry[],
     activeId: "person",
@@ -214,6 +216,11 @@ export function mountShell(host: HTMLElement) {
           </div>
         </section>
         <div className="stage-actions">
+          {s.mapId==='flying-creature-training'&&<label className="subtle-button">选择飞龙
+            <ChoiceSelect id="dragonSelect" aria-label="选择飞龙" value={s.dragonId} onValueChange={value=>action('dragonSelect',value)}>
+              {DRAGON_VARIANTS.map(variant=><ChoiceOption key={variant.id} value={variant.id}>{variant.name}</ChoiceOption>)}
+            </ChoiceSelect>
+          </label>}
           {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
           <label
             className={`subtle-button collider-toggle ${s.collider !== "off" ? "active" : ""}`}

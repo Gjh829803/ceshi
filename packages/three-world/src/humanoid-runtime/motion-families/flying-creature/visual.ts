@@ -4,8 +4,8 @@ import type { MotionPose } from '../../presentation';
 import { CreatureFlame } from './flame';
 import type { FlyingCreatureStateV1 } from './state';
 
-export interface FlyingCreatureVisualResources {dragonUrl:string;flameTextureUrl:string}
-/** D01 的米制模型适配。运动、显示采样和资源释放均由现有 HumanoidRuntime 调用。 */
+export interface FlyingCreatureVisualResources {dragonUrl:string;flameTextureUrl:string;animationPrefix?:string}
+/** 同族骨架的米制模型适配。运动、显示采样和资源释放均由现有 HumanoidRuntime 调用。 */
 export class FlyingCreatureVisual {
   readonly root=new T.Group();
   private mixer?:T.AnimationMixer;
@@ -39,16 +39,21 @@ export class FlyingCreatureVisual {
     model.scene.traverse(node=>{if(node instanceof T.Mesh){node.castShadow=node.receiveShadow=true;node.frustumCulled=false;}});
     this.mixer=new T.AnimationMixer(model.scene);
     const jaw=model.scene.getObjectByName('Jaw'),jawNames=new Set<string>();jaw?.traverse(node=>jawNames.add(node.name));
-    const reference=model.animations.find(clip=>clip.name==='D01_TPOSE_Closed');
+    const prefix=resources.animationPrefix??'D01';
+    const reference=model.animations.find(clip=>clip.name===prefix+'_TPOSE_Closed');
+    for(const suffix of ['Flight_Base','Flight_Base_L','Flight_Base_R','Flight_Base_U','Flight_Base_D','Flight_Fast','Flight_BoostLoop','Flight_Dive','Flight_Hovering','Dodge_L','Dodge_R','Shoot_FlameThrower','Shoot_FlameThrowerLoop','Shoot_FlameThrowerEnd','TPOSE_Closed'])
+      if(!model.animations.some(clip=>clip.name===prefix+'_'+suffix))throw new Error('FLYING_CREATURE_CLIP_MISSING:'+prefix+'_'+suffix);
     for(const source of model.animations){
+      // 控制器使用稳定的动作角色；每份资产仍使用自己的骨骼轨道和动作时长。
+      const role=source.name.startsWith(prefix+'_')?'D01_'+source.name.slice(prefix.length+1):source.name;
       let clip=source;
       if(source.name.includes('FlameThrower')){
         clip=source.clone();clip.tracks=clip.tracks.filter(track=>track.name.endsWith('.quaternion')&&jawNames.has(T.PropertyBinding.parseTrackName(track.name).nodeName??''));
         if(reference)T.AnimationUtils.makeClipAdditive(clip,0,reference,30);
       }
       // Dive 的首尾姿态不同，保留第二个动作实例用于循环接缝过渡。
-      if(source.name==='D01_Flight_Dive'){this.diveStart=this.mixer.clipAction(clip.clone());this.diveStart.play();this.diveStart.setEffectiveWeight(0);}
-      const action=this.mixer.clipAction(clip);action.play();action.setEffectiveWeight(0);this.actions.set(source.name,action);
+      if(role==='D01_Flight_Dive'){this.diveStart=this.mixer.clipAction(clip.clone());this.diveStart.play();this.diveStart.setEffectiveWeight(0);}
+      const action=this.mixer.clipAction(clip);action.play();action.setEffectiveWeight(0);this.actions.set(role,action);
     }
     const texture=await new T.TextureLoader().loadAsync(resources.flameTextureUrl);
     if(this.disposed){texture.dispose();this.dispose();return;}
@@ -124,15 +129,16 @@ export class FlyingCreatureVisual {
     for(const [index,side] of (['l','r'] as const).entries()){
       const line=this.reins[index]!,hand=rider?.getObjectByName('hand_'+side);line.visible=!!hand&&!!jaw;
       if(!hand||!jaw)continue;
-      const start=hand.getWorldPosition(new T.Vector3()).applyMatrix4(inverse),end=jaw.getWorldPosition(new T.Vector3()).applyMatrix4(inverse);
-      end.x+=(side==='l'?1:-1)*.48;end.y+=.15;
+      const socket=this.body?.getObjectByName(side==='l'?'CenturyLeashLeft':'CenturyLeashRight');
+      const start=hand.getWorldPosition(new T.Vector3()).applyMatrix4(inverse),end=(socket??jaw).getWorldPosition(new T.Vector3()).applyMatrix4(inverse);
+      if(!socket){end.x+=(side==='l'?1:-1)*.48;end.y+=.15;}
       const positions=line.geometry.getAttribute('position') as T.BufferAttribute;
       for(let n=0;n<17;n++){const t=n/16,point=start.clone().lerp(end,t);point.y-=Math.sin(Math.PI*t)*.22;positions.setXYZ(n,point.x,point.y,point.z);}
       positions.needsUpdate=true;
     }
   }
   inspect(){return {sampleTimeSeconds:this.sampleTime,flameParticles:this.flame?.object.geometry.drawRange.count??0,
-    clips:[...this.actions.entries(),...(this.diveStart?[['D01_Flight_Dive (loop seam)',this.diveStart] as const]:[])].filter(([,action])=>action.getEffectiveWeight()>0).map(([name,action])=>({name,weight:action.getEffectiveWeight(),time:action.time})),
+    clips:[...this.actions.values(),...(this.diveStart?[this.diveStart]:[])].filter(action=>action.getEffectiveWeight()>0).map(action=>({name:action.getClip().name+(action===this.diveStart?' (loop seam)':''),weight:action.getEffectiveWeight(),time:action.time})),
     attachments:Object.fromEntries(['Seat','Head','Jaw','CenturyFireSocket'].map(name=>[name,this.body?.getObjectByName(name)?.getWorldPosition(new T.Vector3()).toArray()]))};}
   dispose():void{
     this.disposed=true;this.flame?.dispose();this.flame=undefined;this.mixer?.stopAllAction();if(this.body)this.mixer?.uncacheRoot(this.body);

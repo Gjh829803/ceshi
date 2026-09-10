@@ -1,4 +1,5 @@
 import {beforeAll,expect,it} from 'vitest';
+import {DRAGON_VARIANTS} from '../../../../shared/preset-content/dragon-variants';
 import {Group,PerspectiveCamera,Vector3} from 'three';
 import {createWorld} from '../world';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
@@ -63,4 +64,23 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     const snapshot=structuredClone(runtime.simulation.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.motion.flyingCreature).toEqual(snapshot);
     runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
   }finally{world.dispose();}
+});
+
+it.each(DRAGON_VARIANTS.slice(1).map(v=>v.id))('%s uses instance collision geometry for thin-wall sweeps and stationary hover',id=>{
+  const variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
+  const map=createDragonTrainingMap();map.boxes=[{id:'thin-wall',position:[0,100,100],size:[300,200,.2]}];
+  const q=new EnvironmentQueries(map),v=createVehicle({...createFlyingCreatureSpec(id),flyingCreatureCollision:variant.collisionProbes!});v.position.set(0,100,0);q.stepPhysics(1/60);
+  try{
+    for(let n=0;n<600;n++){stepVehicle(v,{...emptyInput(),boost:n<300},1/60,n/60,q);q.stepPhysics(1/60);}
+    expect(v.motion.flyingCreature!.collisionCount).toBeGreaterThan(0);expect(v.position.z).toBeLessThan(100);expect(v.speed).toBe(0);
+    for(const part of creatureBodies(v))expect(q.overlaps(part.position,part.body,part.rotation)).toBe(false);
+    const original=variant.collisionProbes![0]!.radius;
+    (v.spec.flyingCreatureCollision![0]! as {radius:number}).radius+=1;
+    expect(variant.collisionProbes![0]!.radius).toBe(original);
+  }finally{q.dispose();}
+});
+it('rejects invalid per-instance creature collision geometry before creating physics bodies',()=>{
+  const spec=createFlyingCreatureSpec();
+  expect(()=>createVehicle({...spec,flyingCreatureCollision:[]})).toThrow('FLYING_CREATURE_COLLISION_INVALID');
+  expect(()=>createVehicle({...spec,flyingCreatureCollision:[{id:'bad',center:[0,NaN,0],radius:1}]})).toThrow('FLYING_CREATURE_COLLISION_INVALID');
 });

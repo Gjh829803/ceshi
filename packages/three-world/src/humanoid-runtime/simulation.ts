@@ -46,6 +46,12 @@ export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSetti
   const control=resolveMotionFamilyMovement(family,`${family}.${spec.mode}`,authored,defaultMovementSettings(spec.mode,spec));
   const resolved={...structuredClone(spec),...control};
   if(resolved.flyingCreature)resolveConfiguredFlyingCreatureFeel(resolved);
+  if(resolved.flyingCreatureCollision){
+    const probes=resolved.flyingCreatureCollision;
+    if(!resolved.flyingCreature||!Array.isArray(probes)||probes.length<1||probes.length>128||new Set(probes.map(p=>p.id)).size!==probes.length
+      ||probes.some(p=>!p.id||p.center.length!==3||!p.center.every(Number.isFinite)||!Number.isFinite(p.radius)||p.radius<=0))
+      throw new Error('FLYING_CREATURE_COLLISION_INVALID');
+  }
   return resolved;
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {

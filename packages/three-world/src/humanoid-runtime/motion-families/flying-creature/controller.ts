@@ -6,13 +6,13 @@ import { CREATURE_COLLISION_PROBES } from './collision-probes';
 import { commitFlyingCreatureCollisionV1,compileFlyingCreatureCommandV1,stepFlyingCreatureV1 } from './flight';
 import { resolveConfiguredFlyingCreatureFeel } from './state';
 
-function sweepPose(origin:Vector3,before:Quaternion,rotation:Quaternion,delta:Vector3,q:EnvironmentQueries,actorId:string){
+function sweepPose(origin:Vector3,before:Quaternion,rotation:Quaternion,delta:Vector3,q:EnvironmentQueries,actorId:string,probes:typeof CREATURE_COLLISION_PROBES){
   const count=Math.max(1,Math.ceil(before.angleTo(rotation)/.08));
   let fraction=1;const normal=new Vector3();
   for(let step=0;step<count&&step/count<fraction;step++){
     const a=step/count,b=(step+1)/count;
     const from=before.clone().slerp(rotation,a),to=before.clone().slerp(rotation,b);
-    for(const probe of CREATURE_COLLISION_PROBES){
+    for(const probe of probes){
       const p=new Vector3(...probe.center).applyQuaternion(from).add(origin).addScaledVector(delta,a);
       const end=new Vector3(...probe.center).applyQuaternion(to).add(origin).addScaledVector(delta,b);
       const hit=q.sweepActorSphere(p,end,probe.radius,actorId);
@@ -27,15 +27,15 @@ function sweepPose(origin:Vector3,before:Quaternion,rotation:Quaternion,delta:Ve
   return {fraction,normal};
 }
 
-/** D01 动画体积的保守扫掠体积，姿态、平移均进入同一个 Rapier 查询。 */
+/** 各实例动画体积的保守扫掠，姿态、平移均进入同一个 Rapier 查询。 */
 export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:EnvironmentQueries):void {
   if(!(dt>0)||!Number.isFinite(dt))return;
-  const state=v.motion.flyingCreature!,before=v.rotation.clone(),origin=v.position.clone();
+  const state=v.motion.flyingCreature!,before=v.rotation.clone(),origin=v.position.clone(),probes=v.spec.flyingCreatureCollision??CREATURE_COLLISION_PROBES;
   const feel=resolveConfiguredFlyingCreatureFeel(v.spec);
   state.yawRadians=v.yaw;state.pitchRadians=v.pitch;state.bankRadians=v.roll;
   const requested=stepFlyingCreatureV1(state,compileFlyingCreatureCommandV1(input),feel,v.velocity,dt);
   const rotation=new Quaternion().setFromEuler(new Euler(-state.pitchRadians,state.yawRadians,state.bankRadians,'YXZ'));
-  const hit=sweepPose(origin,before,rotation,requested.clone().multiplyScalar(dt),q,v.spec.id),fraction=hit.fraction;
+  const hit=sweepPose(origin,before,rotation,requested.clone().multiplyScalar(dt),q,v.spec.id,probes),fraction=hit.fraction;
   v.rotation.copy(before).slerp(rotation,fraction);
   const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');
   state.pitchRadians=v.pitch=-angles.x;state.yawRadians=v.yaw=angles.y;state.bankRadians=v.roll=angles.z;
@@ -43,7 +43,7 @@ export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:
   if(fraction<1&&hit.normal.lengthSq()>.5){
     // 法线回弹也扫掠完整体积；给下一步转向留净空，不瞬移穿出墙角。
     const rebound=hit.normal.clone().multiplyScalar(dt*4);
-    const clearance=sweepPose(v.position,v.rotation,v.rotation,rebound,q,v.spec.id);
+    const clearance=sweepPose(v.position,v.rotation,v.rotation,rebound,q,v.spec.id,probes);
     v.position.addScaledVector(rebound,clearance.fraction);
     v.velocity.subVectors(v.position,origin).divideScalar(dt);
   }
