@@ -3362,6 +3362,32 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
+          "speed": 22,
+          "accel": 2.1,
+          "grip": 12,
+          "steer": 0.52,
+          "maxSpeed": 22,
+          "reverseSpeed": 2.5,
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "coastDeceleration": 0.55,
+          "brakeDeceleration": 3.8,
+          "brakeDamping": 3.8,
+          "groundDeceleration": 2.1,
+          "directionChangeDeceleration": 4.2,
+          "steeringResponse": 2.5,
+          "steeringReturn": 3.2,
+          "verticalAcceleration": 1.6800000000000002,
+          "linearDamping": 12,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "dragQuadratic": 0.002,
+          "pitchResponse": 3,
+          "rollResponse": 2.5,
+          "throttleResponse": 1.6,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3,
           "id": "bus",
           "name": "复古小巴",
           "en": "MINIBUS",
@@ -3375,20 +3401,6 @@
             64
           ],
           "yaw": 0,
-          "speed": 22,
-          "accel": 2.1,
-          "grip": 12,
-          "steer": 0.52,
-          "maxSpeed": 22,
-          "reverseSpeed": 2.5,
-          "coastDeceleration": 0.55,
-          "brakeDeceleration": 3.8,
-          "brakeDamping": 0,
-          "steeringResponse": 2.5,
-          "steeringReturn": 3.2,
-          "throttleResponse": 1.6,
-          "pitchResponse": 3,
-          "rollResponse": 2.5,
           "wheelbaseMeters": 3.3,
           "rearAxleZMeters": -1.45,
           "radius": 2.15,
@@ -3504,19 +3516,7 @@
               1.34,
               0
             ]
-          },
-          "slowSpeed": 2.5,
-          "groundSpeed": 5,
-          "groundDeceleration": 2.1,
-          "directionChangeDeceleration": 4.2,
-          "verticalAcceleration": 1.6800000000000002,
-          "linearDamping": 12,
-          "verticalDamping": 1.8,
-          "drag": 0.25,
-          "dragQuadratic": 0.002,
-          "minimumSpeed": 0,
-          "launchSpeed": 22,
-          "jumpSpeed": 6.3
+          }
         }
       },
       "sockets": [
@@ -4703,23 +4703,23 @@
               "torqueCurve": [
                 [
                   850,
-                  84.5
+                  552.5
                 ],
                 [
                   1800,
-                  117
+                  765
                 ],
                 [
                   3200,
-                  130
+                  850
                 ],
                 [
                   4500,
-                  123.5
+                  807.5
                 ],
                 [
                   6200,
-                  84.5
+                  552.5
                 ]
               ],
               "forwardRatios": [
@@ -4729,7 +4729,7 @@
               "finalDrive": 2,
               "efficiency": 0.88,
               "shiftSeconds": 0.38,
-              "engineBrakeTorque": 19.5,
+              "engineBrakeTorque": 127.5,
               "dragArea": 2,
               "rollingResistance": 0.018,
               "boostTorqueMultiplier": 1.25

@@ -11,5 +11,7 @@ export const ATV_POWERTRAIN=engine(150,4.1,[3.8,2.3,1.55,1.1,.85],.65);
 export const BUS_POWERTRAIN={...engine(220,4.5,[3.8,2.3,1.55,1.1,.85],3.5),boostTorqueMultiplier:1};
 export const TANK_POWERTRAIN=engine(2400,8,[3.8,2.3,1.55,1.1,.85],8);
 export const JET_POWERTRAIN=engine(300,2,[1.5],.6);
-export const SUB_POWERTRAIN=engine(130,2,[1.5],2);
+// Size thrust for the 2,400 kg fully ballasted craft, not only its 720 kg dry mass.
+// At launch rpm: 850 N·m × .9 × 3 × .88 / .4 m ≈ 5,050 N (2.1 m/s²).
+export const SUB_POWERTRAIN=engine(850,2,[1.5],2);
 

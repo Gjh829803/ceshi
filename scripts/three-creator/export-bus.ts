@@ -25,7 +25,7 @@ const asset={id:'vehicle.bus',displayName:'复古小巴 / BUS',path:'vehicles/bu
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
   actions:{},limitations:['Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation.','W throttle; S brakes before reversing; Space brakes. Shift adds no boost.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-bus.ts'},resources:[],
-  locomotionBindingIds:['vehicle.bus'],vehicle:{schemaVersion:1,spec:{...BUS_SPEC,...defaultMovementSettings('bus',BUS_SPEC)}},
+  locomotionBindingIds:['vehicle.bus'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('bus',BUS_SPEC),...BUS_SPEC}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:BUS_SPEC.seat}],collision:BUS_SPEC.envelope};
 const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
 if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;

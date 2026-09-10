@@ -51,7 +51,9 @@ describe('observation submersible',()=>{
    world.step({humanoid:{...emptyInput(),lift:1}},900);world.step({humanoid:emptyInput()},600);expect(world.humanoid!.interact()).toBe(true);
    world.humanoid!.simulation.visit(0);expect(world.humanoid!.simulation.vehicles[0]!.submersible).toEqual(createSubmersibleState());
   }finally{world.dispose();}
- });
+ // This integrates 42 seconds with the real model, camera and rigid-body world.
+ // Match the bounded budget used by the other long physical lifecycle tests.
+ },20_000);
 });
 
 it('places the original rider inside the sealed cabin from the first mounted frame',async()=>{
