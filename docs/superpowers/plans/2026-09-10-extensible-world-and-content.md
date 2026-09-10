@@ -102,6 +102,8 @@ Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消�
 共享交互基础已实现：环境拥有交互物、松散箱子及预约；控制器只持有自己的关系。
 拾取/落座完成保留 held/occupied，取消握取前的预约不重建物体。世界复位恢复
 物体，单角色复位不重置其他物体；箱子查询与 Playground 显示采用声明 ID。
+目标位置/座椅锚点的同步已进一步收回世界阶段，Actor 只检查自身关系；
+见 [同步归属验证](../../reviews/2026-09-11-shared-target-synchronization.md)。
 验证记录：`.codex-tmp/r0/r2-content-regression-final.log`（98 tests）、
 `r2-world-content-final.log`（资源实例及显示等 17 tests）；typecheck、lint 和 prebuild 通过，
 runtime `77acc3f00d289a50a1b0f8bbbbc076c021382aa861ce51a41fbe3a51bb58735b`。

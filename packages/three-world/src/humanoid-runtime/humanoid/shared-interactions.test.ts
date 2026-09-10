@@ -1,4 +1,4 @@
-import {afterEach,beforeAll,expect,it} from 'vitest';
+import {afterEach,beforeAll,expect,it,vi} from 'vitest';
 import {Vector3} from 'three';
 import {EnvironmentQueries,initEnvironmentQueries} from '../environment/queries';
 import type {EnvironmentDefinition} from '../environment/types';
@@ -117,4 +117,29 @@ it('finishes a stand-up exit before acknowledging its cancellation',()=>{
   expect(a.skills.request({requestId:'exit',action:'standUp'}).status).toBe('running');step(q,[a],15);
   expect(a.skills.cancel('exit')?.status).toBe('running');expect(a.skills.seated).toBe('seat');
   step(q,[a],90);expect(a.skills.status('exit')).toMatchObject({status:'cancelled',action:'standUp'});expect(a.skills.seated).toBeNull();expect(q.interactions.unavailable('seat')).toBe(false);
+});
+
+
+it('synchronizes physical targets even when the world has no actors',()=>{
+ const q=setup(),target=q.interactions.targets.get('cup')!;target.body!.setTranslation({x:7,y:3,z:4},true);
+ q.stepPhysics(1/60);expect(target.position.x).toBeCloseTo(7);expect(target.position.z).toBeCloseTo(4);expect(target.position.y).toBeLessThan(3);
+});
+
+it('does not reread every target body for every actor',()=>{
+ const measure=(count:number)=>{
+  const q=setup(),simulation=new Simulation(q,[],{id:'player'});
+  try{
+   for(let n=1;n<count;n++)simulation.addActor(`npc-${n}`,new Vector3(n*4,.04,0));
+   for(let n=0;n<30;n++)simulation.step(1/60);
+   const body=q.interactions.targets.get('cup')!.body!,read=vi.spyOn(body,'translation');
+   simulation.step(1/60);const reads=read.mock.calls.length;read.mockRestore();return reads;
+  }finally{simulation.dispose();}
+ };
+ const one=measure(1),three=measure(3);expect(one).toBeGreaterThan(0);expect(three).toBe(one);
+});
+
+it('keeps a seat attached to declared static collision eligible',()=>{
+ const q=new EnvironmentQueries({...map,boxes:[...map.boxes,{id:'chair',position:[3,.25,1],size:[1,.5,1]}],interactions:[{...map.interactions![1]!,colliderIds:['chair']}]});environments.push(q);
+ const seated=actor(q,3);step(q,[seated],30);
+ expect(seated.skills.eligibility('sit','seat')).toMatchObject({eligible:true,reason:'READY'});
 });

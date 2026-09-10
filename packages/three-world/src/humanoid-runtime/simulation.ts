@@ -99,7 +99,7 @@ export class Simulation {
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
-    this.time+=dt;for(const actor of this.actors.values())actor.beginStep(dt);this.syncActorBodies();
+    this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values())actor.beginStep(dt);this.syncActorBodies();
     const drivers=new Map<VehicleState,HumanoidActor>();for(const actor of this.actors.values())if(actor.vehicle)drivers.set(actor.vehicle,actor);
     for(const v of this.vehicles){const driver=drivers.get(v);this.stepVehicle(v,driver,inputs.get(driver?.id??'')?.input??emptyInput(),dt);}
     for(const [id,actor] of this.actors){const controls=inputs.get(id);actor.step(controls?.input??emptyInput(),controls?.yaw??0);}

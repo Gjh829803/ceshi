@@ -126,7 +126,7 @@ export class EnvironmentQueries {
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
     }
-    this.interactions=new WorldInteractions(this.world,map,this.colliderBindings);
+    this.interactions=new WorldInteractions(this.world,map,this.colliderBindings,(id,point)=>this.interactionAnchor(id,point));
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();
     this.controller=this.world.createCharacterController(.015);
@@ -158,7 +158,13 @@ export class EnvironmentQueries {
   }
   dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactions.colliderForId(id);}
-  propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
+  private interactionAnchor(boxId:string,point:readonly number[]){
+    const collider=this.staticColliders.get(boxId);if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
+    const group=this.propBodies.get(this.propBoxes.get(boxId)??'');
+    if(!group)return {position:new Vector3(point[0],point[1],point[2]),rotation:new Quaternion(),stable:true};
+    const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();
+    return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};
+  }
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
   resetProps(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.propagateModifiedBodyPositionsToColliders();}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
@@ -410,7 +416,7 @@ export class EnvironmentQueries {
     });
     return normals;
   }
-  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}}
+  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}this.interactions.syncPhysicalState();}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){

@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import {Vector3,Quaternion,Euler} from 'three';
+import {Vector3} from 'three';
 import {bindingLabel,DEFAULT_KEY_BINDINGS,type KeyBindings} from '../input';
 import type {HumanoidActionContext} from './types';
 import {ACTION_TUNING,SKILL_DEFINITIONS,type SkillId,type SkillRequest,type SkillResult} from './action-schema';
@@ -25,14 +25,13 @@ export class ActionSystem {
   private cooldown=0;
   private results=new Map<string,SkillResult>();
   private requests=new Map<string,string>();
-  private unstableSeats=new Set<string>();
   constructor(private sim:HumanoidActionContext,private readonly content:WorldInteractions){this.targets=content.targets;}
   /** The shared world retains target bodies after this controller leaves. */
   dispose(){this.content.releaseOwner(this);this.active=null;this.pose=null;this.carrying=null;this.seated=null;}
   reset(){
     if(this.active)this.finish('cancelled','RESET','测试点已复位');
     this.content.releaseOwner(this);
-    this.active=null;this.pose=null;this.carrying=null;this.seated=null;this.cooldown=0;this.unstableSeats.clear();
+    this.active=null;this.pose=null;this.carrying=null;this.seated=null;this.cooldown=0;
     this.sim.actionCapsuleHalf=null;
   }
   /** Called once when the physics controller enters deep-water swimming. */
@@ -53,14 +52,13 @@ export class ActionSystem {
     target.position.copy(position);target.state='dropped';this.carrying=null;this.pose=null;
     sim.lastResult='进入深水：物件已脱手并按重力下沉；复位可恢复到台面';
   }
-  /** Safe to call every render frame; never overwrites hand-attached positions. */
-  syncDropped(){for(const target of this.targets.values())if(target.body&&target.state!=='carried')target.position.copy(target.body.translation());}
-  syncSeats(resolve:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null){
-    this.unstableSeats.clear();
-    for(const source of this.sim.level.interactions){if(source.kind!=='seat'||!source.colliderIds?.length)continue;const anchor=resolve(source.colliderIds[0]!,source.position),approach=resolve(source.colliderIds[0]!,source.approach),target=this.targets.get(source.id);if(!anchor||!approach||!target)continue;
-      target.position.copy(anchor.position);target.definition.position=anchor.position.toArray();target.definition.approach=approach.position.toArray();target.definition.yaw=source.yaw+new Euler().setFromQuaternion(anchor.rotation,'YXZ').y;
-      if(!anchor.stable||(this.seated===source.id&&this.sim.position.distanceTo(approach.position)>.25)){this.unstableSeats.add(source.id);if(this.active?.targetId===source.id)this.finish('cancelled','SEAT_MOVED','座椅移动或翻倒，坐姿交互已中断');if(this.seated===source.id){this.content.release(this.seated,this);this.seated=null;this.pose=null;this.sim.actionCapsuleHalf=null;target.state='available';}}
-    }
+  /** Per-actor relationship check against the world's last committed target state. */
+  checkSeatSupport():void{
+    const id=this.seated??(this.active?.id==='sit'?this.active.targetId:undefined),target=id?this.targets.get(id):undefined;
+    if(!target||target.definition.kind!=='seat')return;
+    if(target.stable&&!(this.seated===id&&this.sim.position.distanceTo(new Vector3(...target.definition.approach))>.25))return;
+    if(this.active?.targetId===id)this.finish('cancelled','SEAT_MOVED','座椅移动或翻倒，坐姿交互已中断');
+    if(this.seated===id){this.content.release(this.seated!,this);this.seated=null;this.pose=null;this.sim.actionCapsuleHalf=null;target.state='available';}
   }
   status(id:string){const result=this.results.get(id);return result?{...result}:null;}
   private save(result:SkillResult){
@@ -84,7 +82,7 @@ export class ActionSystem {
     if((action==='slide'||action==='roll')&&this.cooldown>0)return ['COOLDOWN','动作仍在恢复中'];
     if(action==='pickup'||action==='sit'){
       if(!target||target.definition.kind!==(action==='pickup'?'pickup':'seat'))return ['INVALID_TARGET','没有对应类型的交互目标'];
-      if(action==='sit'&&this.unstableSeats.has(target.definition.id))return ['SEAT_UNSTABLE','座椅移动或翻倒，暂时不能坐下'];
+      if(action==='sit'&&!target.stable)return ['SEAT_UNSTABLE','座椅移动或翻倒，暂时不能坐下'];
       if(this.content.unavailable(target.definition.id)||target.state!=='available'&&target.state!=='placed')return ['TARGET_UNAVAILABLE','目标已被占用'];
       const approach=new Vector3(...target.definition.approach),delta=approach.clone().sub(sim.position);
       if(Math.hypot(delta.x,delta.z)>ACTION_TUNING.approachRadiusMeters||Math.abs(delta.y)>ACTION_TUNING.approachVerticalToleranceMeters)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
@@ -206,7 +204,6 @@ export class ActionSystem {
   }
   /** Called at fixed 60 Hz on dry land before ordinary locomotion. */
   step(input:Vector3,_sprint:boolean,commands:ActionCommands={},jump=false){
-    this.syncDropped();
     this.cooldown=Math.max(0,this.cooldown-DT);
     const invoke=(action:SkillId,targetId?:string)=>this.request({action,targetId,requestId:`key-${++this.sequence}`});
     if(commands.roll)invoke('roll');if(commands.slide)invoke('slide');if(commands.putDown)invoke('putDown');

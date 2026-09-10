@@ -1,12 +1,12 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import {Vector3} from 'three';
+import {Euler,Vector3,type Quaternion} from 'three';
 import {DYNAMIC_PROP_COLLISION_GROUPS} from '../../config/physics';
 import type {EnvironmentDefinition} from '../environment/types';
 import type {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {InteractionTarget} from './action-schema';
 
 export interface TargetRuntime {
-  definition:InteractionTarget;position:Vector3;
+  definition:InteractionTarget;position:Vector3;stable:boolean;
   state:'available'|'carried'|'placed'|'occupied'|'dropped';
   collider?:RAPIER.Collider|undefined;body?:RAPIER.RigidBody|undefined;
 }
@@ -19,10 +19,10 @@ export class WorldInteractions {
   private readonly claims=new Map<string,Claim>();
   private readonly colliders=new Map<string,RAPIER.Collider>();
   private disposed=false;
-  constructor(private readonly world:RAPIER.World,private readonly map:EnvironmentDefinition,private readonly bindings:PhysicsColliderBindings){
+  constructor(private readonly world:RAPIER.World,private readonly map:EnvironmentDefinition,private readonly bindings:PhysicsColliderBindings,private readonly resolveAnchor:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null){
     try{
       for(const definition of map.interactions??[]){
-        const target:TargetRuntime={definition:structuredClone(definition),position:new Vector3(...definition.position),state:'available'};
+        const target:TargetRuntime={definition:structuredClone(definition),position:new Vector3(...definition.position),state:'available',stable:true};
         this.targets.set(definition.id,target);this.createPickup(target);
       }
       for(const spec of map.looseCrates??[]){
@@ -38,6 +38,18 @@ export class WorldInteractions {
     target.body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(...d.position).setGravityScale(9.81/18).setCcdEnabled(true).lockRotations().setSleeping(true));
     target.collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setMass(d.massKg??.3).setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS),target.body);
     this.colliders.set(d.id,target.collider);this.bindings.added(d.id,target.collider);
+  }
+  /** Called by the world before actors and after physics, never by individual actors or rendering. */
+  syncPhysicalState():void{
+    for(const target of this.targets.values())if(target.body&&target.state!=='carried')target.position.copy(target.body.translation());
+    for(const source of this.map.interactions??[]){
+      if(source.kind!=='seat'||!source.colliderIds?.length)continue;
+      const target=this.targets.get(source.id);if(!target)continue;
+      const anchor=this.resolveAnchor(source.colliderIds[0]!,source.position),approach=this.resolveAnchor(source.colliderIds[0]!,source.approach);
+      target.stable=!!anchor?.stable&&!!approach;
+      if(!anchor||!approach)continue;
+      target.position.copy(anchor.position);target.definition.position=anchor.position.toArray();target.definition.approach=approach.position.toArray();target.definition.yaw=source.yaw+new Euler().setFromQuaternion(anchor.rotation,'YXZ').y;
+    }
   }
   colliderForId(id:string){return this.colliders.get(id);}
   private removeBody(target:TargetRuntime){this.colliders.delete(target.definition.id);if(target.collider)this.bindings.removed(target.collider);if(target.body)this.world.removeRigidBody(target.body);else if(target.collider)this.world.removeCollider(target.collider,true);target.body=undefined;target.collider=undefined;}
@@ -71,7 +83,7 @@ export class WorldInteractions {
     this.claims.clear();
     for(const target of this.targets.values()){
       this.removeBody(target);const source=this.map.interactions?.find(value=>value.id===target.definition.id);
-      if(source)target.definition=structuredClone(source);target.position.fromArray(target.definition.position);target.state='available';this.createPickup(target);
+      if(source)target.definition=structuredClone(source);target.position.fromArray(target.definition.position);target.state='available';target.stable=true;this.createPickup(target);
     }
     for(const {body,initial} of this.crates){body.setTranslation(initial,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);}
     this.world.updateSceneQueries();

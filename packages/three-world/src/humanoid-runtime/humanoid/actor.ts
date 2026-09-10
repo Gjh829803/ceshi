@@ -46,13 +46,13 @@ export class HumanoidActor {
     try{this.resetAt(position,yaw);}catch(error){this.controller.dispose();throw error;}
   }
   resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
-  beginStep(dt:number):void{this.transition=Math.max(0,this.transition-dt);this.controller.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));}
+  beginStep(dt:number):void{this.transition=Math.max(0,this.transition-dt);this.controller.skills.checkSeatSupport();}
   step(input:Input,yaw:number):void{
     const v=this.vehicle,p=this.player;
     if(v){p.position.copy(v.position);if(v.spec.mode==='mount')p.position.add(new Vector3(...v.spec.seat).applyQuaternion(v.rotation));p.yaw=v.yaw;p.animation=this.transition>0?'Sitting_Enter':v.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';return;}
     if(stepHumanoidInput(this.controller,this.transition>0?emptyInput():input,yaw))this.teleportRevision++;syncPlayer(this.controller,this.player);
   }
-  finishStep():void{const v=this.vehicle;if(v&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.syncDropped();this.controller.skills.syncSeats((id,point)=>this.environment.propAnchor(id,point));}
+  finishStep():void{const v=this.vehicle;if(v&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.checkSeatSupport();}
   dispose():void{this.controller.dispose();}
   private canRelocate(){if(this.vehicleIndex<0&&!this.controller.canBoard){this.message=this.controller.boardingReason;return false;}return true;}
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
