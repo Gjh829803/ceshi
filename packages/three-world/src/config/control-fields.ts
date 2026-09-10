@@ -4,6 +4,9 @@ export type ControlField={key:Key;label:string;unit:string;step:number;note:stri
 
 /** UI descriptions only; defaults and numeric validation live in the SDK. */
 export function controlFields(family:string,powertrain=false):ControlField[]{
+ if(powertrain&&['atv','bus'].includes(family))return controlFields('wheeled',true);
+ if(powertrain&&family==='tank')return controlFields('tank',false).map(f=>({...f,disabled:['accel','coastDeceleration','throttleResponse'].includes(f.key),note:['accel','coastDeceleration','throttleResponse'].includes(f.key)?'由发动机、变速箱和履带阻力决定。':f.note}));
+ if(powertrain&&family==='jetski')return controlFields('jetski',false).map(f=>({...f,disabled:['accel','throttleResponse'].includes(f.key),note:['accel','throttleResponse'].includes(f.key)?'由发动机与喷泵传动决定。':f.note}));
  if(family==='unicycle')return controlFields('wheeled').filter(f=>['speed','maxSpeed','reverseSpeed','accel','coastDeceleration','brakeDeceleration','steer','steeringResponse','steeringReturn','pitchResponse','rollResponse'].includes(f.key)).map(f=>({...f,note:f.key==='accel'?'收脚回踏板后建立踩踏推进；悬空时无推进。':f.key==='coastDeceleration'?'松键自动减速；停稳后左脚寻找真实地面支撑。':f.key==='steer'?'依靠重心转向；原地不转动，低速转向减弱。':f.note,label:f.key==='steer'?'平衡转向速率':f.label,unit:f.key==='steer'?'rad/s':f.unit}));
  if(family==='raft')return [...controlFields('kayak').map(f=>({...f,note:f.key==='speed'?'单人划行限速；Shift 提高划桨频率。':f.key==='accel'?'桨叶入水时产生推进；地面只受重力和摩擦。':f.note})),{key:'brakeDeceleration',label:'陆地制动',unit:'m/s²',step:.1,note:'Space 拖地制动；松键仍可沿坡面滑动。',section:'加速与减速'}];
  if(family==='kayak')return [
@@ -66,9 +69,9 @@ export function controlFields(family:string,powertrain=false):ControlField[]{
  if(family==='plane')add('throttleResponse','油门升降速率','/s','Shift / Ctrl 每秒增加或减少的油门量（油门范围 0–1）。','专项运动',.01);
  if(family==='glider')add('launchSpeed','弹射初速度','m/s','再次准备后按 Shift 发射的初速度。','专项运动');
  if(powertrain)for(const f of fields){
-  if(['accel','coastDeceleration','brakeDamping'].includes(f.key)){f.disabled=true;f.note='动力链模式：加速由发动机与齿比决定；滑行由发动机制动、滚阻和风阻决定。';}
+  if((road?['accel','coastDeceleration','brakeDamping']:['accel']).includes(f.key)){f.disabled=true;f.note='动力链模式：加速由发动机与齿比决定；滑行由发动机制动、滚阻和风阻决定。';}
   if(f.key==='brakeDeceleration'){f.label='制动力基准';f.note='换向制动和 Space 制动的最大轮轴制动扭矩基准，实际制动力受抓地力限制。';}
-  if(f.key==='grip'){f.label='轮胎侧向响应';f.unit='/s';f.note='侧向滑动的衰减速率；摩擦上限由轮胎材质倍率、轮载和地面摩擦独立决定。';}
+  if(road&&f.key==='grip'){f.label='轮胎侧向响应';f.unit='/s';f.note='侧向滑动的衰减速率；摩擦上限由轮胎材质倍率、轮载和地面摩擦独立决定。';}
   if(family==='wheeled'&&f.key==='steer')f.note='控制完整机械舵角；高速平滑转向过程，最终舵角不随车速缩小。';
   if(family==='wheeled'&&['steeringResponse','steeringReturn'].includes(f.key))f.note+=' 高速按 1 + 前向速度绝对值 / 20 平滑响应，保留完整舵角。';
  }

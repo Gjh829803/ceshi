@@ -1,7 +1,7 @@
 import {beforeAll,it,expect} from 'vitest';
 import {Vector3} from 'three';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
+import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
 import {sampleRaftVisual} from './raft';
@@ -30,3 +30,5 @@ it('rebounds with lost energy on landing, compresses only its tubes and settles'
  }finally{q.dispose();}
 });
 it('rebounds from a wall without crossing it',()=>{const {q,v,run}=fixture(false,false,true);try{v.velocity.z=8;run(1);expect(v.position.z).toBeLessThan(8);run(1);expect(v.raft!.impacts).toBeGreaterThan(0);expect(v.velocity.z).toBeLessThan(0);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);}finally{q.dispose();}});
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

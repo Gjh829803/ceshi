@@ -8,9 +8,9 @@ export const ATV_GEOMETRY={seat:[0,1,-.15] as [number,number,number],wheelRadius
  wheelPositions:[[.7,.39,.8],[-.7,.39,.8],[.7,.39,-.8],[-.7,.39,-.8]] as [number,number,number][],
  handlebar:[0,1.285,.12] as [number,number,number],grips:[[.29,0,0],[-.29,0,0]] as [number,number,number][],
  feet:[[.420507,.309005,.012058],[-.420509,.309004,.012058]] as [number,number,number][]};
-export interface AtvState{steeringAngle:number;wheelAngles:number[];suspension:number[]}
+export interface AtvState{wheelSteers?:number[];steeringAngle:number;wheelAngles:number[];suspension:number[]}
 export const createAtvState=():AtvState=>({steeringAngle:0,wheelAngles:[0,0,0,0],suspension:[0,0,0,0]});
-export const copyAtvState=(s?:AtvState):AtvState|undefined=>s?{steeringAngle:s.steeringAngle,wheelAngles:[...s.wheelAngles],suspension:[...s.suspension]}:undefined;
+export const copyAtvState=(s?:AtvState):AtvState|undefined=>s?{...(s.wheelSteers?{wheelSteers:[...s.wheelSteers]}:{}),steeringAngle:s.steeringAngle,wheelAngles:[...s.wheelAngles],suspension:[...s.suspension]}:undefined;
 export const atvSteeringAngle=(steering:number,speed:number,maximum:number)=>-steering*Math.min(.48,maximum)/(1+Math.abs(speed)/12);
 export function atvWheelAngle(angle:number,index:number):number{
  if(index>1||Math.abs(angle)<1e-6)return 0;
@@ -57,7 +57,7 @@ export function finishAtvStep(v:VehicleState,old:Vector3,oldYaw:number,q:Environ
 export function sampleAtvVisual(root:Object3D,state:AtvState):void{
  const bar=root.getObjectByName('atv.handlebar');if(bar)bar.rotation.y=state.steeringAngle;
  ATV_GEOMETRY.wheelPositions.forEach((p,index)=>{const pivot=root.getObjectByName(`atv.wheel.${index}`),spin=root.getObjectByName(`atv.spin.${index}`);
-  if(pivot){pivot.rotation.y=atvWheelAngle(state.steeringAngle,index);pivot.position.y=p[1]+state.suspension[index]!;}
+  if(pivot){pivot.rotation.y=state.wheelSteers?.[index]??atvWheelAngle(state.steeringAngle,index);pivot.position.y=p[1]+state.suspension[index]!;}
   if(spin)spin.rotation.x=state.wheelAngles[index]!;
  });
 }

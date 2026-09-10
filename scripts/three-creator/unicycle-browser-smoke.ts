@@ -14,6 +14,16 @@ try{
   const state=()=>page.evaluate(()=>(window as any).playground.getState());
   const elapsed=async(seconds:number)=>{const t=(await state()).simulationTime;await page.waitForFunction(({t,seconds})=>(window as any).playground.getState().simulationTime>=t+seconds,{t,seconds},{timeout:60000});};
   const dynamics=(s:any)=>s.humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='unicycle').unicycle;
+  // Capture the short transition in the browser frame that observes it. Separate
+  // automation round trips can arrive after lifting has already finished.
+  const watchLifting=()=>page.evaluate(`(() => {
+    window.observedLifting=null;
+    let frames=0;const sample=()=>{const s=window.__WORLDKIT_EVAL__.snapshot();
+      if(s.humanoid.vehicleDynamics.find(v=>v.instanceId==='unicycle').unicycle.phase==='lifting') window.observedLifting=s;
+      else if(++frames<600)requestAnimationFrame(sample);
+    };requestAnimationFrame(sample);
+  })()`);
+  const liftingSnapshot=async()=>{await page.waitForFunction(()=>Boolean((window as any).observedLifting),{},{timeout:30000});return page.evaluate(()=>(window as any).observedLifting);};
   await elapsed(.6);
   await page.locator('#libraryButton').click();await page.getByRole('searchbox',{name:'搜索资产'}).fill('独轮车');
   await page.getByRole('button',{name:'查看独轮车',exact:true}).click();await page.getByRole('button',{name:'前往资产',exact:true}).click();
@@ -28,12 +38,12 @@ try{
   await page.keyboard.press('f');await elapsed(.8);const mounted=await snapshot();assert.equal(mounted.humanoid.mountedInstanceId,'unicycle',JSON.stringify({message:mounted.humanoid.message,state:await state()}));assert.equal(dynamics(mounted).phase,'supported');
   await page.mouse.move(700,500);await page.mouse.down();await page.mouse.move(1070,490,{steps:20});await page.mouse.up();await elapsed(.3);
   await page.screenshot({path:path.join(output,'supported.png')});
-  await page.keyboard.down('w');await elapsed(.18);const lifting=await snapshot();assert.equal(dynamics(lifting).phase,'lifting');
+  await watchLifting();await page.keyboard.down('w');const lifting=await liftingSnapshot();assert.equal(dynamics(lifting).phase,'lifting');
   await page.screenshot({path:path.join(output,'lifting.png')});await elapsed(1.8);const riding=await snapshot();assert.equal(dynamics(riding).phase,'riding');assert((await state()).speed>1);
   await page.screenshot({path:path.join(output,'riding.png')});await page.keyboard.down('a');await elapsed(.7);await page.keyboard.up('a');await page.keyboard.up('w');
   await elapsed(3);const stopped=await snapshot();assert.equal(stopped.humanoid.mountedInstanceId,'unicycle');assert.equal(dynamics(stopped).phase,'supported');
   await page.screenshot({path:path.join(output,'stopped.png')});
-  await page.keyboard.down('w');await elapsed(.18);const restart=await snapshot();assert.equal(dynamics(restart).phase,'lifting');await page.screenshot({path:path.join(output,'restart.png')});await elapsed(1);await page.keyboard.up('w');
+  await watchLifting();await page.keyboard.down('w');const restart=await liftingSnapshot();assert.equal(dynamics(restart).phase,'lifting');await page.screenshot({path:path.join(output,'restart.png')});await elapsed(1);await page.keyboard.up('w');
   await page.keyboard.down('Space');await elapsed(1.5);await page.keyboard.up('Space');assert.equal(dynamics(await snapshot()).phase,'supported');
   await page.keyboard.down('s');await elapsed(1.5);await page.keyboard.up('s');await elapsed(2);const reverse=await snapshot();assert.equal(dynamics(reverse).phase,'supported');
   for(let n=0;n<3;n++){await page.keyboard.press('t');await elapsed(.25);}

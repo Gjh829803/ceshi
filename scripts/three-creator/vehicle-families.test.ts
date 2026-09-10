@@ -78,7 +78,7 @@ describe('catalog humanoid families in an independent physical world', () => {
           expect(snapshot.errors).toEqual([]);
           expect(snapshot.humanoid?.mountedInstanceId).toBe('subject');
           expect([...actor.position.toArray(), ...actor.velocity.toArray(), ...actor.rotation.toArray()].every(Number.isFinite)).toBe(true);
-          expect(runtime.environment.overlaps(actor.position, humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
+          expect(runtime.environment.overlaps(actor.position, actor.spec.wheelPhysics?.chassis??humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
           travelled += actor.position.distanceTo(previous); previous.copy(actor.position);
         }
         expect(world.simulationTick).toBe(1800);

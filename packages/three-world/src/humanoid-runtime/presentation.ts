@@ -45,7 +45,7 @@ function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.positi
   out.raft=b.raft?{...b.raft}:undefined;if(out.raft&&a.raft)out.raft.compression=a.raft.compression+(b.raft!.compression-a.raft.compression)*alpha;
   out.jetski=copyJetSkiState(b.jetski);if(out.jetski&&a.jetski&&b.jetski)out.jetski.steeringAngle=a.jetski.steeringAngle+(b.jetski.steeringAngle-a.jetski.steeringAngle)*alpha;
   out.atv=copyAtvState(b.atv);
-  if(out.atv&&a.atv&&b.atv){out.atv.steeringAngle=a.atv.steeringAngle+(b.atv.steeringAngle-a.atv.steeringAngle)*alpha;for(let i=0;i<4;i++){out.atv.wheelAngles[i]=a.atv.wheelAngles[i]!+(b.atv.wheelAngles[i]!-a.atv.wheelAngles[i]!)*alpha;out.atv.suspension[i]=a.atv.suspension[i]!+(b.atv.suspension[i]!-a.atv.suspension[i]!)*alpha;}}
+  if(out.atv&&a.atv&&b.atv){out.atv.steeringAngle=a.atv.steeringAngle+(b.atv.steeringAngle-a.atv.steeringAngle)*alpha;for(let i=0;i<4;i++){out.atv.wheelAngles[i]=a.atv.wheelAngles[i]!+(b.atv.wheelAngles[i]!-a.atv.wheelAngles[i]!)*alpha;out.atv.suspension[i]=a.atv.suspension[i]!+(b.atv.suspension[i]!-a.atv.suspension[i]!)*alpha;if(out.atv.wheelSteers&&a.atv.wheelSteers&&b.atv.wheelSteers)out.atv.wheelSteers[i]=a.atv.wheelSteers[i]!+(b.atv.wheelSteers[i]!-a.atv.wheelSteers[i]!)*alpha;}}
   out.kayak=b.kayak?{...b.kayak}:undefined;if(out.kayak&&a.kayak&&b.kayak)out.kayak.phase=a.kayak.phase+(b.kayak.phase-a.kayak.phase)*alpha;
   out.tank=b.tank?{...b.tank}:undefined;
   if(out.tank&&a.tank&&b.tank)for(const k of ['turretYaw','gunElevation','leftTravel','rightTravel'] as const)out.tank[k]=a.tank[k]+(b.tank[k]-a.tank[k])*alpha;

@@ -3114,7 +3114,7 @@
           "kernel": "K14",
           "color": "#b89465",
           "spawn": [
-            -50,
+            -198,
             0,
             64
           ],
@@ -3132,6 +3132,11 @@
           "camera": 5.8,
           "characterPose": "sled",
           "hint": "W 蹬地起步 · A / D 单侧拖脚转向 · S / Space 双脚制动 · 松键顺坡滑行 · F 上下雪橇",
+          "bodyPhysics": {
+            "kind": "sled",
+            "mass": 100,
+            "centerOfMassHeight": 0.35
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -3244,7 +3249,7 @@
           "kernel": "K14",
           "color": "#e67839",
           "spawn": [
-            -64,
+            -184,
             0,
             64
           ],
@@ -3270,6 +3275,11 @@
           "camera": 6,
           "characterPose": "ski",
           "hint": "W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板",
+          "bodyPhysics": {
+            "kind": "sled",
+            "mass": 85,
+            "centerOfMassHeight": 0.65
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -3338,7 +3348,7 @@
       },
       "actions": {},
       "limitations": [
-        "Bicycle-model steering with longitudinal inertia; no gearbox or full suspension simulation.",
+        "Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation.",
         "W throttle; S brakes before reversing; Space brakes. Shift adds no boost."
       ],
       "provenance": {
@@ -3360,7 +3370,7 @@
           "kernel": "K15",
           "color": "#83c7bb",
           "spawn": [
-            -80,
+            -226,
             0,
             64
           ],
@@ -3389,6 +3399,99 @@
           ],
           "camera": 10,
           "hint": "W 油门 · S 制动后倒车 · A / D 转向 · Space 刹车 · F 上下车 · T 切换视角",
+          "wheelPhysics": {
+            "chassis": {
+              "kind": "box",
+              "halfExtents": [
+                1.14,
+                1.21,
+                2.96
+              ],
+              "offset": [
+                0,
+                1.44,
+                0
+              ]
+            },
+            "mass": 3400,
+            "radius": 0.46,
+            "halfTrack": 1.035,
+            "halfWheelbase": 1.65,
+            "hubHeight": 0.46,
+            "centerOfMassHeight": 0.8,
+            "maxRaise": 0.1,
+            "maxDrop": 0.15,
+            "wheelWidth": 0.22,
+            "wheels": [
+              {
+                "x": -1.035,
+                "z": -1.45,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": -1.035,
+                "z": 1.85,
+                "steering": true,
+                "driven": false
+              },
+              {
+                "x": 1.035,
+                "z": -1.45,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": 1.035,
+                "z": 1.85,
+                "steering": true,
+                "driven": false
+              }
+            ],
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  143
+                ],
+                [
+                  1800,
+                  198
+                ],
+                [
+                  3200,
+                  220
+                ],
+                [
+                  4500,
+                  209
+                ],
+                [
+                  6200,
+                  143
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 4.5,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 33,
+              "dragArea": 3.5,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -3445,8 +3548,8 @@
       "id": "vehicle.tank",
       "displayName": "履带坦克 / TANK",
       "path": "vehicles/tank.glb",
-      "uri": "./assets/subjects/5b7774100a76928c49bf87e7ed7a863f0640ae7087f6ebd56422ea16190b810d.glb",
-      "sha256": "5b7774100a76928c49bf87e7ed7a863f0640ae7087f6ebd56422ea16190b810d",
+      "uri": "./assets/subjects/6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf.glb",
+      "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
       "byteLength": 106580,
       "sourcePath": "assets/three-creator/presets/vehicles/tank.glb",
       "usage": "reusable",
@@ -3469,7 +3572,7 @@
       },
       "actions": {},
       "limitations": [
-        "Enlarged enclosed single-driver training tank; differential tracked drive and independent turret/elevation.",
+        "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation.",
         "No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point."
       ],
       "provenance": {
@@ -3491,7 +3594,7 @@
           "kernel": "K16",
           "color": "#7c8061",
           "spawn": [
-            -102,
+            -240,
             0,
             64
           ],
@@ -3518,6 +3621,55 @@
           "characterPose": "tank",
           "camera": 14,
           "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
+          "bodyPhysics": {
+            "kind": "tracks",
+            "mass": 30000,
+            "centerOfMassHeight": 1.4,
+            "driveRadius": 0.72,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  1560
+                ],
+                [
+                  1800,
+                  2160
+                ],
+                [
+                  3200,
+                  2400
+                ],
+                [
+                  4500,
+                  2280
+                ],
+                [
+                  6200,
+                  1560
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 8,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 360,
+              "dragArea": 8,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -3692,7 +3844,7 @@
           "grip": 8,
           "steer": 0.42,
           "coastDeceleration": 1.25,
-          "brakeDeceleration": 10,
+          "brakeDeceleration": 6,
           "steeringResponse": 7,
           "steeringReturn": 9,
           "throttleResponse": 5,
@@ -3708,6 +3860,100 @@
           "camera": 6.2,
           "wheelbaseMeters": 1.6,
           "rearAxleZMeters": -0.8,
+          "wheelPhysics": {
+            "chassis": {
+              "kind": "box",
+              "halfExtents": [
+                0.85,
+                0.5,
+                1.2
+              ],
+              "offset": [
+                0,
+                0.88,
+                0
+              ]
+            },
+            "mass": 360,
+            "radius": 0.39,
+            "halfTrack": 0.7,
+            "halfWheelbase": 0.8,
+            "hubHeight": 0.39,
+            "centerOfMassHeight": 0.25,
+            "tireFriction": 1.4,
+            "maxRaise": 0.03,
+            "maxDrop": 0.04,
+            "wheelWidth": 0.28,
+            "wheels": [
+              {
+                "x": 0.7,
+                "z": 0.8,
+                "steering": true,
+                "driven": true
+              },
+              {
+                "x": -0.7,
+                "z": 0.8,
+                "steering": true,
+                "driven": true
+              },
+              {
+                "x": 0.7,
+                "z": -0.8,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": -0.7,
+                "z": -0.8,
+                "steering": false,
+                "driven": true
+              }
+            ],
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  97.5
+                ],
+                [
+                  1800,
+                  135
+                ],
+                [
+                  3200,
+                  150
+                ],
+                [
+                  4500,
+                  142.5
+                ],
+                [
+                  6200,
+                  97.5
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 4.1,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 22.5,
+              "dragArea": 0.65,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -3898,6 +4144,17 @@
           "pitchResponse": 4,
           "rollResponse": 4,
           "hint": "W 交替划桨 · S 倒划 · A / D 单侧转向 · Space 压桨制动 · F 上下艇 · T 切换视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 105,
+            "centerOfMassHeight": 0.15,
+            "water": {
+              "displacement": 0.23,
+              "depth": 0.35,
+              "bottom": 0.23,
+              "damping": 5.5
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -4042,6 +4299,17 @@
           "camera": 6.5,
           "characterPose": "kayak",
           "hint": "W 单侧划桨 · S 倒划 · A / D 换侧扫桨转向 · Space 压桨减速 · F 上下舟 · T 切换视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 165,
+            "centerOfMassHeight": 0.22,
+            "water": {
+              "displacement": 0.38,
+              "depth": 0.48,
+              "bottom": 0.32,
+              "damping": 6
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -4158,6 +4426,57 @@
           ],
           "characterPose": "atv",
           "camera": 6.2,
+          "bodyPhysics": {
+            "kind": "jet",
+            "mass": 330,
+            "centerOfMassHeight": 0.3,
+            "driveRadius": 0.35,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  195
+                ],
+                [
+                  1800,
+                  270
+                ],
+                [
+                  3200,
+                  300
+                ],
+                [
+                  4500,
+                  285
+                ],
+                [
+                  6200,
+                  195
+                ]
+              ],
+              "forwardRatios": [
+                1.5
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 2,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 45,
+              "dragArea": 0.6,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            },
+            "water": {
+              "displacement": 0.7,
+              "depth": 0.6,
+              "bottom": 0.3,
+              "damping": 6
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -4371,6 +4690,57 @@
           "camera": 6.5,
           "characterPose": "sub",
           "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
+          "bodyPhysics": {
+            "kind": "submersible",
+            "mass": 720,
+            "centerOfMassHeight": 0,
+            "driveRadius": 0.4,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  84.5
+                ],
+                [
+                  1800,
+                  117
+                ],
+                [
+                  3200,
+                  130
+                ],
+                [
+                  4500,
+                  123.5
+                ],
+                [
+                  6200,
+                  84.5
+                ]
+              ],
+              "forwardRatios": [
+                1.5
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 2,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 19.5,
+              "dragArea": 2,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            },
+            "water": {
+              "displacement": 2.4,
+              "depth": 2.2,
+              "bottom": 0.78,
+              "damping": 2.6
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -4502,6 +4872,18 @@
           "camera": 7,
           "characterPose": "kayak",
           "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 160,
+            "centerOfMassHeight": 0.22,
+            "restitution": 0.36,
+            "water": {
+              "displacement": 0.55,
+              "depth": 0.5,
+              "bottom": 0.32,
+              "damping": 6
+            }
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -4699,6 +5081,11 @@
           ],
           "characterPose": "unicycle",
           "camera": 4.6,
+          "bodyPhysics": {
+            "kind": "unicycle",
+            "mass": 90,
+            "centerOfMassHeight": 0.6
+          },
           "envelope": {
             "kind": "box",
             "halfExtents": [

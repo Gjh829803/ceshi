@@ -1226,7 +1226,7 @@ it does not implement fracture or a full Chaos vehicle solver.
 ## Configurable road vehicle physics
 
 Set `spec.wheelPhysics = humanoid.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
-for `wheeled` or `bike` subjects. Both run in the existing physics world and use
+for `wheeled`, `bike` or `bus` subjects. Both run in the existing physics world and use
 per-wheel suspension, tyre forces, dynamic chassis collision and the powertrain.
 The motorcycle profile enables grounded rider balance torque; it does not right
 an airborne or overturned vehicle. Its low-speed reverse is a playground assist.
@@ -1241,8 +1241,27 @@ Driven wheels share axle torque; sprung load and braking scale with wheel count.
 Wheel presentation reads the same interpolated hub height, suspension, spin and
 steering state. Do not retain a separate visual lean/rolling integrator.
 
-Current playground mapping: rover, racer, trail-rover, supercar, bike and touring-bike.
-Aircraft, hovercraft, boats, human-powered boards and animal-drawn carriages keep
+Current playground mapping includes the existing cars and motorcycles, plus ATV and bus.
+An optional `wheelPhysics.chassis` box specifies a model-specific collision hull;
+omitting it retains the existing car chassis.
+Aircraft, hovercraft, the existing boats, boards and animal-drawn carriages keep
 their specialised controllers; their dynamic-prop collisions remain enabled.
 This is a reusable road solver, not a complete vehicle simulation: no individual
 wheel masses, differential model, per-wheel tyre sizes or trailer joint solver.
+
+The additional tank, unicycle, sled, skis, kayak, canoe, raft, jet ski and observation
+submersible opt into `spec.bodyPhysics`. Their controllers submit force and torque
+to the same native vehicle rig, collision world and fixed clock as road vehicles.
+They do not integrate a second position or camera. Authored mass is in kg, centres
+and propulsor radii in metres, displaced water volume in m³. Their rounded hulls
+retain the envelope's outer dimensions; the tank adds its articulated barrel.
+Engine-driven profiles use the existing powertrain's torque and direction-change
+braking. Human-powered profiles use ground contact or immersed paddle strokes.
+Parked vehicles remain physical and can be pushed. Body pose, wheel/track travel,
+water effects and the seated rider sample the resulting motion.
+
+`humanoid.vehicleDriveTelemetry(vehicle)` is a read-only sample. Engine vehicles
+report real powertrain RPM, gear and throttle; human-powered vehicles report
+cadence and effort instead of fabricated engine readings. The same sample appears
+in `snapshot().vehicleDynamics[].drive`, with `physicsOwner` identifying native
+rigid bodies. The playground shows these values in its lower-left instrument.

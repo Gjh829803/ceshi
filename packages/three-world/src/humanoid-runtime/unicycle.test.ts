@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld} from '../index';
 import {Character} from './character';
-import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
+import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createUnicycleState,unicyclePedal,sampleUnicycleVisual,copyUnicycleState} from './unicycle';
 import {UNICYCLE_SPEC} from '../../../../shared/preset-content/unicycle';
@@ -34,10 +34,10 @@ it('plants a foot, lifts before driving, pedals with travel and supports repeate
 it('stops pedalling and plants at a wall, clears the blocked latch on release, and cannot power itself in air',()=>{
   const {q,v,run}=fixture(true);try{
     run(6,{forward:1});expect(v.position.z).toBeLessThan(7.7);expect(v.unicycle!.phase).toBe('supported');
-    const angle=v.unicycle!.wheelAngle;run(1,{forward:1});expect(v.unicycle!.wheelAngle).toBe(angle);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);
+    const angle=v.unicycle!.wheelAngle;run(1,{forward:1});expect(v.unicycle!.wheelAngle).toBeCloseTo(angle,4);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);
     run(.1);run(2,{forward:-1});expect(v.velocity.z).toBeLessThan(-1);
     v.position.set(0,10,0);v.velocity.set(0,0,0);v.grounded=false;const yaw=v.yaw;
-    run(.7,{forward:1,steer:1});expect(v.unicycle!.phase).toBe('airborne');expect(v.unicycle!.supportLocal).toBeNull();expect(v.unicycle!.footDown).toBe(0);expect(v.yaw).toBe(yaw);expect(v.position.z).toBe(0);
+    run(.7,{forward:1,steer:1});expect(v.unicycle!.phase).toBe('airborne');expect(v.unicycle!.supportLocal).toBeNull();expect(v.unicycle!.footDown).toBe(0);expect(v.yaw).toBeCloseTo(yaw,3);expect(v.position.z).toBeCloseTo(0,4);
   }finally{q.dispose();}
 });
 it('requires ground beside the wheel for foot support and follows real ramps',()=>{
@@ -106,12 +106,14 @@ it('uses Episode starts and common collision ownership, snapshots and reset with
   const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:['driver','parked'].map(instanceId=>({instanceId,assetId:'vehicle.unicycle',spec:UNICYCLE_SPEC,object:buildUnicycleModel()})),character:{instanceId:'person',object:new Group()}}});
   try{
     world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-    world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!,angle=v.unicycle!.wheelAngle;
-    world.step({humanoid:{...emptyInput(),forward:1}},60);expect(v.unicycle!.wheelAngle).toBe(angle);expect(v.unicycle!.phase).toBe('supported');expect(world.snapshot().humanoid!.mountedInstanceId).toBe('driver');
+    world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!,angle=v.unicycle!.wheelAngle,prior=v.position.clone();
+    world.step({humanoid:{...emptyInput(),forward:1}},60);expect(v.unicycle!.wheelAngle-angle).toBeCloseTo(v.position.clone().sub(prior).dot(new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)))/.36,3);world.step({humanoid:emptyInput()},120);expect(v.unicycle!.phase).toBe('supported');expect(world.snapshot().humanoid!.mountedInstanceId).toBe('driver');
     const snapshot=world.humanoid!.snapshot();snapshot.vehicleDynamics[0]!.unicycle!.supportLocal![0]=999;expect(v.unicycle!.supportLocal![0]).not.toBe(999);
     world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,-20],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true,velocityWorldMetersPerSecondXYZ:[0,0,2]}});
     expect(world.humanoid!.simulation.vehicle!.unicycle!.footDown).toBe(0);
-    world.step({humanoid:{...emptyInput(),forward:1}},1);expect(world.humanoid!.simulation.vehicle!.speed).toBeGreaterThan(2);
+    world.step({humanoid:{...emptyInput(),forward:1}},6);expect(world.humanoid!.simulation.vehicle!.speed).toBeGreaterThan(2);
     await world.reset();expect(world.humanoid!.simulation.vehicles[0]!.unicycle).toEqual(createUnicycleState());expect(world.snapshot().humanoid!.mountedInstanceId).toBeNull();
   }finally{world.dispose();f.q.dispose();}
 });
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

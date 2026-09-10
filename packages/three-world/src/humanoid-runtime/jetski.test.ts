@@ -4,7 +4,7 @@ import {createWorld} from '../index';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
+import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './atv';
 import {Character} from './character';
@@ -22,7 +22,7 @@ function fixture(water=true,wall=false){
 }
 it('floats, drives, boosts, brakes before reverse, steers under thrust and fades its wake at rest',()=>{
  const {q,v,run}=fixture();try{
- run(2,{steer:1});expect(v.yaw).toBe(0);expect(Math.abs(v.position.y)).toBeLessThan(.1);expect(v.jetski!.particles).toHaveLength(0);
+ run(2,{steer:1});expect(v.yaw).toBeCloseTo(0,4);expect(Math.abs(v.position.y)).toBeLessThan(.1);expect(v.jetski!.particles).toHaveLength(0);
  run(5,{forward:1});expect(v.speed).toBeGreaterThan(22);const speed=v.speed;expect(v.jetski!.particles.length).toBeGreaterThan(50);
  run(2,{forward:1,boost:true});expect(v.speed).toBeGreaterThan(speed+4);expect(Math.abs(v.position.y)).toBeLessThan(.25);
  run(.3,{forward:-1});expect(v.velocity.z).toBeGreaterThan(0);run(5,{forward:-1});expect(v.velocity.z).toBeLessThan(-4);
@@ -34,7 +34,7 @@ it('floats, drives, boosts, brakes before reverse, steers under thrust and fades
 it('has no jet thrust on dry land or in air and sweeps against a solid pier',()=>{
  const dry=fixture(false);try{dry.run(2,{forward:1,steer:1,boost:true});expect(Math.hypot(dry.v.position.x,dry.v.position.z)).toBeLessThan(.01);expect(dry.v.jetski!.particles).toHaveLength(0);expect(dry.v.grounded).toBe(true);}finally{dry.q.dispose();}
  const {q,v,run}=fixture(true,true);try{run(6,{forward:1,boost:true});expect(v.position.z).toBeLessThan(18.5);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);run(2.2,{forward:1});expect(v.jetski!.particles).toHaveLength(0);
- v.position.set(0,20,0);v.velocity.set(0,0,0);v.grounded=false;const yaw=v.yaw;run(.5,{forward:1,steer:1});expect(v.yaw).toBe(yaw);expect(Math.hypot(v.position.x,v.position.z)).toBeLessThan(.001);expect(v.position.y).toBeLessThan(20);
+ v.position.set(0,20,0);v.velocity.set(0,0,0);v.grounded=false;const yaw=v.yaw;run(.5,{forward:1,steer:1});expect(v.yaw).toBeCloseTo(yaw,3);expect(Math.hypot(v.position.x,v.position.z)).toBeLessThan(.001);expect(v.position.y).toBeLessThan(20);
  }finally{q.dispose();}
 });
 it('keeps emitted water in world coordinates and render sampling pure, including reset',()=>{
@@ -45,13 +45,13 @@ it('keeps emitted water in world coordinates and render sampling pure, including
  sampleJetSkiVisual(model,createJetSkiState(),4);expect(drops.count).toBe(0);expect((model.getObjectByName('jetski.foam') as any).count).toBe(0);disposeJetSkiVisual(model);expect(model.getObjectByName('jetski.water-fx')).toBeUndefined();
  }finally{q.dispose();}
 });
-it('floats unoccupied, stops emitting against another craft, preserves pause and clears pools on reset',async()=>{
+it('floats unoccupied, pushes another craft through native contact, preserves pause and resets',async()=>{
  const f=fixture(),object=buildJetSkiModel();
  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:{...f.q.map,regions:[{id:'water',name:'Water',description:'',center:[0,0,0],size:[300,300],color:'#ccc',modes:['character','boat']}],spawns:[{id:'a',name:'Driver',vehicleId:'driver',position:[0,.03,0],yaw:0,regionId:'water'},{id:'b',name:'Parked',vehicleId:'parked',position:[0,.03,8],yaw:0,regionId:'water'}]},vehicles:[{instanceId:'driver',assetId:'vehicle.jetski',spec:JETSKI_SPEC,object},{instanceId:'parked',assetId:'vehicle.jetski',spec:JETSKI_SPEC,object:buildJetSkiModel()}],character:{instanceId:'person',object:new Group()}}});
  try{
   world.step({},120);const parked=world.humanoid!.simulation.vehicles[1]!;expect(Math.abs(parked.position.y)).toBeLessThan(.1);expect(parked.jetski!.particles).toHaveLength(0);
   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!;expect(v.position.z).toBeLessThan(5);expect(v.jetski!.particles).toHaveLength(0);
+  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!;expect(parked.position.z).toBeGreaterThan(8);expect(parked.position.z-v.position.z).toBeGreaterThan(2.8);expect(v.jetski!.sprayStrength).toBeGreaterThan(0);
   const state=JSON.stringify(v.jetski);world.step({},0);expect(JSON.stringify(v.jetski)).toBe(state);
   await world.reset();expect(world.humanoid!.snapshot().mountedInstanceId).toBeNull();expect(world.humanoid!.simulation.vehicles.every(v=>!v.jetski!.particles.length)).toBe(true);
  }finally{world.dispose();f.q.dispose();}
@@ -89,3 +89,5 @@ it('keeps the original straddle rider clear of body panels and hands on the turn
   console.log('JETSKI_RIDER_CLEARANCE',JSON.stringify(samples));
  }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15_000);
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

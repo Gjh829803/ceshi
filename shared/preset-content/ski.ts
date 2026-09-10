@@ -8,5 +8,6 @@ export const SKI_SPEC: VehicleSpec = {
   steeringResponse:3.5, steeringReturn:5, pitchResponse:12, rollResponse:10,
   radius:1.1, seat:[0,.91,0], camera:6, characterPose:'ski',
   hint:'W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板',
+  bodyPhysics:{kind:'sled',mass:85,centerOfMassHeight:0.65},
   envelope:{kind:'box',halfExtents:[.65,.9,1.05],offset:[0,.9,0]},
 };

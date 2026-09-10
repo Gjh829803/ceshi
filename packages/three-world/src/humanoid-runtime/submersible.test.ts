@@ -7,7 +7,7 @@ import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {PerspectiveCamera,Group,Vector3,SkinnedMesh} from 'three';
 import {createWorld} from '../world';
 import {initEnvironmentQueries,EnvironmentQueries,vehicleBody} from './environment/queries';
-import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
+import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {SUBMERSIBLE_WATER,createSubmersibleState} from './submersible';
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
 import {SUBMERSIBLE_SPEC} from '../../../../shared/preset-content/submersible';
@@ -21,7 +21,7 @@ function fixture(dry=false,wall=false){
 }
 describe('observation submersible',()=>{
  it('floats by displacement, dives with ballast, settles at depth and resurfaces',()=>{
-  const f=fixture();try{f.v.position.y=1;f.run(12);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.submersible!.buoyancy).toBeCloseTo(9.81,1);
+  const f=fixture();try{f.v.position.y=1;f.run(16);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.submersible!.buoyancy).toBeCloseTo(9.81,1);
    f.run(7,{lift:-1});expect(f.v.position.y).toBeLessThan(-5);expect(f.v.submersible!.ballast).toBeGreaterThan(.99);
    f.run(5);const y=f.v.position.y;f.run(3);expect(Math.abs(f.v.position.y-y)).toBeLessThan(.05);expect(f.v.submersible!.mass).toBeCloseTo(SUBMERSIBLE_WATER.displacement*1000,0);
    f.run(14,{lift:1});f.run(10);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.submersible!.ballast).toBeLessThan(.01);
@@ -74,3 +74,5 @@ it('leaves the real deep-water berth clear during rotation and vertical travel',
   }
  }finally{q.dispose();}
 });
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

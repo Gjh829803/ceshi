@@ -5,7 +5,7 @@ import {SkinnedMesh,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Character} from './character';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
+import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {BUS_SPEC} from '../../../../shared/preset-content/bus';
 import {busWheelAngle} from './bus';
 beforeAll(initEnvironmentQueries);
@@ -30,8 +30,8 @@ describe('minibus handling',()=>{
  });
  it('starts slowly, coasts and ignores boost; cannot pivot when stopped',()=>{
   const a=fixture(),b=fixture();try{
-   a.run(1,{steer:1});expect(a.v.yaw).toBe(0);
-   a.run(1);a.run(2,{forward:1});b.run(2,{forward:1,boost:true});
+   a.run(1,{steer:1});expect(a.v.yaw).toBeCloseTo(0,4);
+   a.run(1);b.run(2);a.run(2,{forward:1});b.run(2,{forward:1,boost:true});
    expect(a.v.speed).toBeGreaterThan(1);expect(a.v.speed).toBeLessThan(3.5);expect(a.v.speed).toBeCloseTo(b.v.speed,2);
    const speed=a.v.speed;a.run(1);expect(a.v.speed).toBeGreaterThan(.5);expect(a.v.speed).toBeLessThan(speed);
   }finally{a.q.dispose();b.q.dispose();}
@@ -53,8 +53,10 @@ describe('minibus handling',()=>{
  it('stops the full bus nose at a wall and remains finite',()=>{
   const {q,v,run}=fixture(true);try{
    v.velocity.z=18;run(5,{forward:1});expect(v.position.z).toBeLessThan(16.6);expect(v.position.z).toBeGreaterThan(15);
-   expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);
+   expect(q.overlaps(v.position,v.spec.wheelPhysics!.chassis!,v.rotation)).toBe(false);
    expect([...v.position.toArray(),...v.rotation.toArray()].every(Number.isFinite)).toBe(true);
   }finally{q.dispose();}
  });
 });
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

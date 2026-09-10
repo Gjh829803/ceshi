@@ -10,7 +10,7 @@ import {SkinnedMesh,Vector3,PerspectiveCamera} from 'three';
 import {createWorld} from '../world';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createVehicle,stepVehicle,emptyInput,type Input} from './simulation';
+import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {createKayakState,KAYAK_WATER,kayakPaddlePose,KAYAK_GEOMETRY} from './kayak';
 import {Character} from './character';
 import {KAYAK_SPEC} from '../../../../shared/preset-content/kayak';
@@ -46,7 +46,7 @@ describe('kayak water and paddle mechanics',()=>{
  it('turns at rest using sweep strokes, has no dry-land thrust and collides with a pier',()=>{
   const a=fixture(),dry=fixture(true),wall=fixture(false,true);try{
    a.run(2);a.run(4,{steer:1});expect(a.v.yaw).toBeLessThan(-.3);expect(a.v.speed).toBeLessThan(.02);
-   dry.run(8,{forward:1,steer:1});expect(Math.abs(dry.v.position.z)).toBeLessThan(.002);expect(dry.v.yaw).toBe(0);
+   dry.run(8,{forward:1,steer:1});expect(Math.abs(dry.v.position.z)).toBeLessThan(.002);expect(dry.v.yaw).toBeCloseTo(0,4);
    wall.run(15,{forward:1});expect(wall.v.position.z).toBeGreaterThan(4);expect(wall.v.position.z).toBeLessThan(5.6);expect(qOverlap(wall)).toBe(false);
   }finally{a.q.dispose();dry.q.dispose();wall.q.dispose();}
  });
@@ -98,3 +98,5 @@ describe('single-blade canoe profile',()=>{
   }finally{c.q.dispose();dry.q.dispose();wall.q.dispose();}
  });
 });
+
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}

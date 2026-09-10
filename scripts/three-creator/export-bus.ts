@@ -23,7 +23,7 @@ const file='assets/three-creator/asset-catalog.json',catalog=JSON.parse(await re
 const asset={id:'vehicle.bus',displayName:'复古小巴 / BUS',path:'vehicles/bus.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
-  actions:{},limitations:['Bicycle-model steering with longitudinal inertia; no gearbox or full suspension simulation.','W throttle; S brakes before reversing; Space brakes. Shift adds no boost.'],
+  actions:{},limitations:['Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation.','W throttle; S brakes before reversing; Space brakes. Shift adds no boost.'],
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-bus.ts'},resources:[],
   locomotionBindingIds:['vehicle.bus'],vehicle:{schemaVersion:1,spec:{...BUS_SPEC,...defaultMovementSettings('bus',BUS_SPEC)}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:BUS_SPEC.seat}],collision:BUS_SPEC.envelope};

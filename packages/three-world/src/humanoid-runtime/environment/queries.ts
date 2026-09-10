@@ -322,7 +322,7 @@ export class EnvironmentQueries {
   }
   releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders)this.queryExcluded.delete(collider.handle);this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
   retainVehicleRigs(ids:ReadonlySet<string>){for(const id of this.vehicleRigs.keys())if(!ids.has(id))this.releaseVehicleRig(id);}
-  vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number):VehicleRigidRig {
+  vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number,parts?:readonly {body:QueryBody;rotation?:Quaternion}[],friction=.6,restitution=.08):VehicleRigidRig {
     this.assertLive();const previous=this.vehicleRigs.get(id);if(previous?.token===token)return previous;if(previous)this.releaseVehicleRig(id);
     const inertia={x:mass*(4*halfLength*halfLength+1)/12,y:mass*(4*halfWidth*halfWidth+4*halfLength*halfLength)/12,z:mass*(4*halfWidth*halfWidth+1)/12};
     const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x,position.y,position.z).setRotation(rotation).setGravityScale(9.81/18).setCcdEnabled(true).setAngularDamping(.7).setAdditionalMassProperties(mass,{x:0,y:centerOfMassHeight,z:0},inertia,{x:0,y:0,z:0,w:1}));
@@ -330,9 +330,31 @@ export class EnvironmentQueries {
     const points:number[]=[];for(const side of [-1,1])for(const x of [-halfWidth,halfWidth]){points.push(x,.32,side*halfLength*.64,x,1.02,side*halfLength*.64,x*.88,.52,side*halfLength,x*.88,.72,side*halfLength);}
     const hull=RAPIER.ColliderDesc.convexHull(new Float32Array(points));if(!hull){this.world.removeRigidBody(body);throw new Error('HUMANOID_CHASSIS_HULL_INVALID');}
     const cabin=RAPIER.ColliderDesc.cuboid(halfWidth*.72,Math.max(.2,(height-1.02)/2),halfLength*.4).setTranslation(0,(height+1.02)/2,-.15);
-    const colliders=[hull,cabin].map(desc=>this.world.createCollider(desc.setDensity(0).setFriction(.6).setRestitution(.08).setCollisionGroups(0x00020013),body));
+    const shapes=parts?parts.map(part=>{
+      const b=part.body,r=b.kind==='box'?Math.min(.2,...b.halfExtents.map(n=>n*.25)):0;
+      // Rounded authored hull edges slide across adjoining terrain slabs instead
+      // of catching their internal edges; the outer dimensions stay unchanged.
+      const desc=b.kind==='box'?RAPIER.ColliderDesc.roundCuboid(b.halfExtents[0]-r,b.halfExtents[1]-r,b.halfExtents[2]-r,r):RAPIER.ColliderDesc.capsule(b.height/2-b.radius,b.radius);
+      desc.setTranslation(...b.offset);if(part.rotation)desc.setRotation(part.rotation);return desc;
+    }):[hull,cabin];
+    const colliders=shapes.map(desc=>{
+      if(parts)desc.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setContactSkin(.015);
+      return this.world.createCollider(desc.setDensity(0).setFriction(friction).setRestitution(restitution).setCollisionGroups(0x00020013),body);
+    });
     for(const collider of colliders)this.queryExcluded.add(collider.handle);
     const rig:VehicleRigidRig={token,body,colliders,beforeStep:()=>{},afterStep:()=>{}};this.vehicleRigs.set(id,rig);return rig;
+  }
+  /** Measured contacts from the shared solver, never an extra collision world. */
+  vehicleContactNormals(rig:VehicleRigidRig):Vector3[]{
+    const normals:Vector3[]=[];
+    for(const collider of rig.colliders)this.world.contactPairsWith(collider,other=>{
+      if(other.parent()?.handle===rig.body.handle)return;
+      this.world.contactPair(collider,other,(manifold,flipped)=>{
+        if(!manifold.numSolverContacts())return;
+        const n=manifold.normal();normals.push(new Vector3(n.x,n.y,n.z).multiplyScalar(flipped?1:-1));
+      });
+    });
+    return normals;
   }
   stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();for(const rig of this.vehicleRigs.values())rig.afterStep();}}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}

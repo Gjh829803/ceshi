@@ -26,6 +26,8 @@ export type {HumanoidDisplaySample} from './presentation';
 export {createRoadPhysicsProfile} from './wheel-physics';
 export type {WheelLayout,WheelPhysicsConfig,SimulatedWheel} from './wheel-physics';
 export type {PowertrainConfig,PowertrainState} from './powertrain';
+export {vehicleDriveTelemetry} from './vehicle-dynamics';
+export type {BodyPhysicsConfig,BodyPhysicsState,VehicleDriveTelemetry} from './vehicle-dynamics';
 export * from './input-guidance';
 
 export {

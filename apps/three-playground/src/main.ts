@@ -609,7 +609,7 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
-    powertrain:!!v?.wheelPhysics,
+    powertrain:!!(v?.wheelPhysics||v?.bodyPhysics?.powertrain),
     family: vehicleControlFamily(v?.spec),
     control: humanoid.readMovementSettings(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
@@ -954,8 +954,8 @@ function updateUI() {
     p = sim.player,
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
-  const drive=v?.wheelPhysics?.powertrain;
-  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{rpm:drive.rpm,maxRpm:v!.spec.wheelPhysics!.powertrain?.maxRpm??6200,gear:drive.gear<0?'R':drive.gear===0?'N':'D'+drive.gear,speed:Math.round(speed*3.6),throttle:Math.round(drive.throttle*100),shifting:drive.shiftRemaining>0}:null});
+  const drive=v?humanoid.vehicleDriveTelemetry(v):null;
+  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
@@ -1246,7 +1246,7 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
-    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?.wheelPhysics?{...sim.vehicle.wheelPhysics.powertrain}:undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),
+    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain?{...(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
 
     mapId: session.map.id,
     activeVehicle: sim.vehicle?.spec.id ?? null,
