@@ -18,7 +18,7 @@ export function buildUnicycleModel():T.Group {
     const crank=new T.Group();crank.name=`unicycle.crank.${side}`;crank.position.set(side*.15,.36,0);root.add(crank);rod(crank,[0,0,0],[0,0,.135],.018,metal);
     const pedal=new T.Group();pedal.name=`unicycle.pedal.${side}`;root.add(pedal);box(pedal,'pedal.platform',[.15,.028,.105],[0,-.014,0],dark);
   }
-  rod(root,[0,.74,0],[0,.85,0],.028,metal);box(root,'saddle',[.20,.075,.31],[0,.845,0],dark);
+  rod(root,[0,.74,0],[0,.85,0],.028,metal);box(root,'seat-cushion',[.20,.075,.31],[0,.845,0],dark);
   for(const [name,p] of Object.entries(UNICYCLE_SOCKETS)){const socket=new T.Group();socket.name=name;socket.position.set(...p);root.add(socket);}
   training.sampleUnicycleVisual(root,training.createUnicycleState());return root;
 }

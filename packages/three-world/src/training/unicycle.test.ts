@@ -61,14 +61,36 @@ it('retains the original skeleton and fits alternating pedals, ground support an
     const identities=new Map<SkinnedMesh,unknown>();rider.root.traverse(n=>{if(n instanceof SkinnedMesh)identities.set(n,n.geometry);});
     const frame={position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand' as const,swimming:false,swimStyle:'freestyle' as const,animationEvent:null,surface:null,skills:null,mounted:'unicycle' as const};
     const hands:Vector3[]=[];
-    for(const angle of [0,Math.PI/2,Math.PI,Math.PI*1.5])for(const down of [0,.5,1]){
+    const saddleBounds=new Box3().setFromObject(buildUnicycleModel().getObjectByName('seat-cushion')!);
+    for(const angle of Array.from({length:16},(_,i)=>i*Math.PI/8))for(const down of Array.from({length:11},(_,i)=>i/10)){
       const s={...createUnicycleState(),wheelAngle:angle,footDown:down,balanceTime:angle,supportLocal:[.30,.055,-.06] as [number,number,number]};
       rider.root.position.set(...UNICYCLE_SPEC.seat);rider.update(1/60,{...frame,unicyclePose:s});rider.root.updateMatrixWorld(true);
       for(const [suffix,side] of [['l',1],['r',-1]] as const){
         const target=unicyclePedal(angle,side);target.y+=.055;if(side===1){target.lerp(new Vector3(...s.supportLocal),down);target.y+=Math.sin(Math.PI*down)*.09;}
         const actual=rider.root.getObjectByName(`ball_${suffix}`)!.getWorldPosition(new Vector3());expect(actual.distanceTo(target),JSON.stringify({angle,down,side,actual,target})).toBeLessThan(.015);
       }
-      const bounds=new Box3(),point=new Vector3();for(const [mesh,geometry] of identities){expect(mesh.geometry).toBe(geometry);mesh.skeleton.update();for(let i=0;i<mesh.geometry.getAttribute('position').count;i++)bounds.expandByPoint(mesh.getVertexPosition(i,point).applyMatrix4(mesh.matrixWorld));}
+      const bounds=new Box3(),point=new Vector3();let legVertices=0,minClearance=Infinity,pelvisBottom=Infinity;
+      for(const [mesh,geometry] of identities){
+        expect(mesh.geometry).toBe(geometry);mesh.skeleton.update();
+        const indices=mesh.geometry.getAttribute('skinIndex'),weights=mesh.geometry.getAttribute('skinWeight');
+        for(let i=0;i<mesh.geometry.getAttribute('position').count;i++){
+          bounds.expandByPoint(mesh.getVertexPosition(i,point).applyMatrix4(mesh.matrixWorld));
+          for(let j=0;j<4;j++)if(mesh.skeleton.bones[indices.getComponent(i,j)]!.name==='pelvis'&&weights.getComponent(i,j)>.5){
+            pelvisBottom=Math.min(pelvisBottom,point.y);
+            expect(saddleBounds.containsPoint(point),`pelvis intersects saddle: pedal=${angle}, support=${down}`).toBe(false);
+          }
+          let rightLegWeight=0;
+          for(let j=0;j<4;j++)if(/^(thigh|calf)_r$/.test(mesh.skeleton.bones[indices.getComponent(i,j)]!.name))rightLegWeight+=weights.getComponent(i,j);
+          if(rightLegWeight<.5)continue;
+          legVertices++;
+          const tyre=Math.hypot(point.x,Math.hypot(point.y-.36,point.z)-.29)-.07;
+          const fork=Math.hypot(point.x+.12,point.y-Math.max(.36,Math.min(.76,point.y)),point.z)-.022;
+          minClearance=Math.min(minClearance,tyre,fork);
+        }
+      }
+      expect(legVertices).toBeGreaterThan(0);
+      if(down===0){expect(pelvisBottom).toBeGreaterThan(saddleBounds.max.y);expect(pelvisBottom-saddleBounds.max.y).toBeLessThan(.01);}
+      expect(minClearance,`right leg clearance: pedal=${angle}, support=${down}`).toBeGreaterThan(0);
       expect(bounds.min.y).toBeGreaterThan(-.025);expect(rider.root.scale.toArray()).toEqual([1,1,1]);
       hands.push(rider.root.getObjectByName('hand_l')!.getWorldPosition(new Vector3()));
     }

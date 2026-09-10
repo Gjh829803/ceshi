@@ -11,7 +11,7 @@ export function buildAtvModel():T.Group{
  const shell=(name:string,points:[number,number][],depth:number,p:[number,number,number],mat:T.Material=red)=>{const shape=new T.Shape();points.forEach(([z,y],i)=>i?shape.lineTo(z,y):shape.moveTo(z,y));shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth,bevelEnabled:false});geo.rotateY(-Math.PI/2);geo.translate(depth/2,0,0);const m=new T.Mesh(geo,mat);m.name=name;m.position.set(...p);root.add(m);return m;};
  box(root,'body.engine',[.38,.36,.62],[0,.48,-.05],dark);
  box(root,'body.spine',[.23,.19,1.65],[0,.66,-.08],dark);
- box(root,'seat.cushion',[.27,.09,.91],[0,.82,-.44],dark);
+ box(root,'seat-cushion',[.27,.09,.91],[0,.82,-.44],dark);
  shell('body.nose',[[.28,.82],[.65,1.06],[1.23,.57],[.95,.49]],.51,[0,0,0]);
  for(const side of [-1,1]){
   shell('fender.front',[[.48,.85],[.74,1.03],[1.19,.80],[1.20,.72],[.52,.74]],.43,[side*.64,0,0]);

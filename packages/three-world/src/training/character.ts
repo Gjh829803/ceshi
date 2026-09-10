@@ -240,9 +240,14 @@ export class Character {
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);
       this.actor.position.copy(this.hipOffset).negate();
       if(mode==='unicycle'&&pose.unicyclePose){
-        // Slide to the supporting side of the saddle; never stretch the source legs.
-        this.actor.position.x+=.16*pose.unicyclePose.footDown;
-        this.actor.position.y-=.12*pose.unicyclePose.footDown;
+        const down=pose.unicyclePose.footDown;
+        const smooth=(t:number)=>t*t*(3-2*t);
+        // Step behind the saddle to plant a foot without carrying the opposite
+        // hip across the fork. Source101's visible pelvis extends below its bone:
+        // lift it 55 mm onto the cushion, then clear the rear edge before lowering.
+        this.actor.position.x+=.02*down;
+        this.actor.position.y+=.055-.175*smooth(Math.max(0,(down-.6)/.4));
+        this.actor.position.z-=.30*smooth(Math.min(1,down/.6));
         fitUnicycleFeet(source.root,this.root,pose.unicyclePose);
       }
       if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
