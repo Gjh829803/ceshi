@@ -21,6 +21,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/three-playground/src/inspector.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/three-playground/src/library.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/three-playground/src/panels.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
+  { path: "apps/three-playground/src/shell.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/camera-collision/src/camera-collision-solver.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-library.test.ts", lane: "contract" },
   { path: "packages/three-world/src/assets-locomotion.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

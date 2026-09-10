@@ -350,7 +350,9 @@ it("hands off the full solved world velocity on a supported upward step", async 
       world.step({ moveZRatio: -1 }, 1);
       const solved = horse.position.clone().sub(before).multiplyScalar(60);
       if (horse.grounded && solved.y > 0.1) {
-        upwardVelocity = solved;
+        // A dynamic body's instantaneous velocity differs from the mean
+        // displacement across two accelerating solver slices.
+        upwardVelocity = horse.velocity.clone();
         break;
       }
     }

@@ -1,5 +1,5 @@
 export {SUBMERSIBLE_WATER} from './submersible';
-export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY} from './kayak';
+export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY,createKayakState,kayakPaddlePose,paddleGrip} from './kayak';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
 export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';

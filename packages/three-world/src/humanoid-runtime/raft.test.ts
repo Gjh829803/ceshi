@@ -5,6 +5,7 @@ import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from 
 import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
 import {sampleRaftVisual} from './raft';
+import {CANOE_WATER} from './kayak';
 beforeAll(initEnvironmentQueries);
 function fixture(water=false,slope=false,wall=false){
  const angle=Math.atan(.2);
@@ -14,7 +15,9 @@ function fixture(water=false,slope=false,wall=false){
 }
 it('rows, reverses, brakes and turns on water, with faster cadence on Shift',()=>{
  const {q,v,run}=fixture(true);try{run(7);expect(v.raft!.surface).toBe('water');expect(v.kayak!.buoyancy).toBeCloseTo(9.81,1);run(5,{forward:1});expect(v.speed).toBeGreaterThan(1);const phase=v.kayak!.phase;run(1,{forward:1,boost:true});expect(v.kayak!.phase-phase).toBeGreaterThan(1);
- run(10,{forward:-1});expect(v.velocity.dot(new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)))).toBeLessThan(-.3);run(4,{brake:true});expect(v.speed).toBeLessThan(.1);const yaw=v.yaw;run(5,{steer:1});expect(v.yaw).toBeLessThan(yaw-.2);
+ run(10,{forward:-1});expect(v.velocity.dot(new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)))).toBeLessThan(-.3);run(4,{brake:true});expect(v.speed).toBeLessThan(.1);const yaw=v.yaw;
+ // Include recovery and four complete sweeps after switching out of reverse.
+ run(4*CANOE_WATER.strokePeriod,{steer:1});expect(v.yaw).toBeLessThan(yaw-.2);
  }finally{q.dispose();}
 });
 it('does not motor across flat ground; slides down a real slope without input and floats after entering water',()=>{

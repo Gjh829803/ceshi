@@ -48,7 +48,7 @@ export function mountShell(host: HTMLElement) {
     controls: [] as [string, string][],
     system: [] as [string, string][],
     recoverable:false,
-    drivetrain:null as null|{kind:'engine'|'pedal'|'paddle'|'push';cadence:number;rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
+    drivetrain:null as null|{kind:'engine'|'pedal'|'paddle'|'push'|'motion';cadence:number;rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
     interaction: "",
     pacing: null as FrameRateReading | null,
     configurationDirty: false,
@@ -69,7 +69,23 @@ export function mountShell(host: HTMLElement) {
     if (!timer) timer = setTimeout(notify, 100);
   };
   const update = (patch: Partial<typeof state>) => {
-    Object.assign(state, patch);
+    const next = { ...patch };
+    // Shortcut producers can return fresh arrays with identical contents.
+    // Keep the snapshot identity stable, but observe real key/label/order edits.
+    for (const key of ['controls', 'system'] as const) {
+      const rows = next[key];
+      if (!rows) continue;
+      const previous = state[key];
+      if (rows.length === previous.length && rows.every(([binding, label], n) =>
+        binding === previous[n]![0] && label === previous[n]![1])) {
+        delete next[key];
+      } else {
+        // Own the tuples so subsequent in-place caller edits remain observable.
+        next[key] = rows.map(([binding, label]) => [binding, label]);
+      }
+    }
+    if(Object.entries(next).every(([key,value])=>Object.is(state[key as keyof typeof state],value)))return;
+    Object.assign(state, next);
     schedule();
   };
   const flush = () => {
@@ -90,13 +106,34 @@ export function mountShell(host: HTMLElement) {
     actions.get(id)?.(value, event);
     flush();
   };
+  const subscribe=(fn:()=>void)=>{listeners.add(fn);return ()=>{listeners.delete(fn);};};
+  // Speed and frame diagnostics update independently of the menus/dialogs.
+  // Building the entire Radix tree on every telemetry sample caused long frames.
+  const liveTexts=new Set(['fpsReadout','speed','height','heightLabel','stateValue']);
+  let layout:typeof state|undefined;
+  const layoutSnapshot=()=>{
+    const texts=Object.fromEntries(Object.entries(state.texts).filter(([key])=>!liveTexts.has(key)));
+    const flags={...state.flags,fpsSlow:false};
+    if(!layout||Object.keys(texts).length!==Object.keys(layout.texts).length||Object.keys(texts).some(k=>texts[k]!==layout!.texts[k])
+      ||Object.keys(flags).some(k=>flags[k as Flags]!==layout!.flags[k as Flags])
+      ||Object.keys(state).some(k=>!['texts','flags','pacing','drivetrain'].includes(k)&&state[k as keyof typeof state]!==layout![k as keyof typeof state]))
+      layout={...state,texts,flags,pacing:null,drivetrain:null};
+    return layout;
+  };
+  function LiveText({id,fallback=''}:{id:string;fallback?:string}){
+    return useSyncExternalStore(subscribe,()=>state.texts[id]??fallback);
+  }
+  function Pacing(){const reading=useSyncExternalStore(subscribe,()=>state.pacing);return <FramePacingView reading={reading}/>;}
+  function FPS(){const slow=useSyncExternalStore(subscribe,()=>state.flags.fpsSlow);return <output id="fpsReadout" aria-label="渲染回调频率" aria-live="off" data-slow={slow||undefined}><LiveText id="fpsReadout" fallback="渲染回调 —/s"/></output>;}
+  function Drivetrain(){
+    const d=useSyncExternalStore(subscribe,()=>state.drivetrain);
+    if(!d)return null;
+    return <section className="powertrain-hud" aria-label={d.kind==='engine'?'发动机与变速箱':d.kind==='motion'?'载具操控':'人力驱动'}><strong>{d.kind==='engine'?d.gear:d.kind==='pedal'?'踩踏':d.kind==='paddle'?'划桨':d.kind==='motion'?'操控':'蹬地'}</strong>{d.kind!=='motion'&&<span>{Math.round(d.kind==='engine'?d.rpm:d.cadence)} {d.kind==='engine'?'RPM':'次/分'}</span>}<span>{d.speed} km/h</span><meter min={0} max={d.kind==='engine'?d.maxRpm:100} value={d.kind==='engine'?d.rpm:d.throttle}/><small>{d.kind==='engine'?`${d.shifting?'换挡中':'自动变速箱'} · 油门`:d.kind==='motion'?'输入':'用力'} {d.throttle}%</small></section>;
+  }
   function Shell() {
     const s = useSyncExternalStore(
-      (fn) => {
-        listeners.add(fn);
-        return () => listeners.delete(fn);
-      },
-      () => state,
+      subscribe,
+      layoutSnapshot,
     );
     const t = (id: string, fallback = "") => s.texts[id] ?? fallback,
       f = (id: Flags) => s.flags[id];
@@ -143,7 +180,7 @@ export function mountShell(host: HTMLElement) {
           <span className="status-dot" />
           <span>{t("activeName", "人物动作训练")}</span>
           <span className="stage-divider" />
-          <span>{t("stateValue", "载入中")}</span>
+          <span><LiveText id="stateValue" fallback="载入中"/></span>
         </div>
         <section
           className={`minimap ${f("mapExpanded") ? "expanded" : ""}`}
@@ -263,7 +300,7 @@ export function mountShell(host: HTMLElement) {
         >
           <Hint value={s.interaction} />
         </div>
-        {s.drivetrain&&<section className="powertrain-hud" aria-label={s.drivetrain.kind==='engine'?'发动机与变速箱':'人力驱动'}><strong>{s.drivetrain.kind==='engine'?s.drivetrain.gear:s.drivetrain.kind==='pedal'?'踩踏':s.drivetrain.kind==='paddle'?'划桨':'蹬地'}</strong><span>{Math.round(s.drivetrain.kind==='engine'?s.drivetrain.rpm:s.drivetrain.cadence)} {s.drivetrain.kind==='engine'?'RPM':'次/分'}</span><span>{s.drivetrain.speed} km/h</span><meter min={0} max={s.drivetrain.kind==='engine'?s.drivetrain.maxRpm:100} value={s.drivetrain.kind==='engine'?s.drivetrain.rpm:s.drivetrain.throttle}/><small>{s.drivetrain.kind==='engine'?`${s.drivetrain.shifting?'换挡中':'自动变速箱'} · 油门`:'用力'} {s.drivetrain.throttle}%</small></section>}
+        <Drivetrain/>
         <div className="bottom-hint">{t("bottomHint")}</div>
         {["left", "right"].map((side) => (
           <div key={side} className={`touch ${side}`}>
@@ -402,7 +439,7 @@ export function mountShell(host: HTMLElement) {
                 sideOffset={12}
                 onEscapeKeyDown={(e) => e.stopPropagation()}
               >
-                <FramePacingView reading={s.pacing} />
+                <Pacing/>
               </PopoverContent>
             </Popover>
           </nav>
@@ -458,14 +495,7 @@ export function mountShell(host: HTMLElement) {
                 t("cameraButton", "相机 · 跟随"),
                 "camera-mode-button",
               )}
-              <output
-                id="fpsReadout"
-                aria-label="渲染回调频率"
-                aria-live="off"
-                data-slow={f("fpsSlow") || undefined}
-              >
-                {t("fpsReadout", "渲染回调 —/s")}
-              </output>
+              <FPS/>
             </div>
             <p className="sr-only">{t("cameraNote")}</p>
           </footer>
