@@ -69,8 +69,23 @@ export function mountShell(host: HTMLElement) {
     if (!timer) timer = setTimeout(notify, 100);
   };
   const update = (patch: Partial<typeof state>) => {
-    if(Object.entries(patch).every(([key,value])=>Object.is(state[key as keyof typeof state],value)))return;
-    Object.assign(state, patch);
+    const next = { ...patch };
+    // Shortcut producers can return fresh arrays with identical contents.
+    // Keep the snapshot identity stable, but observe real key/label/order edits.
+    for (const key of ['controls', 'system'] as const) {
+      const rows = next[key];
+      if (!rows) continue;
+      const previous = state[key];
+      if (rows.length === previous.length && rows.every(([binding, label], n) =>
+        binding === previous[n]![0] && label === previous[n]![1])) {
+        delete next[key];
+      } else {
+        // Own the tuples so subsequent in-place caller edits remain observable.
+        next[key] = rows.map(([binding, label]) => [binding, label]);
+      }
+    }
+    if(Object.entries(next).every(([key,value])=>Object.is(state[key as keyof typeof state],value)))return;
+    Object.assign(state, next);
     schedule();
   };
   const flush = () => {
