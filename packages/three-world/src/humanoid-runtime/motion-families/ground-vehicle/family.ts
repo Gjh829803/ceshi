@@ -1,0 +1,10 @@
+import {stepWheelVehicle} from '../../wheel-physics';
+import {stepBodyVehicle} from '../../vehicle-dynamics';
+import {stepCreature} from '../../creatures/controller';
+import {subtype,type MotionFamilyModule} from '../types';
+export const groundVehicleFamily:MotionFamilyModule={id:'ground-vehicle',name:'车类',description:'地面运输；轮式、履带、滑行和陆地骑乘继续使用各自算法。',modes:['wheeled','bus','tank','bike','slide','sled','ski','hover','mount','carriage'],subtypes:[
+  subtype('ground-vehicle','wheeled','轮式车辆','独立轮胎、悬挂与动力链。'),subtype('ground-vehicle','wheeled','全地形车','四轮接触与骑手转向。','atv'),subtype('ground-vehicle','wheeled','独轮车','平衡、踩踏和脚部支撑。','unicycle'),
+  subtype('ground-vehicle','bus','客车','客车轮组与动力配置。'),subtype('ground-vehicle','tank','履带车辆','左右履带差速。'),subtype('ground-vehicle','bike','两轮车辆','转向与侧倾。'),
+  subtype('ground-vehicle','slide','滑行载具','平面滑行与摩擦。'),subtype('ground-vehicle','sled','雪橇','坡面重力、蹬地和制动。'),subtype('ground-vehicle','ski','滑雪','沿坡面滑行。'),
+  subtype('ground-vehicle','hover','悬浮载具','近地高度与平移。'),subtype('ground-vehicle','mount','陆地坐骑','保留独立步态与骑乘算法，不使用轮式动力。'),subtype('ground-vehicle','carriage','马车','牵引和车体组合。'),
+],step(v,i,dt,time,q,fallback){if(v.wheelPhysics){stepWheelVehicle(v,i,dt,q);return;}if(v.bodyPhysics){stepBodyVehicle(v,i,dt,time,q);return;}if(v.creature){stepCreature(v,i,dt,q);return;}fallback(v,i,dt,time,q);}};

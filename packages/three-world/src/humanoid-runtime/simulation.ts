@@ -1,6 +1,7 @@
-import {createBodyPhysics,stepBodyVehicle,validateBodyPhysics,type BodyPhysicsState} from './vehicle-dynamics';
-import {createAircraftState,stepAircraft,type AircraftState} from './aircraft';
-import {createWheelPhysics,stepWheelVehicle,validateWheelPhysics,type WheelPhysicsState} from './wheel-physics';
+import {createBodyPhysics,validateBodyPhysics,type BodyPhysicsState} from './vehicle-dynamics';
+import {createAircraftState,type AircraftState} from './aircraft';
+import {createWheelPhysics,validateWheelPhysics,type WheelPhysicsState} from './wheel-physics';
+import {stepMotionFamily,motionFamilyForMode,resolveMotionFamilyMovement} from './motion-families/registry';
 import { VEHICLE_ATTITUDE } from '../config/vehicle';
 
 import {
@@ -51,14 +52,13 @@ import {evaluateMount,evaluateDismount,type MountContext,type MountDecision,type
 import { Euler, Quaternion, Vector3 } from 'three';
 import { HumanoidController,HUMANOID_BODY } from './humanoid/controller';
 import type { MotionSource } from './humanoid/motion';
-import { resetCreatureState, stepCreature, canPlaceCreature, creatureBodies } from './creatures/controller';
+import { resetCreatureState, canPlaceCreature, creatureBodies } from './creatures/controller';
 import type { CreatureState } from './creatures/types';
 import { coastSpeed, roadYawRate } from './handling';
 import {
   CONTROL_RANGES,
   DEFAULT_CHARACTER_CONTROL_BASE,
   defaultMovementSettings,
-  parseMovementSettings,
   type MovementSettings,
 } from '../config/control';
 
@@ -90,7 +90,8 @@ export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSetti
   if(spec.wheelPhysics){if(spec.mode!=='wheeled'&&spec.mode!=='bike'&&spec.mode!=='bus')throw new Error('VEHICLE_WHEEL_MODE_INVALID');validateWheelPhysics(spec.wheelPhysics);}
   if(spec.bodyPhysics){if(spec.wheelPhysics)throw new Error('VEHICLE_PHYSICS_OWNER_CONFLICT');validateBodyPhysics(spec.bodyPhysics);}
   const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof MovementSettings]]));
-  const control=parseMovementSettings(authored,defaultMovementSettings(spec.mode,spec));
+  const family=motionFamilyForMode(spec.mode);
+  const control=resolveMotionFamilyMovement(family,`${family}.${spec.mode}`,authored,defaultMovementSettings(spec.mode,spec));
   return {...structuredClone(spec),...control};
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {
@@ -117,11 +118,7 @@ function actorBlocksPlayer(v:VehicleState,p:Vector3,margin:number){return actorF
 const forward=new Vector3(),right=new Vector3(),up=new Vector3(),scratch=new Vector3();
 const euler=new Euler(0,0,0,'YXZ');
 export function stepVehicle(v:VehicleState,i:Input,dt:number,time:number,environment:EnvironmentQueries) {
-  if(v.aircraft){stepAircraft(v,i,dt,environment);return;}
-  if(v.spec.wheelPhysics&&v.wheelPhysics){stepWheelVehicle(v,i,dt,environment);return;}
-  if(v.bodyPhysics){stepBodyVehicle(v,i,dt,time,environment);return;}
-  if(v.creature){stepCreature(v,i,dt,environment);return;}
-  stepEnvironmentVehicle(v,i,dt,time,environment);
+  stepMotionFamily(v,i,dt,time,environment,stepEnvironmentVehicle);
 }
 function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:EnvironmentQueries) {
   const sample=(x:number,z:number,afloat=false)=>{const p=new Vector3(x,v.position.y,z),floor=q.support(p,120,.45)?.height??q.map.bounds.min[1];const w=q.waterAt(p);return afloat&&w?Math.max(floor,w.surface):floor;};

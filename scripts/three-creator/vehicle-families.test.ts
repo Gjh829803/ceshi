@@ -103,13 +103,16 @@ describe('catalog humanoid families in an independent physical world', () => {
         expect(runtime.probeEpisodeStart(start).isValid).toBe(true);
         runtime.prepareEpisodeStart(start);
         const revision = runtime.simulation.teleportRevision;
+        let furthestForward = runtime.simulation.vehicle!.position.z;
         for (let sample = 0; sample < 60; sample++) {
           const snapshot = world.step(drive(family), 30);
           expect(snapshot.errors).toEqual([]);
           expect(runtime.simulation.vehicle!.position.z).toBeLessThan(barrierFront);
+          furthestForward = Math.max(furthestForward, runtime.simulation.vehicle!.position.z);
         }
         const actor = runtime.simulation.vehicle!;
-        expect(actor.position.z).toBeGreaterThan(20);
+        // Dynamic aircraft can rebound or turn after impact; prove approach separately from containment.
+        expect(furthestForward).toBeGreaterThan(20);
         expect(actor.position.z).toBeLessThan(barrierFront);
         expect(runtime.simulation.teleportRevision).toBe(revision);
       } finally { world.dispose(); }

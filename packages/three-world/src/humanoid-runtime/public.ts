@@ -1,4 +1,6 @@
 export {SUBMERSIBLE_WATER} from './submersible';
+export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
+export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
 export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY} from './kayak';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
@@ -68,3 +70,4 @@ export {
 
 export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';
+export {AIRCRAFT} from '../config/aircraft';

@@ -1,11 +1,12 @@
-import {AIRCRAFT} from '../../packages/three-world/src/config/aircraft';
 import { Euler, Quaternion, Vector3 } from 'three';
-import { emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
+import { humanoid, emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
 import type {
   RouteCursor,
   RouteDecision,
 } from './route-controller.js';
+
+const {AIRCRAFT}=humanoid;
 
 export const VEHICLE_FAMILIES = [
   'kayak',
