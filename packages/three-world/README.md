@@ -1435,7 +1435,7 @@ group mass and must agree on every part. Box positions/rotations remain authored
 world transforms. Ungrouped boxes remain fixed. EnvironmentQueries owns the body
 in the existing Rapier world, with gravity, CCD, friction and angular motion.
 `propBoxPose(id)` returns each physical part's current world pose for presentation;
-`resetProps()` restores the original group poses and clears velocities.
+`resetRigidGroups()` restores the original group poses and clears velocities.
 
 The Agent chooses which objects need this behavior from the scene and gameplay,
 not from a prescribed category list. Set `rigidGroup` when a box assembly should

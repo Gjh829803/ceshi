@@ -124,7 +124,7 @@ export class HumanoidController {
     this.controller.setMinSlopeSlideAngle(Math.PI/3);
     this.controller.setApplyImpulsesToDynamicBodies(true);
     this.controller.setCharacterMass(75);
-    this.crates=queries.interactions.crates;
+    this.crates=queries.looseCrates;
     this.skills=new ActionSystem(this,queries.interactions);
     this.surface=new SurfaceActions(this);
     this.facing.set(0,0,1);

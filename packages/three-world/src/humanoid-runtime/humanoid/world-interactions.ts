@@ -1,47 +1,26 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import {Euler,Vector3,type Quaternion} from 'three';
-import {DYNAMIC_PROP_COLLISION_GROUPS} from '../../config/physics';
+import {Euler,Vector3,Quaternion} from 'three';
 import type {EnvironmentDefinition} from '../environment/types';
-import type {PhysicsColliderBindings} from '../../physics-collider-bindings';
+import type {InteractionBody,InteractionBodyRelease} from '../../interaction-body';
 import type {InteractionTarget} from './action-schema';
 
 export interface TargetRuntime {
-  definition:InteractionTarget;position:Vector3;stable:boolean;
+  definition:InteractionTarget;position:Vector3;rotation:Quaternion;stable:boolean;
   state:'available'|'carried'|'placed'|'occupied'|'dropped';
-  collider?:RAPIER.Collider|undefined;body?:RAPIER.RigidBody|undefined;
+  physical?:InteractionBody|undefined;
 }
 interface Claim {owner:object;requestId:string;kind:'reserved'|'held'|'occupied'}
 
-/** World-owned physical content. Controller disposal releases its claims, not the targets. */
+/** World-owned interaction semantics. Physical owners retain their bodies and lifecycle. */
 export class WorldInteractions {
   readonly targets=new Map<string,TargetRuntime>();
-  readonly crates:{id:string;body:RAPIER.RigidBody;size:number;initial:Vector3}[]=[];
   private readonly claims=new Map<string,Claim>();
-  private readonly colliders=new Map<string,RAPIER.Collider>();
   private disposed=false;
-  constructor(private readonly world:RAPIER.World,private readonly map:EnvironmentDefinition,private readonly bindings:PhysicsColliderBindings,private readonly resolveAnchor:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null){
-    try{
-      for(const definition of map.interactions??[]){
-        const target:TargetRuntime={definition:structuredClone(definition),position:new Vector3(...definition.position),state:'available',stable:true};
-        this.targets.set(definition.id,target);this.createPickup(target);
-      }
-      for(const spec of map.looseCrates??[]){
-        const initial=new Vector3(...spec.position),body=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(...spec.position).setCcdEnabled(true));
-        this.crates.push({id:spec.id,body,size:spec.size,initial});
-        const collider=world.createCollider(RAPIER.ColliderDesc.cuboid(spec.size/2,spec.size/2,spec.size/2).setMass(7).setFriction(.7).setRestitution(.1).setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS),body);
-        const id=spec.id;this.colliders.set(id,collider);this.bindings.added(id,collider);
-      }
-    }catch(error){this.dispose();throw error;}
-  }
-  private createPickup(target:TargetRuntime){
-    const d=target.definition;if(d.kind!=='pickup')return;const size=d.size??[.13,.13,.13];
-    target.body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(...d.position).setGravityScale(9.81/18).setCcdEnabled(true).lockRotations().setSleeping(true));
-    target.collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(size[0]/2,size[1]/2,size[2]/2).setMass(d.massKg??.3).setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS),target.body);
-    this.colliders.set(d.id,target.collider);this.bindings.added(d.id,target.collider);
+  constructor(private readonly map:EnvironmentDefinition,private readonly physical:(id:string)=>InteractionBody|undefined,private readonly resolveAnchor:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null){
+    for(const definition of map.interactions??[])this.targets.set(definition.id,{definition:structuredClone(definition),position:new Vector3(...definition.position),rotation:new Quaternion(),state:'available',stable:true,physical:physical(definition.id)});
   }
   /** Called by the world before actors and after physics, never by individual actors or rendering. */
   syncPhysicalState():void{
-    for(const target of this.targets.values())if(target.body&&target.state!=='carried')target.position.copy(target.body.translation());
+    for(const target of this.targets.values())if(target.physical&&target.state!=='carried'){const pose=target.physical.read();target.position.copy(pose.position);target.rotation.copy(pose.rotation);}
     for(const source of this.map.interactions??[]){
       if(source.kind!=='seat'||!source.colliderIds?.length)continue;
       const target=this.targets.get(source.id);if(!target)continue;
@@ -51,8 +30,6 @@ export class WorldInteractions {
       target.position.copy(anchor.position);target.definition.position=anchor.position.toArray();target.definition.approach=approach.position.toArray();target.definition.yaw=source.yaw+new Euler().setFromQuaternion(anchor.rotation,'YXZ').y;
     }
   }
-  colliderForId(id:string){return this.colliders.get(id);}
-  private removeBody(target:TargetRuntime){this.colliders.delete(target.definition.id);if(target.collider)this.bindings.removed(target.collider);if(target.body)this.world.removeRigidBody(target.body);else if(target.collider)this.world.removeCollider(target.collider,true);target.body=undefined;target.collider=undefined;}
   unavailable(id:string){return this.disposed||this.claims.has(id);}
   reserve(id:string,owner:object,requestId:string):boolean{
     const target=this.targets.get(id);
@@ -61,38 +38,37 @@ export class WorldInteractions {
   }
   commit(id:string,owner:object,requestId:string,kind:'held'|'occupied'):boolean{
     const claim=this.claims.get(id);if(!claim||claim.owner!==owner||claim.requestId!==requestId)return false;
+    if(kind==='held'&&!this.targets.get(id)?.physical?.hold(owner))return false;
     claim.kind=kind;return true;
   }
   finish(owner:object,requestId:string){for(const [id,claim] of this.claims)if(claim.owner===owner&&claim.requestId===requestId&&claim.kind==='reserved')this.claims.delete(id);}
   release(id:string,owner:object){
     if(this.claims.get(id)?.owner!==owner)return;this.claims.delete(id);
-    const collider=this.targets.get(id)?.collider;if(collider)this.bindings.changed([collider]);
   }
-  releaseOwner(owner:object){
+  moveHeld(id:string,owner:object,position:Vector3):boolean{
+    const target=this.targets.get(id),claim=this.claims.get(id);if(!target||claim?.owner!==owner||claim.kind!=='held'||!target.physical?.moveHeld(owner,position))return false;
+    target.position.copy(position);target.rotation.copy(target.physical.read().rotation);return true;
+  }
+  releaseHeld(id:string,owner:object,options:InteractionBodyRelease):boolean{
+    const target=this.targets.get(id),claim=this.claims.get(id);if(!target||claim?.owner!==owner||claim.kind!=='held'||!target.physical?.release(owner,options))return false;
+    this.claims.delete(id);target.position.copy(options.position);target.rotation.copy(target.physical.read().rotation);target.state=options.reason==='place'?'placed':'dropped';return true;
+  }
+  releaseOwner(owner:object):void{
     if(this.disposed)return;
     for(const [id,claim] of this.claims)if(claim.owner===owner){
       const target=this.targets.get(id);
-      if(target&&claim.kind==='held'){
-        target.body?.setTranslation(target.position,true);target.body?.setLinvel({x:0,y:0,z:0},false);target.body?.setEnabled(true);target.collider?.setEnabled(true);target.state='dropped';
-      }else if(target&&claim.kind==='occupied')target.state='available';
+      if(target&&claim.kind==='held')this.releaseHeld(id,owner,{reason:'drop',position:target.position});
+      else if(target&&claim.kind==='occupied')target.state='available';
       this.claims.delete(id);
     }
-    this.world.updateSceneQueries();
   }
-  reset(){
-    this.claims.clear();
+  reset(resetPhysical:()=>void):void{
+    if(this.claims.size)throw new Error('INTERACTION_RESET_REQUIRES_RELEASE');
+    resetPhysical();
     for(const target of this.targets.values()){
-      this.removeBody(target);const source=this.map.interactions?.find(value=>value.id===target.definition.id);
-      if(source)target.definition=structuredClone(source);target.position.fromArray(target.definition.position);target.state='available';target.stable=true;this.createPickup(target);
+      const source=this.map.interactions?.find(value=>value.id===target.definition.id);if(source)target.definition=structuredClone(source);
+      target.physical=this.physical(target.definition.id);target.position.fromArray(target.definition.position);target.rotation.identity();target.state='available';target.stable=true;
     }
-    for(const {body,initial} of this.crates){body.setTranslation(initial,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);}
-    this.world.updateSceneQueries();
   }
-  dispose(){
-    if(this.disposed)return;this.disposed=true;this.claims.clear();
-    for(const target of this.targets.values())this.removeBody(target);
-    for(const {body} of this.crates)this.world.removeRigidBody(body);
-    for(const collider of this.colliders.values())this.bindings.removed(collider);
-    this.colliders.clear();this.targets.clear();this.crates.length=0;
-  }
+  dispose():void{if(this.disposed)return;this.disposed=true;this.claims.clear();this.targets.clear();}
 }

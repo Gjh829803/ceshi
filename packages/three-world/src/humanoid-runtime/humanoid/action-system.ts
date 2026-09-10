@@ -43,12 +43,7 @@ export class ActionSystem {
     // The hands are inside the conservative upright movement capsule. Detach
     // immediately beyond that capsule, then let a real dynamic body fall.
     const position=sim.position.clone().addScaledVector(UP,1.057).addScaledVector(sim.facing,RADIUS+Math.max(size[0],size[2])/2+.035);
-    if(!target.body||!target.collider)throw new Error('INTERACTION_BODY_MISSING');
-    target.body.setTranslation(position,true);target.body.setEnabled(true);target.body.setGravityScale(1,true);
-    target.body.setLinvel({x:sim.velocity.x,y:Math.min(0,sim.vertical),z:sim.velocity.z},true);
-    target.body.setAngvel({x:0,y:0,z:0},false);target.body.resetForces(false);target.body.resetTorques(false);
-    target.collider.setEnabled(true);target.collider.setMass(Math.max(.01,target.definition.massKg??1));target.collider.setFriction(.65);
-    this.content.release(this.carrying,this);
+    this.content.releaseHeld(this.carrying,this,{reason:'water',position,velocity:new Vector3(sim.velocity.x,Math.min(0,sim.vertical),sim.velocity.z)});
     target.position.copy(position);target.state='dropped';this.carrying=null;this.pose=null;
     sim.lastResult='进入深水：物件已脱手并按重力下沉；复位可恢复到台面';
   }
@@ -197,9 +192,8 @@ export class ActionSystem {
     const sim=this.sim,target=this.targets.get(this.carrying!)!,placement=this.placement();
     if(placement.reason)return this.save({...request,status:'rejected',code:placement.reason[0],message:placement.reason[1]});
     const position=placement.position!;
-    target.position.copy(position);target.state='placed';target.definition.position=position.toArray();
-    target.definition.approach=sim.position.toArray();target.definition.yaw=Math.atan2(sim.facing.x,sim.facing.z);
-    if(target.body){target.body.setTranslation(position,true);target.body.setLinvel({x:0,y:0,z:0},false);target.body.setEnabled(true);}else target.collider?.setTranslation(position);target.collider?.setEnabled(true);this.content.release(this.carrying!,this);this.carrying=null;
+    if(!this.content.releaseHeld(this.carrying!,this,{reason:'place',position})){this.carrying=null;this.pose=null;return this.save({...request,status:'rejected',code:'TARGET_LOST',message:'原持有目标已失效'});}
+    target.definition.position=position.toArray();target.definition.approach=sim.position.toArray();target.definition.yaw=Math.atan2(sim.facing.x,sim.facing.z);this.carrying=null;
     return this.save({...request,targetId:target.definition.id,status:'completed',code:'PLACED',message:'已放到台面（物件状态切换，暂无专用放下动画）'});
   }
   /** Called at fixed 60 Hz on dry land before ordinary locomotion. */
@@ -259,7 +253,7 @@ export class ActionSystem {
       if(active.elapsed>=.30&&!active.attached){
         if(!this.content.commit(active.targetId!,this,active.requestId,'held')){this.finish('cancelled','TARGET_UNAVAILABLE','目标预约已失效');return true;}
         active.attached=true;this.carrying=active.targetId!;const target=this.targets.get(this.carrying)!;
-        target.state='carried';target.collider?.setEnabled(false);target.body?.setEnabled(false);
+        target.state='carried';
       }
       if(active.elapsed>=DURATIONS.pickup!)this.finish('completed','ATTACHED','已拾取：WASD 搬运，靠近台面 G 放下');
     }else if(active.id==='sit'){
@@ -272,7 +266,7 @@ export class ActionSystem {
   }
   syncCarried(position?:Vector3){
     if(!this.carrying)return;
-    const target=this.targets.get(this.carrying)!;
-    target.position.copy(position??this.sim.position.clone().addScaledVector(UP,1.057).addScaledVector(this.sim.facing,.123));
+    const at=position??this.sim.position.clone().addScaledVector(UP,1.057).addScaledVector(this.sim.facing,.123);
+    if(!this.content.moveHeld(this.carrying,this,at)){if(this.active)this.finish('cancelled','TARGET_LOST','原持有目标已失效');this.carrying=null;this.pose=null;}
   }
 }

@@ -1,4 +1,5 @@
 import {registerPhysicsHost,type BorrowedPhysicsWorld} from './physics-host';
+import {InteractionBodyControl} from './interaction-body';
 import {DEFAULT_CHARACTER_OPTIONS,DYNAMIC_PROP_COLLISION_GROUPS} from './config/physics';
 import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
@@ -19,6 +20,7 @@ type CharacterState = { driveMode: DriveMode; needsClearance: boolean; controlle
 type Entity = {
   id: string; object: THREE.Object3D; enabled: boolean; kind: RigidPhysics['kind'] | 'character'; body: RigidBody; colliders: Collider[];
   geometry?: GeometrySnapshot; options?: RigidPhysics; character?: CharacterState;
+  interaction?:InteractionBodyControl;interactionSize?:Vec3;
   fixedQueryPose?: WorldPose;
   sourceObjects?: readonly THREE.Object3D[];
   initial: { local: LocalPose; pose: WorldPose; geometry?: GeometrySnapshot };
@@ -73,6 +75,21 @@ export class ThreePhysics implements PhysicsPort {
       prepareSubstep:fraction=>{for(const target of this.substepTargets){target.body.setNextKinematicTranslation(target.from.clone().lerp(target.to,fraction));target.body.setNextKinematicRotation(target.rotationFrom.clone().slerp(target.rotationTo,fraction));}},
       finishStep:()=>this.finishStep(),
       fork:binding=>this.fork(binding),
+      interactionBody:id=>this.interactionBody(id),
+    });
+  }
+  private interactionBody(id:string):InteractionBodyControl{
+    const entry=this.entry(id);if(entry.kind==='character'||!entry.colliders.length)throw new Error('INTERACTION_RIGID_ENTITY_REQUIRED');
+    const identity=entry.initial;
+    return entry.interaction??=new InteractionBodyControl(()=>{
+      const current=this.disposed?undefined:this.entries.get(id);if(!current||current.initial!==identity)return;
+      if(!current.interactionSize){
+        const bounds=new THREE.Box3(),point=new THREE.Vector3();
+        for(const geometry of current.geometry!.geometries)for(let i=0;i<geometry.vertices.length;i+=3)bounds.expandByPoint(point.fromArray(geometry.vertices,i));
+        current.interactionSize=vec(bounds.getSize(new THREE.Vector3()));
+      }
+      return {body:current.body,colliders:current.colliders,enabled:current.enabled&&current.colliders.length>0,massKg:current.colliders.reduce((sum,collider)=>sum+collider.mass(),0),scale:current.geometry!.pose.scale,sizeMetersXYZ:current.interactionSize,
+        project:()=>this.project(current),changed:()=>{if(this.borrowed?.colliderChanged)this.borrowed.colliderChanged(id,current.colliders);else this.world.updateSceneQueries(current.colliders.map(collider=>collider.handle));}};
     });
   }
   private live(): void { if (this.disposed) geometryError('PHYSICS_DISPOSED', 'The physics world has been disposed.'); }
@@ -159,6 +176,7 @@ export class ThreePhysics implements PhysicsPort {
     return { pose, descriptors: [RAPIER.ColliderDesc.capsule((height - 2 * radius) / 2, radius).setTranslation(0, height / 2, 0)], triangleCount: 0, settings, scale };
   }
   private construct(id: string, object: THREE.Object3D, kind: Entity['kind'], plan: Plan, options: RigidPhysics | undefined, initial: Entity['initial'], previous?: Entity): Entity {
+    if(previous?.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Release the interaction owner before rebuilding this body.',[id]);
     const bodyDescriptor = kind === 'fixed' ? RAPIER.RigidBodyDesc.fixed() : kind === 'dynamic' ? RAPIER.RigidBodyDesc.dynamic().setCcdEnabled(true) : RAPIER.RigidBodyDesc.kinematicPositionBased();
     bodyDescriptor.setTranslation(plan.pose.position.x, plan.pose.position.y, plan.pose.position.z).setEnabled(false);
     if (kind !== 'character') bodyDescriptor.setRotation(plan.pose.rotation);
@@ -167,7 +185,7 @@ export class ThreePhysics implements PhysicsPort {
     try {
       body = this.world.createRigidBody(bodyDescriptor);
       const colliders = plan.descriptors.map(descriptor => this.world.createCollider(descriptor, body));
-      const entry: Entity = { id, object, enabled: previous?.enabled ?? true, kind, body, colliders, initial,
+      const entry: Entity = { id, object, enabled: previous?.enabled ?? true, kind, body, colliders, initial,...(previous?.interaction?{interaction:previous.interaction}:{}),
         ...(plan.geometry ? { geometry: plan.geometry } : {}), ...(plan.sourceObjects ? { sourceObjects: plan.sourceObjects } : {}), ...(options ? { options } : {}), ...(kind === 'fixed' ? { fixedQueryPose: copyPose(plan.pose) } : {}) };
       if (plan.settings && plan.scale) {
         controller = this.world.createCharacterController(plan.settings.collisionOffsetMeters);
@@ -265,7 +283,7 @@ export class ThreePhysics implements PhysicsPort {
     const geometryChanged = shapes.some(shape => shape.changed && !shape.character);
     this.clearanceLifts(shapes, new Set(shapes.filter(shape => shape.character && (shape.changed || geometryChanged)).map(shape => shape.id)));
   }
-  remove(id: string): void { this.live(); const entry = this.entries.get(id); if (entry) { this.destroy(entry); this.entries.delete(id); } }
+  remove(id: string): void { this.live(); const entry = this.entries.get(id); if (entry) { entry.interaction?.retire();this.destroy(entry); this.entries.delete(id); } }
   refresh(id: string): void {
     this.refreshMany([id]);
   }
@@ -291,6 +309,7 @@ export class ThreePhysics implements PhysicsPort {
   }
   teleport(id: string, positionMetersXYZ: Vec3): void {
     const entry = this.entry(id); validateVec(positionMetersXYZ, 'positionMetersXYZ');
+    if(entry.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Move a held body through its interaction owner.',[id]);
     const position = new THREE.Vector3(...positionMetersXYZ);
     let local = position.clone();
     if (entry.object.parent) { worldPose(entry.object.parent); local = entry.object.parent.worldToLocal(local); }
@@ -304,6 +323,7 @@ export class ThreePhysics implements PhysicsPort {
   }
   applyImpulse(id: string, impulseNewtonSecondsXYZ: Vec3): void {
     const entry = this.entry(id); validateVec(impulseNewtonSecondsXYZ, 'impulseNewtonSecondsXYZ');
+    if(entry.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Release the held body before applying an impulse.',[id]);
     if (entry.kind !== 'dynamic') geometryError('PHYSICS_IMPULSE_REQUIRES_DYNAMIC', 'Only a dynamic body can receive an impulse.');
     entry.body.applyImpulse(new THREE.Vector3(...impulseNewtonSecondsXYZ), true);
   }
@@ -702,7 +722,7 @@ export class ThreePhysics implements PhysicsPort {
       const before = proposal.entry.body.translation();
       proposal.entry.body.setNextKinematicTranslation({ x: before.x + proposal.movement.x, y: before.y + proposal.movement.y, z: before.z + proposal.movement.z });
     }
-    this.substepTargets=[...this.entries.values()].filter(entry=>entry.body.isKinematic()&&entry.body.isEnabled()).map(({body})=>({body,
+    this.substepTargets=[...this.entries.values()].filter(entry=>entry.body.isKinematic()&&entry.body.isEnabled()&&!entry.interaction?.isHeld).map(({body})=>({body,
       from:new THREE.Vector3().copy(body.translation()),to:new THREE.Vector3().copy(body.nextTranslation()),
       rotationFrom:new THREE.Quaternion().copy(body.rotation()),rotationTo:new THREE.Quaternion().copy(body.nextRotation())}));
     for(const id of this.queryDirty){const entry=this.entries.get(id);if(entry)this.borrowed?.colliderChanged?.(id,entry.colliders);}
@@ -770,6 +790,7 @@ export class ThreePhysics implements PhysicsPort {
     }catch(error){next.dispose();throw error;}
   }
   dispose(): void { if (this.disposed) return;
+    for(const entry of this.entries.values())entry.interaction?.retire();
     if(this.borrowed)for(const entry of this.entries.values())this.destroy(entry);
     this.disposed = true; this.entries.clear(); this.colliderOwners.clear(); this.colliderSources.clear(); this.queryDirty.clear();
     this.pendingProposals=undefined;this.substepTargets=[];if(!this.borrowed)this.world.free();

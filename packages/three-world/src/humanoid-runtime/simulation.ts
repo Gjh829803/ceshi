@@ -94,7 +94,7 @@ export class Simulation {
   reset():void{
     const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
     for(const actor of this.actors.values()){const p=actor.controller.checkpoint;actor.resetAt(new Vector3(p.x,p.y,p.z),p.yaw+Math.PI);}
-    this.environment.resetProps();this.environment.interactions.reset();
+    this.environment.resetContents();
     if(selected&&index>=0)selected.visit(index);else if(selected)selected.message='人物与交互物已复位';
   }
 

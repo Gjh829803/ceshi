@@ -12,6 +12,7 @@ export interface BorrowedPhysicsWorld {
   characterSettings?(handle:number):Required<CharacterOptions>|undefined;
 }
 export interface PhysicsHostAccess {
+  interactionBody(id:string):import('./interaction-body').InteractionBody;
   prepareStep(dt:number,drives:Readonly<Record<string,CharacterDrive>>):void;
   prepareSubstep(fraction:number):void;
   finishStep():void;

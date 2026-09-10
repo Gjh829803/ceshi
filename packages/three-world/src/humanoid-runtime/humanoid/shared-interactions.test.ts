@@ -21,8 +21,8 @@ function step(q:EnvironmentQueries,actors:HumanoidController[],ticks:number){for
 it('restores world interactions and crates at the simulation reset entry',()=>{
   const q=setup(),simulation=new Simulation(q,[],{id:'player'});controllers.push(simulation.controlledActor.controller);
   const target=q.interactions.targets.get('cup')!;
-  target.state='placed';target.position.set(5,2,4);target.body!.setTranslation(target.position,true);
-  const crate=q.interactions.crates[0]!;crate.body.setTranslation({x:6,y:4,z:2},true);
+  target.state='placed';target.position.set(5,2,4);q.colliderForId('cup')!.parent()!.setTranslation(target.position,true);
+  const crate=q.looseCrates[0]!;crate.body.setTranslation({x:6,y:4,z:2},true);
   simulation.reset();
   expect(target.state).toBe('available');expect(target.position.toArray()).toEqual(map.interactions![0]!.position);
   expect(crate.body.translation()).toMatchObject({x:5,y:2,z:0});
@@ -34,16 +34,16 @@ it('keeps another actor holding its target during actor relocation, and clears e
   for(let n=0;n<30;n++)simulation.step(1/60);
   expect(holder.controller.skills.request({requestId:'hold',action:'pickup',targetId:'cup'}).status).toBe('running');
   for(let n=0;n<120;n++)simulation.step(1/60);
-  const body=q.interactions.targets.get('cup')!.body;
+  const body=q.colliderForId('cup')!.parent()!;
   expect(holder.controller.skills.carrying).toBe('cup');
   expect(simulation.controlledActor.prepareCharacter(new Vector3(-3,.04,0),0)).toBe(true);
-  expect(holder.controller.skills.carrying).toBe('cup');expect(q.interactions.targets.get('cup')!.body).toBe(body);
+  expect(holder.controller.skills.carrying).toBe('cup');expect(q.colliderForId('cup')!.parent()!.handle).toBe(body!.handle);
   expect(q.interactions.unavailable('cup')).toBe(true);
   simulation.reset();expect(holder.controller.skills.carrying).toBeNull();expect(q.interactions.targets.get('cup')!.state).toBe('available');
 });
 
 it('uses declared crate identities independent of array order',()=>{
-  const q=setup(),crate=q.interactions.crates[0]!;
+  const q=setup(),crate=q.looseCrates[0]!;
   expect(q.colliderId(crate.body.collider(0).handle)).toBe('loose-box');
   expect(q.colliderForId('loose-box')?.handle).toBe(crate.body.collider(0).handle);
 });
@@ -56,7 +56,7 @@ it('rejects ambiguous shared physical identities before allocating a world',()=>
 it('creates one set of interaction bodies for multiple controllers and keeps it alive after one leaves',()=>{
   const q=setup(),a=actor(q,-2),count=q.colliderCount,b=actor(q,2);
   expect(q.colliderCount-count).toBe(1);expect(a.skills.targets).toBe(b.skills.targets);expect(a.crates).toBe(b.crates);
-  const target=a.skills.targets.get('cup')!,body=target.body!,crate=a.crates[0]!.body;
+  const target=a.skills.targets.get('cup')!,body=q.colliderForId('cup')!.parent()!,crate=a.crates[0]!.body;
   body.setTranslation({x:3,y:1,z:0},true);crate.setTranslation({x:5,y:3,z:0},true);
   b.resetAt(new Vector3(2,.04,0));expect(body.translation().x).toBe(3);expect(crate.translation().y).toBe(3);
   a.dispose();expect(body.isValid()).toBe(true);expect(crate.isValid()).toBe(true);
@@ -71,17 +71,17 @@ it('reserves a shared pickup before contact and keeps ownership after the operat
   expect(second.status,JSON.stringify(second)).toBe('rejected');expect(second.code).toBe('TARGET_UNAVAILABLE');
   step(q,[a,b],120);expect(a.skills.status('a-pickup')?.status).toBe('completed');expect(a.skills.carrying).toBe('cup');
   expect(b.skills.eligibility('pickup','cup').reason).toBe('TARGET_UNAVAILABLE');
-  const body=a.skills.targets.get('cup')!.body!;a.dispose();
+  const body=q.colliderForId('cup')!.parent()!;a.dispose();
   expect(body.isValid()).toBe(true);expect(body.isEnabled()).toBe(true);expect(b.skills.targets.get('cup')!.state).toBe('dropped');
 });
 
 it('releases a reservation on cancellation before grip without recreating the target',()=>{
   const q=setup(),a=actor(q,-.7),b=actor(q,.7);step(q,[a,b],30);
-  const body=a.skills.targets.get('cup')!.body!;
+  const body=q.colliderForId('cup')!.parent()!;
   expect(a.skills.request({requestId:'cancel-me',action:'pickup',targetId:'cup'}).status).toBe('running');
   expect(a.skills.cancel('cancel-me')?.status).toBe('cancelled');
   expect(b.skills.request({requestId:'next',action:'pickup',targetId:'cup'}).status).toBe('running');
-  expect(b.skills.targets.get('cup')!.body).toBe(body);
+  expect(q.colliderForId('cup')!.parent()!.handle).toBe(body!.handle);
 });
 
 it('keeps a seat occupied until its owner stands up, including an explicit stand-up target',()=>{
@@ -109,7 +109,7 @@ it('preserves a gripped item when cancelling the rest of its pickup animation',(
   const q=setup(),a=actor(q,0);step(q,[a],30);
   expect(a.skills.request({requestId:'gripped',action:'pickup',targetId:'cup'}).status).toBe('running');step(q,[a],25);
   expect(a.skills.carrying).toBe('cup');expect(a.skills.cancel('gripped')?.status).toBe('cancelled');
-  expect(a.skills.carrying).toBe('cup');expect(q.interactions.unavailable('cup')).toBe(true);expect(q.interactions.targets.get('cup')!.body!.isEnabled()).toBe(false);
+  expect(a.skills.carrying).toBe('cup');expect(q.interactions.unavailable('cup')).toBe(true);expect(q.interactions.targets.get('cup')!.physical!.read().enabled).toBe(false);expect(q.colliderForId('cup')!.parent()!.isKinematic()).toBe(true);
 });
 
 it('finishes a stand-up exit before acknowledging its cancellation',()=>{
@@ -121,7 +121,7 @@ it('finishes a stand-up exit before acknowledging its cancellation',()=>{
 
 
 it('synchronizes physical targets even when the world has no actors',()=>{
- const q=setup(),target=q.interactions.targets.get('cup')!;target.body!.setTranslation({x:7,y:3,z:4},true);
+ const q=setup(),target=q.interactions.targets.get('cup')!;q.colliderForId('cup')!.parent()!.setTranslation({x:7,y:3,z:4},true);
  q.stepPhysics(1/60);expect(target.position.x).toBeCloseTo(7);expect(target.position.z).toBeCloseTo(4);expect(target.position.y).toBeLessThan(3);
 });
 
@@ -131,7 +131,7 @@ it('does not reread every target body for every actor',()=>{
   try{
    for(let n=1;n<count;n++)simulation.addActor(`npc-${n}`,new Vector3(n*4,.04,0));
    for(let n=0;n<30;n++)simulation.step(1/60);
-   const body=q.interactions.targets.get('cup')!.body!,read=vi.spyOn(body,'translation');
+   const body=q.interactions.targets.get('cup')!.physical!,read=vi.spyOn(body,'read');
    simulation.step(1/60);const reads=read.mock.calls.length;read.mockRestore();return reads;
   }finally{simulation.dispose();}
  };
@@ -142,4 +142,24 @@ it('keeps a seat attached to declared static collision eligible',()=>{
  const q=new EnvironmentQueries({...map,boxes:[...map.boxes,{id:'chair',position:[3,.25,1],size:[1,.5,1]}],interactions:[{...map.interactions![1]!,colliderIds:['chair']}]});environments.push(q);
  const seated=actor(q,3);step(q,[seated],30);
  expect(seated.skills.eligibility('sit','seat')).toMatchObject({eligible:true,reason:'READY'});
+});
+
+it('keeps pickup capabilities alive when only rigid groups are reset',()=>{
+ const q=setup(),simulation=new Simulation(q,[],{id:'player'});
+ try{const physical=q.interactions.targets.get('cup')!.physical!;q.resetRigidGroups();expect(physical.isValid).toBe(true);expect(()=>simulation.step(1/60)).not.toThrow();}
+ finally{simulation.dispose();}
+});
+
+
+it('rejects content reset before mutating a live held relationship',()=>{
+ const q=setup(),a=actor(q,0);step(q,[a],30);
+ expect(a.skills.request({requestId:'hold-reset',action:'pickup',targetId:'cup'}).status).toBe('running');step(q,[a],120);
+ const physical=q.interactions.targets.get('cup')!.physical!,body=q.colliderForId('cup')!.parent()!;
+ expect(physical.isHeld).toBe(true);
+ expect(()=>q.resetContents()).toThrow('INTERACTION_RESET_REQUIRES_RELEASE');
+ expect(physical.isValid).toBe(true);expect(physical.isHeld).toBe(true);expect(q.colliderForId('cup')!.parent()).toBe(body);
+ q.resetRigidGroups();expect(physical.isHeld).toBe(true);expect(a.skills.carrying).toBe('cup');
+ a.resetAt(new Vector3(0,.04,0));q.resetContents();
+ expect(physical.isValid).toBe(false);expect(q.interactions.targets.get('cup')!.physical!.isValid).toBe(true);
+ expect(()=>step(q,[a],1)).not.toThrow();
 });

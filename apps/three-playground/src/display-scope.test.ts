@@ -5,7 +5,7 @@ import {getMap} from '../../../shared/preset-content/environment/maps';
 import {createDisplayOverlays} from './display-overlays';
 import {defaultDisplaySettings,resolveDisplaySettings,isolateDisplaySelection,exitDisplayIsolation,applyDisplayPreset} from './display-settings';
 import {createDisplayScene} from './display-scene';
-import {buildDisplayCatalog,resolveDisplayColliderId} from './display-catalog';
+import {buildDisplayCatalog} from './display-catalog';
 
 describe('object and physical helper scope',()=>{
   it('follows real pickup and loose-crate bindings after a world reset',async()=>{
@@ -14,9 +14,9 @@ describe('object and physical helper scope',()=>{
     const runtime=world.humanoid!;
     const verify=()=>{
       const h=runtime.simulation.controlledActor.controller!;
-      const owner=(handle:number)=>resolveDisplayColliderId(h,handle=>runtime.environment.colliderId(handle),handle);
-      const target=[...h.skills.targets.values()].find(t=>t.collider?.isEnabled())!;
-      expect(target).toBeDefined();expect(owner(target.collider!.handle)).toBe(target.definition.id);
+      const owner=(handle:number)=>runtime.environment.colliderId(handle);
+      const target=[...h.skills.targets.values()].find(t=>runtime.environment.colliderForId(t.definition.id)?.isEnabled())!;
+      expect(target).toBeDefined();expect(owner(runtime.environment.colliderForId(target.definition.id)!.handle)).toBe(target.definition.id);
       expect(h.crates.length).toBe(1);
       for(const crate of h.crates)for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('loose-test');
       const object=new T.Group(),context={roots:[{id:target.definition.id,object,type:'interaction' as const}],subjects:[object]};

@@ -322,7 +322,7 @@ describe('SDK humanoid runtime',()=>{
    r.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle','sit-exit']),[]);world.step({},30);
    const body=r.environment.colliderForId('chair-shape')!.parent()!;body.setTranslation({x:8,y:.5,z:5},true);body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2),true);world.step({},1);
    const target=r.snapshot().interactionTargets[0]!;expect(target.positionWorldMetersXYZ[0]).toBeGreaterThan(7);expect(target.reason).toBe('SEAT_UNSTABLE');
-   r.environment.resetProps();world.step({},1);expect(r.snapshot().interactionTargets[0]!.positionWorldMetersXYZ[0]).toBeCloseTo(5,2);
+   r.environment.resetRigidGroups();world.step({},1);expect(r.snapshot().interactionTargets[0]!.positionWorldMetersXYZ[0]).toBeCloseTo(5,2);
   }finally{world.dispose();}
  });
  it('uses E to enter a collider-backed climb, Space to attempt the top and crouch to release',async()=>{

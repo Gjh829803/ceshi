@@ -43,7 +43,7 @@ export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderSt
 }
 export function readInteractionTargets(h?:HumanoidController):InteractionVisualTarget[]{
   if(!h)return [];
-  return [...h.skills.targets.values()].map<InteractionVisualTarget>(t=>({id:t.definition.id,kind:t.definition.kind,position:t.position.clone(),rotation:t.body?new Quaternion().copy(t.body.rotation()):new Quaternion(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
+  return [...h.skills.targets.values()].map<InteractionVisualTarget>(t=>({id:t.definition.id,kind:t.definition.kind,position:t.position.clone(),rotation:t.rotation.clone(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
     .concat(h.crates.map(c=>({id:c.id,kind:'pickup' as const,position:new Vector3().copy(c.body.translation()),rotation:new Quaternion().copy(c.body.rotation()),state:'dynamic',size:[c.size,c.size,c.size]})));
 }
 export function copyTargets(targets:readonly InteractionVisualTarget[]){return targets.map(t=>({...t,position:t.position.clone(),rotation:t.rotation?.clone(),size:t.size?[...t.size]:undefined}));}

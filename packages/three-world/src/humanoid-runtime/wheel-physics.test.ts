@@ -160,7 +160,7 @@ describe('per-wheel road vehicle',()=>{
   const group={id:'chair',massKg:8},f=fixture([{id:'seat',position:[0,.5,6],size:[.8,.15,.7],rigidGroup:group},{id:'back',position:[0,.9,6.3],size:[.8,.8,.1],rigidGroup:group}]);
   try{const seat=f.q.colliderForId('seat')!,back=f.q.colliderForId('back')!,body=seat.parent()!;expect(body.isDynamic()).toBe(true);expect(body.handle).toBe(back.parent()!.handle);expect(body.mass()).toBeCloseTo(8);const origin=body.translation(),spacing=new Vector3().copy(seat.translation()).distanceTo(new Vector3().copy(back.translation()));
    for(let n=0;n<180;n++){f.q.syncActorBodies([{id:'car-proxy',actorId:'car',physical:true,position:f.v.position,rotation:f.v.rotation,body:spec.envelope!}]);run(f,1,{...emptyInput(),forward:1});}expect(new Vector3().copy(body.translation()).distanceTo(new Vector3().copy(origin))).toBeGreaterThan(2);expect(new Vector3().copy(seat.translation()).distanceTo(new Vector3().copy(back.translation()))).toBeCloseTo(spacing,4);expect(f.q.colliderForId('floor')!.translation().y).toBe(-.5);
-   f.q.resetProps();expect(body.translation()).toEqual(origin);expect(body.linvel()).toEqual({x:0,y:0,z:0});
+   f.q.resetRigidGroups();expect(body.translation()).toEqual(origin);expect(body.linvel()).toEqual({x:0,y:0,z:0});
   }finally{f.q.dispose();}
  });
  it('brakes after landing on the compression stops of a short-travel suspension',()=>{

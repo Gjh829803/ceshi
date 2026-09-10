@@ -1,3 +1,4 @@
+import {EnvironmentInteractionProps} from './interaction-props';
 import {readNavigationGeometry} from '../../physics-navigation';
 import {WorldInteractions} from '../humanoid/world-interactions';
 import {validateEnvironmentIdentities} from '../map-validation';
@@ -63,6 +64,8 @@ export class EnvironmentQueries {
   private world:RAPIER.World;
   readonly colliderBindings:PhysicsColliderBindings;
   readonly interactions:WorldInteractions;
+  private readonly interactionProps:EnvironmentInteractionProps;
+  get looseCrates(){return this.interactionProps.crates;}
   private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
   private readonly externalCharacterColliders=new Set<number>();
   borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c,kind)=>{this.colliderBindings.added(id,c);if(kind==='character')this.externalCharacterColliders.add(c.handle);},colliderRemoved:(_id,c)=>{this.externalCharacterColliders.delete(c.handle);this.colliderBindings.removed(c);},colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h),characterSettings:handle=>{const rig=[...this.rigs].find(rig=>rig.capsule.handle===handle);return rig?{...DEFAULT_CHARACTER_OPTIONS,heightMeters:2*(rig.capsule.halfHeight()+rig.capsule.radius()),radiusMeters:rig.capsule.radius(),collisionOffsetMeters:rig.controller.offset(),maximumSlopeRadians:rig.controller.maxSlopeClimbAngle()}:undefined;}};}
@@ -126,7 +129,9 @@ export class EnvironmentQueries {
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
     }
-    this.interactions=new WorldInteractions(this.world,map,this.colliderBindings,(id,point)=>this.interactionAnchor(id,point));
+    let props:EnvironmentInteractionProps|undefined;
+    try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point));}
+    catch(error){props?.dispose();this.world.free();throw error;}
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();
     this.controller=this.world.createCharacterController(.015);
@@ -156,8 +161,8 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.world.free();this.disposed=true;}}
-  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactions.colliderForId(id);}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.interactionProps.dispose();this.world.free();this.disposed=true;}}
+  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactionProps.colliderForId(id);}
   private interactionAnchor(boxId:string,point:readonly number[]){
     const collider=this.staticColliders.get(boxId);if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
     const group=this.propBodies.get(this.propBoxes.get(boxId)??'');
@@ -166,7 +171,8 @@ export class EnvironmentQueries {
     return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};
   }
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
-  resetProps(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.propagateModifiedBodyPositionsToColliders();}
+  resetContents():void{this.interactions.reset(()=>{this.resetRigidGroups();this.interactionProps.reset();});}
+  resetRigidGroups(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.updateSceneQueries();}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
    * Cached handles are safe to inspect from Rapier query predicates. */
   isActorCollider(collider:RAPIER.Collider){this.assertLive();return this.actorColliderHandles.has(collider.handle);}

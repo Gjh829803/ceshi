@@ -1,17 +1,7 @@
 import * as T from 'three';
-import type {HumanoidRuntime} from '@worldkit/three';
 import type {EnvironmentDefinition} from '../../../shared/preset-content/environment/types';
 import type {DisplayContext,DisplayRoot} from './display-context';
 import type {DisplayObjectRow,DisplayType} from './display-settings';
-
-export function resolveDisplayColliderId(physics:HumanoidRuntime['simulation']['controlledActor']['controller'],fallback:(handle:number)=>string,handle:number):string {
-  if(physics){
-    if(physics.capsule.handle===handle)return 'person';
-    for(const target of physics.skills.targets.values())if(target.collider?.handle===handle)return target.definition.id;
-    for(const crate of physics.crates)for(let c=0;c<crate.body.numColliders();c++)if(crate.body.collider(c).handle===handle)return crate.id;
-  }
-  return fallback(handle);
-}
 
 /** Adapt already-authored object identities; never require a new layer schema. */
 export function buildDisplayCatalog(input:{scene:T.Scene;map:EnvironmentDefinition;environment:T.Object3D;person:T.Object3D;

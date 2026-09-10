@@ -56,7 +56,7 @@ import {
 import { createDisplayPreview } from './display-preview';
 import { createDisplayOverlays, type DisplayInteractionTarget } from './display-overlays';
 import { defaultDisplaySettings, type DisplaySettings, type DisplayType } from './display-settings';
-import {buildDisplayCatalog,resolveDisplayColliderId} from './display-catalog';
+import {buildDisplayCatalog} from './display-catalog';
 import {resolveDisplayScope} from './display-context';
 import {
   HumanoidDemo,
@@ -252,7 +252,7 @@ let collisionMode: CollisionDebugMode = "off";
 let disposeThumbnails: (() => void) | undefined;
 let displaySettings = defaultDisplaySettings();
 function displayColliderId(handle:number) {
-  return resolveDisplayColliderId(sim.controlledActor.controller,handle=>runtime.environment.colliderId(handle),handle);
+  return runtime.environment.colliderId(handle);
 }
 function readDisplayTargets():DisplayInteractionTarget[] {
   const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.controlledActor.controller)];
