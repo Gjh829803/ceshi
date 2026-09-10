@@ -20,7 +20,7 @@ export const controlsFor=(mode:string,bindings:humanoid.KeyBindings=humanoid.DEF
     case 'atv':case 'wheeled':return [[move,'油门 / 制动倒车'],[turn,'转向'],[key('jump'),'手刹漂移'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
     case 'jetski':return [[move,'油门 / 制动后倒船'],[turn,'喷口转向'],[key('jump'),'水阻制动'],[key('sprint'),'加速'],[key('vehicle'),'上下艇']];
     case 'boat':return [[move,'推进 / 倒船'],[turn,'船舵'],[key('jump'),'减速'],[key('sprint'),'加速'],[key('vehicle'),'离开驾驶位']];
-    case 'bike':case 'slide':return [[move,'前进 / 后退'],[turn,'转向'],[key('jump'),'刹车'],[key('sprint'),'加速'],[key('vehicle'),'离开载具']];
+    case 'motorcycle':case 'slide':return [[move,'前进 / 后退'],[turn,'转向'],[key('jump'),'刹车'],[key('sprint'),'加速'],[key('vehicle'),'离开载具']];
     default:return humanoid.controlHints(bindings);
   }
 };

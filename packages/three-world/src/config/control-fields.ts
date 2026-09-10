@@ -43,7 +43,7 @@ export function controlFields(family:string,powertrain=false):ControlField[]{
   {key:'steer',label:'拖脚转向速率',unit:'rad/s',step:.01,note:'随速度建立转向效果；静止不能原地转圈。',section:'转向与稳定'},
   ...(['steeringResponse','steeringReturn','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回弹',pitchResponse:'顺坡俯仰响应',rollResponse:'横坡姿态响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
  ];
- const person=family==='character',road=['wheeled','bike'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','bike','slide','hover','boat'].includes(family);
+ const person=family==='character',road=['wheeled','motorcycle'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='sub',space=family==='space',surface=['wheeled','motorcycle','slide','hover','boat'].includes(family);
  const fields:ControlField[]=[];
  const add=(key:Key,label:string,unit:string,note:string,section:ControlField['section'],step=.1,disabled=false)=>fields.push({key,label,unit,note,section,step,disabled});
  add('speed',person?'基础移速基准':creature?'步态速度基准':air||sub||space?'最大移速':'基础移速上限','m/s',person?'实际常速 = 基准 × 3.1 / 3.8；蹲行同基准缩放，冲刺与慢走独立。':creature?'普通步态速度 = 基准 × 0.58；加速步态独立使用最大移速。':air?'飞行速度上限；俯冲与推力仍受此限速。':'基础输入下的速度上限，不会在起步时瞬间赋速。','速度范围');

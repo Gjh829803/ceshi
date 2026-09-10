@@ -86,7 +86,7 @@ export interface Input { forward:number; steer:number; lift:number; roll:number;
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
 export interface VehicleState {bodyPhysics?:BodyPhysicsState|undefined;wheelPhysics?:WheelPhysicsState|undefined; spec:VehicleSpec & MovementSettings; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSettings {
-  if(spec.wheelPhysics){if(spec.mode!=='wheeled'&&spec.mode!=='bike'&&spec.mode!=='bus')throw new Error('VEHICLE_WHEEL_MODE_INVALID');validateWheelPhysics(spec.wheelPhysics);}
+  if(spec.wheelPhysics){if(spec.mode!=='wheeled'&&spec.mode!=='motorcycle'&&spec.mode!=='bus')throw new Error('VEHICLE_WHEEL_MODE_INVALID');validateWheelPhysics(spec.wheelPhysics);}
   if(spec.bodyPhysics){if(spec.wheelPhysics)throw new Error('VEHICLE_PHYSICS_OWNER_CONFLICT');validateBodyPhysics(spec.bodyPhysics);}
   const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof MovementSettings]]));
   const control=parseMovementSettings(authored,defaultMovementSettings(spec.mode,spec));
@@ -129,7 +129,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
   const footprintWet=(x:number,z:number,radius:number)=>q.waterContains(new Vector3(x,0,z),radius);
   const waterSurface=q.waterAt(v.position)?.surface??v.position.y;
   const s=v.spec,mode=s.mode,old=v.position.clone();
-  const road=mode==='wheeled'||mode==='bike';
+  const road=mode==='wheeled'||mode==='motorcycle';
   v.steering=damp(v.steering,i.steer,Math.abs(i.steer)>0?s.steeringResponse:s.steeringReturn,dt);
   if(v.submersible){stepSubmersible(v,i,dt,q);return;}
   if(s.archetype==='raft'){stepRaft(v,i,dt,q);return;}
@@ -219,7 +219,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
     v.yaw-=v.steering*yawRate*dt*(driftEnabled?1+drift*.35:i.brake&&mode==='wheeled'?1.25:1);
     if(mode==='hover') side-=i.roll*s.accel*dt;
     const newF=scratch.set(Math.sin(v.yaw),0,Math.cos(v.yaw));
-    if(mode==='wheeled'||mode==='slide'||(mode==='bike'&&drift>0)) {
+    if(mode==='wheeled'||mode==='slide'||(mode==='motorcycle'&&drift>0)) {
       // Integrate drive along the old forward axis, then remove lateral slip
       // relative to the new heading. Repeatedly scaling the WHOLE velocity by
       // its forward projection caused low-grip turns to bleed speed every tick.
@@ -253,7 +253,7 @@ function stepVehicleControls(v:VehicleState,i:Input,dt:number,time:number,q:Envi
       if(v.position.y<=actualFloor+.12) {v.position.y=actualFloor;v.velocity.y=0;v.grounded=true;} else v.grounded=false;
       const ahead=surfaceHeight(v.position.x+newF.x*1.2,v.position.z+newF.z*1.2),behind=surfaceHeight(v.position.x-newF.x*1.2,v.position.z-newF.z*1.2);
       const targetPitch=v.grounded&&Math.abs(ahead-behind)<3?Math.atan2(ahead-behind,2.4):0;
-      const attitude=mode==='bike'?VEHICLE_ATTITUDE.bike:VEHICLE_ATTITUDE.ground;
+      const attitude=mode==='motorcycle'?VEHICLE_ATTITUDE.motorcycle:VEHICLE_ATTITUDE.ground;
       v.pitch=damp(v.pitch,targetPitch,12,dt);
       v.roll=damp(v.roll,clamp(v.steering*speed*attitude.rollRadiansPerSteeringSpeed,-attitude.maximumRollRadians,attitude.maximumRollRadians),attitude.rollResponsePerSecond,dt);
     }
@@ -269,7 +269,7 @@ function stepEnvironmentVehicle(v:VehicleState,i:Input,dt:number,time:number,q:E
   stepVehicleControls(v,i,dt,time,q);
   const incoming=v.velocity.clone();
   const body=vehicleBody(v.spec),mode=v.spec.mode;
-  const ground=!!v.raft||['wheeled','bus','tank','bike','slide','sled','ski'].includes(mode);
+  const ground=!!v.raft||['wheeled','bus','tank','motorcycle','unicycle','slide','sled','ski'].includes(mode);
   // Low-speed taxiing rests on wheels too; airborne attitude keeps its original
   // oriented hull and lift path, including the transition into takeoff.
   const taxi=mode==='plane'&&v.grounded&&v.speed<=14&&v.velocity.y<=0;
@@ -572,7 +572,7 @@ export class Simulation {
   }
     recoverVehicle():boolean {
       const v=this.vehicle,q=this.environment;
-      if(!v||!['wheeled','bike','slide'].includes(v.spec.mode)){this.message='请先进入地面车辆，再使用原地扶正';return false;}
+      if(!v||!['wheeled','motorcycle','unicycle','slide'].includes(v.spec.mode)){this.message='请先进入地面车辆，再使用原地扶正';return false;}
       const forward=new Vector3(0,0,1).applyQuaternion(v.rotation);
       const yaw=Math.hypot(forward.x,forward.z)>.05?Math.atan2(forward.x,forward.z):v.yaw;
       const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),yaw),body=vehicleBody(v.spec);

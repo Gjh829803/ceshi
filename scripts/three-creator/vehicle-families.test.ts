@@ -9,7 +9,7 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 const catalog = JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
-const families = ['kayak', 'tank', 'wheeled', 'bike', 'slide', 'bus', 'sled', 'ski', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;
+const families = ['kayak', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'slide', 'bus', 'sled', 'ski', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;
 type Family = typeof families[number];
 const representative = (family: Family) => assets.find(asset => asset.vehicle.spec.mode === family)!;
 const barrierFront = 59;
@@ -58,7 +58,7 @@ function drive(family: Family) {
 }
 
 describe('catalog humanoid families in an independent physical world', () => {
-  it('covers the catalog 30 vehicle assets and all seventeen runtime families', () => {
+  it('covers the catalog 30 vehicle assets and all eighteen runtime families', () => {
     expect(assets).toHaveLength(30);
     expect([...new Set(assets.map(asset => asset.vehicle.spec.mode))].sort()).toEqual([...families].sort());
   });

@@ -18,7 +18,7 @@ export function createRoadVehicleSpec(kind:RoadVehicleKind):RoadVehicleSpec {
   });
   const spec:RoadVehicleSpec={
     id:kind,name:motorcycle?'自绘摩托':'自绘汽车',en:kind.toUpperCase(),
-    mode:motorcycle?'bike':'wheeled',kernel:motorcycle?'K02':'K03',archetype:motorcycle?'bike':'rover',
+    mode:motorcycle?'motorcycle':'wheeled',kernel:motorcycle?'K02':'K03',archetype:motorcycle?'motorcycle':'rover',
     color:'#eeeeee',spawn:[0,0,0],yaw:0,
     speed:(motorcycle?150:160)/3.6,maxSpeed:(motorcycle?180:200)/3.6,reverseSpeed:motorcycle?2:8.4,
     accel:motorcycle?12:10,grip:motorcycle?13:11,steer:motorcycle?1.12:1,

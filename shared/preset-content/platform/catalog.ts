@@ -74,7 +74,8 @@ const metadata: Record<VehicleSpec['mode'], Pick<AssetEntry, 'environment' | 'ic
   wheeled: { environment: 'ground', icon: 'car', tags: ['四轮', '陆地', '漂移'] },
   tank: {environment:'ground',icon:'car',tags:['坦克','履带','差速','原地转向','封闭驾驶舱','炮塔','炮管']},
   bus: { environment: 'ground', icon: 'car', tags: ['巴士','小巴','客车','四轮','陆地','驾驶室','缓起步','长轴距','低速倒车'] },
-  bike: { environment: 'ground', icon: 'bike', tags: ['两轮', '陆地', '倾斜转向'] },
+  motorcycle: { environment: 'ground', icon: 'bike', tags: ['摩托车', '两轮', '陆地', '倾斜转向'] },
+  unicycle: { environment: 'ground', icon: 'bike', tags: ['独轮车', '单轮', '陆地', '平衡', '踩踏', '单脚撑地'] },
   slide: { environment: 'ground', icon: 'skateboard', tags: ['贴面滑行', '陆地', '站姿'] },
   ski: { environment: 'ground', icon: 'skateboard', tags: ['雪橇', '滑雪', '双板', '雪杖', '站姿', '无动力', '顺坡滑行', '压刃转弯'] },
   sled: { environment: 'ground', icon: 'skateboard', tags: ['雪橇', '雪地', '双滑条', '坐姿', '无动力', '重力下坡', '蹬地', '拖脚制动'] },
@@ -92,7 +93,7 @@ const metadata: Record<VehicleSpec['mode'], Pick<AssetEntry, 'environment' | 'ic
 export function buildAssetCatalog(specs: readonly VehicleSpec[] = SPECS): AssetEntry[] {
   return specs.map(({ id, name, en, mode, kernel, color }) => ({
     id, name, en, mode, kernel, color,
-    ...metadata[mode],...(id==='unicycle'?{tags:['独轮车','单轮','陆地','平衡','踩踏','单脚撑地']}:{}),...(id==='raft'?{tags:['橡皮艇','充气艇','PUBG','划桨','陆地滑行','回弹','缓冲']}:{}),...(id==='observation-sub'?{tags:['潜艇','观景','单人','球舱','水下','浮力','压载','推进器']}:{}),...(id==='jetski'?{tags:['水上摩托','喷射','水花','尾流','跨坐','加速']}:{}),...(id==='canoe'?{tags:['木舟','独木舟','单桨','单叶桨','水面','浮力','惯性','单人']}:{}),...(id==='atv'?{tags:['ATV','Quad','PUBG','全地形车','四轮','越野','跨坐','车把','手刹']}:{}),
+    ...metadata[mode],...(id==='raft'?{tags:['橡皮艇','充气艇','PUBG','划桨','陆地滑行','回弹','缓冲']}:{}),...(id==='observation-sub'?{tags:['潜艇','观景','单人','球舱','水下','浮力','压载','推进器']}:{}),...(id==='jetski'?{tags:['水上摩托','喷射','水花','尾流','跨坐','加速']}:{}),...(id==='canoe'?{tags:['木舟','独木舟','单桨','单叶桨','水面','浮力','惯性','单人']}:{}),...(id==='atv'?{tags:['ATV','Quad','PUBG','全地形车','四轮','越野','跨坐','车把','手刹']}:{}),
     kind: ['mount', 'carriage', 'dragon'].includes(mode) ? 'creature' : 'vehicle',
     version: 'local',
     contributor: '工作区内置',

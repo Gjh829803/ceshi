@@ -17,7 +17,7 @@ const map:EnvironmentDefinition={id:'custom-bike-course',name:'自建摩托',des
  boxes:[{id:'ground',position:[0,-.1,0],size:[120,.2,120],color:'#dddddd'}],
  water:[],
  // A region enables the vehicle family; a spawn places this instance in that region.
- regions:[{id:'course',name:'骑行场地',description:'平地驾驶',center:[0,0,0],size:[110,110],color:'#dddddd',modes:['character','bike']}],
+ regions:[{id:'course',name:'骑行场地',description:'平地驾驶',center:[0,0,0],size:[110,110],color:'#dddddd',modes:['character','motorcycle']}],
  spawns:[{id:'bike-start',vehicleId:'custom-bike',name:'摩托起点',position:[0,0,0],yaw:0,regionId:'course'}],
  playerSpawn:[1.7,0,-.2]};
 for(const box of map.boxes){
