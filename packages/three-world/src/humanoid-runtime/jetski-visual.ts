@@ -1,5 +1,5 @@
 import {CircleGeometry,DoubleSide,Group,SphereGeometry,InstancedMesh,Matrix4,MeshBasicMaterial,Object3D} from 'three';
-import type {JetSkiState} from './jetski';
+import type {JetSkiState} from './motion-families/surface-vessel/jetski';
 import {markCameraVisualEffect} from './camera-visual-effects';
 /** Pure sampling: repeated renders do not emit particles or advance their ages. */
 export function sampleJetSkiVisual(root:Object3D,s:JetSkiState,time:number){

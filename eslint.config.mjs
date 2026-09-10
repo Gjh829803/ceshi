@@ -11,6 +11,8 @@ export default defineConfig([
       '**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.three-creator/**',
       '**/.worktrees/**', '**/.codex-tmp/**', '**/.playwright-cli/**',
       '**/agent-home/**', '**/agent-tmp/**', '**/.agent-home/**', '**/.agent-tmp/**',
+      // Versioned prebuilt distribution; verify its bytes with the dragon-training manifest.
+      'assets/dragon-training/**',
       'outputs/**', 'output/**', 'artifacts/episodes/**', 'artifacts/scenes/**',
     ],
   },

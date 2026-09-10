@@ -21,25 +21,25 @@ function fixture(dry=false,wall=false){
 }
 describe('observation submersible',()=>{
  it('floats by displacement, dives with ballast, settles at depth and resurfaces',()=>{
-  const f=fixture();try{f.v.position.y=1;f.run(16);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.submersible!.buoyancy).toBeCloseTo(9.81,1);
-   f.run(7,{lift:-1});expect(f.v.position.y).toBeLessThan(-5);expect(f.v.submersible!.ballast).toBeGreaterThan(.99);
-   f.run(5);const y=f.v.position.y;f.run(3);expect(Math.abs(f.v.position.y-y)).toBeLessThan(.05);expect(f.v.submersible!.mass).toBeCloseTo(SUBMERSIBLE_WATER.displacement*1000,0);
-   f.run(14,{lift:1});f.run(10);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.submersible!.ballast).toBeLessThan(.01);
+  const f=fixture();try{f.v.position.y=1;f.run(16);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.motion.submersible!.buoyancy).toBeCloseTo(9.81,1);
+   f.run(7,{lift:-1});expect(f.v.position.y).toBeLessThan(-5);expect(f.v.motion.submersible!.ballast).toBeGreaterThan(.99);
+   f.run(5);const y=f.v.position.y;f.run(3);expect(Math.abs(f.v.position.y-y)).toBeLessThan(.05);expect(f.v.motion.submersible!.mass).toBeCloseTo(SUBMERSIBLE_WATER.displacement*1000,0);
+   f.run(14,{lift:1});f.run(10);expect(f.v.position.y).toBeCloseTo(.12,2);expect(f.v.motion.submersible!.ballast).toBeLessThan(.01);
   }finally{f.q.dispose();}
  });
  it('moves both ways, turns at rest, obeys floor/wall collisions and has no land propulsion',()=>{
   const f=fixture(),dry=fixture(true),wall=fixture(false,true);try{f.run(4,{forward:1});expect(f.v.speed).toBeGreaterThan(2);f.run(9,{forward:-1});expect(f.v.velocity.z).toBeLessThan(-1);
    f.run(4,{boost:true});expect(f.v.speed).toBeLessThan(.1);f.run(2,{steer:1});expect(f.v.yaw).toBeLessThan(-.5);
-   dry.run(8,{forward:1,lift:-1});expect(Math.abs(dry.v.position.z)).toBeLessThan(.002);expect(dry.v.submersible!.power).toBe(0);
+   dry.run(8,{forward:1,lift:-1});expect(Math.abs(dry.v.position.z)).toBeLessThan(.002);expect(dry.v.motion.submersible!.power).toBe(0);
    wall.run(8,{forward:1});expect(wall.v.position.z).toBeGreaterThan(3);expect(wall.v.position.z).toBeLessThan(7.4);expect(wall.q.overlaps(wall.v.position,vehicleBody(wall.v.spec),wall.v.rotation)).toBe(false);
    f.run(40,{lift:-1});expect(f.v.position.y).toBeGreaterThan(-19.5);expect(f.q.overlaps(f.v.position,vehicleBody(f.v.spec),f.v.rotation)).toBe(false);
   }finally{f.q.dispose();dry.q.dispose();wall.q.dispose();}
  });
  it('emits surface spray and underwater bubbles only with power; visuals sample without advancing time',()=>{
-  const f=fixture(),root=buildSubmersibleModel();try{f.run(2);expect(f.v.submersible!.particles).toHaveLength(0);f.run(2,{forward:1});expect(f.v.submersible!.particles.some(p=>!p.bubble)).toBe(true);
-   f.run(7,{lift:-1,forward:1});expect(f.v.submersible!.particles.some(p=>p.bubble)).toBe(true);const serial=f.v.submersible!.serial;
-   sampleSubmersibleVisual(root,f.v.submersible!,f.time());const a=root.getObjectByName('submersible.rotor.1')!.rotation.z;sampleSubmersibleVisual(root,f.v.submersible!,f.time());expect(root.getObjectByName('submersible.rotor.1')!.rotation.z).toBe(a);expect(f.v.submersible!.serial).toBe(serial);
-   f.run(5);expect(f.v.submersible!.particles).toHaveLength(0);expect(createVehicle(SUBMERSIBLE_SPEC).submersible).toEqual(createSubmersibleState());
+  const f=fixture(),root=buildSubmersibleModel();try{f.run(2);expect(f.v.motion.submersible!.particles).toHaveLength(0);f.run(2,{forward:1});expect(f.v.motion.submersible!.particles.some(p=>!p.bubble)).toBe(true);
+   f.run(7,{lift:-1,forward:1});expect(f.v.motion.submersible!.particles.some(p=>p.bubble)).toBe(true);const serial=f.v.motion.submersible!.serial;
+   sampleSubmersibleVisual(root,f.v.motion.submersible!,f.time());const a=root.getObjectByName('submersible.rotor.1')!.rotation.z;sampleSubmersibleVisual(root,f.v.motion.submersible!,f.time());expect(root.getObjectByName('submersible.rotor.1')!.rotation.z).toBe(a);expect(f.v.motion.submersible!.serial).toBe(serial);
+   f.run(5);expect(f.v.motion.submersible!.particles).toHaveLength(0);expect(createVehicle(SUBMERSIBLE_SPEC).motion.submersible).toEqual(createSubmersibleState());
   }finally{disposeSubmersibleVisual(root);expect(root.getObjectByName('submersible.water-fx')).toBeUndefined();f.q.dispose();}
  });
  it('keeps unattended craft afloat, prevents underwater hatch exit, and resets ballast/particles',async()=>{
@@ -49,7 +49,7 @@ describe('observation submersible',()=>{
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,-5,0],facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});expect(world.humanoid!.interact()).toBe(false);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:spec.spawn,facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});world.step({humanoid:{...emptyInput(),lift:-1}},420);expect(world.humanoid!.interact()).toBe(false);expect(world.humanoid!.simulation.message).toContain('上浮');
    world.step({humanoid:{...emptyInput(),lift:1}},900);world.step({humanoid:emptyInput()},600);expect(world.humanoid!.interact()).toBe(true);
-   world.humanoid!.simulation.visit(0);expect(world.humanoid!.simulation.vehicles[0]!.submersible).toEqual(createSubmersibleState());
+   world.humanoid!.simulation.visit(0);expect(world.humanoid!.simulation.vehicles[0]!.motion.submersible).toEqual(createSubmersibleState());
   }finally{world.dispose();}
  // This integrates 42 seconds with the real model, camera and rigid-body world.
  // Match the bounded budget used by the other long physical lifecycle tests.
@@ -77,4 +77,4 @@ it('leaves the real deep-water berth clear during rotation and vertical travel',
  }finally{q.dispose();}
 });
 
-function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].motion.wheelPhysics||args[0].motion.body)args[4].stepPhysics(args[2]);}

@@ -1,5 +1,5 @@
 import {Quaternion,Vector3,type Object3D} from 'three';
-import {UNICYCLE_GEOMETRY,unicyclePedal,type UnicycleState} from './unicycle';
+import {UNICYCLE_GEOMETRY,unicyclePedal,type UnicycleState} from './motion-families/ground-vehicle/unicycle';
 
 function aim(bone:Object3D,child:Object3D,target:Vector3){
   const p=bone.getWorldPosition(new Vector3()),from=child.getWorldPosition(new Vector3()).sub(p).normalize(),to=target.clone().sub(p).normalize();

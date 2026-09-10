@@ -1,4 +1,4 @@
-import {copyUnicycleState,blendUnicycleState} from '../unicycle';
+import {copyUnicycleState,blendUnicycleState} from '../motion-families/ground-vehicle/unicycle';
 import { Quaternion, Vector3 } from 'three';
 import type { HumanoidController } from './controller';
 import { SOURCE_ACTION_DURATIONS,type HumanoidRenderState } from './animation';

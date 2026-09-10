@@ -1,5 +1,5 @@
 import {Mesh,MeshBasicMaterial,Object3D,Quaternion,Vector3} from 'three';
-import {CANOE_GEOMETRY,paddleBlade,paddleGrip,KAYAK_GEOMETRY,kayakPaddlePose,kayakStroke,type KayakState} from './kayak';
+import {CANOE_GEOMETRY,paddleBlade,paddleGrip,KAYAK_GEOMETRY,kayakPaddlePose,kayakStroke,type KayakState} from './motion-families/surface-vessel/paddling';
 /** Analytic projection of the fixed stroke; repeated captures cannot advance it. */
 export function sampleKayakVisual(root:Object3D,k:KayakState,speed:number){
  const p=kayakPaddlePose(k),paddle=root.getObjectByName('kayak.paddle');if(paddle){paddle.position.copy(p.position);paddle.quaternion.copy(p.rotation);for(const [name,side] of [['control.hand.left',1],['control.hand.right',-1]] as const){const socket=paddle.getObjectByName(name);if(socket)socket.position.copy(paddleGrip(k,side));}}

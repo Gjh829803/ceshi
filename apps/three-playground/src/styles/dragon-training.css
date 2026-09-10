@@ -1,0 +1,8 @@
+.dragon-training-page{height:100dvh;display:flex;flex-direction:column;background:#09222a}
+.dragon-training-page>.workspace-header{position:relative;flex:0 0 48px;z-index:10}
+.dragon-training-frame{width:100%;flex:1;min-height:0;border:0;display:block;background:#09121a}
+.dragon-training-caption{font-size:12px;color:#94aaa9;margin-left:20px}
+.dragon-training-return{margin-left:auto;margin-right:18px;color:#c9e3b4;font-size:13px;text-decoration:none;white-space:nowrap}
+.dragon-training-status{margin:auto;text-align:center;padding:24px;color:#c9e3b4}
+.dragon-training-status h1{font-size:22px}.dragon-training-status p{color:#94aaa9}
+@media(max-width:760px){.dragon-training-caption{display:none}.dragon-training-return{margin-right:8px;font-size:12px}}
