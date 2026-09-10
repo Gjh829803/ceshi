@@ -210,6 +210,11 @@ export class Character {
     this.loading=loading;
     try{await loading;}finally{if(this.loading===loading)delete this.loading;}
   }
+  /** Creates a fresh actor visual using this character's immutable resource closure. */
+  async createInstance():Promise<Character>{
+    if(this.disposed||!this.loaded||!this.source)throw new Error('CHARACTER_NOT_LOADED');
+    return new Character(await this.source.createInstance());
+  }
   dispose():void{
     if(this.disposed)return;this.disposed=true;this.loaded=false;
     const firstPersonBody=this.firstPersonBody,overlay=this.overlay,attachments=this.attachments,source=this.source;

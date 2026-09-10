@@ -49,6 +49,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/humanoid-runtime/flying-creature-visual.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "packages/three-world/src/humanoid-runtime/flying-creature.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/horse.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/humanoid-runtime/humanoid/shared-interactions.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/jetski.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/kayak.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/motion-families/registry.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

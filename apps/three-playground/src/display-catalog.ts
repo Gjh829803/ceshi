@@ -8,7 +8,7 @@ export function resolveDisplayColliderId(physics:HumanoidRuntime['simulation']['
   if(physics){
     if(physics.capsule.handle===handle)return 'person';
     for(const target of physics.skills.targets.values())if(target.collider?.handle===handle)return target.definition.id;
-    for(const [n,crate] of physics.crates.entries())for(let c=0;c<crate.body.numColliders();c++)if(crate.body.collider(c).handle===handle)return 'crate:'+n;
+    for(const crate of physics.crates)for(let c=0;c<crate.body.numColliders();c++)if(crate.body.collider(c).handle===handle)return crate.id;
   }
   return fallback(handle);
 }

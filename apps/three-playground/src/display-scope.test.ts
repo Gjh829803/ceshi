@@ -18,7 +18,7 @@ describe('object and physical helper scope',()=>{
       const target=[...h.skills.targets.values()].find(t=>t.collider?.isEnabled())!;
       expect(target).toBeDefined();expect(owner(target.collider!.handle)).toBe(target.definition.id);
       expect(h.crates.length).toBe(1);
-      for(const [n,crate] of h.crates.entries())for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('crate:'+n);
+      for(const crate of h.crates)for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('loose-test');
       const object=new T.Group(),context={roots:[{id:target.definition.id,object,type:'interaction' as const}],subjects:[object]};
       const overlay=createDisplayOverlays(scene,()=>({physics:h,map,targets:[],colliderId:owner}));
       try{overlay.update(resolveDisplaySettings({...defaultDisplaySettings(),scope:'selected',selectedIds:[target.definition.id],colliders:'all'}),context);

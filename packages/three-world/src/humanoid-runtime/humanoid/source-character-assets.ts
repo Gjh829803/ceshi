@@ -6,6 +6,11 @@ import {ACTION_CLIP_IDS,SURFACE_CLIP_IDS} from './action-schema';
 import type {CharacterClipEntry} from './source-character';
 
 interface Template {model:Group;entries:CharacterClipEntry[]}
+export interface SourceCharacterLease {
+  readonly model:Group;readonly entries:CharacterClipEntry[];
+  dispose():void;
+  createInstance():Promise<SourceCharacterLease>;
+}
 interface CacheEntry {promise:Promise<Template>;users:number;template?:Template}
 const cache=new Map<string,CacheEntry>();
 const paths=[...CHARACTER_ASSET_IDS.flatMap(id=>[`gasp-research/${id}.experimental.glb`,`gasp-research/${id}.metadata.json`]),
@@ -59,7 +64,7 @@ async function readTemplate(urls:ReadonlyMap<string,string>):Promise<Template>{
 /** URL closure is the cache identity; resources at those URLs must be immutable.
  * Geometry is shared read-only. Bones, mixers, clips, materials and texture objects
  * are instance-owned; changing geometry requires an explicitly cloned geometry. */
-export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:string)=>string)){
+export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:string)=>string)):Promise<SourceCharacterLease>{
   const urls=new Map(paths.map(relative=>{
     const uri=typeof assetBaseUrl==='function'?assetBaseUrl(`humanoid/source/${relative}`):`${assetBaseUrl.replace(/\/$/,'')}/${relative}`;
     return [relative,typeof document==='undefined'?uri:new URL(uri,document.baseURI).href];
@@ -94,6 +99,7 @@ export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:str
     };
     model.traverse(object=>{if(object instanceof Mesh)object.material=Array.isArray(object.material)?object.material.map(cloneMaterial):cloneMaterial(object.material);});
     let disposed=false;
-    return {model,entries:template.entries,dispose(){if(disposed)return;disposed=true;try{disposeResources(owned);}finally{release();}}};
+    return {model,entries:template.entries,dispose(){if(disposed)return;disposed=true;try{disposeResources(owned);}finally{release();}},
+      createInstance(){if(disposed)throw new Error('SOURCE_LEASE_DISPOSED');return leaseSourceCharacter(logical=>urls.get(logical.slice('humanoid/source/'.length))!);}};
   }catch(error){try{disposeResources(owned);}catch{/* Preserve construction failure. */}try{release();}catch{/* Preserve construction failure. */}throw error;}
 }

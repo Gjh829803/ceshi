@@ -1,3 +1,5 @@
+import {WorldInteractions} from '../humanoid/world-interactions';
+import {validateEnvironmentIdentities} from '../map-validation';
 import {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {BorrowedPhysicsWorld} from '../../physics-host';
 import {DYNAMIC_PROP_COLLISION_GROUPS} from '../../config/physics';
@@ -59,6 +61,7 @@ export interface ActorQueryBody {id:string;actorId?:string;physical?:boolean;pos
 export class EnvironmentQueries {
   private world:RAPIER.World;
   readonly colliderBindings:PhysicsColliderBindings;
+  readonly interactions:WorldInteractions;
   private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
   borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h)};}
   beforePhysicsSubstep(callback:(fraction:number)=>void){this.physicsSubsteps.add(callback);return()=>{this.physicsSubsteps.delete(callback);};}
@@ -87,6 +90,7 @@ export class EnvironmentQueries {
   private environmentFilter=(collider:RAPIER.Collider)=>this.motionFilter?this.motionFilter(collider):!this.queryExcluded.has(collider.handle);
   constructor(readonly map:EnvironmentDefinition){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
+    validateEnvironmentIdentities(map);
     this.world=new RAPIER.World({x:0,y:-18,z:0});
     this.colliderBindings=new PhysicsColliderBindings(this.world);
     const groups=new Map<string,typeof map.boxes[number][]>();
@@ -119,6 +123,7 @@ export class EnvironmentQueries {
         if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
       }
     }
+    this.interactions=new WorldInteractions(this.world,map,this.colliderBindings);
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();
     this.controller=this.world.createCharacterController(.015);
@@ -148,8 +153,8 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.world.free();this.disposed=true;}}
-  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id);}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.world.free();this.disposed=true;}}
+  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactions.colliderForId(id);}
   propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
   resetProps(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.propagateModifiedBodyPositionsToColliders();}
@@ -161,11 +166,11 @@ export class EnvironmentQueries {
     const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(position.x,position.y+half+radius,position.z));
     const capsule=this.world.createCollider(RAPIER.ColliderDesc.capsule(half,radius).setMass(75).setFriction(0).setCollisionGroups(0x0008ffff),body);
     const rig={world:this.world,body,capsule,controller:this.world.createCharacterController(.015)};
-    this.rigs.add(rig);this.queryExcluded.add(capsule.handle);return rig;
+    this.rigs.add(rig);this.queryExcluded.add(capsule.handle);this.actorColliderHandles.add(capsule.handle);return rig;
   }
   releaseHumanoidRig(rig:HumanoidRig){
     if(this.disposed||!this.rigs.delete(rig))return;
-    this.queryExcluded.delete(rig.capsule.handle);this.colliderBindings.removed(rig.capsule);
+    this.queryExcluded.delete(rig.capsule.handle);this.actorColliderHandles.delete(rig.capsule.handle);this.colliderBindings.removed(rig.capsule);
     this.world.removeCharacterController(rig.controller);this.world.removeRigidBody(rig.body);
   }
   syncActorBodies(actors:readonly ActorQueryBody[]){

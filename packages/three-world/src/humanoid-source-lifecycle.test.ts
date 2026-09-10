@@ -92,3 +92,14 @@ it('releases the source even if a first-person geometry disposal listener throws
   expect(()=>actor.dispose()).toThrow();expect(actor.loaded).toBe(false);expect(actor.sourceCharacter).toBeUndefined();
   expect(dispose).toHaveBeenCalledOnce();expect(()=>actor.dispose()).not.toThrow();
 });
+
+it('instantiates the same immutable source without inheriting live animation or requiring the original owner',async()=>{
+  const {resolve,counts}=resources();const original=new Character();characters.push(original);await original.load(resolve);
+  original.root.position.set(4,2,6);original.sourceCharacter!.actions.walk!.time=.25;
+  const next=await original.createInstance();characters.push(next);
+  expect(next.root.position.toArray()).toEqual([0,0,0]);expect(next.availableHumanoidClips.size).toBe(48);
+  expect(next.sourceCharacter!.actions.walk!.time).toBe(0);expect(Math.max(...counts.values())).toBe(1);
+  original.dispose();const third=await next.createInstance();characters.push(third);
+  expect(third.loaded).toBe(true);expect(mesh(third.sourceCharacter!).geometry).toBe(mesh(next.sourceCharacter!).geometry);
+  expect(Math.max(...counts.values())).toBe(1);
+});

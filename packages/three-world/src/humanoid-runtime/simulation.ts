@@ -92,6 +92,7 @@ export class Simulation {
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
   prepareCharacter(position:Vector3,yaw:number){
     const safe=this.environment.safeSpawn(position,HUMANOID_BODY);if(!safe){this.message='人物测试点没有站立净空';return false;}
+    this.environment.interactions.reset();
     this.active=-1;this.transition=0;this.transitionKind='';this.humanoid.resetAt(safe,yaw);this.syncHumanoidPlayer();this.teleportRevision++;return true;
   }
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
@@ -297,7 +298,7 @@ export class Simulation {
   }
   reset() {
     this.environment.resetProps();
-    if(this.active<0){this.humanoid.reset();this.syncHumanoidPlayer();this.transition=0;this.transitionKind='';this.teleportRevision++;this.message='人物与交互物已复位';}
+    if(this.active<0){this.environment.interactions.reset();this.humanoid.reset();this.syncHumanoidPlayer();this.transition=0;this.transitionKind='';this.teleportRevision++;this.message='人物与交互物已复位';}
     else this.visit(this.active);
   }
     recoverVehicle():boolean {

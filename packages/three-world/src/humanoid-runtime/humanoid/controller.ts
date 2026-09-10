@@ -54,7 +54,7 @@ export class HumanoidController {
   // including thin suspended ledges; it does not change the movement capsule.
   private readonly ledgeSweep=new RAPIER.Cuboid(.002,1.2,.002);
   checkpoint={x:-6,y:.03,z:2.1,yaw:0};
-  crates:{body:RAPIER.RigidBody;size:number;initial:Vector3}[]=[];
+  crates:{id:string;body:RAPIER.RigidBody;size:number;initial:Vector3}[]=[];
   position=new Vector3(-6,.03,2.1);
   velocity=new Vector3();
   facing=new Vector3(0,0,-1);
@@ -124,13 +124,8 @@ export class HumanoidController {
     this.controller.setMinSlopeSlideAngle(Math.PI/3);
     this.controller.setApplyImpulsesToDynamicBodies(true);
     this.controller.setCharacterMass(75);
-    const crateSpecs=this.level.crates;
-    for(const spec of crateSpecs) { const size=spec.size, initial=new Vector3(spec.x,spec.y,spec.z);
-      const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(initial.x,initial.y,initial.z).setCcdEnabled(true));
-      this.world.createCollider(RAPIER.ColliderDesc.cuboid(size/2,size/2,size/2).setMass(7).setFriction(.7).setRestitution(.1),body);
-      this.crates.push({body,size,initial});
-    }
-    this.skills=new ActionSystem(this);
+    this.crates=queries.interactions.crates;
+    this.skills=new ActionSystem(this,queries.interactions);
     this.surface=new SurfaceActions(this);
     this.facing.set(0,0,1);
     this.world.propagateModifiedBodyPositionsToColliders();
@@ -138,7 +133,6 @@ export class HumanoidController {
   reset(x=this.checkpoint.x,z=this.checkpoint.z,y=this.checkpoint.y,yaw=this.checkpoint.yaw){
     this.skills.reset();
     this.surface.reset();
-    this.resetCrates();
     this.checkpoint={x,y,z,yaw};
     this.resetMovement(x,z,y,yaw);
   }
@@ -177,7 +171,7 @@ export class HumanoidController {
     this.skills.availableClips=new Set(clips);this.surface.availableClips=new Set(clips);this.motionSources=[...sources];
   }
   /** Synchronize the actor immediately for queries; never integrate world physics here. */
-  commitPose(){this.body.setTranslation(this.body.nextTranslation(),true);this.world.propagateModifiedBodyPositionsToColliders();}
+  commitPose(){this.body.setTranslation(this.body.nextTranslation(),true);this.world.updateSceneQueries([this.capsule.handle]);}
   private resetMovement(x:number,z:number,y:number,yaw:number){
     this.traversalRequested=false;
     this.completedMotion=null;this.motionSerial++;this.controller.enableSnapToGround(.18);this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
@@ -575,7 +569,7 @@ export class HumanoidController {
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
-    this.skills.dispose();for(const crate of this.crates)this.world.removeRigidBody(crate.body);this.crates=[];
+    this.skills.dispose();this.crates=[];
     this.queries.releaseHumanoidRig(this.rig);
   }
   sync(){const p=this.body.translation();this.position.set(p.x,p.y-this.capsuleCenter,p.z);}

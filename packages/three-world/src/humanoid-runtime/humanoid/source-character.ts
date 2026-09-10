@@ -1,5 +1,5 @@
 import { AnimationAction, AnimationClip, AnimationMixer, Group, LoopOnce, Mesh, Object3D, PropertyBinding, Quaternion, Vector3 } from 'three';
-import {disposeSourceGraphs,leaseSourceCharacter} from './source-character-assets';
+import {disposeSourceGraphs,leaseSourceCharacter,type SourceCharacterLease} from './source-character-assets';
 import type { SourceCharacterFrame as Simulation } from './animation';
 import type { MotionSource } from './motion';
 import { SWIMMING_ASSET_IDS, ACTION_NAMES, ANIMATION_LABELS as LABELS } from './catalog';
@@ -60,6 +60,7 @@ function authoredSpeed(entry: CharacterClipEntry) {
 
 export class Character {
   private disposed=false;
+  private createResourceInstance:(()=>Promise<Character>)|undefined;
   private releaseResources:()=>void;
   dispose():void{
     if(this.disposed)return;this.disposed=true;
@@ -91,9 +92,20 @@ export class Character {
   private traversalEntry: {serial: number; weights: Record<string, number>; duration: number} | null = null;
 
   static async load(assetBaseUrl:string|((logicalPath:string)=>string) = './assets/humanoid/source/') {
-    const lease=await leaseSourceCharacter(assetBaseUrl);
-    try{return new Character(lease.model,lease.entries,lease.dispose);}
-    catch(error){try{lease.dispose();}catch{/* Preserve binding failure. */}throw error;}
+    return Character.fromLease(await leaseSourceCharacter(assetBaseUrl));
+  }
+  private static fromLease(lease:SourceCharacterLease):Character {
+    try{
+      const instance=new Character(lease.model,lease.entries,lease.dispose);
+      instance.createResourceInstance=async()=>Character.fromLease(await lease.createInstance());
+      return instance;
+    }catch(error){try{lease.dispose();}catch{/* Preserve binding failure. */}throw error;}
+  }
+  /** Fresh state from the same immutable source, independent of this live pose. */
+  async createInstance():Promise<Character>{
+    if(this.disposed)throw new Error('SOURCE_CHARACTER_DISPOSED');
+    if(!this.createResourceInstance)throw new Error('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');
+    return this.createResourceInstance();
   }
 
   constructor(model: Group, entries: CharacterClipEntry[],releaseResources?:()=>void) {
