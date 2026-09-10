@@ -72,6 +72,16 @@ function box(width = 1, height = 1, depth = 1) {
   return new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshBasicMaterial());
 }
 
+it('identifies a decoration physics conflict without registering the entity',async()=>{
+  const world=await createWorld({navigation:false});liveWorlds.push(world);
+  const object=box();let error:unknown;
+  try{world.addEntity({id:'capture-landmark',object,role:'decoration',physics:{kind:'fixed'}} as never);}catch(caught){error=caught;}
+  expect(error).toMatchObject({code:'DECORATION_CANNOT_HAVE_PHYSICS',category:'invalid-input',phase:'control',entityIds:['capture-landmark'],path:'physics',actual:'present',expected:'omitted'});
+  expect((error as {suggestedAction:string}).suggestedAction).toContain('existing collision');
+  expect(world.snapshot().entities.some(entity=>entity.id==='capture-landmark')).toBe(false);
+  object.geometry.dispose();object.material.dispose();
+});
+
 it.each([
   {role:undefined, actual:'undefined'},
   {role:'actor', actual:'"actor"'},

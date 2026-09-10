@@ -139,7 +139,10 @@ export class ThreeWorld implements API.World {
    throw {...failure('ENTITY_ROLE_REQUIRED',`addEntity options.role must be terrain, obstacle or decoration; received ${actual}.`,'invalid-input',[options.id]),
     suggestedAction:'Set options.role explicitly: terrain or obstacle for collision geometry, decoration for visual-only geometry.'};
   }
-  if(options.role==='decoration'&&options.physics)throw failure('DECORATION_CANNOT_HAVE_PHYSICS');
+  const decorationPhysics=(options as unknown as {physics?:unknown}).physics;
+  if(options.role==='decoration'&&decorationPhysics)throw {...failure('DECORATION_CANNOT_HAVE_PHYSICS',`DECORATION_CANNOT_HAVE_PHYSICS: ${options.id} has role:'decoration' but also supplies physics.`,'invalid-input',[options.id]),
+    path:'physics',actual:'present',expected:'omitted',
+    suggestedAction:"For a pure capture landmark with existing collision, keep role:'decoration' and omit physics. If this object must create collision, use role:'terrain' or role:'obstacle' with the required physics."};
   const physics=options.role==='decoration'?{kind:'none' as const}:options.physics?{...options.physics,shape:options.physics.shape==='mesh'?'trimesh' as const:options.physics.shape??'trimesh' as const}:{kind:'fixed' as const};
   if(physics.kind==='dynamic'&&(!('massKilograms' in physics)||!Number.isFinite(physics.massKilograms)||physics.massKilograms<=0))throw failure('DYNAMIC_MASS_REQUIRED');
   this.engine.addEntity({...options,physics});

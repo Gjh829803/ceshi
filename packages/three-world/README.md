@@ -338,7 +338,9 @@ interaction state so it follows the hand and does not remain duplicated.
 forces and collisions from the scene and gameplay requirements; there is no fixed
 list by object name or category. For those `map.boxes`, assign each part an
 `EnvironmentBox.rigidGroup: {id, massKg}`, using one group ID and the same total
-mass for the whole object. Omit the field for boxes that should remain fixed.
+mass for the whole object, and a different group ID for each independent object.
+Resting on the ground does not by itself make an unattached object fixed. Omit
+the field when its support or gameplay relationship should keep it fixed.
 Read current world-space part
 poses from `world.humanoid.simulation.environment.propBoxPose(id)` in
 `onVisualUpdate`; `world.reset()` restores the furniture too. The
@@ -381,7 +383,7 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 ### Brake-turn drift for authored vehicles
 
 For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` on its `humanoid.VehicleSpec`
-(`mode: 'wheeled'` or `'bike'`). The SDK integrates real lateral velocity; do not
+(`mode: 'wheeled'` or `'motorcycle'`). The SDK integrates real lateral velocity; do not
 rotate the visual root or install a second movement loop to fake a skid.
 
 ```ts
@@ -473,6 +475,14 @@ with velocity cleared. It does not walk there. Its applied command receipt
 includes `result.kind:"relocation"`, the character/vehicle IDs and actual position;
 use ordinary input for visible travel, then `vehicle.enter` when eligible.
 
+For a boarding decision, read `world.humanoid.inspectBoarding(instanceId)`:
+it identifies the actual approach position, eligibility and rejection
+reason. `inspectControls()` reports the override and last applied controller
+input with its simulation time; `inputGuide()` describes the active family's
+channels. These methods are included in the `mounted-interaction` / `humanoid`
+declaration response. Host readers can use `world_inspect` description fields
+`humanoid.boarding`, `controlState` and `inputGuide` without reading solver internals.
+
 ```ts
 await world.execute({type:'humanoid.apply-profile',profile:{character:{
   maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
@@ -551,8 +561,13 @@ values. `cameraDistanceMeters` affects only mode 0; mode 2 owns its independent
 shoulder distance. A distant opening composition is not a reason to override the
 gameplay follow distance or eye offset.
 
-Use `world.useAuthoredCamera()` for an authored opening, then return control with
-`humanoid.set-camera-mode` when play begins. Inspect the views needed by the task or an
+For an authored opening, finish the camera pose and projection and call
+`world.useAuthoredCamera()` before the first `start`, `step` or `reset`; that first
+lifecycle transition seals the opening. Then return control with
+`humanoid.set-camera-mode` when play begins. Reset restores the sealed authored
+opening after follow-camera use. The Humanoid follow mode still resets to the
+profile's `defaultPerspective`; temporary authored or shoulder views do not replace
+that default. Do not add a separate `onReset` camera writer. Inspect the views needed by the task or an
 observed camera problem. For a focused Creator check, select the view and capture
 its actual world pixels:
 
@@ -561,6 +576,30 @@ world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})
 world_preview({view:'current'})
 world_inspect({sections:['description']})
 ```
+
+`start()` starts the clock, not the user's first action. The public handoff is
+`world.humanoid.setCameraMode(0 | 1 | 2)`; there is no `humanoid.camera` method.
+Call it from the scene's chosen play input or start button. The optional
+[keyboard handoff example](../../examples/three-creator/vehicle-camera/opening-camera.ts)
+uses current movement/jump/boarding bindings on the focused gameplay surface:
+
+```ts
+// After configuring the authored pose, before the first start:
+world.useAuthoredCamera();
+installOpeningCameraHandoff(world, presentation.inputSurface);
+await world.start();
+presentation.focus();
+```
+
+Read the example via `creator_get_examples({topic:'vehicle-camera',files:['opening-camera.ts']})`
+and import its function into the scene. It leaves idle openings, paused worlds,
+UI input and ordinary camera switching alone; reset needs no extra listener.
+This particular example starts on movement, jump or boarding keys, not arbitrary
+pointer or semantic input. Choose the trigger required by the scene. Creator
+keyboard steps exercise the same DOM listener. For a semantic-input plan, select
+the camera with a `humanoid.set-camera-mode` command in the first play step (and
+after a reset when play resumes). Episode independently selects its segment
+camera and pauses the live clock; scene input handlers must not take it over.
 
 `world_preview({view:'current'})` preserves the current view without resetting or
 advancing simulation. Its `cameraObservation` includes `cameraOverrides` (explicit
@@ -912,6 +951,13 @@ from the pure world canvas. Model input must use that pure canvas or
 screenshot, presentation container or model output. Keep derived reference and
 three-view conditioning images free of baked-in HUD; preserve original inputs.
 
+`createHumanoidWorld` already registers its map collision, preset person and
+vehicles from the creation options. Do not register those objects again as
+generic physical entities. If an existing purely visual map landmark only needs
+an observation or capture identity, call `world.addEntity` with that object and
+`role:'decoration'`, omit `physics`, and select it with `setCaptureTargets` when
+needed. This does not replace genuine map collision declarations.
+
 Read the real exports from contracts.ts using the Creator schema tool by topic.
 Types describe the API; use a complete real input plan to check broad opening
 composition, connected routes and the requested core movement/actions and their
@@ -1034,6 +1080,8 @@ steering/braking, physical mass and dimensions, explicit ordered wheels,
 powertrain, collision envelope and pelvis seat. It creates no geometry, assets,
 rigid body or clock. `car` uses four driven wheels and front steering;
 `motorcycle` uses rear drive, front steering and grounded balance assistance.
+Its `mode` and `archetype` are `motorcycle`; the independent unicycle controller
+uses `mode: 'unicycle'`. Map regions must allow the selected `spec.mode`.
 Only these two road presets are provided here; other motion families retain
 their specialized controllers. `accel` remains a required legacy spec field but
 per-wheel acceleration comes from the powertrain.
@@ -1071,10 +1119,17 @@ engine dashboard. These are optional observation/presentation follow-ups, not
 production prerequisites. See the [integration status](../../docs/reviews/2026-09-09-creator-vehicle-integration-status.md)
 for scope, evidence and remaining work.
 
+When requested gameplay requires a vehicle or actor to move a prop by impact,
+identify that prop and compare its actual physical pose before and after real
+contact. Proximity, a blocked character, or a technically successful Creator
+recording does not prove that the prop moved. Use the existing playtest and
+on-demand observation evidence; this is an outcome choice, not a separate fixed
+test for every scene.
+
 ## Per-wheel road simulation
 
 An optional `VehicleSpec.wheelPhysics` enables the configurable road model for
-wheeled and bike modes. Configure `mass` in kilograms and `radius`, `hubHeight`,
+wheeled and motorcycle modes. Configure `mass` in kilograms and `radius`, `hubHeight`,
 `halfTrack`, `halfWheelbase` in metres. The capabilities playground enables it
 for the rover, racer and utility rover. Author the chassis envelope above the
 tyre contact plane; cylinder sweeps with the tyre radius, width and steering angle
@@ -1144,7 +1199,7 @@ their existing controller and wheel animation.
 
 The local playground's **原地扶正** button and unassigned **R** shortcut call
 `HumanoidRuntime.recoverVehicle()`; command clients use `vehicle.recover`.
-Recovery requires an occupied wheeled/bike/slide vehicle, nearby dry ground and
+Recovery requires an occupied wheeled/motorcycle/unicycle/slide vehicle, nearby dry ground and
 enough clearance. It first tries the current horizontal position, then searches
 outwards up to 6 metres if the chassis spans a ledge or uneven support. Nine
 support samples over the chassis footprint plus margin reject missing ground,
@@ -1205,8 +1260,10 @@ in the existing Rapier world, with gravity, CCD, friction and angular motion.
 The Agent chooses which objects need this behavior from the scene and gameplay,
 not from a prescribed category list. Set `rigidGroup` when a box assembly should
 respond to gravity, forces and collisions; omit it when the assembly should stay
-fixed. If it should rest in place, provide physical support; without support it
-falls. Keep the total group mass identical on every part.
+fixed because of its support or gameplay relationship. Resting on the ground alone
+does not make an unattached object fixed. If it should rest in place, provide
+physical support; without support it falls. Keep separate physical objects in
+separate groups and the total group mass identical on every part.
 `creator_get_examples({topic:'character-actions'})` supplies a complete example
 in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
 callback reads the current `world.humanoid.simulation.environment` after every
@@ -1226,7 +1283,7 @@ it does not implement fracture or a full Chaos vehicle solver.
 ## Configurable road vehicle physics
 
 Set `spec.wheelPhysics = humanoid.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
-for `wheeled`, `bike` or `bus` subjects. Both run in the existing physics world and use
+for `wheeled`, `motorcycle` or `bus` subjects. Both run in the existing physics world and use
 per-wheel suspension, tyre forces, dynamic chassis collision and the powertrain.
 The motorcycle profile enables grounded rider balance torque; it does not right
 an airborne or overturned vehicle. Its low-speed reverse is a playground assist.

@@ -24,7 +24,7 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
  // vertices, physics, mounted placement and the camera all use real code.
  const noop=()=>{};
  vi.stubGlobal('document',{createElement:()=>({getContext:()=>({fillRect:noop,beginPath:noop,roundRect:noop,fill:noop,fillText:noop})})});
- const specs=SPECS.filter(s=>['wheeled','bike'].includes(s.mode)),visuals=specs.map(buildVehicle);
+ const specs=SPECS.filter(s=>['wheeled','motorcycle'].includes(s.mode)),visuals=specs.map(buildVehicle);
  vi.unstubAllGlobals();
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('grand-prix'),character:{instanceId:'person',object:character.root,animation:character},vehicles:specs.map((spec,i)=>({instanceId:spec.id,assetId:spec.id,spec,object:visuals[i]!.root}))}});
  try{

@@ -12,6 +12,8 @@
 | 查看 #215 / #218 自绘载具接入范围、验证与剩余缺口 | [载具接入现状](reviews/2026-09-09-creator-vehicle-integration-status.md) |
 | 配置汽车、摩托车漂移及理解速度/抓地力影响 | [制动漂移设计与调参](three-vehicle-drift.md) |
 | 使用 Agent 工具、编译、验证和交付 | [Creator](../scripts/three-creator/README.md) |
+| 查看星夜骑行与练车两次 Agent 试跑后的优化优先级 | [两例 Harness 优化建议](reviews/2026-09-10-creator-two-case-optimization-plan.md) · [实施记录](reviews/2026-09-10-creator-case-feedback-results.md) |
+| 查看开场输入接线、能力发现与第四次 Agent 复测 | [输入接线与复测](reviews/2026-09-10-creator-input-guidance.md) |
 | 规划动作、录制、生成样式和恢复 | [Episode](../scripts/three-episode/README.md) |
 | 运行数据生产 | [生产流程](three-sdk-data-production.md) · [云生成](../scripts/cloud/three-eval-README.md) |
 | 生成 Seedance 视频、恢复任务和回收成片 | [Seedance 云端链路](three-episode-seedance.md) |

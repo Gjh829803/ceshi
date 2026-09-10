@@ -176,3 +176,56 @@ it('runs the self-drawn car and preset humanoid with native T cycling, F mountin
     expect(final.pageErrors).toEqual([]);
   } finally { await service.close(); await rm(root, {recursive: true, force: true}); }
 }, 30000);
+
+it('hands an authored opening to follow through the public Presentation surface without replacing SDK input', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'opening-camera-browser-'));
+  const service = new ThreeCreatorTools(root, 'three-sdk');
+  try {
+    const example = await readExampleFiles(path.resolve('examples/three-creator/vehicle-camera'),
+      'vehicle-camera', ['index.html', 'main.ts', 'project.json', 'episode.json', 'whitebox-materials.ts', 'opening-camera.ts']);
+    example.files['main.ts'] = `import {installOpeningCameraHandoff} from './opening-camera';\n` + example.files['main.ts']!.replace(
+      'await world.start(); presentation.focus();', `
+world.humanoid!.applyProfile({view:{defaultPerspective:'first-person'}});
+world.useAuthoredCamera();camera.position.set(14,18,22);camera.lookAt(0,0,0);camera.fov=43;camera.updateProjectionMatrix();
+world.setKeyBindings({forward:['KeyI']});
+const releaseHandoff=installOpeningCameraHandoff(world,presentation.inputSurface);
+(window as any).__openingTest={world,presentation,releaseHandoff};
+await world.start(); presentation.focus();`);
+    for (const [name, content] of Object.entries(example.files)) await writeFile(path.join(root, name), content);
+    await service.inspect();
+    const page = (service as unknown as {session: {page: Page}}).session.page;
+    const read = () => page.evaluate(() => {
+      const {world,presentation}=(window as any).__openingTest;
+      return {mode:world.cameraMode,view:world.humanoid.snapshot().cameraMode,
+        pose:world.camera.position.toArray(),fov:world.camera.fov,tick:world.simulationTick,
+        focused:document.activeElement===presentation.inputSurface,
+        isolated:presentation.inputSurface!==world.renderer.domElement&&!presentation.inputSurface.contains(presentation.ui.root)};
+    });
+    const initial=await read();expect(initial).toMatchObject({mode:'authored',fov:43,focused:true,isolated:true});
+    // Unbound keys, repeats and UI input must not begin gameplay.
+    await page.keyboard.press('w');expect((await read()).mode).toBe('authored');
+    await page.evaluate(()=>{const {presentation}=(window as any).__openingTest;presentation.inputSurface.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyI',repeat:true,bubbles:true}));});
+    expect((await read()).mode).toBe('authored');
+    await page.getByRole('button',{name:'Reset'}).focus();await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    await page.evaluate(()=>{const {world,presentation}=(window as any).__openingTest;world.stop();presentation.focus();});
+    await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    await page.evaluate(async()=>{const {world,presentation}=(window as any).__openingTest;await world.start();presentation.focus();});
+    await page.keyboard.down('i');
+    await page.waitForFunction(()=>(window as any).__openingTest.world.cameraMode==='follow');
+    await page.waitForFunction(()=>(window as any).__openingTest.world.humanoid.inspectControls().lastApplied?.input.forward===1);
+    await page.keyboard.up('i');expect((await read()).view).toBe(1);
+    await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).__openingTest.world.humanoid.snapshot().cameraMode===2);
+    await service.preview('opening');const reset=await read();expect(reset).toMatchObject({mode:'authored',pose:initial.pose,fov:43,tick:0});
+    // Creator semantic command uses the same public camera owner while paused.
+    const receipt=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.execute!({type:'humanoid.set-camera-mode',mode:0}));
+    expect(receipt.status).toBe('applied');expect((await read()).mode).toBe('follow');
+    // Episode selects its own view; DOM input must leave the exclusive clock alone.
+    await page.evaluate(async()=>{await window.__WORLDKIT_EVAL__!.episode!.prepareSegment({positionWorldMetersXYZ:[1.9,0,0],facingYawRadians:0,humanoid:{cameraMode:2}},{widthPixels:640,heightPixels:360});(window as any).__openingTest.presentation.focus();});
+    const before=await read();await page.keyboard.press('i');expect(await read()).toEqual(before);
+    await page.evaluate(async()=>{window.__WORLDKIT_EVAL__!.episode!.release();await (window as any).__openingTest.world.reset();});
+    expect((await read()).mode).toBe('authored');
+    await page.evaluate(async()=>{const {world,presentation,releaseHandoff}=(window as any).__openingTest;releaseHandoff();await world.start();presentation.focus();});
+    await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    expect((await service.inspect()).pageErrors).toEqual([]);
+  } finally { await service.close(); await rm(root, {recursive:true,force:true}); }
+}, 30000);

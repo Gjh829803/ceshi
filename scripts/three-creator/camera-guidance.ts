@@ -23,13 +23,15 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
       horizontalOffset:{default:humanoid.CAMERA_PARAMETERS.horizontalOffset.defaultValue,description:humanoid.CAMERA_PARAMETERS.horizontalOffset.description},
       cameraDistanceMeters:{description:humanoid.CAMERA_DISTANCE_METERS_SCHEMA.description},
     }}),
-    opening:'Opening: world.useAuthoredCamera(); play: humanoid.camera. Avoid onReset camera takeovers in Episode.',
+    opening:'Before first start/step/reset, set pose/projection and world.useAuthoredCamera(). To play, call world.humanoid.setCameraMode(0|1|2). start() only runs the clock; reset restores the opening. No onReset camera takeover.',
+    openingExample:{tool:'creator_get_examples',arguments:{topic:'vehicle-camera',files:['opening-camera.ts']},
+      scope:'Optional keyboard policy with current bindings. Semantic input uses camera commands; Episode selects its own view.'},
     verify:{
       selectView:{tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}},
       currentView:{tool:'world_preview',arguments:{view:'current'}},
       read:'cameraObservation: cameraOverrides (explicit), cameraSettings, framing, alongside pixels.',
       opening:'opening resets, unlike current.',
-      playtest:'Cover requested camera behavior in the task self-check; inspect other views or lifecycle transitions only when relevant to an observed problem.',
+      playtest:'Cover requested camera behavior; inspect extra views or transitions for observed problems.',
     },
     inspect:{
       tool:'world_inspect',arguments:{sections:['description']},

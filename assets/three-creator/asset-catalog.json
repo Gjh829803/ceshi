@@ -1205,7 +1205,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.bike"
+        "locomotion.motorcycle"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -1213,7 +1213,7 @@
           "id": "bike",
           "name": "两轮摩托",
           "en": "LEAN",
-          "mode": "bike",
+          "mode": "motorcycle",
           "kernel": "K02",
           "color": "#a4d479",
           "spawn": [
@@ -1234,7 +1234,7 @@
           ],
           "camera": 6.8,
           "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
-          "archetype": "bike",
+          "archetype": "motorcycle",
           "envelope": {
             "kind": "box",
             "halfExtents": [
@@ -2161,7 +2161,7 @@
       },
       "resources": [],
       "locomotionBindingIds": [
-        "locomotion.bike"
+        "locomotion.motorcycle"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -2169,7 +2169,7 @@
           "id": "touring-bike",
           "name": "长途巡航摩托",
           "en": "TOURER",
-          "mode": "bike",
+          "mode": "motorcycle",
           "kernel": "K02",
           "color": "#507fc4",
           "spawn": [
@@ -2190,7 +2190,7 @@
           ],
           "camera": 7.3,
           "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
-          "archetype": "bike",
+          "archetype": "motorcycle",
           "visualVariant": "touring",
           "envelope": {
             "kind": "box",
@@ -5050,7 +5050,7 @@
           "id": "unicycle",
           "name": "独轮车",
           "en": "UNICYCLE",
-          "mode": "bike",
+          "mode": "unicycle",
           "archetype": "unicycle",
           "kernel": "K02",
           "color": "#d9bd36",

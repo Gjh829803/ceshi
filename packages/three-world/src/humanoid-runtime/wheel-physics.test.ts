@@ -93,12 +93,12 @@ describe('per-wheel road vehicle',()=>{
  });
  it('does not use motorcycle balance to right the body in the air',()=>{
   const a=fixture(),b=fixture();
-  for(const [f,balanceAssist] of [[a,true],[b,false]] as const){f.v=createVehicle({...spec,mode:'bike',wheelPhysics:createRoadPhysicsProfile('motorcycle',{balanceAssist})});f.v.position.y=8;f.v.rotation.setFromAxisAngle(new Vector3(0,0,1),.4);}
+  for(const [f,balanceAssist] of [[a,true],[b,false]] as const){f.v=createVehicle({...spec,mode:'motorcycle',wheelPhysics:createRoadPhysicsProfile('motorcycle',{balanceAssist})});f.v.position.y=8;f.v.rotation.setFromAxisAngle(new Vector3(0,0,1),.4);}
   try{run(a,15);run(b,15);expect(a.v.wheelPhysics!.wheels.every(w=>!w.contact)).toBe(true);expect(a.v.rotation.angleTo(b.v.rotation)).toBeLessThan(.001);expect(a.v.velocity.y).toBeLessThan(-1);}
   finally{a.q.dispose();b.q.dispose();}
  });
  it('supports a two-wheel rear-driven motorcycle with grounded balance and braking',()=>{
-  const f=fixture();f.v=createVehicle({...spec,mode:'bike',envelope:{kind:'box',halfExtents:[.65,1.2,1.65],offset:[0,1.2,0]},wheelPhysics:createRoadPhysicsProfile('motorcycle')});
+  const f=fixture();f.v=createVehicle({...spec,mode:'motorcycle',envelope:{kind:'box',halfExtents:[.65,1.2,1.65],offset:[0,1.2,0]},wheelPhysics:createRoadPhysicsProfile('motorcycle')});
   try{run(f,180);expect(f.v.wheelPhysics!.wheels).toHaveLength(2);expect(f.v.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);expect(Math.abs(f.v.roll)).toBeLessThan(.05);run(f,180,{...emptyInput(),forward:1});expect(f.v.position.z).toBeGreaterThan(8);expect(f.v.speed).toBeGreaterThan(5);run(f,100,{...emptyInput(),forward:1,steer:.3});expect(f.v.position.x).toBeLessThan(-.2);expect(Math.abs(f.v.roll)).toBeLessThan(.8);run(f,300,{...emptyInput(),brake:true});expect(f.v.speed).toBeLessThan(.5);}
   finally{f.q.dispose();}
  });
@@ -107,7 +107,7 @@ describe('per-wheel road vehicle',()=>{
   try{run(f,180);expect(f.v.wheelPhysics!.wheels).toHaveLength(6);expect(f.v.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);run(f,120,{...emptyInput(),forward:1});expect(f.v.speed).toBeGreaterThan(5);}
   finally{f.q.dispose();}
  });
- it.each(['bike','slide','hover'] as const)('lets a %s push dynamic furniture while fixed walls still stop it',mode=>{
+ it.each(['motorcycle','slide','hover'] as const)('lets a %s push dynamic furniture while fixed walls still stop it',mode=>{
   const f=fixture([{id:'prop',position:[0,1.5,6],size:[1.2,3,.6],rigidGroup:{id:'prop',massKg:8}},{id:'wall',position:[0,3,18],size:[30,6,.5]}]);
   const {wheelPhysics,...controllerSpec}=spec;f.v=createVehicle({...controllerSpec,mode});
   try{for(let n=0;n<360;n++){f.q.syncActorBodies([{id:"controller-proxy",position:f.v.position,rotation:f.v.rotation,body:spec.envelope}]);run(f,1,{...emptyInput(),forward:1});}expect(f.q.colliderForId('prop')!.translation().z).toBeGreaterThan(7);expect(f.v.position.z).toBeGreaterThan(6);expect(f.v.position.z).toBeLessThan(16);expect(f.q.colliderForId('wall')!.translation().z).toBe(18);}
@@ -239,7 +239,8 @@ describe('per-wheel road vehicle',()=>{
 describe('model-free road vehicle configurations',()=>{
  it.each(['car','motorcycle'] as const)('creates independent %s configurations that drive without a model asset',kind=>{
   const selected=publicHumanoid.createRoadVehicleSpec(kind);
-  expect(selected.mode).toBe(kind==='car'?'wheeled':'bike');
+  expect(selected.mode).toBe(kind==='car'?'wheeled':'motorcycle');
+  expect(selected.archetype).toBe(kind==='car'?'rover':'motorcycle');
   expect(selected.wheelPhysics.wheels).toHaveLength(kind==='car'?4:2);
   expect(selected.wheelPhysics.powertrain.torqueCurve.length).toBeGreaterThan(1);
   expect(selected.brakeDrift).not.toBe(true);

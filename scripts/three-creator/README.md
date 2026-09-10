@@ -85,8 +85,10 @@ The Agent decides which objects should be dynamic from the scene and gameplay;
 there is no prescribed list of object categories. For `map.boxes` that should
 respond to gravity, forces and collisions, configure
 `EnvironmentBox.rigidGroup: {id, massKg}` on every part of the object, using one
-group ID and the same total mass in kilograms. Omit the field for boxes that
-should stay fixed. Supply physical support when the object should rest in place.
+group ID and the same total mass in kilograms. Give different objects independent
+group IDs. Resting on the ground does not make an unattached object fixed; omit
+`rigidGroup` only when its support or gameplay relationship should keep it fixed.
+Supply physical support when the object should rest in place.
 `creator_get_examples({topic:'character-actions'})` uses tables and a chair to illustrate
 seat/pickup interactions, visual pose synchronization and reset. The SDK owns
 the dynamic bodies; scene code reads `propBoxPose(id)` from the current Humanoid
@@ -114,6 +116,12 @@ mode 1; follow distance affects only mode 0. Read the
 for details. Workspace SDK guidance points to current source and matching runtime
 inspection; Host values are not authority for edited SDKs. Standalone nonhuman
 guidance uses `setCameraFollow({view})`; raw guidance does not claim Humanoid support.
+
+For an authored opening, `cameraAuthoring.openingExample` points to the optional
+scene keyboard handoff using `presentation.inputSurface` and the existing
+`world.humanoid.setCameraMode` method. Creator key steps exercise the scene listener;
+semantic plans can issue `humanoid.set-camera-mode` explicitly. Starting the clock
+does not by itself switch an authored camera. Episode chooses its own segment view.
 
 `assets_search({query, limit?, offset?})` returns ranked summaries: 5 by default,
 20 maximum. Empty query lists permitted assets; continue with `nextOffset` until
@@ -238,6 +246,12 @@ is applied. Contextual map anchors use their documented **+Z** heading conventio
 `world_preview` offers opening, current, top-down and entity-triview captures of pure world
 pixels. Mount HUD through `world.createPresentation()`.
 
+In a Humanoid world, collision boxes, the preset person and vehicles are created
+from `createHumanoidWorld` options. Do not register the same map collision again.
+To give an existing purely visual map landmark an observation or capture identity,
+register its object with `role:'decoration'` and omit `physics`, then select it as
+a capture target when needed. Keep genuine map collisions in the Humanoid map.
+
 ## Real input episodes
 
 `episode.json` stores browser input and SDK commands independently of rendering
@@ -313,11 +327,13 @@ Keep glass transparency, opacity and material-array slots when recoloring a mode
 white or gray. Camera collision uses rigid vehicle geometry to preserve open
 cabins; the vehicle movement envelope remains intact. Inspect the first-person
 view and a low-angle orbit near the cabin when those views are part of the scene.
-An authored opening belongs in the user reset/start action, not an unconditional
-`onReset` camera write during Episode capture.
-
-Use `world.useAuthoredCamera()` for that opening and hand control back through
-`humanoid.set-camera-mode` when play begins. To check shoulder view, call
+Finish the authored opening pose and projection and call
+`world.useAuthoredCamera()` before the first `start`, `step` or `reset`, which
+seals that opening. Hand control back through `humanoid.set-camera-mode` when play
+begins. Reset restores the sealed authored opening after follow-camera use; the
+Humanoid follow mode still resets to the profile's `defaultPerspective`, so a
+temporary authored or shoulder view does not replace that default. Do not add an
+unconditional `onReset` camera writer during Episode capture. To check shoulder view, call
 `world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})`, then
 `world_preview({view:'current'})`. Current preview preserves the view without reset
 or simulation stepping. Its `cameraObservation` includes `cameraOverrides`
@@ -362,11 +378,41 @@ active time.
 `world_playtest` returns `status:passed` when technical recording checks pass;
 read `executionMode` and `isCompleteEpisode` separately. Target `reached` means a
 sample entered its XYZ tolerance, not that a gameplay goal was independently verified.
+If the requested outcome is moving a prop by impact, identify that prop and compare
+its actual physical pose before and after real contact; player proximity, a blocked
+character or technical `passed` status is not evidence of prop displacement.
 Omit `durationSeconds` for the full plan. A shorter value truncates debugging;
 a longer value keeps waiting after all steps, with unreleased keys held until cleanup.
 `framesPerSecond` requests video capture samples, not simulation or display FPS.
 `actualWallSeconds` measures this input/recording interval and its finalization;
 it excludes browser startup and subsequent transcoding, and is not whole-task time.
+
+For a question about an already recorded interval, use the playtest result's
+`readTrace` link, or query the same service session directly:
+
+```js
+world_read_playtest({operationId: 'the-playtest-operation-id',
+  fromSeconds: 11, toSeconds: 20, maxSamples: 12})
+```
+
+Times are seconds since the browser trace began, not whole-task time or the sum
+of planned step durations. The reader returns original sample indices, positions,
+velocity magnitudes, mounted instance, camera mode and up to 32 keyboard events.
+It returns at most `maxSamples` uniformly selected samples (default 12, range 2–32),
+including interval endpoints that were actually sampled. Omitted counts are
+explicit; narrow the range for short transitions. Maximum speed uses all valid
+velocity samples in that range; missing measurements remain null. Long text is
+marked with an ellipsis. It does not infer travel between reset/mount transitions,
+track arbitrary prop displacement or decide task success.
+
+The summary carries recorded source/runtime/episode hashes, trace SHA256,
+operation time and recording status. `currentWorldComparison:'not-performed'`
+means it describes that recording even if the current source changed. This read
+does not compile, open a browser, advance simulation, create an operation or
+re-record. It works after the service closes its browser, within that same service
+instance. Unknown IDs and different operation types are rejected; pending runs
+return `not-ready`, and missing/changed trace files return `unavailable`. These
+advisory results do not change recording or submission eligibility.
 
 `recordingReadiness` reports the existing recording prerequisites immediately:
 `eligible` and `issues` cover technical success, plan completeness and required

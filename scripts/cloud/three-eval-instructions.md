@@ -37,6 +37,18 @@ and bind it through addCharacter({object,body,movement}), registerMovement, or a
 VehicleInstance {object,spec}. The raw profile uses normal Three and
 implements its own movement, physics and observation.
 
+Choose fixed or dynamic collision from how each object is supported and how the
+requested gameplay should affect it. Resting on the ground does not by itself
+make an object fixed. If an unattached object should react to pushes or impacts,
+use the selected profile's dynamic-body capabilities. In a Humanoid world, use
+the existing movable-prop `rigidGroup` contract and keep its visuals synchronized
+from the current environment's `propBoxPose`; objects intended to stay fixed
+retain fixed collision. Humanoid map collision is already
+created through `createHumanoidWorld` options. Register a map object separately
+only when it needs an observation/capture identity; for a pure visual landmark,
+use `role:'decoration'` and omit `physics` rather than registering its collision
+again.
+
 Use these layers as needed:
 1. Use the entry point and asset bindings appropriate to the controlled subject.
 2. For humanoid actions, read character-actions capability cards for inputs, eligibility, scene conditions,
@@ -77,11 +89,17 @@ Use characterContinuity and relevant frames when a requested outcome or observed
 problem calls for them. This structural diagnostic is advisory and cannot certify
 preset provenance or identify an extra human mesh by shape. Report unsupported
 poses instead of substituting a primitive rider. Repair observed functional problems.
+When an outcome requires an impact to move an object, verify the identified
+object's actual pose before and after real contact. Proximity, a blocked character,
+or `world_playtest.status:'passed'` does not establish that the object moved.
 After the final source change, complete an input episode covering the core actions
 and their outcomes. Choose its length by functional coverage; omit world_playtest
 durationSeconds to execute the full plan. Use a shorter durationSeconds for a
 debug run while keeping episode.json unchanged. Read targetResults.nearestSample
 for measured position, time and target-minus-player XYZ offsets when tuning routes.
+For a specific recorded interval, use world_read_playtest with the playtest
+operationId and fromSeconds/toSeconds to read sampled motion, mounting and keys;
+this reads saved evidence without another recording. Missing telemetry is unknown.
 recordingReadiness describes recording prerequisites for the reported world and
 episode hashes; a truncated debug run is incomplete even when status is passed.
 Once a complete recording covers the requested outcomes and the world/episode

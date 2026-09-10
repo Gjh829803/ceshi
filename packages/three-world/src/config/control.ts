@@ -38,7 +38,7 @@ export function defaultMovementSettings(mode:Mode|'character',base:CoreControl):
  if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('slide',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
   coastDeceleration:.22,brakeDeceleration:6,brakeDamping:0,steeringResponse:4,steeringReturn:6,
   dragQuadratic:.006,pitchResponse:12,rollResponse:10};
- const road=mode==='wheeled'||mode==='bike',creature=mode==='mount'||mode==='carriage',person=mode==='character';
+ const road=mode==='wheeled'||mode==='motorcycle'||mode==='unicycle',creature=mode==='mount'||mode==='carriage',person=mode==='character';
  return {speed:base.speed,accel:base.accel,grip:base.grip,steer:base.steer,
   maxSpeed:person?5.8*base.speed/3.8:mode==='dragon'?base.speed*1.2:creature||['plane','glider','space','sub'].includes(mode)?base.speed:base.speed*1.15,
   reverseSpeed:mode==='dragon'?base.speed*.2:mode==='carriage'?1.4:mode==='mount'?2.5:base.speed*.3,

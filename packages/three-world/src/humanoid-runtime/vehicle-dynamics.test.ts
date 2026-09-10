@@ -40,7 +40,7 @@ it.each(added)('%s is stopped by the shared rigid body collision solver',id=>{
 });
 it('native bodies exchange collision impulses, retain one owner, and release/reset through the runtime',async()=>{
   const spec=SPECS.find(v=>v.id==='unicycle')!;
-  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:{...map,boxes:[{...map.boxes[0]!,position:[0,-1,0]}],water:[],spawns:[{id:'a',name:'A',vehicleId:'a',position:[0,.05,0],yaw:0,regionId:'road'},{id:'b',name:'B',vehicleId:'b',position:[0,.05,2],yaw:0,regionId:'road'}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['character','bike']}]},vehicles:['a','b'].map(instanceId=>({instanceId,assetId:'vehicle.unicycle',spec,object:new Group()})),character:{instanceId:'person',object:new Group()}}});
+  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:{...map,boxes:[{...map.boxes[0]!,position:[0,-1,0]}],water:[],spawns:[{id:'a',name:'A',vehicleId:'a',position:[0,.05,0],yaw:0,regionId:'road'},{id:'b',name:'B',vehicleId:'b',position:[0,.05,2],yaw:0,regionId:'road'}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['character','unicycle']}]},vehicles:['a','b'].map(instanceId=>({instanceId,assetId:'vehicle.unicycle',spec,object:new Group()})),character:{instanceId:'person',object:new Group()}}});
   try{
     world.step({},60);const [a,b]=world.humanoid!.simulation.vehicles;const before=b!.position.clone();a!.velocity.z=6;world.step({},30);
     expect(b!.position.distanceTo(before)).toBeGreaterThan(.05);

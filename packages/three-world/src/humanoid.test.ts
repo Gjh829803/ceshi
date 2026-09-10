@@ -11,6 +11,29 @@ const worlds:ThreeWorld[]=[];
 const map:EnvironmentDefinition={id:'room',name:'Room',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();});
 
+it.each([
+  {center:[0,24],actual:[0,24]},
+  {center:[0,Number.NaN,24],actual:[0,'NaN',24]},
+  {center:undefined,actual:'missing'},
+  {center:new Proxy([0,24],{getOwnPropertyDescriptor(){throw new Error('diagnostic blocked');}}),actual:'unavailable'},
+])('identifies an invalid region center without allocating the Humanoid world ($actual)',async({center,actual})=>{
+  const invalid={...map,regions:[{id:'road',name:'Road',description:'',center,size:[20,12],color:'#fff',modes:['wheeled']}]} as unknown as EnvironmentDefinition;
+  let error:unknown;try{await createHumanoidWorld({map:invalid});}catch(caught){error=caught;}
+  expect(error).toMatchObject({code:'ENVIRONMENT_INVALID',category:'invalid-input',phase:'environment',entityIds:['road'],path:'regions[0].center',actual,expected:'three finite numbers [x,y,z], each with absolute value <= 100000'});
+  expect((error as Error).message).toContain('regions[0].center');
+});
+
+it('identifies Humanoid content that must be registered in creation options',async()=>{
+  const person=new THREE.Group();
+  const world=await createWorld({navigation:false,humanoid:{map,vehicles:[],character:{instanceId:'player',object:person}}});worlds.push(world);
+  const landmark=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial());
+  let error:unknown;try{world.addEntity({id:'town-hall',object:landmark,role:'obstacle'});}catch(caught){error=caught;}
+  expect(error).toMatchObject({code:'HUMANOID_CONTENT_REGISTER_IN_OPTIONS',category:'content',phase:'physics',entityIds:['town-hall'],path:'world.addEntity',actual:'physical entity registration after Humanoid creation',expected:'map, vehicles or characters in Humanoid creation options'});
+  expect((error as {suggestedAction:string}).suggestedAction).toContain("role:'decoration'");
+  expect(world.snapshot().entities.some(entity=>entity.id==='town-hall')).toBe(false);
+  landmark.geometry.dispose();landmark.material.dispose();
+});
+
 it('uses explicit standalone resources without requiring a Creator catalog',async()=>{
   vi.stubGlobal('document',{baseURI:'https://standalone.test/'});
   const fetch=vi.fn(async()=>new Response(null,{status:404}));vi.stubGlobal('fetch',fetch);
