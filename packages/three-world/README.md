@@ -383,7 +383,7 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 ### Brake-turn drift for authored vehicles
 
 For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` on its `humanoid.VehicleSpec`
-(`mode: 'wheeled'` or `'bike'`). The SDK integrates real lateral velocity; do not
+(`mode: 'wheeled'` or `'motorcycle'`). The SDK integrates real lateral velocity; do not
 rotate the visual root or install a second movement loop to fake a skid.
 
 ```ts
@@ -1080,6 +1080,8 @@ steering/braking, physical mass and dimensions, explicit ordered wheels,
 powertrain, collision envelope and pelvis seat. It creates no geometry, assets,
 rigid body or clock. `car` uses four driven wheels and front steering;
 `motorcycle` uses rear drive, front steering and grounded balance assistance.
+Its `mode` and `archetype` are `motorcycle`; the independent unicycle controller
+uses `mode: 'unicycle'`. Map regions must allow the selected `spec.mode`.
 Only these two road presets are provided here; other motion families retain
 their specialized controllers. `accel` remains a required legacy spec field but
 per-wheel acceleration comes from the powertrain.
@@ -1127,7 +1129,7 @@ test for every scene.
 ## Per-wheel road simulation
 
 An optional `VehicleSpec.wheelPhysics` enables the configurable road model for
-wheeled and bike modes. Configure `mass` in kilograms and `radius`, `hubHeight`,
+wheeled and motorcycle modes. Configure `mass` in kilograms and `radius`, `hubHeight`,
 `halfTrack`, `halfWheelbase` in metres. The capabilities playground enables it
 for the rover, racer and utility rover. Author the chassis envelope above the
 tyre contact plane; cylinder sweeps with the tyre radius, width and steering angle
@@ -1197,7 +1199,7 @@ their existing controller and wheel animation.
 
 The local playground's **原地扶正** button and unassigned **R** shortcut call
 `HumanoidRuntime.recoverVehicle()`; command clients use `vehicle.recover`.
-Recovery requires an occupied wheeled/bike/slide vehicle, nearby dry ground and
+Recovery requires an occupied wheeled/motorcycle/unicycle/slide vehicle, nearby dry ground and
 enough clearance. It first tries the current horizontal position, then searches
 outwards up to 6 metres if the chassis spans a ledge or uneven support. Nine
 support samples over the chassis footprint plus margin reject missing ground,
@@ -1281,7 +1283,7 @@ it does not implement fracture or a full Chaos vehicle solver.
 ## Configurable road vehicle physics
 
 Set `spec.wheelPhysics = humanoid.createRoadPhysicsProfile('car' | 'motorcycle', overrides)`
-for `wheeled`, `bike` or `bus` subjects. Both run in the existing physics world and use
+for `wheeled`, `motorcycle` or `bus` subjects. Both run in the existing physics world and use
 per-wheel suspension, tyre forces, dynamic chassis collision and the powertrain.
 The motorcycle profile enables grounded rider balance torque; it does not right
 an airborne or overturned vehicle. Its low-speed reverse is a playground assist.

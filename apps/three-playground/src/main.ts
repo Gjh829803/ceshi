@@ -955,7 +955,7 @@ function updateUI() {
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
   const drive=v?humanoid.vehicleDriveTelemetry(v):null;
-  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
+  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','slide'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`

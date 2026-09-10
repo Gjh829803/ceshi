@@ -97,7 +97,7 @@ it('discovers handling configurations without offering vehicle models', async ()
   expect(result.assets).toEqual([]);
   const selected=await schema(tools,{topic:'humanoid',sections:['humanoid']});
   expect(selected.roadVehicleConfigurations!.car.mode).toBe('wheeled');
-  expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('bike');
+  expect(selected.roadVehicleConfigurations!.motorcycle.mode).toBe('motorcycle');
   expect(selected.roadVehicleConfigurations!.car.wheelPhysics.wheels).toHaveLength(4);
   expect(selected.roadVehicleConfigurations!.motorcycle.wheelPhysics.wheels).toHaveLength(2);
   expect(selected.humanoidSourceContracts['humanoid-runtime/road-vehicle.ts']).toContain('export declare function createRoadVehicleSpec');

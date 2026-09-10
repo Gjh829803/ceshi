@@ -5,7 +5,7 @@ import { createCampusCharacterCourse, createCharacterWorkshop } from '../humanoi
 import { SPECS } from '../config';
 import { createGrandPrix } from './grand-prix';
 const characterCourse=createCampusCharacterCourse();
-const groundModes=['character','wheeled','bus','tank','bike','slide','sled','ski','hover','mount','carriage'];
+const groundModes=['character','wheeled','bus','tank','motorcycle', 'unicycle','slide','sled','ski','hover','mount','carriage'];
 const regions:MapRegion[]=[
  {id:'staging',name:'01 / 车辆准备区',description:'上下车、转向与六快捷槽',center:[-12,0,66],size:[130,54],color:'#ddb573',modes:groundModes},
  {id:'indoor',name:'02 / 室内实验楼',description:'门洞 · 立柱 · 低顶 · 楼梯 · 二层 · 车库',center:[-180,0,-20],size:[76,68],color:'#77b9c6',modes:groundModes},

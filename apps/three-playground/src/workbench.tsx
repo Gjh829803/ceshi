@@ -343,7 +343,7 @@ function CameraEditor({
           侧向阻尼控制转向后的横滑。Space 上浮、Ctrl 下潜，Shift 独立制动。
         </p>
       )}
-      {(mode === "wheeled" || mode === "bike") && (
+      {(mode === "wheeled" || mode === "motorcycle") && (
         <p className="wb-note">
           转向倍率作用于随速度变化的转弯半径。实际轨迹还受抓地、制动和碰撞影响；松油减速和刹车参数可独立调整。
         </p>

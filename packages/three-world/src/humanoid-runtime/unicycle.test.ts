@@ -20,6 +20,7 @@ function fixture(wall=false){
 }
 it('plants a foot, lifts before driving, pedals with travel and supports repeated stops without dismount',()=>{
   const {q,v,run}=fixture();try{
+    expect(v.spec).toMatchObject({mode:'unicycle',archetype:'unicycle',characterPose:'unicycle'});
     run(1);expect(v.unicycle!.phase).toBe('supported');expect(v.unicycle!.supportLocal).not.toBeNull();
     const p=v.position.clone();run(.25,{forward:1});expect(v.unicycle!.phase).toBe('lifting');expect(v.position.distanceTo(p)).toBeLessThan(.01);
     expect(v.unicycle!.footDown).toBeGreaterThan(.4);run(.4,{forward:1});expect(v.speed).toBeGreaterThan(0);expect(v.unicycle!.footDown).toBe(0);
@@ -102,7 +103,7 @@ it('retains the original skeleton and fits alternating pedals, ground support an
   }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15000);
 it('uses Episode starts and common collision ownership, snapshots and reset with a parked vehicle',async()=>{
-  const f=fixture(),map={...f.q.map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0] as const,size:[180,180] as const,color:'#ccc',modes:['character','bike'] as ('character'|'bike')[]}],spawns:[{id:'a',name:'A',vehicleId:'driver',position:[0,.035,0] as const,yaw:0,regionId:'road'},{id:'b',name:'B',vehicleId:'parked',position:[0,.035,4] as const,yaw:0,regionId:'road'}]};
+  const f=fixture(),map={...f.q.map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0] as const,size:[180,180] as const,color:'#ccc',modes:['character','unicycle'] as ('character'|'unicycle')[]}],spawns:[{id:'a',name:'A',vehicleId:'driver',position:[0,.035,0] as const,yaw:0,regionId:'road'},{id:'b',name:'B',vehicleId:'parked',position:[0,.035,4] as const,yaw:0,regionId:'road'}]};
   const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:['driver','parked'].map(instanceId=>({instanceId,assetId:'vehicle.unicycle',spec:UNICYCLE_SPEC,object:buildUnicycleModel()})),character:{instanceId:'person',object:new Group()}}});
   try{
     world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});

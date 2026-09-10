@@ -30,7 +30,7 @@ describe('player family route input',()=>{
 
 describe('actual player capture controller and humanoid physics integration',()=>{
  const assets=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;vehicle?:{spec:VehicleSpec}}[];
- for(const family of ['unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','sub','space'] as const){
+ for(const family of ['motorcycle','unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','sub','space'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
    const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-sub'?a.id==='vehicle.observation-sub':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
    const aquatic=family==='raft'||family==='jetski'||family==='observation-sub'||family==='sub'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
@@ -49,6 +49,7 @@ describe('actual player capture controller and humanoid physics integration',()=
    const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:asset.id,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
    try{
     const runtime=world.humanoid!;expect(runtime.probeEpisodeStart(segment.start).isValid).toBe(true);runtime.prepareEpisodeStart(segment.start);
+    expect(world.snapshot().humanoid!.vehicles[0]!.mode).toBe(spec.mode);
     const controller=new PlayerCaptureController(segment,{kind:'ground',walkSpeedMetersPerSecond:3.1,runSpeedMetersPerSecond:5.8,heightMeters:1.68,radiusMeters:.28},'follow',async start=>runtime.probeEpisodeStart(start));
     const frames:{snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[]=[];
     const revision=runtime.simulation.teleportRevision;let tick=0;

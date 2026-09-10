@@ -49,7 +49,7 @@ it('disables roll without changing vehicle attitude and remains finite at a vert
 it('exposes controller-specific fields without turning inactive stored values into new gates',async()=>{
  const {controlSchemaForFamily,controlFields}=await import('./control-fields');
  const {defaultMovementSettings,parseMovementSettings,DEFAULT_CHARACTER_CONTROL_BASE,CONTROL_RANGES}=await import('./control');
- expect(controlSchemaForFamily('bike')).not.toHaveProperty('rollResponse');
+ expect(controlSchemaForFamily('motorcycle')).not.toHaveProperty('rollResponse');
  expect(controlSchemaForFamily('plane')).toHaveProperty('rollResponse');
  expect(controlFields('glider').find(field=>field.key==='accel')?.disabled).toBe(true);
  expect(parseMovementSettings({rollResponse:4},defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE)).rollResponse).toBe(4);

@@ -1,7 +1,7 @@
 # 独轮车
 
 资产库中的 `vehicle.unicycle` 是陆地独轮车：单轮、黄色轮圈、车叉、鞍座和一对相反相位的踏板。
-载具沿用 `bike` 的输入和地图分类，`archetype` 与 `characterPose` 均为 `unicycle`。
+载具的 `mode`、`archetype` 与 `characterPose` 均为 `unicycle`；地图区域需允许 `unicycle`。
 人物复用 `humanoid.source-101`，同一实例完成步行、F 上车、骑行、F 下车和重置。
 
 - W 前进；S 先制动，再倒骑；A / D 重心转向；Space 制动；Shift 提高限速。

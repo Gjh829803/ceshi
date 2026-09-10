@@ -53,7 +53,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     root.add(pivot);wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius:r});return pivot;
   }
   function pilotSeat(y:number,z=0){box(root,.72,.13,.75,0,y,z,dark);box(root,.74,.72,.13,0,y+.35,z-.38,dark);}
-  function roadSeat(){const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';if(s.mode!=='bike')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';}
+  function roadSeat(){const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';if(s.mode!=='motorcycle')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';}
   function thruster(x:number,y:number,z:number){const glow=new T.Mesh(new T.ConeGeometry(.18,.8,12),new T.MeshBasicMaterial({color:'#95f9ff',transparent:true,opacity:.65}));glow.rotation.x=-Math.PI/2;glow.position.set(x,y,z);root.add(glow);engine.push(glow);}
   const archetype=s.archetype;
   if(archetype==='unicycle'){root.add(buildUnicycleModel());
@@ -147,7 +147,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     if(sporty){box(root,2.6,.08,.5,0,1.3,-1.85,dark);tube([-.8,.8,-1.85],[-.8,1.3,-1.85]);tube([.8,.8,-1.85],[.8,1.3,-1.85]);}
     for(const x of [-.65,.65]){box(root,.45,.17,.06,x,.85,1.94,new T.MeshBasicMaterial({color:'#fff6d5'}));box(root,.3,.13,.05,x,.8,-1.94,new T.MeshBasicMaterial({color:'#fb6d5c'}));}
     tube([0,.9,.3],[0,1.1,.65]);const steerWheel=new T.Mesh(new T.TorusGeometry(.25,.03,8,24),dark);steerWheel.rotation.x=-.5;steerWheel.position.set(0,1.1,.65);root.add(steerWheel);
-  } else if(archetype==='bike') {
+  } else if(archetype==='motorcycle') {
     wheel(0,.48,-1.1,.48,.28);steering.push(wheel(0,.48,1.1,.48,.28));
     tube([0,.5,-1.1],[0,1,.4],.13,paint);tube([0,.5,-1.1],[0,.55,.5],.09);tube([0,.55,.5],[0,.48,1.1],.07,chrome);
     box(root,.52,.3,.9,0,.85,.2,paint);roadSeat();
