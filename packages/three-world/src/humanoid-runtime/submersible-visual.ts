@@ -1,5 +1,5 @@
 import {Group,SphereGeometry,InstancedMesh,Matrix4,MeshBasicMaterial,Object3D} from 'three';
-import type {SubmersibleState} from './submersible';
+import type {SubmersibleState} from './motion-families/underwater/submersible';
 import {markCameraVisualEffect} from './camera-visual-effects';
 export function sampleSubmersibleVisual(root:Object3D,s:SubmersibleState,time:number){
  for(const side of [-1,1]){const rotor=root.getObjectByName(`submersible.rotor.${side}`);if(rotor)rotor.rotation.z=s.rotorPhase;}

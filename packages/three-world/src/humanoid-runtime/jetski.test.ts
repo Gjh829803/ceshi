@@ -22,23 +22,23 @@ function fixture(water=true,wall=false){
 }
 it('floats, drives, boosts, brakes before reverse, steers under thrust and fades its wake at rest',()=>{
  const {q,v,run}=fixture();try{
- run(2,{steer:1});expect(v.yaw).toBeCloseTo(0,4);expect(Math.abs(v.position.y)).toBeLessThan(.1);expect(v.jetski!.particles).toHaveLength(0);
- run(5,{forward:1});expect(v.speed).toBeGreaterThan(22);const speed=v.speed;expect(v.jetski!.particles.length).toBeGreaterThan(50);
+ run(2,{steer:1});expect(v.yaw).toBeCloseTo(0,4);expect(Math.abs(v.position.y)).toBeLessThan(.1);expect(v.motion.jetski!.particles).toHaveLength(0);
+ run(5,{forward:1});expect(v.speed).toBeGreaterThan(22);const speed=v.speed;expect(v.motion.jetski!.particles.length).toBeGreaterThan(50);
  run(2,{forward:1,boost:true});expect(v.speed).toBeGreaterThan(speed+4);expect(Math.abs(v.position.y)).toBeLessThan(.25);
  run(.3,{forward:-1});expect(v.velocity.z).toBeGreaterThan(0);run(5,{forward:-1});expect(v.velocity.z).toBeLessThan(-4);
- run(1,{brake:true});expect(v.speed).toBeLessThan(.01);run(2.2);expect(v.jetski!.particles).toHaveLength(0);
+ run(1,{brake:true});expect(v.speed).toBeLessThan(.01);run(2.2);expect(v.motion.jetski!.particles).toHaveLength(0);
  run(3,{forward:1,steer:1});expect(Math.abs(v.yaw)).toBeGreaterThan(.4);expect(Math.abs(v.roll)).toBeGreaterThan(.04);
- const yaw=v.yaw;run(1,{forward:1,steer:-1});expect(v.yaw).toBeGreaterThan(yaw);expect(v.jetski!.particles.some(p=>p.foam)).toBe(true);
+ const yaw=v.yaw;run(1,{forward:1,steer:-1});expect(v.yaw).toBeGreaterThan(yaw);expect(v.motion.jetski!.particles.some(p=>p.foam)).toBe(true);
  }finally{q.dispose();}
 });
 it('has no jet thrust on dry land or in air and sweeps against a solid pier',()=>{
- const dry=fixture(false);try{dry.run(2,{forward:1,steer:1,boost:true});expect(Math.hypot(dry.v.position.x,dry.v.position.z)).toBeLessThan(.01);expect(dry.v.jetski!.particles).toHaveLength(0);expect(dry.v.grounded).toBe(true);}finally{dry.q.dispose();}
- const {q,v,run}=fixture(true,true);try{run(6,{forward:1,boost:true});expect(v.position.z).toBeLessThan(18.5);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);run(2.2,{forward:1});expect(v.jetski!.particles).toHaveLength(0);
+ const dry=fixture(false);try{dry.run(2,{forward:1,steer:1,boost:true});expect(Math.hypot(dry.v.position.x,dry.v.position.z)).toBeLessThan(.01);expect(dry.v.motion.jetski!.particles).toHaveLength(0);expect(dry.v.grounded).toBe(true);}finally{dry.q.dispose();}
+ const {q,v,run}=fixture(true,true);try{run(6,{forward:1,boost:true});expect(v.position.z).toBeLessThan(18.5);expect(q.overlaps(v.position,vehicleBody(v.spec),v.rotation)).toBe(false);run(2.2,{forward:1});expect(v.motion.jetski!.particles).toHaveLength(0);
  v.position.set(0,20,0);v.velocity.set(0,0,0);v.grounded=false;const yaw=v.yaw;run(.5,{forward:1,steer:1});expect(v.yaw).toBeCloseTo(yaw,3);expect(Math.hypot(v.position.x,v.position.z)).toBeLessThan(.001);expect(v.position.y).toBeLessThan(20);
  }finally{q.dispose();}
 });
 it('keeps emitted water in world coordinates and render sampling pure, including reset',()=>{
- const {q,v,run}=fixture();try{run(4,{forward:1});const model=buildJetSkiModel(),state=copyJetSkiState(v.jetski)!;const before=JSON.stringify(state);
+ const {q,v,run}=fixture();try{run(4,{forward:1});const model=buildJetSkiModel(),state=copyJetSkiState(v.motion.jetski)!;const before=JSON.stringify(state);
  model.position.copy(v.position);model.quaternion.copy(v.rotation);sampleJetSkiVisual(model,state,4);const drops=model.getObjectByName('jetski.drops') as any;expect(drops.count).toBeGreaterThan(0);
  const matrix=Array.from(drops.instanceMatrix.array);sampleJetSkiVisual(model,state,4);expect(Array.from(drops.instanceMatrix.array)).toEqual(matrix);expect(JSON.stringify(state)).toBe(before);
  model.position.x+=30;sampleJetSkiVisual(model,state,4);model.updateMatrixWorld(true);expect(model.getObjectByName('jetski.water-fx')!.getWorldPosition(new Vector3()).length()).toBeLessThan(.0001);
@@ -49,11 +49,11 @@ it('floats unoccupied, pushes another craft through native contact, preserves pa
  const f=fixture(),object=buildJetSkiModel();
  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:{...f.q.map,regions:[{id:'water',name:'Water',description:'',center:[0,0,0],size:[300,300],color:'#ccc',modes:['character','boat']}],spawns:[{id:'a',name:'Driver',vehicleId:'driver',position:[0,.03,0],yaw:0,regionId:'water'},{id:'b',name:'Parked',vehicleId:'parked',position:[0,.03,8],yaw:0,regionId:'water'}]},vehicles:[{instanceId:'driver',assetId:'vehicle.jetski',spec:JETSKI_SPEC,object},{instanceId:'parked',assetId:'vehicle.jetski',spec:JETSKI_SPEC,object:buildJetSkiModel()}],character:{instanceId:'person',object:new Group()}}});
  try{
-  world.step({},120);const parked=world.humanoid!.simulation.vehicles[1]!;expect(Math.abs(parked.position.y)).toBeLessThan(.1);expect(parked.jetski!.particles).toHaveLength(0);
+  world.step({},120);const parked=world.humanoid!.simulation.vehicles[1]!;expect(Math.abs(parked.position.y)).toBeLessThan(.1);expect(parked.motion.jetski!.particles).toHaveLength(0);
   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!;expect(parked.position.z).toBeGreaterThan(8);expect(parked.position.z-v.position.z).toBeGreaterThan(2.8);expect(v.jetski!.sprayStrength).toBeGreaterThan(0);
-  const state=JSON.stringify(v.jetski);world.step({},0);expect(JSON.stringify(v.jetski)).toBe(state);
-  await world.reset();expect(world.humanoid!.snapshot().mountedInstanceId).toBeNull();expect(world.humanoid!.simulation.vehicles.every(v=>!v.jetski!.particles.length)).toBe(true);
+  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!;expect(parked.position.z).toBeGreaterThan(8);expect(parked.position.z-v.position.z).toBeGreaterThan(2.8);expect(v.motion.jetski!.sprayStrength).toBeGreaterThan(0);
+  const state=JSON.stringify(v.motion.jetski);world.step({},0);expect(JSON.stringify(v.motion.jetski)).toBe(state);
+  await world.reset();expect(world.humanoid!.snapshot().mountedInstanceId).toBeNull();expect(world.humanoid!.simulation.vehicles.every(v=>!v.motion.jetski!.particles.length)).toBe(true);
  }finally{world.dispose();f.q.dispose();}
 });
 it('keeps the original straddle rider clear of body panels and hands on the turning handlebar without scaling',async()=>{
@@ -90,4 +90,4 @@ it('keeps the original straddle rider clear of body panels and hands on the turn
  }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15_000);
 
-function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].motion.wheelPhysics||args[0].motion.body)args[4].stepPhysics(args[2]);}

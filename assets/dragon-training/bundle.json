@@ -1,0 +1,22 @@
+{
+  "kind": "native-flying-creature-assets",
+  "schemaVersion": 2,
+  "files": {
+    "__creature-assets/FireGenLoop01_8x8.png": {
+      "bytes": 1584772,
+      "sha256": "5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7"
+    },
+    "__creature-assets/dragon.glb": {
+      "bytes": 15335468,
+      "sha256": "3d67d7eeb8f32dbee048d8124940f298abcaef5691d587280261e62485b374cc"
+    },
+    "__creature-assets/manifest.json": {
+      "bytes": 7158,
+      "sha256": "49fdc10d4169bcec3ee83a96746e1d138ef423da7427774571707ab40216039d"
+    },
+    "__creature-assets/rider.glb": {
+      "bytes": 6584688,
+      "sha256": "cb0ac014ae3adb71b4c2753d708de3a406cee102bee867fa06eaa7de1e726f54"
+    }
+  }
+}

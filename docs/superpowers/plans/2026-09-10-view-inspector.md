@@ -27,3 +27,9 @@ Ruling: select through the object list first; direct picking, fade, same-frame c
 - Editor production build passed. Diagnostic previews deliberately omit source shadow passes; original renderer output remains untouched.
 - Runtime prebuild: `.codex-tmp/view-inspector-runtime/runtime-manifest.json`; runtime hash `33c833b78211d4fd7e6bc360aacf57b38a1eb82b570d0e0d9c6afa2cf05d0086`, manifest SHA-256 `4cea4845d22a55d26084e3c59797f19848c778ca7e24d25d76ea69fc4bd9a2fb`. The live Vite editor consumes worktree source; this manifest identifies the rebuilt SDK runtime bytes.
 - Local visual evidence: `.codex-tmp/display-evidence/picture-explanations.png`, `view-inspector-pinned.png`, `view-inspector-mobile.png`. Also visually inspected the current in-app browser with the pinned inspector and live scene.
+
+## Main integration
+
+Integrated with fetched `origin/main` at `8038f1b2`. Kept map hash routing and the new motion-state telemetry alongside display state; only `main.ts` required conflict resolution. The source-pixel smoke now waits for initial presentation before stopping live execution and taking its baseline. Merged-source verification: 69 tests across 9 files passed, typecheck and targeted lint passed, census 100 files (30 contract, 70 resource-heavy), editor build passed. Display and driving browser smokes both passed against the main checkout on port 5187 with no browser errors. The original preview on port 5186 remains available in its worktree.
+
+Merged runtime: `.codex-tmp/view-inspector-merged-runtime/runtime-manifest.json`, runtime hash `2808b77990b0ae4270a12803f9d124972b4272ed0bc4b50187c737f476efba64`, manifest SHA-256 `b1566330cca29a1e5df1ea2cae1e043423ef85132aee2e3419c48c56ade2f458`. The unrelated camera assessment was not included in either commit.

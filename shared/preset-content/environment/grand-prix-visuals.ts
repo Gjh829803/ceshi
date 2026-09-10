@@ -39,7 +39,7 @@ export function buildGrandPrixVisuals(map: EnvironmentDefinition) {
   }
   // Pit apron and entry/exit lanes, all flush painted onto the same ground.
   const p = (x: number, z: number) => new T.Vector3(x, 0, z);
-  quad(p(-590, -370), p(-590, -90), p(-536, -90), p(-536, -370), '#77858a', .022);
+  quad(p(-590, -370), p(-590, -90), p(-406, -90), p(-406, -370), '#77858a', .022);
   quad(p(-627, -445), p(-583, -335), p(-569, -341), p(-613, -451), '#77858a', .023);
   quad(p(-583, -125), p(-627, 25), p(-613, 31), p(-569, -119), '#77858a', .023);
   // Chequered timing line is a visual landmark, not a lap-timer promise.

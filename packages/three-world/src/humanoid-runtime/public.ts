@@ -1,5 +1,12 @@
-export {SUBMERSIBLE_WATER} from './submersible';
-export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY,createKayakState,kayakPaddlePose,paddleGrip} from './kayak';
+export {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
+export {createFlyingCreatureStateV1,resolveFlyingCreatureFeelV1} from './motion-families/flying-creature/state';
+export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families/flying-creature/state';
+export {SUBMERSIBLE_WATER} from './motion-families/underwater/submersible';
+export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
+export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
+export * as surfaceVessel from './motion-families/surface-vessel/public';
+// Preserve flat SDK imports used by existing Creator and Episode consumers.
+export * from './motion-families/surface-vessel/public';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
 export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
@@ -23,8 +30,8 @@ export { HorseVisual } from './horse';
 export type { HorseAnimationFrame, SeatAnchor, ResourceResolver } from './horse';
 
 export type {HumanoidDisplaySample} from './presentation';
-export {createRoadPhysicsProfile} from './wheel-physics';
-export type {WheelLayout,WheelPhysicsConfig,SimulatedWheel} from './wheel-physics';
+export {createRoadPhysicsProfile} from './motion-families/ground-vehicle/wheel-physics';
+export type {WheelLayout,WheelPhysicsConfig,SimulatedWheel} from './motion-families/ground-vehicle/wheel-physics';
 export type {PowertrainConfig,PowertrainState} from './powertrain';
 export {vehicleDriveTelemetry} from './vehicle-dynamics';
 export type {BodyPhysicsConfig,BodyPhysicsState,VehicleDriveTelemetry} from './vehicle-dynamics';
@@ -41,7 +48,7 @@ export {
   TANK_GEOMETRY,
   TANK_CONTROLS,
   createTankState,
-} from './tank';
+} from './motion-families/ground-vehicle/tank';
 
 export { sampleTankVisual } from './tank-visual';
 
@@ -51,20 +58,26 @@ export {
   createUnicycleState,
   unicyclePedal,
   sampleUnicycleVisual,
-} from './unicycle';
+} from './motion-families/ground-vehicle/unicycle';
 
-export type { UnicycleState } from './unicycle';
+export type { UnicycleState } from './motion-families/ground-vehicle/unicycle';
 
 export {
   ATV_GEOMETRY,
   createAtvState,
   sampleAtvVisual,
-} from './atv';
+} from './motion-families/ground-vehicle/atv';
 
 export {
   JETSKI_WATER,
   createJetSkiState,
-} from './jetski';
+} from './motion-families/surface-vessel/jetski';
 
 export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';
+export {AIRCRAFT} from '../config/aircraft';
+
+export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-families/flying-creature/visual';
+export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';
+
+export type {MotionFamilyState} from './motion-families/state';

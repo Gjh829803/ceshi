@@ -1,23 +1,24 @@
-import {UNICYCLE_SPEC} from './unicycle';
-import {SUBMERSIBLE_SPEC} from './submersible';
-import {CANOE_SPEC} from './canoe';
-import {KAYAK_SPEC} from './kayak';
-import {RAFT_SPEC} from './raft';
-import {JETSKI_SPEC} from './jetski';
-import {ATV_SPEC} from './atv';
+import { humanoid } from '@worldkit/three';
+import { ATV_SPEC } from './atv';
+import { BUS_SPEC } from './bus';
+import { CANOE_SPEC } from './canoe';
+import { CREATURE_SPECS } from './creatures/specs';
+import { JETSKI_SPEC } from './jetski';
+import { KAYAK_SPEC } from './kayak';
+import { RAFT_SPEC } from './raft';
+import { roadSeatAnchor } from './road-seating';
 import { SKI_SPEC } from './ski';
 import { SLED_SPEC } from './sled';
+import { SUBMERSIBLE_SPEC } from './submersible';
 import { TANK_SPEC } from './tank';
-import { BUS_SPEC } from './bus';
-import {humanoid} from '@worldkit/three';
-import { CREATURE_SPECS } from './creatures/specs';
-import { roadSeatAnchor } from './road-seating';
+import { UNICYCLE_SPEC } from './unicycle';
 export type Mode = humanoid.VehicleSpec['mode'];
 export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
 export type VehicleSpec = humanoid.VehicleSpec;
 /** Specialized controller families share movement modes but have distinct tuning. */
-export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype'> | undefined): string {
+export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype' | 'flyingCreature'> | undefined): string {
+  if(spec?.flyingCreature)return 'flying-creature';
   const archetype = spec?.archetype;
   return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
     ? archetype : spec?.mode ?? 'character';
@@ -31,13 +32,13 @@ export const SPECS: VehicleSpec[] = [
   {id:'boat',name:'水上快艇',en:'WAKE',mode:'boat',kernel:'K06',color:'#68baf1',spawn:[207,-1.9,10],yaw:0,speed:24,accel:7,grip:3,steer:1.05,radius:1.7,seat:[0,0.35,-0.3],camera:9,hint:'W / S 推进与倒船 · A / D 船舵 · Space 减速',archetype:'boat',envelope:{kind:'box',halfExtents:[1.35,1.25,2.85],offset:[0,.5,0]}},
   {id:'sub',name:'探索潜艇',en:'DEEP',mode:'submarine',kernel:'K07',color:'#f4ca58',spawn:[230,-3.1,45],yaw:0,speed:16,accel:6.5,grip:2.4,steer:1.15,radius:1.7,seat:[0,0.1,0.5],camera:9,hint:'W / S 推进 · A / D 转向 · Space 上浮 · Ctrl 下潜 · Q / E 横滚 · Shift 制动',archetype:'submarine',envelope:{kind:'box',halfExtents:[1.8,1.6,2.9],offset:[0,.2,0]}},
   {id:'glider',name:'无动力滑翔机',en:'SOAR',mode:'glider',kernel:'K08',color:'#e2e8eb',spawn:[-130,33,-146],yaw:0,speed:32,accel:0,grip:1,steer:1.05,radius:1.8,seat:[0,0.46,0],camera:11,hint:'W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚 · Shift 释放滑翔',archetype:'glider',envelope:{kind:'box',halfExtents:[5.6,1.1,3.3],offset:[0,.9,0]}},
-  {id:'plane',name:'动力飞机',en:'AERO',mode:'plane',kernel:'K09',color:'#e27e58',spawn:[-285,0,-205],yaw:0,speed:58,accel:12,grip:1,steer:1.05,radius:2,seat:[0,0.6,0.4],camera:13,hint:'Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚',archetype:'plane',envelope:{kind:'box',halfExtents:[4.2,1.5,3.35],offset:[0,.45,0]}},
+  {id:'plane',name:'动力飞机',en:'AERO',mode:'plane',kernel:'K09',color:'#e27e58',spawn:[-285,0,-205],yaw:0,speed:58,accel:12,grip:1,steer:1.05,radius:2,seat:[0,1.3,.1],camera:13,hint:'Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚',archetype:'plane',envelope:{kind:'box',halfExtents:[4.2,1.25,3.35],offset:[0,1.25,0]}},
   {id:'space',name:'无重力飞行器',en:'ORBIT',mode:'spacecraft',kernel:'K10',color:'#a398eb',spawn:[-84,0.8,-70],yaw:0,speed:36,accel:14,grip:2.4,steer:1.45,radius:1.6,seat:[0,0.15,0.4],camera:9,hint:'W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · ↑↓ 俯仰 / ←→ 侧移 · Shift 制动',archetype:'spacecraft',envelope:{kind:'box',halfExtents:[2,1.2,2.15],offset:[0,.35,0]}},
   {id:'trail-rover',name:'远征保障车',en:'TRAIL',mode:'wheeled',kernel:'K03',color:'#568f72',spawn:[-38,0,35],yaw:0,speed:24,accel:8,grip:12,steer:.95,radius:1.75,seat:roadSeatAnchor('trail-rover'),camera:8.8,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹',archetype:'rover',visualVariant:'utility',envelope:{kind:'box',halfExtents:[1.35,1.15,2.25],offset:[0,1.15,0]}},
   {id:'touring-bike',name:'长途巡航摩托',en:'TOURER',mode:'motorcycle',kernel:'K02',color:'#507fc4',spawn:[-24,0,35],yaw:0,speed:28,accel:9,grip:14,steer:1.05,radius:.9,seat:roadSeatAnchor('touring-bike'),camera:7.3,hint:'W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车',archetype:'motorcycle',characterPose:'ride',visualVariant:'touring',envelope:{kind:'box',halfExtents:[.65,1.2,1.65],offset:[0,1.2,0]}},
   {id:'rescue-hover',name:'救援悬浮艇',en:'LIFTER',mode:'hover',kernel:'K05',color:'#e36b55',spawn:[-10,1.3,35],yaw:0,speed:24,accel:9,grip:6,steer:1.3,radius:1.65,seat:[0,.48,-.1],camera:8.8,hint:'W / S 推进 · A / D 转向 · Q / E 侧移 · Space 制动',archetype:'hover',visualVariant:'rescue',envelope:{kind:'box',halfExtents:[1.75,1.15,2.3],offset:[0,.775,0]}},
   {id:'patrol-boat',name:'水域巡逻艇',en:'PATROL',mode:'boat',kernel:'K06',color:'#315f91',spawn:[207,-1.9,24],yaw:0,speed:21,accel:7.5,grip:3.8,steer:1.15,radius:1.85,seat:[0,.35,-.3],camera:9.8,hint:'W / S 推进与倒船 · A / D 船舵 · Space 减速',archetype:'boat',visualVariant:'patrol',envelope:{kind:'box',halfExtents:[1.45,1.4,3],offset:[0,.65,0]}},
-  {id:'trainer-plane',name:'稳定教练机',en:'MENTOR',mode:'plane',kernel:'K09',color:'#f0d04f',spawn:[-270,0,-205],yaw:0,speed:46,accel:10,grip:1.4,steer:.9,radius:2.1,seat:[0,.6,.4],camera:13.5,hint:'Shift 加油门 / Ctrl 减油门 · W / S 俯仰 · A / D 转弯 · Q / E 横滚',archetype:'plane',visualVariant:'trainer',envelope:{kind:'box',halfExtents:[4.6,1.5,3.5],offset:[0,.45,0]}},
+  {id:'trainer-plane',name:'稳定教练机',en:'MENTOR',mode:'plane',kernel:'K09',color:'#f0d04f',spawn:[-270,0,-205],yaw:0,speed:46,accel:10,grip:1.4,steer:.9,radius:2.1,seat:[0,1.3,.1],camera:13.5,hint:'Shift 加油门 / Ctrl 减油门 · W / S 俯仰 · A / D 转弯 · Q / E 横滚',archetype:'plane',visualVariant:'trainer',envelope:{kind:'box',halfExtents:[4.6,1.25,3.5],offset:[0,1.25,0]}},
   {id:'survey-space',name:'轨道测绘艇',en:'SURVEYOR',mode:'spacecraft',kernel:'K10',color:'#64c8d0',spawn:[-70,1,-70],yaw:0,speed:28,accel:11,grip:4,steer:1.3,radius:1.8,seat:[0,.15,.4],camera:10,hint:'W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · 方向键姿态 · Shift 制动',archetype:'spacecraft',visualVariant:'survey',envelope:{kind:'box',halfExtents:[2.8,1.2,2.4],offset:[0,.35,0]}},
   {id:'supercar',name:'超跑',en:'VELOCITY',mode:'wheeled',kernel:'K03',color:'#e66048',spawn:[-52,0,64],yaw:0,speed:65,accel:17,grip:18,steer:.88,radius:1.7,seat:roadSeatAnchor('supercar'),camera:8.2,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速',archetype:'racer',envelope:{kind:'box',halfExtents:[1.3,.9,2.5],offset:[0,.9,0]}},
   {id:'kart',name:'卡丁车',en:'KART',mode:'wheeled',kernel:'K03',color:'#e9bf4f',spawn:[-66,0,64],yaw:0,speed:24,accel:10,grip:19,steer:1.65,radius:1.15,seat:roadSeatAnchor('kart'),camera:6,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速',archetype:'racer',envelope:{kind:'box',halfExtents:[1,.85,1.45],offset:[0,.85,0]}},
@@ -68,12 +69,6 @@ for(const spec of SPECS)if(spec.mode==='motorcycle'){
   spec.speed=150/3.6;spec.maxSpeed=180/3.6;spec.reverseSpeed=2;
 }
 SPECS.push(...CREATURE_SPECS,UNICYCLE_SPEC,SUBMERSIBLE_SPEC,CANOE_SPEC,KAYAK_SPEC,RAFT_SPEC,JETSKI_SPEC,ATV_SPEC,SKI_SPEC,SLED_SPEC,TANK_SPEC,BUS_SPEC);
-// Export the actual physical owner for every preset, including unoccupied craft.
-// The SDK converts these motion controls to forces in its existing physics world.
-for(const spec of SPECS)if(!spec.wheelPhysics&&!spec.bodyPhysics){
-  const mass:{[mode:string]:number}={skateboard:90,hover:450,boat:900,submarine:3000,glider:180,plane:1200,spacecraft:2000,mount:550,carriage:1000,dragon:1800};
-  spec.bodyPhysics={kind:'motion',mass:mass[spec.mode]!,centerOfMassHeight:Math.max(0,spec.envelope.offset[1]*.5),friction:0,restitution:.08};
-}
 export const START: [number,number,number] = [-24,0,55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;

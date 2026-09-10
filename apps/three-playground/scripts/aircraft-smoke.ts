@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {launchChromiumWithSystemFallback} from '../../../scripts/lib/playwright-browser-launch';
+
+const output=path.resolve(process.argv[3]??'D:/CodexData/Artifacts/aircraft-training');
+await mkdir(output,{recursive:true});
+const browser=await launchChromiumWithSystemFallback(),page=await browser.newPage({viewport:{width:1440,height:960}});
+const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+const state=()=>page.evaluate(()=>(window as any).playground.getState());
+try{
+ await page.goto(process.argv[2]??'http://127.0.0.1:5190');
+ await page.waitForFunction(()=>!!(window as any).playground?.getState().ready,{},{timeout:60000});
+ await page.locator('#mapSelect').click();await page.getByRole('option',{name:'飞机 · 起降训练场',exact:true}).click();
+ await page.waitForFunction(()=>(window as any).playground.getState().mapId==='aircraft-training');
+ await page.locator('[data-worldkit-surface]').click();await page.keyboard.press('f');
+ await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle==='plane');
+ await page.keyboard.press('t');await page.locator('#inspectorClose').click();
+ await page.screenshot({path:path.join(output,'cockpit-ground.png')});
+ await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('Shift');
+ await page.waitForFunction(()=>(window as any).playground.getState().speed>27,{},{timeout:30000});
+ await page.keyboard.up('Shift');await page.keyboard.down('s');
+ await page.waitForFunction(()=>{const s=(window as any).playground.getState();return !s.flight.grounded&&s.position[1]>15;},{},{timeout:20000});
+ await page.keyboard.up('s');const airborne=await state();
+ await page.screenshot({path:path.join(output,'cockpit-flight.png')});
+ await page.keyboard.down('a');await page.waitForTimeout(1600);await page.keyboard.up('a');
+ const banked=await state();assert(Math.abs(banked.vehicleRotation[2])>.03);
+ await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===2);await page.keyboard.press('t');
+ await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===0);
+ await page.screenshot({path:path.join(output,'aircraft-flight.png')});
+ await page.waitForTimeout(1800);const recovered=await state();assert(Math.abs(recovered.vehicleRotation[2])<.06);
+ await page.keyboard.down('Control');await page.waitForFunction(()=>(window as any).playground.getState().flight.throttle<.05,{},{timeout:10000});await page.keyboard.up('Control');
+ const reduced=await state();assert(reduced.flight.throttle<airborne.flight.throttle);
+ assert.deepEqual(errors,[]);
+ await writeFile(path.join(output,'browser-results.json'),JSON.stringify({airborne,banked,recovered,reduced,errors},null,2));
+ console.log(JSON.stringify({map:airborne.mapId,altitude:airborne.position[1],airspeed:airborne.speed,bankVerified:true,recoveryVerified:true,throttleVerified:true,errors}));
+}finally{await browser.close();}

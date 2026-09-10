@@ -1,5 +1,5 @@
 import type {Object3D} from 'three';
-import {TANK_GEOMETRY,type TankState} from './tank';
+import {TANK_GEOMETRY,type TankState} from './motion-families/ground-vehicle/tank';
 
 /** Sample distance around the belt. Bottom, front arc, top, rear arc. */
 export function tankTrackPoint(distance:number):{y:number;z:number;angle:number}{

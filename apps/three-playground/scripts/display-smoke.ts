@@ -8,6 +8,8 @@ try {
   await mkdir('.codex-tmp/display-evidence',{recursive:true});
   await page.goto(process.argv[2]??'http://127.0.0.1:5186');
   await page.waitForFunction(()=>!!(window as any).playground,{}, {timeout:60000});
+  // Let the initial presentation complete before freezing the source-pixel baseline.
+  await page.waitForFunction(()=>(window as any).playground.getState().simulationTime>0);
   await page.evaluate(()=>window.__WORLDKIT_EVAL__!.stopLive());
   const settings=()=>page.evaluate(()=>(window as any).playground.getState().display);
   const state=()=>page.evaluate(()=>{const s=(window as any).playground.getState();return {position:s.position,time:s.simulationTime,camera:s.camera};});

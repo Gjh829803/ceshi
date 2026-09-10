@@ -1,6 +1,6 @@
 import { CubicBezierCurve3, CurvePath, LineCurve3, Vector3 } from 'three';
 import { SPECS } from '../config';
-import { block } from './modules';
+import { block, ramp } from './modules';
 import type { EnvironmentBox, EnvironmentDefinition, MapRegion, MapSpawn } from './types';
 
 // Original clockwise circuit. Coordinates are metres; tangent joins preserve
@@ -48,11 +48,12 @@ export const GRAND_PRIX = {
   }),
 };
 
-const modes = ['character', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'hover', 'bus'];
+const originalPitModes = ['wheeled', 'motorcycle', 'unicycle', 'skateboard', 'hover', 'bus'];
+const modes = ['character', ...new Set(SPECS.map(spec => spec.mode))];
 export function createGrandPrix(): EnvironmentDefinition {
   const regions: MapRegion[] = [
-    { id: 'gp-pits', name: '01 / 维修准备区', description: '选择赛车、换乘和调参；沿出口接入主直道。', center: [-562, 0, -240], size: [50, 240], color: '#86aaa7', modes },
-    { id: 'gp-straight', name: '02 / 800 m 主直道', description: '加速、极速稳定性和重刹；弯前 150 / 100 / 50 m 标牌。', center: [-620, 0, -70], size: [18, 730], color: '#d9ac78', modes },
+    { id: 'gp-pits', name: '01 / 维修准备区', description: '全部载具与坐骑停放、换乘和调参；沿出口接入主直道。水上载具在此仅作旱地停放。', center: [-498, 0, -230], size: [184, 280], color: '#86aaa7', modes },
+    { id: 'gp-straight', name: '02 / 800 m 主直道', description: '加速、特技飞坡和重刹；坡道两侧可绕行，弯前 150 / 100 / 50 m 标牌。', center: [-620, 0, -70], size: [18, 730], color: '#d9ac78', modes },
     { id: 'gp-esses', name: '03 / 连续 S 弯', description: '左右重心切换、转向响应与连续修正。', center: [-130, 0, 350], size: [400, 120], color: '#79afb6', modes },
     { id: 'gp-hairpin', name: '04 / 重刹发卡弯', description: '后直道接低速回头弯，测试入弯制动和出弯加速。', center: [500, 0, -250], size: [195, 240], color: '#d1a085', modes },
     { id: 'gp-technical', name: '05 / 低速技术段', description: '紧凑反向弯，比较低速转向、抓地与手刹。', center: [160, 0, -190], size: [245, 240], color: '#aba2c1', modes },
@@ -63,6 +64,15 @@ export function createGrandPrix(): EnvironmentDefinition {
     // paint and flush kerbs never introduce overlapping road collider seams.
     { ...block('gp-ground', [-20, -2, -70], [1440, 4, 1260], '#cbd1ce'), surface: 'asphalt' },
   ];
+  // Eight-metre launch faces leave a five-metre bypass on each side of the
+  // road. The upper face starts flush with the ground; the open road beyond
+  // each lip provides landing room before the next turn or obstacle.
+  boxes.push(
+    { ...ramp('gp-stunt-main-small', -620, -310, 8, 18, 2, 0, '#d9ac78'), surface: 'asphalt' },
+    { ...ramp('gp-stunt-main-large', -620, 85, 8, 24, 3.6, 0, '#d9ac78'), surface: 'asphalt' },
+    // Traffic on the back straight runs toward -Z, so reverse the slope.
+    { ...ramp('gp-stunt-back', 500, 70, 8, 22, -3, 3, '#d9ac78'), surface: 'asphalt' },
+  );
   // Posts sit beyond both the road and the diagonal pit entry. The underside
   // of the hanging light enclosure is 7 m above the continuous road surface.
   for (const side of [-1, 1]) {
@@ -81,12 +91,23 @@ export function createGrandPrix(): EnvironmentDefinition {
   for (const [distance, z] of [[150, 150], [100, 200], [50, 250]]) {
     boxes.push(block(`gp-brake-board-${distance}`, [-636, 1.5, z!], [3.4, 2, .2], '#edf0eb'));
   }
-  // Append the new bus so existing vehicles retain their authored pit positions.
-  const pitSpecs = [...SPECS.filter(s => modes.includes(s.mode) && s.mode !== 'bus'), ...SPECS.filter(s => s.mode === 'bus')];
+  // Preserve the original parking order, including the appended bus.
+  const pitSpecs = [...SPECS.filter(s => originalPitModes.includes(s.mode) && s.mode !== 'bus'), ...SPECS.filter(s => s.mode === 'bus')];
   const parkedVehicles = pitSpecs.map((spec, i): MapSpawn => ({
     id: `gp-park-${spec.id}`, vehicleId: spec.id, name: spec.name,
     position: [-564 + (i % 2) * 14, spec.mode === 'hover' ? 1.3 : .03, -330 + Math.floor(i / 2) * 32], yaw: 0, regionId: 'gp-pits',
   }));
+  // The open apron east of the garages has room for wings and large mounts.
+  // Derive additions from the catalog so new controller families are not omitted.
+  const parkedIds = new Set(pitSpecs.map(spec => spec.id));
+  SPECS.filter(spec => !parkedIds.has(spec.id)).forEach((spec, i) => {
+    const groundClearance = Math.max(0, spec.envelope.halfExtents[1] - spec.envelope.offset[1]);
+    parkedVehicles.push({
+      id: `gp-park-${spec.id}`, vehicleId: spec.id, name: spec.name,
+      position: [-492 + (i % 3) * 28, groundClearance + .03, -330 + Math.floor(i / 3) * 32],
+      yaw: 0, regionId: 'gp-pits',
+    });
+  });
   const supercarSpawn = parkedVehicles.find(spawn => spawn.vehicleId === 'supercar')!;
   // Within boarding reach, with room for the character preparation clearance.
   const playerSpawn: MapSpawn['position'] = [supercarSpawn.position[0] + 3, .03, supercarSpawn.position[2]];
@@ -99,6 +120,6 @@ export function createGrandPrix(): EnvironmentDefinition {
     { id: 'gp-sweeper-start', name: '长弧弯入口', position: [140, .03, -340], yaw: Math.PI, regionId: 'gp-sweeper' },
     ...parkedVehicles,
   ];
-  return { id: 'grand-prix', name: '大奖赛 · 驾驶测试赛道', description: `原创 F1 风格 ${(length / 1000).toFixed(2)} km 闭环，18 m 宽赛道、800 m 主直道、S 弯、发卡弯与维修区。平整铺装缓冲区和齐平路肩沿用赛道抓地；按 F 驾驶，右侧调参。`,
+  return { id: 'grand-prix', name: '大奖赛 · 驾驶测试赛道', description: `原创 F1 风格 ${(length / 1000).toFixed(2)} km 闭环，18 m 宽赛道、800 m 主直道、3 处特技飞坡、S 弯、发卡弯与维修区。飞坡两侧可绕行；平整铺装缓冲区和齐平路肩沿用赛道抓地；按 F 驾驶，右侧调参。`,
     bounds: { min: [-740, -10, -700], max: [700, 120, 560] }, boxes, water: [], regions, spawns, playerSpawn };
 }

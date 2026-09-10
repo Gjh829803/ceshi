@@ -25,6 +25,7 @@ export class FollowCamera {
   get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
   private previousPresentation:CameraPresentationPose|undefined;
   private currentPresentation:CameraPresentationPose|undefined;
+  private presentationCreature=false;
   private presentationHumanoid:Simulation['humanoid']|undefined;
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
@@ -42,6 +43,7 @@ export class FollowCamera {
     this.previousPresentation=pose;
   }
   capturePresentationPose(sim:Simulation,snap=false):void {
+    this.presentationCreature=!!sim.vehicle?.motion.flyingCreature;
     this.presentationHumanoid=sim.vehicle?undefined:sim.humanoid;
     const head=new T.Vector3();let headSource:CameraPresentationPose['headSource']='posture-eye';
     if(sim.vehicle){
@@ -68,6 +70,13 @@ export class FollowCamera {
     this.displayedTarget=target;
     const eye=a.position.clone().lerp(b.position,alpha).add(offset);
     this.displayedHead={position:a.head.clone().lerp(b.head,alpha).add(offset),source:b.headSource,simulationSeconds:a.simulationSeconds+(b.simulationSeconds-a.simulationSeconds)*alpha,offsets:{targetHeightOffset:a.offsets.targetHeightOffset+(b.offsets.targetHeightOffset-a.offsets.targetHeightOffset)*alpha,horizontalOffset:a.offsets.horizontalOffset+(b.offsets.horizontalOffset-a.offsets.horizontalOffset)*alpha}};
+    // 飞龙的 Seat 与骑手骨架已按显示时间求值，不能再使用两个固定步眼位的直线近似。
+    if(this.presentationCreature&&(this.mode===1||this.mode===2)){
+      const head=new T.Vector3();
+      if(this.eyePosition?.(head)){
+        const correction=head.clone().sub(this.displayedHead.position);eye.add(correction);target.add(correction);this.displayedHead.position.copy(head);
+      }
+    }
     let resolved=eye;
     const humanoid=this.presentationHumanoid;
     if(this.tuning.collisionEnabled&&this.mode!==1&&alpha!==1){
@@ -215,7 +224,7 @@ export class FollowCamera {
     if(this.camera.near!==this.originalNear){this.camera.near=this.originalNear;this.camera.updateProjectionMatrix();}
     const airborne=v&&['spacecraft','plane','glider','submarine','dragon'].includes(v.spec.mode);
     if(v&&this.mode!==1&&sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8){this.yaw+=angleDelta(this.yaw,yaw)*(1-Math.exp(-this.tuning.recenterResponsePerSecond*(airborne?1.3/1.9:1)*dt));this.pitch=damp(this.pitch,airborne?.2:.28,1.2*this.tuning.recenterResponsePerSecond/1.9,dt);}
-    this.anchor.copy(position);this.anchor.y+=(v?(v.spec.mode==='tank'?2.3:v.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
+    this.anchor.copy(position);this.anchor.y+=(v?(v.spec.mode==='tank'?2.3:v.motion.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
     this.anchor.x+=Math.cos(this.yaw)*this.tuning.horizontalOffset;this.anchor.z-=Math.sin(this.yaw)*this.tuning.horizontalOffset;this.aim.copy(this.anchor);
     this.targetUp.set(0,1,0);if(v?.spec.mode==='spacecraft'&&rotation)this.targetUp.applyQuaternion(rotation);
     this.up.lerp(this.targetUp,1-Math.exp(-5*dt)).normalize();
@@ -239,7 +248,9 @@ export class FollowCamera {
     if(this.tuning.collisionEnabled){
       const solved=this.collision.solve({target:this.anchor.toArray(),eye:this.candidate.toArray(),
         current:this.camera.position.toArray(),radius:this.tuning.collisionRadiusMeters,armClearance:0},{
-        authorityTick:++this.collisionTick,deltaSeconds:dt,clearHoldSeconds:0,recoveryHalfLifeSeconds:0,maximumRecoveryMetersPerSecond:Number.MAX_VALUE,
+        authorityTick:++this.collisionTick,deltaSeconds:dt,clearHoldSeconds:v?.motion.flyingCreature ? .12 : 0,
+        recoveryHalfLifeSeconds:v?.motion.flyingCreature ? .18 : 0,maximumRecoveryMetersPerSecond:v?.motion.flyingCreature?12:Number.MAX_VALUE,
+        ...(v?.motion.flyingCreature?{resetWhenClear:false}:{}),
       });
       this.collisionLimited=solved.limited;this.candidate.fromArray(solved.position);
     }else this.collision.reset();
