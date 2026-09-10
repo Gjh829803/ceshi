@@ -1,3 +1,5 @@
+import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
+import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {describe,it,expect,beforeAll,afterEach,vi} from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {BoxGeometry,CapsuleGeometry,CylinderGeometry,SphereGeometry,Group,InstancedMesh,Matrix4,Mesh,MeshStandardMaterial,PerspectiveCamera,Quaternion,Vector3} from 'three';
@@ -196,4 +198,24 @@ describe('vehicle camera geometry',()=>{
   expect(query.probe([0,0,0],[0,3,0],.2).colliderEntityId).toBeUndefined();
   expect(query.probe([0,0,0],[2,0,0],.2).distanceMeters).toBeLessThan(.9);
  });
+});
+
+it('holds a dragon camera arm across a brief clear gap and recovers without a pop',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
+    character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'dragon',assetId:'dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}]}});
+  let blocked=true;
+  const probe=vi.spyOn(world.humanoid!.environment,'cameraProbe').mockImplementation((from,to)=>{
+    const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);return blocked&&length>10?{distanceMeters:10,colliderEntityId:'wall'}:{distanceMeters:length};
+  });
+  try{
+    const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:0,humanoid:{mounted:true,vehicleInstanceId:'dragon'}});
+    const camera=r.followCamera,arm=()=>world.camera.position.distanceTo(camera.target);
+    world.step({},1);const constrained=arm();expect(constrained).toBeLessThan(11);
+    blocked=false;world.step({},1);expect(arm()).toBeLessThanOrEqual(constrained+.001);
+    blocked=true;world.step({},1);expect(arm()).toBeLessThan(11);
+    blocked=false;let previous=arm();for(let n=0;n<600;n++){
+      world.step({},1);expect(arm()-previous).toBeLessThanOrEqual(12/60+.001);previous=arm();
+    }
+    expect(arm()).toBeGreaterThan(31);
+  }finally{probe.mockRestore();world.dispose();}
 });

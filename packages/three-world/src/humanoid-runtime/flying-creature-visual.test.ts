@@ -1,4 +1,5 @@
 import {fileURLToPath} from 'node:url';
+import type {WorldEngine} from '../engine';
 import {Character} from './character';
 import {createWorld} from '../world';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
@@ -83,6 +84,11 @@ it('keeps native mounted views at the real Source101 eyes through orbit, flight 
       for(let n=0;n<60;n++){
         world.step({cameraYawRatio:direction,cameraPitchRatio:direction,humanoid:{...emptyInput(),steer:direction,boost:true}},1);
         expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
+        const engine=(world as unknown as {engine:WorldEngine}).engine;
+        for(const alpha of [.1,.5,.9])engine.withPresentation(()=>{
+          expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
+          expect(world.camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
+        },alpha);
       }
       expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
@@ -95,4 +101,31 @@ it('keeps native mounted views at the real Source101 eyes through orbit, flight 
     runtime.setCameraMode(1);runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,cameraMode:1}});
     expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
   }finally{world.dispose();vi.unstubAllGlobals();}
+});
+
+it('closes the real dive loop without moving the saddle across its animation seam',async()=>{
+  const {visual,pose}=await fixture();try{
+    pose.speed=31;Object.assign(pose.flyingCreature!,{mode:'dive',speedMetersPerSecond:31});
+    for(const time of [1.5,3,4.5]){
+      visual.sample(pose,time-.00001);const before=visual.readSeatWorld();
+      visual.sample(pose,time+.00001);const after=visual.readSeatWorld();
+      expect(new T.Vector3().setFromMatrixPosition(before).distanceTo(new T.Vector3().setFromMatrixPosition(after))).toBeLessThan(.001);
+    }
+  }finally{visual.dispose();vi.unstubAllGlobals();}
+});
+it('crossfades flight modes only on fixed commits and survives display cuts and reset',async()=>{
+  const {visual,pose}=await fixture();try{
+    pose.speed=31;Object.assign(pose.flyingCreature!,{mode:'boost',speedMetersPerSecond:31,tick:15});
+    visual.commit(pose,1,.25);const before=new T.Vector3().setFromMatrixPosition(visual.readSeatWorld());
+    Object.assign(pose.flyingCreature!,{mode:'dive',tick:16});visual.commit(pose,1,.25+1/60);
+    expect(before.distanceTo(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()))).toBeLessThan(.4);
+    const fixed=visual.readSeatWorld().elements.slice();visual.sample(pose,.255);const display=visual.readSeatWorld().elements.slice();
+    visual.sample(pose,.25+1/60);expect(visual.readSeatWorld().elements).toEqual(fixed);
+    visual.sample(pose,.255);expect(visual.readSeatWorld().elements).toEqual(display);
+    visual.commit(pose,2,.25+1/60);expect(visual.readSeatWorld().elements).toEqual(fixed);
+    pose.flyingCreature!.tick=17;visual.commit(pose,2,.25+2/60);
+    expect(new T.Vector3().setFromMatrixPosition(new T.Matrix4().fromArray(fixed)).distanceTo(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()))).toBeLessThan(.4);
+    pose.flyingCreature=createFlyingCreatureStateV1();pose.speed=0;visual.commit(pose,3,0);
+    expect(visual.inspect().clips.map(clip=>clip.name)).toEqual(['D01_Flight_Hovering']);
+  }finally{visual.dispose();vi.unstubAllGlobals();}
 });

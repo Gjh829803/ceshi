@@ -39,7 +39,12 @@ function read(sim:Simulation,player:MotionPose,vehicles:MotionPose[]){
     if(sim.vehicle?.sled)player.humanoid.sledPose={...sim.vehicle.sled};}
   sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.flyingCreature=v.flyingCreature?{...v.flyingCreature}:undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.wheelPhysics?.wheels.map(w=>({...w}))??v.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.creature);p.unicycle=copyUnicycleState(v.unicycle);p.submersible=copySubmersibleState(v.submersible);p.raft=v.raft?{...v.raft}:undefined;p.jetski=copyJetSkiState(v.jetski);p.atv=copyAtvState(v.atv);p.kayak=v.kayak?{...v.kayak}:undefined;p.tank=v.tank?{...v.tank}:undefined;});
 }
-function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flyingCreature=b.flyingCreature?{...b.flyingCreature}:undefined;out.position.lerpVectors(a.position,b.position,alpha);out.rotation.slerpQuaternions(a.rotation,b.rotation,alpha);out.velocity.lerpVectors(a.velocity,b.velocity,alpha);out.yaw=a.yaw+angleDelta(a.yaw,b.yaw)*alpha;out.speed=a.speed+(b.speed-a.speed)*alpha;out.steering=a.steering+(b.steering-a.steering)*alpha;
+function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flyingCreature=b.flyingCreature?{...b.flyingCreature}:undefined;
+  if(out.flyingCreature&&a.flyingCreature&&b.flyingCreature){
+    for(const key of ['pitchRadians','bankRadians','speedMetersPerSecond'] as const)out.flyingCreature[key]=a.flyingCreature[key]+(b.flyingCreature[key]-a.flyingCreature[key])*alpha;
+    if(a.flyingCreature.evadeCount===b.flyingCreature.evadeCount)out.flyingCreature.evadeRemainingSeconds=a.flyingCreature.evadeRemainingSeconds+(b.flyingCreature.evadeRemainingSeconds-a.flyingCreature.evadeRemainingSeconds)*alpha;
+  }
+  out.position.lerpVectors(a.position,b.position,alpha);out.rotation.slerpQuaternions(a.rotation,b.rotation,alpha);out.velocity.lerpVectors(a.velocity,b.velocity,alpha);out.yaw=a.yaw+angleDelta(a.yaw,b.yaw)*alpha;out.speed=a.speed+(b.speed-a.speed)*alpha;out.steering=a.steering+(b.steering-a.steering)*alpha;
   out.humanoid=blendHumanoid(a.humanoid,b.humanoid,alpha);out.cameraHeight=(a.cameraHeight??1.25)+((b.cameraHeight??1.25)-(a.cameraHeight??1.25))*alpha;
   out.unicycle=blendUnicycleState(a.unicycle,b.unicycle,alpha);
   out.submersible=copySubmersibleState(b.submersible);if(out.submersible&&a.submersible&&b.submersible)out.submersible.rotorPhase=a.submersible.rotorPhase+(b.submersible.rotorPhase-a.submersible.rotorPhase)*alpha;

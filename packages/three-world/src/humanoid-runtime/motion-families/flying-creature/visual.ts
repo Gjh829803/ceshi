@@ -10,6 +10,8 @@ export class FlyingCreatureVisual {
   readonly root=new T.Group();
   private mixer?:T.AnimationMixer;
   private actions=new Map<string,T.AnimationAction>();
+  private diveStart?:T.AnimationAction;
+  private blendHistory?:{previousTime:number;time:number;tick:number;previous:Record<string,number>;current:Record<string,number>};
   private flame:CreatureFlame|undefined;
   private seat:T.Object3D|undefined;
   private mouth:T.Object3D|undefined;
@@ -44,6 +46,8 @@ export class FlyingCreatureVisual {
         clip=source.clone();clip.tracks=clip.tracks.filter(track=>track.name.endsWith('.quaternion')&&jawNames.has(T.PropertyBinding.parseTrackName(track.name).nodeName??''));
         if(reference)T.AnimationUtils.makeClipAdditive(clip,0,reference,30);
       }
+      // Dive 的首尾姿态不同，保留第二个动作实例用于循环接缝过渡。
+      if(source.name==='D01_Flight_Dive'){this.diveStart=this.mixer.clipAction(clip.clone());this.diveStart.play();this.diveStart.setEffectiveWeight(0);}
       const action=this.mixer.clipAction(clip);action.play();action.setEffectiveWeight(0);this.actions.set(source.name,action);
     }
     const texture=await new T.TextureLoader().loadAsync(resources.flameTextureUrl);
@@ -55,19 +59,31 @@ export class FlyingCreatureVisual {
     const action=this.actions.get(name);if(!action)return;
     action.enabled=true;action.setEffectiveWeight(weight);
     action.time=phase===undefined?time%Math.max(.001,action.getClip().duration):Math.min(.999,Math.max(0,phase))*action.getClip().duration;
+    if(name==='D01_Flight_Dive'&&this.diveStart){
+      const end=action.getClip().duration,t=T.MathUtils.clamp((action.time-(end-.25))/.25,0,1),mix=t*t*(3-2*t);
+      action.setEffectiveWeight(weight*(1-mix));this.diveStart.enabled=true;this.diveStart.time=0;this.diveStart.setEffectiveWeight(weight*mix);
+    }
   }
-  sample(pose:MotionPose,time:number):void {
-    const state=pose.flyingCreature;if(!state||!this.mixer)return;this.state=state;this.sampleTime=time;
-    for(const action of this.actions.values())action.setEffectiveWeight(0);
+  private flightWeights(pose:MotionPose):Record<string,number>{
+    const state=pose.flyingCreature!;
     const hover=1-T.MathUtils.clamp(pose.speed/6,0,1),bank=T.MathUtils.clamp(state.bankRadians/.8,-1,1),pitch=T.MathUtils.clamp(state.pitchRadians/1.05,-1,1);
     const special=state.mode==='evade'?'D01_Dodge_'+(state.evadeDirection<0?'L':'R'):state.mode==='boost'?'D01_Flight_BoostLoop':state.mode==='glide'||state.mode==='dive'?'D01_Flight_Dive':pose.speed>24?'D01_Flight_Fast':null;
     const specialWeight=special?(state.mode==='evade'?Math.sin(Math.PI*(1-state.evadeRemainingSeconds/.45)):T.MathUtils.clamp((pose.speed-12)/15,0,1)):0;
     const directional=(1-hover)*(1-specialWeight),turn=Math.abs(bank)*.55,vertical=Math.abs(pitch)*.4;
-    this.weight('D01_Flight_Hovering',hover,time);
-    this.weight('D01_Flight_Base',directional*(1-turn-vertical),time);
-    this.weight(`D01_Flight_Base_${bank>0?'R':'L'}`,directional*turn,time);
-    this.weight(`D01_Flight_Base_${pitch>0?'U':'D'}`,directional*vertical,time);
-    if(special)this.weight(special,(1-hover)*specialWeight,time,state.mode==='evade'?1-state.evadeRemainingSeconds/.45:undefined);
+    return {'D01_Flight_Hovering':hover,'D01_Flight_Base':directional*(1-turn-vertical),
+      [`D01_Flight_Base_${bank>0?'R':'L'}`]:directional*turn,[`D01_Flight_Base_${pitch>0?'U':'D'}`]:directional*vertical,
+      ...(special?{[special]:(1-hover)*specialWeight}:{})};
+  }
+  sample(pose:MotionPose,time:number):void {
+    const state=pose.flyingCreature;if(!state||!this.mixer)return;this.state=state;this.sampleTime=time;
+    for(const action of this.actions.values())action.setEffectiveWeight(0);this.diveStart?.setEffectiveWeight(0);
+    const history=this.blendHistory,weights=this.flightWeights(pose);
+    if(history){
+      const alpha=history.time>history.previousTime?T.MathUtils.clamp((time-history.previousTime)/(history.time-history.previousTime),0,1):1;
+      for(const name of new Set([...Object.keys(weights),...Object.keys(history.previous),...Object.keys(history.current)]))
+        weights[name]=T.MathUtils.lerp(history.previous[name]??0,history.current[name]??0,alpha);
+    }
+    for(const [name,weight] of Object.entries(weights))this.weight(name,weight,time,name.startsWith('D01_Dodge_')?1-state.evadeRemainingSeconds/.45:undefined);
     if(state.flamePhase!=='off'){
       const name='D01_Shoot_FlameThrower'+(state.flamePhase==='loop'?'Loop':state.flamePhase==='ending'?'End':'');
       this.weight(name,1,time,state.flamePhase==='loop'?undefined:state.flamePhaseSeconds/.3);
@@ -78,6 +94,16 @@ export class FlyingCreatureVisual {
   /** 仅固定步调用；渲染恢复及多次观察不会重复发射。 */
   commit(pose:MotionPose,epoch:number,time:number):void {
     const state=pose.flyingCreature;if(!state||!this.mouth||!this.flame)return;
+    const target=this.flightWeights(pose),history=this.blendHistory;
+    if(!history||time<history.time||state.tick<history.tick){
+      this.blendHistory={previousTime:time,time,tick:state.tick,previous:{...target},current:target};
+    }else if(time>history.time){
+      const current:Record<string,number>={},amount=1-Math.exp(-(time-history.time)/.12);
+      for(const name of new Set([...Object.keys(history.current),...Object.keys(target)]))current[name]=T.MathUtils.lerp(history.current[name]??0,target[name]??0,amount);
+      this.blendHistory={previousTime:history.time,time,tick:state.tick,previous:history.current,current};
+    }
+    // 混合历史只在固定步推进；发射点、鞍位和之后的相机读取同一份完成姿态。
+    this.sample(pose,time);
     const direction=new T.Vector3(0,0,1).applyQuaternion(pose.rotation);
     const emission=state.flamePhase==='off'?0:state.flamePhase==='starting'?Math.min(1,state.flamePhaseSeconds/.3):state.flamePhase==='ending'?Math.max(0,1-state.flamePhaseSeconds/.3):1;
     this.flame.commit(epoch,state.tick,time,emission,this.mouth.getWorldPosition(new T.Vector3()),direction,pose.velocity);
@@ -106,13 +132,13 @@ export class FlyingCreatureVisual {
     }
   }
   inspect(){return {sampleTimeSeconds:this.sampleTime,flameParticles:this.flame?.object.geometry.drawRange.count??0,
-    clips:[...this.actions.entries()].filter(([,action])=>action.getEffectiveWeight()>0).map(([name,action])=>({name,weight:action.getEffectiveWeight(),time:action.time})),
+    clips:[...this.actions.entries(),...(this.diveStart?[['D01_Flight_Dive (loop seam)',this.diveStart] as const]:[])].filter(([,action])=>action.getEffectiveWeight()>0).map(([name,action])=>({name,weight:action.getEffectiveWeight(),time:action.time})),
     attachments:Object.fromEntries(['Seat','Head','Jaw','CenturyFireSocket'].map(name=>[name,this.body?.getObjectByName(name)?.getWorldPosition(new T.Vector3()).toArray()]))};}
   dispose():void{
     this.disposed=true;this.flame?.dispose();this.flame=undefined;this.mixer?.stopAllAction();if(this.body)this.mixer?.uncacheRoot(this.body);
     for(const line of this.reins){line.geometry.dispose();(line.material as T.Material).dispose();line.removeFromParent();}
     const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
     this.body?.traverse(node=>{if(node instanceof T.Mesh){geometries.add(node.geometry);for(const material of Array.isArray(node.material)?node.material:[node.material]){materials.add(material);for(const value of Object.values(material))if(value instanceof T.Texture)textures.add(value);}}});
-    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());this.body?.removeFromParent();delete this.body;delete this.mixer;this.actions.clear();this.root.removeFromParent();
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());this.body?.removeFromParent();delete this.body;delete this.mixer;this.actions.clear();delete this.diveStart;delete this.blendHistory;this.root.removeFromParent();
   }
 }

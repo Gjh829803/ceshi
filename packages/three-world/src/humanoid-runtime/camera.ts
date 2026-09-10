@@ -25,6 +25,7 @@ export class FollowCamera {
   get presentationTarget():T.Vector3 {return (this.displayedTarget??this.target).clone();}
   private previousPresentation:CameraPresentationPose|undefined;
   private currentPresentation:CameraPresentationPose|undefined;
+  private presentationCreature=false;
   private presentationHumanoid:Simulation['humanoid']|undefined;
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
@@ -42,6 +43,7 @@ export class FollowCamera {
     this.previousPresentation=pose;
   }
   capturePresentationPose(sim:Simulation,snap=false):void {
+    this.presentationCreature=!!sim.vehicle?.flyingCreature;
     this.presentationHumanoid=sim.vehicle?undefined:sim.humanoid;
     const head=new T.Vector3();let headSource:CameraPresentationPose['headSource']='posture-eye';
     if(sim.vehicle){
@@ -68,6 +70,13 @@ export class FollowCamera {
     this.displayedTarget=target;
     const eye=a.position.clone().lerp(b.position,alpha).add(offset);
     this.displayedHead={position:a.head.clone().lerp(b.head,alpha).add(offset),source:b.headSource,simulationSeconds:a.simulationSeconds+(b.simulationSeconds-a.simulationSeconds)*alpha,offsets:{targetHeightOffset:a.offsets.targetHeightOffset+(b.offsets.targetHeightOffset-a.offsets.targetHeightOffset)*alpha,horizontalOffset:a.offsets.horizontalOffset+(b.offsets.horizontalOffset-a.offsets.horizontalOffset)*alpha}};
+    // 飞龙的 Seat 与骑手骨架已按显示时间求值，不能再使用两个固定步眼位的直线近似。
+    if(this.presentationCreature&&(this.mode===1||this.mode===2)){
+      const head=new T.Vector3();
+      if(this.eyePosition?.(head)){
+        const correction=head.clone().sub(this.displayedHead.position);eye.add(correction);target.add(correction);this.displayedHead.position.copy(head);
+      }
+    }
     let resolved=eye;
     const humanoid=this.presentationHumanoid;
     if(this.tuning.collisionEnabled&&this.mode!==1&&alpha!==1){
@@ -239,7 +248,9 @@ export class FollowCamera {
     if(this.tuning.collisionEnabled){
       const solved=this.collision.solve({target:this.anchor.toArray(),eye:this.candidate.toArray(),
         current:this.camera.position.toArray(),radius:this.tuning.collisionRadiusMeters,armClearance:0},{
-        authorityTick:++this.collisionTick,deltaSeconds:dt,clearHoldSeconds:0,recoveryHalfLifeSeconds:0,maximumRecoveryMetersPerSecond:Number.MAX_VALUE,
+        authorityTick:++this.collisionTick,deltaSeconds:dt,clearHoldSeconds:v?.flyingCreature ? .12 : 0,
+        recoveryHalfLifeSeconds:v?.flyingCreature ? .18 : 0,maximumRecoveryMetersPerSecond:v?.flyingCreature?12:Number.MAX_VALUE,
+        ...(v?.flyingCreature?{resetWhenClear:false}:{}),
       });
       this.collisionLimited=solved.limited;this.candidate.fromArray(solved.position);
     }else this.collision.reset();
