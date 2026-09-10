@@ -97,6 +97,9 @@ and their outcomes. Choose its length by functional coverage; omit world_playtes
 durationSeconds to execute the full plan. Use a shorter durationSeconds for a
 debug run while keeping episode.json unchanged. Read targetResults.nearestSample
 for measured position, time and target-minus-player XYZ offsets when tuning routes.
+For a specific recorded interval, use world_read_playtest with the playtest
+operationId and fromSeconds/toSeconds to read sampled motion, mounting and keys;
+this reads saved evidence without another recording. Missing telemetry is unknown.
 recordingReadiness describes recording prerequisites for the reported world and
 episode hashes; a truncated debug run is incomplete even when status is passed.
 Once a complete recording covers the requested outcomes and the world/episode

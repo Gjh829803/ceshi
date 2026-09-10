@@ -24,6 +24,7 @@ import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
 import {measureEpisodeTargets} from './target-feedback.js';
+import {summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -107,6 +108,7 @@ export class ThreeCreatorTools {
   private activeOperationId?: string;
   private session?: Session;
   private playtestEvidence?: Evidence;
+  private readonly recordedPlaytests = new Map<string, Evidence>();
   private captureEvidence?: Evidence;
   constructor(workspace: string, readonly profile: CreatorProfile, policyOptions:AssetPolicyOptions = {}) {
     this.compiler = new ThreeCompiler(workspace, profile, policyOptions); this.compiler.assetPolicy(); this.discovery = new CreatorDiscovery(this.compiler); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
@@ -157,6 +159,28 @@ export class ThreeCreatorTools {
     return structuredClone(operation);
   }
   async cancel(id: string) { const operation = this.operations.get(id); if (!operation) throw new Error('THREE_OPERATION_UNKNOWN'); if (operation.status === 'queued' || operation.status === 'running') { this.cancelled.add(id); if (id === this.activeOperationId) await this.closeSession(); } return this.getOperation(id); }
+  async readPlaytest(operationId: string, query: PlaytestTraceQuery = {}) {
+    validatePlaytestTraceQuery(query);
+    const operation = await this.getOperation(operationId);
+    if (operation.type !== 'world.playtest') throw new Error('THREE_PLAYTEST_OPERATION_REQUIRED');
+    if (operation.status === 'queued' || operation.status === 'running') return {status:'not-ready', operationId, operationStatus:operation.status};
+    const evidence = this.recordedPlaytests.get(operationId);
+    if (!evidence) return {status:'unavailable', operationId, reason:'NO_RECORDED_TRACE_IN_THIS_SERVICE_SESSION'};
+    const {report} = evidence;
+    const source = {creatorOperationId:operationId, operationCompletedAt:operation.updatedAt,
+      sourceHash:report.sourceHash, worldBuildHash:report.worldBuildHash, runtimeHash:report.runtimeHash,
+      runtimeSourceHash:report.runtimeSourceHash, episodeHash:report.episodeHash};
+    const identity = {kind:'three-creator-playtest-summary', advisory:true, source, currentWorldComparison:'not-performed',
+      recording:{status:report.status,executionMode:report.executionMode,isCompleteEpisode:report.isCompleteEpisode,creatorOperationStatus:operation.status}};
+    try {
+      const file = path.join(evidence.root, 'trace.json'), stat = await lstat(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 128 * 1024 * 1024 ||
+          !isWithin(await realpath(this.workspace), await realpath(file))) throw new Error('TRACE_FILE_UNAVAILABLE');
+      const bytes = await readFile(file);
+      if (sha256(bytes) !== evidence.files['trace.json']) return {...identity,status:'unavailable',reason:'RECORDED_TRACE_CHANGED'};
+      return {...identity, traceSha256:evidence.files['trace.json'], ...summarizePlaytestTrace(JSON.parse(bytes.toString()), query)};
+    } catch { return {...identity,status:'unavailable',reason:'RECORDED_TRACE_UNREADABLE'}; }
+  }
   private assertActive(id: string) { if (this.cancelled.has(id)) throw new Error('THREE_OPERATION_CANCELLED'); }
   async close() { for (const operation of this.operations.values()) if (['queued', 'running'].includes(operation.status)) this.cancelled.add(operation.id); await this.closeSession(); }
   private async closeSession() { const session = this.session; delete this.session; if (session) await session.close(); }
@@ -409,11 +433,13 @@ export class ThreeCreatorTools {
     const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
     const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
-    const report = {...recording, recordingReadiness: {scope: 'recording-only' as const,
+    const report = {...recording, readTrace:{tool:'world_read_playtest',arguments:{operationId}}, recordingReadiness: {scope: 'recording-only' as const,
       checkedAt: new Date().toISOString(), creatorOperationId: operationId, ...identity,
       ...playtestSubmissionReadiness(recording, identity)}};
     await json(path.join(root, 'trace.json'), trace); await json(path.join(root, 'playtest.json'), report); await writeFile(path.join(root, 'episode.json'), input.bytes);
-    this.playtestEvidence = { root, files: await hashTree(root), report }; return report;
+    this.playtestEvidence = { root, files: await hashTree(root), report };
+    this.recordedPlaytests.set(operationId, this.playtestEvidence);
+    return report;
   }
   async submit() {
     const candidate = await this.compiler.prepare(), episode = await this.episode(), played = this.playtestEvidence;

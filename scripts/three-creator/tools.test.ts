@@ -59,6 +59,49 @@ describe('sampled target feedback',()=>{
 
 describe('Three semantic target views', () => {
 
+  it('reads verified historical trace windows after browser close and source edits, without recompilation or a new operation', async () => {
+    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+    await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:.3},{keysUp:['w'],durationSeconds:.1}],targets:[]}));
+    try {
+      const started=await executeThreeCreatorTool(service,'world_playtest',{}) as {operationId:string};
+      const operation=await service.getOperation(started.operationId,25),report=operation.result;
+      expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
+      await service.close();
+      await writeFile(path.join(root,'main.ts'),'invalid current code');
+      const prepare=vi.spyOn(service.compiler,'prepare').mockRejectedValue(new Error('must not compile'));
+      const start=vi.spyOn(service,'start');
+      const result:any=await executeThreeCreatorTool(service,report.readTrace.tool,{...report.readTrace.arguments,maxSamples:2});
+      expect(result).toMatchObject({status:'observed',advisory:true,currentWorldComparison:'not-performed',source:{creatorOperationId:started.operationId,operationCompletedAt:operation.updatedAt,worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash},recording:{status:'passed',isCompleteEpisode:true,executionMode:'full-episode'},summary:{speedSampleCount:0}});
+      expect(result.samples).toHaveLength(2);expect(result.samples[0].speedMetersPerSecond).toBeNull();
+      expect(result.keyboardEvents.some((e:any)=>e.type==='keydown'&&e.code==='KeyW')).toBe(true);
+      expect(prepare).not.toHaveBeenCalled();expect(start).not.toHaveBeenCalled();
+      expect(await service.getOperation(started.operationId)).toEqual(operation);
+      const traceFile=path.join(path.dirname(report.videoPath),'trace.json');
+      const original=await readFile(traceFile);
+      await writeFile(traceFile,'{"samples":[]}');
+      expect(await service.readPlaytest(started.operationId)).toMatchObject({status:'unavailable',reason:'RECORDED_TRACE_CHANGED'});
+      await rm(traceFile);await writeFile(path.join(root,'outside.json'),original);await symlink(path.join(root,'outside.json'),traceFile);
+      expect(await service.readPlaytest(started.operationId)).toMatchObject({status:'unavailable',reason:'RECORDED_TRACE_UNREADABLE'});
+      const fresh=new ThreeCreatorTools(root,'three-raw');
+      await expect(fresh.readPlaytest(started.operationId)).rejects.toThrow('THREE_OPERATION_UNKNOWN');await fresh.close();
+    } finally {await service.close();}
+  },30000);
+
+  it('keeps pending, unrelated and unknown recording queries distinct', async () => {
+    const service=new ThreeCreatorTools(await fixture(),'three-raw');let release!:()=>void;
+    try {
+      const started=service.start('world.playtest',()=>new Promise(resolve=>{release=()=>resolve({});}));
+      expect(await service.readPlaytest(started.operationId)).toMatchObject({status:'not-ready',operationId:started.operationId});
+      await new Promise(resolve=>setTimeout(resolve,0));release();await service.getOperation(started.operationId,1);
+      expect(await service.readPlaytest(started.operationId)).toMatchObject({status:'unavailable'});
+      const other=service.start('world.validate',async()=>({}));
+      await expect(service.readPlaytest(other.operationId)).rejects.toThrow('THREE_PLAYTEST_OPERATION_REQUIRED');
+      await expect(service.readPlaytest('../trace')).rejects.toThrow('THREE_OPERATION_UNKNOWN');
+      await expect(executeThreeCreatorTool(service,'world_read_playtest',{operationId:started.operationId,maxSamples:100})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+    } finally {release?.();await service.close();}
+  });
+
   it('returns trace-backed target offsets through playtest and preserves them in delivery without adding a gate', async () => {
     const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
     await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));

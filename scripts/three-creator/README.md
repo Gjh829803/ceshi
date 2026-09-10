@@ -387,6 +387,33 @@ a longer value keeps waiting after all steps, with unreleased keys held until cl
 `actualWallSeconds` measures this input/recording interval and its finalization;
 it excludes browser startup and subsequent transcoding, and is not whole-task time.
 
+For a question about an already recorded interval, use the playtest result's
+`readTrace` link, or query the same service session directly:
+
+```js
+world_read_playtest({operationId: 'the-playtest-operation-id',
+  fromSeconds: 11, toSeconds: 20, maxSamples: 12})
+```
+
+Times are seconds since the browser trace began, not whole-task time or the sum
+of planned step durations. The reader returns original sample indices, positions,
+velocity magnitudes, mounted instance, camera mode and up to 32 keyboard events.
+It returns at most `maxSamples` uniformly selected samples (default 12, range 2–32),
+including interval endpoints that were actually sampled. Omitted counts are
+explicit; narrow the range for short transitions. Maximum speed uses all valid
+velocity samples in that range; missing measurements remain null. Long text is
+marked with an ellipsis. It does not infer travel between reset/mount transitions,
+track arbitrary prop displacement or decide task success.
+
+The summary carries recorded source/runtime/episode hashes, trace SHA256,
+operation time and recording status. `currentWorldComparison:'not-performed'`
+means it describes that recording even if the current source changed. This read
+does not compile, open a browser, advance simulation, create an operation or
+re-record. It works after the service closes its browser, within that same service
+instance. Unknown IDs and different operation types are rejected; pending runs
+return `not-ready`, and missing/changed trace files return `unavailable`. These
+advisory results do not change recording or submission eligibility.
+
 `recordingReadiness` reports the existing recording prerequisites immediately:
 `eligible` and `issues` cover technical success, plan completeness and required
 input/video durations. `scope:'recording-only'`, `checkedAt`, `creatorOperationId`,

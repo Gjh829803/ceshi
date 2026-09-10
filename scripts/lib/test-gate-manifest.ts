@@ -81,6 +81,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/three-creator/custom-vehicle.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/example-files.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/three-creator/mount-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
+  { path: "scripts/three-creator/playtest-summary.test.ts", lane: "contract" },
   { path: "scripts/three-creator/preset-import-catalog.test.ts", lane: "contract" },
   { path: "scripts/three-creator/preset-workspace.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "scripts/three-creator/runtime-guidance.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
