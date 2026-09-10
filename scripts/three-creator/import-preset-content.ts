@@ -1,3 +1,4 @@
+import {readCatalogSources,writeCatalogSources,syncAssetCatalog} from './catalog-sources.js';
 /** Reproducible content import. No donor code executes in the deployed Host. */
 import { readFile, readdir, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -61,10 +62,9 @@ Object.assign(globalThis, { document: { createElement: () => ({ width: 768, heig
   FileReader: class { result: unknown; onloadend?: () => void; readAsArrayBuffer(blob: Blob) { void blob.arrayBuffer().then(value => { this.result = value; this.onloadend?.(); }); } } });
 const { SPECS } = await import(pathToFileURL(path.join(donor, 'src/config.ts')).href);
 const { buildVehicle } = await import(pathToFileURL(path.join(donor, 'src/models.ts')).href);
-const catalogFile = path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json');
-const catalog = JSON.parse(await readFile(catalogFile, 'utf8'));
+const catalog = {schemaVersion:1,assets:await readCatalogSources(REPOSITORY_ROOT)};
 const previousAssets = new Map<string, Parameters<typeof presetImportDetails>[1]>(
-  catalog.assets.map((asset: { id: string }) => [asset.id, asset]),
+  catalog.assets.map(asset => [asset.id, asset as Parameters<typeof presetImportDetails>[1]]),
 );
 catalog.assets = catalog.assets.filter((asset: any) => asset.provenance?.repository !== 'vehicle-training-ground' && asset.id !== 'humanoid.source-101');
 const provenance = { repository: 'vehicle-training-ground', commit: expected, notices: 'resources', importedWithoutChangingAssetBytes: true };
@@ -96,7 +96,8 @@ for (const spec of SPECS) {
     ...details, collision: spec.envelope,
   }));
 }
-await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n');
+await writeCatalogSources(REPOSITORY_ROOT,catalog.assets,true);
+await syncAssetCatalog(REPOSITORY_ROOT);
 await writeFile(path.join(destination, 'import-manifest.json'), JSON.stringify({ schemaVersion: 1, provenance,
   character: { boneCount: 101, runtimeClipCount: sourceManifest.runtimeClipCount }, vehicleIds: SPECS.map((s: any) => s.id),
   maps: ['campus','indoor-lab','character-workshop'], resources: await Promise.all(imports.map(resource)) }, null, 2) + '\n');

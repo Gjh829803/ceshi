@@ -1,0 +1,106 @@
+{
+  "id": "vehicle.boat",
+  "displayName": "水上快艇 / WAKE",
+  "path": "vehicles/boat.glb",
+  "uri": "./assets/subjects/9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0.glb",
+  "sha256": "9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0",
+  "byteLength": 39092,
+  "sourcePath": "assets/three-creator/presets/vehicles/boat.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [],
+  "provenance": {
+    "repository": "vehicle-training-ground",
+    "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+    "notices": "resources",
+    "importedWithoutChangingAssetBytes": true
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "locomotion.boat"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "boat",
+      "name": "水上快艇",
+      "en": "WAKE",
+      "mode": "boat",
+      "kernel": "K06",
+      "color": "#68baf1",
+      "spawn": [
+        207,
+        -1.9,
+        10
+      ],
+      "yaw": 0,
+      "speed": 24,
+      "accel": 7,
+      "grip": 3,
+      "steer": 1.05,
+      "radius": 1.7,
+      "seat": [
+        0,
+        0.35,
+        -0.3
+      ],
+      "camera": 9,
+      "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
+      "archetype": "boat",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.25,
+          2.85
+        ],
+        "offset": [
+          0,
+          0.5,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.35,
+        -0.3
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      1.35,
+      1.25,
+      2.85
+    ],
+    "offset": [
+      0,
+      0.5,
+      0
+    ]
+  }
+}

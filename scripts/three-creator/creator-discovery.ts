@@ -6,7 +6,7 @@ import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, 
 import { humanoid } from '@worldkit/three';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, sdkExample } from './examples.js';
-import { readExampleFiles, type ExampleTopic } from './example-files.js';
+import { EXAMPLE_REGISTRY, readExampleFiles, type ExampleTopic } from './example-files.js';
 import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
@@ -91,10 +91,7 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
-    if (topic === 'preset-assets' || topic === 'environment-maps') return path.join(REPOSITORY_ROOT, 'shared/preset-content');
-    const folder = topic === 'custom-aircraft' ? 'custom-aircraft' : topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : (topic === 'custom-vehicle' || topic === 'presentation-ui') ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
-      topic === 'character-actions' ? 'character-actions' : 'vehicle-sandbox';
-    return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
+    return path.join(REPOSITORY_ROOT, EXAMPLE_REGISTRY[topic].root);
   }
 
   private async missingExampleAssets(topic: ExampleTopic) {

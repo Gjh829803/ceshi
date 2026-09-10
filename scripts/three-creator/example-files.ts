@@ -1,8 +1,10 @@
 import { readFile, readdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-export const EXAMPLE_TOPICS = ['getting-started','extensions','preset-assets','environment-maps','presentation-ui','independent-world','character-actions','mounted-interaction','custom-vehicle','custom-aircraft','nonhuman-subject','vehicle-camera'] as const;
-export type ExampleTopic = typeof EXAMPLE_TOPICS[number];
+import registry from './example-registry.json';
+export const EXAMPLE_REGISTRY = registry;
+export type ExampleTopic = keyof typeof registry;
+export const EXAMPLE_TOPICS = Object.keys(registry) as ExampleTopic[];
 export async function readExampleFiles(root:string, topic:ExampleTopic, selected?:readonly string[]) {
   const entries:{path:string;byteLength:number;sha256:string;readable:boolean}[]=[];
   async function walk(dir:string){for(const name of (await readdir(dir)).sort()){
@@ -15,12 +17,7 @@ export async function readExampleFiles(root:string, topic:ExampleTopic, selected
     }
   }}
   await walk(root);
-  const defaults=topic==='preset-assets'?['config.ts','models.ts','assets/resources.ts','creatures/specs.ts','creatures/manifest.ts']:
-    topic==='environment-maps'?['environment/maps.ts','environment/modules.ts','humanoid/workshop.ts']:
-    topic==='presentation-ui'?['index.html','main.ts','project.json','episode.json']:
-    topic==='character-actions'?['index.html','main.ts','map.ts','project.json','episode.json']:
-    topic==='vehicle-camera'?['index.html','main.ts','project.json','episode.json','whitebox-materials.ts']:
-    ['index.html','main.ts','project.json','episode.json'];
+  const defaults=registry[topic].files;
   const files:Record<string,string>={};
   for(const name of selected??defaults){const entry=entries.find(e=>e.path===name);if(!entry?.readable){if(selected)throw new Error(`THREE_EXAMPLE_FILE_UNKNOWN: ${name}`);continue;}
     files[name]=await readFile(path.join(root,name),'utf8');}

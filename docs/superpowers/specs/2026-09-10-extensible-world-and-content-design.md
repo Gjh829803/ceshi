@@ -4,6 +4,18 @@
 
 ## 1. 结论与边界
 
+2026-09-10 实施中用户进一步明确：内容在 Playground 调好后，由 Codex 按接入 Skill
+完成整理、绑定与验证。长期目标是资产数量增长不要求重构核心加载和执行流程，同时允许
+后续 NPC 自主行为及 Agent 叙事通过现有实体/命令/任务/事件边界扩展。
+以下包构建、索引和检查工具作为可选辅助，不要求所有内容完全工程化注册。
+需要稳定的是内容与运行实例的分离、共享依赖/释放、行为合同和真实消费闭环；
+具体资源、binding、配置和代码接线可以由 AI 按 Skill 维护。
+
+参考的业界职责划分是稳定 ID 与依赖加载（[Unreal Asset Manager](https://dev.epicgames.com/documentation/en-us/unreal-engine/asset-management-in-unreal-engine)）、
+共享资源引用生命周期（[Unity Addressables](https://docs.unity.cn/Packages/com.unity.addressables%402.3/manual/MemoryManagement.html)）
+以及跨帧行为任务（[Unreal Ability Tasks](https://dev.epicgames.com/documentation/unreal-engine/gameplay-ability-tasks-in-unreal-engine?lang=en-US)）。
+在本 SDK 中落实这些原则，仍保留普通 Three 与已有 owner，不照搬完整引擎框架。
+
 保留“普通 Three 创作 + SDK 稳定执行”。将“先在 Playground 调好，再人工教 Agent 接入”改为：**能力与资源具有同源定义，Playground 调试它，SDK 执行它，Creator 发现并绑定它，Episode 独立验证同一份定义和运行时。** Playground 是调试客户端，不是发布源，也不是与 SDK 平行的实现。
 
 这需要两条主线同时规划、分阶段交付：

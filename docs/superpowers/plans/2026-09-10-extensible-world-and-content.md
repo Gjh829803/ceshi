@@ -16,8 +16,9 @@
 - 普通 Three、白模、Source101、当前动作和简洁照明保留；不换模型、不购买资产、不迁入 GASP。
 - 观察只读；未知、失败、stale 分开。源身份、runtime bytes、输入和采样时刻跟随证据。
 - 无外部生产、Seedance、部署或账号切换；本地云合同测试 mock。
+- 用户已授权按实际需要新增 npm 依赖；选成熟库并锁定版本，验证 Three/Rapier、浏览器打包和生命周期兼容性。
 - 每阶段同步实际 SDK、Host schema/tools、Playground、Episode 和样例；新增测试入 census。
-- PR 目标 main，阶段提交；后续阶段在本 worktree 累积时标明依赖，避免未审重构直推 main。
+- 用户 2026-09-10 调整为单分支：后续全部在 `codex/extensible-world-r0` 累积，按阶段记录提交与证据，不再拆分支或另建 PR，方便用户统一处理。已有 R0 PR #232 保留；不自动合并或直推 main。
 
 ## R0：基线与决策（本地完成）
 
@@ -33,6 +34,12 @@
 
 ## C1：首批内容包的真实发现与打包
 
+2026-09-10 用户明确：Playground 调好后，Codex 按 Skill 完成接入。验收重点是链路跑通、
+资产解耦、AI 知道如何接入和工作链路清楚；不要求所有资产完全工程化注册。
+因此下列包版本/自动依赖求解内容仅在真实需要时实现，不能成为固定前置步骤。
+本阶段先交付仓库接入 Skill、独立资产源、同源示例入口以及 Source101/现有动作/车辆的真实接线；
+现有代码、binding、配置与说明均允许 AI 直接维护。运行时 R1–R6 范围不变。
+
 文件 owner：`assets/three-creator/` 包源；`scripts/three-creator/asset-catalog.ts` 和实际导入/导出脚本；`example-files.ts`、`creator-discovery.ts`、`scripts/cloud/three-capsule.mjs`；SDK action-schema/action-system 与 vehicle factory；`shared/preset-content/config.ts`。
 
 - [ ] 先测试重复 ID、依赖缺失/循环、精确闭包、确定性输出、未授权包不可被策略扩权。
@@ -40,7 +47,7 @@
 - [ ] 生成目录、Agent 索引、例子 topic/打包清单；迁移条目从聚合源移出，未迁移条目只读旧目录。编译器自动展开已准入的精确依赖。
 - [ ] pickup descriptor/binding 引用真实原因码、tuning 和 clip roles；测试实际拒绝结果。Playground 与 SDK 引用同一规范默认值。
 - [ ] 按包检查报告分列 registered/policy-allowed/compiled/behavior-verified/visual-reviewed/released；证据键包含闭包/runtime/配置/检查器/输入。
-- [ ] 通过实际 discovery、示例编译和本地浏览器/Episode 验证；阶段 PR。
+- [ ] 通过实际 discovery、示例编译和本地浏览器/Episode 验证；阶段提交与验证记录。
 
 ## R1：共享模拟服务
 
@@ -48,7 +55,7 @@
 
 - [ ] 先写两入口物体/人物共享接触、子步计数、借用释放的失败测试。
 - [ ] 提取实际 Rapier 生命周期和推进 owner，完整人形与通用 rigid 使用同一世界；保留现有碰撞过滤和求解算法。
-- [ ] 普通物体碰撞、骑乘和 reset 浏览器复核；SDK/Creator/Episode 相关测试、typecheck/census/prebuild；阶段 PR。
+- [ ] 普通物体碰撞、骑乘和 reset 浏览器复核；SDK/Creator/Episode 相关测试、typecheck/census/prebuild；阶段提交与验证记录。
 
 ## R2：Actor 与导航
 
@@ -57,7 +64,7 @@
 - [ ] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [ ] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。
 - [ ] 相同内容共享只读资源，独立骨架/mixer/可变材质；部分加载失败和最后 lease 释放可核对。
-- [ ] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段 PR。
+- [ ] 三角色浏览器导航、玩家骑乘、本地 Episode；3/10 活动角色首次性能和 50 次生命周期测试；阶段提交与验证记录。
 
 ## R3：共享目标与资源
 
@@ -65,7 +72,7 @@
 
 - [ ] 同 tick 两请求争物/座恰一成功；先写原子全有或全无预约、目标移动/移除、reset/despawn 测试。
 - [ ] 世界持有 target/slot generation 与 reservation；grip/sit 转成持续 heldBy/occupiedBy。物理实体及视觉引用同一个目标。
-- [ ] 样例真实争用、搬运、释放、低顶退出、取消；阶段 PR。
+- [ ] 样例真实争用、搬运、释放、低顶退出、取消；阶段提交与验证记录。
 
 ## R4：持续任务与事件
 
@@ -74,7 +81,7 @@
 - [ ] 测试跨事件 tick、暂停、循环、重复呈现、grip 前后取消、目标失效；operation 状态核对实际归属。
 - [ ] 在既有 execute 中实现 pickup/sit task 阶段及动态资源；安全点再校验并提交，事件用 operationId/generation/loopIndex/eventId 去重。
 - [ ] 保留纯 plan 行为；取消请求与清理完成分离，putDown 无有效落点保持持有并解释。
-- [ ] 键盘/Creator/Episode 同合同真实完成与失败；阶段 PR。
+- [ ] 键盘/Creator/Episode 同合同真实完成与失败；阶段提交与验证记录。
 
 ## R5、C2：姿态与动作包
 
@@ -83,7 +90,7 @@
 - [ ] 测试显示骨骼扰动不污染同源时间采样、根运动只消费一次、骑乘 overlay 恢复。
 - [ ] 源姿态/根运动提案/实际身体/overlay/显示分离；交接明确 actor/rig、tick、空间、单位、速度参照。
 - [ ] 用已有 clip 做动画 binding 变体，主要修改内容；rig 不兼容拒绝，纯动画不冒充 gameplay。
-- [ ] 真实动作与骑乘媒体及工程回归分别记录；阶段 PR。
+- [ ] 真实动作与骑乘媒体及工程回归分别记录；阶段提交与验证记录。
 
 ## R6/C3：最终消费与发布材料闭环
 
@@ -91,4 +98,4 @@
 - [ ] 复测相同单角色及 3/10 角色性能；单角色 p95 回退超过 10% 复测并解释。
 - [ ] 包锁、资源/配置/runtime/验证闭包及回退材料由本地发布准备消费；不执行外部发布。
 - [ ] 完成 runtime checklist 相关合同和资源测试、typecheck、census、prebuild、Playground 浏览器与独立审查。
-- [ ] 汇报各阶段 PR、远端 CI 实态、浏览器/视频与人工视觉验收缺口；未经人工审阅的动作观感保持未验收。
+- [ ] 汇报单分支各阶段提交、远端 CI 实态、浏览器/视频与人工视觉验收缺口；未经人工审阅的动作观感保持未验收。
