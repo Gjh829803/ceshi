@@ -69,7 +69,9 @@ export class PlayerCaptureController {
     }
     const actor = snapshot.entities.find(e => e.id === snapshot.controlledEntityId)!;
     const grounded = actor.motion?.isGrounded ?? false;
-    const cameraSupported = this.cameraMode !== 'authored';
+    const yaw = snapshot.camera.desiredYawRadians, pitch = snapshot.camera.desiredPitchRadians;
+    const cameraSupported = this.cameraMode !== 'authored' && snapshot.camera.mode !== 'authored' &&
+      typeof yaw === 'number' && Number.isFinite(yaw) && typeof pitch === 'number' && Number.isFinite(pitch);
     const lookStart = 4 + this.ordinal * 0.45;
     const lookDuration = this.ordinal % 2 === 0 ? 2.6 : 1.4;
     const observe = !this.segment.actionGoals?.length && decision.mode === 'travel' && grounded && time >= lookStart && time < lookStart + lookDuration;
@@ -118,7 +120,6 @@ export class PlayerCaptureController {
       input.moveZRatio = (input.moveZRatio ?? 0) * (observe ? 0 : this.pace);
     }
     if (cameraSupported && snapshot.camera) {
-      const yaw = snapshot.camera.desiredYawRadians, pitch = snapshot.camera.desiredPitchRadians;
       this.yawBase ??= yaw; this.pitchBase ??= pitch;
       const previous = this.previousCamera;
       if (previous && snapshot.simulationSeconds > previous.time) {

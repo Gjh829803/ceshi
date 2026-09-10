@@ -48,7 +48,7 @@ export const GRAND_PRIX = {
   }),
 };
 
-const modes = ['character', 'wheeled', 'motorcycle', 'unicycle', 'slide', 'hover', 'bus'];
+const modes = ['character', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'hover', 'bus'];
 export function createGrandPrix(): EnvironmentDefinition {
   const regions: MapRegion[] = [
     { id: 'gp-pits', name: '01 / 维修准备区', description: '选择赛车、换乘和调参；沿出口接入主直道。', center: [-562, 0, -240], size: [50, 240], color: '#86aaa7', modes },

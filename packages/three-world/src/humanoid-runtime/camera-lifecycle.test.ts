@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {Group,PerspectiveCamera,Vector2,PCFShadowMap,type WebGLRenderer} from 'three';
+import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,PCFShadowMap,type WebGLRenderer} from 'three';
 import {createWorld} from '../world';
 import type {WorldObservation} from '../contracts';
 const map={id:'camera',name:'Camera',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]} as const;
@@ -7,6 +7,32 @@ const fixture=(renderer?:WebGLRenderer)=>createWorld({camera:new PerspectiveCame
 function authored(world:Awaited<ReturnType<typeof fixture>>){world.useAuthoredCamera();const c=world.camera as PerspectiveCamera;c.position.set(11,22,33);c.lookAt(0,0,0);c.fov=41;c.near=.2;c.far=700;c.updateProjectionMatrix();return c.clone();}
 function matches(world:Awaited<ReturnType<typeof fixture>>,camera:PerspectiveCamera){expect(world.cameraMode).toBe('authored');expect(world.camera.position.toArray()).toEqual(camera.position.toArray());expect(world.camera.quaternion.toArray()).toEqual(camera.quaternion.toArray());expect((world.camera as PerspectiveCamera).fov).toBe(camera.fov);expect(world.camera.projectionMatrix.elements).toEqual(camera.projectionMatrix.elements);}
 describe('Humanoid sealed camera lifecycle',()=>{
+ it('reads a dirty camera pose without changing transform caches or ownership',async()=>{
+  const w=await fixture();try{
+   w.step({},0);w.humanoid!.setCameraMode(2);
+   const c=w.camera,parent=new Group();w.scene.add(parent);parent.add(c);
+   parent.position.set(4,5,6);parent.rotation.y=.4;c.position.set(1,2,3);
+   const matrix=c.matrix.clone(),worldMatrix=c.matrixWorld.clone(),parentMatrix=parent.matrix.clone(),dirty=c.matrixWorldNeedsUpdate;
+   const expected=c.position.clone().applyQuaternion(parent.quaternion).add(parent.position);
+   const state=w.humanoid!.cameraSnapshot();
+   state.positionWorldMetersXYZ.forEach((value,index)=>expect(value).toBeCloseTo(expected.toArray()[index]!,10));
+   expect(c.matrix.equals(matrix)).toBe(true);expect(c.matrixWorld.equals(worldMatrix)).toBe(true);expect(c.matrixWorldNeedsUpdate).toBe(dirty);expect(parent.matrix.equals(parentMatrix)).toBe(true);
+   w.onUpdate(()=>{w.snapshot();});expect(()=>w.step({},1)).not.toThrow();
+  }finally{w.dispose();}
+ });
+ it('reports authored world pose without stale follow diagnostics or advancing state',async()=>{
+  const w=await fixture();try{
+   w.humanoid!.setCameraMode(2);w.step({moveZRatio:-1},10);
+   const parent=new Group();parent.position.set(4,5,6);parent.rotation.y=.7;w.scene.add(parent);parent.add(w.camera);authored(w);
+   const before=w.simulationTick,position=w.camera.getWorldPosition(new Vector3()).toArray(),rotation=w.camera.getWorldQuaternion(new Quaternion()).toArray();
+   for(let i=0;i<2;i++){
+    const state=w.snapshot().camera;
+    expect(state).toMatchObject({mode:'authored',positionWorldMetersXYZ:position,orientationWorldQuaternionXYZW:rotation,desiredPositionWorldMetersXYZ:null,desiredYawRadians:null,desiredPitchRadians:null});
+    for(const key of ['desiredArmDistanceMeters','actualArmDistanceMeters','collisionPhase'])expect(state).not.toHaveProperty(key);
+   }
+   expect(w.simulationTick).toBe(before);expect(w.camera.getWorldPosition(new Vector3()).toArray()).toEqual(position);
+  }finally{w.dispose();}
+ });
  it('restores pre-seal authored pose and projection immediately on repeated paused resets',async()=>{
   const w=await fixture();try{const parent=new Group(),attachment=new Group();w.scene.add(parent);parent.position.set(2,0,0);parent.add(w.camera);w.camera.add(attachment);const initial=authored(w);w.step({},0);
    for(let i=0;i<2;i++){w.humanoid!.setCameraMode(2);w.step({moveZRatio:-1},30);await w.reset();matches(w,initial);expect(w.camera.parent).toBe(parent);expect(w.camera.children).toEqual([attachment]);expect(w.simulationTick).toBe(0);expect(w.isRunning).toBe(false);const before=w.snapshot();w.snapshot();w.humanoid!.inspectConfiguration();expect(w.snapshot()).toEqual(before);matches(w,initial);}

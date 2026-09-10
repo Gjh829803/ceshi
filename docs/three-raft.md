@@ -26,7 +26,7 @@
 保留原 `humanoid.source-101` 人物、骨骼及缩放。船桨与手部目标同步更新，
 气囊压缩只改变 `raft.tubes`，人物、坐板和脚撑不随气囊缩放。
 
-[运行时](../packages/three-world/src/humanoid-runtime/raft.ts)复用 `kayak` 家族的划桨和浮力，
+[运行时](../packages/three-world/src/humanoid-runtime/raft.ts)使用 `mode: 'paddled_boat'` 与 `archetype: 'raft'`，复用共享的划桨和浮力，
 通过同一 SDK 固定时钟及 Rapier 碰撞世界完成陆地接触。四点水域采样、160 kg
 等效质量、最大 0.55 m³ 排水量控制浮起。陆地坡面法线决定纵坡与横坡上的重力分量，
 基础滑动摩擦为 0.32 m/s²；下坡安全限速为 18 m/s。

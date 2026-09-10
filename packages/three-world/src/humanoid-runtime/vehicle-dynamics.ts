@@ -193,7 +193,7 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
     // Normalize at the physics boundary so float32 roundoff cannot deform the
     // visual hierarchy or invalidate rigid camera geometry every fixed step.
     const p=body.translation(),r=body.rotation(),velocity=body.linvel(),angular=body.angvel();v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w).normalize();v.velocity.set(velocity.x,velocity.y,velocity.z);state.angularVelocity.set(angular.x,angular.y,angular.z);
-    const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');v.pitch=-angles.x;v.yaw=angles.y;v.roll=angles.z;v.speed=v.submersible||['plane','glider','space'].includes(v.spec.mode)?v.velocity.length():Math.hypot(velocity.x,velocity.z);
+    const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');v.pitch=-angles.x;v.yaw=angles.y;v.roll=angles.z;v.speed=v.submersible||['plane','glider','spacecraft'].includes(v.spec.mode)?v.velocity.length():Math.hypot(velocity.x,velocity.z);
     // Glider sink is a vertical flight-path offset, not loss of airspeed on
     // every solver slice. Recover airspeed from the actual horizontal motion.
     if(c.kind==='motion'&&['plane','glider'].includes(v.spec.mode))v.speed=Math.hypot(velocity.x,velocity.z)/Math.max(.2,Math.cos(v.pitch));

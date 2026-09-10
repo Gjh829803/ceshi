@@ -413,18 +413,18 @@ describe('SDK humanoid runtime',()=>{
    c.orbit(1e5,-1e5,s.time,s);c.update(s,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
   }finally{world.dispose();}
  });
- it.each(['plane','sub','space','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
+ it.each(['plane','submarine','spacecraft','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
   const speeds=[];
   for(const stronger of [false,true]){
-   const sceneMap:EnvironmentDefinition={...map,boxes:[map.boxes[0]!],water:mode==='sub'?[{id:'pool',min:[-90,-5,-90],max:[90,40,90],surface:40}]:[],regions:[{...map.regions[0]!,modes:[mode]}],spawns:[]};
+   const sceneMap:EnvironmentDefinition={...map,boxes:[map.boxes[0]!],water:mode==='submarine'?[{id:'pool',min:[-90,-5,-90],max:[90,40,90],surface:40}]:[],regions:[{...map.regions[0]!,modes:[mode]}],spawns:[]};
    const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:sceneMap,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'craft',assetId:'craft',spec:{...spec,mode,spawn:[-20,mode==='mount'?.03:25,-20]},object:new Group()}]}});
-   try{const r=world.humanoid!;const tuning:Partial<MovementSettings>=mode==='plane'?{drag:stronger?5:0,dragQuadratic:0}:mode==='sub'?{verticalAcceleration:stronger?12:2}:mode==='space'?{grip:0,brakeDamping:stronger?8:0}:mode==='dragon'?{groundDeceleration:stronger?8:1}:{coastDeceleration:stronger?8:1};
-    r.applyProfile({vehicles:{craft:tuning}});r.simulation.active=0;r.simulation.transition=0;const v=r.simulation.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='sub'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
-    world.step({humanoid:{...emptyInput(),lift:mode==='sub'?1:0,boost:mode==='space'}},30);speeds.push(mode==='sub'?v.velocity.y:v.velocity.z);
+   try{const r=world.humanoid!;const tuning:Partial<MovementSettings>=mode==='plane'?{drag:stronger?5:0,dragQuadratic:0}:mode==='submarine'?{verticalAcceleration:stronger?12:2}:mode==='spacecraft'?{grip:0,brakeDamping:stronger?8:0}:mode==='dragon'?{groundDeceleration:stronger?8:1}:{coastDeceleration:stronger?8:1};
+    r.applyProfile({vehicles:{craft:tuning}});r.simulation.active=0;r.simulation.transition=0;const v=r.simulation.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='submarine'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
+    world.step({humanoid:{...emptyInput(),lift:mode==='submarine'?1:0,boost:mode==='spacecraft'}},30);speeds.push(mode==='submarine'?v.velocity.y:v.velocity.z);
     expect(r.snapshot().controls.vehicles.craft).toMatchObject(tuning);
    }finally{world.dispose();}
   }
-  if(mode==='sub')expect(speeds[1]!-speeds[0]!).toBeGreaterThan(3);else expect(speeds[0]!-speeds[1]!).toBeGreaterThan(2);
+  if(mode==='submarine')expect(speeds[1]!-speeds[0]!).toBeGreaterThan(3);else expect(speeds[0]!-speeds[1]!).toBeGreaterThan(2);
  });
  it('tunes release deceleration independently per instance and preserves it through reset',async()=>{
   const world=await fixture();try{const r=world.humanoid!;

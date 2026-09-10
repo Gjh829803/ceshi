@@ -21,7 +21,7 @@ export function motionForces(v:VehicleState,input:Input,h:number,time:number,q:E
     force.z=mass*clamp((draft.velocity.z-v.velocity.z)/h,limit);
   }else{
     // Unoccupied actors coast and exchange momentum; never pin them to a pose.
-    const drag=mode==='slide'?.12:['boat','sub'].includes(mode)?.35:mode==='space'?.04:v.grounded?.6:.04;
+    const drag=mode==='skateboard'?.12:['boat','submarine'].includes(mode)?.35:mode==='spacecraft'?.04:v.grounded?.6:.04;
     force.x=-mass*v.velocity.x*drag;force.z=-mass*v.velocity.z*drag;
   }
   if(mode==='hover'){
@@ -30,9 +30,9 @@ export function motionForces(v:VehicleState,input:Input,h:number,time:number,q:E
     force.y=mass*(9.81+clamp((target-v.position.y)*28-v.velocity.y*8,35));
   }else if(mode==='boat'&&water){
     force.y=mass*(9.81+clamp((water.surface+.1-v.position.y)*18-v.velocity.y*6,30));
-  }else if(mode==='sub'&&water){
+  }else if(mode==='submarine'&&water){
     force.y=mass*(9.81+(driven?clamp((draft.velocity.y-v.velocity.y)/h,s.verticalAcceleration):-v.velocity.y*s.verticalDamping));
-  }else if(mode==='space'){
+  }else if(mode==='spacecraft'){
     force.y=mass*(9.81+(driven?clamp((draft.velocity.y-v.velocity.y)/h,limit):-v.velocity.y*.04));
   }else if((mode==='plane'||mode==='glider')&&(driven||v.launched)&&(!v.grounded||draft.velocity.y>0&&v.speed>14)){
     force.y=mass*(9.81+clamp((draft.velocity.y-v.velocity.y)/h,25));
@@ -52,7 +52,7 @@ export function motionForces(v:VehicleState,input:Input,h:number,time:number,q:E
     force.y=mass*(9.81+(Math.max(3,draft.velocity.y)-v.velocity.y)/h);
   }
   // Upright assistance is torque-limited, so impacts still rotate the chassis.
-  if(driven||v.grounded||mode==='hover'||mode==='boat'||mode==='sub'){
+  if(driven||v.grounded||mode==='hover'||mode==='boat'||mode==='submarine'){
     const target=draft.rotation.clone();
     if(!driven){const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');target.setFromEuler(new Euler(0,angles.y,0,'YXZ'));}
     const error=target.multiply(v.rotation.clone().invert());if(error.w<0)error.set(-error.x,-error.y,-error.z,-error.w);

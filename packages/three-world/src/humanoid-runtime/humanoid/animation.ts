@@ -43,7 +43,7 @@ export interface SourceCharacterFrame {
 export type HumanoidRenderState = Omit<SourceCharacterFrame, 'skills'> & {
   simulationIdentity?: object;
   unicyclePose?: import('../unicycle').UnicycleState | undefined;
-  mounted?: 'unicycle' | 'stand' | 'drive' | 'ride' | 'sled' | 'ski' | 'tank' | 'sub' | 'atv' | 'kayak' | null;
+  mounted?: 'unicycle' | 'stand' | 'drive' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'atv' | 'paddling' | null;
   atvSteeringAngle?:number;
   sledPose?: {push:number;brake:number;steer:number}; kayakPose?:KayakState;
   skills: (Omit<SourceCharacterSkills, 'syncCarried'> & { syncCarried?: SourceCharacterSkills['syncCarried'] }) | null;

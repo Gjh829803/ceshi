@@ -15,8 +15,8 @@ const map:EnvironmentDefinition={id:'native-vehicles',name:'Native vehicles',des
 beforeAll(initEnvironmentQueries);
 function collisionPair(id:string,otherId=id){
   const aSource=SPECS.find(s=>s.id===id)!,bSource=SPECS.find(s=>s.id===otherId)!;
-  const aquatic=['boat','sub','kayak'].includes(aSource.mode);
-  const y=aquatic?aSource.mode==='sub'?-3:.1:Math.max(.05,aSource.envelope.halfExtents[1]-aSource.envelope.offset[1]+.05);
+  const aquatic=['boat','submarine','paddled_boat'].includes(aSource.mode);
+  const y=aquatic?aSource.mode==='submarine'?-3:.1:Math.max(.05,aSource.envelope.halfExtents[1]-aSource.envelope.offset[1]+.05);
   const gap=aSource.envelope.halfExtents[2]+bSource.envelope.halfExtents[2]+.2+(id==='carriage'?4.8:0);
   const specs=[{...aSource,id:'a',spawn:[0,y,0] as [number,number,number],yaw:0},{...bSource,id:'b',spawn:[0,y,gap] as [number,number,number],yaw:0}];
   const q=new EnvironmentQueries({...map,water:aquatic?map.water:[],boxes:[{...map.boxes[0]!,position:[0,aquatic?-21:-1,0]}],
@@ -129,7 +129,7 @@ it('keeps the tracked hull stable across adjoining ground slabs without changing
 async function bridgeFixture(id:string,bottom=1,mounted=true){
  const spec=SPECS.find(s=>s.id===id)!,pool:EnvironmentDefinition={...map,
   boxes:[...map.boxes,{id:'bridge',position:[0,bottom+1,8],size:[80,2,6]}],
-  regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[200,200],color:'#aaa',modes:['kayak']}],
+  regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[200,200],color:'#aaa',modes:['paddled_boat']}],
   spawns:[{id:'boat',name:'Boat',vehicleId:'boat',position:[0,.1,0],yaw:0,regionId:'pool'}]};
  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:pool,vehicles:[{instanceId:'boat',assetId:`vehicle.${id}`,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
  if(mounted)world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.1,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'boat',mounted:true}});

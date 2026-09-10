@@ -117,7 +117,13 @@ export class EnvironmentQueries {
   }
   private assertLive(){if(this.disposed)throw new Error('Environment queries disposed');}
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
-  colliderId(handle:number):string{return this.staticColliderIds.get(handle)??this.vehicleColliderIds.get(handle)??[...this.actorColliders].find(([,v])=>v.collider.handle===handle)?.[0]??`collider-${handle}`;}
+  colliderId(handle:number):string{
+    this.assertLive();
+    const environmentId=this.staticColliderIds.get(handle);if(environmentId!==undefined)return environmentId;
+    const vehicleId=this.vehicleColliderIds.get(handle);if(vehicleId!==undefined)return vehicleId;
+    for(const entry of this.actorColliders.values())if(entry.collider.handle===handle)return entry.actorId;
+    return `collider-${handle}`;
+  }
   wheelSweep(origin:Vector3,rotation:Quaternion,direction:Vector3,radius:number,width:number,distance:number){
     this.assertLive();
     const hit=this.world.castShape(origin,rotation,direction,new RAPIER.Cylinder(width/2,radius),0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
@@ -127,7 +133,7 @@ export class EnvironmentQueries {
   raycast(origin:Vector3,direction:Vector3,distance:number){
     this.assertLive();const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,direction),distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
     if(!hit)return null;
-    const id=[...this.staticColliders].find(([,c])=>c.handle===hit.collider.handle)?.[0]??`collider-${hit.collider.handle}`;
+    const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
   dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
@@ -363,7 +369,7 @@ export class EnvironmentQueries {
       if(parts)desc.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setContactSkin(.015);
       return this.world.createCollider(desc.setDensity(0).setFriction(friction).setRestitution(restitution).setCollisionGroups(0x00020013),body);
     });
-    colliders.forEach((collider,index)=>{this.queryExcluded.add(collider.handle);this.vehicleColliderIds.set(collider.handle,`${id}:${index}`);});
+    colliders.forEach(collider=>{this.queryExcluded.add(collider.handle);this.vehicleColliderIds.set(collider.handle,id);});
     const rig:VehicleRigidRig={token,body,colliders,beforeStep:()=>{},afterStep:()=>{}};this.vehicleRigs.set(id,rig);return rig;
   }
   /** Measured contacts from the shared solver, never an extra collision world. */

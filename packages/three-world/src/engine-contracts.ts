@@ -148,7 +148,7 @@ export type WorldSnapshot = Readonly<{
   isRunning: boolean;
   controlledEntityId?: string;
   entities: readonly EntityState[];
-  errors: readonly Readonly<{ code: string; message: string; simulationTick: number; entityId?: string }>[];
+  errors: readonly Readonly<{ code: string; message: string; simulationTick: number; entityId?: string; diagnostic?: import('./contracts').RuntimeError }>[];
 }>;
 /** Minimal common observer for raw Three and SDK worlds. Host owns evaluation. */
 export interface WorldObservation {

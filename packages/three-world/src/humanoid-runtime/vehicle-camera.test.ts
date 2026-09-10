@@ -41,7 +41,7 @@ describe('vehicle camera geometry',()=>{
   const world=await fixture();try{
    const contact=approachAndOrbit(world);
    expect(contact.positionWorldMetersXYZ[0]-contact.vehicleX).toBeGreaterThan(1.60);expect(contact.positionWorldMetersXYZ[0]-contact.vehicleX).toBeLessThan(1.75);
-   expect(contact.motion?.collisionEntityIds).toContain('rover:0');
+   expect(contact.motion?.collisionEntityIds).toContain('rover');
    expect(world.snapshot().camera.actualArmDistanceMeters).toBeGreaterThan(10.9);
    world.step({},180);expect(world.snapshot().camera.actualArmDistanceMeters).toBeGreaterThan(10.9);
   }finally{world.dispose();}

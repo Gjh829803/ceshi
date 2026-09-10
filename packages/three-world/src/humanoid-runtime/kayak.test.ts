@@ -57,20 +57,21 @@ describe('kayak water and paddle mechanics',()=>{
   expect(root.getObjectByName('kayak.paddle')!.matrixWorld.toArray()).toEqual(before);expect(createVehicle(KAYAK_SPEC).kayak).toEqual(createKayakState());
  });
  it.each([KAYAK_SPEC,CANOE_SPEC,RAFT_SPEC])('keeps Source101 feet inside and hands on $id paddle in the runtime',async(spec)=>{
+  expect(spec.mode).toBe('paddled_boat');expect(spec.archetype).toBe(spec.id);expect(spec.characterPose).toBe('paddling');expect(spec).not.toHaveProperty('visualVariant');
   const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');});
   const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...spec.seat);
-   for(const side of (spec.visualVariant==='canoe'?[-1,1]:[-1]))for(const phase of [0,.25,.5,.85,1.25,1.5]){const k={...createVehicle(spec).kayak!,...(spec.visualVariant==='canoe'?{side}:{}),phase,effort:1};
-    rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'kayak',kayakPose:k});
+   for(const side of ((spec.archetype==='canoe'||spec.archetype==='raft')?[-1,1]:[-1]))for(const phase of [0,.25,.5,.85,1.25,1.5]){const k={...createVehicle(spec).kayak!,...((spec.archetype==='canoe'||spec.archetype==='raft')?{side}:{}),phase,effort:1};
+    rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'paddling',kayakPose:k});
     rider.root.updateMatrixWorld(true);let minY=Infinity,minFootY=Infinity;const point=new Vector3();rider.root.traverse(n=>{if(n instanceof SkinnedMesh){n.skeleton.update();for(let j=0;j<n.geometry.getAttribute('position').count;j++){n.getVertexPosition(j,point).applyMatrix4(n.matrixWorld);minY=Math.min(minY,point.y);if(point.z>.38)minFootY=Math.min(minFootY,point.y);if(spec.id==='raft'&&point.z>.41&&point.z<.61&&Math.abs(point.x)<.25)expect(point.y).toBeGreaterThan(.305);}}});expect(minY).toBeGreaterThan(-.18);if(spec.id==='raft'&&phase===.5&&side===-1)console.log('RAFT_FEET',minY,minFootY,rider.root.getObjectByName('ball_l')!.getWorldPosition(new Vector3()).toArray(),rider.root.getObjectByName('ball_r')!.getWorldPosition(new Vector3()).toArray());
     const pose=kayakPaddlePose(k);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(k,side).applyQuaternion(pose.rotation).add(pose.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(point).distanceTo(target)).toBeLessThan(.035);}
    }
-   if(spec.visualVariant==='canoe'){
+   if(spec.archetype==='canoe'){
     // Grip coincidence alone missed forearms folded through the chest. Sample
     // both sides and the entire forward/reverse/recovery/bracing motion.
     for(const side of [-1,1])for(const reverse of [-1,1])for(const brake of [0,1])for(let frame=0;frame<24;frame++){
      const k={...createVehicle(spec).kayak!,side,reverse,brake,phase:frame/24,effort:1};
-     rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'kayak',kayakPose:k});
+     rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'paddling',kayakPose:k});
      rider.root.updateMatrixWorld(true);
      const chest=rider.root.getObjectByName('spine_03')!.getWorldPosition(new Vector3()),head=rider.root.getObjectByName('head')!.getWorldPosition(new Vector3()).add(new Vector3(0,.1,0)),pose=kayakPaddlePose(k);
      for(const [suffix,handSide] of [['l',1],['r',-1]] as const){
@@ -88,9 +89,10 @@ describe('kayak water and paddle mechanics',()=>{
    }
    // Verify the runtime passes the stroke into the actual animation owner,
    // including a rotated craft; isolated bone posing is insufficient.
-   const f=fixture(false,false,spec),map={...f.q.map,regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0] as const,size:[180,180] as const,color:'#aaa',modes:['kayak']}],spawns:[{id:'kayak',vehicleId:'kayak',name:'Kayak',position:[0,.07,0] as const,yaw:Math.PI/2,regionId:'pool'}]};f.q.dispose();
+   const f=fixture(false,false,spec),map={...f.q.map,regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0] as const,size:[180,180] as const,color:'#aaa',modes:['paddled_boat']}],spawns:[{id:'kayak',vehicleId:'kayak',name:'Kayak',position:[0,.07,0] as const,yaw:Math.PI/2,regionId:'pool'}]};f.q.dispose();
    const boat=spec.id==='raft'?buildRaftModel():spec.id==='canoe'?buildCanoeModel():buildKayakModel(),world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'kayak',assetId:'vehicle.kayak',object:boat,spec:{...spec,spawn:[0,.07,0],yaw:Math.PI/2}}]}});
    try{world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.07,0],facingYawRadians:Math.PI/2,humanoid:{vehicleInstanceId:'kayak',mounted:true}});world.step({humanoid:{...emptyInput(),forward:1}},90);
+    expect(world.humanoid!.inputGuide().family).toBe('paddled_boat');
     const v=world.humanoid!.simulation.vehicle!,p=kayakPaddlePose(v.kayak!);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(v.kayak!,side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3()).distanceTo(target)).toBeLessThan(.035);}
    }finally{world.dispose();}
   }finally{rider.dispose();loader.mockRestore();transport.mockRestore();}

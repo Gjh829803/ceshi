@@ -1,5 +1,8 @@
 # 单人观景潜艇
 
+驾驶模式与类型均为 `submarine`，封闭舱内坐姿为 `characterPose: 'submarine'`。
+`bodyPhysics.kind: 'submersible'` 选择现有压载浮力与推进模型。
+
 资产库搜索“单人观景潜艇”，点击“前往资产”。潜艇默认浮在综合园区
 `[205, -1.88, -105]` 米的深水泊位，低码头通过缓坡与西岸相连。
 保留原探索潜艇，新资产 ID 为 `vehicle.observation-sub`。

@@ -625,7 +625,7 @@ export class ThreeWorld implements API.World {
   };
  }
  snapshot():API.WorldSnapshot{
-  const engine=this.engine.snapshot();return {...(this.humanoid?{humanoid:this.humanoid.snapshot()}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:engine.simulationTick,simulationSeconds:engine.simulationSeconds,isRunning:engine.isRunning,...(engine.controlledEntityId?{controlledEntityId:engine.controlledEntityId}:{}),camera:this.humanoid?.cameraSnapshot()??this.engine.cameraRig.snapshot(),entities:[...this.entries.keys()].map(id=>this.getEntityState(id)),errors:[...this.errors,...engine.errors.map(error=>runtimeError(error.message,error.code,error.entityId?[error.entityId]:[]))]};
+  const engine=this.engine.snapshot();return {...(this.humanoid?{humanoid:this.humanoid.snapshot()}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:engine.simulationTick,simulationSeconds:engine.simulationSeconds,isRunning:engine.isRunning,...(engine.controlledEntityId?{controlledEntityId:engine.controlledEntityId}:{}),camera:this.humanoid?.cameraSnapshot()??this.engine.cameraRig.snapshot(),entities:[...this.entries.keys()].map(id=>this.getEntityState(id)),errors:[...this.errors,...engine.errors.map(error=>runtimeError(error.diagnostic??error.message,error.code,error.entityId?[error.entityId]:[]))]};
  }
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
