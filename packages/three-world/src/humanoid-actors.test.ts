@@ -224,3 +224,13 @@ it('prepares Episode on the selected NPC and keeps the original player at its ba
   expect(world.humanoid!.cameraTargetId).toBe('a');episode.advance({moveZRatio:-1},30);expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeLessThan(5);
   episode.release();await world.reset();expect(world.humanoid!.cameraTargetId).toBe('a');
 });
+
+it('keeps prepared humanoid prototypes without retaining a hidden model lease',async()=>{
+  const world=await setup(),seed=new Character();await seed.load(path=>`https://prototype-source.test/${path}`);
+  let geometry:THREE.BufferGeometry|undefined;seed.sourceCharacter!.root.traverse(node=>{if(!geometry&&(node as THREE.SkinnedMesh).isSkinnedMesh)geometry=(node as THREE.SkinnedMesh).geometry;});
+  const disposed=vi.spyOn(geometry!,'dispose');
+  try{for(let n=0;n<3;n++)await world.registerPrototype({id:`variant-${n}`,description:'Independent source factory',template:{kind:'character',options:{humanoid:seed}}});}finally{seed.dispose();}
+  expect(disposed).toHaveBeenCalledOnce();
+  const result=await world.execute({type:'entity.spawn',prototypeId:'variant-1',entityId:'guide',positionWorldMetersXYZ:[3,.04,0]});
+  expect(result.status,JSON.stringify(result)).toBe('applied');expect(world.getEntityState('guide').animation?.actionId).toBeTruthy();
+});

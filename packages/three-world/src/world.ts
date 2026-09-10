@@ -23,7 +23,8 @@ type Registration = {
  movementId:string;movementState:API.JsonValue;physicsKind:'none'|'fixed'|'kinematic'|'dynamic'|'character';
 };
 type Parameter = {definition:API.ParameterDefinition<API.ScalarSchema>;value:API.Scalar;status:API.ParameterHandle<API.Scalar>['status'];operationId?:string;error?:API.RuntimeError};
-type Prototype = {definition:Pick<API.PrototypeDefinition,'id'|'description'>;template:API.SpawnTemplate;asset?:API.AssetInstance;humanoid?:import('./humanoid-runtime/character').Character;status:'preparing'|'ready'|'failed';error?:API.RuntimeError};
+type HumanoidPrototype = {kind:'humanoid';options:Omit<Extract<API.CharacterOptions,{humanoid:import('./humanoid-runtime/character').Character}>,'id'|'humanoid'>;create:()=>Promise<import('./humanoid-runtime/character').Character>};
+type Prototype = {definition:Pick<API.PrototypeDefinition,'id'|'description'>;template?:API.SpawnTemplate|HumanoidPrototype;asset?:API.AssetInstance;status:'preparing'|'ready'|'failed';error?:API.RuntimeError};
 type Geometry = {id:string;description:string;geometry:THREE.BufferGeometry};
 type Plan = {commands:API.PrimitiveCommand[];parameters:Map<string,API.Scalar>;effects:Parameter[];parameterOwners:Map<API.PrimitiveCommand,string>;declarations:Map<API.PrimitiveCommand,Set<string>>};
 type Prepared = {plan:Plan;spawned:Map<string,API.EntityOptions|API.CharacterOptions>;epoch:number;revision:number;generations:Map<string,number>;expectedRevision?:number};
@@ -195,15 +196,15 @@ export class ThreeWorld implements API.World {
  private track<T>(promise:Promise<T>):Promise<T>{this.pending.add(promise);void promise.then(()=>this.pending.delete(promise),()=>this.pending.delete(promise));return promise;}
  async registerPrototype(definition:API.PrototypeDefinition):Promise<void>{
   this.alive();requireId(definition.id);if(this.prototypes.has(definition.id))throw failure('PROTOTYPE_DUPLICATE');
-  const epoch=this.epoch;const record:Prototype={definition:{id:definition.id,description:definition.description},template:definition.template,status:'preparing'};this.prototypes.set(definition.id,record);this.touch();
+  const epoch=this.epoch;const record:Prototype={definition:{id:definition.id,description:definition.description},status:'preparing'};this.prototypes.set(definition.id,record);this.touch();
   return this.track((async()=>{try{
-   const template=definition.template;let copy:API.SpawnTemplate;
+   const template=definition.template;let copy:API.SpawnTemplate|HumanoidPrototype;
    if(template.kind==='character')this.validateHumanoidOptions({...template.options,id:definition.id});
-   if(template.kind==='character'&&template.options.humanoid){const humanoid=await template.options.humanoid.createInstance();record.humanoid=humanoid;copy={kind:'character',options:{...template.options,humanoid}};}
+   if(template.kind==='character'&&template.options.humanoid){const {humanoid,...options}=template.options;const create=humanoid.createFactory();if(!create)throw failure('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');copy={kind:'humanoid',options:structuredClone(options),create};}
    else if(template.kind==='character'&&template.options.asset){const asset=await this.assets.clone(template.options.asset);if(epoch!==this.epoch||this.disposed){this.assets.release(asset);throw failure('STALE_TASK');}record.asset=asset;copy={kind:'character',options:{...template.options,asset}};}
    else{const object=this.cloneObject(template.options.object!,true);copy=template.kind==='character'?{kind:'character',options:{...template.options,object} as Extract<API.SpawnTemplate,{kind:'character'}>['options']}:{kind:'entity',options:{...template.options,object}};}
    if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');record.template=copy;record.status='ready';this.touch();
-  }catch(error){record.humanoid?.dispose();delete record.humanoid;record.status='failed';record.error=runtimeError(error,'prototype');throw error;}})());
+  }catch(error){record.status='failed';record.error=runtimeError(error,'prototype');throw error;}})());
  }
  async registerGeometry(definition:API.GeometryDefinition):Promise<void>{
   this.alive();requireId(definition.id);if(this.geometries.has(definition.id))throw failure('GEOMETRY_DUPLICATE');
@@ -320,9 +321,9 @@ export class ThreeWorld implements API.World {
  private async prepare(plan:Plan):Promise<Prepared>{
   const epoch=this.epoch,revision=this.revision;const generations=new Map<string,number>();for(const command of plan.commands)for(const field of ['entityId','childEntityId','parentEntityId','targetEntityId'] as const){const id=(command as unknown as Record<string,unknown>)[field];if(typeof id==='string'&&this.entries.has(id))generations.set(id,this.entries.get(id)!.generation);}const spawned=new Map<string,API.EntityOptions|API.CharacterOptions>();
   try{for(const command of plan.commands)if(command.type==='entity.spawn'){
-   if(this.entries.has(command.entityId)||spawned.has(command.entityId))throw failure('ENTITY_DUPLICATE');const prototype=this.prototypes.get(command.prototypeId);if(prototype?.status!=='ready')throw failure('PROTOTYPE_NOT_READY','Prepare a registered prototype before spawning.','unsupported-capability');
+   if(this.entries.has(command.entityId)||spawned.has(command.entityId))throw failure('ENTITY_DUPLICATE');const prototype=this.prototypes.get(command.prototypeId);if(prototype?.status!=='ready'||!prototype.template)throw failure('PROTOTYPE_NOT_READY','Prepare a registered prototype before spawning.','unsupported-capability');
    const template=prototype.template;let options:API.EntityOptions|API.CharacterOptions;
-   if(template.kind==='character'&&template.options.humanoid){const humanoid=await template.options.humanoid.createInstance();options={...template.options,id:command.entityId,humanoid};}
+   if(template.kind==='humanoid'){const humanoid=await template.create();options={...structuredClone(template.options),id:command.entityId,humanoid};}
    else if(template.kind==='character'&&template.options.asset){const asset=await this.assets.clone(template.options.asset);options={...template.options,id:command.entityId,asset};}
    else options={...template.options,id:command.entityId,object:this.cloneObject(template.options.object!)} as API.EntityOptions|API.CharacterOptions;
    const object='humanoid' in options&&options.humanoid?options.humanoid.root:'asset' in options&&options.asset?options.asset.object:options.object!;this.scene.updateWorldMatrix(true,true,true);object.position.copy(this.scene.worldToLocal(new THREE.Vector3().fromArray(command.positionWorldMetersXYZ)));spawned.set(command.entityId,options);
@@ -588,7 +589,6 @@ export class ThreeWorld implements API.World {
   this.captureTargets=baseline.captureTargets;
   for(const [id,geometry] of baseline.geometryById){const original=baseline.entries.get(id)!;(original.object as THREE.Mesh).geometry=geometry;}
   this.entries.clear();for(const [id,entry] of baseline.entries)this.entries.set(id,{...this.copyEntry(entry),generation:++this.nextGeneration});
-  for(const [id,record] of this.prototypes)if(baseline.prototypes.get(id)!==record)record.humanoid?.dispose();
   this.prototypes.clear();for(const [id,value] of baseline.prototypes)this.prototypes.set(id,value);
   this.geometries.clear();for(const [id,value] of baseline.geometries)this.geometries.set(id,value);
   this.movements.clear();for(const [id,value] of baseline.movements)this.movements.set(id,value);
@@ -773,7 +773,6 @@ export class ThreeWorld implements API.World {
   if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
   this.operations.cancelAll();
-  for(const record of new Set([...this.prototypes.values(),...(this.baseline?.prototypes.values()??[])]))record.humanoid?.dispose();
   this.presentation?.dispose();this.changes.clear();this.restoreRendererShadows?.();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
