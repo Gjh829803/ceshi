@@ -4,6 +4,7 @@ import * as T from "three";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
+import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
@@ -226,10 +227,12 @@ const presentation = {
   },
   snap(_sim: unknown) {},
 };
+const renderPreparation = new AbortController();
 const pressed = new Set<string>();
 let jumpPressed = false,
   paused = false,
-  ready = true,
+  ready = false,
+  preparingRender = true,
   lastMessage = "",
   lastActive = -99;
 let humanCommands: HumanoidActionInput = {},
@@ -342,7 +345,7 @@ function visit(n: number) {
 function pause(value = !paused, showOverlay = true) {
   paused = value;
   if (value) sdk.stop();
-  else void sdk.start();
+  else if (ready && !preparingRender && !panelOpen) void sdk.start();
   frameClock.reset();
   presentation.snap(sim);
   visuals.forEach(resetVehicleWheels);
@@ -386,6 +389,7 @@ function interact() {
 }
 window.addEventListener("keydown", (e) => {
   if (
+    !ready ||
     e.defaultPrevented ||
     e.altKey ||
     e.metaKey ||
@@ -450,7 +454,7 @@ shell.on("quickSelect", (id) => {
 const onPanelChange = (open: boolean) => {
   panelOpen = open;
   if (open) sdk.stop();
-  else if (!paused) void sdk.start();
+  else if (ready && !preparingRender && !paused) void sdk.start();
   clearInput();
   frameClock.reset();
   resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
@@ -826,6 +830,7 @@ document.addEventListener("focusin", releaseUIInput);
 window.addEventListener(
   "pagehide",
   () => {
+    renderPreparation.abort();
     window.removeEventListener("hashchange", restoreMapFromHash);
     disposeThumbnails?.();
     inspector.dispose();
@@ -846,6 +851,7 @@ window.addEventListener(
   { once: true },
 );
 shell.on("touchDown", (code) => {
+  if (!ready) return;
   const bindings = sdk.getKeyBindings();
   if (!pressed.has(code!)) {
     const action = actionForKey(code!, !!sim.vehicle, pressed, bindings);
@@ -1252,10 +1258,40 @@ sdk.onReset(() => {
   humanDemo = null;
   lastActive = -99;
 });
+// Keep loading visible while first-use shaders and camera geometry are prepared.
+// The SDK remains the only clock; render() samples display state without stepping.
+try {
+  let preparedMap: string;
+  do {
+    // Apply URL edits made during loading before preparing that map's materials.
+    ready = true;
+    restoreMapFromHash();
+    ready = false;
+    preparedMap = session.map.id;
+    shell.text("loadText", "正在准备画面与材质…");
+    shell.flush();
+    await preparePlaygroundRendering({
+      prepareVisuals: () => {
+        runtime.setCameraMode(follow.mode as 0 | 1 | 2);
+        updateVisuals(0);
+      },
+      compile: () => renderer.compileAsync(scene, camera),
+      render: () => sdk.render(),
+      signal: renderPreparation.signal,
+    });
+  } while (readMapHash(location.hash, mapIds) !== preparedMap);
+  clearInput();
+  preparingRender = false;
+  if (!paused && !panelOpen) await sdk.start();
+  ready = true;
+} catch (error) {
+  if (!renderPreparation.signal.aborted) {
+    shell.text("loadText", "画面准备失败：" + String(error));
+    shell.flush();
+  }
+  throw error;
+}
 window.addEventListener("hashchange", restoreMapFromHash);
-// Also catches URL edits made while the initial assets/runtime were loading.
-restoreMapFromHash();
-await sdk.start();
 // Read-only browser callback cadence; no simulation, animation or camera writes.
 const observePacing = (now: number) => {
   if (!paused && !panelOpen) {

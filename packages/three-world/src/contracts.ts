@@ -424,7 +424,7 @@ export interface World {
  describe(query?:{readonly query?:string;readonly entityIds?:readonly string[]}):WorldDescription;
  snapshot():WorldSnapshot;
  getEntityState(entityId:string):EntityState;
- /** Awaits asset/prototype preparation, seals initial state and exposes Host observation once ready. */
+ /** Awaits resources and initial shader compilation, renders the opening without stepping, then starts and exposes Host observation. Pending start rejects as STALE_TASK after stop/reset/dispose. */
  start():Promise<void>;
  stop():void;
  reset():Promise<void>;

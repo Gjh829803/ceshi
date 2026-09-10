@@ -77,6 +77,7 @@ export class WorldEngine {
   private lastFrameTime = 0;
   private frameId = 0;
   private frameGeneration = 0;
+  private renderPreparation: Promise<unknown> | undefined;
   private pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{} as Record<string,boolean>};
   private previousJump = false;
   private previousInteract = false;
@@ -516,6 +517,16 @@ export class WorldEngine {
       }
       this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
     }
+  }
+  /** Seal the opening and compile its materials without starting or stepping the clock. */
+  prepareRendering(): Promise<unknown> {
+    this.alive(); this.sealInitialState();
+    if (!this.renderPreparation) {
+      const preparation = this.renderer?.compileAsync?.(this.scene, this.camera) ?? Promise.resolve();
+      this.renderPreparation = preparation;
+      void preparation.catch(() => { if (this.renderPreparation === preparation) this.renderPreparation = undefined; });
+    }
+    return this.renderPreparation;
   }
   start(): void {
     this.alive(); if (this.running) return; this.sealInitialState(); this.running = true; this.keyboard.enabled = true;
