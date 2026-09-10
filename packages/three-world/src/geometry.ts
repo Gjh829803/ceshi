@@ -53,19 +53,26 @@ export function geometryAttributeVersion(attribute: THREE.BufferAttribute | THRE
   if (!attribute) return 0;
   return attribute instanceof THREE.InterleavedBufferAttribute ? attribute.data.version : attribute.version;
 }
-function visibleMeshes(root: THREE.Object3D, visit: (mesh: THREE.Mesh) => void): void {
+function visibleMeshes(root: THREE.Object3D, visit: (mesh: THREE.Mesh) => void, recursive = true): void {
   function walk(object: THREE.Object3D, isRoot: boolean): void {
     // Keep a hidden root's shape so showing it restores collision immediately.
     if (!isRoot && entityBoundaries.has(object)) return;
     if ((object as THREE.SkinnedMesh).isSkinnedMesh) geometryError('PHYSICS_SKINNED_MESH_UNSUPPORTED', 'Use addCharacter for a skinned actor; rigid collision cannot silently use its unskinned bind pose.');
     if ((object as THREE.Mesh).isMesh) visit(object as THREE.Mesh);
-    for (const child of object.children) walk(child, false);
+    if (recursive) for (const child of object.children) walk(child, false);
   }
   walk(root, true);
 }
 
+/** Rigid mesh leaves within the registry's entity boundary. */
+export function collisionMeshes(root: THREE.Object3D): readonly THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  visibleMeshes(root, mesh => meshes.push(mesh));
+  return meshes;
+}
+
 /** Lightweight change key; attributes edited in place must use needsUpdate or explicit refresh(). */
-export function geometrySignature(root: THREE.Object3D, pose = worldPose(root)): string {
+export function geometrySignature(root: THREE.Object3D, pose = worldPose(root), recursive = true): string {
   const inverseFrame = new THREE.Matrix4().compose(pose.position, pose.rotation, new THREE.Vector3(1, 1, 1)).invert();
   const parts: string[] = [];
   visibleMeshes(root, mesh => {
@@ -77,7 +84,7 @@ export function geometrySignature(root: THREE.Object3D, pose = worldPose(root)):
       const instances = mesh as THREE.InstancedMesh;
       parts.push(String(instances.count), String(attributeIdentity(instances.instanceMatrix)), String(instances.instanceMatrix.version));
     }
-  });
+  }, recursive);
   return parts.join('|');
 }
 
@@ -111,7 +118,7 @@ export function subdivideTriangles(vertices: Float32Array, indices: Uint32Array,
   return { vertices: Float32Array.from(output), indices: Uint32Array.from(outputIndices), triangleCount: outputIndices.length / 3 };
 }
 
-export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders: number, maximumTriangles: number, subdivide = true, allowEmpty = false): GeometrySnapshot {
+export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders: number, maximumTriangles: number, subdivide = true, allowEmpty = false, recursive = true): GeometrySnapshot {
   const pose = worldPose(root), inverseFrame = new THREE.Matrix4().compose(pose.position, pose.rotation, new THREE.Vector3(1, 1, 1)).invert();
   const geometries: CollisionTriangleGeometry[] = [];
   let triangles = 0;
@@ -153,9 +160,9 @@ export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders:
       if (triangles > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', `The visible hierarchy exceeds the triangle budget: collectedTriangleCount=${triangles}, maximumTriangleCount=${maximumTriangles}.`);
       geometries.push({...shape,sourceObject:mesh});
     }
-  });
+  }, recursive);
   if (!geometries.length && !allowEmpty) geometryError('PHYSICS_GEOMETRY_EMPTY', 'The hierarchy contains no visible rigid mesh geometry.');
-  return { geometries, signature: geometrySignature(root, pose), pose };
+  return { geometries, signature: geometrySignature(root, pose, recursive), pose };
 }
 
 /** The exact same visible triangle source as fixed/kinematic trimesh collision, expressed in world coordinates for navigation. */

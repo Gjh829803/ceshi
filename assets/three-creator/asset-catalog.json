@@ -3063,6 +3063,2096 @@
           0
         ]
       }
+    },
+    {
+      "id": "vehicle.sled",
+      "displayName": "木座雪橇 / SLED",
+      "path": "vehicles/sled.glb",
+      "uri": "./assets/subjects/6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3.glb",
+      "sha256": "6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3",
+      "byteLength": 68180,
+      "sourcePath": "assets/three-creator/presets/vehicles/sled.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Unpowered packed-snow approximation; no deep-snow deformation or rollover simulation.",
+        "W pushes only below groundSpeed; downhill speed comes from gravity."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-sled.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.sled"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "sled",
+          "name": "木座雪橇",
+          "en": "SLED",
+          "mode": "sled",
+          "archetype": "sled",
+          "kernel": "K14",
+          "color": "#b89465",
+          "spawn": [
+            -198,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 24,
+          "accel": 4,
+          "grip": 2.2,
+          "steer": 0.9,
+          "radius": 1.15,
+          "seat": [
+            0,
+            0.63,
+            -0.22
+          ],
+          "camera": 5.8,
+          "characterPose": "sled",
+          "hint": "W 蹬地起步 · A / D 单侧拖脚转向 · S / Space 双脚制动 · 松键顺坡滑行 · F 上下雪橇",
+          "bodyPhysics": {
+            "kind": "sled",
+            "mass": 100,
+            "centerOfMassHeight": 0.35
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.65,
+              0.78,
+              1.05
+            ],
+            "offset": [
+              0,
+              0.78,
+              0
+            ]
+          },
+          "maxSpeed": 24,
+          "reverseSpeed": 0,
+          "slowSpeed": 2.5,
+          "groundSpeed": 3,
+          "coastDeceleration": 0.22,
+          "brakeDeceleration": 6,
+          "brakeDamping": 0,
+          "groundDeceleration": 4,
+          "directionChangeDeceleration": 8,
+          "steeringResponse": 4,
+          "steeringReturn": 6,
+          "verticalAcceleration": 3.2,
+          "linearDamping": 2.2,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "dragQuadratic": 0.006,
+          "pitchResponse": 12,
+          "rollResponse": 10,
+          "throttleResponse": 0.38,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.63,
+            -0.22
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.78,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.78,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.ski",
+      "displayName": "双板滑雪 / ALPINE",
+      "path": "vehicles/ski.glb",
+      "uri": "./assets/subjects/c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05.glb",
+      "sha256": "c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05",
+      "byteLength": 32588,
+      "sourcePath": "assets/three-creator/presets/vehicles/ski.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Unpowered parallel skiing on packed snow; no deep-snow deformation, independent leg physics or ski tricks.",
+        "W pole pushes only below groundSpeed; turns retain momentum, S / Space brakes, gravity drives downhill."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-ski.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.ski"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "ski",
+          "name": "双板滑雪",
+          "en": "ALPINE",
+          "mode": "ski",
+          "archetype": "ski",
+          "kernel": "K14",
+          "color": "#e67839",
+          "spawn": [
+            -184,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 24,
+          "accel": 5,
+          "grip": 4.5,
+          "steer": 1.1,
+          "groundSpeed": 3,
+          "coastDeceleration": 0.18,
+          "brakeDeceleration": 7,
+          "dragQuadratic": 0.004,
+          "steeringResponse": 3.5,
+          "steeringReturn": 5,
+          "pitchResponse": 12,
+          "rollResponse": 10,
+          "radius": 1.1,
+          "seat": [
+            0,
+            0.91,
+            0
+          ],
+          "camera": 6,
+          "characterPose": "ski",
+          "hint": "W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板",
+          "bodyPhysics": {
+            "kind": "sled",
+            "mass": 85,
+            "centerOfMassHeight": 0.65
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.65,
+              0.9,
+              1.05
+            ],
+            "offset": [
+              0,
+              0.9,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.91,
+            0
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.9,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.bus",
+      "displayName": "复古小巴 / BUS",
+      "path": "vehicles/bus.glb",
+      "uri": "./assets/subjects/47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14.glb",
+      "sha256": "47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14",
+      "byteLength": 381212,
+      "sourcePath": "assets/three-creator/presets/vehicles/bus.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation.",
+        "W throttle; S brakes before reversing; Space brakes. Shift adds no boost."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-bus.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.bus"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "speed": 22,
+          "accel": 2.1,
+          "grip": 12,
+          "steer": 0.52,
+          "maxSpeed": 22,
+          "reverseSpeed": 2.5,
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "coastDeceleration": 0.55,
+          "brakeDeceleration": 3.8,
+          "brakeDamping": 3.8,
+          "groundDeceleration": 2.1,
+          "directionChangeDeceleration": 4.2,
+          "steeringResponse": 2.5,
+          "steeringReturn": 3.2,
+          "verticalAcceleration": 1.6800000000000002,
+          "linearDamping": 12,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "dragQuadratic": 0.002,
+          "pitchResponse": 3,
+          "rollResponse": 2.5,
+          "throttleResponse": 1.6,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3,
+          "id": "bus",
+          "name": "复古小巴",
+          "en": "MINIBUS",
+          "mode": "bus",
+          "archetype": "bus",
+          "kernel": "K15",
+          "color": "#83c7bb",
+          "spawn": [
+            -226,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "wheelbaseMeters": 3.3,
+          "rearAxleZMeters": -1.45,
+          "radius": 2.15,
+          "seat": [
+            0.47,
+            1.13,
+            1.38
+          ],
+          "camera": 10,
+          "hint": "W 油门 · S 制动后倒车 · A / D 转向 · Space 刹车 · F 上下车 · T 切换视角",
+          "wheelPhysics": {
+            "chassis": {
+              "kind": "box",
+              "halfExtents": [
+                1.14,
+                1.21,
+                2.96
+              ],
+              "offset": [
+                0,
+                1.44,
+                0
+              ]
+            },
+            "mass": 3400,
+            "radius": 0.46,
+            "halfTrack": 1.035,
+            "halfWheelbase": 1.65,
+            "hubHeight": 0.46,
+            "centerOfMassHeight": 0.8,
+            "maxRaise": 0.1,
+            "maxDrop": 0.15,
+            "wheelWidth": 0.22,
+            "wheels": [
+              {
+                "x": -1.035,
+                "z": -1.45,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": -1.035,
+                "z": 1.85,
+                "steering": true,
+                "driven": false
+              },
+              {
+                "x": 1.035,
+                "z": -1.45,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": 1.035,
+                "z": 1.85,
+                "steering": true,
+                "driven": false
+              }
+            ],
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  143
+                ],
+                [
+                  1800,
+                  198
+                ],
+                [
+                  3200,
+                  220
+                ],
+                [
+                  4500,
+                  209
+                ],
+                [
+                  6200,
+                  143
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 4.5,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 33,
+              "dragArea": 3.5,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              1.22,
+              1.34,
+              2.96
+            ],
+            "offset": [
+              0,
+              1.34,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0.47,
+            1.13,
+            1.38
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          1.22,
+          1.34,
+          2.96
+        ],
+        "offset": [
+          0,
+          1.34,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.tank",
+      "displayName": "履带坦克 / TANK",
+      "path": "vehicles/tank.glb",
+      "uri": "./assets/subjects/6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf.glb",
+      "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
+      "byteLength": 106580,
+      "sourcePath": "assets/three-creator/presets/vehicles/tank.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation.",
+        "No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-tank.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.tank"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "tank",
+          "name": "履带坦克",
+          "en": "TANK",
+          "mode": "tank",
+          "archetype": "tank",
+          "kernel": "K16",
+          "color": "#7c8061",
+          "spawn": [
+            -240,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 12,
+          "accel": 3,
+          "grip": 10,
+          "steer": 0.75,
+          "maxSpeed": 18,
+          "reverseSpeed": 4,
+          "coastDeceleration": 1.4,
+          "brakeDeceleration": 7,
+          "steeringResponse": 3,
+          "steeringReturn": 5,
+          "throttleResponse": 2,
+          "pitchResponse": 5,
+          "rollResponse": 5,
+          "radius": 5.4,
+          "seat": [
+            0,
+            1.45,
+            2.1
+          ],
+          "characterPose": "tank",
+          "camera": 14,
+          "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
+          "bodyPhysics": {
+            "kind": "tracks",
+            "mass": 30000,
+            "centerOfMassHeight": 1.4,
+            "driveRadius": 0.72,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  1560
+                ],
+                [
+                  1800,
+                  2160
+                ],
+                [
+                  3200,
+                  2400
+                ],
+                [
+                  4500,
+                  2280
+                ],
+                [
+                  6200,
+                  1560
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 8,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 360,
+              "dragArea": 8,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              2.9,
+              2.08,
+              4.65
+            ],
+            "offset": [
+              0,
+              2.08,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "seat.driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            1.45,
+            2.1
+          ]
+        },
+        {
+          "id": "control.hand.left",
+          "node": "control.hand.left",
+          "positionMetersXYZ": [
+            0.213968,
+            1.735009,
+            2.518638
+          ]
+        },
+        {
+          "id": "control.hand.right",
+          "node": "control.hand.right",
+          "positionMetersXYZ": [
+            -0.194585,
+            1.743792,
+            2.495255
+          ]
+        },
+        {
+          "id": "control.foot.left",
+          "node": "control.foot.left",
+          "positionMetersXYZ": [
+            0.169582,
+            0.948443,
+            2.590657
+          ]
+        },
+        {
+          "id": "control.foot.right",
+          "node": "control.foot.right",
+          "positionMetersXYZ": [
+            -0.169582,
+            0.948443,
+            2.590659
+          ]
+        },
+        {
+          "id": "entry.left",
+          "node": "entry.left",
+          "positionMetersXYZ": [
+            3.25,
+            0.025,
+            0
+          ]
+        },
+        {
+          "id": "entry.right",
+          "node": "entry.right",
+          "positionMetersXYZ": [
+            -3.25,
+            0.025,
+            0
+          ]
+        },
+        {
+          "id": "camera.driver",
+          "node": "camera.driver",
+          "positionMetersXYZ": [
+            0.000542,
+            2.083,
+            2.330046
+          ]
+        },
+        {
+          "id": "muzzle",
+          "node": "socket.muzzle",
+          "positionMetersXYZ": [
+            0,
+            0,
+            5
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          2.9,
+          2.08,
+          4.65
+        ],
+        "offset": [
+          0,
+          2.08,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.atv",
+      "displayName": "全地形车 / QUAD ATV",
+      "path": "vehicles/atv.glb",
+      "uri": "./assets/subjects/042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004.glb",
+      "sha256": "042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004",
+      "byteLength": 301444,
+      "sourcePath": "assets/three-creator/presets/vehicles/atv.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Racing quad inspired by PUBG; short-wheelbase four-wheel drive with front-wheel steering and original straddle rider.",
+        "Single active driver under the current Training contract. Rear passenger socket is reserved; no fuel, damage or multiplayer passenger simulation."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-atv.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.atv"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "atv",
+          "name": "全地形车",
+          "en": "QUAD ATV",
+          "mode": "wheeled",
+          "archetype": "atv",
+          "kernel": "K01",
+          "color": "#bc3543",
+          "spawn": [
+            -212,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 30.555555555555554,
+          "maxSpeed": 34.72222222222222,
+          "reverseSpeed": 6,
+          "accel": 7.5,
+          "grip": 8,
+          "steer": 0.42,
+          "coastDeceleration": 1.25,
+          "brakeDeceleration": 6,
+          "steeringResponse": 7,
+          "steeringReturn": 9,
+          "throttleResponse": 5,
+          "pitchResponse": 8,
+          "rollResponse": 7,
+          "radius": 1.48,
+          "seat": [
+            0,
+            1,
+            -0.15
+          ],
+          "characterPose": "atv",
+          "camera": 6.2,
+          "wheelbaseMeters": 1.6,
+          "rearAxleZMeters": -0.8,
+          "wheelPhysics": {
+            "chassis": {
+              "kind": "box",
+              "halfExtents": [
+                0.85,
+                0.5,
+                1.2
+              ],
+              "offset": [
+                0,
+                0.88,
+                0
+              ]
+            },
+            "mass": 360,
+            "radius": 0.39,
+            "halfTrack": 0.7,
+            "halfWheelbase": 0.8,
+            "hubHeight": 0.39,
+            "centerOfMassHeight": 0.25,
+            "tireFriction": 1.4,
+            "maxRaise": 0.03,
+            "maxDrop": 0.04,
+            "wheelWidth": 0.28,
+            "wheels": [
+              {
+                "x": 0.7,
+                "z": 0.8,
+                "steering": true,
+                "driven": true
+              },
+              {
+                "x": -0.7,
+                "z": 0.8,
+                "steering": true,
+                "driven": true
+              },
+              {
+                "x": 0.7,
+                "z": -0.8,
+                "steering": false,
+                "driven": true
+              },
+              {
+                "x": -0.7,
+                "z": -0.8,
+                "steering": false,
+                "driven": true
+              }
+            ],
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  97.5
+                ],
+                [
+                  1800,
+                  135
+                ],
+                [
+                  3200,
+                  150
+                ],
+                [
+                  4500,
+                  142.5
+                ],
+                [
+                  6200,
+                  97.5
+                ]
+              ],
+              "forwardRatios": [
+                3.8,
+                2.3,
+                1.55,
+                1.1,
+                0.85
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 4.1,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 22.5,
+              "dragArea": 0.65,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.91,
+              0.71,
+              1.25
+            ],
+            "offset": [
+              0,
+              0.71,
+              0
+            ]
+          },
+          "hint": "W 前进 · S 制动后倒车 · A / D 转向 · Shift 加速 · Space 手刹 · F 上下车 · T 视角"
+        }
+      },
+      "sockets": [
+        {
+          "id": "seat.driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            1,
+            -0.15
+          ]
+        },
+        {
+          "id": "seat.passenger",
+          "node": "seat.passenger",
+          "positionMetersXYZ": [
+            0,
+            1,
+            -0.68
+          ]
+        },
+        {
+          "id": "control.foot.left",
+          "node": "control.foot.left",
+          "positionMetersXYZ": [
+            0.420507,
+            0.309005,
+            0.012058
+          ]
+        },
+        {
+          "id": "control.foot.right",
+          "node": "control.foot.right",
+          "positionMetersXYZ": [
+            -0.420509,
+            0.309004,
+            0.012058
+          ]
+        },
+        {
+          "id": "entry.left",
+          "node": "entry.left",
+          "positionMetersXYZ": [
+            1.35,
+            0.025,
+            -0.15
+          ]
+        },
+        {
+          "id": "entry.right",
+          "node": "entry.right",
+          "positionMetersXYZ": [
+            -1.35,
+            0.025,
+            -0.15
+          ]
+        },
+        {
+          "id": "camera.driver",
+          "node": "camera.driver",
+          "positionMetersXYZ": [
+            0.000542,
+            1.633,
+            0.080046
+          ]
+        },
+        {
+          "id": "control.hand.left",
+          "node": "control.hand.left",
+          "positionMetersXYZ": [
+            0.29,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "control.hand.right",
+          "node": "control.hand.right",
+          "positionMetersXYZ": [
+            -0.29,
+            0,
+            0
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.91,
+          0.71,
+          1.25
+        ],
+        "offset": [
+          0,
+          0.71,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.kayak",
+      "displayName": "单人皮划艇 / KAYAK",
+      "path": "vehicles/kayak.glb",
+      "uri": "./assets/subjects/457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7.glb",
+      "sha256": "457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7",
+      "byteLength": 49508,
+      "sourcePath": "assets/three-creator/presets/vehicles/kayak.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation.",
+        "W paddles, S back-paddles, A/D sweep, Space braces to slow; propulsion requires immersion."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-kayak.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.kayak"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "kayak",
+          "name": "单人皮划艇",
+          "en": "KAYAK",
+          "mode": "kayak",
+          "archetype": "kayak",
+          "kernel": "K17",
+          "color": "#b84047",
+          "spawn": [
+            205,
+            -1.93,
+            -124
+          ],
+          "yaw": 1.5707963267948966,
+          "speed": 4.6,
+          "accel": 2.7,
+          "grip": 1.8,
+          "steer": 3,
+          "radius": 0.48,
+          "seat": [
+            0,
+            0.23,
+            -0.35
+          ],
+          "camera": 6,
+          "characterPose": "kayak",
+          "maxSpeed": 4.6,
+          "reverseSpeed": 1.8,
+          "coastDeceleration": 0.16,
+          "dragQuadratic": 0.08,
+          "brakeDamping": 2.1,
+          "steeringResponse": 5,
+          "steeringReturn": 5,
+          "pitchResponse": 4,
+          "rollResponse": 4,
+          "hint": "W 交替划桨 · S 倒划 · A / D 单侧转向 · Space 压桨制动 · F 上下艇 · T 切换视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 105,
+            "centerOfMassHeight": 0.15,
+            "water": {
+              "displacement": 0.23,
+              "depth": 0.35,
+              "bottom": 0.23,
+              "damping": 5.5
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.4,
+              0.24,
+              2.2
+            ],
+            "offset": [
+              0,
+              0.01,
+              0
+            ]
+          },
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "brakeDeceleration": 4.86,
+          "groundDeceleration": 2.7,
+          "directionChangeDeceleration": 5.4,
+          "verticalAcceleration": 2.16,
+          "linearDamping": 1.8,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "throttleResponse": 0.38,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.23,
+            -0.35
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.4,
+          0.24,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.canoe",
+      "displayName": "单桨木舟 / CANOE",
+      "path": "vehicles/canoe.glb",
+      "uri": "./assets/subjects/d483b69c99ded62957573d6627bbe5c8ee7977e9a73a7fc5ed482483924d0506.glb",
+      "sha256": "d483b69c99ded62957573d6627bbe5c8ee7977e9a73a7fc5ed482483924d0506",
+      "byteLength": 60296,
+      "sourcePath": "assets/three-creator/presets/vehicles/canoe.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation.",
+        "W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-canoe.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.canoe"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "speed": 3.1,
+          "accel": 1.9,
+          "grip": 1.2,
+          "steer": 1.7,
+          "maxSpeed": 3.1,
+          "reverseSpeed": 1.2,
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "coastDeceleration": 0.11,
+          "brakeDeceleration": 3.42,
+          "brakeDamping": 1.8,
+          "groundDeceleration": 1.9,
+          "directionChangeDeceleration": 3.8,
+          "steeringResponse": 2.8,
+          "steeringReturn": 3,
+          "verticalAcceleration": 1.52,
+          "linearDamping": 1.2,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "dragQuadratic": 0.11,
+          "pitchResponse": 3,
+          "rollResponse": 2.5,
+          "throttleResponse": 0.38,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3,
+          "id": "canoe",
+          "name": "单桨木舟",
+          "en": "CANOE",
+          "mode": "kayak",
+          "archetype": "kayak",
+          "visualVariant": "canoe",
+          "kernel": "K17",
+          "color": "#95643a",
+          "spawn": [
+            205,
+            -1.888,
+            -140.5
+          ],
+          "yaw": 1.5707963267948966,
+          "radius": 0.7,
+          "seat": [
+            0,
+            0.45,
+            -0.45
+          ],
+          "camera": 6.5,
+          "characterPose": "kayak",
+          "hint": "W 单侧划桨 · S 倒划 · A / D 换侧扫桨转向 · Space 压桨减速 · F 上下舟 · T 切换视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 165,
+            "centerOfMassHeight": 0.22,
+            "water": {
+              "displacement": 0.38,
+              "depth": 0.48,
+              "bottom": 0.32,
+              "damping": 6
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.6,
+              0.34,
+              2.4
+            ],
+            "offset": [
+              0,
+              0.1,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.45,
+            -0.45
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.6,
+          0.34,
+          2.4
+        ],
+        "offset": [
+          0,
+          0.1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.jetski",
+      "displayName": "水上摩托 / JET SKI",
+      "path": "vehicles/jetski.glb",
+      "uri": "./assets/subjects/d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707.glb",
+      "sha256": "d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707",
+      "byteLength": 30336,
+      "sourcePath": "assets/three-creator/presets/vehicles/jetski.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Jet propelled personal watercraft with buoyancy, independent handlebars and world-space water spray.",
+        "Single original straddle rider; no fuel, damage or ocean wave simulation."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-jetski.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.jetski"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "jetski",
+          "name": "水上摩托",
+          "en": "JET SKI",
+          "mode": "boat",
+          "archetype": "jetski",
+          "kernel": "K06",
+          "color": "#bad43e",
+          "spawn": [
+            220,
+            -1.98,
+            -145
+          ],
+          "yaw": 0,
+          "speed": 23,
+          "maxSpeed": 29,
+          "reverseSpeed": 5,
+          "accel": 6.5,
+          "grip": 4,
+          "steer": 1.15,
+          "coastDeceleration": 0.65,
+          "brakeDeceleration": 8,
+          "steeringResponse": 7,
+          "steeringReturn": 9,
+          "throttleResponse": 5,
+          "pitchResponse": 6,
+          "rollResponse": 6,
+          "radius": 1.8,
+          "seat": [
+            0,
+            1,
+            -0.15
+          ],
+          "characterPose": "atv",
+          "camera": 6.2,
+          "bodyPhysics": {
+            "kind": "jet",
+            "mass": 330,
+            "centerOfMassHeight": 0.3,
+            "driveRadius": 0.35,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  195
+                ],
+                [
+                  1800,
+                  270
+                ],
+                [
+                  3200,
+                  300
+                ],
+                [
+                  4500,
+                  285
+                ],
+                [
+                  6200,
+                  195
+                ]
+              ],
+              "forwardRatios": [
+                1.5
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 2,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 45,
+              "dragArea": 0.6,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            },
+            "water": {
+              "displacement": 0.7,
+              "depth": 0.6,
+              "bottom": 0.3,
+              "damping": 6
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.72,
+              0.84,
+              1.65
+            ],
+            "offset": [
+              0,
+              0.54,
+              0
+            ]
+          },
+          "hint": "W 推进 · S 制动后倒船 · A / D 喷口转向 · Shift 加速 · Space 水阻制动 · F 上下车 · T 视角"
+        }
+      },
+      "sockets": [
+        {
+          "id": "seat.driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            1,
+            -0.15
+          ]
+        },
+        {
+          "id": "control.foot.left",
+          "node": "control.foot.left",
+          "positionMetersXYZ": [
+            0.420507,
+            0.309005,
+            0.012058
+          ]
+        },
+        {
+          "id": "control.foot.right",
+          "node": "control.foot.right",
+          "positionMetersXYZ": [
+            -0.420509,
+            0.309004,
+            0.012058
+          ]
+        },
+        {
+          "id": "entry.left",
+          "node": "entry.left",
+          "positionMetersXYZ": [
+            1.4,
+            0.05,
+            -0.15
+          ]
+        },
+        {
+          "id": "entry.right",
+          "node": "entry.right",
+          "positionMetersXYZ": [
+            -1.4,
+            0.05,
+            -0.15
+          ]
+        },
+        {
+          "id": "camera.driver",
+          "node": "camera.driver",
+          "positionMetersXYZ": [
+            0.000542,
+            1.633,
+            0.080046
+          ]
+        },
+        {
+          "id": "water.intake",
+          "node": "water.intake",
+          "positionMetersXYZ": [
+            0,
+            -0.25,
+            -0.85
+          ]
+        },
+        {
+          "id": "water.jet",
+          "node": "water.jet",
+          "positionMetersXYZ": [
+            0,
+            -0.02,
+            -1.5
+          ]
+        },
+        {
+          "id": "control.hand.left",
+          "node": "control.hand.left",
+          "positionMetersXYZ": [
+            0.29,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "control.hand.right",
+          "node": "control.hand.right",
+          "positionMetersXYZ": [
+            -0.29,
+            0,
+            0
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.72,
+          0.84,
+          1.65
+        ],
+        "offset": [
+          0,
+          0.54,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.observation-sub",
+      "displayName": "单人观景潜艇 / SUBMERSIBLE",
+      "path": "vehicles/observation-sub.glb",
+      "uri": "./assets/subjects/18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f.glb",
+      "sha256": "18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f",
+      "byteLength": 279828,
+      "sourcePath": "assets/three-creator/presets/vehicles/observation-sub.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Hydrostatic buoyancy and ballast approximation; no fluid solver or pressure damage.",
+        "W/S propulsion, A/D yaw, Ctrl dives with ballast, Space surfaces, Q/E roll, Shift slows; hatch opens only at the surface."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-submersible.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.observation-sub"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "speed": 5,
+          "accel": 2.1,
+          "grip": 1.4,
+          "steer": 0.75,
+          "maxSpeed": 5,
+          "reverseSpeed": 2.2,
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "coastDeceleration": 1.8,
+          "brakeDeceleration": 3.7800000000000002,
+          "brakeDamping": 2.8,
+          "groundDeceleration": 2.1,
+          "directionChangeDeceleration": 4.2,
+          "steeringResponse": 2.5,
+          "steeringReturn": 3,
+          "verticalAcceleration": 4.5,
+          "linearDamping": 0.5,
+          "verticalDamping": 2.6,
+          "drag": 0.18,
+          "dragQuadratic": 0.08,
+          "pitchResponse": 3,
+          "rollResponse": 3,
+          "throttleResponse": 2.5,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3,
+          "id": "observation-sub",
+          "name": "单人观景潜艇",
+          "en": "SUBMERSIBLE",
+          "mode": "sub",
+          "archetype": "sub",
+          "visualVariant": "bubble-sub",
+          "kernel": "K07",
+          "color": "#d4ad38",
+          "spawn": [
+            205,
+            -1.88,
+            -105
+          ],
+          "yaw": 1.5707963267948966,
+          "radius": 1.6,
+          "seat": [
+            0,
+            0.24,
+            0.25
+          ],
+          "camera": 6.5,
+          "characterPose": "sub",
+          "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
+          "bodyPhysics": {
+            "kind": "submersible",
+            "mass": 720,
+            "centerOfMassHeight": 0,
+            "driveRadius": 0.4,
+            "powertrain": {
+              "idleRpm": 850,
+              "maxRpm": 6200,
+              "upshiftRpm": 5200,
+              "downshiftRpm": 2100,
+              "torqueCurve": [
+                [
+                  850,
+                  552.5
+                ],
+                [
+                  1800,
+                  765
+                ],
+                [
+                  3200,
+                  850
+                ],
+                [
+                  4500,
+                  807.5
+                ],
+                [
+                  6200,
+                  552.5
+                ]
+              ],
+              "forwardRatios": [
+                1.5
+              ],
+              "reverseRatio": 3.3,
+              "finalDrive": 2,
+              "efficiency": 0.88,
+              "shiftSeconds": 0.38,
+              "engineBrakeTorque": 127.5,
+              "dragArea": 2,
+              "rollingResistance": 0.018,
+              "boostTorqueMultiplier": 1.25
+            },
+            "water": {
+              "displacement": 2.4,
+              "depth": 2.2,
+              "bottom": 0.78,
+              "damping": 2.6
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              1.55,
+              1.2,
+              1.55
+            ],
+            "offset": [
+              0,
+              0.15,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.24,
+            0.25
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          1.55,
+          1.2,
+          1.55
+        ],
+        "offset": [
+          0,
+          0.15,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.raft",
+      "displayName": "橡皮艇 / INFLATABLE BOAT",
+      "path": "vehicles/raft.glb",
+      "uri": "./assets/subjects/cfbbef760b4bfc168fb3c61e707e44d3a749df8b9ea7b976f8907c68504fb678.glb",
+      "sha256": "cfbbef760b4bfc168fb3c61e707e44d3a749df8b9ea7b976f8907c68504fb678",
+      "byteLength": 59988,
+      "sourcePath": "assets/three-creator/presets/vehicles/raft.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Unpowered inflatable boat; paddle propulsion on water, gravity sliding on land and damped contact restitution. Single active driver; passenger anchors reserved.",
+        "W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-raft.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.raft"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "speed": 6.944444444444445,
+          "accel": 7.5,
+          "grip": 1.4,
+          "steer": 1.8,
+          "maxSpeed": 6.944444444444445,
+          "reverseSpeed": 2,
+          "slowSpeed": 2.5,
+          "groundSpeed": 5,
+          "coastDeceleration": 0.08,
+          "brakeDeceleration": 5,
+          "brakeDamping": 7,
+          "groundDeceleration": 7.5,
+          "directionChangeDeceleration": 15,
+          "steeringResponse": 3.5,
+          "steeringReturn": 4,
+          "verticalAcceleration": 6,
+          "linearDamping": 1.4,
+          "verticalDamping": 1.8,
+          "drag": 0.25,
+          "dragQuadratic": 0.045,
+          "pitchResponse": 6,
+          "rollResponse": 6,
+          "throttleResponse": 0.38,
+          "minimumSpeed": 0,
+          "launchSpeed": 22,
+          "jumpSpeed": 6.3,
+          "id": "raft",
+          "name": "橡皮艇",
+          "en": "INFLATABLE BOAT",
+          "mode": "kayak",
+          "archetype": "raft",
+          "visualVariant": "canoe",
+          "kernel": "K17",
+          "color": "#343b40",
+          "spawn": [
+            201,
+            -1.88,
+            -176
+          ],
+          "yaw": 1.5707963267948966,
+          "radius": 1.15,
+          "seat": [
+            0,
+            0.45,
+            -0.45
+          ],
+          "camera": 7,
+          "characterPose": "kayak",
+          "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
+          "bodyPhysics": {
+            "kind": "paddle",
+            "mass": 160,
+            "centerOfMassHeight": 0.22,
+            "restitution": 0.36,
+            "water": {
+              "displacement": 0.55,
+              "depth": 0.5,
+              "bottom": 0.32,
+              "damping": 6
+            }
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.84,
+              0.34,
+              2.15
+            ],
+            "offset": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "seat.driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.45,
+            -0.45
+          ]
+        },
+        {
+          "id": "seat.passenger.1",
+          "node": "seat.passenger.1",
+          "positionMetersXYZ": [
+            0,
+            0.45,
+            0.85
+          ]
+        },
+        {
+          "id": "seat.passenger.2",
+          "node": "seat.passenger.2",
+          "positionMetersXYZ": [
+            0,
+            0.45,
+            -1.25
+          ]
+        },
+        {
+          "id": "entry.left",
+          "node": "entry.left",
+          "positionMetersXYZ": [
+            1.4,
+            0.05,
+            -0.45
+          ]
+        },
+        {
+          "id": "entry.right",
+          "node": "entry.right",
+          "positionMetersXYZ": [
+            -1.4,
+            0.05,
+            -0.45
+          ]
+        },
+        {
+          "id": "camera.driver",
+          "node": "camera.driver",
+          "positionMetersXYZ": [
+            0,
+            1.08,
+            -0.3
+          ]
+        },
+        {
+          "id": "control.foot.left",
+          "node": "control.foot.left",
+          "positionMetersXYZ": [
+            0.123174,
+            0.389302,
+            0.52132
+          ]
+        },
+        {
+          "id": "control.foot.right",
+          "node": "control.foot.right",
+          "positionMetersXYZ": [
+            -0.122625,
+            0.391087,
+            0.496006
+          ]
+        },
+        {
+          "id": "control.hand.left",
+          "node": "control.hand.left",
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "control.hand.right",
+          "node": "control.hand.right",
+          "positionMetersXYZ": [
+            0,
+            -0.56,
+            0
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.84,
+          0.34,
+          2.15
+        ],
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.unicycle",
+      "displayName": "独轮车 / UNICYCLE",
+      "path": "vehicles/unicycle.glb",
+      "uri": "./assets/subjects/9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0.glb",
+      "sha256": "9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0",
+      "byteLength": 112688,
+      "sourcePath": "assets/three-creator/presets/vehicles/unicycle.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Direct-drive single wheel with original humanoid balance and terrain-checked left-foot support.",
+        "Assisted balance, not a free-falling single-wheel rigid-body simulation. No aerial tricks."
+      ],
+      "provenance": {
+        "source": "Local procedural geometry",
+        "generator": "scripts/three-creator/export-unicycle.ts"
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "vehicle.unicycle"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "unicycle",
+          "name": "独轮车",
+          "en": "UNICYCLE",
+          "mode": "bike",
+          "archetype": "unicycle",
+          "kernel": "K02",
+          "color": "#d9bd36",
+          "spawn": [
+            -170,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 4.2,
+          "maxSpeed": 5.5,
+          "reverseSpeed": 1.8,
+          "accel": 2.2,
+          "grip": 12,
+          "steer": 1.3,
+          "coastDeceleration": 2.8,
+          "brakeDeceleration": 4.5,
+          "steeringResponse": 5,
+          "steeringReturn": 7,
+          "throttleResponse": 5,
+          "pitchResponse": 8,
+          "rollResponse": 7,
+          "radius": 0.55,
+          "seat": [
+            0,
+            0.94,
+            0
+          ],
+          "characterPose": "unicycle",
+          "camera": 4.6,
+          "bodyPhysics": {
+            "kind": "unicycle",
+            "mass": 90,
+            "centerOfMassHeight": 0.6
+          },
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.34,
+              0.49,
+              0.39
+            ],
+            "offset": [
+              0,
+              0.49,
+              0
+            ]
+          },
+          "hint": "W 前进 · S 制动后倒骑 · A / D 平衡转向 · 松开自动减速、单脚撑地 · 再按 W 收脚踩踏 · Space 制动 · F 上下车"
+        }
+      },
+      "sockets": [
+        {
+          "id": "seat.driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.94,
+            0
+          ]
+        },
+        {
+          "id": "entry.left",
+          "node": "entry.left",
+          "positionMetersXYZ": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "entry.right",
+          "node": "entry.right",
+          "positionMetersXYZ": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camera.driver",
+          "node": "camera.driver",
+          "positionMetersXYZ": [
+            0,
+            1.6,
+            0.05
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.34,
+          0.49,
+          0.39
+        ],
+        "offset": [
+          0,
+          0.49,
+          0
+        ]
+      }
     }
   ]
 }

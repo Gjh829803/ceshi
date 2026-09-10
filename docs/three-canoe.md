@@ -1,0 +1,42 @@
+# 单桨木舟
+
+资产库搜索“单桨木舟”，点击“前往资产”。木舟位于综合园区水域
+`[205, -1.888, -140.5]` 米，旁边的低码头通过缓坡与西岸连接。
+F 上下舟；T 切换第三人称、第一人称和越肩视角。
+
+- W：连续单侧划桨，船头会逐渐偏转。
+- S：倒划，先抵消前进惯性再后退。
+- A / D：在回桨阶段换到对应侧，扫桨向左 / 右转向；静止时也可转向。
+- Space：压桨入水减速；松键后保留惯性。Shift 不提供动力。
+
+开放木质船体长 4.8 m、宽 1.2 m，配横座和一支单叶桨。
+保留 Source101 人物，双手由原人物动画更新中的两段骨骼求解贴合桨柄。
+座位和腿部姿态使用真实模型验证。
+
+木舟使用现有 `kayak` 划桨控制家族，`visualVariant: 'canoe'` 选择单桨模型与运动配置，
+不增加独立时钟、相机或物理世界。总质量 165 kg，最大排水量 0.38 m³，
+水密度 1000 kg/m³，垂直阻尼 6 /s，划桨周期 1.55 s。
+四点采样浮力使船体平衡原点约高于水面 0.112 m。
+前进上限 3.1 m/s、倒划上限 1.2 m/s、划桨峰值加速度 1.9 m/s²；
+线性水阻 0.11 /s，速度二次阻力系数 0.11 /m。
+这些参数通过 [驾驶配置](../shared/preset-content/canoe.ts) 和
+SDK 的 `humanoid.CANOE_WATER` 导出。
+
+桨叶浸水时才施加推进和偏航脉冲；出水回桨无推力。
+水面显示轻量桨叶水纹和尾流。搁浅时不能划行，岸边和码头使用现有碰撞查询。
+这是静水浮力与水阻近似，未模拟波浪、水流和翻艇。
+
+相关实现：
+
+- [木舟模型](../shared/preset-content/canoe-model.ts)
+- [浮力与单桨运动](../packages/three-world/src/humanoid-runtime/kayak.ts)
+- [握桨与水面反馈](../packages/three-world/src/humanoid-runtime/kayak-visual.ts)
+- [物理和真实骨架测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)
+- [浏览器真实按键验证](../scripts/three-creator/canoe-browser-smoke.ts)
+- [Episode 路线输入测试](../scripts/three-episode/vehicle-route.test.ts)
+
+执行 `pnpm exec tsx scripts/three-creator/export-canoe.ts` 导出
+`assets/three-creator/presets/vehicles/canoe.glb` 并更新 `vehicle.canoe` 目录哈希。
+SDK 修改后执行 `pnpm build` 并重启预览。
+在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
+验证截图、纯画面操作录像及实际运行时 SHA-256 位于 `outputs/canoe/browser/`。

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 2,
+  "targets": [],
+  "steps": [
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "a"
+      ],
+      "durationSeconds": 0.8
+    },
+    {
+      "keysUp": [
+        "a"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 2.5
+    },
+    {
+      "keysDown": [
+        "Shift"
+      ],
+      "durationSeconds": 1.3
+    },
+    {
+      "keysUp": [
+        "w",
+        "Shift"
+      ],
+      "durationSeconds": 0.7
+    },
+    {
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 2.5
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "s"
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "keysUp": [
+        "s"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "w",
+        "a"
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysUp": [
+        "a"
+      ],
+      "durationSeconds": 0.5
+    },
+    {
+      "keysDown": [
+        "d"
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysUp": [
+        "w",
+        "d"
+      ],
+      "durationSeconds": 0.5
+    },
+    {
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "commands": [
+        {
+          "type": "humanoid.camera",
+          "mode": 1
+        }
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "commands": [
+        {
+          "type": "humanoid.camera",
+          "mode": 2
+        }
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "commands": [
+        {
+          "type": "humanoid.camera",
+          "mode": 0
+        }
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 0.7
+    },
+    {
+      "keysUp": [
+        "w"
+      ],
+      "durationSeconds": 0.4
+    },
+    {
+      "lifecycle": "pause",
+      "durationSeconds": 0.3
+    },
+    {
+      "lifecycle": "start",
+      "durationSeconds": 0.3
+    },
+    {
+      "lifecycle": "reset",
+      "durationSeconds": 0.5
+    }
+  ]
+}

@@ -23,7 +23,10 @@ const records: Record<string, AssetProfile> = { person };
 for (const spec of SPECS) records[spec.id] = {
   version: PROFILE_VERSION,
   assetId: spec.id,
-  control: {...humanoid.defaultMovementSettings(spec.mode,spec),...(spec.maxSpeed!==undefined?{maxSpeed:spec.maxSpeed}:{}),...(spec.reverseSpeed!==undefined?{reverseSpeed:spec.reverseSpeed}:{})},
+  control: humanoid.parseMovementSettings(
+    Object.fromEntries(humanoid.controlKeys.filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key]])),
+    humanoid.defaultMovementSettings(spec.mode,spec),
+  ),
   camera: { ...DEFAULT_CAMERA_TUNING, distance: spec.camera },
   envelope: structuredClone(spec.envelope),
 };

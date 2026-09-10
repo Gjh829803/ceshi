@@ -9,13 +9,13 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 const catalog = JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
-const families = ['wheeled', 'bike', 'slide', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;
+const families = ['kayak', 'tank', 'wheeled', 'bike', 'slide', 'bus', 'sled', 'ski', 'hover', 'boat', 'sub', 'glider', 'plane', 'space', 'mount', 'carriage', 'dragon'] as const;
 type Family = typeof families[number];
 const representative = (family: Family) => assets.find(asset => asset.vehicle.spec.mode === family)!;
 const barrierFront = 59;
 
 function course(family: Family | 'character', barrier = false): EnvironmentDefinition {
-  const aquatic = family === 'boat' || family === 'sub';
+  const aquatic = family === 'kayak' || family === 'boat' || family === 'sub';
   const floor = aquatic ? -80 : 0;
   return {
     id: `independent-${family}`, name: 'Independent physical integration course', description: '',
@@ -30,7 +30,7 @@ function course(family: Family | 'character', barrier = false): EnvironmentDefin
 
 function vehicleStart(family: Family, spec: VehicleSpec, instanceId = 'subject'): EpisodeStart {
   const clearance = Math.max(0, spec.envelope.halfExtents[1] - spec.envelope.offset[1]);
-  const y = family === 'boat' ? .1 : family === 'sub' ? -15 : family === 'hover' ? 1.3 :
+  const y = (family === 'boat'||family === 'kayak') ? .1 : family === 'sub' ? -15 : family === 'hover' ? 1.3 :
     ['plane', 'glider', 'space', 'dragon'].includes(family) ? 100 : clearance + .03;
   return { positionWorldMetersXYZ: [0, y, 0], facingYawRadians: Math.PI,
     humanoid: { vehicleInstanceId: instanceId, mounted: true, cameraMode: 0,
@@ -57,9 +57,9 @@ function drive(family: Family) {
     boost: family === 'plane' || family === 'glider' } };
 }
 
-describe('catalog player families in an independent physical world', () => {
-  it('covers the catalog 19 vehicle assets and all twelve runtime families', () => {
-    expect(assets).toHaveLength(19);
+describe('catalog humanoid families in an independent physical world', () => {
+  it('covers the catalog 30 vehicle assets and all seventeen runtime families', () => {
+    expect(assets).toHaveLength(30);
     expect([...new Set(assets.map(asset => asset.vehicle.spec.mode))].sort()).toEqual([...families].sort());
   });
 
@@ -78,7 +78,7 @@ describe('catalog player families in an independent physical world', () => {
           expect(snapshot.errors).toEqual([]);
           expect(snapshot.humanoid?.mountedInstanceId).toBe('subject');
           expect([...actor.position.toArray(), ...actor.velocity.toArray(), ...actor.rotation.toArray()].every(Number.isFinite)).toBe(true);
-          expect(runtime.environment.overlaps(actor.position, humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
+          expect(runtime.environment.overlaps(actor.position, actor.spec.wheelPhysics?.chassis??humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
           travelled += actor.position.distanceTo(previous); previous.copy(actor.position);
         }
         expect(world.simulationTick).toBe(1800);

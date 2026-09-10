@@ -1,4 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
+import {readFileSync} from 'node:fs';
 import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
 import {createCapsuleDebug,createCollisionDebug} from '../../shared/preset-content/humanoid/capsule-debug';
 import {createWorld,humanoid} from '@worldkit/three';
@@ -10,7 +11,15 @@ import {SPECS} from '../../shared/preset-content/config';
 import {defaultRegion,prepareCourse} from '../../shared/preset-content/platform/scenarios';
 
 describe('player workspace configuration',()=>{
- it.each(SPECS.filter(spec=>spec.mode==='wheeled'||spec.mode==='bike').map(spec=>spec.id))('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
+ it('exports the explicit bus brake profile without replacing it with family defaults',()=>{
+  const catalog=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8'));
+  const exported=catalog.assets.find((asset:{id:string})=>asset.id==='vehicle.bus').vehicle.spec;
+  const profile=getDefaultProfile('bus')!;
+  expect(exported.brakeDamping).toBeGreaterThan(0);
+  expect(exported.brakeDamping).toBe(profile.control.brakeDamping);
+  expect(exported.brakeDeceleration).toBe(profile.control.brakeDeceleration);
+ });
+ it.each(SPECS.filter(spec=>!!spec.wheelPhysics).map(spec=>spec.id))('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
   const spec=SPECS.find(s=>s.id===id);expect(spec).toBeDefined();
   const profile=getDefaultProfile(id);expect(profile).toBeDefined();
   // These presets use wheel forces, not the optional legacy brake-drift controller.

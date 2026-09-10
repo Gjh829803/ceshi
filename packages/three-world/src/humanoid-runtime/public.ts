@@ -1,3 +1,5 @@
+export {SUBMERSIBLE_WATER} from './submersible';
+export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY} from './kayak';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
 export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
@@ -24,8 +26,45 @@ export type {HumanoidDisplaySample} from './presentation';
 export {createRoadPhysicsProfile} from './wheel-physics';
 export type {WheelLayout,WheelPhysicsConfig,SimulatedWheel} from './wheel-physics';
 export type {PowertrainConfig,PowertrainState} from './powertrain';
+export {vehicleDriveTelemetry} from './vehicle-dynamics';
+export type {BodyPhysicsConfig,BodyPhysicsState,VehicleDriveTelemetry} from './vehicle-dynamics';
 export * from './input-guidance';
 
-export {controlFields,controlKeys,controlSchemaForFamily,type ControlField} from '../config/control-fields';
+export {
+  controlFields,
+  controlKeys,
+  controlSchemaForFamily,
+  type ControlField,
+} from '../config/control-fields';
 
+export {
+  TANK_GEOMETRY,
+  TANK_CONTROLS,
+  createTankState,
+} from './tank';
+
+export { sampleTankVisual } from './tank-visual';
+
+export {
+  UNICYCLE_GEOMETRY,
+  UNICYCLE_TIMING,
+  createUnicycleState,
+  unicyclePedal,
+  sampleUnicycleVisual,
+} from './unicycle';
+
+export type { UnicycleState } from './unicycle';
+
+export {
+  ATV_GEOMETRY,
+  createAtvState,
+  sampleAtvVisual,
+} from './atv';
+
+export {
+  JETSKI_WATER,
+  createJetSkiState,
+} from './jetski';
+
+export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';

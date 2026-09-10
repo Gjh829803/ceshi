@@ -29,6 +29,39 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
     jump: 'Jump/action edge; traversal and swimming interpret it in the current movement context.',
     actions: 'Optional semantic action edges; inspect characterCapabilities for current eligibility.',
   },
+    kayak: {
+    forward: 'Positive paddles forward; negative paddles backward.',
+    steer: 'Positive turns right by changing paddle side or stroke strength.',
+    boost: 'Requests faster paddling when supported by the selected craft.',
+    brake: 'Adds water drag; raft profiles also use it for braking on land.',
+  },
+
+  bus: {
+    forward: 'Positive drives forward; negative brakes before selecting reverse.',
+    steer: 'Positive turns the front wheels right; turning depends on speed and wheelbase.',
+    brake: 'Applies the service brake and holds the bus on a slope.',
+  },
+
+  tank: {
+    forward: 'Positive drives both tracks forward; negative brakes before reversing.',
+    steer: 'Positive applies differential track steering and can pivot the tank at rest.',
+    boost: 'Raises the available forward speed while forward drive is applied.',
+    brake: 'Stops both tracks and prevents differential steering.',
+    roll: 'Rotates the turret.',
+    pitch: 'Raises or lowers the gun.',
+  },
+
+  sled: {
+    forward: 'Positive pushes forward at low speed; negative drags the feet to brake and does not reverse.',
+    steer: 'Positive drags one side to turn right; steering requires movement and loses speed.',
+    brake: 'Drags both feet to slow the sled.',
+  },
+
+  ski: {
+    forward: 'Positive pushes with the poles at low speed; negative applies braking and does not reverse.',
+    steer: 'Positive edges the skis to turn right and loses some speed.',
+    brake: 'Applies ski-edge braking.',
+  },
   wheeled: GROUND_INPUT_FIELDS,
   bike: GROUND_INPUT_FIELDS,
   slide: GROUND_INPUT_FIELDS,

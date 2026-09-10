@@ -1,3 +1,4 @@
+import type {KayakState} from '../kayak';
 import type { Vector3 } from 'three';
 import type { MotionPlan } from './motion';
 import actionRuntime from './action-runtime.json';
@@ -41,6 +42,9 @@ export interface SourceCharacterFrame {
  */
 export type HumanoidRenderState = Omit<SourceCharacterFrame, 'skills'> & {
   simulationIdentity?: object;
-  mounted?: 'stand' | 'drive' | 'ride' | null;
+  unicyclePose?: import('../unicycle').UnicycleState | undefined;
+  mounted?: 'unicycle' | 'stand' | 'drive' | 'ride' | 'sled' | 'ski' | 'tank' | 'sub' | 'atv' | 'kayak' | null;
+  atvSteeringAngle?:number;
+  sledPose?: {push:number;brake:number;steer:number}; kayakPose?:KayakState;
   skills: (Omit<SourceCharacterSkills, 'syncCarried'> & { syncCarried?: SourceCharacterSkills['syncCarried'] }) | null;
 };

@@ -6,7 +6,7 @@ import "./styles.css";
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
 import { renderAssetThumbnails } from "../../../shared/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
-import { SPECS } from "../../../shared/preset-content/config";
+import { SPECS, vehicleControlFamily } from "../../../shared/preset-content/config";
 import presentationConfig from "../../../shared/preset-content/presentation.json";
 import {
   getMap,
@@ -609,8 +609,8 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
-    powertrain:!!v?.wheelPhysics,
-    family: v?.spec.mode ?? "character",
+    powertrain:!!(v?.wheelPhysics||v?.bodyPhysics?.powertrain),
+    family: vehicleControlFamily(v?.spec),
     control: humanoid.readMovementSettings(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
     grounded: v?.grounded ?? sim.player.grounded,
@@ -954,8 +954,8 @@ function updateUI() {
     p = sim.player,
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
-  const drive=v?.wheelPhysics?.powertrain;
-  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{rpm:drive.rpm,maxRpm:v!.spec.wheelPhysics!.powertrain?.maxRpm??6200,gear:drive.gear<0?'R':drive.gear===0?'N':'D'+drive.gear,speed:Math.round(speed*3.6),throttle:Math.round(drive.throttle*100),shifting:drive.shiftRemaining>0}:null});
+  const drive=v?humanoid.vehicleDriveTelemetry(v):null;
+  shell.update({recoverable:!!v&&['wheeled','bike','slide'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
@@ -968,13 +968,13 @@ function updateUI() {
     setText(
       "category",
       v
-        ? `${["plane", "glider", "space", "dragon"].includes(v.spec.mode) ? "FLIGHT" : v.spec.mode === "sub" || v.spec.mode === "boat" ? "WATER" : "GROUND"} / ${v.spec.kernel}`
+        ? `${["plane", "glider", "space", "dragon"].includes(v.spec.mode) ? "FLIGHT" : ["sub", "boat", "kayak"].includes(v.spec.mode) ? "WATER" : "GROUND"} / ${v.spec.kernel}`
         : "ON FOOT / K01",
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
     shell.update({
-      controls: controlsFor(v?.spec.mode ?? "character", sdk.getKeyBindings()),
+      controls: controlsFor(vehicleControlFamily(v?.spec), sdk.getKeyBindings()),
     });
     setText("shortcutSubject", v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
@@ -999,7 +999,9 @@ function updateUI() {
     v
       ? sim.transition > 0
         ? "正在入座"
-        : v.submerged
+        : v.submersible
+          ? v.submersible.depth > .4 ? "水下航行" : "水面漂浮"
+          : v.submerged
           ? "载具涉水，请复位"
           : v.creature
             ? {
@@ -1033,7 +1035,9 @@ function updateUI() {
   if (v)
     setHTML(
       "interaction",
-      v.submerged
+      v.submersible && v.submersible.depth > .4
+        ? `深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
+        : v.submerged && v.spec.mode !== "sub"
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
           ? "<kbd>Shift</kbd>从高台释放，开始滑翔"
@@ -1242,7 +1246,7 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
-    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?.wheelPhysics?{...sim.vehicle.wheelPhysics.powertrain}:undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),
+    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain?{...(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
 
     mapId: session.map.id,
     activeVehicle: sim.vehicle?.spec.id ?? null,

@@ -48,7 +48,7 @@ export function mountShell(host: HTMLElement) {
     controls: [] as [string, string][],
     system: [] as [string, string][],
     recoverable:false,
-    drivetrain:null as null|{rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
+    drivetrain:null as null|{kind:'engine'|'pedal'|'paddle'|'push';cadence:number;rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
     interaction: "",
     pacing: null as FrameRateReading | null,
     configurationDirty: false,
@@ -263,7 +263,7 @@ export function mountShell(host: HTMLElement) {
         >
           <Hint value={s.interaction} />
         </div>
-        {s.drivetrain&&<section className="powertrain-hud" aria-label="发动机与变速箱"><strong>{s.drivetrain.gear}</strong><span>{Math.round(s.drivetrain.rpm)} RPM</span><span>{s.drivetrain.speed} km/h</span><meter min={0} max={s.drivetrain.maxRpm} value={s.drivetrain.rpm}/><small>{s.drivetrain.shifting?'换挡中':'自动变速箱'} · 油门 {s.drivetrain.throttle}%</small></section>}
+        {s.drivetrain&&<section className="powertrain-hud" aria-label={s.drivetrain.kind==='engine'?'发动机与变速箱':'人力驱动'}><strong>{s.drivetrain.kind==='engine'?s.drivetrain.gear:s.drivetrain.kind==='pedal'?'踩踏':s.drivetrain.kind==='paddle'?'划桨':'蹬地'}</strong><span>{Math.round(s.drivetrain.kind==='engine'?s.drivetrain.rpm:s.drivetrain.cadence)} {s.drivetrain.kind==='engine'?'RPM':'次/分'}</span><span>{s.drivetrain.speed} km/h</span><meter min={0} max={s.drivetrain.kind==='engine'?s.drivetrain.maxRpm:100} value={s.drivetrain.kind==='engine'?s.drivetrain.rpm:s.drivetrain.throttle}/><small>{s.drivetrain.kind==='engine'?`${s.drivetrain.shifting?'换挡中':'自动变速箱'} · 油门`:'用力'} {s.drivetrain.throttle}%</small></section>}
         <div className="bottom-hint">{t("bottomHint")}</div>
         {["left", "right"].map((side) => (
           <div key={side} className={`touch ${side}`}>

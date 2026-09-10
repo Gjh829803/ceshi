@@ -32,6 +32,12 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
   for(const [i,spec] of specs.entries()){
    prepareCourse(runtime.simulation,getMap('grand-prix'),'gp-straight',spec.id);
    expect(runtime.enter(spec.id)).toBe(true);world.step({},60);
+   if(spec.archetype==='unicycle'){
+    // At rest the rider stands behind the saddle with a support foot down.
+    // Use real forward input to reach the seated pedalling phase for contact checks.
+    world.step({humanoid:{...humanoid.emptyInput(),forward:1}},60);
+    expect(runtime.simulation.vehicle!.unicycle!.phase).toBe('riding');
+   }
    const cushion=visuals[i]!.root.getObjectByName('seat-cushion');
    expect(cushion,`${spec.id} cushion`).toBeDefined();
    const cushionBounds=new Box3().setFromObject(cushion!),top=cushionBounds.max.y,pelvisBounds=new Box3();
@@ -55,7 +61,9 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
    const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);
    expect(runtime.followCamera.camera.position.distanceTo(eye)).toBeLessThan(.002);
    expect(eye.y-top).toBeGreaterThan(.7);
-   runtime.setCameraMode(0);world.step({},1);expect(runtime.exit()).toBe(true);world.step({},30);
+   runtime.setCameraMode(0);world.step({},1);
+   if(spec.archetype==='unicycle')world.step({humanoid:{...humanoid.emptyInput(),brake:true}},120);
+   expect(runtime.exit()).toBe(true);world.step({},30);
   }
  }finally{world.dispose();vi.unstubAllGlobals();}
 },30000);

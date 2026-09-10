@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { humanoid } from "@worldkit/three";
-import { SPECS } from "../../../shared/preset-content/config";
+import { SPECS, vehicleControlFamily } from "../../../shared/preset-content/config";
 import { MAPS } from "../../../shared/preset-content/environment/maps";
 import {
   parseAssetProfile,
@@ -268,7 +268,7 @@ function CameraEditor({
   reset(): void;
 }) {
   const current = o.getProfile(assetId),
-    mode = SPECS.find((s) => s.id === assetId)?.mode;
+    mode = vehicleControlFamily(SPECS.find((s) => s.id === assetId));
   const fields: {
     group: "camera" | "control";
     key: string;

@@ -168,7 +168,33 @@ export class FollowCamera {
     if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
     else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
   }
-  reset(sim:Simulation){this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);this.sourceCharacter=!!sim.humanoid&&!sim.vehicle;this.yaw=sim.vehicle?.yaw??sim.player.yaw;this.pitch=this.mode===1?0:this.mode===2?.12:this.sourceCharacter?.35:.3;this.seatLookYaw=0;this.zoom=1;this.lastOrbit=sim.time;this.initialized=false;this.collision.reset();this.collisionTick=0;}
+  reset(sim: Simulation) {
+    this.activeSubject = sim.vehicle ? 'vehicle' : 'character';
+    this.tuning = this.selectTuning(sim);
+    this.sourceCharacter = !!sim.humanoid && !sim.vehicle;
+    this.yaw = sim.vehicle?.yaw ?? sim.player.yaw;
+
+    this.pitch =
+      this.mode === 1
+        ? (
+            sim.vehicle?.spec.archetype === 'atv' ||
+            sim.vehicle?.spec.archetype === 'jetski'
+          )
+          ? .34
+          : 0
+        : this.mode === 2
+          ? .12
+          : this.sourceCharacter
+            ? .35
+            : .3;
+
+    this.seatLookYaw = 0;
+    this.zoom = 1;
+    this.lastOrbit = sim.time;
+    this.initialized = false;
+    this.collision.reset();
+    this.collisionTick = 0;
+  }
   update(sim:Simulation,dt:number,pose?:MotionPose){
     this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);
     this.collisionHumanoid=sim.vehicle?undefined:sim.humanoid;
@@ -177,7 +203,7 @@ export class FollowCamera {
     if(this.revision!==sim.teleportRevision){this.revision=sim.teleportRevision;this.reset(sim);}
     if(this.previousMode!==this.mode){this.previousMode=this.mode;this.reset(sim);}
     const subjectChanged=this.lastActive!==sim.active;
-    if(subjectChanged){this.lastActive=sim.active;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=this.mode===1?0:this.mode===2?.12:!v&&sim.humanoid?.35:.3;this.seatLookYaw=0;this.initialized=false;}
+    if(subjectChanged){this.lastActive=sim.active;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=this.mode===1?((v?.spec.archetype==='atv'||v?.spec.archetype==='jetski')?.34:0):this.mode===2?.12:!v&&sim.humanoid?.35:.3;this.seatLookYaw=0;this.initialized=false;}
     if(!this.initialized||subjectChanged)this.collision.reset();
     if(this.mode===1){this.updateFirstPerson(sim,pose);return;}
     if(this.mode===2){this.updateShoulder(sim,dt,pose);return;}
@@ -189,7 +215,7 @@ export class FollowCamera {
     if(this.camera.near!==this.originalNear){this.camera.near=this.originalNear;this.camera.updateProjectionMatrix();}
     const airborne=v&&['space','plane','glider','sub','dragon'].includes(v.spec.mode);
     if(v&&this.mode!==1&&sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8){this.yaw+=angleDelta(this.yaw,yaw)*(1-Math.exp(-this.tuning.recenterResponsePerSecond*(airborne?1.3/1.9:1)*dt));this.pitch=damp(this.pitch,airborne?.2:.28,1.2*this.tuning.recenterResponsePerSecond/1.9,dt);}
-    this.anchor.copy(position);this.anchor.y+=(v?(v.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
+    this.anchor.copy(position);this.anchor.y+=(v?(v.spec.mode==='tank'?2.3:v.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
     this.anchor.x+=Math.cos(this.yaw)*this.tuning.horizontalOffset;this.anchor.z-=Math.sin(this.yaw)*this.tuning.horizontalOffset;this.aim.copy(this.anchor);
     this.targetUp.set(0,1,0);if(v?.spec.mode==='space'&&rotation)this.targetUp.applyQuaternion(rotation);
     this.up.lerp(this.targetUp,1-Math.exp(-5*dt)).normalize();
@@ -235,6 +261,7 @@ export class FollowCamera {
       if(sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8)this.seatLookYaw=damp(this.seatLookYaw,0,this.tuning.recenterResponsePerSecond,dt);
       this.yaw=(pose?.yaw??v.yaw)+this.seatLookYaw;
       if(!this.eyePosition?.(this.origin))this.origin.set(...v.spec.seat).add(this.offset.set(0,v.spec.characterPose==='stand'?1.55:.72,0)).applyQuaternion(rotation).add(position);
+      if(v.spec.mode==='tank'&&this.mode===2)this.origin.set(0,4.35,-1.2).applyQuaternion(rotation).add(position);
       this.localRotation.set(this.pitch,this.seatLookYaw,0,'YXZ');
       this.direction.set(0,0,-1).applyEuler(this.localRotation).applyQuaternion(rotation);
       this.offset.set(-1,0,0).applyAxisAngle(this.targetUp.set(0,1,0),this.seatLookYaw).applyQuaternion(rotation);

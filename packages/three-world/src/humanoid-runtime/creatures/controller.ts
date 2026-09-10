@@ -1,3 +1,4 @@
+import {tankBarrel} from '../tank';
 import { Quaternion, Vector3 } from 'three';
 import { vehicleImpactMass,type VehicleSpec } from '../config';
 import { vehicleBody, type EnvironmentQueries, type MoveResult, type QueryBody } from '../environment/queries';
@@ -23,6 +24,7 @@ export function resetCreatureState(v:VehicleState){
 /** The lead horse is a separate occupied body, also useful for boarding/exit checks. */
 export function creatureBodies(v:VehicleState):{position:Vector3;rotation:Quaternion;body:QueryBody}[]{
   const parts=[{position:v.position,rotation:v.rotation,body:vehicleBody(v.spec)}];
+  if(v.tank)parts.push(tankBarrel(v));
   if(v.spec.mode==='carriage'){
     const state=v.creature??createCreatureState(v.spec,v.position,v.rotation,v.yaw);
     parts.push({position:state.leadPosition!,rotation:rotationAt(state.leadYaw!),body:LEAD_HORSE_BODY});

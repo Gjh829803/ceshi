@@ -48,7 +48,7 @@ export const GRAND_PRIX = {
   }),
 };
 
-const modes = ['character', 'wheeled', 'bike', 'slide', 'hover'];
+const modes = ['character', 'wheeled', 'bike', 'slide', 'hover', 'bus'];
 export function createGrandPrix(): EnvironmentDefinition {
   const regions: MapRegion[] = [
     { id: 'gp-pits', name: '01 / 维修准备区', description: '选择赛车、换乘和调参；沿出口接入主直道。', center: [-562, 0, -240], size: [50, 240], color: '#86aaa7', modes },
@@ -81,7 +81,9 @@ export function createGrandPrix(): EnvironmentDefinition {
   for (const [distance, z] of [[150, 150], [100, 200], [50, 250]]) {
     boxes.push(block(`gp-brake-board-${distance}`, [-636, 1.5, z!], [3.4, 2, .2], '#edf0eb'));
   }
-  const parkedVehicles = SPECS.filter(s => modes.includes(s.mode)).map((spec, i): MapSpawn => ({
+  // Append the new bus so existing vehicles retain their authored pit positions.
+  const pitSpecs = [...SPECS.filter(s => modes.includes(s.mode) && s.mode !== 'bus'), ...SPECS.filter(s => s.mode === 'bus')];
+  const parkedVehicles = pitSpecs.map((spec, i): MapSpawn => ({
     id: `gp-park-${spec.id}`, vehicleId: spec.id, name: spec.name,
     position: [-564 + (i % 2) * 14, spec.mode === 'hover' ? 1.3 : .03, -330 + Math.floor(i / 2) * 32], yaw: 0, regionId: 'gp-pits',
   }));

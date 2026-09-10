@@ -1,1 +1,36 @@
-{"schemaVersion":1,"assetIds":["humanoid.source-101","vehicle.rover","vehicle.racer","vehicle.bike","vehicle.slide","vehicle.hover","vehicle.boat","vehicle.sub","vehicle.glider","vehicle.plane","vehicle.space","vehicle.trail-rover","vehicle.touring-bike","vehicle.rescue-hover","vehicle.patrol-boat","vehicle.trainer-plane","vehicle.survey-space","creature.horse","vehicle.carriage","creature.dragon"]}
+{
+  "schemaVersion": 1,
+  "assetIds": [
+    "humanoid.source-101",
+    "vehicle.rover",
+    "vehicle.racer",
+    "vehicle.bike",
+    "vehicle.slide",
+    "vehicle.hover",
+    "vehicle.boat",
+    "vehicle.sub",
+    "vehicle.glider",
+    "vehicle.plane",
+    "vehicle.space",
+    "vehicle.trail-rover",
+    "vehicle.touring-bike",
+    "vehicle.rescue-hover",
+    "vehicle.patrol-boat",
+    "vehicle.trainer-plane",
+    "vehicle.survey-space",
+    "creature.horse",
+    "vehicle.carriage",
+    "creature.dragon",
+    "vehicle.unicycle",
+    "vehicle.observation-sub",
+    "vehicle.canoe",
+    "vehicle.kayak",
+    "vehicle.raft",
+    "vehicle.jetski",
+    "vehicle.atv",
+    "vehicle.ski",
+    "vehicle.sled",
+    "vehicle.tank",
+    "vehicle.bus"
+  ]
+}

@@ -1,3 +1,14 @@
+import {UNICYCLE_SPEC} from './unicycle';
+import {SUBMERSIBLE_SPEC} from './submersible';
+import {CANOE_SPEC} from './canoe';
+import {KAYAK_SPEC} from './kayak';
+import {RAFT_SPEC} from './raft';
+import {JETSKI_SPEC} from './jetski';
+import {ATV_SPEC} from './atv';
+import { SKI_SPEC } from './ski';
+import { SLED_SPEC } from './sled';
+import { TANK_SPEC } from './tank';
+import { BUS_SPEC } from './bus';
 import {humanoid} from '@worldkit/three';
 import { CREATURE_SPECS } from './creatures/specs';
 import { roadSeatAnchor } from './road-seating';
@@ -5,6 +16,12 @@ export type Mode = humanoid.VehicleSpec['mode'];
 export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
 export type VehicleSpec = humanoid.VehicleSpec;
+/** Specialized controller families share movement modes but have distinct tuning. */
+export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype'> | undefined): string {
+  const archetype = spec?.archetype;
+  return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
+    ? archetype : spec?.mode ?? 'character';
+}
 export const SPECS: VehicleSpec[] = [
   {id:'rover',name:'越野车',en:'ROVER',mode:'wheeled',kernel:'K03',color:'#f0b64d',spawn:[-24,0,64],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:roadSeatAnchor('rover'),camera:8.2,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}},
   {id:'racer',name:'公路赛车',en:'APEX',mode:'wheeled',kernel:'K03',color:'#f37659',spawn:[-10,0,64],yaw:0,speed:36,accel:12,grip:14,steer:1.08,radius:1.6,seat:roadSeatAnchor('racer'),camera:8,hint:'W / S 油门与制动 · A / D 转向 · Space 手刹漂移',archetype:'racer',envelope:{kind:'box',halfExtents:[1.35,1.1,2.15],offset:[0,1.1,0]}},
@@ -50,7 +67,7 @@ for(const spec of SPECS)if(spec.mode==='bike'){
   spec.wheelPhysics=humanoid.createRoadPhysicsProfile('motorcycle',{mass:spec.id==='touring-bike'?320:260});
   spec.speed=150/3.6;spec.maxSpeed=180/3.6;spec.reverseSpeed=2;
 }
-SPECS.push(...CREATURE_SPECS);
+SPECS.push(...CREATURE_SPECS,UNICYCLE_SPEC,SUBMERSIBLE_SPEC,CANOE_SPEC,KAYAK_SPEC,RAFT_SPEC,JETSKI_SPEC,ATV_SPEC,SKI_SPEC,SLED_SPEC,TANK_SPEC,BUS_SPEC);
 export const START: [number,number,number] = [-24,0,55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;

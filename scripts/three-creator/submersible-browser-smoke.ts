@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {launchChromiumWithSystemFallback} from '../lib/playwright-browser-launch';
+const output=path.resolve('outputs/submersible/browser');await mkdir(output,{recursive:true});
+const browser=await launchChromiumWithSystemFallback({headless:true,args:['--enable-unsafe-swiftshader']});
+const page=await browser.newPage({viewport:{width:1440,height:960}}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+const state=()=>page.evaluate(()=>(window as any).trainingGround.getState());
+const dynamics=()=>page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='observation-sub').submersible);
+const elapsed=async(seconds:number)=>{const t=(await state()).simulationTime;await page.waitForFunction(({t,seconds})=>(window as any).trainingGround.getState().simulationTime>=t+seconds,{t,seconds},{timeout:60000});};
+const hold=async(key:string,seconds:number)=>{await page.keyboard.down(key);await elapsed(seconds);await page.keyboard.up(key);};
+const capture=(name:string)=>page.screenshot({path:path.join(output,name+'.png')});
+try{
+ await page.goto(process.argv[2]??'http://127.0.0.1:5180/');await page.waitForFunction(()=>Boolean((window as any).trainingGround?.getState().ready),{},{timeout:60000});
+ const bytes=await(await page.request.get(new URL('/runtime/worldkit-three.js',page.url()).href)).body();
+ await elapsed(2);const parked=await dynamics();assert.equal(parked.diving,false);assert.equal(parked.surface,-2);assert(Math.abs(parked.buoyancy-9.81)<.05);
+ await page.locator('#libraryButton').click();await page.getByRole('searchbox',{name:'搜索资产'}).fill('观景潜艇');await page.getByRole('button',{name:'查看单人观景潜艇',exact:true}).click();await capture('library');
+ await page.getByRole('button',{name:'前往资产',exact:true}).click();await elapsed(.4);const boarding=await state();assert(boarding.position[1]>-2);
+ await page.mouse.click(700,500);await page.keyboard.press('f');await elapsed(.7);assert.equal((await state()).activeVehicle,'observation-sub');await capture('surface');
+ await page.evaluate(()=>{const stream=(document.querySelector('#viewport') as HTMLCanvasElement).captureStream(30),r=new MediaRecorder(stream,{mimeType:'video/webm'}),chunks:Blob[]=[];r.ondataavailable=e=>chunks.push(e.data);r.start();(window as any).finishSub=()=>new Promise<string>(resolve=>{r.onstop=()=>{const reader=new FileReader();reader.onload=()=>{stream.getTracks().forEach(t=>t.stop());resolve(String(reader.result).split(',')[1]!);};reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};r.stop();});});
+ await page.keyboard.down('w');await elapsed(3);const spray=await dynamics();assert(spray.splashCount>0);await capture('surface-spray');await page.keyboard.up('w');
+ await page.keyboard.down('Control');await elapsed(7);const submerged=await dynamics();assert(submerged.depth>4);assert(submerged.bubbleCount>0);await capture('underwater');
+ await page.mouse.move(700,500);await page.mouse.down();await page.mouse.move(1330,470,{steps:16});await page.mouse.up();await elapsed(.2);await capture('underwater-cabin');await page.keyboard.up('Control');
+ await page.keyboard.press('f');await elapsed(.2);assert.equal((await state()).activeVehicle,'observation-sub');assert(!(await page.locator('#interaction').innerText()).includes('涉水'));
+ await elapsed(4);const settled=await state();await elapsed(2);assert(Math.abs((await state()).position[1]-settled.position[1])<.1);
+ await page.keyboard.press('t');await elapsed(.4);assert.equal((await state()).camera.mode,1);await capture('first-person');
+ await hold('s',7);const reverse=await state();assert(reverse.movement.velocity[0]<-.5);await hold('Shift',3);assert((await state()).speed<.1);
+ await hold('a',1.5);const left=await state();await hold('d',1.5);const right=await state();
+ await hold('q',1);await hold('e',1);
+ await page.keyboard.press('t');await elapsed(.3);assert.equal((await state()).camera.mode,2);await capture('shoulder');await page.keyboard.press('t');
+ await hold(' ',14);await elapsed(5);const surfaced=await dynamics();assert(surfaced.depth<.1);assert(surfaced.ballast<.01);await capture('resurfaced');
+ const video=await page.evaluate(()=>(window as any).finishSub());await writeFile(path.join(output,'submersible-input.webm'),Buffer.from(video,'base64'));
+ await page.evaluate(()=>(window as any).trainingGround.reset());await elapsed(.7);assert((await dynamics()).ballast<.001);assert.equal((await dynamics()).bubbleCount,0);
+ await page.keyboard.press('f');await elapsed(.5);assert.equal((await state()).activeVehicle,null);assert.deepEqual(errors,[]);
+ await writeFile(path.join(output,'report.json'),JSON.stringify({runtimeSha256:createHash('sha256').update(bytes).digest('hex'),runtimeBytes:bytes.length,parked,boarding,spray,submerged,settled,reverse,left,right,surfaced,errors},null,2));
+ console.log(JSON.stringify({output,depth:submerged.depth,splash:spray.splashCount,bubbles:submerged.bubbleCount,surfaced,errors}));
+}catch(error){console.log(JSON.stringify(await state().catch(()=>null)));await capture('failure');throw error;}finally{await browser.close();}
