@@ -234,3 +234,10 @@ it('keeps prepared humanoid prototypes without retaining a hidden model lease',a
   const result=await world.execute({type:'entity.spawn',prototypeId:'variant-1',entityId:'guide',positionWorldMetersXYZ:[3,.04,0]});
   expect(result.status,JSON.stringify(result)).toBe('applied');expect(world.getEntityState('guide').animation?.actionId).toBeTruthy();
 });
+
+it('retires a removed actor action immediately without another simulation tick',async()=>{
+  const world=await setup(),a=await world.humanoid!.createCharacter();a.root.position.set(0,.04,0);world.addCharacter({id:'temporary',humanoid:a});world.step({},30);
+  const result=await world.execute({type:'humanoid.perform-action',actorId:'temporary',request:{requestId:'remove-running',action:'roll'}});if(result.status!=='accepted')throw new Error(JSON.stringify(result));
+  const tick=world.simulationTick;expect((await world.execute({type:'entity.despawn',entityId:'temporary'})).status).toBe('applied');
+  expect(world.simulationTick).toBe(tick);expect(world.operations.get(result.operationId)).toMatchObject({status:'cancelled',phase:'actor-removed'});
+});

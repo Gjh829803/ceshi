@@ -794,7 +794,14 @@ While paused, instant commands apply at the pause boundary; ongoing operations
 return accepted and wait for explicit start. Wait observes state events and does
 not start the world. Reset/dispose cancel
 operations and wake waiters; AbortSignal only aborts that wait. Use operations.cancel
-to cancel the operation itself. World operation IDs are distinct from Creator tool
+to request cancellation of the operation itself. Atomic seat transitions finish a
+safe standing exit before releasing occupancy; a slide under a low roof stays low
+until directional input reaches standing clearance. These operations remain
+`running` with phase `cancelling`; wait for the terminal result. Cancelling a pickup
+after grip keeps the item held until an explicit put-down, release or actor removal.
+Sit requires enter, idle and exit clips so its cleanup is executable. Removing an
+actor ends its operations at that same boundary without requiring another tick.
+World operation IDs are distinct from Creator tool
 operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
 NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.

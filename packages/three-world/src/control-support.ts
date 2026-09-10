@@ -48,8 +48,8 @@ export class OperationLedger implements Operations {
  private next=0;
  private readonly records=new Map<string,OperationStatus>();
  private readonly waiters=new Map<string,Set<Waiter>>();
- private readonly cancellations=new Map<string,()=>void>();
- create(phase:string,cancel?:()=>void):string {const id=`world-operation-${++this.next}`;this.records.set(id,{id,status:'queued',phase});if(cancel)this.cancellations.set(id,cancel);return id;}
+ private readonly cancellations=new Map<string,()=>void|false>();
+ create(phase:string,cancel?:()=>void|false):string {const id=`world-operation-${++this.next}`;this.records.set(id,{id,status:'queued',phase});if(cancel)this.cancellations.set(id,cancel);return id;}
  get(id:string):OperationStatus {const value=this.records.get(id);if(!value)throw failure('OPERATION_NOT_FOUND');return cloneJson(value);}
  update(id:string,change:Partial<Omit<OperationStatus,'id'>>):void {
   const previous=this.records.get(id);if(!previous||['succeeded','failed','cancelled'].includes(previous.status))return;
@@ -60,7 +60,7 @@ export class OperationLedger implements Operations {
    this.waiters.delete(id);
   }
  }
- cancel(id:string):void {const status=this.get(id);if(['succeeded','failed','cancelled'].includes(status.status))return;this.cancellations.get(id)?.();this.update(id,{status:'cancelled',phase:'cancelled'});}
+ cancel(id:string):void {const status=this.get(id);if(['succeeded','failed','cancelled'].includes(status.status))return;if(this.cancellations.get(id)?.()===false){this.update(id,{status:'running',phase:'cancelling'});return;}this.update(id,{status:'cancelled',phase:'cancelled'});}
  cancelAll():void {for(const [id,status] of this.records)if(status.status==='queued'||status.status==='running')this.cancel(id);}
  wait(id:string,options:{readonly signal?:AbortSignal}={}):Promise<TerminalOperationStatus>{
   if(options.signal?.aborted)return Promise.reject(failure('WAIT_ABORTED'));

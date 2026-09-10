@@ -167,6 +167,7 @@ export interface OperationStatus {
 export interface TerminalOperationStatus extends OperationStatus {readonly status:'succeeded'|'failed'|'cancelled'}
 export interface Operations {
  get(operationId:string):OperationStatus;
+ /** Requests cancellation; a running operation may remain in phase cancelling until safe cleanup finishes. */
  cancel(operationId:string):void;
  /** Observes terminal state without stepping/starting the world. Abort only cancels this wait. */
  wait(operationId:string,options?:{readonly signal?:AbortSignal}):Promise<TerminalOperationStatus>;

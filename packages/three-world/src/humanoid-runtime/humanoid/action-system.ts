@@ -10,7 +10,7 @@ export type {TargetRuntime} from './world-interactions';
 const DT=1/60,UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1},RADIUS=.28;
 export interface ActionCommands {roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean}
 export interface SkillPose {key:string;time:number;phase:string}
-interface ActiveSkill {id:SkillId;requestId:string;targetId?:string|undefined;elapsed:number;phase:string;direction:Vector3;initialSpeed:number;attached?:boolean;alignTime:number}
+interface ActiveSkill {id:SkillId;requestId:string;targetId?:string|undefined;elapsed:number;phase:string;direction:Vector3;initialSpeed:number;attached?:boolean;cancelRequested?:boolean;alignTime:number}
 const DURATIONS:Record<string,number>={roll:ACTION_TUNING.rollDurationSeconds,'slide-start':ACTION_TUNING.slideEntryDurationSeconds,'slide-exit':ACTION_TUNING.slideExitDurationSeconds,pickup:25/30,'sit-enter':1.3,'sit-exit':31/30};
 
 /** Physical actions and target state. Rendering is optional; no DOM or model calls. */
@@ -102,7 +102,7 @@ export class ActionSystem {
     return null;
   }
   eligibility(action:SkillId,targetId?:string){
-    const needed=action==='slide'?['slide-start','slide-loop','slide-exit']:action==='pickup'?['pickup','carry-walk']:action==='sit'?['sit-enter','sit-idle']:action==='standUp'?['sit-exit']:action==='putDown'?[]:['roll'];
+    const needed=action==='slide'?['slide-start','slide-loop','slide-exit']:action==='pickup'?['pickup','carry-walk']:action==='sit'?['sit-enter','sit-idle','sit-exit']:action==='standUp'?['sit-exit']:action==='putDown'?[]:['roll'];
     const missing=needed.find(id=>!this.availableClips.has(id));
     const reason=this.sim.isMounted?['MOUNTED','请先离开载具或坐骑']:missing?['ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`]:this.reason(action,targetId?this.targets.get(targetId):undefined);
     return {eligible:!reason,reason:reason?.[0]??'READY',message:reason?.[1]??'可执行'};
@@ -139,9 +139,11 @@ export class ActionSystem {
     return this.save({...request,status:'running',code:'STARTED',message:`${SKILL_DEFINITIONS.find(a=>a.id===request.action)!.label}：开始`,phase:this.active.phase});
   }
   cancel(requestId:string){
-    if(this.active?.requestId!==requestId)return this.status(requestId);
-    if(this.active.id==='slide'&&!this.clearHeight(ACTION_TUNING.standingHeightMeters))return {...this.status(requestId)!,code:'HEADROOM_BLOCKED',message:'低顶下需先移出，不能强制恢复站姿'};
-    if(this.active.id==='sit'||this.active.id==='standUp')return {...this.status(requestId)!,code:'ATOMIC_TRANSITION',message:'请等待坐姿过渡完成，再执行起身'};
+    const active=this.active;if(active?.requestId!==requestId)return this.status(requestId);
+    if(active.id==='slide'||active.id==='standUp'||active.id==='sit'&&active.phase!=='align'){
+      active.cancelRequested=true;
+      return this.save({...this.status(requestId)!,code:'CANCELLING',phase:'cancelling',message:'取消已请求，等待安全退出后释放动作资源'});
+    }
     this.finish('cancelled','CANCELLED','动作已取消');return this.status(requestId);
   }
   private finish(status:'completed'|'cancelled',code:string,message:string){
@@ -151,6 +153,17 @@ export class ActionSystem {
     this.active=null;this.pose=null;this.cooldown=ACTION_TUNING.cooldownSeconds;
     this.setHeight(ACTION_TUNING.standingHeightMeters);this.sim.velocity.set(0,0,0);this.sim.speed=0;
     this.sim.controller.enableAutostep(.27,.2,false);this.sim.controller.enableSnapToGround(.18);
+  }
+  private stepStandingExit(active:ActiveSkill):void{
+    const sim=this.sim;this.move(new Vector3());
+    if(!this.clearHeight(ACTION_TUNING.standingHeightMeters)){
+      active.elapsed-=DT;this.pose={key:'sit-idle',time:0,phase:'clearance'};sim.state='seated';sim.lastResult='头顶空间不足：保持占座，等待安全起身';return;
+    }
+    this.pose={key:'sit-exit',time:Math.min(active.elapsed,DURATIONS['sit-exit']!),phase:'sit-exit'};sim.state='stand-up';
+    if(active.elapsed>=DURATIONS['sit-exit']!){
+      this.targets.get(this.seated!)!.state='available';this.content.release(this.seated!,this);this.seated=null;
+      this.finish(active.cancelRequested?'cancelled':'completed',active.cancelRequested?'CANCELLED':'STANDING',active.cancelRequested?'已安全起身并取消动作':'已起身');
+    }
   }
   private setHeight(height:number){
     const half=Math.max(.06,height/2-RADIUS);
@@ -218,7 +231,9 @@ export class ActionSystem {
       return true;
     }
     active.elapsed+=DT;
-    if(active.id==='roll'){
+    if(active.id==='standUp'||active.id==='sit'&&active.phase==='cancel-exit'){
+      this.stepStandingExit(active);
+    }else if(active.id==='roll'){
       this.pose={key:'roll',time:Math.min(active.elapsed,DURATIONS.roll!),phase:'roll'};sim.state='roll';
       sim.controller.disableAutostep();
       const speed=2.7/DURATIONS.roll! * Math.PI/2*Math.sin(Math.PI*Math.min(1,active.elapsed/DURATIONS.roll!));
@@ -227,9 +242,11 @@ export class ActionSystem {
     }else if(active.id==='slide'){
       sim.controller.disableAutostep();
       const start=DURATIONS['slide-start']!,loopEnd=start+ACTION_TUNING.slideLoopSeconds;
+      if(active.cancelRequested&&active.phase!=='exit'&&this.clearHeight(ACTION_TUNING.standingHeightMeters)){active.phase='exit';active.elapsed=0;}
+      if(active.phase==='exit'&&!this.clearHeight(ACTION_TUNING.standingHeightMeters)){active.phase='clearance';active.elapsed=loopEnd;this.setHeight(ACTION_TUNING.slideHeightMeters);}
       if(active.phase==='exit'){
         this.pose={key:'slide-exit',time:Math.min(active.elapsed,ACTION_TUNING.slideExitDurationSeconds),phase:'exit'};this.setHeight(ACTION_TUNING.standingHeightMeters);this.move(new Vector3());
-        if(active.elapsed>=ACTION_TUNING.slideExitDurationSeconds)this.finish('completed','FINISHED','滑铲结束');
+        if(active.elapsed>=ACTION_TUNING.slideExitDurationSeconds)this.finish(active.cancelRequested?'cancelled':'completed',active.cancelRequested?'CANCELLED':'FINISHED',active.cancelRequested?'已安全退出滑铲并取消动作':'滑铲结束');
       }else{
         const t=active.elapsed;const height=t<.333?ACTION_TUNING.standingHeightMeters-(ACTION_TUNING.standingHeightMeters-ACTION_TUNING.slideHeightMeters)*Math.min(1,t/.333):ACTION_TUNING.slideHeightMeters;
         this.setHeight(height);this.pose={key:t<start?'slide-start':'slide-loop',time:t<start?t:(t-start)%2,phase:t<loopEnd?'slide':'clearance'};
@@ -250,12 +267,10 @@ export class ActionSystem {
       if(active.elapsed>=DURATIONS.pickup!)this.finish('completed','ATTACHED','已拾取：WASD 搬运，靠近台面 G 放下');
     }else if(active.id==='sit'){
       this.move(new Vector3());this.pose={key:'sit-enter',time:Math.min(active.elapsed,1.3),phase:'sit-enter'};sim.state='sit';
-      if(active.elapsed>=1.3){if(!this.content.commit(active.targetId!,this,active.requestId,'occupied')){this.finish('cancelled','TARGET_UNAVAILABLE','座位预约已失效');return true;}this.seated=active.targetId!;this.targets.get(this.seated)!.state='occupied';this.finish('completed','SEATED','已坐下：按 E 或空格起身');}
-    }else if(active.id==='standUp'){
-      this.move(new Vector3());this.pose={key:'sit-exit',time:Math.min(active.elapsed,DURATIONS['sit-exit']!),phase:'sit-exit'};sim.state='stand-up';
-      if(active.elapsed>=DURATIONS['sit-exit']!){this.targets.get(this.seated!)!.state='available';this.content.release(this.seated!,this);this.seated=null;this.finish('completed','STANDING','已起身');}
+      if(active.elapsed>=1.3){if(!this.content.commit(active.targetId!,this,active.requestId,'occupied')){this.finish('cancelled','TARGET_UNAVAILABLE','座位预约已失效');return true;}this.seated=active.targetId!;this.targets.get(this.seated)!.state='occupied';if(active.cancelRequested){active.phase='cancel-exit';active.elapsed=0;}else this.finish('completed','SEATED','已坐下：按 E 或空格起身');}
+
     }
-    if(this.active){const result=this.results.get(active.requestId);if(result)result.phase=this.pose?.phase??active.phase;}
+    if(this.active){const result=this.results.get(active.requestId);if(result)result.phase=active.cancelRequested?'cancelling':this.pose?.phase??active.phase;}
     return true;
   }
   syncCarried(position?:Vector3){

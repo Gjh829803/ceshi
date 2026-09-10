@@ -95,3 +95,26 @@ it('keeps a seat occupied until its owner stands up, including an explicit stand
   expect(a.teleportTo(new Vector3(0,.04,-2),0)).toBe(true);
   expect(b.skills.request({requestId:'next-seat',action:'sit',targetId:'seat'}).status).toBe('running');
 });
+
+it('cancels a seated entry by completing a safe exit before releasing the seat',()=>{
+  const q=setup(),a=actor(q,3);step(q,[a],30);
+  expect(a.skills.request({requestId:'sit-cancel',action:'sit',targetId:'seat'}).status).toBe('running');step(q,[a],20);
+  expect(a.skills.cancel('sit-cancel')).toMatchObject({status:'running',code:'CANCELLING'});
+  step(q,[a],75);expect(a.skills.status('sit-cancel')?.status).toBe('running');expect(q.interactions.unavailable('seat')).toBe(true);
+  step(q,[a],90);expect(a.skills.status('sit-cancel')).toMatchObject({status:'cancelled',action:'sit'});
+  expect(a.skills.seated).toBeNull();expect(q.interactions.unavailable('seat')).toBe(false);expect(a.capsuleHeight).toBeCloseTo(1.68);
+});
+
+it('preserves a gripped item when cancelling the rest of its pickup animation',()=>{
+  const q=setup(),a=actor(q,0);step(q,[a],30);
+  expect(a.skills.request({requestId:'gripped',action:'pickup',targetId:'cup'}).status).toBe('running');step(q,[a],25);
+  expect(a.skills.carrying).toBe('cup');expect(a.skills.cancel('gripped')?.status).toBe('cancelled');
+  expect(a.skills.carrying).toBe('cup');expect(q.interactions.unavailable('cup')).toBe(true);expect(q.interactions.targets.get('cup')!.body!.isEnabled()).toBe(false);
+});
+
+it('finishes a stand-up exit before acknowledging its cancellation',()=>{
+  const q=setup(),a=actor(q,3);step(q,[a],30);a.skills.request({requestId:'sit',action:'sit',targetId:'seat'});step(q,[a],180);
+  expect(a.skills.request({requestId:'exit',action:'standUp'}).status).toBe('running');step(q,[a],15);
+  expect(a.skills.cancel('exit')?.status).toBe('running');expect(a.skills.seated).toBe('seat');
+  step(q,[a],90);expect(a.skills.status('exit')).toMatchObject({status:'cancelled',action:'standUp'});expect(a.skills.seated).toBeNull();expect(q.interactions.unavailable('seat')).toBe(false);
+});

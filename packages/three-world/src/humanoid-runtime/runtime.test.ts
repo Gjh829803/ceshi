@@ -266,6 +266,29 @@ describe('SDK humanoid runtime',()=>{
    world.step({humanoid:{...emptyInput(),forward:1}},420);expect(world.operations.get(start.operationId).status).toBe('succeeded');expect(runtime.simulation.controlledActor.controller!.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(8.25);
   }finally{world.dispose();}
  });
+ it('keeps cancelled slide operations pending under a low roof and resolves only after safe exit',async()=>{
+  const world=await fixture();try{const runtime=world.humanoid!;
+   runtime.switchMap({...map,boxes:[map.boxes[0]!,{id:'low-roof',position:[0,1.35,5.5],size:[4,.3,5]}]});
+   const controller=runtime.simulation.controlledActor.controller;controller.setAvailableClips(new Set(['slide-start','slide-loop','slide-exit']),[]);
+   world.step({},30);world.step({humanoid:{...emptyInput(),forward:1,boost:true}},30);
+   const start=await world.execute({type:'humanoid.perform-action',request:{requestId:'cancel-slide',action:'slide'}});if(start.status!=='accepted')throw new Error('Slide was not accepted');
+   world.step({},180);let resolved=false;const wait=world.operations.wait(start.operationId).then(result=>{resolved=true;return result;});
+   expect(()=>world.operations.cancel(start.operationId)).not.toThrow();expect(world.operations.get(start.operationId)).toMatchObject({status:'running',phase:'cancelling'});
+   const tick=world.simulationTick;world.operations.cancel(start.operationId);world.snapshot();await Promise.resolve();expect(resolved).toBe(false);expect(world.simulationTick).toBe(tick);
+   world.step({},60);expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);expect(world.operations.get(start.operationId).status).toBe('running');
+   world.step({humanoid:{...emptyInput(),forward:1}},420);expect(await wait).toMatchObject({status:'cancelled'});expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);
+  }finally{world.dispose();}
+ });
+ it('rechecks slide exit clearance when a ceiling enters after cancellation started',async()=>{
+  const world=await fixture();try{const runtime=world.humanoid!,controller=runtime.simulation.controlledActor.controller;
+   controller.setAvailableClips(new Set(['slide-start','slide-loop','slide-exit']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),forward:1,boost:true}},30);
+   const result=await world.execute({type:'humanoid.perform-action',request:{requestId:'moving-roof',action:'slide'}});if(result.status!=='accepted')throw new Error('Slide unavailable');
+   world.operations.cancel(result.operationId);world.step({},1);expect(controller.skills.active?.phase).toBe('exit');
+   const p=controller.position,physics=runtime.environment.world,roof=physics.createCollider(RAPIER.ColliderDesc.cuboid(2,.15,2).setTranslation(p.x,p.y+1.35,p.z));physics.updateSceneQueries();
+   world.step({},90);expect(world.operations.get(result.operationId).status).toBe('running');expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.slideHeightMeters);
+   physics.removeCollider(roof,true);world.step({},90);expect(world.operations.get(result.operationId).status).toBe('cancelled');expect(controller.capsuleHeight).toBeCloseTo(ACTION_TUNING.standingHeightMeters);
+  }finally{world.dispose();}
+ });
  it('rejects mounted skills immediately and shares rejection conditions with the capability query',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll','slide-start','slide-loop','slide-exit']),[]);world.step({},30);
    expect(runtime.characterCapabilities().find(c=>c.id==='slide')).toMatchObject({eligible:false,reason:'SPEED_TOO_LOW',parameters:{minimumSpeedMetersPerSecond:ACTION_TUNING.slideMinimumSpeedMetersPerSecond}});
@@ -282,7 +305,7 @@ describe('SDK humanoid runtime',()=>{
  it('returns authored approach anchors and exactly the eligibility used by target execution',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
    runtime.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',position:[5,.5,5],approach:[5,.03,4],yaw:.4}]});
-   runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle','sit-exit']),[]);world.step({},30);
    const before=world.getEntityState('player').positionWorldMetersXYZ,target=runtime.snapshot().interactionTargets[0]!;
    expect(target).toMatchObject({id:'seat',approachPositionWorldMetersXYZ:[5,.03,4],facingYawRadians:.4,eligible:false,reason:'OUT_OF_REACH'});
    const result=await world.execute({type:'humanoid.perform-action',request:{requestId:'distant-seat',action:'sit',targetId:'seat'}});
@@ -293,7 +316,7 @@ describe('SDK humanoid runtime',()=>{
  it('moves seat anchors with a compound prop and rejects a toppled seat',async()=>{
   const world=await fixture();try{const r=world.humanoid!;
    r.switchMap({...map,boxes:[map.boxes[0]!,{id:'chair-shape',position:[5,.5,5],size:[1,1,1],rigidGroup:{id:'chair',massKg:8}}],interactions:[{id:'chair-seat',label:'Seat',kind:'seat',position:[5,1,5],approach:[5,0,4],yaw:0,colliderIds:['chair-shape']}]});
-   r.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle']),[]);world.step({},30);
+   r.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle','sit-exit']),[]);world.step({},30);
    const body=r.environment.colliderForId('chair-shape')!.parent()!;body.setTranslation({x:8,y:.5,z:5},true);body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2),true);world.step({},1);
    const target=r.snapshot().interactionTargets[0]!;expect(target.positionWorldMetersXYZ[0]).toBeGreaterThan(7);expect(target.reason).toBe('SEAT_UNSTABLE');
    r.environment.resetProps();world.step({},1);expect(r.snapshot().interactionTargets[0]!.positionWorldMetersXYZ[0]).toBeCloseTo(5,2);
@@ -561,11 +584,11 @@ describe('SDK humanoid runtime',()=>{
    expect(world.camera.position.z).toBeGreaterThan(-1.7);
   }finally{world.dispose();}
  });
- it('retires map-owned operations on replacement and preserves a refused cancellation until reset',async()=>{
+ it('retires map-owned operations on replacement and keeps safe cancellation pending until reset',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);world.step({},30);
    const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:'map-roll',action:'roll'}});if(receipt.status!=='accepted')throw new Error('roll unavailable');
    const cancel=vi.spyOn(runtime.simulation.controlledActor.controller!.skills,'cancel').mockReturnValue({requestId:'map-roll',action:'roll',status:'running',code:'HEADROOM_BLOCKED',message:'cannot cancel safely'});
-   expect(()=>world.operations.cancel(receipt.operationId)).toThrow('cannot cancel safely');expect(world.operations.get(receipt.operationId).status).toBe('running');await world.reset();expect(world.operations.get(receipt.operationId).status).toBe('cancelled');cancel.mockRestore();runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
+   expect(()=>world.operations.cancel(receipt.operationId)).not.toThrow();expect(world.operations.get(receipt.operationId)).toMatchObject({status:'running',phase:'cancelling'});await world.reset();expect(world.operations.get(receipt.operationId).status).toBe('cancelled');cancel.mockRestore();runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
    world.step({},30);const next=await world.execute({type:'humanoid.perform-action',request:{requestId:'replace-roll',action:'roll'}});if(next.status!=='accepted')throw new Error('roll unavailable');runtime.switchMap({...map,id:'new-map'});expect(world.operations.get(next.operationId).status).toBe('cancelled');expect(world.snapshot().humanoid?.character.activeAction).toBeNull();
   }finally{world.dispose();}
  });
