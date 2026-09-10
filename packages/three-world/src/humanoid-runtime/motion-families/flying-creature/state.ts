@@ -1,4 +1,4 @@
-import type {MovementSettings} from '../../../config/control';
+import type { MovementSettings } from '../../../config/control';
 /** 原生飞行生物状态和标定；实例独立，单位为米、秒、弧度。 */
 export const FLYING_CREATURE_SYSTEM_ID_V1 = "creature-flight";
 export const FLYING_CREATURE_KERNEL_REF_V1 = "worldkit://motion-kernel/creature-flight@1";

@@ -1,12 +1,12 @@
 import {AIRCRAFT} from '../config/aircraft';
-import type {SimulatedWheel} from './wheel-physics';
-import {copyUnicycleState,blendUnicycleState,type UnicycleState} from './unicycle';
-import {copySubmersibleState,type SubmersibleState} from './submersible';
-import {copyJetSkiState,type JetSkiState} from './jetski';
-import type {RaftState} from './raft';
-import type {KayakState} from './kayak';
-import {copyAtvState,type AtvState} from './atv';
-import type {TankState} from './tank';
+import type {SimulatedWheel} from './motion-families/ground-vehicle/wheel-physics';
+import {copyUnicycleState,blendUnicycleState,type UnicycleState} from './motion-families/ground-vehicle/unicycle';
+import {copySubmersibleState,type SubmersibleState} from './motion-families/underwater/submersible';
+import {copyJetSkiState,type JetSkiState} from './motion-families/surface-vessel/jetski';
+import type {RaftState} from './motion-families/surface-vessel/raft';
+import type {KayakState} from './motion-families/surface-vessel/paddling';
+import {copyAtvState,type AtvState} from './motion-families/ground-vehicle/atv';
+import type {TankState} from './motion-families/ground-vehicle/tank';
 import { Quaternion, Vector3 } from 'three';
 import { Simulation, angleDelta } from './simulation';
 import type { CreatureState } from './creatures/types';
@@ -32,12 +32,12 @@ function read(sim:Simulation,player:MotionPose,vehicles:MotionPose[]){
   player.position.copy(sim.player.position);player.velocity.copy(sim.player.velocity);player.yaw=sim.player.yaw;player.rotation.set(0,Math.sin(player.yaw/2),0,Math.cos(player.yaw/2));player.speed=sim.player.velocity.length();
   player.humanoid=readHumanoid(sim.humanoid);player.cameraHeight=sim.humanoid?(sim.humanoid.swimming?1.4:sim.humanoid.capsuleHeight*.655):1.25;
   if(player.humanoid){player.humanoid.mounted=sim.vehicle?(sim.vehicle.spec.characterPose??'drive'):null;
-    if(sim.vehicle?.kayak)player.humanoid.kayakPose={...sim.vehicle.kayak};
-    if(sim.vehicle?.jetski)player.humanoid.atvSteeringAngle=sim.vehicle.jetski.steeringAngle;
-    if(sim.vehicle?.unicycle)player.humanoid.unicyclePose=copyUnicycleState(sim.vehicle.unicycle);
-    if(sim.vehicle?.atv)player.humanoid.atvSteeringAngle=sim.vehicle.atv.steeringAngle;
-    if(sim.vehicle?.sled)player.humanoid.sledPose={...sim.vehicle.sled};}
-  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.flyingCreature=v.flyingCreature?{...v.flyingCreature}:undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.wheelPhysics?.wheels.map(w=>({...w}))??v.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.creature);p.unicycle=copyUnicycleState(v.unicycle);p.submersible=copySubmersibleState(v.submersible);p.raft=v.raft?{...v.raft}:undefined;p.jetski=copyJetSkiState(v.jetski);p.atv=copyAtvState(v.atv);p.kayak=v.kayak?{...v.kayak}:undefined;p.tank=v.tank?{...v.tank}:undefined;});
+    if(sim.vehicle?.motion.kayak)player.humanoid.kayakPose={...sim.vehicle.motion.kayak};
+    if(sim.vehicle?.motion.jetski)player.humanoid.atvSteeringAngle=sim.vehicle.motion.jetski.steeringAngle;
+    if(sim.vehicle?.motion.unicycle)player.humanoid.unicyclePose=copyUnicycleState(sim.vehicle.motion.unicycle);
+    if(sim.vehicle?.motion.atv)player.humanoid.atvSteeringAngle=sim.vehicle.motion.atv.steeringAngle;
+    if(sim.vehicle?.motion.sled)player.humanoid.sledPose={...sim.vehicle.motion.sled};}
+  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.flyingCreature=v.motion.flyingCreature?{...v.motion.flyingCreature}:undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.motion.wheelPhysics?.wheels.map(w=>({...w}))??v.motion.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.motion.creature);p.unicycle=copyUnicycleState(v.motion.unicycle);p.submersible=copySubmersibleState(v.motion.submersible);p.raft=v.motion.raft?{...v.motion.raft}:undefined;p.jetski=copyJetSkiState(v.motion.jetski);p.atv=copyAtvState(v.motion.atv);p.kayak=v.motion.kayak?{...v.motion.kayak}:undefined;p.tank=v.motion.tank?{...v.motion.tank}:undefined;});
 }
 function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flyingCreature=b.flyingCreature?{...b.flyingCreature}:undefined;
   if(out.flyingCreature&&a.flyingCreature&&b.flyingCreature){

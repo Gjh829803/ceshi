@@ -1,17 +1,17 @@
-import {UNICYCLE_SPEC} from './unicycle';
-import {SUBMERSIBLE_SPEC} from './submersible';
-import {CANOE_SPEC} from './canoe';
-import {KAYAK_SPEC} from './kayak';
-import {RAFT_SPEC} from './raft';
-import {JETSKI_SPEC} from './jetski';
-import {ATV_SPEC} from './atv';
+import { humanoid } from '@worldkit/three';
+import { ATV_SPEC } from './atv';
+import { BUS_SPEC } from './bus';
+import { CANOE_SPEC } from './canoe';
+import { CREATURE_SPECS } from './creatures/specs';
+import { JETSKI_SPEC } from './jetski';
+import { KAYAK_SPEC } from './kayak';
+import { RAFT_SPEC } from './raft';
+import { roadSeatAnchor } from './road-seating';
 import { SKI_SPEC } from './ski';
 import { SLED_SPEC } from './sled';
+import { SUBMERSIBLE_SPEC } from './submersible';
 import { TANK_SPEC } from './tank';
-import { BUS_SPEC } from './bus';
-import {humanoid} from '@worldkit/three';
-import { CREATURE_SPECS } from './creatures/specs';
-import { roadSeatAnchor } from './road-seating';
+import { UNICYCLE_SPEC } from './unicycle';
 export type Mode = humanoid.VehicleSpec['mode'];
 export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
@@ -69,12 +69,6 @@ for(const spec of SPECS)if(spec.mode==='motorcycle'){
   spec.speed=150/3.6;spec.maxSpeed=180/3.6;spec.reverseSpeed=2;
 }
 SPECS.push(...CREATURE_SPECS,UNICYCLE_SPEC,SUBMERSIBLE_SPEC,CANOE_SPEC,KAYAK_SPEC,RAFT_SPEC,JETSKI_SPEC,ATV_SPEC,SKI_SPEC,SLED_SPEC,TANK_SPEC,BUS_SPEC);
-// Export the actual physical owner for every preset, including unoccupied craft.
-// The SDK converts these motion controls to forces in its existing physics world.
-for(const spec of SPECS)if(!spec.wheelPhysics&&!spec.bodyPhysics&&spec.mode!=='plane'){
-  const mass:{[mode:string]:number}={skateboard:90,hover:450,boat:900,submarine:3000,glider:180,plane:1200,spacecraft:2000,mount:550,carriage:1000,dragon:1800};
-  spec.bodyPhysics={kind:'motion',mass:mass[spec.mode]!,centerOfMassHeight:Math.max(0,spec.envelope.offset[1]*.5),friction:0,restitution:.08};
-}
 export const START: [number,number,number] = [-24,0,55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;

@@ -1,8 +1,8 @@
 import * as T from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import type {MotionPose} from '../../presentation';
-import type {FlyingCreatureStateV1} from './state';
-import {CreatureFlame} from './flame';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { MotionPose } from '../../presentation';
+import { CreatureFlame } from './flame';
+import type { FlyingCreatureStateV1 } from './state';
 
 export interface FlyingCreatureVisualResources {dragonUrl:string;flameTextureUrl:string}
 /** D01 的米制模型适配。运动、显示采样和资源释放均由现有 HumanoidRuntime 调用。 */

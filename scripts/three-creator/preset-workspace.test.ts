@@ -38,7 +38,7 @@ describe('player workspace configuration',()=>{
     // Keep the same distance requirement, with a bounded six-second driving window.
     for(let frame=0;frame<360&&sim.vehicle!.position.distanceTo(origin)<=15;frame++)world.step({humanoid:{...humanoid.emptyInput(),forward:1}},1);
     expect(sim.vehicle!.position.distanceTo(origin)).toBeGreaterThan(15);
-    expect(sim.vehicle!.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
+    expect(sim.vehicle!.motion.wheelPhysics!.wheels.some(w=>w.contact&&w.load>0)).toBe(true);
     // Space remains a brake at parking speed; S intentionally becomes reverse below 1 m/s.
     const speed=sim.vehicle!.speed;world.step({humanoid:{...humanoid.emptyInput(),brake:true}},30);
     expect(Math.abs(sim.vehicle!.speed)).toBeLessThan(speed);

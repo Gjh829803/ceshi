@@ -1,8 +1,8 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
-import { probeHumanoidCamera } from '../camera-queries';
+import { Euler,Quaternion,Vector3 } from 'three';
 import type { Vec3 } from '../../contracts';
-import { Euler, Quaternion, Vector3 } from 'three';
+import { probeHumanoidCamera } from '../camera-queries';
 import type { VehicleSpec } from '../config';
 import type { EnvironmentDefinition } from './types';
 
@@ -393,11 +393,7 @@ export class EnvironmentQueries {
     const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,{x:0,y:-1,z:0}),maxDrop+step,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
     return hit&&hit.normal.y>.25?{height:origin.y-hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)}:null;
   }
-  overlaps(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity){
-    this.assertLive();const c=center(position,body,rotation),s=shape(body);
-    return !!this.world.intersectionWithShape(c,rotation,s,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter)
-      ||this.motionColliders.some(other=>{const hit=s.contactShape(c,rotation,other.shape,other.translation(),other.rotation(),0);return !!hit&&hit.distance<0;});
-  }
+  overlaps(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity){this.assertLive();return !!this.world.intersectionWithShape(center(position,body,rotation),rotation,shape(body),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);}
   safeSpawn(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity):Vector3|null {
     const p=position.clone();
     const floor=this.support(p,5,.45);
@@ -410,7 +406,6 @@ export class EnvironmentQueries {
   }
   move(position:Vector3,delta:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity,step=0,push?:{massKg:number;dt:number}):MoveResult {
     this.assertLive();
-    if(this.suppressContactImpulses)push=undefined;
     const c=center(position,body,rotation);
     const descriptor=body.kind==='capsule'?RAPIER.ColliderDesc.capsule(body.height/2-body.radius,body.radius):RAPIER.ColliderDesc.cuboid(...body.halfExtents);
     const proxy=this.world.createCollider(descriptor.setTranslation(c.x,c.y,c.z).setRotation(rotation));
@@ -426,25 +421,8 @@ export class EnvironmentQueries {
     const p=position.clone().add(new Vector3(movement.x,movement.y,movement.z));
     const normals:Vector3[]=[],contacts:{point:Vector3;normal:Vector3}[]=[];
     for(let n=0;n<this.controller.numComputedCollisions();n++){const hit=this.controller.computedCollision(n);if(hit){const normal=new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z);normals.push(normal);contacts.push({normal,point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z)});}}
-    let grounded=this.controller.computedGrounded();
+    const grounded=this.controller.computedGrounded();
     this.world.removeCollider(proxy,false);
-    // Rapier 0.20 refreshes its broadphase at the physics step. New or moved
-    // actor proxies must also be swept at their current pose on the first tick;
-    // use Rapier's own narrowphase, without stepping the world to refresh queries.
-    const travelDelta=p.clone().sub(position),length=travelDelta.length();
-    if(length>1e-9&&this.motionColliders.length){
-      const s=shape(body);let fraction=1;
-      for(const other of this.motionColliders){
-        const hit=s.castShape(c,rotation,travelDelta,other.shape,other.translation(),other.rotation(),{x:0,y:0,z:0},0,1,false);
-        if(!hit||hit.time_of_impact>=fraction)continue;
-        const r=other.rotation();
-        const normal=new Vector3(hit.normal2.x,hit.normal2.y,hit.normal2.z).applyQuaternion(new Quaternion(r.x,r.y,r.z,r.w));
-        if(travelDelta.dot(normal)>=-1e-8)continue;
-        fraction=Math.max(0,hit.time_of_impact-this.controller.offset()/length);
-        normals.push(normal);if(normal.y>=.5&&delta.y<=0)grounded=true;
-      }
-      if(fraction<1)p.copy(position).addScaledVector(travelDelta,fraction);
-    }
     // Short stair treads can be narrower than a capsule's diameter. Try an explicit
     // up / across / down sweep, with full headroom checks, when autostep stalls.
     const horizontal=new Vector3(delta.x,0,delta.z),travel=new Vector3(p.x-position.x,0,p.z-position.z);

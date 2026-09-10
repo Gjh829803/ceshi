@@ -5,7 +5,32 @@ import {SPECS} from '../../../../../shared/preset-content/config';
 import {getMap} from '../../../../../shared/preset-content/environment/maps';
 import {createVehicle,emptyInput,stepVehicle} from '../simulation';
 import {EnvironmentQueries,initEnvironmentQueries} from '../environment/queries';
+import {surfaceVesselFamily} from './surface-vessel/family';
+import {groundVehicleFamily} from './ground-vehicle/family';
 beforeAll(initEnvironmentQueries);
+it('owns each instance state inside its family and rejects a foreign propulsion config',()=>{
+ const boat=SPECS.find(s=>s.id==='kayak')!,tank=SPECS.find(s=>s.id==='tank')!,plane=SPECS.find(s=>s.id==='plane')!;
+ const a=createVehicle(boat),b=createVehicle(boat),air=createVehicle(plane);
+ expect(a.motion.family).toBe('surface-vessel');expect(a.motion.kayak).toBeDefined();expect(a.motion.body).toBeDefined();
+ expect(a).not.toHaveProperty('bodyPhysics');expect(a).not.toHaveProperty('kayak');
+ expect(air.motion.family).toBe('aircraft');expect(air.motion.aircraft).toBeDefined();expect(air.motion.body).toBeUndefined();
+ a.motion.kayak!.phase=12;a.motion.body!.angularVelocity.y=4;a.spec.bodyPhysics!.mass=999;
+ expect(b.motion.kayak!.phase).toBe(0);expect(b.motion.body!.angularVelocity.y).toBe(0);expect(b.spec.bodyPhysics!.mass).toBe(105);
+ expect(air.motion.aircraft!.stalled).toBe(false);
+ expect(()=>createVehicle({...boat,bodyPhysics:tank.bodyPhysics!})).toThrow('MOTION_PHYSICS_FAMILY_MISMATCH:surface-vessel');
+ expect(()=>createVehicle({...tank,bodyPhysics:boat.bodyPhysics!})).toThrow('MOTION_PHYSICS_FAMILY_MISMATCH:ground-vehicle');
+ expect(()=>createVehicle({...plane,bodyPhysics:boat.bodyPhysics!})).toThrow('AIRCRAFT_PHYSICS_OWNER_INVALID');
+});
+it('rejects cross-family stepping before mutating state or registering a rigid body',()=>{
+ const aircraft=createVehicle(SPECS.find(s=>s.id==='plane')!),boat=createVehicle(SPECS.find(s=>s.id==='kayak')!);
+ const q=new EnvironmentQueries(getMap('aircraft-training')),before=aircraft.position.clone();
+ try{
+  expect(()=>surfaceVesselFamily.step!(aircraft,{...emptyInput(),forward:1},1/60,0,q)).toThrow('MOTION_PHYSICS_OWNER_MISMATCH');
+  expect(()=>groundVehicleFamily.step!(boat,{...emptyInput(),forward:1},1/60,0,q)).toThrow('MOTION_PHYSICS_OWNER_MISMATCH');
+  expect(aircraft.position.equals(before)).toBe(true);expect(aircraft.throttle).toBe(0);expect(boat.motion.kayak!.phase).toBe(0);
+  q.stepPhysics(1/60);expect(aircraft.position.equals(before)).toBe(true);
+ }finally{q.dispose();}
+});
 it('assigns every current mode exactly once to seven categories and keeps catalog reads isolated',()=>{
  const families=listMotionFamilies();expect(families.map(f=>f.id)).toEqual(['human','ground-vehicle','surface-vessel','aircraft','flying-creature','underwater','space']);
  for(const spec of SPECS)expect(families.filter(f=>f.modes.includes(spec.mode))).toHaveLength(1);
@@ -28,6 +53,6 @@ it('keeps two aircraft states and unrelated vehicle configuration independent du
  const plane=SPECS.find(s=>s.id==='plane')!,a=createVehicle(plane),b=createVehicle(plane),car=createVehicle(SPECS.find(s=>s.id==='rover')!);
  const q=new EnvironmentQueries(getMap('aircraft-training')),before=b.position.clone(),originalSpeed=car.spec.speed;
  try{a.spec.speed=48;for(let tick=0;tick<120;tick++){stepVehicle(a,{...emptyInput(),boost:true},1/60,tick/60,q);q.stepPhysics(1/60);}
- expect(a.aircraft).not.toBe(b.aircraft);expect(a.aircraft!.wheels).not.toBe(b.aircraft!.wheels);expect(a.velocity.length()).toBeGreaterThan(1);expect(b.position.equals(before)).toBe(true);expect(b.throttle).toBe(0);expect(car.spec.speed).toBe(originalSpeed);
+ expect(a.motion.aircraft).not.toBe(b.motion.aircraft);expect(a.motion.aircraft!.wheels).not.toBe(b.motion.aircraft!.wheels);expect(a.velocity.length()).toBeGreaterThan(1);expect(b.position.equals(before)).toBe(true);expect(b.throttle).toBe(0);expect(car.spec.speed).toBe(originalSpeed);
  }finally{q.dispose();}
 });

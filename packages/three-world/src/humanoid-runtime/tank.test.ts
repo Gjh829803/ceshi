@@ -31,14 +31,14 @@ it('accelerates, boosts, brakes before reversing and holds still with no input',
 it('counter-rotates tracks during a pivot, while turret and elevation have independent inputs and stops',()=>{
  const {q,v,run}=fixture();try{
   run(1,{steer:1});expect(v.position.length()).toBeLessThan(.1);expect(v.yaw).toBeLessThan(-.3);
-  expect(v.tank!.leftTravel).toBeGreaterThan(.5);expect(v.tank!.rightTravel).toBeLessThan(-.5);
+  expect(v.motion.tank!.leftTravel).toBeGreaterThan(.5);expect(v.motion.tank!.rightTravel).toBeLessThan(-.5);
   run(.5);const yaw=v.yaw;run(2,{roll:1,pitch:-1});expect(Math.abs(v.yaw-yaw)).toBeLessThan(.06);
-  expect(v.tank!.turretYaw).toBeCloseTo(-1.3,3);expect(v.tank!.gunElevation).toBe(TANK_CONTROLS.maximumGunRadians);
-  const turret=v.tank!.turretYaw;run(1);expect(v.tank!.turretYaw).toBe(turret);
-  run(3,{pitch:1});expect(v.tank!.gunElevation).toBe(TANK_CONTROLS.minimumGunRadians);
-  const model=buildTankModel();sampleTankVisual(model,v.tank!);const locals=model.children.map(n=>n.quaternion.clone());sampleTankVisual(model,v.tank!);
+  expect(v.motion.tank!.turretYaw).toBeCloseTo(-1.3,3);expect(v.motion.tank!.gunElevation).toBe(TANK_CONTROLS.maximumGunRadians);
+  const turret=v.motion.tank!.turretYaw;run(1);expect(v.motion.tank!.turretYaw).toBe(turret);
+  run(3,{pitch:1});expect(v.motion.tank!.gunElevation).toBe(TANK_CONTROLS.minimumGunRadians);
+  const model=buildTankModel();sampleTankVisual(model,v.motion.tank!);const locals=model.children.map(n=>n.quaternion.clone());sampleTankVisual(model,v.motion.tank!);
   model.children.forEach((n,i)=>expect(n.quaternion.angleTo(locals[i]!)).toBeLessThan(1e-7));
-  sampleTankVisual(model,createVehicle(TANK_SPEC).tank!);expect(model.getObjectByName('tank.turret')!.rotation.y).toBe(0);
+  sampleTankVisual(model,createVehicle(TANK_SPEC).motion.tank!);expect(model.getObjectByName('tank.turret')!.rotation.y).toBe(0);
  }finally{q.dispose();}
 });
 it('sweeps the barrel before the hull reaches a wall, and rejects obstructed turret rotation',()=>{
@@ -51,7 +51,7 @@ it('sweeps the barrel before the hull reaches a wall, and rejects obstructed tur
   // Additional test wall outside the hull, inside the turret's swept radius.
   const obstacle=new EnvironmentQueries({...side.q.map,boxes:[...side.q.map.boxes,{id:'side',position:[5.1,3.5,-1],size:[.15,3,14]}]});
   try{for(let i=0;i<180;i++)stepVehicle(side.v,{...emptyInput(),roll:-1},1/60,i/60,obstacle);
-   expect(side.v.tank!.turretYaw).toBeLessThan(Math.PI/2);expect(side.v.tank!.articulationBlocked).toBe(true);
+   expect(side.v.motion.tank!.turretYaw).toBeLessThan(Math.PI/2);expect(side.v.motion.tank!.articulationBlocked).toBe(true);
   }finally{obstacle.dispose();}
  }finally{side.q.dispose();}
 });
@@ -89,4 +89,4 @@ it('keeps the full original rider inside the cabin with fixed hand/foot contact,
  }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15_000);
 
-function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].motion.wheelPhysics||args[0].motion.body)args[4].stepPhysics(args[2]);}

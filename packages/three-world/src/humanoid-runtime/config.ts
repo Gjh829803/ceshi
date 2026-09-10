@@ -1,11 +1,10 @@
-import type {WheelPhysicsConfig} from './wheel-physics';
+import {familyImpactMass} from './motion-families/registry';
+import type {WheelPhysicsConfig} from './motion-families/ground-vehicle/wheel-physics';
 import type {BodyPhysicsConfig} from './vehicle-dynamics';
 export type Mode = 'wheeled' | 'bus' | 'tank' | 'motorcycle' | 'unicycle' | 'skateboard' | 'sled' | 'ski' | 'hover' | 'paddled_boat' | 'boat' | 'submarine' | 'glider' | 'plane' | 'spacecraft' | 'mount' | 'carriage' | 'dragon';
 export type VehicleArchetype = 'unicycle' | 'canoe' | 'raft' | 'jetski' | 'atv' | 'rover' | 'racer' | 'bus' | 'tank' | 'motorcycle' | 'skateboard' | 'sled' | 'ski' | 'hover' | 'kayak' | 'boat' | 'submarine' | 'glider' | 'plane' | 'spacecraft' | 'horse' | 'carriage' | 'dragon';
 /** 控制器载具的接触等效质量（含驾驶员），用于推动动态物品，不改变原有操控模型。 */
-export function vehicleImpactMass(spec:VehicleSpec):number {
-  return spec.wheelPhysics?.mass??spec.bodyPhysics?.mass??({bus:11000,tank:30000,sled:100,ski:85,paddled_boat:110,wheeled:1600,motorcycle:260,unicycle:90,skateboard:90,hover:450,boat:900,submarine:3000,glider:180,plane:1200,spacecraft:2000,mount:550,carriage:1000,dragon:1800}[spec.mode]);
-}
+export function vehicleImpactMass(spec:VehicleSpec):number{return familyImpactMass(spec);}
 export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, number]; offset: [number, number, number] }
 import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {

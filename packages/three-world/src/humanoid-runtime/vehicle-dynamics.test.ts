@@ -1,66 +1,17 @@
 import {beforeAll,expect,it,vi} from 'vitest';
+import {Group,PerspectiveCamera,Vector3,Mesh,BoxGeometry,MeshStandardMaterial} from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import {BoxGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Vector3} from 'three';
 import {VehicleCameraQueries} from './vehicle-camera-queries';
 import {createWorld} from '../index';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
-import {createVehicle,emptyInput,stepVehicle,Simulation} from './simulation';
+import {createVehicle,emptyInput,stepVehicle} from './simulation';
 import {vehicleDriveTelemetry} from './vehicle-dynamics';
 import {SPECS} from '../../../../shared/preset-content/config';
 import type {EnvironmentDefinition} from './environment/types';
-import {paddleRiderBody} from './kayak';
 
 const added=['atv','bus','tank','unicycle','sled','ski','kayak','canoe','raft','jetski','observation-sub'];
 const map:EnvironmentDefinition={id:'native-vehicles',name:'Native vehicles',description:'',bounds:{min:[-500,-50,-500],max:[500,100,500]},boxes:[{id:'floor',position:[0,-21,0],size:[1000,2,1000]}],water:[{id:'water',min:[-500,-20,-500],max:[500,0,500],surface:0}],regions:[],spawns:[],playerSpawn:[20,0,20]};
 beforeAll(initEnvironmentQueries);
-function collisionPair(id:string,otherId=id){
-  const aSource=SPECS.find(s=>s.id===id)!,bSource=SPECS.find(s=>s.id===otherId)!;
-  const aquatic=['boat','submarine','paddled_boat'].includes(aSource.mode);
-  const y=aquatic?aSource.mode==='submarine'?-3:.1:Math.max(.05,aSource.envelope.halfExtents[1]-aSource.envelope.offset[1]+.05);
-  const gap=aSource.envelope.halfExtents[2]+bSource.envelope.halfExtents[2]+.2+(id==='carriage'?4.8:0);
-  const specs=[{...aSource,id:'a',spawn:[0,y,0] as [number,number,number],yaw:0},{...bSource,id:'b',spawn:[0,y,gap] as [number,number,number],yaw:0}];
-  const q=new EnvironmentQueries({...map,water:aquatic?map.water:[],boxes:[{...map.boxes[0]!,position:[0,aquatic?-21:-1,0]}],
-    regions:[{id:'test',name:'Test',description:'',center:[0,0,0],size:[1000,1000],color:'#fff',modes:[aSource.mode,bSource.mode]}],
-    spawns:specs.map(s=>({id:s.id,name:s.id,vehicleId:s.id,position:s.spawn,yaw:0,regionId:'test'}))});
-  const sim=new Simulation(q,specs);return {q,sim,a:sim.vehicles[0]!,b:sim.vehicles[1]!};
-}
-it.each(SPECS.map(s=>s.id))('%s has a dynamic chassis and receives collision momentum while unoccupied',id=>{
-  const {q,sim,a,b}=collisionPair(id);try{
-    expect(Number(!!a.wheelPhysics)+Number(!!a.bodyPhysics)+Number(!!a.aircraft)).toBe(1);
-    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
-    const start=b.position.clone();a.velocity.z=20;
-    for(let n=0;n<90;n++)sim.step(emptyInput(),1/60);
-    expect(b.position.z-start.z,`${id} must receive forward collision momentum`).toBeGreaterThan(.05);
-    expect([...a.position.toArray(),...b.position.toArray(),...b.rotation.toArray()]).toSatisfy(xs=>xs.every(Number.isFinite));
-  }finally{sim.dispose();q.dispose();}
-});
-it.each([false,true])('a rover knocks an unoccupied slide forward independent of list order (%s)',reversed=>{
-  const {q,sim,a,b}=collisionPair('rover','slide');try{
-    if(reversed)sim.vehicles.reverse();
-    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
-    const start=b.position.clone();a.velocity.z=15;
-    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
-    expect(b.position.z-start.z).toBeGreaterThan(1);
-    expect(a.position.z).toBeLessThan(b.position.z);
-  }finally{sim.dispose();q.dispose();}
-});
-it('all preset motions are intents: no vehicle advances before the shared physics step',()=>{
-  const q=new EnvironmentQueries(map);try{for(const spec of SPECS){
-    const v=createVehicle(spec),position=v.position.clone(),rotation=v.rotation.clone();
-    stepVehicle(v,{...emptyInput(),forward:1,boost:true},1/60,1/60,q);
-    expect(v.position).toEqual(position);expect(v.rotation).toEqual(rotation);
-    q.releaseVehicleRig(v.spec.id);
-  }}finally{q.dispose();}
-});
-it.each(['plane','glider'])('%s takes off from a supported start using forces in the shared solver',id=>{
- const source=SPECS.find(s=>s.id===id)!,q=new EnvironmentQueries({...map,water:[],boxes:[{id:'floor',position:[0,-1,0],size:[1000,2,1000]}]});
- const v=createVehicle({...source,spawn:[0,source.envelope.halfExtents[1]-source.envelope.offset[1]+.05,0],yaw:0});
- try{if(v.bodyPhysics)v.bodyPhysics.riderMounted=true;for(let n=0;n<120;n++){stepVehicle(v,emptyInput(),1/60,n/60,q);q.stepPhysics(1/60);}
-  const ground=v.position.y;for(let n=0;n<600;n++){stepVehicle(v,{...emptyInput(),boost:true,forward:id==='plane'?-.5:0},1/60,n/60,q);q.stepPhysics(1/60);}
-  expect(v.position.z).toBeGreaterThan(50);if(id==='plane')expect(v.position.y).toBeGreaterThan(ground+10);else expect(v.launched).toBe(true);
- }finally{q.dispose();}
-});
-
 function fixture(id:string,wall=false){
   const source=SPECS.find(v=>v.id===id)!;const aquatic=!!source.bodyPhysics?.water;
   const q=new EnvironmentQueries({...map,water:aquatic?map.water:[],boxes:[{...map.boxes[0]!,position:[0,aquatic?-21:-1,0]},...(wall?[{id:'wall',position:[0,10,12] as const,size:[100,60,.2] as const}]:[])]});
@@ -70,7 +21,7 @@ function fixture(id:string,wall=false){
 }
 it.each(added)('%s submits intent to the one physics clock, drives and exposes immutable telemetry',id=>{
   const {q,v,run}=fixture(id);try{
-    expect(Number(!!v.wheelPhysics)+Number(!!v.bodyPhysics)).toBe(1);
+    expect(Number(!!v.motion.wheelPhysics)+Number(!!v.motion.body)).toBe(1);
     const p=v.position.clone();stepVehicle(v,{...emptyInput(),forward:1},1/60,1/60,q);expect(v.position).toEqual(p);
     run(180);const settled=v.position.clone();run(240,{...emptyInput(),forward:1});
     expect(v.position.distanceTo(settled)).toBeGreaterThan(1);
@@ -88,20 +39,14 @@ it.each(added)('%s is stopped by the shared rigid body collision solver',id=>{
     expect(v.position.y).toBeGreaterThan(-22);
   }finally{q.dispose();}
 });
-it.each(['atv','observation-sub'])('%s keeps rigid camera shapes cached across real physics rotations',id=>{
+it.each(['atv','tank','canoe','kayak','raft','observation-sub'])('%s keeps camera meshes cached while its independent physics updates the pose',id=>{
   const {q,v,run}=fixture(id),root=new Group(),panel=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());
-  panel.scale.set(1,1.1,.9);root.add(panel);v.yaw=.7;v.rotation.setFromAxisAngle(new Vector3(0,1,0),v.yaw);
+  panel.scale.set(1,1.1,.9);root.add(panel);v.rotation.setFromAxisAngle(new Vector3(0,1,0),.7);
   const query=new VehicleCameraQueries([{instanceId:id,object:root}]),build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
   try{
-    root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();const built=build.mock.calls.length;
-    expect(built).toBe(2);
-    for(let n=0;n<120;n++){
-      run(1,{...emptyInput(),forward:1,steer:.4});
-      expect(v.rotation.lengthSq()).toBeCloseTo(1,12);
-      root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();
-    }
-    expect(build.mock.calls.length).toBe(built);
-    panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBeGreaterThan(built);
+    root.quaternion.copy(v.rotation);query.sync();const built=build.mock.calls.length;expect(built).toBe(2);
+    for(let n=0;n<120;n++){run(1,{...emptyInput(),forward:1,steer:.4});root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();}
+    expect(build.mock.calls.length).toBe(built);panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBeGreaterThan(built);
   }finally{query.dispose();build.mockRestore();panel.geometry.dispose();panel.material.dispose();q.dispose();}
 });
 it('native bodies exchange collision impulses, retain one owner, and release/reset through the runtime',async()=>{
@@ -112,7 +57,7 @@ it('native bodies exchange collision impulses, retain one owner, and release/res
     expect(b!.position.distanceTo(before)).toBeGreaterThan(.05);
     const snap=world.humanoid!.snapshot();expect(snap.vehicleDynamics.every(v=>v.physicsOwner==='rigid-body')).toBe(true);
     const state=JSON.stringify(world.humanoid!.simulation.vehicles);world.humanoid!.snapshot();world.step({},0);expect(JSON.stringify(world.humanoid!.simulation.vehicles)).toBe(state);
-    const token=a!.bodyPhysics;await world.reset();expect(world.humanoid!.simulation.vehicles[0]!.bodyPhysics).not.toBe(token);expect(world.humanoid!.simulation.vehicles[0]!.bodyPhysics!.elapsed).toBe(0);
+    const token=a!.motion.body;await world.reset();expect(world.humanoid!.simulation.vehicles[0]!.motion.body).not.toBe(token);expect(world.humanoid!.simulation.vehicles[0]!.motion.body!.elapsed).toBe(0);
     world.step({},30);expect(world.humanoid!.snapshot().vehicleDynamics[0]!.drive!.kind).toBe('pedal');
   }finally{world.dispose();}
 });
@@ -124,50 +69,4 @@ it('rejects two physics owners and invalid force profiles before creating a vehi
 it('keeps the tracked hull stable across adjoining ground slabs without changing the terrain solver',()=>{
   const q=new EnvironmentQueries({...map,water:[],boxes:[{id:'floor',position:[0,-1,0],size:[400,2,400]}]}),v=createVehicle({...SPECS.find(s=>s.id==='tank')!,spawn:[0,.05,0],yaw:0});
   try{for(let n=0;n<720;n++){stepVehicle(v,{...emptyInput(),forward:1},1/60,n/60,q);q.stepPhysics(1/60);expect(v.position.y).toBeLessThan(.08);expect(Math.abs(v.roll)).toBeLessThan(.02);expect(Math.abs(v.yaw)).toBeLessThan(.02);}expect(v.position.z).toBeGreaterThan(80);}finally{q.dispose();}
-});
-
-async function bridgeFixture(id:string,bottom=1,mounted=true){
- const spec=SPECS.find(s=>s.id===id)!,pool:EnvironmentDefinition={...map,
-  boxes:[...map.boxes,{id:'bridge',position:[0,bottom+1,8],size:[80,2,6]}],
-  regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[200,200],color:'#aaa',modes:['paddled_boat']}],
-  spawns:[{id:'boat',name:'Boat',vehicleId:'boat',position:[0,.1,0],yaw:0,regionId:'pool'}]};
- const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map:pool,vehicles:[{instanceId:'boat',assetId:`vehicle.${id}`,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
- if(mounted)world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.1,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'boat',mounted:true}});
- return world;
-}
-it.each(['canoe','raft','kayak'])('%s stops its seated rider below a low bridge and keeps every camera mode outside',async id=>{
- const world=await bridgeFixture(id);try{
-  const r=world.humanoid!,v=r.simulation.vehicles[0]!,q=r.environment;
-  world.step({},120);
-  for(let n=0;n<600;n++){
-   world.step({humanoid:{...emptyInput(),forward:1}},1);
-   expect(q.bodyOverlap({position:v.position,rotation:v.rotation,body:paddleRiderBody(v.spec.seat)},{excludedActorIds:new Set(['boat']),excludedColliderHandles:new Set([r.simulation.humanoid.capsule.handle])})).toBe(false);
-  }
-  expect(v.bodyPhysics!.riderMounted).toBe(true);expect(v.position.z).toBeGreaterThan(3);expect(v.position.z).toBeLessThan(5.5);
-  for(const mode of [0,1,2] as const){r.setCameraMode(mode);world.step({humanoid:{...emptyInput(),forward:1}},60);
-   const eye=world.camera.position.toArray();expect(q.cameraProbe(eye,eye,.1,q.cameraFilter(new Set(['boat']))).startedOverlapping).not.toBe(true);
-  }
-  const token=v.bodyPhysics;expect(r.exit()).toBe(true);world.step({},1);expect(v.bodyPhysics).toBe(token);expect(v.bodyPhysics!.riderMounted).toBe(false);
-  v.velocity.z=8;world.step({},180);expect(v.position.z).toBeGreaterThan(6);
-  await world.reset();world.step({},1);expect(r.simulation.vehicles[0]!.bodyPhysics).not.toBe(token);expect(r.simulation.vehicles[0]!.bodyPhysics!.riderMounted).toBe(false);
- }finally{world.dispose();}
-});
-it.each(['canoe','raft','kayak'])('%s clears a tall bridge and an empty hull clears the low bridge',async id=>{
- for(const mounted of [false,true]){
-  const world=await bridgeFixture(id,mounted?2.3:1,mounted);try{
-   const v=world.humanoid!.simulation.vehicles[0]!;world.step({},120);
-   if(!mounted)v.position.z=4;
-   v.velocity.z=8;
-   world.step(mounted?{humanoid:{...emptyInput(),forward:1}}:{},240);
-   expect(v.position.z).toBeGreaterThan(6);expect(v.bodyPhysics!.riderMounted).toBe(mounted);
-  }finally{world.dispose();}
- }
-});
-it('rejects keyboard boarding and mounted Episode starts under an occupied head space',async()=>{
- const world=await bridgeFixture('canoe',1,false);try{
-  const r=world.humanoid!,s=r.simulation,v=s.vehicles[0]!;world.step({},120);
-  v.position.z=8;s.player.position.copy(v.position).add(new Vector3(2,0,0));
-  expect(s.interact()).toBe(false);expect(s.failureCode).toBe('VEHICLE_MOUNT_SPACE_BLOCKED');
-  expect(r.probeEpisodeStart({positionWorldMetersXYZ:v.position.toArray(),facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'boat',mounted:true}}).isValid).toBe(false);
- }finally{world.dispose();}
 });

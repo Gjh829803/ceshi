@@ -20,14 +20,14 @@ it('turns A left and D right in the +Z camera convention',()=>{
 it('releases WASD to a true zero-velocity hover, including after Ctrl release',()=>{
   const {q,v,step}=fixture();try{
     step({boost:true},180);expect(v.speed).toBeGreaterThan(20);step({},600);expect(v.velocity.toArray()).toEqual([0,0,0]);
-    const hover=v.position.clone();step({primary:true},120);expect(v.position.distanceTo(hover)).toBe(0);expect(v.flyingCreature!.flamePhase).toBe('loop');
-    step({boost:true},120);step({slow:true},240);step({},120);expect(v.speed).toBe(0);expect(v.flyingCreature!.mode).toBe('hover');
+    const hover=v.position.clone();step({primary:true},120);expect(v.position.distanceTo(hover)).toBe(0);expect(v.motion.flyingCreature!.flamePhase).toBe('loop');
+    step({boost:true},120);step({slow:true},240);step({},120);expect(v.speed).toBe(0);expect(v.motion.flyingCreature!.mode).toBe('hover');
   }finally{q.dispose();}
 });
 it('sweeps the full animation envelope through a thin wall at maximum speed',()=>{
   const {q,v,step}=fixture(true);try{
-    v.velocity.set(0,0,44);v.flyingCreature!.speedMetersPerSecond=44;step({boost:true},180);
-    expect(v.position.z).toBeLessThan(38);expect(v.flyingCreature!.collisionCount).toBeGreaterThan(0);
+    v.velocity.set(0,0,44);v.motion.flyingCreature!.speedMetersPerSecond=44;step({boost:true},180);
+    expect(v.position.z).toBeLessThan(38);expect(v.motion.flyingCreature!.collisionCount).toBeGreaterThan(0);
     for(const part of creatureBodies(v))expect(q.overlaps(part.position,part.body,part.rotation)).toBe(false);
     step({},300);expect(v.speed).toBe(0);
     const contact=v.position.clone();step({steer:1},360);expect(v.position.distanceTo(contact)).toBeGreaterThan(3);
@@ -44,8 +44,8 @@ it('excludes its own collision proxies and blocks another actor',()=>{
 it('keeps independent stamina/action state and resets to hover',()=>{
   const {q,v,step}=fixture();try{
     const other=createVehicle(createFlyingCreatureSpec('bird'));step({boost:true,primary:true,secondary:true},60);
-    expect(other.flyingCreature!.staminaRatio).toBe(1);expect(other.flyingCreature!.evadeCount).toBe(0);
-    const reset=createVehicle(v.spec);expect(reset.flyingCreature!.flamePhase).toBe('off');expect(reset.velocity.length()).toBe(0);expect(reset.flyingCreature!.collisionCount).toBe(0);
+    expect(other.motion.flyingCreature!.staminaRatio).toBe(1);expect(other.motion.flyingCreature!.evadeCount).toBe(0);
+    const reset=createVehicle(v.spec);expect(reset.motion.flyingCreature!.flamePhase).toBe('off');expect(reset.velocity.length()).toBe(0);expect(reset.motion.flyingCreature!.collisionCount).toBe(0);
   }finally{q.dispose();}
 });
 it('runs dedicated actions, camera switching and map reset through the public SDK owner',async()=>{
@@ -58,9 +58,9 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     expect(()=>runtime.applyProfile({vehicles:{dragon:{speed:40,maxSpeed:20}}})).toThrow('CREATURE_FEEL_SPEED_ORDER_INVALID');
     expect(runtime.simulation.vehicle!.spec.speed).toBe(originalSpeed);
     const release=runtime.setInput({...emptyInput(),primary:true});world.step({},60);release();
-    expect(runtime.simulation.vehicle!.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.vehicle!.speed).toBe(0);
+    expect(runtime.simulation.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.vehicle!.speed).toBe(0);
     runtime.applyProfile({view:{keyboardToggleEnabled:true}});world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
-    const snapshot=structuredClone(runtime.simulation.vehicle!.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.flyingCreature).toEqual(snapshot);
-    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
+    const snapshot=structuredClone(runtime.simulation.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.motion.flyingCreature).toEqual(snapshot);
+    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
   }finally{world.dispose();}
 });

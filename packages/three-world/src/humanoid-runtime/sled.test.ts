@@ -60,7 +60,7 @@ it('steers with retained lateral momentum and collision blocks a fast downhill-s
 it('has no foot thrust or steering in the air and recreates empty push state',()=>{
   const {q,v,run}=fixture();try{v.position.y=35;v.grounded=false;run(.5,{forward:1,steer:1,brake:true});
     expect(v.velocity.z).toBe(0);expect(v.yaw).toBeCloseTo(0,3);expect(v.velocity.y).toBeCloseTo(-9.81*.5);
-    expect(createVehicle(v.spec).sled).toEqual({phase:0,push:0,brake:0,steer:0});
+    expect(createVehicle(v.spec).motion.sled).toEqual({phase:0,push:0,brake:0,steer:0});
   }finally{q.dispose();}
 });
 it('keeps the actual Source101 soles above snow throughout pushing, steering and braking',async()=>{
@@ -111,4 +111,4 @@ it('keeps authored skiing control values in the workspace profile and catalog',(
     expect(profile.control[key]).toBe(SKI_SPEC[key]);
 });
 
-function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].wheelPhysics||args[0].bodyPhysics)args[4].stepPhysics(args[2]);}
+function stepVehicle(...args:Parameters<typeof prepareVehicle>){prepareVehicle(...args);if(args[0].motion.wheelPhysics||args[0].motion.body)args[4].stepPhysics(args[2]);}

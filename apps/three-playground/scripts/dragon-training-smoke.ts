@@ -12,7 +12,7 @@ async function choose(name:string){await page.locator('#mapSelect').click();awai
 try{
   await page.goto(base);await waitMap('campus');await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
   const initial=await state();assert.equal(initial.activeVehicle,'dragon');assert.equal(initial.speed,0);assert.equal(page.frames().length,1);
-  await page.locator('#viewport').click();await page.keyboard.down('d');
+  await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('d');
   await page.waitForFunction(()=>(window as any).playground.getState().flyingCreature.yawRadians<-.3);
   await page.keyboard.up('d');assert((await state()).position[0]<0,'D must move toward camera right (-X)');
   await page.keyboard.down('Control');await page.waitForFunction(()=>(window as any).playground.getState().speed===0);await page.keyboard.up('Control');

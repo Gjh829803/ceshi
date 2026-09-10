@@ -1,10 +1,10 @@
-import {Euler,Quaternion,Vector3} from 'three';
-import type {VehicleState,Input} from '../../simulation';
-import type {EnvironmentQueries} from '../../environment/queries';
-import type {VehicleSpec} from '../../config';
-import {compileFlyingCreatureCommandV1,stepFlyingCreatureV1,commitFlyingCreatureCollisionV1} from './flight';
-import {resolveConfiguredFlyingCreatureFeel} from './state';
-import {CREATURE_COLLISION_PROBES} from './collision-probes';
+import { Euler,Quaternion,Vector3 } from 'three';
+import type { VehicleSpec } from '../../config';
+import type { EnvironmentQueries } from '../../environment/queries';
+import type { Input,VehicleState } from '../../simulation';
+import { CREATURE_COLLISION_PROBES } from './collision-probes';
+import { commitFlyingCreatureCollisionV1,compileFlyingCreatureCommandV1,stepFlyingCreatureV1 } from './flight';
+import { resolveConfiguredFlyingCreatureFeel } from './state';
 
 function sweepPose(origin:Vector3,before:Quaternion,rotation:Quaternion,delta:Vector3,q:EnvironmentQueries,actorId:string){
   const count=Math.max(1,Math.ceil(before.angleTo(rotation)/.08));
@@ -30,7 +30,7 @@ function sweepPose(origin:Vector3,before:Quaternion,rotation:Quaternion,delta:Ve
 /** D01 动画体积的保守扫掠体积，姿态、平移均进入同一个 Rapier 查询。 */
 export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:EnvironmentQueries):void {
   if(!(dt>0)||!Number.isFinite(dt))return;
-  const state=v.flyingCreature!,before=v.rotation.clone(),origin=v.position.clone();
+  const state=v.motion.flyingCreature!,before=v.rotation.clone(),origin=v.position.clone();
   const feel=resolveConfiguredFlyingCreatureFeel(v.spec);
   state.yawRadians=v.yaw;state.pitchRadians=v.pitch;state.bankRadians=v.roll;
   const requested=stepFlyingCreatureV1(state,compileFlyingCreatureCommandV1(input),feel,v.velocity,dt);
@@ -48,7 +48,7 @@ export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:
     v.velocity.subVectors(v.position,origin).divideScalar(dt);
   }
   commitFlyingCreatureCollisionV1(state,feel,requested,v.velocity,fraction<1);v.speed=v.velocity.length();v.launched=true;v.grounded=false;
-  if(v.creature){v.creature.flying=true;v.creature.gait=state.mode==='glide'?'glide':'flap';v.creature.phase+=dt*10;}
+  if(v.motion.creature){v.motion.creature.flying=true;v.motion.creature.gait=state.mode==='glide'?'glide':'flap';v.motion.creature.phase+=dt*10;}
 }
 
 /** 创建配置，不创建场景、相机、时钟或资源。模型尺寸按 D01 米制资产标定。 */

@@ -26,7 +26,7 @@ function openCabin(){
  return root;
 }
 async function fixture(object=openCabin()){
- const parkedSpec={...spec,bodyPhysics:{kind:'motion' as const,mass:1600,centerOfMassHeight:.6,friction:1}};
+ const parkedSpec={...spec};
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:parkedSpec,object}]}});
  world.humanoid!.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1,collisionRadiusMeters:.25}});
  return world;

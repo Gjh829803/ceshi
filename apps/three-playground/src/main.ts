@@ -300,7 +300,7 @@ function selectAsset(id: string) {
   if (!ready) return;
   if(id==='dragon'){prepareSelection(DRAGON_TRAINING.id,'dragon-air',id);shell.update({mapId:session.map.id});return;}
   if (id === "person") {
-    if(sim.vehicle?.flyingCreature){prepareSelection(session.map.id,defaultRegion(session.map,'person').id,'person');return;}
+    if(sim.vehicle?.motion.flyingCreature){prepareSelection(session.map.id,defaultRegion(session.map,'person').id,'person');return;}
     if (sim.vehicle) {
       runtime.interact();
       syncTeleport();
@@ -431,6 +431,8 @@ shell.on("resetButton", async () => {
 });
 shell.on("pauseButton", () => pause());
 shell.on("resumeButton", () => pause(false));
+// 等弹窗释放焦点后再交还驾驶输入，避免关闭动画将焦点拉回“暂停”按钮。
+shell.on("viewportFocus", () => { if (ready && !paused && !panelOpen) sdkPresentation.focus(); });
 shell.on("touchInteract", interact);
 function renderQuickSlots(assets: AssetEntry[]) {
   quickSlots = assets;
@@ -613,7 +615,7 @@ const workbench = mountWorkbench(document.body, {
     视野度: +camera.fov.toFixed(1),
     动画: sim.player.animation,
     生物模型: visuals[sim.active]?.creature?.sourceStatus,
-    步态: sim.vehicle?.creature?.gait,
+    步态: sim.vehicle?.motion.creature?.gait,
     骑乘姿势:
       sim.vehicle?.spec.characterPose === "ride"
         ? "程序姿势占位 · 待替换专用骑乘动作"
@@ -633,7 +635,7 @@ function movementState() {
   const v = sim.vehicle,
     c = v?.spec ?? sim.characterControl;
   return {
-    powertrain:!!(v?.wheelPhysics||v?.bodyPhysics?.powertrain),
+    powertrain:!!(v?.motion.wheelPhysics||v?.motion.body?.powertrain),
     family: vehicleControlFamily(v?.spec),
     control: humanoid.readMovementSettings(c),
     velocity: (v?.velocity ?? sim.player.velocity).toArray(),
@@ -1023,13 +1025,13 @@ function updateUI() {
     v
       ? sim.transition > 0
         ? "正在入座"
-        : v.submersible
-          ? v.submersible.depth > .4 ? "水下航行" : "水面漂浮"
+        : v.motion.submersible
+          ? v.motion.submersible.depth > .4 ? "水下航行" : "水面漂浮"
           : v.submerged
           ? "载具涉水，请复位"
-          : v.flyingCreature
-            ? ({hover:'悬停',brake:'减速',cruise:'振翅巡航',boost:'加速',glide:'滑翔',dive:'俯冲',evade:'闪避',collision:'碰撞缓冲'}[v.flyingCreature.mode]+(v.flyingCreature.flamePhase!=='off'?' · 喷火':''))
-          : v.creature
+          : v.motion.flyingCreature
+            ? ({hover:'悬停',brake:'减速',cruise:'振翅巡航',boost:'加速',glide:'滑翔',dive:'俯冲',evade:'闪避',collision:'碰撞缓冲'}[v.motion.flyingCreature.mode]+(v.motion.flyingCreature.flamePhase!=='off'?' · 喷火':''))
+          : v.motion.creature
             ? {
                 graze: "休息",
                 walk: "慢走",
@@ -1038,11 +1040,11 @@ function updateUI() {
                 rest: "停驻",
                 flap: "振翅",
                 glide: "滑翔",
-              }[v.creature.gait]
+              }[v.motion.creature.gait]
             : v.spec.mode === "glider" && !v.launched
               ? "等待释放"
               : v.spec.mode === "plane"
-                ? `${v.aircraft?.hardLanding?"重着陆":v.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
+                ? `${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
                 : "驾驶中"
       : p.swimming
         ? "游泳"
@@ -1061,10 +1063,10 @@ function updateUI() {
   if (v)
     setHTML(
       "interaction",
-      v.flyingCreature
-        ? `体力 ${Math.round(v.flyingCreature.staminaRatio*100)}% · 顶部地图菜单切换训练场`
-        : v.submersible && v.submersible.depth > .4
-        ? `深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
+      v.motion.flyingCreature
+        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · 顶部地图菜单切换训练场`
+        : v.motion.submersible && v.motion.submersible.depth > .4
+        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "submarine"
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
@@ -1154,7 +1156,7 @@ function updateUI() {
 function updateCreatureVisual(n: number, dt: number) {
   const visual = visuals[n]!,
     state = sim.vehicles[n]!,
-    c = state.creature;
+    c = state.motion.creature;
   if (visual.root.visible && visual.creature)
     visual.creature.update(
       {
@@ -1185,7 +1187,7 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
     });
     if (n === sim.active)
       vis.aircraftCockpit?.update(state,sim.time);
-    if(n===sim.active)vis.rotors.forEach((r) => (r.rotation.z += (state.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
+    if(n===sim.active)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
     vis.label.visible =
       n !== sim.active &&
       camera.position.distanceToSquared(state.position) < 8100;
@@ -1291,12 +1293,12 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
-    flyingCreature:sim.vehicle?.flyingCreature?{...sim.vehicle.flyingCreature}:undefined,
+    flyingCreature:sim.vehicle?.motion.flyingCreature?{...sim.vehicle.motion.flyingCreature}:undefined,
     dragonVisual:nativeDragon.inspect(),
     dragonSeat:nativeDragon.readSeatWorld().elements,
     riderHip:character.hip?.getWorldPosition(new T.Vector3()).toArray(),
-    flight:sim.vehicle?.aircraft?{...sim.vehicle.aircraft,throttle:sim.vehicle.throttle,grounded:sim.vehicle.grounded}:undefined,
-    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain?{...(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
+    flight:sim.vehicle?.motion.aircraft?{...sim.vehicle.motion.aircraft,throttle:sim.vehicle.throttle,grounded:sim.vehicle.grounded}:undefined,
+    vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.motion.wheelPhysics?.powertrain??sim.vehicle.motion.body?.powertrain?{...(sim.vehicle.motion.wheelPhysics?.powertrain??sim.vehicle.motion.body?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.motion.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
 
     mapId: session.map.id,
     activeVehicle: sim.vehicle?.spec.id ?? null,
@@ -1317,7 +1319,7 @@ const labAPI = {
       target: follow.target.toArray(),
     },
     vehicleCount: SPECS.length,
-    creature: sim.vehicle?.creature,
+    creature: sim.vehicle?.motion.creature,
     creatureSources: visuals
       .filter((v) => v.creature)
       .map((v) => ({ id: v.root.name, ...v.creature!.sourceStatus })),

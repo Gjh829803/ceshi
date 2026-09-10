@@ -1,6 +1,6 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Group, Object3D } from 'three';
-import {busWheelAngle} from './bus';
+import {busWheelAngle} from './motion-families/ground-vehicle/bus';
 export interface VehicleVisual {root?:Object3D;wheelRigs:{steering:Group;spin:Group;radius:number}[];steering:Object3D[]}
 
 export interface WheelPose {wheels?:readonly {hubHeight?:number;length:number;angle:number;steer:number}[]|undefined;speed?:number;spec?:{mode:string;steer:number};position:Vector3;rotation:Quaternion;steering:number}
