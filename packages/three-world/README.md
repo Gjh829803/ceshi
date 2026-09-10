@@ -1332,8 +1332,13 @@ steering state. Do not retain a separate visual lean/rolling integrator.
 Current playground mapping includes the existing cars and motorcycles, plus ATV and bus.
 An optional `wheelPhysics.chassis` box specifies a model-specific collision hull;
 omitting it retains the existing car chassis.
-Aircraft, hovercraft, the existing boats, boards and animal-drawn carriages keep
-their specialised controllers; their dynamic-prop collisions remain enabled.
+Aircraft, hovercraft, the existing boats, boards and animal-drawn carriages use
+`bodyPhysics.kind: 'motion'`. Their specialised controls supply bounded forces
+and torques to the same dynamic rig; only the shared Rapier step writes their
+position, orientation and collision momentum. All 32 playground presets and
+the 30 catalog vehicle assets declare one physical owner. Custom vehicles
+without a profile receive a dynamic motion body (paddled craft receive a paddle
+body); author explicit mass and hull dimensions for custom geometry.
 This is a reusable road solver, not a complete vehicle simulation: no individual
 wheel masses, differential model, per-wheel tyre sizes or trailer joint solver.
 
@@ -1353,3 +1358,7 @@ report real powertrain RPM, gear and throttle; human-powered vehicles report
 cadence and effort instead of fabricated engine readings. The same sample appears
 in `snapshot().vehicleDynamics[].drive`, with `physicsOwner` identifying native
 rigid bodies. The playground shows these values in its lower-left instrument.
+Motion-controlled craft report `kind: 'motion'` with control effort and speed,
+without fabricating an engine or human-powered cadence. Unoccupied vehicles
+continue to exchange collision momentum; carriage parts share the same compound
+body, with articulated lead geometry rather than a separate trailer solver.

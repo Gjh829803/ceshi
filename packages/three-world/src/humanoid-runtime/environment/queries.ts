@@ -56,6 +56,7 @@ export interface ActorQueryBody {id:string;actorId?:string;physical?:boolean;pos
 export class EnvironmentQueries {
   private world:RAPIER.World;
   private vehicleRigs=new Map<string,VehicleRigidRig>();
+  private vehicleColliderIds=new Map<number,string>();
   private controller:RAPIER.KinematicCharacterController;
   private disposed=false;
   private staticColliders=new Map<string,RAPIER.Collider>();
@@ -65,12 +66,15 @@ export class EnvironmentQueries {
   private rigs=new Set<HumanoidRig>();
   private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string;actorId:string}>();
   private actorColliderHandles=new Set<number>();
-  // Vehicle simulation already resolves actor contacts. Excluding its own proxy
-  // also keeps floor/spawn/camera queries from hitting the controlled character.
+  // General floor/spawn queries omit actor proxies. Vehicle motion temporarily
+  // includes other actors, using their native rig or authored compound collider.
   private queryExcluded=new Set<number>();
+  private motionFilter:((collider:RAPIER.Collider)=>boolean)|undefined;
+  private motionColliders:readonly RAPIER.Collider[]=[];
+  private suppressContactImpulses=false;
   // Do not call collider methods from KCC predicates: that reenters a borrowed
   // WASM collider set. Sensor rejection is a native query flag instead.
-  private environmentFilter=(collider:RAPIER.Collider)=>!this.queryExcluded.has(collider.handle);
+  private environmentFilter=(collider:RAPIER.Collider)=>this.motionFilter?this.motionFilter(collider):!this.queryExcluded.has(collider.handle);
   constructor(readonly map:EnvironmentDefinition){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
     this.world=new RAPIER.World({x:0,y:-18,z:0});
@@ -116,7 +120,7 @@ export class EnvironmentQueries {
   colliderId(handle:number):string{
     this.assertLive();
     const environmentId=this.staticColliderIds.get(handle);if(environmentId!==undefined)return environmentId;
-    for(const [id,rig] of this.vehicleRigs)if(rig.colliders.some(collider=>collider.handle===handle))return id;
+    const vehicleId=this.vehicleColliderIds.get(handle);if(vehicleId!==undefined)return vehicleId;
     for(const entry of this.actorColliders.values())if(entry.collider.handle===handle)return entry.actorId;
     return `collider-${handle}`;
   }
@@ -132,7 +136,7 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id);}
   propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
@@ -166,6 +170,24 @@ export class EnvironmentQueries {
       entry.collider.setCollisionGroups(actor.physical?0x0004ffff:0x0010ffff);entry.collider.setTranslation(center(actor.position,actor.body,actor.rotation));entry.collider.setRotation(actor.rotation);
     }
     for(const [id,entry] of this.actorColliders)if(!live.has(id)){this.queryExcluded.delete(entry.collider.handle);this.actorColliderHandles.delete(entry.collider.handle);this.world.removeCollider(entry.collider,false);this.actorColliders.delete(id);}
+  }
+  /** Vehicle controllers query the same world and actual hulls. Exclude every
+   * part of self and the duplicate proxy of a native rig. Predicates read only
+   * cached handles, without reentering the borrowed WASM collider set. */
+  withVehicleCollisions<T>(actorId:string,move:()=>T):T {
+    const excluded=new Set(this.queryExcluded),colliders:RAPIER.Collider[]=[];
+    for(const entry of this.actorColliders.values())if(entry.actorId!==actorId&&!this.vehicleRigs.has(entry.actorId))colliders.push(entry.collider);
+    for(const [id,rig] of this.vehicleRigs)if(id!==actorId)colliders.push(...rig.colliders.filter(c=>c.isEnabled()));
+    for(const collider of colliders)excluded.delete(collider.handle);
+    const previous=this.motionFilter,previousColliders=this.motionColliders;
+    this.motionFilter=collider=>!excluded.has(collider.handle);this.motionColliders=colliders;
+    try{return move();}finally{this.motionFilter=previous;this.motionColliders=previousColliders;}
+  }
+  /** Motion prediction may query contacts, but only the native chassis applies
+   * the resulting forces during the shared physics step. */
+  withoutContactImpulses<T>(read:()=>T):T {
+    const previous=this.suppressContactImpulses;this.suppressContactImpulses=true;
+    try{return read();}finally{this.suppressContactImpulses=previous;}
   }
   /** Direct per-collider queries read current poses without advancing Rapier's broadphase. */
   private directColliders(filter: BodyQueryFilter = {}): RAPIER.Collider[] {
@@ -326,7 +348,7 @@ export class EnvironmentQueries {
         }
       : null;
   }
-  releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders)this.queryExcluded.delete(collider.handle);this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
+  releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders){this.queryExcluded.delete(collider.handle);this.vehicleColliderIds.delete(collider.handle);}this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
   retainVehicleRigs(ids:ReadonlySet<string>){for(const id of this.vehicleRigs.keys())if(!ids.has(id))this.releaseVehicleRig(id);}
   vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number,parts?:readonly {body:QueryBody;rotation?:Quaternion}[],friction=.6,restitution=.08,airframe?:{stops?:readonly {radius:number;center:Vector3}[];boxes:readonly {halfExtents:readonly [number,number,number];offset:readonly [number,number,number]}[];inertia:Vector3;center:Vector3}):VehicleRigidRig {
     this.assertLive();const previous=this.vehicleRigs.get(id);if(previous?.token===token)return previous;if(previous)this.releaseVehicleRig(id);
@@ -347,7 +369,7 @@ export class EnvironmentQueries {
       if(parts)desc.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setContactSkin(.015);
       return this.world.createCollider(desc.setDensity(0).setFriction(friction).setRestitution(restitution).setCollisionGroups(0x00020013),body);
     });
-    for(const collider of colliders)this.queryExcluded.add(collider.handle);
+    colliders.forEach(collider=>{this.queryExcluded.add(collider.handle);this.vehicleColliderIds.set(collider.handle,id);});
     const rig:VehicleRigidRig={token,body,colliders,beforeStep:()=>{},afterStep:()=>{}};this.vehicleRigs.set(id,rig);return rig;
   }
   /** Measured contacts from the shared solver, never an extra collision world. */
@@ -371,7 +393,11 @@ export class EnvironmentQueries {
     const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,{x:0,y:-1,z:0}),maxDrop+step,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
     return hit&&hit.normal.y>.25?{height:origin.y-hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)}:null;
   }
-  overlaps(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity){this.assertLive();return !!this.world.intersectionWithShape(center(position,body,rotation),rotation,shape(body),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);}
+  overlaps(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity){
+    this.assertLive();const c=center(position,body,rotation),s=shape(body);
+    return !!this.world.intersectionWithShape(c,rotation,s,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter)
+      ||this.motionColliders.some(other=>{const hit=s.contactShape(c,rotation,other.shape,other.translation(),other.rotation(),0);return !!hit&&hit.distance<0;});
+  }
   safeSpawn(position:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity):Vector3|null {
     const p=position.clone();
     const floor=this.support(p,5,.45);
@@ -384,6 +410,7 @@ export class EnvironmentQueries {
   }
   move(position:Vector3,delta:Vector3,body:QueryBody=HUMANOID_BODY,rotation=identity,step=0,push?:{massKg:number;dt:number}):MoveResult {
     this.assertLive();
+    if(this.suppressContactImpulses)push=undefined;
     const c=center(position,body,rotation);
     const descriptor=body.kind==='capsule'?RAPIER.ColliderDesc.capsule(body.height/2-body.radius,body.radius):RAPIER.ColliderDesc.cuboid(...body.halfExtents);
     const proxy=this.world.createCollider(descriptor.setTranslation(c.x,c.y,c.z).setRotation(rotation));
@@ -399,8 +426,25 @@ export class EnvironmentQueries {
     const p=position.clone().add(new Vector3(movement.x,movement.y,movement.z));
     const normals:Vector3[]=[],contacts:{point:Vector3;normal:Vector3}[]=[];
     for(let n=0;n<this.controller.numComputedCollisions();n++){const hit=this.controller.computedCollision(n);if(hit){const normal=new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z);normals.push(normal);contacts.push({normal,point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z)});}}
-    const grounded=this.controller.computedGrounded();
+    let grounded=this.controller.computedGrounded();
     this.world.removeCollider(proxy,false);
+    // Rapier 0.20 refreshes its broadphase at the physics step. New or moved
+    // actor proxies must also be swept at their current pose on the first tick;
+    // use Rapier's own narrowphase, without stepping the world to refresh queries.
+    const travelDelta=p.clone().sub(position),length=travelDelta.length();
+    if(length>1e-9&&this.motionColliders.length){
+      const s=shape(body);let fraction=1;
+      for(const other of this.motionColliders){
+        const hit=s.castShape(c,rotation,travelDelta,other.shape,other.translation(),other.rotation(),{x:0,y:0,z:0},0,1,false);
+        if(!hit||hit.time_of_impact>=fraction)continue;
+        const r=other.rotation();
+        const normal=new Vector3(hit.normal2.x,hit.normal2.y,hit.normal2.z).applyQuaternion(new Quaternion(r.x,r.y,r.z,r.w));
+        if(travelDelta.dot(normal)>=-1e-8)continue;
+        fraction=Math.max(0,hit.time_of_impact-this.controller.offset()/length);
+        normals.push(normal);if(normal.y>=.5&&delta.y<=0)grounded=true;
+      }
+      if(fraction<1)p.copy(position).addScaledVector(travelDelta,fraction);
+    }
     // Short stair treads can be narrower than a capsule's diameter. Try an explicit
     // up / across / down sweep, with full headroom checks, when autostep stalls.
     const horizontal=new Vector3(delta.x,0,delta.z),travel=new Vector3(p.x-position.x,0,p.z-position.z);

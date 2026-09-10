@@ -4,7 +4,7 @@ export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families
 export {SUBMERSIBLE_WATER} from './submersible';
 export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
 export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
-export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY} from './kayak';
+export {KAYAK_WATER,KAYAK_GEOMETRY,CANOE_WATER,CANOE_GEOMETRY,createKayakState,kayakPaddlePose,paddleGrip} from './kayak';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
 export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';

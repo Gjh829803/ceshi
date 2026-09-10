@@ -1,6 +1,7 @@
 import {describe,it,expect,beforeAll,afterEach,vi} from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
-import {BoxGeometry,CapsuleGeometry,CylinderGeometry,SphereGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Quaternion,Vector3} from 'three';
+import {BoxGeometry,CapsuleGeometry,CylinderGeometry,SphereGeometry,Group,InstancedMesh,Matrix4,Mesh,MeshStandardMaterial,PerspectiveCamera,Quaternion,Vector3} from 'three';
+import * as geometryQueries from '../geometry';
 import {createWorld} from '../world';
 import type {VehicleSpec} from './config';
 import type {EnvironmentDefinition} from './environment/types';
@@ -23,22 +24,23 @@ function openCabin(){
  return root;
 }
 async function fixture(object=openCabin()){
- const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec,object}]}});
+ const parkedSpec={...spec,bodyPhysics:{kind:'motion' as const,mass:1600,centerOfMassHeight:.6,friction:1}};
+ const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:parkedSpec,object}]}});
  world.humanoid!.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1,collisionRadiusMeters:.25}});
  return world;
 }
 function approachAndOrbit(world:Awaited<ReturnType<typeof fixture>>){
  world.step({},5);world.step({moveXRatio:1},100);
- const contact=world.getEntityState('player');world.step({},30);
+ const contact=world.getEntityState('player'),vehicleX=world.humanoid!.simulation.vehicles[0]!.position.x;world.step({},30);
  world.step({cameraPitchRatio:-1},25);world.step({cameraYawRatio:1},78);
- return contact;
+ return {...contact,vehicleX};
 }
 describe('vehicle camera geometry',()=>{
  beforeAll(initEnvironmentQueries);
  it('keeps the third-person view through an open cabin while the envelope still stops walking',async()=>{
   const world=await fixture();try{
    const contact=approachAndOrbit(world);
-   expect(contact.positionWorldMetersXYZ[0]).toBeGreaterThan(1.62);expect(contact.positionWorldMetersXYZ[0]).toBeLessThan(1.67);
+   expect(contact.positionWorldMetersXYZ[0]-contact.vehicleX).toBeGreaterThan(1.60);expect(contact.positionWorldMetersXYZ[0]-contact.vehicleX).toBeLessThan(1.75);
    expect(contact.motion?.collisionEntityIds).toContain('rover');
    expect(world.snapshot().camera.actualArmDistanceMeters).toBeGreaterThan(10.9);
    world.step({},180);expect(world.snapshot().camera.actualArmDistanceMeters).toBeGreaterThan(10.9);
@@ -50,7 +52,7 @@ describe('vehicle camera geometry',()=>{
    expect(camera.actualArmDistanceMeters).toBeGreaterThan(.5);
    expect(camera.actualArmDistanceMeters).toBeLessThan(1.7);
    expect(camera.desiredArmDistanceMeters).toBeCloseTo(11,5);
-   expect(camera.positionWorldMetersXYZ[0]).toBeGreaterThan(.34);
+   expect(camera.positionWorldMetersXYZ[0]-world.humanoid!.simulation.vehicles[0]!.position.x).toBeGreaterThan(.34);
   }finally{world.dispose();}
  });
  it('discovers a vehicle model attached after runtime initialization and keeps display projection deterministic',async()=>{
@@ -86,6 +88,19 @@ describe('vehicle camera geometry',()=>{
   expect(hit.distanceMeters).toBeCloseTo(1.7,4);expect(hit.normalWorldXYZ![2]).toBeLessThan(-.99);
   parent.position.z=30;query.sync();expect(query.probe([10,1,18],[10,1,22],.1).colliderEntityId).toBeUndefined();
  });
+ it('refreshes broad-phase bounds for distant overhangs, edited geometry and manual parent matrices',()=>{
+  const parent=new Group(),root=new Group();parent.add(root);parent.matrixAutoUpdate=false;parent.matrix.makeTranslation(20,0,0);
+  const panel=block(root,[.2,3,4],[-20,1.5,0]),query=trackQuery([{instanceId:'overhang',object:root}]);query.sync();
+  expect(query.probe([2,1,0],[-2,1,0],.1).distanceMeters).toBeCloseTo(1.8,4);
+  expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(false);
+  expect(query.visibleBetween([2,1,0],[-2,1,0],'overhang')).toBe(true);
+  parent.matrix.makeTranslation(40,0,0);query.sync();
+  expect(query.probe([2,1,0],[-2,1,0],.1).colliderEntityId).toBeUndefined();
+  expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(true);
+  panel.geometry.translate(-20,0,0);query.sync();
+  expect(query.probe([2,1,0],[-2,1,0],.1).distanceMeters).toBeCloseTo(1.8,4);
+  expect(query.probe([0,1,0],[0,1,0],.1).startedOverlapping).toBe(true);
+ });
  it.each([['sphere',()=>new SphereGeometry(1,32,16)],['cylinder',()=>new CylinderGeometry(1,1,2,32)],['capsule',()=>new CapsuleGeometry(1,2,8,16)]] as const)('detects an interior lens despite a primitive numerical seam (%s)',(_name,make)=>{
   const geometry=make();
   const root=new Group();root.add(new Mesh(geometry,new MeshStandardMaterial({transparent:true,opacity:.25})));
@@ -117,6 +132,42 @@ describe('vehicle camera geometry',()=>{
   drop.scale.setScalar(0);query.sync();
   expect(query.refinedActorIds.has('boat')).toBe(true);
   expect(query.probe([4,0,0],[-4,0,0],.2).distanceMeters).toBeCloseTo(3.7,4);
+ });
+ it('does not decompose unchanged parked parts but observes live material changes',()=>{
+  const root=new Group(),mesh=block(root,[.2,3,4],[0,1.5,0]),query=trackQuery([{instanceId:'parked',object:root}]);
+  const signature=vi.spyOn(geometryQueries,'poseFromWorldMatrix');
+  try{
+   query.sync();const calls=signature.mock.calls.length;expect(calls).toBeGreaterThan(0);
+   for(let n=0;n<60;n++)query.sync();expect(signature.mock.calls.length).toBe(calls);
+   const material=mesh.material as MeshStandardMaterial;material.transparent=true;material.opacity=.3;query.sync();
+   expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(true);
+   expect(query.probe([2,1,0],[-2,1,0],.1).distanceMeters).toBeCloseTo(1.8,4);
+   expect(signature.mock.calls.length).toBe(calls);
+  }finally{signature.mockRestore();}
+ });
+ it('invalidates parked geometry for attribute replacement, in-place edits, draw ranges and material groups',()=>{
+  const root=new Group(),mesh=block(root,[.2,3,4],[0,1.5,0]),query=trackQuery([{instanceId:'editable',object:root}]);query.sync();
+  const positions=mesh.geometry.getAttribute('position').clone();
+  for(let n=0;n<positions.count;n++)positions.setX(n,positions.getX(n)+10);
+  mesh.geometry.setAttribute('position',positions);query.sync();
+  expect(query.probe([2,1,0],[-2,1,0],.1).colliderEntityId).toBeUndefined();
+  for(let n=0;n<positions.count;n++)positions.setX(n,positions.getX(n)-10);positions.needsUpdate=true;query.sync();
+  expect(query.probe([2,1,0],[-2,1,0],.1).distanceMeters).toBeCloseTo(1.8,4);
+  mesh.geometry.setDrawRange(0,0);query.sync();expect(query.refinedActorIds.size).toBe(0);
+  mesh.geometry.setDrawRange(0,Infinity);query.sync();expect(query.refinedActorIds.has('editable')).toBe(true);
+  mesh.material=[new MeshStandardMaterial(),new MeshStandardMaterial({visible:false})];
+  mesh.geometry.clearGroups();mesh.geometry.addGroup(0,mesh.geometry.index!.count,0);query.sync();
+  expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(false);
+  mesh.geometry.groups[0]!.materialIndex=1;query.sync();expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(true);
+ });
+ it('observes instance matrix versions and counts when the mesh world pose stays unchanged',()=>{
+  const mesh=new InstancedMesh(new BoxGeometry(1,2,2),new MeshStandardMaterial(),1),query=trackQuery([{instanceId:'instances',object:mesh}]);
+  mesh.setMatrixAt(0,new Matrix4().makeTranslation(10,0,0));mesh.instanceMatrix.needsUpdate=true;query.sync();
+  expect(query.probe([2,0,0],[-2,0,0],.1).colliderEntityId).toBeUndefined();
+  mesh.setMatrixAt(0,new Matrix4());mesh.instanceMatrix.needsUpdate=true;query.sync();
+  expect(query.probe([2,0,0],[-2,0,0],.1).distanceMeters).toBeCloseTo(1.4,4);
+  mesh.count=0;query.sync();expect(query.refinedActorIds.size).toBe(0);
+  mesh.count=1;query.sync();expect(query.probe([2,0,0],[-2,0,0],.1).distanceMeters).toBeCloseTo(1.4,4);
  });
  it('reuses rigid part shapes while child meshes rotate, and releases removed parts',()=>{
   const root=new Group(),arm=new Group();root.add(arm);

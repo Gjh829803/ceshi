@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {buildCanoeModel} from './canoe-model';
 import {RAFT_SOCKETS} from './raft';
+import {humanoid} from '@worldkit/three';
 export function buildRaftModel(){
  const donor=buildCanoeModel(),root=new T.Group();root.name='inflatable-boat';
  const rubber=new T.MeshStandardMaterial({color:'#343b40',roughness:1}),dark=new T.MeshStandardMaterial({color:'#171e22',roughness:1});
@@ -14,7 +15,7 @@ export function buildRaftModel(){
  // Keep the original paddle rig, including pure water-contact ripples.
  for(const node of [...donor.children])if(node.name==='kayak.paddle'||node.name.startsWith('kayak.ripple')||node.name.startsWith('kayak.wake'))root.add(node);
  const paddle=root.getObjectByName('kayak.paddle')!;paddle.traverse(node=>{if(node instanceof T.Mesh)node.material=dark;});
- for(const [name,y] of [['control.hand.left',0],['control.hand.right',-.56]] as const){const socket=new T.Group();socket.name=name;socket.position.y=y;paddle.add(socket);}
+ for(const [name,side] of [['control.hand.left',1],['control.hand.right',-1]] as const){const socket=new T.Group();socket.name=name;socket.position.copy(humanoid.paddleGrip({...humanoid.createKayakState(),craft:'canoe',side:-1},side));paddle.add(socket);}
  for(const [name,pos] of Object.entries(RAFT_SOCKETS)){const node=new T.Group();node.name=name;node.position.set(...pos);root.add(node);}
  return root;
 }

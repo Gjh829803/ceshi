@@ -3,6 +3,8 @@ import {MotionFamilyCatalog} from './motion-family-catalog';
 import { Hint } from "./components/hint";
 import { toast } from "sonner";
 import {
+  memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -69,6 +71,9 @@ export type InspectorOptions = {
 };
 export type AssetInspector = { sync(): void; focus(): void; dispose(): void };
 type NumericCameraKey = Exclude<keyof ProfileCameraTuning, "collisionEnabled">;
+type NumericFieldKey = NumericCameraKey | keyof ControlTuning;
+const personDistanceBounds = [3.2, 12] as const;
+const vehicleDistanceBounds = [1, 40] as const;
 type Snapshot = {
   assetId: string;
   subject: InspectorSubject;
@@ -104,7 +109,8 @@ function Group({
     </section>
   );
 }
-function NumericField({
+// Live speed/pose samples must not rebuild every slider and tooltip.
+const NumericField = memo(function NumericField({
   id,
   fieldKey,
   group = "camera",
@@ -120,7 +126,7 @@ function NumericField({
   onChange,
 }: {
   id: string;
-  fieldKey: string;
+  fieldKey: NumericFieldKey;
   group?: "camera" | "control";
   label: string;
   unit: string;
@@ -131,7 +137,7 @@ function NumericField({
   disabled?: boolean;
   reason?: string | undefined;
   hidden?: boolean;
-  onChange(value: number): void;
+  onChange(key: NumericFieldKey, value: number, group: "camera" | "control"): void;
 }) {
   const [draft, setDraft] = useState(
     String(Number(value.toFixed(precision(step)))),
@@ -180,7 +186,7 @@ function NumericField({
                     input.validity.valid &&
                     Number.isFinite(input.valueAsNumber)
                   )
-                    onChange(input.valueAsNumber);
+                    onChange(fieldKey, input.valueAsNumber, group);
                 }}
                 onBlur={() => {
                   editing.current = false;
@@ -204,7 +210,7 @@ function NumericField({
             aria-label={`${label}滑块`}
             onValueChange={(values) => {
               const next = values[0];
-              if (next !== undefined && Number.isFinite(next)) onChange(next);
+              if (next !== undefined && Number.isFinite(next)) onChange(fieldKey, next, group);
             }}
           />
         </Hint>
@@ -214,7 +220,7 @@ function NumericField({
       </div>
     </Hint>
   );
-}
+});
 
 function Inspector({
   id,
@@ -238,7 +244,7 @@ function Inspector({
     dirty.has(`${assetId}:movement`) || dirty.has(`${assetId}:camera`);
   const markDirty = (target: InspectorTab) =>
     setDirty((previous) => new Set(previous).add(`${assetId}:${target}`));
-  const run = (action: () => void, fallback: string) => {
+  const run = useCallback((action: () => void, fallback: string) => {
     try {
       action();
       refresh();
@@ -247,12 +253,12 @@ function Inspector({
         id: `${id}-profile`,
       });
     }
-  };
-  function apply(
+  }, [id, refresh]);
+  const apply = useCallback((
     key: keyof ProfileCameraTuning | keyof ControlTuning,
     value: number | boolean,
     group: "camera" | "control" = "camera",
-  ) {
+  ) => {
     run(() => {
       const next = structuredClone(options.getProfile(assetId));
       if (group === "control")
@@ -262,9 +268,9 @@ function Inspector({
       else next.camera[key as NumericCameraKey] = value as number;
       const target = group === "control" ? "movement" : "camera";
       options.applyProfile(next, target);
-      markDirty(target);
+      setDirty((previous) => new Set(previous).add(`${assetId}:${target}`));
     }, "无法应用参数");
-  }
+  }, [assetId, options, run]);
   const cameraField = (
     key: NumericCameraKey,
     note: string,
@@ -279,8 +285,8 @@ function Inspector({
     const bounds: readonly [number, number] =
       key === "distance"
         ? person
-          ? [3.2, 12]
-          : [1, 40]
+          ? personDistanceBounds
+          : vehicleDistanceBounds
         : humanoid.CAMERA_TUNING_RANGES[key];
     return (
       <NumericField
@@ -294,7 +300,7 @@ function Inspector({
         disabled={disabled}
         reason={reason}
         hidden={hidden}
-        onChange={(value) => apply(key, value)}
+        onChange={apply}
       />
     );
   };
@@ -409,7 +415,7 @@ function Inspector({
                         bounds={humanoid.CONTROL_RANGES[d.key]}
                         disabled={!!d.disabled}
                         reason={d.note}
-                        onChange={(value) => apply(d.key, value, "control")}
+                        onChange={apply}
                       />
                     ))}
                   </Group>

@@ -2,7 +2,7 @@ import * as T from 'three';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
 
 /** Render the actual loaded model, once per asset. No external thumbnail images. */
-export function renderAssetThumbnails(assets:readonly {id:string;object:T.Object3D}[],onReady:(id:string,url:string)=>void){
+export function renderAssetThumbnails(assets:readonly {id:string;object:T.Object3D}[],onReady:(id:string,url:string)=>void,canRender:()=>boolean=()=>true){
   const renderer=new T.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true});
   renderer.setSize(176,128);renderer.setPixelRatio(1);renderer.outputColorSpace=T.SRGBColorSpace;
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.35;
@@ -14,6 +14,8 @@ export function renderAssetThumbnails(assets:readonly {id:string;object:T.Object
   const dispose=()=>{if(cancelled)return;cancelled=true;cancelAnimationFrame(frame);renderer.dispose();renderer.forceContextLoss();};
   const step=()=>{
     if(cancelled)return;
+    // Closing the library suspends pending previews before another clone/render.
+    if(!canRender()){frame=requestAnimationFrame(step);return;}
     const entry=assets[index++];if(!entry){dispose();return;}
     const model=clone(entry.object);model.position.set(0,0,0);model.quaternion.identity();model.visible=true;
     // Staging signs and active rider attachments are not part of an asset preview.

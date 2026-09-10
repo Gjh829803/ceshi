@@ -1,3 +1,4 @@
+import {stepBodyVehicle} from '../vehicle-dynamics';
 import {parseMovementSettings,type MovementSettings} from '../../config/control';
 import {controlFields} from '../../config/control-fields';
 import {humanFamily} from './human/family';
@@ -22,4 +23,12 @@ export function resolveMotionFamilyMovement(familyId:MotionFamilyId,subtypeId:st
   return parseMovementSettings(value,defaults);
 }
 /** 公共接触查询与时间仍由 Simulation 拥有；每次只调用一个大类入口。 */
-export function stepMotionFamily(...args:[...Parameters<VehicleStep>,fallback:VehicleStep]){const family=byMode.get(args[0].spec.mode);if(!family?.step)throw Error(`MOTION_VEHICLE_FAMILY_UNAVAILABLE:${args[0].spec.mode}`);family.step(...args);}
+export function stepMotionFamily(...args:[...Parameters<VehicleStep>,fallback:VehicleStep]){const family=byMode.get(args[0].spec.mode);if(!family?.step)throw Error(`MOTION_VEHICLE_FAMILY_UNAVAILABLE:${args[0].spec.mode}`);const [v,input,dt,time,q,fallback]=args;
+  if(v.spec.bodyPhysics?.kind==='motion'&&v.bodyPhysics){
+    // 公共刚体负责积分；大类在临时状态上计算运动意图，不能再次创建刚体。
+    stepBodyVehicle(v,input,dt,time,q,(draft,command,h,t,environment)=>{
+      const body=draft.bodyPhysics;draft.bodyPhysics=undefined;
+      try{family.step!(draft,command,h,t,environment,fallback);}finally{draft.bodyPhysics=body;}
+    });return;
+  }
+  family.step(...args);}

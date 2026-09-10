@@ -1,7 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import {Box3,Ray,Vector3,type Material,type Mesh,type Object3D} from 'three';
+import {Box3,Matrix4,Ray,Vector3,type InstancedMesh,type Material,type Mesh,type Object3D} from 'three';
 import type {CameraCollisionProbeResult} from '@whitebox-world/camera-collision';
-import {collisionMeshes,extractCollisionGeometry,geometrySignature,isWorldVisible,worldPose,type WorldPose} from '../geometry';
+import {collisionMeshes,extractCollisionGeometry,geometryAttributeVersion,isWorldVisible,poseFromWorldMatrix,worldPose,type WorldPose} from '../geometry';
 import type {Vec3} from '../contracts';
 import {CameraMeshShape} from './camera-mesh-shape';
 import {isCameraVisualEffect} from './camera-visual-effects';
@@ -10,6 +10,23 @@ interface Part {shape:CameraMeshShape;bounds:Box3;mesh:Mesh;materialIndex:number
 interface Volume {shape:CameraMeshShape;bounds:Box3;parts:readonly Part[]}
 interface Geometry {parts:readonly Part[];volumes:readonly Volume[]}
 interface Frame extends Geometry {id:string;pose:WorldPose}
+interface VehicleFrame {id:string;bounds:Box3;parts:Frame[]}
+interface CachedFrame extends Frame {matrix:Matrix4;shapeMatrix:Matrix4;worldBounds:Box3;revision:ReturnType<typeof meshRevision>}
+function meshRevision(mesh:Mesh){
+ const geometry=mesh.geometry,position=geometry.getAttribute('position'),index=geometry.getIndex(),instances=(mesh as InstancedMesh).isInstancedMesh?mesh as InstancedMesh:undefined;
+ return {geometry,position,index,positionCount:position?.count,indexCount:index?.count,positionVersion:geometryAttributeVersion(position),indexVersion:geometryAttributeVersion(index??undefined),
+  drawStart:geometry.drawRange.start,drawCount:geometry.drawRange.count,groups:geometry.groups.map(g=>({...g})),materialArray:Array.isArray(mesh.material),morphs:mesh.morphTargetInfluences?.slice(),
+  instanceMatrix:instances?.instanceMatrix,instanceVersion:instances?.instanceMatrix.version,instanceCount:instances?.count};
+}
+/** Attribute identity/version and draw groups can change without moving the mesh. */
+function sameRevision(mesh:Mesh,r:ReturnType<typeof meshRevision>):boolean {
+ const g=mesh.geometry,p=g.getAttribute('position'),i=g.getIndex(),instances=(mesh as InstancedMesh).isInstancedMesh?mesh as InstancedMesh:undefined,morphs=mesh.morphTargetInfluences;
+ return r.geometry===g&&r.position===p&&r.index===i&&r.positionCount===p?.count&&r.indexCount===i?.count&&r.positionVersion===geometryAttributeVersion(p)&&r.indexVersion===geometryAttributeVersion(i??undefined)
+  &&r.drawStart===g.drawRange.start&&r.drawCount===g.drawRange.count&&r.materialArray===Array.isArray(mesh.material)
+  &&r.groups.length===g.groups.length&&r.groups.every((a,n)=>{const b=g.groups[n]!;return a.start===b.start&&a.count===b.count&&a.materialIndex===b.materialIndex;})
+  &&r.morphs?.length===morphs?.length&&(!r.morphs||r.morphs.every((v,n)=>v===morphs![n]))
+  &&r.instanceMatrix===instances?.instanceMatrix&&r.instanceVersion===instances?.instanceMatrix.version&&r.instanceCount===instances?.count;
+}
 function material(part:Part):Material|undefined{return Array.isArray(part.mesh.material)?part.mesh.material[part.materialIndex]:part.mesh.material;}
 function visible(part:Part){const m=material(part);return !!m&&m.visible&&m.opacity>0&&isWorldVisible(part.mesh);}
 function opaque(part:Part){const m=material(part);return visible(part)&&!(m!.transparent&&m!.opacity<1)&&!('transmission' in m!&&typeof m.transmission==='number'&&m.transmission>0);}
@@ -35,8 +52,12 @@ function closedGeometry(vertices:Float32Array,indices:Uint32Array):{vertices:Flo
 
 /** Camera-only shape queries over authored vehicle meshes. No colliders or second world. */
 export class VehicleCameraQueries {
- private readonly cache=new Map<Object3D,Geometry & {signature:string}>();
- private frames:Frame[]=[];
+ private readonly cache=new Map<Object3D,CachedFrame>();
+ private frames:VehicleFrame[]=[];
+ private readonly rigidMatrix=new Matrix4();
+ private readonly shapeMatrix=new Matrix4();
+ private readonly boundsScratch=new Box3();
+ private readonly unitScale=new Vector3(1,1,1);
  readonly refinedActorIds=new Set<string>();
  constructor(private readonly vehicles:readonly {instanceId:string;object:Object3D}[]){}
  private release(geometry:Geometry):void{for(const p of [...geometry.parts,...geometry.volumes])p.shape.dispose();}
@@ -48,15 +69,25 @@ export class VehicleCameraQueries {
   for(const {instanceId,object} of this.vehicles){
    try{
     worldPose(object);
-    const frames:Frame[]=[];
+    const frames:Frame[]=[],bounds=new Box3();
     // Cache each rigid part in its own frame: rotating a wheel or paddle must
     // update its pose without rebuilding every triangle in the whole vehicle.
     for(const mesh of collisionMeshes(object)){
     if(isCameraVisualEffect(mesh))continue;
     liveMeshes.add(mesh);
-    const pose=worldPose(mesh),signature=geometrySignature(mesh,pose,false)+String(Array.isArray(mesh.material))+JSON.stringify(mesh.geometry.groups);
     let cached=this.cache.get(mesh);
-    if(!cached||cached.signature!==signature){
+    const revised=!cached||!sameRevision(mesh,cached.revision);
+    // Most parked parts have the identical world matrix in the fixed and display
+    // samples. Reuse their validated pose, signature and bounds without allocating.
+    if(!cached||!cached.matrix.equals(mesh.matrixWorld)||revised){
+    // worldPose(object) already updated every descendant, including manual matrices.
+    const pose=poseFromWorldMatrix(mesh);
+    this.rigidMatrix.compose(pose.position,pose.rotation,this.unitScale);
+    this.shapeMatrix.copy(this.rigidMatrix).invert().multiply(mesh.matrixWorld);
+    // Match geometrySignature's transform precision, without serializing all
+    // geometry IDs, attributes and groups whenever only the rigid pose changes.
+    for(let n=0;n<16;n++)this.shapeMatrix.elements[n]=Math.round(this.shapeMatrix.elements[n]!*1e8)/1e8;
+    if(!cached||revised||!cached.shapeMatrix.equals(this.shapeMatrix)){
      const snapshot=extractCollisionGeometry(mesh,4096,1_000_000,false,true,false),parts:Part[]=[],volumes:Volume[]=[];
      try{
      for(const geometry of snapshot.geometries){
@@ -76,12 +107,20 @@ export class VehicleCameraQueries {
       }
      }
      }catch(error){this.release({parts,volumes});throw error;}
-     if(cached)this.release(cached);cached={signature,parts,volumes};this.cache.set(mesh,cached);
+     if(cached)this.release(cached);
+     cached={id:instanceId,parts,volumes,pose,matrix:mesh.matrixWorld.clone(),shapeMatrix:this.shapeMatrix.clone(),worldBounds:new Box3(),revision:meshRevision(mesh)};this.cache.set(mesh,cached);
+    }else{
+     cached.pose=pose;cached.matrix.copy(mesh.matrixWorld);
+    }
+     cached.worldBounds.makeEmpty();
+     for(const part of cached.parts)cached.worldBounds.union(this.boundsScratch.copy(part.bounds).applyMatrix4(this.rigidMatrix));
     }
     // Empty/incompatible subjects retain the movement envelope as a conservative fallback.
-    if(cached.parts.length)frames.push({id:instanceId,pose,parts:cached.parts,volumes:cached.volumes});
+    if(cached.parts.length){
+     cached.id=instanceId;frames.push(cached);bounds.union(cached.worldBounds);
     }
-    if(frames.length){this.refinedActorIds.add(instanceId);this.frames.push(...frames);}
+    }
+    if(frames.length){this.refinedActorIds.add(instanceId);this.frames.push({id:instanceId,bounds,parts:frames});}
    }catch(error){
     // Skinned/morphed or temporarily incomplete meshes must not silently lose collision.
     if(!(error instanceof Error)||!error.message.startsWith('PHYSICS_'))throw error;
@@ -91,10 +130,15 @@ export class VehicleCameraQueries {
  }
  private local(frame:Frame,point:Vec3){return new Vector3(...point).sub(frame.pose.position).applyQuaternion(frame.pose.rotation.clone().invert());}
  private vector(frame:Frame,v:RAPIER.Vector):Vec3{return new Vector3(v.x,v.y,v.z).applyQuaternion(frame.pose.rotation).toArray();}
+ private *candidates(from:Vec3,to:Vec3,radius:number,excludedActorId?:string):Iterable<Frame>{
+  const start=new Vector3(...from),end=new Vector3(...to),sweep=new Box3().setFromPoints([start,end]).expandByScalar(radius);
+  // Bounds contain the actual authored mesh, not the smaller movement envelope.
+  // Only the broad phase is approximate; nearby windows/glass still use triangles.
+  for(const vehicle of this.frames)if(vehicle.id!==excludedActorId&&vehicle.bounds.intersectsBox(sweep))yield* vehicle.parts;
+ }
  probe(from:Vec3,to:Vec3,radius:number,excludedActorId?:string):CameraCollisionProbeResult {
   const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);let nearest:CameraCollisionProbeResult={distanceMeters:length};
-  for(const frame of this.frames){
-   if(frame.id===excludedActorId)continue;
+  for(const frame of this.candidates(from,to,radius,excludedActorId)){
    const start=this.local(frame,from),end=this.local(frame,to),direction=end.clone().sub(start).normalize(),ray=new Ray(start,direction);
    for(const volume of frame.volumes){
     if(!volume.parts.every(visible)||!volume.bounds.containsPoint(start))continue;
@@ -117,8 +161,7 @@ export class VehicleCameraQueries {
  }
  visibleBetween(from:Vec3,to:Vec3,excludedActorId?:string):boolean {
   const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);if(length<1e-12)return true;
-  for(const frame of this.frames){
-   if(frame.id===excludedActorId)continue;
+  for(const frame of this.candidates(from,to,0,excludedActorId)){
    const start=this.local(frame,from),direction=this.local(frame,to).sub(start).normalize(),ray=new Ray(start,direction);
    for(const part of frame.parts){
     if(!opaque(part))continue;

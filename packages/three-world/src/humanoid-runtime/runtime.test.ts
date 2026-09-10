@@ -737,7 +737,7 @@ it('separates the saved profile from active resolved camera settings without mut
 });
 
  it.each(['wheeled','motorcycle'] as const)('%s opts into brake-turn slip, retains momentum and recovers without affecting low-speed steering',async(mode)=>{
-  const trial=async(drift:boolean,speed:number,brake:boolean)=>{const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:{...map,bounds:{min:[-500,-10,-500],max:[500,50,500]},boxes:[{id:'ground',position:[0,-.5,0],size:[1000,1,1000]}]},character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',object:new Group(),spec:{...spec,mode,brakeDrift:drift,brakeDeceleration:8,coastDeceleration:1.5,brakeDamping:.65}}]}});try{
+  const trial=async(drift:boolean,speed:number,brake:boolean)=>{const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:{...map,regions:[{...map.regions[0]!,modes:[mode]}],bounds:{min:[-500,-10,-500],max:[500,50,500]},boxes:[{id:'ground',position:[0,-.5,0],size:[1000,1,1000]}]},character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',object:new Group(),spec:{...spec,mode,brakeDrift:drift,brakeDeceleration:8,coastDeceleration:1.5,brakeDamping:.65}}]}});try{
    const r=world.humanoid!,sim=r.simulation;sim.active=0;sim.transition=0;
    const v=sim.vehicle!;v.position.set(-30,.03,-50);v.velocity.set(0,0,speed);v.spec.brakeDrift=drift;v.spec.brakeDeceleration=8;v.spec.coastDeceleration=1.5;v.spec.brakeDamping=.65;
    const slip=()=>Math.abs(v.velocity.x*Math.cos(v.yaw)-v.velocity.z*Math.sin(v.yaw));
