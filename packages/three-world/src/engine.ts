@@ -220,11 +220,14 @@ export class WorldEngine {
     this.humanoid?.sealInitialState();
   }
   step(input: WorldInput = {}, ticks = 1): WorldSnapshot {
-    this.alive(); if (!Number.isInteger(ticks) || ticks < 0 || ticks > 36_000) throw new Error('WORLD_TICKS_INVALID');
-    this.validateInput(input);
+    this.validateStep(input,ticks);
     this.sealInitialState();
     for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.humanoid?{humanoid:{...input.humanoid,jump:false,actions:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) });
     return this.snapshot();
+  }
+  validateStep(input:WorldInput,ticks:number):void{
+    this.alive();if(!Number.isInteger(ticks)||ticks<0||ticks>36_000)throw new Error('WORLD_TICKS_INVALID');
+    this.validateInput(input);
   }
   validateInput(input: WorldInput): void {
     if (!input || typeof input !== 'object') throw new Error('WORLD_INPUT_INVALID');
@@ -269,21 +272,15 @@ export class WorldEngine {
     const dt = this.fixedTimeStepSeconds;
     try {
       for (const update of this.updates) { const result: unknown = update({ world: this, deltaSeconds: dt, simulationTick: this.tick + 1 }); if (result && typeof (result as Promise<unknown>).then === 'function') throw new Error('WORLD_ASYNC_UPDATE_UNSUPPORTED: prepare async content before a fixed update'); }
-      if(this.humanoid){
-        const mode=this.humanoid.followCamera.mode;
-        const drives:Record<string,CharacterDrive>={};
-        for(const [id,goal] of this.goals)if(id!==this.controlled&&this.entities.has(id))drives[id]=this.goalDrive(id,goal,dt);
-        this.steerNavigation(drives,dt);humanoidHost(this.humanoid).advance(input,dt,this.pointerInput,drives);
-        if(mode!==this.humanoid.followCamera.mode)this.inputRouter.releasePointerLock();
-        this.pointerInput={};this.tick++;for(const callback of this.afterUpdates)callback();return;
-      }
-      if(input.cameraTogglePressed&&this.cameraRig.keyboardToggleEnabled)this.setCameraPerspective(this.cameraRig.perspective==='first-person'?'third-person':'first-person');
       const jumpPressed = input.jumpPressed ?? Boolean(input.jump && !this.previousJump);
-      this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.moveYRatio||jumpPressed)},dt);this.pointerInput={};
+      if(!this.humanoid){
+        if(input.cameraTogglePressed&&this.cameraRig.keyboardToggleEnabled)this.setCameraPerspective(this.cameraRig.perspective==='first-person'?'third-person':'first-person');
+        this.cameraRig.updateDesired({...this.pointerInput,cameraYawRatio:input.cameraYawRatio??0,cameraPitchRatio:input.cameraPitchRatio??0,activate:Boolean(this.pointerInput.activate||input.moveXRatio||input.moveZRatio||input.moveYRatio||jumpPressed)},dt);this.pointerInput={};
+      }
       const drives: Record<string, CharacterDrive> = {};
       const customActions=new Map<string,string>();
       let desiredDirection:Vec3=[0,0,0];
-      if (this.controlled) {
+      if (!this.humanoid&&this.controlled) {
         const actor = this.entity(this.controlled); const forward = new THREE.Vector3(...this.controlForwardWorldXYZ());
         const right = forward.clone().cross(new THREE.Vector3(0, 1, 0)); const move = right.multiplyScalar(input.moveXRatio ?? 0).addScaledVector(forward, -(input.moveZRatio ?? 0)); if (move.lengthSq() > 1) move.normalize();
         const speed = input.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4;
@@ -295,36 +292,41 @@ export class WorldEngine {
       for (const [id, goal] of this.goals) if (id !== this.controlled && this.entities.has(id)) drives[id] = this.goalDrive(id, goal, dt);
       for(const [id,e] of this.entities)if(e.character){const custom=this.driveProvider?.(id,id===this.controlled?input:{},id===this.controlled?desiredDirection:[0,0,0],dt);if(custom){drives[id]=custom.drive;if(custom.facing)this.faceDirection(e,new THREE.Vector3().fromArray(custom.facing));if(custom.actionId)customActions.set(id,custom.actionId);}}
       this.steerNavigation(drives,dt);
-      this.physics.step(dt, drives); this.tick += 1;
+      if(this.humanoid){const mode=this.humanoid.followCamera.mode;humanoidHost(this.humanoid).advance(input,dt,this.pointerInput,drives);if(mode!==this.humanoid.followCamera.mode)this.inputRouter.releasePointerLock();this.pointerInput={};}
+      else this.physics.step(dt, drives);
+      this.tick += 1;
       this.previousJump = Boolean(input.jump); this.previousInteract = Boolean(input.interact);
-      for (const [id, entity] of this.entities) if (entity.asset) {
-        const state = this.physics.state(id); const speed = state ? Math.hypot(state.velocityMetersPerSecondXYZ[0], state.velocityMetersPerSecondXYZ[2]) : 0;
-        if(state?.isGrounded)this.jumped.delete(id);
-        const runningIntent = id === this.controlled ? Boolean(input.run) : Boolean(this.goals.get(id)?.run);
-        const drive = drives[id];
-        let automatic = !state?.isGrounded ? (this.jumped.has(id) ? 'jump' : 'fall') : speed > 0.1 ? (runningIntent ? 'run' : 'walk') : 'idle';
-        if (state && entity.character && (!drive || 'velocityMetersPerSecondXZ' in drive)) {
-          let animation = this.locomotionAnimations.get(id);
-          if (!animation) { animation = new LocomotionAnimation(); this.locomotionAnimations.set(id, animation); }
-          automatic = animation.update(state, {
-            deltaSeconds: dt,
-            desiredSpeedMetersPerSecond: drive ? Math.hypot(...drive.velocityMetersPerSecondXZ) : 0,
-            heightMeters: (entity.character.heightMeters ?? DEFAULT_CHARACTER_OPTIONS.heightMeters) * Math.abs(entity.object.getWorldScale(new THREE.Vector3()).y),
-            run: runningIntent,
-            jumped: this.jumped.has(id),
-          });
-        } else this.locomotionAnimations.delete(id);
-        const requested = customActions.get(id) ?? automatic;
-        if(entity.asset.isActionComplete)this.manualActions.delete(id);
-        if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) {
-          if (!customActions.has(id) && (requested === 'walk' || requested === 'run')) playLocomotion(entity.asset, requested);
-          else entity.asset.play(requested);
-        }
-        entity.asset.update(dt);
-      }
-      this.cameraRig.update(dt);
+      this.updateAssetAnimations(input,drives,customActions,dt);
+      if(!this.humanoid)this.cameraRig.update(dt);
       for(const callback of this.afterUpdates)callback();
     } catch (error) { this.recordError('WORLD_FIXED_STEP_FAILED', error); this.stop(); throw error; }
+  }
+  private updateAssetAnimations(input:WorldInput,drives:Readonly<Record<string,CharacterDrive>>,customActions:ReadonlyMap<string,string>,dt:number):void{
+    for (const [id, entity] of this.entities) if (entity.asset) {
+      const state = this.physics.state(id); const speed = state ? Math.hypot(state.velocityMetersPerSecondXYZ[0], state.velocityMetersPerSecondXYZ[2]) : 0;
+      if(state?.isGrounded)this.jumped.delete(id);
+      const runningIntent = id === this.controlled ? Boolean(input.run) : Boolean(this.goals.get(id)?.run);
+      const drive = drives[id];
+      let automatic = !state?.isGrounded ? (this.jumped.has(id) ? 'jump' : 'fall') : speed > 0.1 ? (runningIntent ? 'run' : 'walk') : 'idle';
+      if (state && entity.character && (!drive || 'velocityMetersPerSecondXZ' in drive)) {
+        let animation = this.locomotionAnimations.get(id);
+        if (!animation) { animation = new LocomotionAnimation(); this.locomotionAnimations.set(id, animation); }
+        automatic = animation.update(state, {
+          deltaSeconds: dt,
+          desiredSpeedMetersPerSecond: drive ? Math.hypot(...drive.velocityMetersPerSecondXZ) : 0,
+          heightMeters: (entity.character.heightMeters ?? DEFAULT_CHARACTER_OPTIONS.heightMeters) * Math.abs(entity.object.getWorldScale(new THREE.Vector3()).y),
+          run: runningIntent,
+          jumped: this.jumped.has(id),
+        });
+      } else this.locomotionAnimations.delete(id);
+      const requested = customActions.get(id) ?? automatic;
+      if(entity.asset.isActionComplete)this.manualActions.delete(id);
+      if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) {
+        if (!customActions.has(id) && (requested === 'walk' || requested === 'run')) playLocomotion(entity.asset, requested);
+        else entity.asset.play(requested);
+      }
+      entity.asset.update(dt);
+    }
   }
   private readonly manualActions = new Set<string>();
   private interactNearest(): void {

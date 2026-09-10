@@ -2,12 +2,14 @@ import {readFile} from 'node:fs/promises';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {Raw} from '@recast-navigation/core';
+import type RAPIER from '@dimforge/rapier3d-compat';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {createHumanoidWorld} from './humanoid';
 import type {ThreeWorld} from './world';
 import {emptyInput} from './humanoid-runtime/simulation';
 import {createRoadVehicleSpec} from './humanoid-runtime/road-vehicle';
 import {Character} from './humanoid-runtime/character';
+import type {AssetDefinition} from './engine-contracts';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 
 const worlds:ThreeWorld[]=[];
@@ -16,7 +18,7 @@ const map:EnvironmentDefinition={id:'three-actors',name:'Three actors',descripti
 async function setup(renderer?:THREE.WebGLRenderer,options:Partial<Parameters<typeof createHumanoidWorld>[0]>={}){
   const paths=new Map(catalog.assets.find(a=>a.id==='humanoid.source-101')!.resources!.map(r=>[r.path,r.sourcePath]));
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
-  vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{const uri=typeof input==='string'?input:input instanceof URL?input.href:input.url;const path=paths.get(decodeURIComponent(new URL(uri).pathname.slice(1)));if(!path)throw new Error(uri);return new Response(await readFile(path));});
+  vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{const uri=typeof input==='string'?input:input instanceof URL?input.href:input.url;const path=paths.get(decodeURIComponent(new URL(uri,'https://actors.test/').pathname.slice(1)))??catalog.assets.find(asset=>uri.includes(asset.sha256))?.sourcePath;if(!path)throw new Error(uri);return new Response(await readFile(path));});
   const world=await createHumanoidWorld({map,...options,...(renderer?{renderer}:{}),resourceUrl:path=>`https://actors.test/${path}`});worlds.push(world);return world;
 }
 
@@ -127,7 +129,7 @@ it('despawns and restores the initial actor through the same lifecycle as later 
   const world=await setup(),other=await world.humanoid!.createCharacter();other.root.position.set(3,.04,0);world.addCharacter({id:'other',humanoid:other});world.setControlledEntity('other');world.step({},0);
   const initial=world.humanoid!.simulation.actor('player').controller.body;
   expect((await world.execute({type:'entity.despawn',entityId:'player'})).status).toBe('applied');expect(initial.isValid()).toBe(false);expect(world.humanoid!.hasActor('player')).toBe(false);
-  world.step({},1);await world.reset();expect(world.humanoid!.hasActor('player')).toBe(true);expect(world.humanoid!.simulation.actors.size).toBe(2);world.step({},1);
+  world.step({},1);await world.reset();expect(world.humanoid!.hasActor('player')).toBe(true);expect(world.humanoid!.simulation.actors.size).toBe(2);expect(world.snapshot().entities.map(entity=>entity.id).sort()).toEqual(['other','player']);world.step({},1);
 });
 
 it('creates from the default content after the initial instance is removed before baseline sealing',async()=>{
@@ -217,9 +219,10 @@ it('prepares Episode on the selected NPC and keeps the original player at its ba
   const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:doc,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:()=> 'data:image/png;base64,dGVzdA=='});
   let ratio=1;const size=new THREE.Vector2(800,600);
   const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
-  const world=await setup(renderer),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.setCameraFollow({targetEntityId:'a'});world.step({},0);
+  const world=await setup(renderer,{vehicles:[{instanceId:'car',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new THREE.Group()}]}),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.setCameraFollow({targetEntityId:'a'});world.step({},0);
   await world.start();world.stop();
   const episode=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
+  expect(episode.capabilities()).toMatchObject({controlledEntityId:'a',worldBounds:{minimumWorldMetersXYZ:map.bounds.min,maximumWorldMetersXYZ:map.bounds.max}});
   await episode.prepareSegment({positionWorldMetersXYZ:[3,.03,5],facingYawRadians:0},{widthPixels:640,heightPixels:360});
   expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeCloseTo(5);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(0);
   expect(world.humanoid!.cameraTargetId).toBe('a');episode.advance({moveZRatio:-1},30);expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeLessThan(5);
@@ -288,4 +291,44 @@ it('steers two full NPCs past each other and reproduces their route after reset'
     expect(minDistance).toBeGreaterThan(.62);expect(maxLateral).toBeGreaterThan(.3);expect(world.snapshot().errors).toEqual([]);traces.push(trace);
   }
   expect(traces[1]).toEqual(traces[0]);
+});
+
+it('shares ordinary Mesh NPC bodies and navigation with the full humanoid world',async()=>{
+  const world=await setup(),object=new THREE.Group();object.position.set(0,.04,0);
+  world.addCharacter({id:'plain',object,body:{heightMeters:1.2,radiusMeters:.4},movement:{kind:'ground',walkSpeedMetersPerSecond:2}});
+  expect(world.humanoid!.characterSettings('plain')).toMatchObject({heightMeters:1.2,radiusMeters:.4,walkSpeedMetersPerSecond:2});
+  await world.start();world.stop();const sequence=world.humanoid!.environment.physicsStepSequence,player=world.getEntityState('player').positionWorldMetersXYZ;
+  const goal=await world.execute({type:'actor.move-to',entityId:'plain',targetPositionWorldMetersXYZ:[0,0,4]});if(goal.status!=='accepted')throw new Error(JSON.stringify(goal));
+  world.step({},240);expect(world.operations.get(goal.operationId).status,JSON.stringify({operation:world.operations.get(goal.operationId),state:world.getEntityState('plain'),errors:world.snapshot().errors})).toBe('succeeded');expect(world.getEntityState('plain').positionWorldMetersXYZ[2]).toBeCloseTo(4,1);
+  expect(world.humanoid!.environment.physicsStepSequence-sequence).toBe(240);expect(world.getEntityState('player').positionWorldMetersXYZ[0]).toBeCloseTo(player[0]);
+  expect(()=>world.describe()).not.toThrow();await world.reset();expect(world.getEntityState('plain').positionWorldMetersXYZ[2]).toBeCloseTo(0);
+  expect(world.humanoid!.characterSettings('plain')).toMatchObject({heightMeters:1.2,radiusMeters:.4});
+  world.humanoid!.switchMap({...map,id:'second-map'});expect(world.humanoid!.characterSettings('plain')).toMatchObject({heightMeters:1.2,radiusMeters:.4});world.step({},10);expect(world.snapshot().errors).toEqual([]);
+});
+it('runs custom three-dimensional NPC intent once per shared world tick',async()=>{
+  const world=await setup(),object=new THREE.Group();object.position.set(3,.04,0);let calls=0;
+  world.registerMovement({id:'float',version:1,description:'Controlled spatial velocity',initialState:0,update:({state})=>{calls++;return {state:state+1,velocityWorldMetersPerSecondXYZ:[0,1,1],applyGravity:false};}});
+  world.addCharacter({id:'floating',object,body:{heightMeters:.8,radiusMeters:.3},movement:{kind:'custom',movementId:'float'}});
+  await world.start();world.stop();world.step({},60);expect(calls).toBe(60);expect(world.getEntityState('floating').positionWorldMetersXYZ[1]).toBeGreaterThan(.9);expect(world.getEntityState('floating').positionWorldMetersXYZ[2]).toBeGreaterThan(.9);
+  await world.reset();expect(world.getEntityState('floating').positionWorldMetersXYZ).toEqual([3,.04,0]);world.step({},60);expect(calls).toBe(120);expect(world.snapshot().errors).toEqual([]);
+});
+it('advances a separately loaded AssetInstance mixer beside the full humanoid controller',async()=>{
+  const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')! as unknown as AssetDefinition;
+  const world=await setup(undefined,{assetDefinitions:{[definition.id]:definition}}),asset=await world.assets.load(definition.id);asset.object.position.set(5,.04,0);
+  world.addCharacter({id:'asset-actor',asset});await world.start();world.stop();
+  const move=await world.execute({type:'actor.move-to',entityId:'asset-actor',targetPositionWorldMetersXYZ:[5,0,5]});expect(move.status).toBe('accepted');world.step({},60);
+  expect(world.getEntityState('asset-actor').positionWorldMetersXYZ[2],JSON.stringify({move,state:world.getEntityState('asset-actor'),operation:move.status==='accepted'?world.operations.get(move.operationId):null})).toBeGreaterThan(1);expect(world.getEntityState('asset-actor').animation).toMatchObject({actionId:'walk'});expect(world.getEntityState('asset-actor').animation!.timeSeconds).toBeGreaterThan(.1);
+  await world.execute({type:'actor.stop',entityId:'asset-actor'});expect((await world.execute({type:'entity.play-action',entityId:'asset-actor',actionId:'jump',playback:'once'})).status).toBe('applied');world.step({},10);
+  expect(world.getEntityState('asset-actor').animation?.actionId).toBe('jump');await world.reset();expect(world.getEntityState('asset-actor').animation).toMatchObject({actionId:'idle',timeSeconds:0});
+});
+
+it('keeps moving ordinary and full humanoid capsules separated without navigation',async()=>{
+  const world=await setup(undefined,{navigation:false}),object=new THREE.Group();object.position.set(-4,.04,2);
+  world.registerMovement({id:'toward-player',version:1,description:'Direct walking velocity',initialState:null,update:()=>({state:null,velocityWorldMetersPerSecondXYZ:[0,0,-2],applyGravity:true})});
+  world.addCharacter({id:'plain',object,body:{heightMeters:1.2,radiusMeters:.4},movement:{kind:'custom',movementId:'toward-player'}});
+  const q=world.humanoid!.environment,player=world.humanoid!.actorController('player');let collider:RAPIER.Collider|undefined;
+  q.borrowPhysics().world.colliders.forEach(value=>{if(q.colliderId(value.handle)==='plain')collider=value;});expect(collider).toBeDefined();
+  let penetration=0;
+  for(let tick=0;tick<180;tick++){world.step({humanoid:{...emptyInput(),forward:1}},1);const contact=player.capsule.contactCollider(collider!,.1);penetration=Math.max(penetration,-(contact?.distance??0));}
+  expect(penetration).toBeLessThan(.003);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeLessThan(world.getEntityState('plain').positionWorldMetersXYZ[2]);
 });

@@ -572,7 +572,7 @@ export class HumanoidRuntime implements PhysicsPort {
     if(input.cameraTogglePressed&&this.profile.view.keyboardToggleEnabled&&!this.authored)this.setCameraModeOwned((this.followCamera.mode+1)%3 as 0|1|2);
     if(!this.authored)this.followCamera.beforeFixedUpdate();
     const cameraBefore={revision:this.cameraSubject.teleportRevision,vehicle:this.cameraSubject.vehicleIndex};
-    physicsHost(this.ordinaryPhysics).prepareStep(dt,{});this.presentation.beforeStep(this.simulation);
+    physicsHost(this.ordinaryPhysics).prepareStep(dt,Object.fromEntries(Object.entries(drives).filter(([id])=>!this.objects.has(id))));this.presentation.beforeStep(this.simulation);
     const sampled=input.humanoid??{...emptyInput(),forward:-(input.moveZRatio??0),steer:input.moveXRatio??0,lift:input.moveYRatio??0,boost:!!input.run,jump:input.jumpPressed??!!(input.jump&&!this.previousJump)};
     if(pointer.yawDeltaRadians||pointer.pitchDeltaRadians)this.followCamera.orbitRadians(pointer.yawDeltaRadians??0,pointer.pitchDeltaRadians??0,this.simulation.time,this.cameraSubject);
     if(pointer.distanceDeltaMeters)this.followCamera.zoomByMeters(pointer.distanceDeltaMeters,this.cameraSubject);
@@ -736,12 +736,9 @@ export class HumanoidRuntime implements PhysicsPort {
     this.configureSimulation(this.simulation,this.prepareProfile(this.profile));
     if(this.simulation.actors.has(this.cameraTargetId)){if(firstActor)this.followCamera.reset(this.cameraSubject);this.sync(0,!firstActor);}
   }
-  addCharacter(id:string,object:THREE.Object3D,_options?:CharacterOptions):void{
-    if(!this.objects.has(id)||this.objects.get(id)!==object)throw Object.assign(new Error(`HUMANOID_CONTENT_REGISTER_IN_OPTIONS: ${id} cannot be registered as physical content after Humanoid creation.`),{
-      code:'HUMANOID_CONTENT_REGISTER_IN_OPTIONS',category:'content',phase:'physics',entityIds:[id],path:'world.addEntity',
-      actual:'physical entity registration after Humanoid creation',expected:'map, vehicles or characters in Humanoid creation options',
-      suggestedAction:"Register map collision, vehicles and characters through createHumanoidWorld options. For a pure capture landmark whose collision already exists, use role:'decoration' and omit physics.",
-    });
+  addCharacter(id:string,object:THREE.Object3D,options:CharacterOptions={}):void{
+    if(this.objects.has(id)){if(this.objects.get(id)!==object)throw new Error('HUMANOID_CONTENT_OBJECT_MISMATCH');return;}
+    this.assertRigidIds([id]);this.ordinaryPhysics.addCharacter(id,object,options);
   }
   private assertRigidIds(ids:readonly string[],environment=this.environment):void{
     if(ids.some(id=>this.objects.has(id)||environment.colliderForId(id)))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');
@@ -766,7 +763,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   applyImpulse(id:string,impulse:Vec3):void{this.assertExternalMutation();this.ordinaryPhysics.applyImpulse(id,impulse);}
   step():void{throw new Error('HUMANOID_REQUIRES_ENGINE_INPUT');}
-  characterSettings(id:string):Required<CharacterOptions>{const c=this.hasActor(id)?this.actorController(id).movementTuning:this.simulation.controlledActor.controller.movementTuning;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speedScale,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
+  characterSettings(id:string):Required<CharacterOptions>{if(!this.hasActor(id))return this.ordinaryPhysics.characterSettings(id);const c=this.actorController(id).movementTuning;return {...DEFAULT_CHARACTER_OPTIONS,heightMeters:CENTER*2,radiusMeters:RADIUS,walkSpeedMetersPerSecond:3.1*c.speedScale,runSpeedMetersPerSecond:c.maxSpeed,jumpSpeedMetersPerSecond:c.jumpSpeed,maximumStepHeightMeters:.27};}
   probeCharacterStart(id:string,position:Vec3):EpisodeStartProbe{
     this.actorController(id);
     const safe=this.environment.safeSpawn(new THREE.Vector3(...position),HUMANOID_BODY);const valid=!!safe&&safe.distanceTo(new THREE.Vector3(...position))<=.35&&!this.environment.bodyOverlap({position:safe,rotation:new THREE.Quaternion(),body:HUMANOID_BODY},{excludedColliderHandles:new Set([this.actorController(id).capsule.handle])},.015);

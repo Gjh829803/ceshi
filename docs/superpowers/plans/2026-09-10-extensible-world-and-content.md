@@ -85,8 +85,10 @@ Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消�
 局部绕让已复用 Detour Crowd，保持角色控制器和共享 Rapier 的唯一实际位移归属；
 真实对向通行、复位轨迹、50 次导航/删除、3/10 角色巡逻及 Creator/Episode 已通过，
 见 [绕让验证](../../reviews/2026-09-11-actor-navigation-avoidance.md)。
-进一步检查发现 Humanoid world 的普通 Mesh character 注册/推进仍有旧限制，
-混合角色能力需要继续收敛，不能把单独 createWorld 的可用性当作混合世界已完成。
+普通 Mesh/AssetInstance NPC 已接入共享物理、导航、自定义移动和动画，旧注册限制
+已删除；真实 Creator/Episode 四角色浏览器和生命周期边界通过，见
+[混合 NPC 验证](../../reviews/2026-09-11-mixed-character-npcs.md)。
+普通角色成为受控主角时的相机与 Episode 选择仍需继续迁移。
 
 - [x] 测试 3 Actor 独立输入/mixer/controller，despawn 不销毁共享世界，旧 generation 异步完成只释放 lease。
 - [x] 完整人物按 actorId 绑定；输入目标和相机目标分开。复用导航生成意图，碰撞几何生成 navmesh，保留失效/受阻原因与确定性让行。

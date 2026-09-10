@@ -55,6 +55,13 @@ the initial seal are retained for reset. Later actors release their resources on
 despawn. Keep a caller-created instance only if registration failed, and dispose
 it if it will not be retried.
 
+The same humanoid world accepts ordinary NPCs through
+`world.addCharacter({id,object,body,movement})` or an `AssetInstance` binding.
+Their own capsule dimensions, navigation, custom movement intent and asset mixer
+run in the shared fixed tick. Character colliders participate in physical contact
+and local avoidance, but are excluded from static navigation geometry. Full
+humanoid abilities still require a complete humanoid binding.
+
 `WorldObservation.controlledObject` is the current controlled entity's live
 `THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
 It is separate from `world.humanoid`; observers expose runtime state through
@@ -177,6 +184,11 @@ simulation cost. Worlds without a renderer skip GPU preparation.
 previous running/paused state. Use `onReset` for author-owned visual state and
 `onDispose` for external cleanup; `dispose()` releases the world. Each hook returns
 an unsubscribe function.
+For synchronous headless checks, the first `world.step(input,ticks)` also seals
+both entity metadata and runtime state, even for zero ticks. Finish registration
+first. If resources or parameters need initialization, await `world.start()` and
+then stop before stepping. Invalid input and failed prototype preparation cannot
+leave a partially sealed baseline.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:nonhuman-subject -->

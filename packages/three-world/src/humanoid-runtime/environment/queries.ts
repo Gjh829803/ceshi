@@ -64,8 +64,9 @@ export class EnvironmentQueries {
   readonly colliderBindings:PhysicsColliderBindings;
   readonly interactions:WorldInteractions;
   private readonly physicsSubsteps=new Set<(fraction:number)=>void>();
-  borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c)=>this.colliderBindings.added(id,c),colliderRemoved:(_id,c)=>this.colliderBindings.removed(c),colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h),characterSettings:handle=>{const rig=[...this.rigs].find(rig=>rig.capsule.handle===handle);return rig?{...DEFAULT_CHARACTER_OPTIONS,heightMeters:2*(rig.capsule.halfHeight()+rig.capsule.radius()),radiusMeters:rig.capsule.radius(),collisionOffsetMeters:rig.controller.offset(),maximumSlopeRadians:rig.controller.maxSlopeClimbAngle()}:undefined;}};}
-  navigationGeometry(){this.assertLive();return readNavigationGeometry(this.world,collider=>!this.queryExcluded.has(collider.handle));}
+  private readonly externalCharacterColliders=new Set<number>();
+  borrowPhysics():BorrowedPhysicsWorld{return {world:this.world,colliderAdded:(id,c,kind)=>{this.colliderBindings.added(id,c);if(kind==='character')this.externalCharacterColliders.add(c.handle);},colliderRemoved:(_id,c)=>{this.externalCharacterColliders.delete(c.handle);this.colliderBindings.removed(c);},colliderChanged:(_id,c)=>this.colliderBindings.changed(c),colliderOwner:h=>this.colliderId(h),characterSettings:handle=>{const rig=[...this.rigs].find(rig=>rig.capsule.handle===handle);return rig?{...DEFAULT_CHARACTER_OPTIONS,heightMeters:2*(rig.capsule.halfHeight()+rig.capsule.radius()),radiusMeters:rig.capsule.radius(),collisionOffsetMeters:rig.controller.offset(),maximumSlopeRadians:rig.controller.maxSlopeClimbAngle()}:undefined;}};}
+  navigationGeometry(){this.assertLive();return readNavigationGeometry(this.world,collider=>!this.queryExcluded.has(collider.handle)&&!this.externalCharacterColliders.has(collider.handle));}
   beforePhysicsSubstep(callback:(fraction:number)=>void){this.physicsSubsteps.add(callback);return()=>{this.physicsSubsteps.delete(callback);};}
 
   private vehicleRigs=new Map<string,VehicleRigidRig>();
@@ -155,7 +156,7 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactions.colliderForId(id);}
   propAnchor(boxId:string,point:readonly number[]){const group=this.propBodies.get(this.propBoxes.get(boxId)??'');if(!group)return null;const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};}
   propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}

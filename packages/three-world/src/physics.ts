@@ -198,7 +198,7 @@ export class ThreePhysics implements PhysicsPort {
     for (let i = 0; i < entry.colliders.length; i++) {
       const collider = entry.colliders[i]!;
       this.colliderOwners.set(collider.handle, entry.id);
-      this.borrowed?.colliderAdded?.(entry.id,collider);
+      this.borrowed?.colliderAdded?.(entry.id,collider,entry.kind);
       this.colliderSources.set(collider.handle, entry.sourceObjects?.[i] ?? entry.object);
     }
     entry.body.setEnabled(entry.enabled && entry.colliders.length > 0);

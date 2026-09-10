@@ -5,7 +5,7 @@ import type {CharacterDrive,CharacterOptions} from './engine-contracts';
 /** Internal borrowing contract; not exported by the author-facing SDK barrel. */
 export interface BorrowedPhysicsWorld {
   world:RAPIER.World;
-  colliderAdded?(id:string,collider:RAPIER.Collider):void;
+  colliderAdded?(id:string,collider:RAPIER.Collider,kind:'fixed'|'kinematic'|'dynamic'|'character'):void;
   colliderRemoved?(id:string,collider:RAPIER.Collider):void;
   colliderChanged?(id:string,colliders:readonly RAPIER.Collider[]):void;
   colliderOwner?(handle:number):string|undefined;

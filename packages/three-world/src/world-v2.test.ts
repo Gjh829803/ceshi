@@ -478,3 +478,19 @@ it('keeps NPC navigation running when the controlled actor leaves the navmesh',a
   expect((await world.execute({type:'entity.set-position',entityId:'hero',positionWorldMetersXYZ:[25,3,0]})).status).toBe('applied');
   expect(()=>world.step({},360)).not.toThrow();expect(world.operations.get(route).status).toBe('succeeded');expect(world.snapshot().errors).toEqual([]);
 });
+
+it.each(['ticks','input'] as const)('does not seal a partial initial state after invalid first step %s',async(kind)=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});liveWorlds.push(world);
+ world.addCharacter({id:'a',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.3}});world.setControlledEntity('a');
+ expect(()=>kind==='ticks'?world.step({},-1):world.step({moveXRatio:2},0)).toThrow();
+ world.addCharacter({id:'b',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.3}});world.step({},0);
+ await world.reset();expect(world.snapshot().entities.map(entity=>entity.id).sort()).toEqual(['a','b']);
+ expect(()=>world.step({},1)).not.toThrow();
+});
+
+it('rejects synchronous initialization after prototype preparation has failed',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});liveWorlds.push(world);
+ const object=new THREE.Group();object.clone=()=>{throw new Error('prototype clone failed');};
+ await expect(world.registerPrototype({id:'broken',description:'Failed source',template:{kind:'entity',options:{role:'decoration',object}}})).rejects.toThrow('prototype clone failed');
+ expect(()=>world.step({},0)).toThrow();await expect(world.start()).rejects.toMatchObject({message:expect.stringContaining('prototype clone failed')});
+});

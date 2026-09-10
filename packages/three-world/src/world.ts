@@ -565,13 +565,19 @@ export class ThreeWorld implements API.World {
  private async initialise():Promise<void>{
   if(this.baseline)return;
   while(this.pending.size)await Promise.all([...this.pending]);
-  for(const prototype of this.prototypes.values())if(prototype.status!=='ready')throw prototype.error??failure('PROTOTYPE_NOT_READY');
+  this.assertPrototypesReady();
   const epoch=this.epoch;
   if(this.parameters.size){
    const prepared=await this.prepare(this.expand([...this.parameters].map(([id,parameter])=>({type:'parameter.set' as const,parameterId:id,value:parameter.definition.initialValue}))));
    let receipt:API.CommandReceipt|undefined;const operationId=this.operations.create('initial');this.commit({prepared,operationId,commandId:'initial-parameters',resolve:value=>{receipt=value;}},true);if(receipt?.status==='rejected')throw receipt.error;if(receipt?.status==='accepted'){const result=this.operations.get(receipt.operationId);if(result.status!=='succeeded')throw result.error??failure('INITIAL_PREPARATION_FAILED');}
   }
   if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');
+  this.sealBaseline();
+ }
+ private assertPrototypesReady():void{for(const prototype of this.prototypes.values())if(prototype.status!=='ready')throw prototype.error??failure('PROTOTYPE_NOT_READY');}
+ private sealBaseline():void{
+  if(this.baseline)return;
+  this.assertPrototypesReady();
   this.captureObservation();
   this.state.seal();
   this.baseline={entries:new Map([...this.entries].map(([id,entry])=>[id,this.copyEntry(entry)])),prototypes:new Map(this.prototypes),geometries:new Map(this.geometries),parameters:new Map(this.parameters),actions:new Map(this.actions),movements:new Map(this.movements),autonomies:new Map([...this.autonomies].map(([id,value])=>[id,cloneJson(value)])),geometryById:new Map([...this.entries].filter(([,entry])=>(entry.object as THREE.Mesh).isMesh).map(([id,entry])=>[id,(entry.object as THREE.Mesh).geometry])),captureTargets:this.captureTargets};
@@ -710,12 +716,12 @@ export class ThreeWorld implements API.World {
    world.episodeLease=undefined;if(host&&!host.isDisposed())host.setEpisodeOwned(false);world.engine.stop();lease.restoreViewport();};
   return {schemaVersion:1,
    capabilities(){const entry=controlled(),settings=world.engine.physics.characterSettings(entry.id),bounds=new THREE.Box3();
-    for(const candidate of world.entries.values())if(candidate.role!=='decoration'){
+    if(world.humanoid){bounds.min.set(...world.humanoid.environment.map.bounds.min);bounds.max.set(...world.humanoid.environment.map.bounds.max);}
+    else for(const candidate of world.entries.values())if(candidate.role!=='decoration'){
      bounds.union(new THREE.Box3().setFromObject(candidate.object));
      if(candidate.body){const body=world.engine.physics.characterSettings(candidate.id),position=worldPose(candidate.object).position;bounds.expandByPoint(position.clone().add(new THREE.Vector3(-body.radiusMeters,0,-body.radiusMeters)));bounds.expandByPoint(position.clone().add(new THREE.Vector3(body.radiusMeters,body.heightMeters,body.radiusMeters)));}
     }
     if(bounds.isEmpty())bounds.expandByPoint(worldPose(entry.object).position);
-    if(world.humanoid){bounds.min.set(...world.humanoid.environment.map.bounds.min);bounds.max.set(...world.humanoid.environment.map.bounds.max);}
     return {...(world.humanoid?{humanoid:world.humanoid.episodeCapabilities()}:{}),schemaVersion:1,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
     movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,episodeInput:world.humanoid?'humanoid':entry.movementId==='ground'?'ground':adapter()?'custom':'unsupported',startSupport:adapter()?.startSupport??'ground',walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
     camera:{mode:world.cameraMode,segmentInitialization:'relative-authored-pose'},maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
@@ -779,7 +785,15 @@ export class ThreeWorld implements API.World {
   };
  }
  /** Headless/Host verification uses the same fixed engine; no synthetic position updates. */
- step(input:API.WorldInput={},ticks=1):API.WorldSnapshot{if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.step(input,ticks);return this.snapshot();}
+ step(input:API.WorldInput={},ticks=1):API.WorldSnapshot{
+  this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
+  this.engine.validateStep(input,ticks);
+  if(!this.baseline){
+   if(this.pending.size||this.parameters.size)throw failure('WORLD_INITIALIZATION_REQUIRED','Await world.start() before synchronous stepping when content or parameters require initialization.');
+   this.sealBaseline();
+  }
+  this.engine.step(input,ticks);return this.snapshot();
+ }
  render():void{this.engine.render();}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
