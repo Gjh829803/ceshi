@@ -46,7 +46,6 @@ import {
   defaultRegion,
   prepareCourse,
 } from "../../../shared/preset-content/platform/scenarios";
-import { buildInteractionVisuals } from "../../../shared/preset-content/humanoid/interaction-visuals";
 import { createAccessoryPreview } from "../../../shared/preset-content/humanoid/accessories";
 import { mountEquipmentPanel } from "./equipment-panel";
 import { mountHumanoidLab } from "./humanoid-panel";
@@ -195,7 +194,6 @@ const sdkPresentation = sdk.createPresentation({
   container: canvas.parentElement!,
 });
 shell.attachViewport(sdkPresentation);
-const interactionVisuals = buildInteractionVisuals(scene);
 const profiles = new Map<string, AssetProfile>();
 const exportedProfiles = new Map<string, string>();
 for (const id of ["person", ...SPECS.map((s) => s.id)]) {
@@ -225,19 +223,6 @@ function syncCameraProfile(force = false) {
   }
 }
 syncCameraProfile();
-const frameClock = { reset() {} };
-const presentation = {
-  get vehicles() {
-    return sim.vehicles;
-  },
-  get player() {
-    return sim.controlledActor.player;
-  },
-  get targets() {
-    return humanoid.readInteractionTargets(sim.controlledActor.controller);
-  },
-  snap(_sim: unknown) {},
-};
 const renderPreparation = new AbortController();
 const pressed = new Set<string>();
 let jumpPressed = false,
@@ -255,7 +240,7 @@ function displayColliderId(handle:number) {
   return runtime.environment.colliderId(handle);
 }
 function readDisplayTargets():DisplayInteractionTarget[] {
-  const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.controlledActor.controller)];
+  const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.environment)];
   sim.vehicles.forEach((vehicle,n)=>{
     if(!sim.available(vehicle))return;
     const root=visuals[n]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
@@ -356,8 +341,6 @@ function syncTeleport() {
   humanDemo = null;
   clearInput();
   runtime.clearInput();
-  presentation.snap(sim);
-  frameClock.reset();
   lastActive = -99;
   toast(sim.controlledActor.message);
   if (paused) renderPausedState();
@@ -405,8 +388,6 @@ function pause(value = !paused, showOverlay = true) {
   paused = value;
   if (value) sdk.stop();
   else if (ready && !preparingRender && !panelOpen) void sdk.start();
-  frameClock.reset();
-  presentation.snap(sim);
   visuals.forEach(resetVehicleWheels);
   resetFPS(value ? "已暂停" : ready ? "采样中" : "加载中");
   clearInput();
@@ -515,7 +496,6 @@ const onPanelChange = (open: boolean) => {
   if (open) sdk.stop();
   else if (ready && !preparingRender && !paused) void sdk.start();
   clearInput();
-  frameClock.reset();
   resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
 };
 const catalog = buildWorkspaceCatalog();
@@ -899,7 +879,6 @@ window.addEventListener(
     equipmentPanel.dispose();
     accessories.dispose();
     displayPreview.dispose();
-    interactionVisuals.dispose();
     visuals.forEach((v) => v.creature?.dispose());
     library.dispose();
     workbench.dispose();
@@ -1274,9 +1253,9 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
       camera.position.distanceToSquared(state.position) < 8100;
   });
   const held = character.carriedAttachment;
-  interactionVisuals.update(
+  world.interactionProps.update(
     humanoid
-      .readInteractionTargets(sim.controlledActor.controller)
+      .readInteractionTargets(sim.environment)
       .map((target) =>
         held && target.id === held.id && target.state === "carried"
           ? { ...target, position: held.position }

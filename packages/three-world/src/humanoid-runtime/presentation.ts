@@ -3,8 +3,7 @@ import { AIRCRAFT } from '../config/aircraft';
 import type { CreatureState } from './creatures/types';
 import type { HumanoidActor } from './humanoid/actor';
 import type { HumanoidRenderState } from './humanoid/animation';
-import type { InteractionVisualTarget } from './humanoid/interaction-visuals';
-import { blendHumanoid,blendTargets,copyHumanoid,copyTargets,readHumanoid,readInteractionTargets } from './humanoid/render-state';
+import { blendHumanoid,copyHumanoid,readHumanoid } from './humanoid/render-state';
 import { copyAtvState,type AtvState } from './motion-families/ground-vehicle/atv';
 import type { TankState } from './motion-families/ground-vehicle/tank';
 import { blendUnicycleState,copyUnicycleState,type UnicycleState } from './motion-families/ground-vehicle/unicycle';
@@ -65,12 +64,11 @@ function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flying
     if(a.creature.leadYaw!==undefined&&b.creature.leadYaw!==undefined)out.creature.leadYaw=a.creature.leadYaw+angleDelta(a.creature.leadYaw,b.creature.leadYaw)*alpha;
   }
 }
-/** One history and render timestamp for every actor, vehicle and shared target. */
+/** One history and render timestamp for every actor and vehicle. */
 export class PresentationState {
   private previousTime=0;
   private currentTime=0;
   private readonly actors=new Map<string,{previous:MotionPose;current:MotionPose;revision:number;vehicleIndex:number;mountedInstanceId:string|null}>();
-  targets:InteractionVisualTarget[]=[];private previousTargets:InteractionVisualTarget[]=[];private currentTargets:InteractionVisualTarget[]=[];
   vehicles:MotionPose[];previousVehicles:MotionPose[];currentVehicles:MotionPose[];
   constructor(sim:Simulation){this.vehicles=sim.vehicles.map(pose);this.previousVehicles=sim.vehicles.map(pose);this.currentVehicles=sim.vehicles.map(pose);this.snap(sim);}
   hasDiscontinuity(sim:Simulation):boolean{return this.actors.size!==sim.actors.size||[...sim.actors].some(([id,actor])=>{const old=this.actors.get(id);return !old||old.revision!==actor.teleportRevision||old.vehicleIndex!==actor.vehicleIndex;});}
@@ -78,11 +76,11 @@ export class PresentationState {
     this.previousTime=this.currentTime=sim.time;this.actors.clear();
     for(const [id,actor] of sim.actors){const current=pose(),previous=pose();readActor(actor,current);copy(previous,current);this.actors.set(id,{previous,current,revision:actor.teleportRevision,vehicleIndex:actor.vehicleIndex,mountedInstanceId:actor.vehicle?.spec.id??null});}
     readVehicles(sim,this.currentVehicles);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));
-    this.currentTargets=readInteractionTargets(sim.actors.values().next().value?.controller);this.previousTargets=copyTargets(this.currentTargets);this.interpolate(1);
+    this.interpolate(1);
   }
-  beforeStep(sim:Simulation):void{if(this.hasDiscontinuity(sim))this.snap(sim);this.previousTime=this.currentTime;this.previousTargets=copyTargets(this.currentTargets);for(const state of this.actors.values())copy(state.previous,state.current);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));}
-  afterStep(sim:Simulation):void{if(this.hasDiscontinuity(sim)){this.snap(sim);return;}this.currentTime=sim.time;for(const [id,actor] of sim.actors)readActor(actor,this.actors.get(id)!.current);readVehicles(sim,this.currentVehicles);this.currentTargets=readInteractionTargets(sim.actors.values().next().value?.controller);}
-  interpolate(alpha:number):void{alpha=Math.max(0,Math.min(1,alpha));this.targets=blendTargets(this.previousTargets,this.currentTargets,alpha);this.vehicles.forEach((p,n)=>blend(p,this.previousVehicles[n]!,this.currentVehicles[n]!,alpha));}
+  beforeStep(sim:Simulation):void{if(this.hasDiscontinuity(sim))this.snap(sim);this.previousTime=this.currentTime;for(const state of this.actors.values())copy(state.previous,state.current);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));}
+  afterStep(sim:Simulation):void{if(this.hasDiscontinuity(sim)){this.snap(sim);return;}this.currentTime=sim.time;for(const [id,actor] of sim.actors)readActor(actor,this.actors.get(id)!.current);readVehicles(sim,this.currentVehicles);}
+  interpolate(alpha:number):void{alpha=Math.max(0,Math.min(1,alpha));this.vehicles.forEach((p,n)=>blend(p,this.previousVehicles[n]!,this.currentVehicles[n]!,alpha));}
   sample(alpha:number,epoch:number,previousTick:number,currentTick:number):HumanoidDisplaySample{
     alpha=Math.max(0,Math.min(1,alpha));const actors:Record<string,ActorPose>={},vehicles=this.currentVehicles.map(pose);
     for(const [id,state] of this.actors){const sampled=pose();blend(sampled,state.previous,state.current,alpha);actors[id]={...sampled,mountedInstanceId:state.mountedInstanceId};}

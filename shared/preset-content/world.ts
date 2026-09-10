@@ -1,12 +1,14 @@
 import * as T from 'three';
+import {buildInteractionVisuals} from './humanoid/interaction-visuals';
 import { getMap } from './environment/maps';
 import { buildGrandPrixVisuals } from './environment/grand-prix-visuals';
 import { START_FINISH } from './environment/grand-prix';
 import type { EnvironmentDefinition } from './environment/types';
-export interface WorldVisual {root:T.Group;solids:T.Object3D[];sun:T.DirectionalLight;update:(time:number,target:T.Vector3,underwater:boolean)=>void;dispose:()=>void}
+export interface WorldVisual {interactionProps:ReturnType<typeof buildInteractionVisuals>;root:T.Group;solids:T.Object3D[];sun:T.DirectionalLight;update:(time:number,target:T.Vector3,underwater:boolean)=>void;dispose:()=>void}
 /** The mesh transform is exactly the box transform consumed by environment queries. */
 export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campus')):WorldVisual{
  const root=new T.Group();root.name=`map:${map.id}`;scene.add(root);
+ const interactionProps=buildInteractionVisuals(root,[...(map.interactions??[]).filter(target=>target.kind==='pickup').map(target=>({id:target.id,size:target.size??[.13,.13,.13],position:target.position})),...(map.looseCrates??[]).map(crate=>({id:crate.id,size:[crate.size,crate.size,crate.size],position:crate.position}))]);
  const solids:T.Object3D[]=[],geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>(),instances=new Set<T.InstancedMesh>();
  const unit=new T.BoxGeometry(1,1,1);geometries.add(unit);
  const palette=new Map<string,T.MeshStandardMaterial>();
@@ -69,5 +71,5 @@ export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campu
  const previousFog=scene.fog,previousBackground=scene.background,airFog=new T.Fog('#c1d7dd',280,1000),waterFog=new T.Fog('#246879',8,105),waterBackground=new T.Color('#246879'),sunOffset=new T.Vector3(-70,140,-90);
  scene.fog=airFog;root.updateMatrixWorld(true);
  let disposed=false;
- return {root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;circuit?.dispose();root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
+ return {interactionProps,root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;interactionProps.dispose();circuit?.dispose();root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
 }

@@ -1,12 +1,12 @@
 import * as T from 'three';
 import {createCollisionDebug} from '../../../shared/preset-content/humanoid/capsule-debug';
 import type {EnvironmentDefinition} from '../../../shared/preset-content/environment/types';
-import type {InteractionVisualTarget} from '../../../shared/preset-content/humanoid/interaction-visuals';
+import type {humanoid} from '@worldkit/three';
 import type {DisplayRenderSettings} from './display-settings';
 import {resolveDisplayScope,type DisplayContext} from './display-context';
 
 type PhysicsSource=Parameters<ReturnType<typeof createCollisionDebug>['update']>[0];
-export type DisplayInteractionTarget=InteractionVisualTarget&{ownerIds?:readonly string[]};
+export type DisplayInteractionTarget=humanoid.InteractionVisualTarget&{ownerIds?:readonly string[]};
 export function createDisplayOverlays(scene:T.Scene,read:()=>{physics:PhysicsSource;map:EnvironmentDefinition;targets:readonly DisplayInteractionTarget[];
   colliderId?:(handle:number)=>string;colliderDistance?:(handle:number,centers:readonly T.Vector3[])=>number}) {
   const root=new T.Group();root.name='display-diagnostics';root.visible=false;scene.add(root);

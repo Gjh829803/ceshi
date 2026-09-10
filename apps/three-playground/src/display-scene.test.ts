@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from 'three';
+import {buildInteractionVisuals} from '../../../shared/preset-content/humanoid/interaction-visuals';
 import { createDisplayScene } from './display-scene';
 import { defaultDisplaySettings } from './display-settings';
 
@@ -88,4 +89,18 @@ describe('display-only scene transaction', () => {
     expect(skin.material).toBe(original);
     f.preview.dispose(); expect(disposed).toBe(false);
   });
+});
+
+
+it('builds only declared map props and never creates models from semantic observations',()=>{
+ const scene=new T.Scene();
+ const visual=buildInteractionVisuals(scene,[{id:'authored',size:[.2,.3,.4],position:[1,2,3]}]);
+ try{
+  const object=scene.getObjectByName('authored');expect(object).toBeDefined();expect(object!.position.toArray()).toEqual([1,2,3]);
+  visual.update([{id:'custom-object',kind:'pickup',position:new T.Vector3(5,5,5),state:'available'}]);
+  expect(scene.getObjectByName('custom-object')).toBeUndefined();expect(object!.visible).toBe(false);
+  visual.update([{id:'authored',kind:'pickup',position:new T.Vector3(3,2,1),state:'placed'}]);
+  expect(scene.getObjectByName('authored')).toBe(object);expect(object!.visible).toBe(true);expect(object!.position.toArray()).toEqual([3,2,1]);
+ }finally{visual.dispose();}
+ expect(scene.children).toHaveLength(0);
 });

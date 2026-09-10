@@ -1,5 +1,6 @@
 import {copyUnicycleState,blendUnicycleState} from '../motion-families/ground-vehicle/unicycle';
 import { Quaternion, Vector3 } from 'three';
+import type {EnvironmentQueries} from '../environment/queries';
 import type { HumanoidController } from './controller';
 import { SOURCE_ACTION_DURATIONS,type HumanoidRenderState } from './animation';
 import type { InteractionVisualTarget } from './interaction-visuals';
@@ -41,12 +42,7 @@ export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderSt
   if(out.animationEvent&&a.animationEvent?.id===out.animationEvent.id)out.animationEvent.elapsed=a.animationEvent.elapsed+(out.animationEvent.elapsed-a.animationEvent.elapsed)*alpha;
   return out;
 }
-export function readInteractionTargets(h?:HumanoidController):InteractionVisualTarget[]{
-  if(!h)return [];
-  return [...h.skills.targets.values()].map<InteractionVisualTarget>(t=>({id:t.definition.id,kind:t.definition.kind,position:t.position.clone(),rotation:t.rotation.clone(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
-    .concat(h.crates.map(c=>({id:c.id,kind:'pickup' as const,position:new Vector3().copy(c.body.translation()),rotation:new Quaternion().copy(c.body.rotation()),state:'dynamic',size:[c.size,c.size,c.size]})));
-}
-export function copyTargets(targets:readonly InteractionVisualTarget[]){return targets.map(t=>({...t,position:t.position.clone(),rotation:t.rotation?.clone(),size:t.size?[...t.size]:undefined}));}
-export function blendTargets(a:readonly InteractionVisualTarget[],b:readonly InteractionVisualTarget[],alpha:number){
-  const previous=new Map(a.map(t=>[t.id,t]));return copyTargets(b).map(t=>{const p=previous.get(t.id);if(p&&p.state===t.state){t.position.lerpVectors(p.position,t.position,alpha);if(p.rotation&&t.rotation)t.rotation=p.rotation.clone().slerp(t.rotation,alpha);}return t;});
+export function readInteractionTargets(environment:EnvironmentQueries):InteractionVisualTarget[]{
+  return [...environment.interactions.targets.values()].map<InteractionVisualTarget>(t=>({id:t.definition.id,kind:t.definition.kind,position:t.position.clone(),rotation:t.rotation.clone(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
+    .concat(environment.looseCrates.map(c=>({id:c.id,kind:'pickup' as const,position:new Vector3().copy(c.body.translation()),rotation:new Quaternion().copy(c.body.rotation()),state:'dynamic',size:[c.size,c.size,c.size]})));
 }

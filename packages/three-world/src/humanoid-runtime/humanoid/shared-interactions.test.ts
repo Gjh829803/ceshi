@@ -5,6 +5,7 @@ import type {EnvironmentDefinition} from '../environment/types';
 import {HumanoidController} from './controller';
 import {ACTION_CLIP_IDS} from './action-schema';
 import {Simulation} from '../simulation';
+import {readInteractionTargets} from './render-state';
 
 const controllers:HumanoidController[]=[],environments:EnvironmentQueries[]=[];
 const map:EnvironmentDefinition={id:'shared-targets',name:'Shared targets',description:'',bounds:{min:[-10,-5,-10],max:[10,10,10]},
@@ -162,4 +163,16 @@ it('rejects content reset before mutating a live held relationship',()=>{
  a.resetAt(new Vector3(0,.04,0));q.resetContents();
  expect(physical.isValid).toBe(false);expect(q.interactions.targets.get('cup')!.physical!.isValid).toBe(true);
  expect(()=>step(q,[a],1)).not.toThrow();
+});
+
+
+it('reads world target poses without actors and without advancing the physical owner',()=>{
+ const q=setup(),simulation=new Simulation(q,[]);
+ try{
+  const target=q.interactions.targets.get('cup')!,pose=target.position.toArray(),time=simulation.time;
+  const read=()=>readInteractionTargets(q);
+  expect(read().map(target=>target.id)).toEqual(['cup','seat','loose-box']);
+  const values=read();values[0]!.position.set(100,100,100);values[0]!.rotation!.set(1,0,0,0);
+  expect(target.position.toArray()).toEqual(pose);expect(read()[0]!.rotation!.w).toBe(1);expect(simulation.time).toBe(time);
+ }finally{simulation.dispose();}
 });
