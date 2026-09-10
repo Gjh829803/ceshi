@@ -436,6 +436,7 @@ const library = mountAssetLibrary(el("libraryHost"), {
   onOpenChange: (open) => {
     clearInput();
     shell.flag("libraryOpen", open);
+    if (open) ensureThumbnails();
   },
   onQuickSlotsChange: renderQuickSlots,
 });
@@ -1107,12 +1108,14 @@ function updateUI() {
     "cameraButton",
     `相机 · ${["第三人称", "第一人称", "沉浸越肩"][follow.mode]}`,
   );
-  inspector.sync();
+  const inspectorVisible =
+    !shell.get().flags.inspectorClosed &&
+    (innerWidth > 720 || shell.get().flags.inspectorMobileOpen) &&
+    !(innerWidth <= 1000 && library.isOpen());
+  if (inspectorVisible) inspector.sync();
   shell.flag(
     "debugActive",
-    !shell.get().flags.inspectorClosed &&
-      (innerWidth > 720 || shell.get().flags.inspectorMobileOpen) &&
-      !(innerWidth <= 1000 && library.isOpen()),
+    inspectorVisible,
   );
   if (sim.message && sim.message !== lastMessage) {
     lastMessage = sim.message;
@@ -1224,13 +1227,20 @@ sdkPresentation.focus();
 toast(
   `Whitebox SDK · 101 骨 / 48 动作 / ${SPECS.length} 载具 / ${MAPS.length} 地图`,
 );
-disposeThumbnails = renderAssetThumbnails(
+// Asset previews are only needed while browsing. Starting their second renderer
+// during driving competes with the simulation and compiles extra shader programs.
+function ensureThumbnails() {
+ if (!ready || disposeThumbnails) return;
+ disposeThumbnails = renderAssetThumbnails(
   [
     { id: "person", object: character.root },
     ...visuals.map((v, n) => ({ id: SPECS[n]!.id, object: v.root })),
   ],
   (id, url) => library.setThumbnail(id, url),
-);
+  () => library.isOpen(),
+ );
+}
+if (library.isOpen()) ensureThumbnails();
 shell.on("exportProfiles", () => {
   const value = { schemaVersion: 1, profiles: [...profiles.values()] };
   const uri = URL.createObjectURL(

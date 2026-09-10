@@ -68,6 +68,12 @@ for(const spec of SPECS)if(spec.mode==='motorcycle'){
   spec.speed=150/3.6;spec.maxSpeed=180/3.6;spec.reverseSpeed=2;
 }
 SPECS.push(...CREATURE_SPECS,UNICYCLE_SPEC,SUBMERSIBLE_SPEC,CANOE_SPEC,KAYAK_SPEC,RAFT_SPEC,JETSKI_SPEC,ATV_SPEC,SKI_SPEC,SLED_SPEC,TANK_SPEC,BUS_SPEC);
+// Export the actual physical owner for every preset, including unoccupied craft.
+// The SDK converts these motion controls to forces in its existing physics world.
+for(const spec of SPECS)if(!spec.wheelPhysics&&!spec.bodyPhysics){
+  const mass:{[mode:string]:number}={slide:90,hover:450,boat:900,sub:3000,glider:180,plane:1200,space:2000,mount:550,carriage:1000,dragon:1800};
+  spec.bodyPhysics={kind:'motion',mass:mass[spec.mode]!,centerOfMassHeight:Math.max(0,spec.envelope.offset[1]*.5),friction:0,restitution:.08};
+}
 export const START: [number,number,number] = [-24,0,55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;

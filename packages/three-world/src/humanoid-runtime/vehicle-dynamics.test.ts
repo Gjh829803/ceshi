@@ -1,8 +1,10 @@
-import {beforeAll,expect,it} from 'vitest';
-import {Group,PerspectiveCamera,Vector3} from 'three';
+import {beforeAll,expect,it,vi} from 'vitest';
+import RAPIER from '@dimforge/rapier3d-compat';
+import {BoxGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Vector3} from 'three';
+import {VehicleCameraQueries} from './vehicle-camera-queries';
 import {createWorld} from '../index';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
-import {createVehicle,emptyInput,stepVehicle} from './simulation';
+import {createVehicle,emptyInput,stepVehicle,Simulation} from './simulation';
 import {vehicleDriveTelemetry} from './vehicle-dynamics';
 import {SPECS} from '../../../../shared/preset-content/config';
 import type {EnvironmentDefinition} from './environment/types';
@@ -11,6 +13,54 @@ import {paddleRiderBody} from './kayak';
 const added=['atv','bus','tank','unicycle','sled','ski','kayak','canoe','raft','jetski','observation-sub'];
 const map:EnvironmentDefinition={id:'native-vehicles',name:'Native vehicles',description:'',bounds:{min:[-500,-50,-500],max:[500,100,500]},boxes:[{id:'floor',position:[0,-21,0],size:[1000,2,1000]}],water:[{id:'water',min:[-500,-20,-500],max:[500,0,500],surface:0}],regions:[],spawns:[],playerSpawn:[20,0,20]};
 beforeAll(initEnvironmentQueries);
+function collisionPair(id:string,otherId=id){
+  const aSource=SPECS.find(s=>s.id===id)!,bSource=SPECS.find(s=>s.id===otherId)!;
+  const aquatic=['boat','sub','kayak'].includes(aSource.mode);
+  const y=aquatic?aSource.mode==='sub'?-3:.1:Math.max(.05,aSource.envelope.halfExtents[1]-aSource.envelope.offset[1]+.05);
+  const gap=aSource.envelope.halfExtents[2]+bSource.envelope.halfExtents[2]+.2+(id==='carriage'?4.8:0);
+  const specs=[{...aSource,id:'a',spawn:[0,y,0] as [number,number,number],yaw:0},{...bSource,id:'b',spawn:[0,y,gap] as [number,number,number],yaw:0}];
+  const q=new EnvironmentQueries({...map,water:aquatic?map.water:[],boxes:[{...map.boxes[0]!,position:[0,aquatic?-21:-1,0]}],
+    regions:[{id:'test',name:'Test',description:'',center:[0,0,0],size:[1000,1000],color:'#fff',modes:[aSource.mode,bSource.mode]}],
+    spawns:specs.map(s=>({id:s.id,name:s.id,vehicleId:s.id,position:s.spawn,yaw:0,regionId:'test'}))});
+  const sim=new Simulation(q,specs);return {q,sim,a:sim.vehicles[0]!,b:sim.vehicles[1]!};
+}
+it.each(SPECS.map(s=>s.id))('%s has a dynamic chassis and receives collision momentum while unoccupied',id=>{
+  const {q,sim,a,b}=collisionPair(id);try{
+    expect(Number(!!a.wheelPhysics)+Number(!!a.bodyPhysics)).toBe(1);
+    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
+    const start=b.position.clone();a.velocity.z=20;
+    for(let n=0;n<90;n++)sim.step(emptyInput(),1/60);
+    expect(b.position.z-start.z,`${id} must receive forward collision momentum`).toBeGreaterThan(.05);
+    expect([...a.position.toArray(),...b.position.toArray(),...b.rotation.toArray()]).toSatisfy(xs=>xs.every(Number.isFinite));
+  }finally{sim.dispose();q.dispose();}
+});
+it.each([false,true])('a rover knocks an unoccupied slide forward independent of list order (%s)',reversed=>{
+  const {q,sim,a,b}=collisionPair('rover','slide');try{
+    if(reversed)sim.vehicles.reverse();
+    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
+    const start=b.position.clone();a.velocity.z=15;
+    for(let n=0;n<120;n++)sim.step(emptyInput(),1/60);
+    expect(b.position.z-start.z).toBeGreaterThan(1);
+    expect(a.position.z).toBeLessThan(b.position.z);
+  }finally{sim.dispose();q.dispose();}
+});
+it('all preset motions are intents: no vehicle advances before the shared physics step',()=>{
+  const q=new EnvironmentQueries(map);try{for(const spec of SPECS){
+    const v=createVehicle(spec),position=v.position.clone(),rotation=v.rotation.clone();
+    stepVehicle(v,{...emptyInput(),forward:1,boost:true},1/60,1/60,q);
+    expect(v.position).toEqual(position);expect(v.rotation).toEqual(rotation);
+    q.releaseVehicleRig(v.spec.id);
+  }}finally{q.dispose();}
+});
+it.each(['plane','glider'])('%s takes off from a supported start using forces in the shared solver',id=>{
+ const source=SPECS.find(s=>s.id===id)!,q=new EnvironmentQueries({...map,water:[],boxes:[{id:'floor',position:[0,-1,0],size:[1000,2,1000]}]});
+ const v=createVehicle({...source,spawn:[0,source.envelope.halfExtents[1]-source.envelope.offset[1]+.05,0],yaw:0});
+ try{v.bodyPhysics!.riderMounted=true;for(let n=0;n<120;n++){stepVehicle(v,emptyInput(),1/60,n/60,q);q.stepPhysics(1/60);}
+  const ground=v.position.y;for(let n=0;n<600;n++){stepVehicle(v,{...emptyInput(),boost:true,forward:id==='plane'?-.5:0},1/60,n/60,q);q.stepPhysics(1/60);}
+  expect(v.position.z).toBeGreaterThan(50);if(id==='plane')expect(v.position.y).toBeGreaterThan(ground+10);else expect(v.launched).toBe(true);
+ }finally{q.dispose();}
+});
+
 function fixture(id:string,wall=false){
   const source=SPECS.find(v=>v.id===id)!;const aquatic=!!source.bodyPhysics?.water;
   const q=new EnvironmentQueries({...map,water:aquatic?map.water:[],boxes:[{...map.boxes[0]!,position:[0,aquatic?-21:-1,0]},...(wall?[{id:'wall',position:[0,10,12] as const,size:[100,60,.2] as const}]:[])]});
@@ -37,6 +87,22 @@ it.each(added)('%s is stopped by the shared rigid body collision solver',id=>{
     expect(v.position.z+v.spec.envelope.halfExtents[2]*.5).toBeLessThan(12.2);
     expect(v.position.y).toBeGreaterThan(-22);
   }finally{q.dispose();}
+});
+it.each(['atv','observation-sub'])('%s keeps rigid camera shapes cached across real physics rotations',id=>{
+  const {q,v,run}=fixture(id),root=new Group(),panel=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());
+  panel.scale.set(1,1.1,.9);root.add(panel);v.yaw=.7;v.rotation.setFromAxisAngle(new Vector3(0,1,0),v.yaw);
+  const query=new VehicleCameraQueries([{instanceId:id,object:root}]),build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
+  try{
+    root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();const built=build.mock.calls.length;
+    expect(built).toBe(2);
+    for(let n=0;n<120;n++){
+      run(1,{...emptyInput(),forward:1,steer:.4});
+      expect(v.rotation.lengthSq()).toBeCloseTo(1,12);
+      root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();
+    }
+    expect(build.mock.calls.length).toBe(built);
+    panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBeGreaterThan(built);
+  }finally{query.dispose();build.mockRestore();panel.geometry.dispose();panel.material.dispose();q.dispose();}
 });
 it('native bodies exchange collision impulses, retain one owner, and release/reset through the runtime',async()=>{
   const spec=SPECS.find(v=>v.id==='unicycle')!;

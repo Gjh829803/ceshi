@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Group, PerspectiveCamera } from 'three';
+import {SPECS} from '../../shared/preset-content/config';
 import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, type VehicleSpec } from '@worldkit/three';
 
 // Headless physical integration evidence, not rendered Creator self-check or Episode
@@ -61,6 +62,11 @@ describe('catalog humanoid families in an independent physical world', () => {
   it('covers the catalog 30 vehicle assets and all eighteen runtime families', () => {
     expect(assets).toHaveLength(30);
     expect([...new Set(assets.map(asset => asset.vehicle.spec.mode))].sort()).toEqual([...families].sort());
+    for(const asset of assets){const preset=SPECS.find(s=>s.id===asset.vehicle.spec.id)!;
+      expect(asset.vehicle.spec.wheelPhysics,asset.id).toEqual(preset.wheelPhysics);
+      expect(asset.vehicle.spec.bodyPhysics,asset.id).toEqual(preset.bodyPhysics);
+      expect(Number(!!preset.wheelPhysics)+Number(!!preset.bodyPhysics),asset.id).toBe(1);
+    }
   });
 
   for (const family of families) {
@@ -78,7 +84,14 @@ describe('catalog humanoid families in an independent physical world', () => {
           expect(snapshot.errors).toEqual([]);
           expect(snapshot.humanoid?.mountedInstanceId).toBe('subject');
           expect([...actor.position.toArray(), ...actor.velocity.toArray(), ...actor.rotation.toArray()].every(Number.isFinite)).toBe(true);
-          expect(runtime.environment.overlaps(actor.position, actor.spec.wheelPhysics?.chassis??humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
+          // Test the actual rounded chassis, not its sharp enclosing box.
+          const e=actor.spec.envelope,body=actor.spec.bodyPhysics;
+          {const rig=runtime.environment.vehicleRig(actor.spec.id,actor.bodyPhysics??actor.wheelPhysics!,actor.position,actor.rotation,actor.bodyPhysics?.mass??actor.spec.wheelPhysics!.mass!,e.halfExtents[0],e.halfExtents[2],e.offset[1]+e.halfExtents[1],body?.centerOfMassHeight??0);
+            for(const collider of rig.colliders)for(const box of runtime.environment.map.boxes){
+              const contact=collider.contactCollider(runtime.environment.colliderForId(box.id)!, .02);
+              expect(contact?.distance??0,`${family} penetrates ${box.id}`).toBeGreaterThan(-.01);
+            }
+          }
           travelled += actor.position.distanceTo(previous); previous.copy(actor.position);
         }
         expect(world.simulationTick).toBe(1800);

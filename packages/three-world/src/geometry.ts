@@ -38,6 +38,10 @@ export function worldPose(object: THREE.Object3D): WorldPose {
   for (let parent = object.parent; parent; parent = parent.parent) ancestors.push(parent);
   for (let i = ancestors.length - 1; i >= 0; i--) ancestors[i]!.updateWorldMatrix(false, false, true);
   object.updateWorldMatrix(false, true, true);
+  return poseFromWorldMatrix(object);
+}
+/** Read a validated pose after the caller has refreshed the hierarchy once. */
+export function poseFromWorldMatrix(object: THREE.Object3D): WorldPose {
   if (!object.matrixWorld.elements.every(Number.isFinite) || Math.abs(object.matrixWorld.determinant()) < 1e-12) geometryError('PHYSICS_TRANSFORM_INVALID', 'The world transform must be finite and invertible.');
   const position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
   object.matrixWorld.decompose(position, rotation, scale);

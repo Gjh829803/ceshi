@@ -7,11 +7,13 @@ import {kayakStroke,kayakPaddlePose,paddleBlade,paddleRiderBody,KAYAK_WATER,CANO
 import {finishJetSkiStep} from './jetski';
 import {finishSubmersibleStep} from './submersible';
 import {tankBarrel,TANK_CONTROLS,TANK_GEOMETRY} from './tank';
+import {motionForces,type MotionIntent} from './vehicle-motion-forces';
+import {creatureBodies} from './creatures/controller';
 
 /** SI units. These controllers supply forces to the existing vehicle rigid rig;
  * EnvironmentQueries.stepPhysics remains the sole integrator. */
 export interface BodyPhysicsConfig {
-  kind:'unicycle'|'sled'|'paddle'|'tracks'|'jet'|'submersible';
+  kind:'unicycle'|'sled'|'paddle'|'tracks'|'jet'|'submersible'|'motion';
   mass:number;centerOfMassHeight:number;
   friction?:number;restitution?:number;
   /** Effective driven wheel/track/propulsor radius, in metres. */
@@ -27,7 +29,7 @@ export interface BodyPhysicsState {
 export const createBodyPhysics=(c:BodyPhysicsConfig):BodyPhysicsState=>({riderMounted:false,angularVelocity:new Vector3(),powertrain:c.powertrain?createPowertrain(c.powertrain):undefined,effort:0,cadence:0,mass:c.mass,contactCount:0,elapsed:0});
 export function validateBodyPhysics(c:BodyPhysicsConfig):void {
   const fail=()=>{throw new Error('VEHICLE_BODY_PHYSICS_CONFIG_INVALID');};
-  if(!['unicycle','sled','paddle','tracks','jet','submersible'].includes(c.kind)||!Number.isFinite(c.mass)||c.mass<20||!Number.isFinite(c.centerOfMassHeight)||Math.abs(c.centerOfMassHeight)>5)fail();
+  if(!['unicycle','sled','paddle','tracks','jet','submersible','motion'].includes(c.kind)||!Number.isFinite(c.mass)||c.mass<20||!Number.isFinite(c.centerOfMassHeight)||Math.abs(c.centerOfMassHeight)>5)fail();
   if(c.friction!==undefined&&(!Number.isFinite(c.friction)||c.friction<0||c.friction>2))fail();
   if(c.restitution!==undefined&&(!Number.isFinite(c.restitution)||c.restitution<0||c.restitution>1))fail();
   if(c.powertrain){validatePowertrain(c.powertrain);if(!c.driveRadius||!Number.isFinite(c.driveRadius)||c.driveRadius<.05)fail();}
@@ -38,21 +40,39 @@ export function validateBodyPhysics(c:BodyPhysicsConfig):void {
 const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 const blend=(a:number,b:number,k:number,h:number)=>a+(b-a)*(1-Math.exp(-k*h));
 
-export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number,q:EnvironmentQueries):void {
+export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number,q:EnvironmentQueries,intent?:MotionIntent):void {
   if(dt<=0)return;
   const c=v.spec.bodyPhysics!,state=v.bodyPhysics!,e=v.spec.envelope;
   const parts:{body:ReturnType<typeof vehicleBody>;rotation?:Quaternion}[]=[{body:vehicleBody(v.spec)}];
   if(v.tank){const barrel=tankBarrel({...v,position:new Vector3(),rotation:new Quaternion()});parts.push({body:{...barrel.body,offset:new Vector3(...barrel.body.offset).applyQuaternion(barrel.rotation).add(barrel.position).toArray()},rotation:barrel.rotation});}
   if(c.kind==='paddle')parts.push({body:paddleRiderBody(v.spec.seat)});
+  if(c.kind==='motion'&&v.spec.mode==='carriage'){
+    const lead=creatureBodies(v)[1]!,inverse=v.rotation.clone().invert();
+    parts.push({body:{...lead.body,offset:new Vector3(...lead.body.offset).applyQuaternion(lead.rotation).add(lead.position).sub(v.position).applyQuaternion(inverse).toArray()},rotation:inverse.multiply(lead.rotation)});
+  }
   const rig=q.vehicleRig(v.spec.id,state,v.position,v.rotation,state.mass,e.halfExtents[0],e.halfExtents[2],e.offset[1]+e.halfExtents[1],c.centerOfMassHeight,parts,c.friction??.02,c.restitution??.08),body=rig.body;
   if(c.kind==='paddle')rig.colliders[parts.length-1]!.setEnabled(state.riderMounted);
   // Synchronise explicit reset/teleport once; substeps below only read the solver.
   const prior=body.translation();let relocated=new Vector3(prior.x,prior.y,prior.z).distanceToSquared(v.position)>.01;
   body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(state.angularVelocity,true);
-  let h=dt,advanced=0,old=v.position.clone(),oldYaw=v.yaw,incoming=v.velocity.clone();
+  let h=dt,advanced=0,old=v.position.clone(),oldYaw=v.yaw,incoming=v.velocity.clone(),leadOffset:Vector3|undefined,leadAngle=0;
   const inertia=(mass:number)=>new Vector3(mass*(4*e.halfExtents[2]**2+1)/12,mass*(4*e.halfExtents[0]**2+4*e.halfExtents[2]**2)/12,mass*(4*e.halfExtents[0]**2+1)/12);
   rig.beforeStep=step=>{
     h=step;old=v.position.clone();oldYaw=v.yaw;incoming=v.velocity.clone();
+    if(c.kind==='motion'){
+      if(!intent)throw new Error('VEHICLE_MOTION_INTENT_MISSING');
+      const result=motionForces(v,input,h,time-dt+advanced,q,state.mass,intent);
+      if(v.creature?.leadPosition){
+        const inverse=result.draftRotation.clone().invert();
+        leadOffset=v.creature.leadPosition.clone().sub(result.draftPosition).applyQuaternion(inverse);
+        leadAngle=v.creature.leadYaw!-result.draftYaw;
+        const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),leadAngle);
+        rig.colliders[1]!.setTranslationWrtParent(new Vector3(0,1.65,0).applyQuaternion(rotation).add(leadOffset));
+        rig.colliders[1]!.setRotationWrtParent(rotation);
+      }
+      body.resetForces(true);body.resetTorques(true);body.addForce(result.force,true);body.addTorque(result.torque,true);
+      state.effort=Math.abs(v.throttle);return;
+    }
     const s=v.spec,f=new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)),right=new Vector3(f.z,0,-f.x);
     const speed=v.velocity.dot(f),water=q.waterAt(v.position);
     const normals=relocated?[]:q.vehicleContactNormals(rig),contactNormal=normals.filter(n=>n.y>.45).sort((a,b)=>b.y-a.y)[0];
@@ -170,8 +190,14 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
     body.resetForces(true);body.resetTorques(true);body.addForce(force,true);body.addTorque(torque,true);
   };
   rig.afterStep=()=>{
-    const p=body.translation(),r=body.rotation(),velocity=body.linvel(),angular=body.angvel();v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w);v.velocity.set(velocity.x,velocity.y,velocity.z);state.angularVelocity.set(angular.x,angular.y,angular.z);
-    const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');v.pitch=-angles.x;v.yaw=angles.y;v.roll=angles.z;v.speed=v.submersible?v.velocity.length():Math.hypot(velocity.x,velocity.z);
+    // Normalize at the physics boundary so float32 roundoff cannot deform the
+    // visual hierarchy or invalidate rigid camera geometry every fixed step.
+    const p=body.translation(),r=body.rotation(),velocity=body.linvel(),angular=body.angvel();v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w).normalize();v.velocity.set(velocity.x,velocity.y,velocity.z);state.angularVelocity.set(angular.x,angular.y,angular.z);
+    const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');v.pitch=-angles.x;v.yaw=angles.y;v.roll=angles.z;v.speed=v.submersible||['plane','glider','space'].includes(v.spec.mode)?v.velocity.length():Math.hypot(velocity.x,velocity.z);
+    // Glider sink is a vertical flight-path offset, not loss of airspeed on
+    // every solver slice. Recover airspeed from the actual horizontal motion.
+    if(c.kind==='motion'&&['plane','glider'].includes(v.spec.mode))v.speed=Math.hypot(velocity.x,velocity.z)/Math.max(.2,Math.cos(v.pitch));
+    if(c.kind==='motion'&&v.creature?.leadPosition&&leadOffset){v.creature.leadPosition.copy(leadOffset).applyQuaternion(v.rotation).add(v.position);v.creature.leadYaw=v.yaw+leadAngle;}
     const normals=q.vehicleContactNormals(rig);v.grounded=normals.some(n=>n.y>.45);state.contactCount=normals.length;state.elapsed+=h;
     if(v.unicycle)finishUnicycleStep(v,old,input,h,q);
     if(v.kayak)v.kayak.yawRate=angular.y;
@@ -183,11 +209,11 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,time:number
   };
 }
 
-export interface VehicleDriveTelemetry {kind:'engine'|'pedal'|'paddle'|'push';speed:number;effort:number;cadence:number;rpm:number;maxRpm:number;gear:string;shifting:boolean}
+export interface VehicleDriveTelemetry {kind:'engine'|'pedal'|'paddle'|'push'|'motion';speed:number;effort:number;cadence:number;rpm:number;maxRpm:number;gear:string;shifting:boolean}
 /** A read-only sample shared by the UI and observations. Sampling advances nothing. */
 export function vehicleDriveTelemetry(v:VehicleState):VehicleDriveTelemetry|null {
   const p=v.wheelPhysics?.powertrain??v.bodyPhysics?.powertrain,c=v.spec.wheelPhysics?.powertrain??v.spec.bodyPhysics?.powertrain;
   if(p)return {kind:'engine',speed:v.speed,effort:p.throttle,cadence:0,rpm:p.rpm,maxRpm:c?.maxRpm??6200,gear:p.gear<0?'R':p.gear===0?'N':'D'+p.gear,shifting:p.shiftRemaining>0};
-  if(v.bodyPhysics)return {kind:v.unicycle?'pedal':v.kayak?'paddle':'push',speed:v.speed,effort:v.bodyPhysics.effort,cadence:v.bodyPhysics.cadence,rpm:0,maxRpm:0,gear:'',shifting:false};
+  if(v.bodyPhysics)return {kind:v.spec.bodyPhysics?.kind==='motion'?'motion':v.unicycle?'pedal':v.kayak?'paddle':'push',speed:v.speed,effort:v.bodyPhysics.effort,cadence:v.bodyPhysics.cadence,rpm:0,maxRpm:0,gear:'',shifting:false};
   return null;
 }

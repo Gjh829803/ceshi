@@ -120,7 +120,9 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
   rig.afterStep=()=>{
     if(v.atv){v.atv.steeringAngle=-v.steering*Math.min(.65,.5*v.spec.steer);v.atv.wheelSteers=state.wheels.map(w=>w.steer);v.atv.wheelAngles=state.wheels.map(w=>w.angle);v.atv.suspension=state.wheels.map(w=>restLength-w.length);}
     const p=body.translation(),r=body.rotation(),linear=body.linvel(),angular=body.angvel();
-    v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w);v.velocity.set(linear.x,linear.y,linear.z);state.angularVelocity.set(angular.x,angular.y,angular.z);
+    // Rapier rotations have float32 roundoff; Three requires a unit quaternion
+    // or rigid motion becomes a changing scale in visual/camera mesh transforms.
+    v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w).normalize();v.velocity.set(linear.x,linear.y,linear.z);state.angularVelocity.set(angular.x,angular.y,angular.z);
     const angles=new Euler().setFromQuaternion(v.rotation,'YXZ');v.yaw=angles.y;v.pitch=-angles.x;v.roll=angles.z;
     v.grounded=state.wheels.some(w=>w.contact);v.speed=v.velocity.length();
   };
