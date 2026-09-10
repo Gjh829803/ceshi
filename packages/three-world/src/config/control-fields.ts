@@ -4,6 +4,16 @@ export type ControlField={key:Key;label:string;unit:string;step:number;note:stri
 
 /** UI descriptions only; defaults and numeric validation live in the SDK. */
 export function controlFields(family:string,powertrain=false):ControlField[]{
+ if(family==='flying-creature')return [
+  {key:'speed',label:'巡航速度',unit:'m/s',step:.5,note:'有飞行输入时逐步接近；无输入不会自动巡航。',section:'速度范围'},
+  {key:'maxSpeed',label:'加速速度',unit:'m/s',step:.5,note:'Shift 消耗体力并加速。',section:'速度范围'},
+  {key:'accel',label:'振翅加速度',unit:'m/s²',step:.1,note:'普通飞行的推进响应。',section:'加速与减速'},
+  {key:'coastDeceleration',label:'松键减速度',unit:'m/s²',step:.1,note:'松开 WASD 减速到零并保持悬停。',section:'加速与减速'},
+  {key:'brakeDeceleration',label:'刹停减速度',unit:'m/s²',step:.1,note:'Ctrl 主动制动，释放后保持悬停。',section:'加速与减速'},
+  {key:'steer',label:'低速转向速率',unit:'rad/s',step:.05,note:'高速时按飞行标定降低转向速率。',section:'转向与稳定'},
+  {key:'pitchResponse',label:'俯仰响应',unit:'/s',step:.1,note:'W/S 俯冲与抬头姿态响应。',section:'转向与稳定'},
+  {key:'rollResponse',label:'侧倾响应',unit:'/s',step:.1,note:'A/D 带动身体侧倾与骑手姿态。',section:'转向与稳定'},
+ ];
  if(powertrain&&['atv','bus'].includes(family))return controlFields('wheeled',true);
  if(powertrain&&family==='tank')return controlFields('tank',false).map(f=>({...f,disabled:['accel','coastDeceleration','throttleResponse'].includes(f.key),note:['accel','coastDeceleration','throttleResponse'].includes(f.key)?'由发动机、变速箱和履带阻力决定。':f.note}));
  if(powertrain&&family==='jetski')return controlFields('jetski',false).map(f=>({...f,disabled:['accel','throttleResponse'].includes(f.key),note:['accel','throttleResponse'].includes(f.key)?'由发动机与喷泵传动决定。':f.note}));

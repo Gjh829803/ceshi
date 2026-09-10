@@ -2,6 +2,7 @@ import {createBodyPhysics,validateBodyPhysics,type BodyPhysicsState} from './veh
 import {createAircraftState,type AircraftState} from './aircraft';
 import {createWheelPhysics,validateWheelPhysics,type WheelPhysicsState} from './wheel-physics';
 import {stepMotionFamily,motionFamilyForMode,resolveMotionFamilyMovement} from './motion-families/registry';
+import {validateFlyingCreatureTuning,resolveConfiguredFlyingCreatureFeel} from './motion-families/flying-creature/state';
 import { VEHICLE_ATTITUDE } from '../config/vehicle';
 
 import {
@@ -83,16 +84,19 @@ export const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 export const damp=(a:number,b:number,k:number,dt:number)=>a+(b-a)*(1-Math.exp(-k*dt));
 export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
 export interface HumanoidActionInput {toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
-export interface Input { forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;actions?:HumanoidActionInput }
+export interface Input { primary?:boolean;secondary?:boolean; forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;actions?:HumanoidActionInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
-export interface VehicleState {aircraft?:AircraftState|undefined;bodyPhysics?:BodyPhysicsState|undefined;wheelPhysics?:WheelPhysicsState|undefined; spec:VehicleSpec & MovementSettings; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
+export interface VehicleState {flyingCreature?:import("./motion-families/flying-creature/state").FlyingCreatureStateV1|undefined;aircraft?:AircraftState|undefined;bodyPhysics?:BodyPhysicsState|undefined;wheelPhysics?:WheelPhysicsState|undefined; spec:VehicleSpec & MovementSettings; position:Vector3; velocity:Vector3; rotation:Quaternion; yaw:number; pitch:number; roll:number; steering:number; throttle:number; grounded:boolean; launched:boolean; speed:number; submerged:boolean; creature?:CreatureState|undefined; sled?:SledState; tank?:TankState;kayak?:KayakState;atv?:AtvState;raft?:RaftState;jetski?:JetSkiState;submersible?:SubmersibleState;unicycle?:UnicycleState }
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSettings {
+  if(spec.flyingCreature){if(spec.mode!=='dragon'||spec.wheelPhysics||spec.bodyPhysics)throw Error('FLYING_CREATURE_PHYSICS_OWNER_INVALID');validateFlyingCreatureTuning(spec.flyingCreature);}
   if(spec.wheelPhysics){if(spec.mode!=='wheeled'&&spec.mode!=='motorcycle'&&spec.mode!=='bus')throw new Error('VEHICLE_WHEEL_MODE_INVALID');validateWheelPhysics(spec.wheelPhysics);}
   if(spec.bodyPhysics){if(spec.wheelPhysics)throw new Error('VEHICLE_PHYSICS_OWNER_CONFLICT');validateBodyPhysics(spec.bodyPhysics);}
   const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof MovementSettings]]));
   const family=motionFamilyForMode(spec.mode);
   const control=resolveMotionFamilyMovement(family,`${family}.${spec.mode}`,authored,defaultMovementSettings(spec.mode,spec));
-  return {...structuredClone(spec),...control};
+  const resolved={...structuredClone(spec),...control};
+  if(resolved.flyingCreature)resolveConfiguredFlyingCreatureFeel(resolved);
+  return resolved;
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {
   const state:VehicleState={...(spec.mode==='kayak'?{kayak:{...createKayakState(),...(spec.visualVariant==='canoe'?{craft:'canoe' as const,side:-1}:{})}}:{}),spec:resolveVehicleSpec(spec),position:new Vector3(...spec.spawn),velocity:new Vector3(),rotation:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spec.yaw),yaw:spec.yaw,pitch:0,roll:0,steering:0,throttle:0,grounded:true,launched:false,speed:0,submerged:false};
@@ -624,8 +628,8 @@ export class Simulation {
       // 只有驾驶中的载具接收输入；四轮车停车后仍计算重力、悬架和驻车制动。
       if (v === this.vehicle && this.transition === 0)
         stepVehicle(v, i, dt, this.time, this.environment);
-      else if ((v.wheelPhysics||v.bodyPhysics||v.aircraft)&&this.available(v))
-        stepVehicle(v,{...emptyInput(),brake:true},dt,this.time,this.environment);
+      else if ((v.wheelPhysics||v.bodyPhysics||v.aircraft||v.flyingCreature)&&this.available(v))
+        stepVehicle(v,{...emptyInput(),brake:!v.flyingCreature,slow:!!v.flyingCreature},dt,this.time,this.environment);
       else if (
         (v !== this.vehicle || v.spec.mode === 'kayak' || !!v.jetski || !!v.submersible) &&
         (!!v.submersible || !!v.jetski || v.spec.mode === "kayak" || v.spec.mode === "mount" || v.spec.mode === "sled" || v.spec.mode === "ski") &&
@@ -664,7 +668,7 @@ export class Simulation {
         }
       }
     }
-    if(this.vehicle&&!this.vehicle.wheelPhysics&&!this.vehicle.bodyPhysics&&!this.vehicle.aircraft&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;if(this.vehicle.atv&&before!.atv){this.vehicle.atv.wheelAngles=[...before!.atv.wheelAngles];this.vehicle.atv.suspension=[...before!.atv.suspension];}if(this.vehicle.submersible&&before!.submersible)this.vehicle.submersible=before!.submersible;if(this.vehicle.jetski&&before!.jetski){this.vehicle.jetski=before!.jetski;finishJetSkiStep(this.vehicle,vehicleBefore,dt,this.time);}this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;if(this.vehicle.unicycle&&before!.unicycle){this.vehicle.unicycle=before!.unicycle;finishUnicycleStep(this.vehicle,vehicleBefore,i,dt,this.environment);}}}
+    if(this.vehicle&&!this.vehicle.flyingCreature&&!this.vehicle.wheelPhysics&&!this.vehicle.bodyPhysics&&!this.vehicle.aircraft&&vehicleBefore){if(this.vehicles.some(o=>o!==this.vehicle&&this.available(o)&&actorsTouch(this.vehicle!,o))){this.vehicle.position.copy(vehicleBefore);this.vehicle.rotation.copy(before!.rotation);this.vehicle.yaw=before!.yaw;this.vehicle.pitch=before!.pitch;this.vehicle.roll=before!.roll;this.vehicle.creature=before!.creature;if(this.vehicle.atv&&before!.atv){this.vehicle.atv.wheelAngles=[...before!.atv.wheelAngles];this.vehicle.atv.suspension=[...before!.atv.suspension];}if(this.vehicle.submersible&&before!.submersible)this.vehicle.submersible=before!.submersible;if(this.vehicle.jetski&&before!.jetski){this.vehicle.jetski=before!.jetski;finishJetSkiStep(this.vehicle,vehicleBefore,dt,this.time);}this.vehicle.velocity.set(0,0,0);this.vehicle.speed=0;if(this.vehicle.unicycle&&before!.unicycle){this.vehicle.unicycle=before!.unicycle;finishUnicycleStep(this.vehicle,vehicleBefore,i,dt,this.environment);}}}
     const p=this.player;
     if (this.vehicle) {
       p.position.copy(this.vehicle.position);

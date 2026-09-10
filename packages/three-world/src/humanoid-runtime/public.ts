@@ -1,3 +1,6 @@
+export {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
+export {createFlyingCreatureStateV1,resolveFlyingCreatureFeelV1} from './motion-families/flying-creature/state';
+export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families/flying-creature/state';
 export {SUBMERSIBLE_WATER} from './submersible';
 export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
 export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
@@ -71,3 +74,6 @@ export {
 export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';
 export {AIRCRAFT} from '../config/aircraft';
+
+export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-families/flying-creature/visual';
+export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';

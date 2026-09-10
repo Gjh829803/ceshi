@@ -17,7 +17,8 @@ export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
 export type VehicleSpec = humanoid.VehicleSpec;
 /** Specialized controller families share movement modes but have distinct tuning. */
-export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype'> | undefined): string {
+export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype' | 'flyingCreature'> | undefined): string {
+  if(spec?.flyingCreature)return 'flying-creature';
   const archetype = spec?.archetype;
   return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
     ? archetype : spec?.mode ?? 'character';

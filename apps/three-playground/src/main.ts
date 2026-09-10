@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { toast as notify } from "sonner";
 import * as T from "three";
 import { mountShell } from "./shell";
@@ -7,7 +8,7 @@ import "./styles.css";
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
 import { renderAssetThumbnails } from "../../../shared/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
-import { SPECS, vehicleControlFamily } from "../../../shared/preset-content/config";
+import { SPECS as PRESET_SPECS, vehicleControlFamily } from "../../../shared/preset-content/config";
 import presentationConfig from "../../../shared/preset-content/presentation.json";
 import {
   getMap,
@@ -20,14 +21,14 @@ import {
   readEffectiveProfile,
 } from "../../../shared/preset-content/platform/profile-runtime";
 import {
-  getDefaultProfile,
+  getDefaultProfile as getPresetDefaultProfile,
   loadAssetProfile,
   saveAssetProfile,
   clearAssetProfile,
   parseAssetProfile,
   type AssetProfile,
 } from "../../../shared/preset-content/platform/profiles";
-import { buildVehicle } from "../../../shared/preset-content/models";
+import { buildVehicle, labelSprite, type VehicleVisual } from "../../../shared/preset-content/models";
 import { FrameRateMeter } from "../../../shared/preset-content/fps";
 import {
   updateVehicleWheels,
@@ -88,11 +89,23 @@ const camera = new T.PerspectiveCamera(
   0.12,
   2100,
 );
-const visuals = SPECS.map(buildVehicle),
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),spawn:[80,40,35] as [number,number,number]}:spec);
+function getDefaultProfile(id:string):AssetProfile|undefined{
+  const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
+  const spec=SPECS.find(value=>value.id===id)!;
+  return {...profile,control:humanoid.readMovementSettings(humanoid.createVehicle(spec).spec),camera:{...profile.camera,distance:spec.camera},envelope:structuredClone(spec.envelope)};
+}
+const nativeDragon=new humanoid.FlyingCreatureVisual();
+const visuals:VehicleVisual[] = SPECS.map(spec=>{
+  if(!spec.flyingCreature)return buildVehicle(spec);
+  const seat=new T.Group(),label=labelSprite(spec.name);label.position.y=15;nativeDragon.root.add(label);
+  return {root:nativeDragon.root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};
+}),
   character = new humanoid.HumanoidCharacter();
 try {
   await Promise.all([
     character.load(resolvePresetResource),
+    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/dragon.glb',flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -114,6 +127,7 @@ const sdk = await createWorld({
       assetId: `${spec.mode === 'mount' || spec.mode === 'dragon' ? 'creature' : 'vehicle'}.${spec.id}`,
       spec,
       object: visuals[n]!.root,
+      ...(spec.flyingCreature?{flyingVisual:nativeDragon}:{}),
     })),
     character: {
       instanceId: "person",
@@ -284,7 +298,9 @@ function syncTeleport() {
 }
 function selectAsset(id: string) {
   if (!ready) return;
+  if(id==='dragon'){prepareSelection(DRAGON_TRAINING.id,'dragon-air',id);shell.update({mapId:session.map.id});return;}
   if (id === "person") {
+    if(sim.vehicle?.flyingCreature){prepareSelection(session.map.id,defaultRegion(session.map,'person').id,'person');return;}
     if (sim.vehicle) {
       runtime.interact();
       syncTeleport();
@@ -306,6 +322,7 @@ function selectAsset(id: string) {
 }
 function visit(n: number) {
   const spec = SPECS[n]!;
+  if(spec.flyingCreature){prepareSelection(DRAGON_TRAINING.id,'dragon-air',spec.id);shell.update({mapId:session.map.id});return;}
   const spawn = session.map.spawns.find((s) => s.vehicleId === spec.id) ?? {
     id: spec.id,
     vehicleId: spec.id,
@@ -408,7 +425,8 @@ shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
 shell.on("resetButton", async () => {
   await sdk.reset();
-  syncTeleport();
+  if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
+  else syncTeleport();
   toast("已返回场景起点");
 });
 shell.on("pauseButton", () => pause());
@@ -463,7 +481,11 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
   session.switchMap(mapId);
   world = session.world;
   follow.environment = session.queries;
-  prepareCourse(sim, map, regionId, assetId);
+  if(assetId==='dragon'){
+    const spawn=map.spawns.find(value=>value.vehicleId==='dragon');
+    if(!spawn)throw new Error('当前地图没有飞龙准备点');
+    runtime.prepareEpisodeStart({positionWorldMetersXYZ:[spawn.position[0],Math.max(40,spawn.position[1]),spawn.position[2]],facingYawRadians:spawn.yaw-Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,launched:true,cameraMode:0}});
+  }else prepareCourse(sim, map, regionId, assetId);
   pause(false, false);
   syncTeleport();
   resetFPS("采样中");
@@ -725,15 +747,11 @@ shell.on("performanceButton", clearInput);
 shell.update({ mapId: session.map.id });
 shell.on("mapSelect", (value) => {
   clearInput();
-  if (value === DRAGON_TRAINING.id) {
-    location.assign(DRAGON_TRAINING.href);
-    return;
-  }
   const map = getMap(value!);
-  let id = sim.vehicle?.spec.id ?? "person";
+  let id = value===DRAGON_TRAINING.id?"dragon":sim.vehicle?.spec.id ?? "person";
   if (
     !map.regions.some((r) =>
-      r.modes.includes(sim.vehicle?.spec.mode ?? "character"),
+      r.modes.includes(id==='dragon'?'dragon':sim.vehicle?.spec.mode ?? "character"),
     )
   )
     id = "person";
@@ -1008,6 +1026,8 @@ function updateUI() {
           ? v.submersible.depth > .4 ? "水下航行" : "水面漂浮"
           : v.submerged
           ? "载具涉水，请复位"
+          : v.flyingCreature
+            ? ({hover:'悬停',brake:'减速',cruise:'振翅巡航',boost:'加速',glide:'滑翔',dive:'俯冲',evade:'闪避',collision:'碰撞缓冲'}[v.flyingCreature.mode]+(v.flyingCreature.flamePhase!=='off'?' · 喷火':''))
           : v.creature
             ? {
                 graze: "休息",
@@ -1040,7 +1060,9 @@ function updateUI() {
   if (v)
     setHTML(
       "interaction",
-      v.submersible && v.submersible.depth > .4
+      v.flyingCreature
+        ? `体力 ${Math.round(v.flyingCreature.staminaRatio*100)}% · 顶部地图菜单切换训练场`
+        : v.submersible && v.submersible.depth > .4
         ? `深度 ${v.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "sub"
         ? "载具涉水 · 使用页面复位按钮继续训练"
@@ -1214,7 +1236,8 @@ await sdk.start();
 const requestedMapId = new URLSearchParams(location.search).get("map");
 if (requestedMapId && MAPS.some((map) => map.id === requestedMapId)) {
   const requestedMap = getMap(requestedMapId);
-  prepareSelection(requestedMap.id, defaultRegion(requestedMap, "person").id, "person");
+  const selected=requestedMap.id===DRAGON_TRAINING.id?'dragon':'person';
+  prepareSelection(requestedMap.id, defaultRegion(requestedMap,selected).id,selected);
   shell.update({ mapId: requestedMap.id });
 }
 // Read-only browser callback cadence; no simulation, animation or camera writes.
@@ -1258,6 +1281,10 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    flyingCreature:sim.vehicle?.flyingCreature?{...sim.vehicle.flyingCreature}:undefined,
+    dragonVisual:nativeDragon.inspect(),
+    dragonSeat:nativeDragon.readSeatWorld().elements,
+    riderHip:character.hip?.getWorldPosition(new T.Vector3()).toArray(),
     flight:sim.vehicle?.aircraft?{...sim.vehicle.aircraft,throttle:sim.vehicle.throttle,grounded:sim.vehicle.grounded}:undefined,
     vehicleRotation:sim.vehicle?.rotation.toArray(),powertrain:sim.vehicle?(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain?{...(sim.vehicle.wheelPhysics?.powertrain??sim.vehicle.bodyPhysics?.powertrain)}:undefined):undefined,wheelTelemetry:sim.vehicle?.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.vehicle?humanoid.vehicleDriveTelemetry(sim.vehicle):null,
 
@@ -1293,7 +1320,8 @@ const labAPI = {
   },
   reset: async () => {
     await sdk.reset();
-    syncTeleport();
+    if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
+    else syncTeleport();
     return labAPI.getState();
   },
   humanoidState: () => ({
@@ -1345,6 +1373,13 @@ if (context?.registerTool) {
       console.warn("Playground tool unavailable", error);
     }
   };
+  if(import.meta.env.DEV)register('step_vehicle_controls','Pause and execute up to 600 fixed SDK input steps for a local vehicle regression; leaves the scene paused for inspection.',
+    {type:'object',properties:{frames:{type:'integer',minimum:1,maximum:600},input:{type:'object',properties:Object.fromEntries(['forward','steer','boost','slow','brake','primary','secondary'].map(key=>[key,{type:['forward','steer'].includes(key)?'number':'boolean'}])),additionalProperties:false}},required:['frames','input'],additionalProperties:false},false,(value)=>{
+      const request=value as {frames:number;input:Partial<humanoid.Input>};
+      if(!Number.isInteger(request.frames)||request.frames<1||request.frames>600)throw new Error('Invalid frame count');
+      const input={...emptyInput(),...request.input};runtime.setInput(input)();
+      clearInput();pause(true,false);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
+    });
   register(
     "inspect_playground",
     "Read current vehicle, location, speed and character state.",

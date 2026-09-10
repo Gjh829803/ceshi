@@ -1,12 +1,3 @@
-/** 独立训练场通过页面切换交接执行权；普通地图仍由 Three Session 切换。 */
-export const DRAGON_TRAINING = {
-  id: "flying-creature-training",
-  name: "飞龙 · 空中训练场",
-  href: "./dragon-training.html",
-} as const;
-
-export function trainingMapHref(mapId: string): string {
-  return mapId === DRAGON_TRAINING.id
-    ? DRAGON_TRAINING.href
-    : `./?map=${encodeURIComponent(mapId)}`;
-}
+/** 训练地图统一交给当前 Three Session；旧书签跳转到同一个入口。 */
+export const DRAGON_TRAINING={id:'flying-creature-training',name:'飞龙 · 空中训练场',href:'./?map=flying-creature-training'} as const;
+export function trainingMapHref(mapId:string):string{return './?map='+encodeURIComponent(mapId);}

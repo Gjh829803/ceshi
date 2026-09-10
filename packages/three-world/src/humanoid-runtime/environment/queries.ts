@@ -423,6 +423,18 @@ export class EnvironmentQueries {
     for(const entry of this.actorColliders.values())if(!excludedActorIds.has(entry.actorId))excluded.delete(entry.collider.handle);
     return collider=>!excluded.has(collider.handle);
   }
+  /** 飞行体积扫掠；排除自己的代理，包含其他实体的实际刚体，返回可安全移动比例。 */
+  sweepActorSphere(from:Vector3,to:Vector3,radius:number,actorId:string):{fraction:number;normal:Vector3}|null {
+    this.assertLive();
+    const delta=to.clone().sub(from),length=delta.length();if(length<1e-8)return null;
+    const excluded=new Set<number>();
+    for(const entry of this.actorColliders.values())if(entry.actorId===actorId)excluded.add(entry.collider.handle);
+    for(const collider of this.vehicleRigs.get(actorId)?.colliders??[])excluded.add(collider.handle);
+    // 骑乘关系已禁用自己的角色胶囊；其他步行角色仍参与碰撞。
+    const hit=this.world.castShape(from,identity,delta,new RAPIER.Ball(radius),.025,1,false,
+      RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,c=>!excluded.has(c.handle));
+    return hit?{fraction:Math.max(0,hit.time_of_impact-.035/length),normal:new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z).normalize()}:null;
+  }
   cameraProbe(from:Vec3,to:Vec3,radius:number,filter=this.environmentFilter) {
     this.assertLive();
     const hit=probeHumanoidCamera(this.world,from,to,radius,undefined,filter,.015);

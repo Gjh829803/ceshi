@@ -9,6 +9,8 @@ export function vehicleImpactMass(spec:VehicleSpec):number {
 export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, number]; offset: [number, number, number] }
 import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {
+  /** 原生动力飞行标定；缺省时保留现有地面起降坐骑。 */
+  flyingCreature?:import('./motion-families/flying-creature/state').FlyingCreatureTuning;
   id: string; name: string; en: string; mode: Mode; kernel: string; color: string;
   spawn: [number, number, number]; yaw: number; speed: number; accel: number; grip: number;
   steer: number; radius: number; seat: [number, number, number]; camera: number; hint: string; characterPose?: 'unicycle' | 'atv' | 'stand' | 'ride' | 'sled' | 'ski' | 'tank' | 'sub' | 'kayak';

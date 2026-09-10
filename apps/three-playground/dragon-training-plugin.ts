@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { Plugin } from "vite";
 
-/** 只发布预先打包的文件清单；开发服务与静态站点使用同一套资源路径。 */
+/** 发布原生 Three 使用的模型、动作和纹理；不发布第二套运行时。 */
 export function dragonTrainingPlugin(repository: string): Plugin {
   const directory = path.join(repository, "assets/dragon-training");
   let files: Map<string, Buffer> | undefined;
@@ -16,8 +16,10 @@ export function dragonTrainingPlugin(repository: string): Plugin {
     const manifest = JSON.parse(manifestBytes.toString("utf8")) as {
       kind: string; schemaVersion: number; files: Record<string, { bytes: number; sha256: string }>;
     };
-    if (manifest.kind !== "flying-creature-training" || manifest.schemaVersion !== 1 || !manifest.files?.["flying-creature.html"])
+    if (manifest.kind !== "native-flying-creature-assets" || manifest.schemaVersion !== 2 || !manifest.files?.["__creature-assets/dragon.glb"])
       throw new Error("DRAGON_TRAINING_MANIFEST_INVALID");
+    const allowed=new Set(["__creature-assets/dragon.glb","__creature-assets/rider.glb","__creature-assets/manifest.json","__creature-assets/FireGenLoop01_8x8.png"]);
+    if(Object.keys(manifest.files).length!==allowed.size||Object.keys(manifest.files).some(name=>!allowed.has(name)))throw new Error("DRAGON_TRAINING_ASSET_LIST_INVALID");
     for (const [name, identity] of Object.entries(manifest.files)) {
       if (!/^[a-zA-Z0-9_./-]+$/.test(name) || name.startsWith("/") || name.split("/").some(part => part === ".." || part === "." || !part))
         throw new Error(`DRAGON_TRAINING_PATH_INVALID:${name}`);

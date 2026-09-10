@@ -46,7 +46,7 @@ export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boole
   const key=(action:ControlAction)=>Number(bindings[action].some(code=>held.has(code)));
   const i:Input={forward:key('forward')-key('backward'),steer:key('right')-key('left'),roll:0,lift:0,pitch:0,strafe:0,
     boost:!!key('sprint'),brake:false,slow:!!key('slow'),jump:false};
-  if(mounted){i.slow=!!key('crouch');i.roll=key('interact')-key('roll');i.lift=key('jump')-key('crouch');i.pitch=key('cameraDown')-key('cameraUp');i.strafe=key('cameraRight')-key('cameraLeft');i.brake=!!key('jump');}
+  if(mounted){i.primary=!!key('interact');i.secondary=!!key('roll');i.slow=!!key('crouch');i.roll=key('interact')-key('roll');i.lift=key('jump')-key('crouch');i.pitch=key('cameraDown')-key('cameraUp');i.strafe=key('cameraRight')-key('cameraLeft');i.brake=!!key('jump');}
   else {i.jump=jump;i.actions={...commands};}
   return i;
 }
