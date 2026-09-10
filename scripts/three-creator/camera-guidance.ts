@@ -23,15 +23,15 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
       horizontalOffset:{default:humanoid.CAMERA_PARAMETERS.horizontalOffset.defaultValue,description:humanoid.CAMERA_PARAMETERS.horizontalOffset.description},
       cameraDistanceMeters:{description:humanoid.CAMERA_DISTANCE_METERS_SCHEMA.description},
     }}),
-    opening:'Set pose/projection and world.useAuthoredCamera() before the first start/step/reset seals the opening. At the chosen play input, call world.humanoid.setCameraMode(0|1|2) or humanoid.set-camera-mode. start() only runs the clock; reset restores the sealed opening. Avoid onReset camera takeovers in Episode.',
+    opening:'Before first start/step/reset, set pose/projection and world.useAuthoredCamera(). To play, call world.humanoid.setCameraMode(0|1|2). start() only runs the clock; reset restores the opening. No onReset camera takeover.',
     openingExample:{tool:'creator_get_examples',arguments:{topic:'vehicle-camera',files:['opening-camera.ts']},
-      scope:'Optional scene-side keyboard handoff using current bindings on the focused gameplay surface. Creator key steps exercise it. Direct semantic input needs the same explicit camera command; Episode selects its own start camera.'},
+      scope:'Optional keyboard policy with current bindings. Semantic input uses camera commands; Episode selects its own view.'},
     verify:{
       selectView:{tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}},
       currentView:{tool:'world_preview',arguments:{view:'current'}},
       read:'cameraObservation: cameraOverrides (explicit), cameraSettings, framing, alongside pixels.',
       opening:'opening resets, unlike current.',
-      playtest:'Cover requested camera behavior in the task self-check; inspect other views or lifecycle transitions only when relevant to an observed problem.',
+      playtest:'Cover requested camera behavior; inspect extra views or transitions for observed problems.',
     },
     inspect:{
       tool:'world_inspect',arguments:{sections:['description']},
