@@ -34,6 +34,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/humanoid-asset.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/atv.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/bus.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/humanoid-runtime/camera-lifecycle.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/character-attachments.test.ts", lane: "contract" },
   { path: "packages/three-world/src/humanoid-runtime/environment/mounted-queries.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/horse.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

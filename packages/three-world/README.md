@@ -338,7 +338,9 @@ interaction state so it follows the hand and does not remain duplicated.
 forces and collisions from the scene and gameplay requirements; there is no fixed
 list by object name or category. For those `map.boxes`, assign each part an
 `EnvironmentBox.rigidGroup: {id, massKg}`, using one group ID and the same total
-mass for the whole object. Omit the field for boxes that should remain fixed.
+mass for the whole object, and a different group ID for each independent object.
+Resting on the ground does not by itself make an unattached object fixed. Omit
+the field when its support or gameplay relationship should keep it fixed.
 Read current world-space part
 poses from `world.humanoid.simulation.environment.propBoxPose(id)` in
 `onVisualUpdate`; `world.reset()` restores the furniture too. The
@@ -551,8 +553,13 @@ values. `cameraDistanceMeters` affects only mode 0; mode 2 owns its independent
 shoulder distance. A distant opening composition is not a reason to override the
 gameplay follow distance or eye offset.
 
-Use `world.useAuthoredCamera()` for an authored opening, then return control with
-`humanoid.set-camera-mode` when play begins. Inspect the views needed by the task or an
+For an authored opening, finish the camera pose and projection and call
+`world.useAuthoredCamera()` before the first `start`, `step` or `reset`; that first
+lifecycle transition seals the opening. Then return control with
+`humanoid.set-camera-mode` when play begins. Reset restores the sealed authored
+opening after follow-camera use. The Humanoid follow mode still resets to the
+profile's `defaultPerspective`; temporary authored or shoulder views do not replace
+that default. Do not add a separate `onReset` camera writer. Inspect the views needed by the task or an
 observed camera problem. For a focused Creator check, select the view and capture
 its actual world pixels:
 
@@ -912,6 +919,13 @@ from the pure world canvas. Model input must use that pure canvas or
 screenshot, presentation container or model output. Keep derived reference and
 three-view conditioning images free of baked-in HUD; preserve original inputs.
 
+`createHumanoidWorld` already registers its map collision, preset person and
+vehicles from the creation options. Do not register those objects again as
+generic physical entities. If an existing purely visual map landmark only needs
+an observation or capture identity, call `world.addEntity` with that object and
+`role:'decoration'`, omit `physics`, and select it with `setCaptureTargets` when
+needed. This does not replace genuine map collision declarations.
+
 Read the real exports from contracts.ts using the Creator schema tool by topic.
 Types describe the API; use a complete real input plan to check broad opening
 composition, connected routes and the requested core movement/actions and their
@@ -1071,6 +1085,13 @@ engine dashboard. These are optional observation/presentation follow-ups, not
 production prerequisites. See the [integration status](../../docs/reviews/2026-09-09-creator-vehicle-integration-status.md)
 for scope, evidence and remaining work.
 
+When requested gameplay requires a vehicle or actor to move a prop by impact,
+identify that prop and compare its actual physical pose before and after real
+contact. Proximity, a blocked character, or a technically successful Creator
+recording does not prove that the prop moved. Use the existing playtest and
+on-demand observation evidence; this is an outcome choice, not a separate fixed
+test for every scene.
+
 ## Per-wheel road simulation
 
 An optional `VehicleSpec.wheelPhysics` enables the configurable road model for
@@ -1205,8 +1226,10 @@ in the existing Rapier world, with gravity, CCD, friction and angular motion.
 The Agent chooses which objects need this behavior from the scene and gameplay,
 not from a prescribed category list. Set `rigidGroup` when a box assembly should
 respond to gravity, forces and collisions; omit it when the assembly should stay
-fixed. If it should rest in place, provide physical support; without support it
-falls. Keep the total group mass identical on every part.
+fixed because of its support or gameplay relationship. Resting on the ground alone
+does not make an unattached object fixed. If it should rest in place, provide
+physical support; without support it falls. Keep separate physical objects in
+separate groups and the total group mass identical on every part.
 `creator_get_examples({topic:'character-actions'})` supplies a complete example
 in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
 callback reads the current `world.humanoid.simulation.environment` after every

@@ -485,6 +485,45 @@ it('retains the real addEntity role failure before start without inventing a sta
   expect(operation.errorDetails).not.toHaveProperty('stack');
 },30000);
 
+it.each([
+  {code:'ENVIRONMENT_INVALID',entityId:'yard',action:`map.regions=[{id:'yard',name:'Yard',description:'Driving area',center:[0,24],size:[40,40],color:'#eee',modes:['character']}]; await createHumanoidWorld({scene,camera,canvas,map});`,diagnosticPath:'regions[0].center',actual:[0,24]},
+  {code:'HUMANOID_CONTENT_REGISTER_IN_OPTIONS',entityId:'ramp-marker',action:`const world=await createHumanoidWorld({scene,camera,canvas,map});world.addEntity({id:'ramp-marker',object:new THREE.Group(),role:'terrain'});`,diagnosticPath:'world.addEntity',actual:'physical entity registration after Humanoid creation'},
+  {code:'DECORATION_CANNOT_HAVE_PHYSICS',entityId:'ramp-marker',action:`const world=await createWorld({scene,camera,canvas,navigation:false});world.addEntity({id:'ramp-marker',object:new THREE.Group(),role:'decoration',physics:{kind:'none'}});`,diagnosticPath:'physics',actual:'present'},
+])('returns actionable $code from real browser initialization through the tool contract',async({code,entityId,action,diagnosticPath,actual})=>{
+  const tools=await service(['humanoid.source-101']);
+  await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.source-101']}));
+  await writeFile(path.join(tools.workspace,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(tools.workspace,'main.ts'),`
+    import * as THREE from 'three';import {createWorld,createHumanoidWorld} from '@worldkit/three';
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),canvas=document.createElement('canvas');document.body.append(canvas);
+    const map={id:'yard-map',name:'Yard',description:'Physical floor',bounds:{min:[-20,-5,-20],max:[20,20,20]},boxes:[{id:'floor',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[0,0,0]};
+    ${action}
+  `);
+  const started=await executeThreeCreatorTool(tools,'world_preview',{view:'opening'}) as {operationId:string};
+  const operation=await tools.getOperation(started.operationId,25);
+  expect(operation.status).toBe('failed');
+  expect(operation.errorDetails).toMatchObject({code,entityIds:[entityId],path:diagnosticPath,actual,expected:expect.any(String),suggestedAction:expect.any(String),host:{phase:'browser.startup',candidate:{sourceHash:expect.any(String),runtimeHash:expect.any(String)}}});
+  expect(operation.errorDetails?.nextSteps[0]?.instruction).toBe(operation.errorDetails?.suggestedAction);
+  expect(await executeThreeCreatorTool(tools,'operations_get',{operationId:started.operationId})).toMatchObject({...operation,operationId:operation.id,next:null});
+},60000);
+
+it('bounds field diagnostics without reading authored accessors or coercing values',async()=>{
+  const {creatorToolErrorResponse}=await import('./tool-errors');
+  let reads=0;
+  const actual:unknown[]=[0,24];
+  Object.defineProperty(actual,'2',{get(){reads++;throw Error('must not read');}});
+  actual[3]={toString(){reads++;throw Error('must not coerce');}};
+  const error={code:'ENVIRONMENT_INVALID',message:'invalid center',path:'x'.repeat(8000),expected:'e'.repeat(8000),actual,suggestedAction:'Use three finite coordinates.'};
+  const response=creatorToolErrorResponse(error);
+  expect(response.errorDetails).toMatchObject({path:'x'.repeat(4000),expected:'e'.repeat(4000),actual:[0,24,'<unavailable>','<unavailable>']});
+  expect(reads).toBe(0);
+  Object.defineProperty(error,'actual',{get(){reads++;throw Error('must not read');}});
+  expect(creatorToolErrorResponse(error).errorDetails).not.toHaveProperty('actual');
+  expect(reads).toBe(0);
+  expect(creatorToolErrorResponse({message:'values',actual:[null,false,0,Number.NaN]}).errorDetails.actual).toEqual([null,false,0,'<unavailable>']);
+  expect(creatorToolErrorResponse({message:'long',actual:Array(100).fill(1)}).errorDetails.actual).toEqual([...Array(8).fill(1),'<truncated>']);
+});
+
 it('preserves legacy physics error codes instead of classifying a known budget error as generic',async()=>{
   const {creatorToolErrorResponse}=await import('./tool-errors');
   const response=creatorToolErrorResponse(new Error('PHYSICS_TRIANGLE_BUDGET_EXCEEDED: old workspace SDK message'));

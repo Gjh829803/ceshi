@@ -2,6 +2,8 @@
 export interface SerializedDiagnostic {
   message: string;
   code?: string; category?: string; phase?: string; suggestedAction?: string; stack?: string;
+  path?: string; expected?: string;
+  actual?: string | number | boolean | null | (string | number | boolean | null)[];
   entityIds?: string[];
   cause?: SerializedDiagnostic;
   causes?: SerializedDiagnostic[];
@@ -10,7 +12,13 @@ export function serializeDiagnostic(value: unknown, depth = 0, seen: unknown[] =
   const result: SerializedDiagnostic = { message: typeof value === 'string' ? value.slice(0,4000) : 'Unknown thrown value' };
   if (!value || (typeof value !== 'object' && typeof value !== 'function') || seen.includes(value)) return result;
   seen = [...seen, value];
-  for (const key of ['message','code','category','phase','suggestedAction','stack','entityIds','cause','errors','causes']) {
+  const scalar = (field: unknown): string | number | boolean | null | undefined => {
+    if (typeof field === 'string') return field.slice(0,4000);
+    if (field === null || typeof field === 'boolean') return field;
+    if (typeof field === 'number' && Number.isFinite(field)) return field;
+    return undefined;
+  };
+  for (const key of ['message','code','category','phase','suggestedAction','stack','path','actual','expected','entityIds','cause','errors','causes']) {
     try {
       const descriptor = Object.getOwnPropertyDescriptor(value,key);
       if (!descriptor) continue;
@@ -18,7 +26,24 @@ export function serializeDiagnostic(value: unknown, depth = 0, seen: unknown[] =
       // Author-defined accessors (including on Error instances) are never invoked.
       if (!('value' in descriptor) && !(key === 'stack' && value instanceof Error && descriptor.get && descriptor.get === Object.getOwnPropertyDescriptor(new Error(), 'stack')?.get)) continue;
       const field = 'value' in descriptor ? descriptor.value : Reflect.get(value,key);
-      if (key === 'entityIds' && Array.isArray(field)) {
+      if (key === 'actual') {
+        if (Array.isArray(field)) {
+          const length = Object.getOwnPropertyDescriptor(field,'length')?.value;
+          if (typeof length !== 'number') continue;
+          const values: (string | number | boolean | null)[] = [];
+          for (let i=0;i<Math.min(length,8);i++) {
+            let item: PropertyDescriptor | undefined;
+            try { item=Object.getOwnPropertyDescriptor(field,String(i)); } catch { /* Keep an unavailable array slot. */ }
+            const value=item && 'value' in item ? scalar(item.value) : undefined;
+            values.push(value === undefined ? '<unavailable>' : value);
+          }
+          if (length > 8) values.push('<truncated>');
+          result.actual=values;
+        } else {
+          const actual=scalar(field);
+          if (actual !== undefined) result.actual=actual;
+        }
+      } else if (key === 'entityIds' && Array.isArray(field)) {
         result.entityIds = [];
         for (let i=0;i<Math.min(field.length,20);i++) {
           const item=Object.getOwnPropertyDescriptor(field,String(i));
@@ -31,7 +56,7 @@ export function serializeDiagnostic(value: unknown, depth = 0, seen: unknown[] =
           const item=Object.getOwnPropertyDescriptor(field,String(i));
           if(item && 'value' in item && !seen.includes(item.value)) result.causes.push(serializeDiagnostic(item.value,depth+1,seen));
         }
-      } else if (typeof field === 'string' && ['message','code','category','phase','suggestedAction','stack'].includes(key)) (result as any)[key]=field.slice(0,4000);
+      } else if (typeof field === 'string' && ['message','code','category','phase','suggestedAction','stack','path','expected'].includes(key)) (result as any)[key]=field.slice(0,4000);
     } catch { /* A hostile proxy or descriptor cannot break diagnostic delivery. */ }
   }
   return result;

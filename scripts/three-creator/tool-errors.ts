@@ -38,6 +38,11 @@ export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
     (isErrorInstance(error, SyntaxError) ? 'THREE_JSON_INVALID' : 'THREE_TOOL_FAILED');
   let nextSteps: RecoveryStep[];
   switch (code) {
+    case 'ENVIRONMENT_INVALID':
+    case 'HUMANOID_CONTENT_REGISTER_IN_OPTIONS':
+    case 'DECORATION_CANNOT_HAVE_PHYSICS':
+      nextSteps = [{ instruction: original.suggestedAction ?? 'Check the reported environment field or entity registration against the current Humanoid contract. Preserve required collision geometry.', tool: 'creator_get_authoring_schema', arguments: { topic: 'humanoid', sections: ['guide','humanoid'] } }];
+      break;
     case 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED':
     case 'PHYSICS_COLLIDER_BUDGET_EXCEEDED':
       nextSteps = [{ instruction: original.suggestedAction ?? 'Inspect collision geometry and the reported budget. Both mesh and static box may subdivide; use convex-hull only when a closed convex volume matches the intended collision. Source and world budgets still apply.', tool: 'creator_get_authoring_schema', arguments: { topic: 'getting-started', sections: ['guide','contracts'] } }];
