@@ -22,6 +22,7 @@ import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
 import { Icon } from "./components/icon";
 import type { AssetEntry } from "../../../shared/preset-content/platform/catalog";
 import { MAPS } from "../../../shared/preset-content/environment/maps";
+import { DRAGON_TRAINING } from "./training-destinations";
 import type { WorldPresentation } from "@worldkit/three";
 
 type Flags =
@@ -323,6 +324,9 @@ export function mountShell(host: HTMLElement) {
                     {map.name}
                   </ChoiceOption>
                 ))}
+                <ChoiceOption value={DRAGON_TRAINING.id}>
+                  {DRAGON_TRAINING.name}
+                </ChoiceOption>
               </ChoiceSelect>
             </div>
             {btn(

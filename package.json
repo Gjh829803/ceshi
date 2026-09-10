@@ -36,6 +36,8 @@
     "verify:three-workspace": "tsx scripts/testing/verify-three-workspace.ts",
     "test:cloud-orchestration": "node --test scripts/cloud/*.test.mjs",
     "dev:editor": "pnpm --filter @worldkit/three-playground dev",
+    "prepare:dragon-training": "tsx apps/three-playground/scripts/prepare-dragon-training.ts",
+    "verify:dragon-training": "tsx apps/three-playground/scripts/dragon-training-smoke.ts",
     "build:editor": "pnpm --filter @worldkit/three-playground build",
     "test:editor:browser": "tsx apps/three-playground/scripts/browser-smoke.ts"
   },

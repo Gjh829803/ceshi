@@ -1,6 +1,7 @@
 import { toast as notify } from "sonner";
 import * as T from "three";
 import { mountShell } from "./shell";
+import { DRAGON_TRAINING } from "./training-destinations";
 import "./styles.css";
 
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
@@ -724,6 +725,10 @@ shell.on("performanceButton", clearInput);
 shell.update({ mapId: session.map.id });
 shell.on("mapSelect", (value) => {
   clearInput();
+  if (value === DRAGON_TRAINING.id) {
+    location.assign(DRAGON_TRAINING.href);
+    return;
+  }
   const map = getMap(value!);
   let id = sim.vehicle?.spec.id ?? "person";
   if (
@@ -1206,6 +1211,12 @@ sdk.onReset(() => {
   lastActive = -99;
 });
 await sdk.start();
+const requestedMapId = new URLSearchParams(location.search).get("map");
+if (requestedMapId && MAPS.some((map) => map.id === requestedMapId)) {
+  const requestedMap = getMap(requestedMapId);
+  prepareSelection(requestedMap.id, defaultRegion(requestedMap, "person").id, "person");
+  shell.update({ mapId: requestedMap.id });
+}
 // Read-only browser callback cadence; no simulation, animation or camera writes.
 const observePacing = (now: number) => {
   if (!paused && !panelOpen) {
