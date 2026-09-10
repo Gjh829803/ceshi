@@ -83,16 +83,20 @@ export class ActionSystem {
       if(Math.hypot(delta.x,delta.z)>ACTION_TUNING.approachRadiusMeters||Math.abs(delta.y)>ACTION_TUNING.approachVerticalToleranceMeters)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
       const hit=sim.world.castShape(sim.body.translation(),ROT,delta,new RAPIER.Capsule(sim.capsuleHalf,RADIUS),0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule);
       if(hit&&hit.time_of_impact<.99)return ['PATH_BLOCKED','交互位置被实体挡住'];
-      if(action==='pickup'&&(target.definition.massKg??1)>ACTION_TUNING.maximumPickupMassKg)return ['TOO_HEAVY',`当前搬运动作支持不超过 ${ACTION_TUNING.maximumPickupMassKg} kg 的物件`];
-      if(action==='pickup'){
-        // This is a table-height authored reach, not a general IK pickup.
-        // Reject incompatible targets rather than teleporting them to a hand.
-        const reach=new Vector3(.051,.894,.363).applyAxisAngle(UP,target.definition.yaw).add(approach);
-        const tolerance=.10+Math.min(.1,Math.max(...(target.definition.size??[.13,.13,.13]))/2);
-        if(reach.distanceTo(target.position)>tolerance)return ['GRASP_OUT_OF_REACH','目标不在当前桌面拾取动作的触碰范围内'];
-      }
+      if(action==='pickup')return this.pickupContactReason(target,approach,target.definition.yaw);
     }
     return null;
+  }
+  private pickupContactReason(target:TargetRuntime,position:Vector3,yaw:number):[string,string]|null{
+    const physical=target.physical;if(!physical?.isValid)return ['TARGET_LOST','原目标物理实体已失效'];
+    const body=physical.read();
+    if(!body.enabled)return ['TARGET_DISABLED','目标碰撞或物理实体已停用'];
+    if(!body.movable)return ['TARGET_IMMOVABLE','目标没有可搬运的动态刚体'];
+    if(body.massKg>ACTION_TUNING.maximumPickupMassKg)return ['TOO_HEAVY',`当前搬运动作支持不超过 ${ACTION_TUNING.maximumPickupMassKg} kg 的物件`];
+    // This clip has a calibrated table-height contact, not arbitrary-height IK.
+    const reach=new Vector3(.051,.894,.363).applyAxisAngle(UP,yaw).add(position);
+    const tolerance=.10+Math.min(.1,Math.max(...body.sizeMetersXYZ)/2);
+    return reach.distanceTo(body.position)>tolerance?['GRASP_OUT_OF_REACH','目标不在当前桌面拾取动作的触碰范围内']:null;
   }
   eligibility(action:SkillId,targetId?:string){
     const needed=action==='slide'?['slide-start','slide-loop','slide-exit']:action==='pickup'?['pickup','carry-walk']:action==='sit'?['sit-enter','sit-idle','sit-exit']:action==='standUp'?['sit-exit']:action==='putDown'?[]:['roll'];
@@ -251,6 +255,8 @@ export class ActionSystem {
     }else if(active.id==='pickup'){
       this.move(new Vector3());this.pose={key:'pickup',time:Math.min(active.elapsed,DURATIONS.pickup!),phase:'pickup'};sim.state='pickup';
       if(active.elapsed>=.30&&!active.attached){
+        const contactTarget=this.targets.get(active.targetId!),blocked=contactTarget?this.pickupContactReason(contactTarget,sim.position,Math.atan2(sim.facing.x,sim.facing.z)):['TARGET_LOST','原交互目标已失效'];
+        if(blocked){this.finish('cancelled',blocked[0]!,blocked[1]!);return true;}
         if(!this.content.commit(active.targetId!,this,active.requestId,'held')){this.finish('cancelled','TARGET_UNAVAILABLE','目标预约已失效');return true;}
         active.attached=true;this.carrying=active.targetId!;const target=this.targets.get(this.carrying)!;
         target.state='carried';

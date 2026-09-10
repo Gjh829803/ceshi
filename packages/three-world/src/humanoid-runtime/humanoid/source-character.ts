@@ -73,10 +73,6 @@ export class Character {
   bones: Record<string, Object3D> = {};
   weights: Record<string, number> = {};
   motionSources: MotionSource[] = [];
-  handError: number | null = null;
-  // Kept for the inspector API. Generic arm/leg IK is deliberately not applied
-  // to authored traversal poses; contact correction needs a GASP-specific rig.
-  ik = false;
   smoothing = true;
   phase = 0;
   clipLabel = LABELS.idle!;
@@ -369,6 +365,5 @@ export class Character {
       if(sim.skills.active?.id!=='pickup')left.lerp(this.bones.hand_r!.getWorldPosition(new Vector3()),.5);
       sim.skills.syncCarried(left);
     }
-    this.handError = null;
   }
 }

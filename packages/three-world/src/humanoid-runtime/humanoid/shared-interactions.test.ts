@@ -176,3 +176,24 @@ it('reads world target poses without actors and without advancing the physical o
   expect(target.position.toArray()).toEqual(pose);expect(read()[0]!.rotation!.w).toBe(1);expect(simulation.time).toBe(time);
  }finally{simulation.dispose();}
 });
+
+it.each(['moved','disabled','mass'] as const)('revalidates the actual pickup body at contact after reservation: %s',change=>{
+ const q=setup(),a=actor(q,0);step(q,[a],30);
+ expect(a.skills.request({requestId:'late-change',action:'pickup',targetId:'cup'}).status).toBe('running');
+ for(let n=0;n<30&&a.skills.active?.phase==='align';n++)step(q,[a],1);
+ expect(a.skills.active?.phase).toBe('play');expect(a.skills.carrying).toBeNull();
+ const physical=q.interactions.targets.get('cup')!.physical!,collider=q.colliderForId('cup')!,body=collider.parent()!;
+ if(change==='moved')body.setTranslation({x:5,y:1,z:0},true);
+ if(change==='disabled')collider.setEnabled(false);
+ if(change==='mass')collider.setMass(100);
+ step(q,[a],40);
+ expect(a.skills.status('late-change')).toMatchObject({status:'cancelled',code:change==='moved'?'GRASP_OUT_OF_REACH':change==='disabled'?'TARGET_DISABLED':'TOO_HEAVY'});
+ expect(a.skills.carrying).toBeNull();expect(physical.isHeld).toBe(false);expect(q.interactions.unavailable('cup')).toBe(false);
+ if(change==='disabled')expect(collider.isEnabled()).toBe(false);
+});
+
+it('does not acquire a native-disabled map body or collider through its physical capability',()=>{
+ const q=setup(),physical=q.interactions.targets.get('cup')!.physical!,collider=q.colliderForId('cup')!,body=collider.parent()!;
+ collider.setEnabled(false);expect(physical.hold({})).toBe(false);collider.setEnabled(true);
+ body.setEnabled(false);expect(physical.hold({})).toBe(false);
+});

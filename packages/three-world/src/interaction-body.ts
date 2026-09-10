@@ -57,7 +57,7 @@ export class InteractionBodyControl implements InteractionBody {
   hold(owner:object):boolean{
     const source=this.source();if(!source||!source.enabled)return false;
     if(this.owner)return this.owner===owner;
-    if(!source.body.isDynamic())return false;
+    if(!source.body.isDynamic()||!source.body.isEnabled()||!source.colliders.some(collider=>collider.isEnabled()))return false;
     this.owner=owner;this.colliderEnabled=source.colliders.map(collider=>collider.isEnabled());
     // Temporary kinematic ownership keeps the same body and its authored physics settings.
     // Only collider participation changes; no parent-disabled flag delays release until a step.

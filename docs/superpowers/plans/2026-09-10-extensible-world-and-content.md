@@ -103,6 +103,8 @@ Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消�
 [交互物理所有权](../../reviews/2026-09-11-interaction-physical-ownership.md)。
 交互呈现也已脱离 Actor，内容构建与观察分开，见
 [呈现归属验证](../../reviews/2026-09-11-interaction-presentation-ownership.md)。
+拾取接触会重新检查实际物理条件，见
+[接触再验证](../../reviews/2026-09-11-pickup-contact-validation.md)。
 动态绑定的后续实施见 [R3 计划](2026-09-11-interaction-entity-bindings.md)。
 
 共享交互基础已实现：环境拥有交互物、松散箱子及预约；控制器只持有自己的关系。
