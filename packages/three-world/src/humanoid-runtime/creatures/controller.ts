@@ -1,7 +1,7 @@
 import {resetFamilyAuxiliaryState} from '../motion-families/registry';
 import {createCreatureState} from '../motion-families/ground-vehicle/physics-state';
 import {createFlyingCreatureStateV1} from '../motion-families/flying-creature/state';
-import {CREATURE_COLLISION_PROBES} from '../motion-families/flying-creature/collision-probes';
+import {dragonProbes} from '../motion-families/flying-creature/ground';
 import {tankBarrel} from '../motion-families/ground-vehicle/tank';
 import { Quaternion, Vector3 } from 'three';
 import { vehicleImpactMass,type VehicleSpec } from '../config';
@@ -22,7 +22,7 @@ export function resetCreatureState(v:VehicleState){resetFamilyAuxiliaryState(v);
 
 /** The lead horse is a separate occupied body, also useful for boarding/exit checks. */
 export function creatureBodies(v:VehicleState):{position:Vector3;rotation:Quaternion;body:QueryBody}[]{
-  if(v.motion.flyingCreature)return CREATURE_COLLISION_PROBES.map(p=>({position:v.position,rotation:v.rotation,body:{kind:"capsule" as const,radius:p.radius,height:p.radius*2,offset:p.center}}));
+  if(v.motion.flyingCreature)return dragonProbes(v).map(p=>({position:v.position,rotation:v.rotation,body:{kind:"capsule" as const,radius:p.radius,height:p.radius*2,offset:p.center}}));
   const parts=[{position:v.position,rotation:v.rotation,body:vehicleBody(v.spec)}];
   if(v.motion.tank)parts.push(tankBarrel(v));
   if(v.spec.mode==='carriage'){

@@ -1,3 +1,6 @@
+export {spaceTelemetry} from './motion-families/space/commands';
+export {SPACE_FLIGHT_PRESETS} from './motion-families/space/config';
+export type {SpaceFlightConfig,SpaceDriveMode,SpaceDockPort} from './motion-families/space/config';
 export {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 export {createFlyingCreatureStateV1,resolveFlyingCreatureFeelV1} from './motion-families/flying-creature/state';
 export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families/flying-creature/state';
@@ -80,6 +83,7 @@ export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-
 export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';
 
 export type {MotionFamilyState} from './motion-families/state';
+export {dragonGroundHeading} from './motion-families/flying-creature/ground-pose';
 
 export {createAircraftSpec,type AircraftSpec,type AircraftKind} from './aircraft-spec';
 export type {VehicleInspection,VehicleInspectionResult,VehicleInspectionQuery,VehicleWheelInspection} from './vehicle-inspection';

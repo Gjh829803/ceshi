@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { MAPS } from "../../../shared/preset-content/environment/maps";
 import { readMapHash, writeMapHash } from "./map-route";
 
-const mapIds = ["campus", "grand-prix", "character-workshop", "aircraft-training", "flying-creature-training"];
+const mapIds = ["campus", "grand-prix", "character-workshop", "aircraft-training", "flying-creature-training", "space-training"];
 
 describe("Playground map URL", () => {
-  it("exposes the NPC workshop through the real scene catalog", () => {
-    expect(readMapHash("#/scenes/npc-workshop", MAPS.map(map => map.id))).toBe("npc-workshop");
+  it.each(["npc-workshop", "space-training", "flying-creature-training"])("exposes %s through the real scene catalog", (id) => {
+    expect(readMapHash(`#/scenes/${id}`, MAPS.map(map => map.id))).toBe(id);
   });
   it.each(mapIds)("restores the %s map from its URL", (id) => {
     expect(readMapHash(`#/scenes/${id}`, mapIds)).toBe(id);

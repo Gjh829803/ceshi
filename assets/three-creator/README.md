@@ -1,7 +1,8 @@
 # Reusable character and vehicle assets
 
-[`asset-catalog.json`](asset-catalog.json) defines
-public asset IDs, resource paths, SHA-256 hashes, byte lengths and capabilities.
+Each [`catalog/<assetId>.json`](catalog/) defines the asset ID, resource paths,
+SHA-256 hashes, byte lengths and capabilities for one asset.
+`pnpm content:sync` generates [`asset-catalog.json`](asset-catalog.json) from those sources.
 The compiler verifies and packages the selected resource closure.
 
 Asset producers should follow the [asset submission and Agent integration guide](../../docs/asset-production-integration.md).
@@ -29,8 +30,16 @@ Only procedural vehicle exports create that named socket.
 
 [`import-preset-content.ts`](../../scripts/three-creator/import-preset-content.ts)
 regenerates resource identities and structural metadata, while preserving each
-existing preset asset's `limitations` and `integrationMetadata` from this catalog.
+existing preset asset's `limitations` and `integrationMetadata` from its source definition.
 Those fields remain the maintained guidance source. The importer reads the pinned
-donor to export resource bytes; SDK and Playground TypeScript modules are maintained
+donor to export motion and preset resource bytes. The local humanoid manifest and
+visible skin remain authoritative during imports. SDK and Playground TypeScript modules are maintained
 in this repository and are never copied back from that historical source. Use
 `pnpm content:sync` for routine catalog regeneration.
+
+D01–D11 飞龙使用独立 ID `creature.dragon.d01` 至 `creature.dragon.d11`。
+其 `integrationMetadata.visual` 声明模型、火焰资源和动画前缀，`vehicle.spec`
+保留与 Playground 一致的尺寸、鞍位、核心碰撞和地面校准。
+使用 `flying-creature` 示例与专用 `FlyingCreatureVisual` 接线；目录 `actions` 为空，
+避免普通资产 mixer 与专用控制器争用动画。来源、限制与重新注册命令见
+[飞龙资源说明](../dragon-training/README.md#creator--agent-接入)。

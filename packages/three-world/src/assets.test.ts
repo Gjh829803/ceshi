@@ -26,9 +26,31 @@ const pose = (asset: AssetInstance) => {
   return new Box3().setFromObject(asset.object, true);
 };
 
-afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); });
+afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('Three asset loader against original project GLBs', () => {
+  it('skips embedded model images by default and keeps failed texture opt-in separate from live whitebox assets', async () => {
+    const fetchBytes = vi.fn(readBytes(humanoid));
+    const objectURL = vi.spyOn(URL, 'createObjectURL');
+    const first = await loadAsset(humanoid, { fetchBytes }); instances.push(first);
+    const material = meshes(first)[0]!.material as MeshStandardMaterial;
+    expect(material.map).toBeNull(); expect(material.normalMap).toBeNull();
+    expect(material.color.getHex()).toBe(0xffffff);
+    expect(objectURL).not.toHaveBeenCalled();
+    await expect(loadAsset(humanoid, { fetchBytes, loadTextures: true })).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+    const second = await loadAsset(humanoid, { fetchBytes, loadTextures: false }); instances.push(second);
+    expect(meshes(second)[0]!.geometry).toBe(meshes(first)[0]!.geometry);
+    expect(fetchBytes).toHaveBeenCalledTimes(2);
+    second.play('walk'); second.update(.2);
+    expect(Number.isFinite(pose(second).max.y)).toBe(true);
+  });
+
+  it('rejects an invalid texture policy before fetching model bytes', async () => {
+    const fetchBytes = vi.fn(readBytes(humanoid));
+    await expect(loadAsset(humanoid, { fetchBytes, loadTextures: 'false' as never })).rejects.toThrow('MODEL_LOAD_TEXTURES_INVALID');
+    expect(fetchBytes).not.toHaveBeenCalled();
+  });
+
   it('restores the exact idle pose immediately after stopping a different locomotion clip',async()=>{
     const instance=await load();instance.play('idle');instance.update(0);const expected=pose(instance).clone();
     for(const action of ['walk','run','walk','run','walk']){
@@ -46,9 +68,13 @@ describe('Three asset loader against original project GLBs', () => {
 
   it('binds source humanoid clips to its metric skeleton without root drift', async () => {
     const instance=await load();
-    expect(meshes(instance)).toHaveLength(2);
+    expect(meshes(instance)).toHaveLength(1);
     expect(instance.clips.map(clip=>clip.name).sort()).toEqual(Object.keys(humanoid.actions).sort());
     const mesh=meshes(instance)[0] as SkinnedMesh;
+    expect(mesh.name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');
+    for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){
+      expect(material.transparent).toBe(false);expect(material.depthWrite).toBe(true);
+    }
     expect(mesh.skeleton.bones).toHaveLength(101);
     instance.play('idle');instance.update(0);
     const idle=pose(instance);expect(idle.min.y).toBeGreaterThan(-.12);expect(idle.max.y).toBeGreaterThan(1.6);

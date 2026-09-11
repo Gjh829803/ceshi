@@ -88,7 +88,8 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
   spacecraft: {
     forward:'Signed local +Z thrust.',strafe:'Signed local -X thrust.',lift:'Signed local +Y thrust.',
     steer:'Positive rotates about local -Y.',pitch:'Signed angular input about local X.',roll:'Signed angular input about local Z.',
-    boost:'Brakes velocity through damping; does not increase thrust.',
+    boost:'Uses counter-thrust to brake linear and angular velocity in either flight mode.',
+    brake:'Ignored; keyboard Space is handled through lift. F enters/exits via the shared vehicle action.',
   },
   submarine: {
     forward:'Signed forward thrust.',steer:'Positive turns right about world Y.',roll:'Signed angular roll.',

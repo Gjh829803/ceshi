@@ -14,6 +14,7 @@ import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 import type {CameraFollowOptions} from './contracts';
 
 const worlds:ThreeWorld[]=[];
+
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const map:EnvironmentDefinition={id:'three-actors',name:'Three actors',description:'',bounds:{min:[-20,-5,-20],max:[20,10,20]},boxes:[{id:'floor',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[-4,.04,0]};
 async function setup(renderer?:THREE.WebGLRenderer,options:Partial<Parameters<typeof createHumanoidWorld>[0]>={}){
@@ -507,4 +508,8 @@ it('continues observation after deleting a camera NPC and preserves ownership af
  const before=world.snapshot().camera;expect(()=>world.setCameraFollow({targetEntityId:'ordinary',collisionRadiusMeters:0})).toThrow();expect(world.snapshot().camera).toEqual(before);
  world.setCameraFollow({targetEntityId:'npc'});expect((await world.execute({type:'entity.despawn',entityId:'npc'})).status).toBe('applied');
  expect(world.describe().humanoid!.configuration.effective.camera).toMatchObject({owner:'authored',settings:null,framing:{status:'not-applicable'}});world.step({},1);
+});
+
+it('forwards explicit character model texture options through createHumanoidWorld',async()=>{
+  await expect(setup(undefined,{characterLoadOptions:{loadTextures:true}})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
 });

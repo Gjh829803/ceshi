@@ -467,14 +467,23 @@ describe('v2 command and discovery boundary', () => {
       {type:'entity.set-scale',entityId:'a',scaleLocalXYZ:[1,NaN,1]},
       {type:'actor.stop',entityId:'a',priority:100},
       {type:'action.invoke',actionId:'x',arguments:{callback:{eval:'evil'}}},
+      {type:'space.set-drive-mode',mode:'automatic'},
+      {type:'space.dock',portId:''},
+      {type:'space.dock'},
+      {type:'space.dock',portId:'home',teleport:true},
+      {type:'space.dock',portId:'home',actorId:42},
+      {type:'space.set-drive-mode',mode:'inertial',actorId:''},
     ]) expect(check(command)).toBe(false);
     expect(check({type:'parameter.set',parameterId:'sky.mode',value:'aurora'})).toBe(true);
     expect(check({type:'entity.set-geometry',entityId:'bridge',geometryId:'long'})).toBe(true);
+    for(const mode of ['assisted','inertial'])for(const actor of [{},{actorId:'npc'}])expect(check({type:'space.set-drive-mode',mode,...actor})).toBe(true);
+    for(const portId of ['home',null])for(const actor of [{},{actorId:'npc'}])expect(check({type:'space.dock',portId,...actor})).toBe(true);
   });
   it('keeps input v1 unchanged and permits closed v2 lifecycle/command steps', () => {
     const check=new Ajv({strict:false,strictNumbers:true}).compile(EPISODE_SCHEMA);
     const episode={schemaVersion:2,steps:[{lifecycle:'pause',durationSeconds:.5},{lifecycle:'start',commands:[{type:'actor.stop',entityId:'npc'}],keysDown:['w'],durationSeconds:1}],targets:[]};
     expect(check(episode)).toBe(true); expect(check({...episode,schemaVersion:1})).toBe(false);
+    expect(check({...episode,steps:[{commands:[{type:'space.set-drive-mode',actorId:'npc',mode:'inertial'},{type:'space.dock',actorId:'npc',portId:'home'},{type:'space.dock',actorId:'npc',portId:null}],durationSeconds:1}]})).toBe(true);
     expect(check({...episode,steps:[{commands:[{type:'eval',source:'anything'}],durationSeconds:1}]})).toBe(false);
   });
   it('keeps caller command receipt and World operation ID distinct from Creator operations', async () => {

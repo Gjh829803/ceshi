@@ -29,7 +29,9 @@ async function resource(relative: string) {
     sourcePath: `assets/three-creator/presets/${relative}` };
 }
 const sourceRoot = path.join(donor, 'public/assets/humanoid/source');
-const sourceManifest = JSON.parse(await readFile(path.join(sourceRoot, 'manifest.json'), 'utf8'));
+// The local manifest and visible skin are maintained content; the pinned donor supplies motions and notices.
+const sourceManifest = JSON.parse(await readFile(path.join(destination, 'humanoid/source/manifest.json'), 'utf8'));
+const maintainedHumanoidFiles=new Set(['humanoid/source/manifest.json',`humanoid/source/${sourceManifest.model}`]);
 const runtimeFiles = new Set<string>(['manifest.json', sourceManifest.model]);
 for (const clip of sourceManifest.runtimeClips) { runtimeFiles.add(clip.file); if (clip.metadata) runtimeFiles.add(clip.metadata); }
 for (const file of await walk(sourceRoot)) {
@@ -39,6 +41,7 @@ for (const file of await walk(sourceRoot)) {
 const imports = [...runtimeFiles].map(file => `humanoid/source/${file}`);
 imports.push('creatures/horse.glb', 'creatures/dragon.glb', 'creatures/manifest.json', 'creatures/LICENSE-ANIMALS.txt', 'creatures/LICENSE-MONSTERS.txt');
 for (const relative of imports) {
+  if(maintainedHumanoidFiles.has(relative))continue;
   const target = path.join(destination, relative); await mkdir(path.dirname(target), { recursive: true });
   await copyFile(path.join(donor, 'public/assets', relative), target);
 }
@@ -51,6 +54,7 @@ const catalog = {schemaVersion:1,assets:await readCatalogSources(REPOSITORY_ROOT
 const previousAssets = new Map<string, Parameters<typeof presetImportDetails>[1]>(
   catalog.assets.map(asset => [asset.id, asset as Parameters<typeof presetImportDetails>[1]]),
 );
+const previousHumanoid=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
 catalog.assets = catalog.assets.filter((asset: any) => asset.provenance?.repository !== 'vehicle-training-ground' && asset.id !== 'humanoid.source-101');
 const provenance = { repository: 'vehicle-training-ground', commit: expected, notices: 'resources', importedWithoutChangingAssetBytes: true };
 const transform = { positionMetersXYZ: [0,0,0], rotationEulerRadiansXYZ: [0,0,0], scaleXYZ: [1,1,1] };
@@ -59,8 +63,8 @@ async function definition(id: string, displayName: string, primary: string, depe
   return { id, displayName, ...source, uri: `./assets/subjects/${source.sha256}.glb`, usage: 'reusable', rootTransform: transform,
     actions: {}, limitations: [], provenance, resources: await Promise.all(dependencies.map(resource)), ...extra };
 }
-catalog.assets.push(await definition('humanoid.source-101', '原版人物 / 101 骨 / 48 动作', `humanoid/source/${sourceManifest.model}`,
-  imports.filter(file => file.startsWith('humanoid/')), { recommendedBody: { heightMeters: 1.68, radiusMeters: .28 },
+catalog.assets.push(await definition('humanoid.source-101', previousHumanoid.displayName, `humanoid/source/${sourceManifest.model}`,
+  imports.filter(file => file.startsWith('humanoid/')), { provenance:previousHumanoid.provenance, recommendedBody: { heightMeters: 1.68, radiusMeters: .28 },
     locomotionBindingIds: ['locomotion.humanoid'], runtimeActions: sourceManifest.runtimeClips, boneCount: 101, runtimeClipCount: 48 }));
 for (const spec of SPECS) {
   let primary: string;
@@ -83,7 +87,7 @@ for (const spec of SPECS) {
 }
 await writeCatalogSources(REPOSITORY_ROOT,catalog.assets,true);
 await syncAssetCatalog(REPOSITORY_ROOT);
-await writeFile(path.join(destination, 'import-manifest.json'), JSON.stringify({ schemaVersion: 1, provenance,
+await writeFile(path.join(destination, 'import-manifest.json'), JSON.stringify({ schemaVersion: 1, provenance:previousHumanoid.provenance,
   character: { boneCount: 101, runtimeClipCount: sourceManifest.runtimeClipCount }, vehicleIds: SPECS.map((s: any) => s.id),
   resources: await Promise.all(imports.map(resource)) }, null, 2) + '\n');
 execFileSync('python3', [path.join(REPOSITORY_ROOT,'scripts/three-creator/build-humanoid.py')], {cwd:REPOSITORY_ROOT,stdio:'inherit'});

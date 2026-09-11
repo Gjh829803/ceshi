@@ -1,3 +1,4 @@
+import {buildSpaceTrainingStars} from './environment/space-training-visual';
 import * as T from 'three';
 import {buildInteractionVisuals} from './humanoid/interaction-visuals';
 import { getMap } from './environment/maps';
@@ -7,7 +8,8 @@ import type { EnvironmentDefinition } from './environment/types';
 export interface WorldVisual {interactionProps:ReturnType<typeof buildInteractionVisuals>;root:T.Group;solids:T.Object3D[];sun:T.DirectionalLight;update:(time:number,target:T.Vector3,underwater:boolean)=>void;dispose:()=>void}
 /** The mesh transform is exactly the box transform consumed by environment queries. */
 export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campus')):WorldVisual{
- const root=new T.Group();root.name=`map:${map.id}`;scene.add(root);
+ const space=map.id==='space-training',stars=space?buildSpaceTrainingStars():null;
+ const root=new T.Group();root.name=`map:${map.id}`;scene.add(root);if(stars)root.add(stars.root);
  const interactionProps=buildInteractionVisuals(root,[...(map.interactions??[]).filter(target=>target.kind==='pickup').map(target=>({id:target.id,size:target.size??[.13,.13,.13],position:target.position})),...(map.looseCrates??[]).map(crate=>({id:crate.id,size:[crate.size,crate.size,crate.size],position:crate.position}))]);
  const solids:T.Object3D[]=[],geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>(),instances=new Set<T.InstancedMesh>();
  const unit=new T.BoxGeometry(1,1,1);geometries.add(unit);
@@ -27,7 +29,7 @@ export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campu
   const geometry=new T.PlaneGeometry(w,h);geometries.add(geometry);const material=new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:T.DoubleSide});materials.add(material);
   const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);if(floor)mesh.rotation.x=-Math.PI/2;if(yaw)mesh.rotateOnWorldAxis(new T.Vector3(0,1,0),yaw);root.add(mesh);
  }
- for(const region of map.regions){if(map.id==='grand-prix'||region.id==='water'||region.id==='circuit'||region.id==='launch')continue;const [x,y,z]=region.center,[w,d]=region.size;
+ for(const region of map.regions){if(map.id==='grand-prix'||(space&&region.id!=='space-dock')||region.id==='water'||region.id==='circuit'||region.id==='launch')continue;const [x,y,z]=region.center,[w,d]=region.size;
   for(const side of [-1,1]){stripe(x+side*w/2,z,.3,d,region.color,y+.045);stripe(x,z+side*d/2,w,.3,region.color,y+.045);}
   label(region.name,x,y+.07,z-d/2-5,Math.min(w,38),3);
  }
@@ -65,11 +67,11 @@ export function buildWorld(scene:T.Scene,map:EnvironmentDefinition=getMap('campu
  }
  // Camera-centred sky at the far depth plane: large maps must not expose the clear colour.
  const skyGeometry=new T.SphereGeometry(1500,24,12);geometries.add(skyGeometry);
- const skyMaterial=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,uniforms:{top:{value:new T.Color('#76a9bd')},bottom:{value:new T.Color('#dae7e5')}},vertexShader:'varying float h;void main(){h=position.y/1500.;vec4 clip=projectionMatrix*vec4(mat3(viewMatrix)*position,1.);gl_Position=clip.xyww;}',fragmentShader:'varying float h;uniform vec3 top;uniform vec3 bottom;void main(){gl_FragColor=vec4(mix(bottom,top,pow(max(h,0.),.7)),1.);}'});materials.add(skyMaterial);
+ const skyMaterial=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,uniforms:{top:{value:new T.Color(space?'#030712':'#76a9bd')},bottom:{value:new T.Color(space?'#030712':'#dae7e5')}},vertexShader:'varying float h;void main(){h=position.y/1500.;vec4 clip=projectionMatrix*vec4(mat3(viewMatrix)*position,1.);gl_Position=clip.xyww;}',fragmentShader:'varying float h;uniform vec3 top;uniform vec3 bottom;void main(){gl_FragColor=vec4(mix(bottom,top,pow(max(h,0.),.7)),1.);}'});materials.add(skyMaterial);
  const sky=new T.Mesh(skyGeometry,skyMaterial);sky.frustumCulled=false;root.add(sky);root.add(new T.HemisphereLight('#e4f4fb','#728a7e',2.1));
  const sun=new T.DirectionalLight('#fff0d6',3);sun.position.set(-70,140,-90);root.add(sun,sun.target);
- const previousFog=scene.fog,previousBackground=scene.background,airFog=new T.Fog('#c1d7dd',280,1000),waterFog=new T.Fog('#246879',8,105),waterBackground=new T.Color('#246879'),sunOffset=new T.Vector3(-70,140,-90);
+ const previousFog=scene.fog,previousBackground=scene.background,airFog=space?null:new T.Fog('#c1d7dd',280,1000),waterFog=new T.Fog('#246879',8,105),waterBackground=new T.Color('#246879'),sunOffset=new T.Vector3(-70,140,-90);
  scene.fog=airFog;root.updateMatrixWorld(true);
  let disposed=false;
- return {interactionProps,root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;interactionProps.dispose();circuit?.dispose();root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
+ return {interactionProps,root,solids,sun,update(time,target,underwater){sun.position.copy(target).add(sunOffset);sun.target.position.copy(target);sky.visible=!underwater;scene.background=underwater?waterBackground:previousBackground;scene.fog=underwater?waterFog:airFog;for(const material of waterMaterials)material.roughness=.24+Math.sin(time*.6)*.025;},dispose(){if(disposed)return;disposed=true;stars?.dispose();interactionProps.dispose();circuit?.dispose();root.removeFromParent();instances.forEach(mesh=>mesh.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.dispose();if(scene.fog===airFog||scene.fog===waterFog){scene.fog=previousFog;scene.background=previousBackground;}solids.length=0;root.clear();}};
 }

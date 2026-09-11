@@ -1,6 +1,7 @@
 import type { AssetInstance, Assets, CharacterBody } from './contracts.js';
 import type { AssetDefinition, AssetInstance as EngineAssetInstance } from './engine-contracts.js';
 import { cloneAsset, loadAsset, validateAssetDefinition } from './assets.js';
+import type {ModelLoadOptions} from './contracts.js';
 
 type AssetSearchResult = ReturnType<Assets['search']>[number];
 type Entry = { definition: AssetDefinition; raw: EngineAssetInstance; managed: EngineAssetInstance };
@@ -62,11 +63,11 @@ export class WorldAssets implements Assets {
     }));
   }
 
-  async load(assetId: string): Promise<AssetInstance> {
+  async load(assetId: string, options:ModelLoadOptions={}): Promise<AssetInstance> {
     this.alive();
     const definition = this.definitions.get(assetId);
     if (!definition) throw new Error(`ASSET_NOT_FOUND: ${assetId}`);
-    const raw = await loadAsset(definition, this.baseUri === undefined ? {} : { baseUri: this.baseUri });
+    const raw = await loadAsset(definition, {...options,...(this.baseUri === undefined ? {} : { baseUri: this.baseUri })});
     return this.adoptOrRelease(raw, definition);
   }
 

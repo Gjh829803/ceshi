@@ -115,7 +115,7 @@ export class CreatorDiscovery {
       return {
         ...authority, profile: this.profile, topic,
         ...await readExampleFiles(this.exampleRoot(topic), topic, selectedFiles),
-        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox humanoid runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
+        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='flying-creature'?'A supplied humanoid and a native dragon selected from asset-definitions.json. Read vehicle.spec and integrationMetadata.visual from the selected asset, and keep model, animation prefix, core collision and ground calibration together. Inspect real boarding, takeoff and landing states.':topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox humanoid runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
       };
     }
     const isSdk = this.profile === 'three-sdk';

@@ -1,52 +1,24 @@
-import { Euler,Vector3 } from 'three';
-import type { EnvironmentQueries } from '../../environment/queries';
-import type { Input,VehicleState } from '../../simulation';
-export type MotionIntent = (v: VehicleState, input: Input, dt: number, time: number, q: EnvironmentQueries) => void;
-const clamp = (n: number, limit: number) => Math.max(-limit, Math.min(limit, n));
-/** Existing flight, hover and creature controls supply intent to the shared
- * dynamic chassis. Only Rapier integrates the real position and momentum. */
-export function motionForces(v: VehicleState, input: Input, h: number, time: number, q: EnvironmentQueries, mass: number, intent: MotionIntent) {
-    const s = v.spec;
-    const draft: VehicleState = { ...v, position: v.position.clone(), rotation: v.rotation.clone(), velocity: v.velocity.clone(), motion: { ...v.motion } };
-    const driven = v.motion.body!.riderMounted || [input.forward, input.steer, input.lift, input.roll, input.pitch, input.strafe].some(n => Math.abs(n) > .01) || input.boost || input.jump;
-    q.withoutContactImpulses(() => intent(draft, input, h, time, q));
-    const force = new Vector3(), torque = new Vector3();
-    const limit = Math.max(2, s.accel, s.brakeDeceleration, s.grip * v.velocity.length(), 0);
-    if (driven) {
-        force.x = mass * clamp((draft.velocity.x - v.velocity.x) / h, limit);
-        force.z = mass * clamp((draft.velocity.z - v.velocity.z) / h, limit);
-    }
-    else {
-        // Unoccupied actors coast and exchange momentum; never pin them to a pose.
-        const drag = .04;
-        force.x = -mass * v.velocity.x * drag;
-        force.z = -mass * v.velocity.z * drag;
-    }
-    {
-        force.y = mass * (9.81 + (driven ? clamp((draft.velocity.y - v.velocity.y) / h, limit) : -v.velocity.y * .04));
-    }
-    // Upright assistance is torque-limited, so impacts still rotate the chassis.
-    if (driven || v.grounded) {
-        const target = draft.rotation.clone();
-        if (!driven) {
-            const angles = new Euler().setFromQuaternion(v.rotation, 'YXZ');
-            target.setFromEuler(new Euler(0, angles.y, 0, 'YXZ'));
-        }
-        const error = target.multiply(v.rotation.clone().invert());
-        if (error.w < 0)
-            error.set(-error.x, -error.y, -error.z, -error.w);
-        const localError = new Vector3(error.x, error.y, error.z).multiplyScalar(2).applyQuaternion(v.rotation.clone().invert());
-        const omega = v.motion.body!.angularVelocity.clone().applyQuaternion(v.rotation.clone().invert());
-        const e = s.envelope.halfExtents, j = new Vector3(mass * (4 * e[2] ** 2 + 1) / 12, mass * (4 * e[0] ** 2 + 4 * e[2] ** 2) / 12, mass * (4 * e[0] ** 2 + 1) / 12);
-        // The intent yaw is one slice ahead. Feed its angular velocity to the PD
-        // controller instead of accumulating a second authoritative orientation.
-        const targetYaw = driven ? Math.atan2(Math.sin(draft.yaw - v.yaw), Math.cos(draft.yaw - v.yaw)) / h : 0;
-        const rate = driven ? 1 / h : 4;
-        torque.set(j.x * clamp((localError.x * rate - omega.x) * 24, 60), j.y * clamp((targetYaw - omega.y) * 24, 60), j.z * clamp((localError.z * rate - omega.z) * 24, 60)).applyQuaternion(v.rotation);
-    }
-    v.steering = draft.steering;
-    v.throttle = driven ? (Math.max(...[input.forward, input.steer, input.lift, input.roll, input.pitch, input.strafe].map(Math.abs))) : 0;
-    v.launched = draft.launched;
-    v.submerged = draft.submerged;
-    return { force, torque, draftPosition: draft.position, draftRotation: draft.rotation, draftYaw: draft.yaw };
+import {Vector3} from 'three';
+import type {Input,VehicleState} from '../../simulation';
+import type {SpaceFlightConfig} from './config';
+export function spaceInertia(v:VehicleState,c:SpaceFlightConfig,mass:number){
+ const [x,y,z]=v.spec.envelope.halfExtents;
+ return c.hull==='disc'?new Vector3(mass*(3*x*x+4*y*y)/12,mass*x*x/2,mass*(3*x*x+4*y*y)/12):new Vector3(mass*(y*y+z*z)/3,mass*(x*x+z*z)/3,mass*(x*x+y*y)/3);
+}
+const clamp=(n:number,limit:number)=>Math.max(-limit,Math.min(limit,n));
+/** 主项目 +Z 前进、-X 局部右向；仅计算力和力矩，不积分位置。 */
+export function spaceForces(v:VehicleState,i:Input,c:SpaceFlightConfig,mass:number,targets?:{velocity:Vector3;angular:Vector3}){
+ if(v.motion.family!=='space')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
+ const inverse=v.rotation.clone().invert(),velocity=v.velocity.clone().applyQuaternion(inverse),omega=v.motion.body.angularVelocity.clone().applyQuaternion(inverse);
+ const translation=new Vector3(-i.strafe,i.lift,i.forward),rotation=new Vector3(i.pitch,-i.steer,i.roll);
+ const force=new Vector3(),torque=new Vector3(),inertia=spaceInertia(v,c,mass),brake=i.boost;
+ for(let axis=0;axis<3;axis++){
+  const f=c.thrustNewtonsXYZ[axis]!,input=translation.getComponent(axis),speed=velocity.getComponent(axis);
+  const assisted=!!targets||brake||v.motion.driveMode==='assisted';
+  const requested=assisted?((targets?targets.velocity.getComponent(axis):brake?0:input*v.spec.speed)-speed)*mass*(targets?2:brake?v.spec.brakeDamping:v.spec.grip):input*f;
+  force.setComponent(axis,Math.max(axis===2?-c.reverseThrustNewtons:-f,Math.min(f,requested)));
+  const desired=targets?targets.angular.getComponent(axis):brake?0:rotation.getComponent(axis)*v.spec.steer;
+  torque.setComponent(axis,clamp(assisted?(desired-omega.getComponent(axis))*inertia.getComponent(axis)*4:rotation.getComponent(axis)*c.torqueNewtonMetersXYZ[axis]!,c.torqueNewtonMetersXYZ[axis]!));
+ }
+ return {force,torque};
 }

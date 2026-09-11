@@ -1,9 +1,9 @@
 {
   "id": "humanoid.source-101",
-  "displayName": "默认人形 / Source 101 / 48 动作",
-  "uri": "./assets/subjects/bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4.glb",
-  "sha256": "bd1fc0fb985966cd2e0ba517f626bdad8fbbbd062c2f709c1c0a73e8159e61b4",
-  "byteLength": 4643232,
+  "displayName": "UEFN 白色人形 / 黑色关节 / LOD1 / 48 动作",
+  "uri": "./assets/subjects/260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461.glb",
+  "sha256": "260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461",
+  "byteLength": 7029028,
   "sourcePath": "assets/three-creator/humanoid/source-101/model.glb",
   "usage": "reusable",
   "rootTransform": {
@@ -60,16 +60,10 @@
     "repository": "vehicle-training-ground",
     "commit": "c293622a63716b8473cc2a95cb485c515265945e",
     "notices": "resources",
-    "importedWithoutChangingAssetBytes": true
+    "importedWithoutChangingAssetBytes": false,
+    "modelModification": "User-supplied UEFN BlackJoints LOD1 skin bound offline to preserved Source101 animation rig."
   },
   "resources": [
-    {
-      "path": "humanoid/source/manifest.json",
-      "uri": "./assets/resources/f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff.json",
-      "sha256": "f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff",
-      "byteLength": 38260,
-      "sourcePath": "assets/three-creator/presets/humanoid/source/manifest.json"
-    },
     {
       "path": "humanoid/source/gasp-research/climb-2m5.experimental.glb",
       "uri": "./assets/resources/c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1.glb",
@@ -601,6 +595,20 @@
       "sha256": "84a52c6ab396c8304c3b7f1f9729af14832a68bddb0c613a1d82467de716b4cb",
       "byteLength": 1034,
       "sourcePath": "assets/three-creator/presets/humanoid/source/swimming/LICENSE-SOURCE-CMU.txt"
+    },
+    {
+      "path": "humanoid/source/manifest.json",
+      "uri": "./assets/resources/53f24eb12664813e33e597fb32c56d9d3b7bd77633f6f9733fdd7d8cda2c132f.json",
+      "sha256": "53f24eb12664813e33e597fb32c56d9d3b7bd77633f6f9733fdd7d8cda2c132f",
+      "byteLength": 38243,
+      "sourcePath": "assets/three-creator/presets/humanoid/source/manifest.json"
+    },
+    {
+      "path": "humanoid/source/uefn-mannequin-lod1.glb",
+      "uri": "./assets/resources/364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3.glb",
+      "sha256": "364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3",
+      "byteLength": 3355000,
+      "sourcePath": "assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb"
     }
   ],
   "recommendedBody": {

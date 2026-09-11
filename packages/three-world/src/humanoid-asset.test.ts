@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, cloneAsset, playLocomotion } from './assets';
 import { createWorld } from './engine';
@@ -15,13 +17,23 @@ async function preset() {
   });
   instances.push(asset); return asset;
 }
-afterEach(() => { for (const asset of instances.splice(0)) asset.dispose(); });
+beforeEach(()=>{
+  const parse=GLTFLoader.prototype.parse;
+  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
+});
+afterEach(() => { for (const asset of instances.splice(0)) asset.dispose(); vi.restoreAllMocks(); });
 
 it('loads the preset skeleton, a grounded human body and independent clone animation', async () => {
   const asset = await preset();
   expect(asset.actionIds).toEqual(expect.arrayContaining(['idle','walk','run','jump','fall']));
   const bones: THREE.Object3D[] = [];
-  asset.object.traverse(o => { if ((o as THREE.Bone).isBone) bones.push(o); });
+  asset.object.traverse(o => {
+    if ((o as THREE.Bone).isBone) bones.push(o);
+    if(o instanceof THREE.SkinnedMesh)for(const material of Array.isArray(o.material)?o.material:[o.material]){
+      expect(material.transparent,'opaque shell must not enter the transparent pass').toBe(false);
+      expect(material.depthWrite,'joint occlusion requires depth writes').toBe(true);
+    }
+  });
   expect(bones).toHaveLength(101);
   asset.play('idle'); asset.update(0); asset.object.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(asset.object, true);

@@ -1,36 +1,124 @@
-/** D01 米制 +Z 前向体积：覆盖翼拍、尾部与混合动作，半径含 0.5 米扫掠余量。 */
+/** D01 躯干、颈部和头部的米制通行体积；翼尖/尾尖允许擦边。由 prepare-dragon-core-collision.mjs 生成。 */
 export const CREATURE_COLLISION_PROBES:readonly {id:string;center:readonly [number,number,number];radius:number}[] = [
-  {"id":"head-neck","center":[0,0,6],"radius":8.1},
-  {"id":"body-rider","center":[0,1,0.5],"radius":5.3},
-  {"id":"tail-base","center":[0,0,-4],"radius":4.1},
-  {"id":"tail-tip","center":[0,0,-9],"radius":5.3},
-  {"id":"wing-left","center":[-6,0,1],"radius":7},
-  {"id":"wing-right","center":[6,0,1],"radius":7},
-  {"id":"wingtip-left","center":[-11,0,2],"radius":7},
-  {"id":"wingtip-right","center":[11,0,2],"radius":7},
-  {"id":"downstroke","center":[0,-8,4],"radius":6.5},
-  {"id":"upstroke","center":[0,7,3],"radius":8.1},
-  {"id":"downstroke-center","center":[0,-7,-1],"radius":7},
-  {"id":"dive-tail","center":[0,-5,-6],"radius":5.5},
-  {"id":"tail-end","center":[0,-3,-11],"radius":5.8},
-  {"id":"wing-forward-left","center":[-7,0,8],"radius":6},
-  {"id":"wing-forward-right","center":[7,0,8],"radius":6},
-  {"id":"tail-swing-left","center":[-6,0,-8],"radius":5},
-  {"id":"tail-swing-right","center":[6,0,-8],"radius":5},
-  {"id":"raised-tail","center":[0,4,-6],"radius":5},
-  {"id":"wing-up-left","center":[-7,6,5],"radius":7},
-  {"id":"wing-up-right","center":[7,6,5],"radius":7},
-  {"id":"wing-down-left","center":[-7,-6,1],"radius":9},
-  {"id":"wing-down-right","center":[7,-6,1],"radius":9},
-  {"id":"wing-up-back-left","center":[-7,6,-2],"radius":6.3},
-  {"id":"wing-up-back-right","center":[7,6,-2],"radius":6.3},
-  {"id":"wing-down-back-left","center":[-6,-6,-5],"radius":7},
-  {"id":"wing-down-back-right","center":[6,-6,-5],"radius":7},
-  {"id":"wing-folded-back-left","center":[-9,6,-8],"radius":7.3},
-  {"id":"wing-folded-back-right","center":[9,6,-8],"radius":7.3},
-  {"id":"wing-lowered-forward-left","center":[-6,-6,8],"radius":7.3},
-  {"id":"wing-lowered-forward-right","center":[6,-6,8],"radius":7.3},
-  {"id":"tail-blended-downstroke","center":[0,-8,-7],"radius":6.5},
-  {"id":"neck-blended-upstroke","center":[0,5,9],"radius":6.5},
-  {"id":"tail-blended-upstroke","center":[0,4,-10],"radius":6.5},
+  {
+    "id": "D01-core-0",
+    "center": [
+      -0.011,
+      0.219,
+      6.223
+    ],
+    "radius": 1.462
+  },
+  {
+    "id": "D01-core-1",
+    "center": [
+      0.014,
+      0.295,
+      -0.26
+    ],
+    "radius": 1.442
+  },
+  {
+    "id": "D01-core-2",
+    "center": [
+      0.007,
+      2.384,
+      3.721
+    ],
+    "radius": 1.71
+  },
+  {
+    "id": "D01-core-3",
+    "center": [
+      -0.067,
+      -0.835,
+      3.442
+    ],
+    "radius": 1.48
+  },
+  {
+    "id": "D01-core-4",
+    "center": [
+      0.133,
+      -0.426,
+      9.261
+    ],
+    "radius": 1.379
+  },
+  {
+    "id": "D01-core-5",
+    "center": [
+      0.485,
+      0.154,
+      1.929
+    ],
+    "radius": 1.448
+  },
+  {
+    "id": "D01-core-6",
+    "center": [
+      0.052,
+      0.467,
+      4.402
+    ],
+    "radius": 1.462
+  },
+  {
+    "id": "D01-core-7",
+    "center": [
+      -0.018,
+      -0.964,
+      5.253
+    ],
+    "radius": 1.541
+  },
+  {
+    "id": "D01-core-8",
+    "center": [
+      0.022,
+      1.731,
+      1.282
+    ],
+    "radius": 1.614
+  },
+  {
+    "id": "D01-core-9",
+    "center": [
+      -0.184,
+      0.622,
+      2.832
+    ],
+    "radius": 1.543
+  },
+  {
+    "id": "D01-core-10",
+    "center": [
+      -0.185,
+      -0.271,
+      1.194
+    ],
+    "radius": 1.509
+  },
+  {
+    "id": "D01-core-11",
+    "center": [
+      -0.008,
+      -0.519,
+      7.514
+    ],
+    "radius": 1.636
+  }
 ];
+export const CREATURE_COLLISION_ENVELOPE = {
+  "kind": "box",
+  "halfExtents": [
+    1.8299999999999998,
+    3.2994999999999997,
+    6.170999999999999
+  ],
+  "offset": [
+    0.10299999999999998,
+    0.7944999999999998,
+    4.468999999999999
+  ]
+} as const;

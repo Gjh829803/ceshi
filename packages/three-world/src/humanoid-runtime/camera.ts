@@ -10,6 +10,8 @@ export type CameraSubject=Pick<HumanoidActor,'controller'|'player'|'vehicle'|'ti
 import type { MotionPose } from './presentation';
 import { DEFAULT_CAMERA_TUNING, HUMANOID_CAMERA_DEFAULTS, CHARACTER_CAMERA_DISTANCE_METERS, parseCameraTuning, type CameraTuning } from '../config/camera';
 import type { EnvironmentQueries } from './environment/queries';
+// 负俯仰表示抬头；三种视角均允许看向天空，并在垂直极点前保留 5° 防止翻转。
+const MIN_LOOK_PITCH_RADIANS=-85*Math.PI/180;
 interface CameraPresentationPose {
   position:T.Vector3; rotation:T.Quaternion; target:T.Vector3; subject:T.Vector3;
   up:T.Vector3; fov:number; near:number;
@@ -150,10 +152,10 @@ export class FollowCamera {
     if(this.mode===1||this.mode===2){
       if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw+yawDelta,-Math.PI*5/6,Math.PI*5/6);
       else this.yaw+=yawDelta;
-      this.pitch=clamp(this.pitch+pitchDelta,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);
+      this.pitch=clamp(this.pitch+pitchDelta,MIN_LOOK_PITCH_RADIANS,this.mode===2?1.05:1.4);
     }else{
       const character=sim?!!sim.controller&&!sim.vehicle:this.sourceCharacter;
-      this.yaw+=yawDelta;this.pitch=clamp(this.pitch+pitchDelta,character ? .12 : -.6,character ? 1.1 : 1.25);
+      this.yaw+=yawDelta;this.pitch=clamp(this.pitch+pitchDelta,MIN_LOOK_PITCH_RADIANS,character ? 1.1 : 1.25);
     }
     this.lastOrbit=time;
   }

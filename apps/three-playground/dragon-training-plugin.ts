@@ -18,7 +18,8 @@ export function dragonTrainingPlugin(repository: string): Plugin {
     };
     if (manifest.kind !== "native-flying-creature-assets" || manifest.schemaVersion !== 2 || !manifest.files?.["__creature-assets/dragon.glb"])
       throw new Error("DRAGON_TRAINING_MANIFEST_INVALID");
-    const allowed=new Set(["__creature-assets/dragon.glb","__creature-assets/rider.glb","__creature-assets/manifest.json","__creature-assets/FireGenLoop01_8x8.png"]);
+    const allowed=new Set(["dragon.glb","rider.glb","manifest.json","FireGenLoop01_8x8.png","variants.json","variant-sources.json","ground-sources.json",
+      ...Array.from({length:10},(_,i)=>'D'+String(i+2).padStart(2,'0')+'.glb')].map(name=>'__creature-assets/'+name));
     if(Object.keys(manifest.files).length!==allowed.size||Object.keys(manifest.files).some(name=>!allowed.has(name)))throw new Error("DRAGON_TRAINING_ASSET_LIST_INVALID");
     for (const [name, identity] of Object.entries(manifest.files)) {
       if (!/^[a-zA-Z0-9_./-]+$/.test(name) || name.startsWith("/") || name.split("/").some(part => part === ".." || part === "." || !part))
@@ -35,6 +36,11 @@ export function dragonTrainingPlugin(repository: string): Plugin {
   return {
     name: "playground-dragon-training",
     configureServer(server) {
+      const bundlePath=path.join(directory,'bundle.json');
+      server.watcher.add(bundlePath);
+      const invalidate=(changed:string)=>{if(path.resolve(changed)===bundlePath)files=undefined;};
+      server.watcher.on('change',invalidate);
+      server.httpServer?.once('close',()=>server.watcher.off('change',invalidate));
       server.middlewares.use(async (request, response, next) => {
         const name = (request.url ?? "").split("?")[0]!.replace(/^\//, "");
         if (!name.startsWith("flying-creature/")) return next();

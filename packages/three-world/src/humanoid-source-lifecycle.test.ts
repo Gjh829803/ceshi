@@ -6,21 +6,29 @@ import {Character as SourceCharacter} from './humanoid-runtime/humanoid/source-c
 import {Character} from './humanoid-runtime/character';
 
 const sources:SourceCharacter[]=[],characters:Character[]=[];
+
 afterEach(()=>{for(const actor of characters.splice(0))actor.dispose();for(const actor of sources.splice(0))actor.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
-function resources(options:{fail?:()=>boolean;gate?:Promise<void>}={}){
+function resources(options:{fail?:()=>boolean;gate?:Promise<void>;manifestModel?:()=>string;modelAliases?:Record<string,string>;failManifest?:()=>boolean}={}){
   const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
   const paths=new Map(definition.resources!.map(resource=>[resource.path,resource.sourcePath]));
-  const counts=new Map<string,number>();
+  for(const [relative,sourcePath] of Object.entries(options.modelAliases??{}))paths.set(`humanoid/source/${relative}`,sourcePath);
+  const counts=new Map<string,number>(),requestedUrls:string[]=[];
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
   vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{
     const uri=typeof input==='string'?input:input instanceof URL?input.href:input.url;
+    requestedUrls.push(uri);
     const logical=decodeURIComponent(new URL(uri).pathname.slice(1));counts.set(logical,(counts.get(logical)??0)+1);
     if(options.gate)await options.gate;
+    if(options.failManifest?.()&&logical.endsWith('/manifest.json'))return new Response(null,{status:500});
     if(options.fail?.()&&logical.endsWith('idle-loop.metadata.json'))return new Response(null,{status:500});
     const file=paths.get(logical);if(!file)throw new Error(`Unexpected resource ${logical}`);
-    return new Response(await readFile(file));
+    const bytes=await readFile(file);
+    if(logical.endsWith('/manifest.json')&&options.manifestModel){
+      const manifest=JSON.parse(bytes.toString());manifest.model=options.manifestModel();return Response.json(manifest);
+    }
+    return new Response(bytes);
   });
-  return {resolve:(logical:string)=>`https://source-lifecycle.test/${logical}`,counts};
+  return {resolve:(logical:string)=>paths.has(logical)?`https://source-lifecycle.test/${logical}`:undefined as unknown as string,counts,requestedUrls};
 }
 function mesh(actor:SourceCharacter){let found:THREE.SkinnedMesh|undefined;actor.root.traverse(node=>{if(!found&&(node as THREE.SkinnedMesh).isSkinnedMesh)found=node as THREE.SkinnedMesh;});return found!;}
 
@@ -29,6 +37,9 @@ it('shares immutable model sources while isolating three skeletons, mixers, clip
   const actors=await Promise.all([SourceCharacter.load(resolve),SourceCharacter.load(resolve),SourceCharacter.load(logical=>resolve(logical))]);sources.push(...actors);
   expect(Math.max(...counts.values())).toBe(1);
   const [a,b,c]=actors as [SourceCharacter,SourceCharacter,SourceCharacter],ma=mesh(a),mb=mesh(b),mc=mesh(c);
+  expect(ma.name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');
+  expect(counts.get('humanoid/source/manifest.json')).toBe(1);
+  expect(counts.get('humanoid/source/uefn-mannequin-lod1.glb')).toBe(1);
   expect(ma.geometry).toBe(mb.geometry);expect(mb.geometry).toBe(mc.geometry);
   expect(ma.skeleton).not.toBe(mb.skeleton);expect(ma.skeleton.boneInverses[0]).not.toBe(mb.skeleton.boneInverses[0]);expect(a.bones.root).not.toBe(b.bones.root);expect(a.mixer).not.toBe(b.mixer);
   expect(ma.material).not.toBe(mb.material);expect(a.actions.walk!.getClip()).not.toBe(b.actions.walk!.getClip());
@@ -36,6 +47,9 @@ it('shares immutable model sources while isolating three skeletons, mixers, clip
   expect(a.bones.calf_l!.quaternion.angleTo(pose)).toBeGreaterThan(.01);expect(b.bones.calf_l!.quaternion.equals(pose)).toBe(true);
   const materialA=(Array.isArray(ma.material)?ma.material[0]:ma.material) as THREE.MeshStandardMaterial;
   const materialB=(Array.isArray(mb.material)?mb.material[0]:mb.material) as THREE.MeshStandardMaterial;
+  expect(materialA.transparent).toBe(false);expect(materialA.depthWrite).toBe(true);
+  expect(materialA.map).toBeNull();expect(materialB.map).toBeNull();
+  expect(materialA.normalMap).toBeNull();expect(materialB.normalMap).toBeNull();
   const color=materialB.color.clone();materialA.color.setRGB(.1,.2,.3);expect(materialB.color.equals(color)).toBe(true);
   const sharedDispose=vi.spyOn(ma.geometry,'dispose');
   a.dispose();a.dispose();expect(sharedDispose).not.toHaveBeenCalled();
@@ -110,4 +124,76 @@ it('instantiates the same immutable source without inheriting live animation or 
   original.dispose();const third=await next.createInstance();characters.push(third);
   expect(third.loaded).toBe(true);expect(mesh(third.sourceCharacter!).geometry).toBe(mesh(next.sourceCharacter!).geometry);
   expect(Math.max(...counts.values())).toBe(1);
+});
+
+it('rejects an undeclared manifest model before loading graphics and permits a corrected manifest retry',async()=>{
+  let model='unregistered.glb';const {resolve,counts}=resources({manifestModel:()=>model});
+  await expect(SourceCharacter.load(resolve)).rejects.toThrow('HUMANOID_MODEL_RESOURCE_UNDECLARED');
+  expect([...counts.keys()]).toEqual(['humanoid/source/manifest.json']);
+  model='uefn-mannequin-lod1.glb';const actor=await SourceCharacter.load(resolve);sources.push(actor);
+  expect(mesh(actor).name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');
+  expect(counts.get('humanoid/source/manifest.json')).toBe(2);
+});
+
+
+it('loads an alternate declared model filename and keeps the factory URL closure after its caller changes',async()=>{
+  const model='skins/alternate.glb';
+  const {resolve,counts,requestedUrls}=resources({manifestModel:()=>model,modelAliases:{[model]:'assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb'}});
+  let version='original';
+  const resolver=(logical:string)=>{
+    if(logical.endsWith('/uefn-mannequin-lod1.glb'))throw new Error('Default skin must not be resolved');
+    return resolve(logical)+(logical.endsWith(model)?`?version=${version}`:'');
+  };
+  const [a,b]=await Promise.all([SourceCharacter.load(resolver),SourceCharacter.load(resolver)]);sources.push(a,b);
+  expect(mesh(a).name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');expect(mesh(a).geometry).toBe(mesh(b).geometry);
+  expect(counts.get(`humanoid/source/${model}`)).toBe(1);expect(counts.has('humanoid/source/uefn-mannequin-lod1.glb')).toBe(false);
+  const factory=a.createFactory()!;a.dispose();b.dispose();version='changed';
+  const clone=await factory();sources.push(clone);
+  expect(mesh(clone).name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');
+  expect(requestedUrls.filter(url=>url.includes(model))).toEqual([resolve(`humanoid/source/${model}`)+'?version=original',resolve(`humanoid/source/${model}`)+'?version=original']);
+});
+
+it('includes the resolved model URL in source identity while sharing the manifest request',async()=>{
+  const {resolve,counts}=resources();
+  const model='humanoid/source/uefn-mannequin-lod1.glb';
+  const variant=(version:string)=>(logical:string)=>resolve(logical)+(logical===model?`?version=${version}`:'');
+  const [a,b,c]=await Promise.all([SourceCharacter.load(variant('a')),SourceCharacter.load(variant('b')),SourceCharacter.load(variant('a'))]);sources.push(a,b,c);
+  expect(counts.get('humanoid/source/manifest.json')).toBe(1);expect(counts.get(model)).toBe(2);
+  expect(mesh(a).geometry).toBe(mesh(c).geometry);expect(mesh(a).geometry).not.toBe(mesh(b).geometry);
+  const dispose=vi.spyOn(mesh(b).geometry,'dispose');a.dispose();c.dispose();expect(dispose).not.toHaveBeenCalled();
+});
+
+it('deduplicates a failed manifest request and permits a clean retry',async()=>{
+  let fail=true;const {resolve,counts}=resources({failManifest:()=>fail});
+  const results=await Promise.allSettled([SourceCharacter.load(resolve),SourceCharacter.load(resolve)]);
+  for(const result of results){expect(result.status).toBe('rejected');if(result.status==='rejected')expect(result.reason.message).toBe('人形资源清单加载失败');}
+  expect(counts.get('humanoid/source/manifest.json')).toBe(1);
+  fail=false;const actor=await SourceCharacter.load(resolve);sources.push(actor);
+  expect(actor.clipCount).toBe(48);expect(counts.get('humanoid/source/manifest.json')).toBe(2);
+});
+
+
+it('loads model textures off by default using the real Node GLTF parser',async()=>{
+  const {resolve}=resources(),actor=await SourceCharacter.load(resolve);sources.push(actor);
+  expect(actor.rigTargets).toBe(101);expect(actor.clipCount).toBe(48);
+  actor.root.traverse(object=>{if(object instanceof THREE.Mesh)for(const material of Array.isArray(object.material)?object.material:[object.material]){
+    expect(Object.values(material).some(value=>value instanceof THREE.Texture)).toBe(false);
+  }});
+});
+
+it('rejects enabled model textures in Node without reusing or poisoning the default cache',async()=>{
+  const {resolve}=resources(),actor=await SourceCharacter.load(resolve);sources.push(actor);
+  await expect(SourceCharacter.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  const again=await SourceCharacter.load(resolve);sources.push(again);expect(mesh(again).geometry).toBe(mesh(actor).geometry);
+  const publicActor=new Character();characters.push(publicActor);
+  await expect(publicActor.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  expect(publicActor.loaded).toBe(false);await publicActor.load(resolve);expect(publicActor.loaded).toBe(true);
+});
+
+it('captures model textures options before async loading and retains them in the immutable source factory',async()=>{
+  const {resolve}=resources(),options={loadTextures:false};
+  const loading=SourceCharacter.load(resolve,options);options.loadTextures=true;
+  const actor=await loading;sources.push(actor);const factory=actor.createFactory()!;actor.dispose();
+  const clone=await factory();sources.push(clone);
+  const material=mesh(clone).material as THREE.MeshStandardMaterial;expect(material.map).toBeNull();
 });

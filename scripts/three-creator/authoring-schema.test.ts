@@ -178,7 +178,7 @@ world.setCaptureTargets([1]);
 it('exposes the actual humanoid factory options and signature without runtime implementation',()=>{
  const source=readFileSync(new URL('../../packages/three-world/src/humanoid.ts',import.meta.url),'utf8');
  const contract=humanoidFactoryContractSource(source);
- for(const field of ['map:','characterId?:','resourceUrl?:','vehicles?:','profile?:','character?:','assetDefinitions?:'])expect(contract).toContain(field);
+ for(const field of ['map:','characterId?:','resourceUrl?:','characterLoadOptions?:','vehicles?:','profile?:','character?:','assetDefinitions?:'])expect(contract).toContain(field);
  expect(contract).toMatch(/export declare function createHumanoidWorld\(options:\s*HumanoidWorldOptions\):\s*Promise<ThreeWorld>/);
  expect(contract).not.toContain('await character.load');
  const filename=fileURLToPath(new URL('./.humanoid-contract-typecheck.ts',import.meta.url));

@@ -19,7 +19,7 @@ export function controlHints(bindings:KeyBindings=DEFAULT_KEY_BINDINGS):[string,
   [bindingLabel('sprint',bindings),'冲刺 / 加速'],[bindingLabel('jump',bindings),INPUT_BINDINGS.jump.label],
   [bindingLabel('crouch',bindings),'蹲伏 / 站立；攀爬时松手'],
   [`${bindingLabel('sprint',bindings)} + ${bindingLabel('crouch',bindings)}`,'滑铲（需助跑）'],
-  ...(['prone','roll','interact','putDown','vehicle'] as const).map(action=>[bindingLabel(action,bindings),INPUT_BINDINGS[action].label] as [string,string]),
+  ...(['prone','roll','interact','putDown','vehicle','summonDragon'] as const).map(action=>[bindingLabel(action,bindings),INPUT_BINDINGS[action].label] as [string,string]),
 ];}
 /** Humanoid input fields with their default UI labels. Chords resolve at the new key press. */
 export const HUMANOID_BINDINGS = {
@@ -32,13 +32,14 @@ export const HUMANOID_BINDINGS = {
   climb:{code:DEFAULT_KEY_BINDINGS.interact[0]!,key:bindingLabel('interact'),label:'进入攀爬'},
   toggleSwimStyle:{code:'',key:'动作菜单',label:'切换泳姿'},
 } as const;
-export const HUMANOID_ACTION_INPUT_FIELDS=Object.freeze(['toggleCrouch','roll','slide','interact','putDown','prone','climb','releaseClimb','toggleSwimStyle','cancel'] as const);
+export const HUMANOID_ACTION_INPUT_FIELDS=Object.freeze(['toggleCrouch','roll','slide','interact','putDown','prone','climb','releaseClimb','toggleSwimStyle','cancel','summonDragon'] as const);
 export type KeyAction={kind:'vehicle'}|{kind:'camera-toggle'}|{kind:'humanoid';input:HumanoidActionInput};
 export function actionForKey(code:string,mounted:boolean,held:ReadonlySet<string>=new Set(),bindings:KeyBindings=DEFAULT_KEY_BINDINGS):KeyAction|undefined {
   const bound=(action:ControlAction)=>bindings[action].includes(code);
   if(bound('vehicle'))return {kind:'vehicle'};
   if(bound('cameraToggle'))return {kind:'camera-toggle'};
   if(mounted)return;
+  if(bound('summonDragon'))return {kind:'humanoid',input:{summonDragon:true}};
   if(bound('crouch'))return {kind:'humanoid',input:bindings.sprint.some(code=>held.has(code))?{slide:true}:{toggleCrouch:true}};
   for(const [action,field] of [['roll','roll'],['interact','interact'],['putDown','putDown'],['prone','prone'],['swimStyle','toggleSwimStyle']] as const)if(bound(action))return {kind:'humanoid',input:{[field]:true}};
 }

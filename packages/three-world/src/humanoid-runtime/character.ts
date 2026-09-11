@@ -1,6 +1,9 @@
+import type {ModelLoadOptions} from '../model-loader';
 import {fitUnicycleFeet} from './unicycle-rider';
 import {poseKayakHands} from './kayak-visual';
 import {fitAtvHands} from './atv-rider';
+import {raiseMountedFeet,RIDER_SHOE_CONTACT_RISE} from './rider-foot-clearance';
+import {fitDragonClimb,type DragonClimbContacts} from './motion-families/flying-creature/mount-ladder';
 import * as T from 'three';
 import {CharacterAttachments,type CharacterAttachmentPoint,type CharacterAttachmentTransform} from './character-attachments';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './character-attachments';
@@ -199,11 +202,11 @@ export class Character {
       throw error;
     }
   }
-  async load(assetBaseUrl?:string|((logicalPath:string)=>string)) {
+  async load(assetBaseUrl?:string|((logicalPath:string)=>string),options:ModelLoadOptions={}) {
     if(this.disposed)throw new Error('CHARACTER_DISPOSED');
     if(this.source)return;
     if(this.loading)return this.loading;
-    const loading=SourceCharacter.load(assetBaseUrl).then(source=>{
+    const loading=SourceCharacter.load(assetBaseUrl,options).then(source=>{
       if(this.disposed){source.dispose();throw new Error('CHARACTER_LOAD_STALE');}
       this.adopt(source);
     });
@@ -243,12 +246,15 @@ export class Character {
     this.actor.updateWorldMatrix(false, true);
   }
 
+  fitDragonClimb(contacts:DragonClimbContacts):void{if(this.source)fitDragonClimb(this.source.root,contacts);}
   update(dt: number, pose: HumanoidRenderState) {
     const source = this.source; if (!source) return;
     this.applyPresentationPose(1);
     this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
     const mode = pose.mounted ?? null;
     const mounted = mode !== null;
+    const boarding=pose.dragonMount,progress=boarding?.progress??1;
+    const rideWeight=boarding?T.MathUtils.clamp(boarding.entering?(progress-.65)/.35:1-progress/.25,0,1):1;
     const identity = pose.simulationIdentity;
     if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
@@ -259,6 +265,7 @@ export class Character {
     if (mounted) {
       Object.assign(this.frame, emptyFrame(), { position: this.localPosition, facing: this.localFacing });
       if (mode !== 'stand' && mode !== 'ski') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
+      if(boarding&&rideWeight<.99)this.frame.skills={pose:{key:boarding.entering?'climb-up':'climb-down',time:progress*3},seated:null,carrying:null,active:null,syncCarried:()=>{}};
     } else if (pose.skills) {
       const carrying = pose.skills.carrying;
       this.frame.skills = { ...pose.skills, syncCarried: position => {
@@ -272,7 +279,7 @@ export class Character {
     if(mode==='unicycle'||mode==='submarine'||mode==='tank'||mode==='atv')source.smoothing=false;
     try{source.update(dt,this.frame);}finally{source.smoothing=smoothing;}
     if (mounted && mode !== 'stand') {
-      this.overlay!.apply(1, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
+      this.overlay!.apply(rideWeight, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
       // Align the true source pelvis with the host's seat/saddle attachment.
       this.actor.updateWorldMatrix(true, true);
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);
@@ -281,14 +288,16 @@ export class Character {
         const down=pose.unicyclePose.footDown;
         const smooth=(t:number)=>t*t*(3-2*t);
         // Step behind the saddle to plant a foot without carrying the opposite
-        // hip across the fork. Source101's visible pelvis extends below its bone:
-        // lift it 55 mm onto the cushion, then clear the rear edge before lowering.
+        // hip across the fork. UEFN's visible pelvis extends below its bone:
+        // lift it 74 mm onto the cushion, then clear the rear edge before lowering.
         this.actor.position.x+=.02*down;
-        this.actor.position.y+=.055-.175*smooth(Math.max(0,(down-.6)/.4));
+        this.actor.position.y+=.074-.175*smooth(Math.max(0,(down-.6)/.4));
         this.actor.position.z-=.30*smooth(Math.min(1,down/.6));
         fitUnicycleFeet(source.root,this.root,pose.unicyclePose);
       }
       if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
+      if(mode==='atv'||mode==='tank'||mode==='submarine'||mode==='paddling')raiseMountedFeet(source.root,this.root,RIDER_SHOE_CONTACT_RISE);
+      if(mode==='sled')raiseMountedFeet(source.root,this.root,.006);
     }
     this.root.updateWorldMatrix(true, true);
     if(mode==='paddling'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);

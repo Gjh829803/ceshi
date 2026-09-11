@@ -9,11 +9,11 @@ export const ROAD_CUSHIONS = {
   'touring-bike': { center: [0, .89, -.48], size: [.42, .16, .95] },
 } as const;
 
-/** Source101 pelvis extends 0.110 m below its bone. The drive pose needs
- * 0.125 m clearance over a 0.50 m pan; straddled thighs need 0.165 m above a
+/** The UEFN skin uses the Source101 rig. Its drive pose needs
+ * 0.133 m clearance over a 0.50 m pan; straddled thighs need 0.165 m above a
  * 0.42 m saddle. Keep motorcycle riders at the existing forward saddle position. */
 export function roadSeatAnchor(id: keyof typeof ROAD_CUSHIONS): [number, number, number] {
   const { center, size } = ROAD_CUSHIONS[id];
   const motorcycle=id==='bike'||id==='touring-bike';
-  return [center[0], center[1] + size[1] / 2 + (motorcycle?.165:.125), center[2]+(motorcycle?.28:0)];
+  return [center[0], center[1] + size[1] / 2 + (motorcycle?.165:.133), center[2]+(motorcycle?.28:0)];
 }

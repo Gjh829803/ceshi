@@ -30,7 +30,7 @@ function effectiveDuration(instance: AssetInstance, id: 'walk' | 'run') {
   return clip.duration - Math.min(...clip.tracks.map(track => track.times[0]!));
 }
 
-afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); });
+afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('automatic humanoid locomotion with the original project GLB', () => {
   it.each([

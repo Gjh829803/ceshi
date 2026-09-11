@@ -1,0 +1,1235 @@
+[
+  {
+    "id": "D01",
+    "clips": {
+      "D01_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D01\\Animations\\D01_MM_IdleBase1.psa",
+        "sha256": "b9faff2acb8fe86c02b53a32a47cb3751e53f750d2a9476d6eaf3d269370a355",
+        "retarget": {
+          "configSha256": "c4f5eb56d4a9ba5bb7295bb143e37e8871d4343e9d41edb5a07494917e9d62a8",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D01\\Animations\\D01_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": [
+            {
+              "bone": "CollarUp_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                12.851318359375,
+                21.72126007080078,
+                31.904006958007812
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CollarUp_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                12.851318359375,
+                -21.721206665039062,
+                31.904048919677734
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CollarDwn_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -10.645263671875,
+                28.551939010620117,
+                0.6088749170303345
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CollarDwn_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -10.645263671875,
+                -28.55194664001465,
+                0.6089293956756592
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Tail12",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                71.867431640625,
+                -0.000012875287211500108,
+                0.000010851668776012957
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.21582794189453,
+        "sourceFrames": 140,
+        "durationSeconds": 4.633333240751238,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D02",
+    "clips": {
+      "D02_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\Walk\\D02_Ground_Idle.psa",
+        "sha256": "5431f4e87dbefdadc0a21e1802f3c225081afd9c0cd46ae8d36fe56d20193fdd",
+        "retarget": {
+          "configSha256": "b3f94b137ea28954d2618f95c5a6ca3bb950bd7f76b6b7edd3908ac794d9850a",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 30.5,
+        "sourceFrames": 61,
+        "durationSeconds": 2,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Ground_Landing": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\Walk\\D02_Ground_Landing.psa",
+        "sha256": "668726db75cd0b4b96ee217cfa5fa98652b0361778af2336d1c6d5e5b371d9ac",
+        "retarget": {
+          "configSha256": "59e6d6be2442e3d01b01f5267aba18dd3a4a657c69c74a1bd501724a78fba86f",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 30.285715103149414,
+        "sourceFrames": 106,
+        "durationSeconds": 3.4999999055322637,
+        "nonUnitScaleKeys": 0
+      },
+      "D02_Ground_Takeoff": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\Walk\\D02_Ground_JumpStart.psa",
+        "sha256": "aa1ca322d9f4ff5b5d9e5efaa3bb98877e60dccc0755b63076fd6427032449ec",
+        "retarget": {
+          "configSha256": "b748b0598d40d5aa79f951e02ab14f382ed8da2341dd03f31f39ad7a4f2c87fe",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D02\\Animations\\D02_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 30.71428680419922,
+        "sourceFrames": 43,
+        "durationSeconds": 1.3999999503202234,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D03",
+    "clips": {
+      "D03_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_MM_IdleBase1.psa",
+        "sha256": "0aea2c14037b9dca82fa40cec510b9ba4146f756c282cbb20a205dd4b22c234b",
+        "retarget": {
+          "configSha256": "9d7118e30b77fa6362198a245d73ad9bede615cc4910d205edd94ee23bf335ad",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D03\\Animations\\D03_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 30.223880767822266,
+        "sourceFrames": 135,
+        "durationSeconds": 4.466666641423732,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D04",
+    "clips": {
+      "D04_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_MM_IdleBase1.psa",
+        "sha256": "525ada7a19b66f77541929aae40b1e9c695e4fbb3ecaa9b9ac1c8465ec719cee",
+        "retarget": {
+          "configSha256": "1ee701d7846f3d68cd7c67a199c542b6eff8eff740a429335542aafd8e2692f5",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D04\\Animations\\D04_Flight_Hovering.psa",
+          "configBoneOrderVerified": false,
+          "bones": [
+            {
+              "bone": "UnSk_BipArms_Root",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                96.236328125,
+                0.00000788288889452815,
+                0.00007060007192194462
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                -0.00000762939453125,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                22.03257179260254,
+                -0.079315185546875,
+                0.000029684335459023714
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Neck",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                100.9516372680664,
+                -1.028472900390625,
+                -0.00965746771544218
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck1",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0000019073486328125,
+                0.00000426173210144043,
+                -5.6843418860808015e-12
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck2",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                104.21737670898438,
+                -9.537470759823918e-7,
+                -0.0000577011815039441
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Head",
+              "mode": "AnimationScaled",
+              "targetTranslationCm": [
+                104.216796875,
+                0.000009536757715977728,
+                0.00002342065636184998
+              ],
+              "translationScale": 0.9999979319973482
+            },
+            {
+              "bone": "UnSk_Root_Tail",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0.000004291534423828125,
+                -1.8189894035458565e-12,
+                -6.510042505070146e-12
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0.000004291534423828125,
+                -1.8189894035458565e-12,
+                1.734723475976807e-18
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UseL_BipLegs_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                21.490251541137695,
+                0.2896216809749603,
+                0.00009280911763198674
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.1265811920166,
+        "sourceFrames": 238,
+        "durationSeconds": 7.9000002849001945,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D05",
+    "clips": {
+      "D05_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_MM_IdleBase1.psa",
+        "sha256": "228d61e7997acdad55ae8037584aa56e2753d63e38227e015874daa8501fb839",
+        "retarget": {
+          "configSha256": "f093a774db5769931dba5829730a244569cf1ff48309a1ea6e617325619a005b",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D05\\Animations\\D05_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 30.14285659790039,
+        "sourceFrames": 211,
+        "durationSeconds": 7.00000012655394,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D06",
+    "clips": {
+      "D06_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_MM_IdleBase1.psa",
+        "sha256": "66b57c6c1505a125e302c19e650b952b24d47785aab64318220e4d2aaaa3f5b8",
+        "retarget": {
+          "configSha256": "2a616c2b8fb1dd78594023937f0d7537bb0c1055e6ea70dce8aac3c490d257fb",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D06\\Animations\\D06_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": [
+            {
+              "bone": "UnSk_BipArms_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -15.760467529296875,
+                0.00003621102951001376,
+                -56.76105880737305
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                22.032573699951172,
+                -0.079315185546875,
+                0.00003216546610929072
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Neck",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                100.9516372680664,
+                -1.028472900390625,
+                -0.009657466784119606
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck1",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                15.760467529296875,
+                -0.00003957869193982333,
+                56.76105880737305
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck2",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                80.12051391601562,
+                1.3552527156068805e-20,
+                0.000003814697265625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                66.95806884765625,
+                20.516218185424805,
+                -4.278205871582031
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                66.9581298828125,
+                20.516237258911133,
+                -4.2781982421875
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                66.9581298828125,
+                20.516239166259766,
+                -4.278190612792969
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                67.0828857421875,
+                -21.96955680847168,
+                -4.3184661865234375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                67.0828857421875,
+                -21.96955680847168,
+                -4.3184661865234375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                67.0828857421875,
+                -21.96955680847168,
+                -4.3184661865234375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                74.86962890625,
+                23.225088119506836,
+                5.603477478027344
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                74.869384765625,
+                -23.224971771240234,
+                5.603416442871094
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_Root_Tail",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0.000004291534423828125,
+                -1.8189894035458565e-12,
+                -6.510042505070146e-12
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UseL_BipLegs_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                21.490251541137695,
+                0.2896216809749603,
+                0.00009280911763198674
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.133333206176758,
+        "sourceFrames": 226,
+        "durationSeconds": 7.500000031648484,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D07",
+    "clips": {
+      "D07_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_MM_IdleBase1.psa",
+        "sha256": "3790041c08ba01a65fc8ad3bdc9ec29be00cf98b1103c4c3220125be1cf2c88a",
+        "retarget": {
+          "configSha256": "a2808bfeb86b147124ad1aab26601c5d5ac19a3c46949fb7c53cfa3b615e6933",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D07\\Animations\\D07_Flight_Hovering.psa",
+          "configBoneOrderVerified": false,
+          "bones": [
+            {
+              "bone": "Jaw",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -8.660548210144043,
+                30.971954345703125,
+                0.06883778423070908
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Tongue1",
+              "mode": "AnimationScaled",
+              "targetTranslationCm": [
+                6.630187511444092,
+                -1.6551361083984375,
+                0.06985856592655182
+              ],
+              "translationScale": 1.000000000034897
+            },
+            {
+              "bone": "Tongue2",
+              "mode": "AnimationScaled",
+              "targetTranslationCm": [
+                25.002357482910156,
+                0.00006062933607609011,
+                0.000019075288946623914
+              ],
+              "translationScale": 1.000000000000291
+            },
+            {
+              "bone": "Eyebrow_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                8.717576026916504,
+                52.846221923828125,
+                -14.668689727783203
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0143842538818717,
+                50.027191162109375,
+                -14.975189208984375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0143842538818717,
+                50.027191162109375,
+                -14.975189208984375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0143842538818717,
+                50.027191162109375,
+                -14.975189208984375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CheekBone_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                5.699340343475342,
+                42.030426025390625,
+                -15.362070083618164
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "LipsUp_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -7.764185905456543,
+                45.88917541503906,
+                -22.857467651367188
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "HeadSpike_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                7.690300464630127,
+                30.83013916015625,
+                -29.62144660949707
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "LipsDwn_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -23.60321807861328,
+                24.692596435546875,
+                -29.72884178161621
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "LipsDwn_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -23.602994918823242,
+                24.69244384765625,
+                29.71436309814453
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Nose_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -3.9132912158966064,
+                77.17953491210938,
+                5.645959854125977
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Nose_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -3.913259267807007,
+                77.17962646484375,
+                -5.693026542663574
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                8.71768856048584,
+                52.846282958984375,
+                14.664618492126465
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "LipsUp_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -7.764079570770264,
+                45.88914489746094,
+                22.85757064819336
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CheekBone_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                5.699462413787842,
+                42.03045654296875,
+                15.362131118774414
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.014260276220738888,
+                50.027191162109375,
+                14.95284366607666
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.04342572018504143,
+                50.011932373046875,
+                14.941753387451172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.04342569038271904,
+                50.011962890625,
+                14.941741943359375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "HeadSpike_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                7.69051456451416,
+                30.830108642578125,
+                29.62141990661621
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Horn_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                22.193279266357422,
+                24.376373291015625,
+                21.509944915771484
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Horn_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                22.193248748779297,
+                24.376373291015625,
+                -21.510757446289062
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.120967864990234,
+        "sourceFrames": 249,
+        "durationSeconds": 8.266666632894426,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D08",
+    "clips": {
+      "D08_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_MM_IdleBase1.psa",
+        "sha256": "af6467aec634d2e827739d6f9708d5c1372a4d478d527a7f72b8256b8490150e",
+        "retarget": {
+          "configSha256": "e632823be58f415a99e1ed02bf5d259fcacee24f880628c9c0f81b26acd92736",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D08\\Animations\\D08_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 60.21428680419922,
+        "sourceFrames": 281,
+        "durationSeconds": 4.666666582197294,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D09",
+    "clips": {
+      "D09_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Body\\Body01\\D09_MM_IdleBase1.psa",
+        "sha256": "540b4c3e14256266fc3b0fb322b7da428e80069563c08377ee15a33cffc51c91",
+        "retarget": {
+          "configSha256": "60ac85bcf8c6722e863250ca49023a4ef9583324a13102fdb500bab131af08cc",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D09\\Animations\\D09_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": []
+        },
+        "sourceFramesPerSecond": 60.150001525878906,
+        "sourceFrames": 401,
+        "durationSeconds": 6.666666497547369,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D10",
+    "clips": {
+      "D10_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\D10_MM_IdleBase1.psa",
+        "sha256": "3c8f9352b03b471b6e9b354adf24e8d7fb38fb836c5497fdbf923dff290c47bc",
+        "retarget": {
+          "configSha256": "5dd0a4a0812cb2a85064c977b1cc847e5e94d0889435d841ed57f2ef02abdcb2",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D10\\Animation\\Retarget\\D10_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": [
+            {
+              "bone": "UnSk_BipArms_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -26.668243408203125,
+                0.0000076223514042794704,
+                -18.007217407226562
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                57.40791320800781,
+                -0.0878448486328125,
+                0.00007818416634108871
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipArms_Neck",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                111.789794921875,
+                -1.138946533203125,
+                -0.010694293305277824
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck1",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                106.45426940917969,
+                -0.0000035555276554077864,
+                0.0002288818359375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck2",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                54.557220458984375,
+                2.427113940939307e-7,
+                -0.00000762939453125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck3",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                55.895660400390625,
+                2.399901859462261e-7,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.4039306640625,
+                -12.793228149414062,
+                16.976837158203125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.40367126464844,
+                13.21802806854248,
+                16.97686767578125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Root_Offset_R_eye",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99125671386719,
+                -11.002878189086914,
+                13.041259765625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                5.684341886080802e-14,
+                -0.000030517578125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Root_Offset_L_eye",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99293518066406,
+                10.997138023376465,
+                13.04119873046875
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0000152587890625,
+                0,
+                -0.000030517578125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DownEyeLid_L001",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99293518066406,
+                10.997190475463867,
+                13.041107177734375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99293518066406,
+                10.997190475463867,
+                13.041107177734375
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DownEyeLid_R001",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99128723144531,
+                -11.002893447875977,
+                13.0411376953125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                36.99128723144531,
+                -11.002893447875977,
+                13.0411376953125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_Root_Tail",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0000152587890625,
+                -0.0000014305405784398317,
+                0.0000152587890625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -115.86882019042969,
+                -0.0002770379651337862,
+                0.5084991455078125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Pelvis",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                0,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UseL_BipLegs_Spine",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                23.797454833984375,
+                0.3207244873046875,
+                -0.000003886125341523439
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.12605094909668,
+        "sourceFrames": 239,
+        "durationSeconds": 7.933333194046342,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  },
+  {
+    "id": "D11",
+    "clips": {
+      "D11_Ground_Idle": {
+        "source": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\D11_MM_IdleBase2.psa",
+        "sha256": "314b86830e838af25489e758367b09a26032151306008af0ea43500e973892c0",
+        "retarget": {
+          "configSha256": "1d2ca1cc006734ae284a5c6fc4587b3ca53dc8da7555456b42b6e5edd860962c",
+          "boneOrderReference": "Animations_PSA\\Game\\Characters\\Dragons\\D11\\Animation\\Retarget\\D11_Flight_Hovering.psa",
+          "configBoneOrderVerified": true,
+          "bones": [
+            {
+              "bone": "Neck1",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.0000457763671875,
+                0.000012263626558706164,
+                0.0000152587890625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Neck2",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                62.81585693359375,
+                2.418782969471067e-7,
+                0.000003814697265625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Head",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                47.34808349609375,
+                -1.3230601325631142e-7,
+                -2.842170943040401e-14
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.316558837890625,
+                20.123746871948242,
+                19.05376434326172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "DwnEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.316558837890625,
+                -20.123964309692383,
+                19.05376434326172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.354705810546875,
+                20.753633499145508,
+                28.62848663330078
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eyebrow_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.354705810546875,
+                -20.753963470458984,
+                28.62848663330078
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.316558837890625,
+                20.123746871948242,
+                19.05376434326172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UpEyeLid_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.316558837890625,
+                -20.123964309692383,
+                19.05376434326172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "CHops_root",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                65.87225341796875,
+                0.00003638455382315442,
+                -1.4560165405273438
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "chops",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.00004141845784033649,
+                -5.690035820293815e-8,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Nose_root",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                94.88116455078125,
+                0.000041726143535925075,
+                16.49005889892578
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Nose",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.000029943725166958757,
+                2.0310855219918267e-9,
+                -0.000029943725166958757
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Mad_W_root",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                53.4888916015625,
+                0.000036877827369607985,
+                37.448638916015625
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Mad_W",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0.000030517578125,
+                -1.7053025658242404e-13,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Root_target__L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.31658935546875,
+                20.12373924255371,
+                19.053741455078125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_L",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -0.000030517578125,
+                0.0000057220458984375,
+                -0.00000762939453125
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Root_target__R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                52.3165283203125,
+                -20.123933792114258,
+                19.05376434326172
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Eye_R",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0,
+                -0.0000019073486328125,
+                0
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "Seat",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                -33.80863952636719,
+                0.00005763045555795543,
+                80.67515563964844
+              ],
+              "translationScale": null
+            },
+            {
+              "bone": "UnSk_BipLegs_Bip",
+              "mode": "Skeleton",
+              "targetTranslationCm": [
+                0.00037813017843291163,
+                -0.00013037232565693557,
+                0
+              ],
+              "translationScale": null
+            }
+          ]
+        },
+        "sourceFramesPerSecond": 30.121952056884766,
+        "sourceFrames": 247,
+        "durationSeconds": 8.199999772044817,
+        "nonUnitScaleKeys": 0
+      }
+    }
+  }
+]

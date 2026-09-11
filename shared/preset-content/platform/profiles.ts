@@ -71,7 +71,8 @@ export function parseAssetProfile(input: unknown, expectedAssetId?: string): Ass
   if (!value.envelope || typeof value.envelope !== 'object' || Array.isArray(value.envelope)) throw new Error('envelope must be an object');
   const envelope = value.envelope as Record<string, unknown>, offset = vector(envelope.offset, 'envelope.offset', -20, 20);
   let parsedEnvelope: ProfileEnvelope;
-  if (envelope.kind === 'box') parsedEnvelope = { kind: 'box', halfExtents: vector(envelope.halfExtents, 'envelope.halfExtents', .01, 20), offset };
+  // 大型飞行生物的动画翼展包络可超过 40 米；保持实际体积，不压缩模型尺寸。
+  if (envelope.kind === 'box') parsedEnvelope = { kind: 'box', halfExtents: vector(envelope.halfExtents, 'envelope.halfExtents', .01, 50), offset };
   else if (envelope.kind === 'capsule') parsedEnvelope = { kind: 'capsule', radius: finite(envelope.radius, 'envelope.radius', .05, 5), halfHeight: finite(envelope.halfHeight, 'envelope.halfHeight', .05, 10), offset };
   else throw new Error('unknown envelope kind');
   return {

@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Group, SkinnedMesh, Vector3 } from 'three';
 import { readFile } from 'node:fs/promises';
@@ -68,7 +69,7 @@ it('has no foot thrust or steering in the air and recreates empty push state',()
 });
 it('keeps the actual Source101 soles above snow throughout pushing, steering and braking',async()=>{
   const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{
-    const bytes=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+    const bytes=await readFile(fileURLToPath(url));return parseFixtureGlb(bytes);
   });
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();

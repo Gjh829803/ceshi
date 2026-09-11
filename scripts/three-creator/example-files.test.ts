@@ -151,3 +151,29 @@ it('discovers, compiles and flies a self-drawn fixed wing using the Episode owne
   }finally{await episode.close();}
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },60000);
+
+
+it('discovers and compiles the native flying-creature resource binding',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'flying-creature-example-'));
+ const service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'flying-creature'}) as {files:Record<string,string>;fileManifest:{path:string}[]};
+  expect(Object.keys(example.files).sort()).toEqual(['README.md','episode.json','index.html','main.ts','project.json']);
+  expect(example.fileManifest.map(file=>file.path)).toEqual(expect.arrayContaining(Object.keys(example.files)));
+  const selected=await service.examples('flying-creature',['README.md']) as {files:Record<string,string>};
+  expect(selected.files['README.md']).toContain('creature.dragon.d11');
+  expect(JSON.parse(example.files['project.json']!).assetIds).toEqual(['humanoid.source-101','creature.dragon.d01']);
+  const checkEpisode=new Ajv({strict:false}).compile(EPISODE_SCHEMA);
+  expect(checkEpisode(JSON.parse(example.files['episode.json']!)),JSON.stringify(checkEpisode.errors)).toBe(true);
+  for(const [name,source] of Object.entries(example.files))await writeFile(path.join(root,name),source);
+  const candidate=await service.compiler.prepare();
+  const catalog=JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
+  const dragon=catalog.assets.find((asset:{id:string})=>asset.id==='creature.dragon.d01');
+  expect(dragon.integrationMetadata.visual.animationPrefix).toBe('D01');
+  for(const logicalPath of [dragon.integrationMetadata.visual.modelResource,dragon.integrationMetadata.visual.flameResource]){
+   const resource=dragon.resources.find((value:{path:string})=>value.path===logicalPath);
+   expect(resource).toBeDefined();
+   expect((await readFile(path.join(candidate.playableRoot,resource.uri))).length).toBe(resource.byteLength);
+  }
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},30000);

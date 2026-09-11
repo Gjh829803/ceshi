@@ -18,6 +18,8 @@ const humanoidProfile=objectSchema({character:objectSchema(humanoid.CONTROL_SCHE
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
+ command('space.set-drive-mode',{actorId:string,mode:{enum:['assisted','inertial']}},['actorId']),
+ command('space.dock',{actorId:string,portId:{anyOf:[string,{type:'null'}]}},['actorId']),
  command('vehicle.prepare',{actorId:string,instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])},['actorId']),
  {...command('vehicle.approach',{instanceId:string,actorId:string},['actorId']),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string,actorId:string},['actorId']),command('vehicle.exit',{actorId:string},['actorId']),command('vehicle.recover',{actorId:string},['actorId']),
  command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{actorId:string,input:{anyOf:[humanoidInput,{type:'null'}]}},['actorId']),

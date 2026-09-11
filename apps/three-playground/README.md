@@ -128,3 +128,26 @@ Verify teardown, tool revocation and real input after reload with:
 ```sh
 pnpm exec tsx apps/three-playground/scripts/lifecycle-smoke.ts http://127.0.0.1:5178
 ```
+
+## Flight training
+
+The scene selector opens aircraft, flying-creature and space training in the same
+SDK session. Deep links use `/#/scenes/flying-creature-training` and
+`/#/scenes/space-training`. The dragon scene starts with the supplied humanoid on
+the ground: **H** summons the existing dragon, **F** boards after it lands,
+**Space** takes off, and **F** requests landing before dismounting on the ground.
+The dragon selector uses the native D01–D11 model and animation variants. A variant
+change reloads the same scene route and preserves the unmounted person's position
+when the SDK validates it. `?dragon=D02#/scenes/flying-creature-training` selects a
+variant directly. The renderer, physics and camera remain owned by the SDK.
+
+Space training exposes assisted/inertial drive and docking through the existing
+SDK command contracts in Presentation UI. `?space=survey-space#/scenes/space-training`
+selects that spacecraft's preparation point; boarding still uses **F**.
+
+```sh
+pnpm verify:dragon-training -- http://127.0.0.1:5178
+```
+
+This browser case exercises ground start, real summon/boarding/takeoff inputs,
+flight and flame, native variant loading, map/reset/reload and history navigation.

@@ -59,6 +59,20 @@ function catalogPlugin(): Plugin {
       await load();
     },
     configureServer(server) {
+      // Catalog URLs identify exact asset bytes. Retire the in-memory catalog
+      // when imports change, then let Vite reload clients with the new URLs.
+      const catalogInputs = [
+        path.join(repository, "assets/three-creator/asset-catalog.json"),
+        path.join(repository, "shared/preset-content/project.json"),
+      ];
+      server.watcher.add(catalogInputs);
+      const onCatalogChange = (changed: string) => {
+        if (catalogInputs.some(input => path.resolve(input) === path.resolve(changed))) {
+          void server.restart();
+        }
+      };
+      server.watcher.on("change", onCatalogChange);
+      server.httpServer?.once("close", () => server.watcher.off("change", onCatalogChange));
       server.middlewares.use(async (req, res, next) => {
         const name = (req.url ?? "").split("?")[0]!.replace(/^\//, "");
         const bytes = (await load()).get(name);

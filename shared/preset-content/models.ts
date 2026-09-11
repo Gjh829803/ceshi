@@ -1,3 +1,4 @@
+import {buildSpaceModel} from './space-model';
 import {buildUnicycleModel} from './unicycle-model';
 import {buildSubmersibleModel} from './submersible-model';
 import {buildCanoeModel} from './canoe-model';
@@ -27,6 +28,7 @@ export function labelSprite(text:string,color='#233746',width=5,height=.9):T.Spr
   const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;const sprite=new T.Sprite(new T.SpriteMaterial({map,depthTest:true}));sprite.scale.set(width,height,1);return sprite;
 }
 export function buildVehicle(s:VehicleSpec):VehicleVisual {
+  if(s.mode==='spacecraft'){const visual=buildSpaceModel(s),label=labelSprite(s.name);label.position.y=3.2;visual.root.add(label);return {...visual,label,wheels:[],wheelRigs:[],rotors:[],steering:[]};}
   if(s.visualVariant==='bubble-sub'){const root=buildSubmersibleModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='jetski'){const root=buildJetSkiModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2.4;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='kayak'||s.archetype==='canoe'||s.archetype==='raft'){const root=s.archetype==='raft'?buildRaftModel():s.archetype==='canoe'?buildCanoeModel():buildKayakModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=1.65;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
@@ -200,10 +202,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     ball(root,0,.12,0,.64,.28,3.25,paint);pilotSeat(s.seat[1],s.seat[2]);
     box(root,11,.13,1.4,0,.3,-.2,accent);box(root,3.3,.1,.8,0,.65,-2.4,paint);box(root,.12,1.6,1,0,1.1,-2.5,paint);
     ball(root,0,.81,.55,.67,.7,1.2,glass);box(root,.6,.04,1,0,-.13,0,dark);
-  } else if(archetype==='spacecraft') {
-    ball(root,0,-.45,0,1.25,.36,1.9,paint);pilotSeat(.15,.4);ball(root,0,.42,.62,.88,.86,1.05,glass);
-    for(const x of [-1.55,1.55]) {box(root,.65,.6,2.4,x,0,-.3,dark);box(root,.8,.15,1.3,x,.35,-.4,paint);thruster(x,0,-1.9);}
-    box(root,3.6,.1,.55,0,0,.7,accent);box(root,.1,.8,.8,0,.6,-1.4,paint);
+
   }
   if(s.visualVariant==='utility'){box(root,1.75,.7,1.15,0,1.35,-.75,paint);box(root,1.9,.08,1.3,0,1.74,-.75,dark);}
   else if(s.visualVariant==='touring'){for(const x of [-.42,.42])box(root,.3,.5,.75,x,.72,-.72,paint);box(root,.65,.62,.04,0,1.18,.72,glass);}

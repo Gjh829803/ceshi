@@ -128,7 +128,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
     for (const resource of [asset, ...(asset.resources ?? [])]) {
-      assert(/^assets\/three-creator\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
+      assert(/^assets\/(?:three-creator|dragon-training)\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
         && !resource.sourcePath.split('/').includes('..'), `Asset outside resource allowlist: ${asset.id}`);
       assert(/^[a-f0-9]{64}$/.test(resource.sha256)); source(resource.sourcePath);
       const record = files.get(resource.sourcePath);

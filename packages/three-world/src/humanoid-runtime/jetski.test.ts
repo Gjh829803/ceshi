@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,expect,it,vi} from 'vitest';
 import {Box3,Group,Mesh,SkinnedMesh,Vector3,PerspectiveCamera} from 'three';
 import {createWorld} from '../index';
@@ -57,7 +58,7 @@ it('floats unoccupied, pushes another craft through native contact, preserves pa
  }finally{world.dispose();f.q.dispose();}
 });
 it('keeps the original straddle rider clear of body panels and hands on the turning handlebar without scaling',async()=>{
- const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');});
+ const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character(),model=buildJetSkiModel();
  try{
@@ -81,8 +82,9 @@ it('keeps the original straddle rider clear of body panels and hands on the turn
    }
    expect([...intersections]).toEqual([]);
    expect(bounds.min.y).toBeGreaterThan(.24);expect(bounds.max.y).toBeLessThan(1.85);
+   // Foot sockets retain their physical calibration; the thicker UEFN shoe raises its ball bone 35 mm.
    for(const [bone,socket] of [['hand_l','control.hand.left'],['hand_r','control.hand.right'],['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
-    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());const target=socket.startsWith('control.hand')?new Vector3(...ATV_GEOMETRY.grips[bone==='hand_l'?0:1]!).applyAxisAngle(new Vector3(0,1,0),angle).add(new Vector3(...ATV_GEOMETRY.handlebar)):new Vector3(...JETSKI_SOCKETS[socket as keyof typeof JETSKI_SOCKETS]);expect(point.distanceTo(target)).toBeLessThan(.002);
+    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());const target=socket.startsWith('control.hand')?new Vector3(...ATV_GEOMETRY.grips[bone==='hand_l'?0:1]!).applyAxisAngle(new Vector3(0,1,0),angle).add(new Vector3(...ATV_GEOMETRY.handlebar)):new Vector3(...JETSKI_SOCKETS[socket as keyof typeof JETSKI_SOCKETS]).add(new Vector3(0,.035,0));expect(point.distanceTo(target)).toBeLessThan(.002);
    }
    expect(rider.root.scale.toArray()).toEqual([1,1,1]);samples.push({angle,min:bounds.min.toArray(),max:bounds.max.toArray()});
   }

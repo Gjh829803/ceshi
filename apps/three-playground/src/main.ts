@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 import { toast as notify } from "sonner";
 import * as T from "three";
+import {updateSpaceExhaust} from '../../../shared/preset-content/space-model';
+import {mountSpacePanel} from './space-panel';
 import { createNpcPlayground } from "./npc-playground";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
+import { DRAGON_VARIANTS, readDragonVariant } from '../../../shared/preset-content/dragon-variants';
 import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
@@ -95,7 +98,11 @@ const camera = new T.PerspectiveCamera(
   0.12,
   2100,
 );
-const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),spawn:[80,40,35] as [number,number,number]}:spec);
+const dragonVariant=readDragonVariant(location.search);
+shell.update({dragonId:dragonVariant.id});
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,camera:dragonVariant.camera,...(dragonVariant.ground?{flyingCreatureGround:dragonVariant.ground}:{}),
+  ...(dragonVariant.seat?{seat:dragonVariant.seat}:{}),...(dragonVariant.envelope?{envelope:dragonVariant.envelope}:{}),
+  ...(dragonVariant.collisionProbes?{flyingCreatureCollision:dragonVariant.collisionProbes}:{}),spawn:[80,40,35] as [number,number,number]}:spec);
 function getDefaultProfile(id:string):AssetProfile|undefined{
   const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
@@ -111,7 +118,7 @@ const visuals:VehicleVisual[] = SPECS.map(spec=>{
 try {
   await Promise.all([
     character.load(resolvePresetResource),
-    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/dragon.glb',flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
+    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -485,6 +492,15 @@ document.addEventListener("visibilitychange", () => {
 canvas.addEventListener("contextmenu", (e) => e.preventDefault(), pageEventOptions);
 shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
+shell.on('dragonSelect',id=>{
+  if(!DRAGON_VARIANTS.some(variant=>variant.id===id)||id===dragonVariant.id)return;
+  if(!sim.controlledActor.vehicle&&session.map.id===DRAGON_TRAINING.id){
+    sessionStorage.setItem('dragon-training-person',JSON.stringify({position:sim.controlledActor.player.position.toArray(),yaw:sim.controlledActor.player.yaw}));
+  }
+  const url=new URL(location.href);url.searchParams.set('dragon',id!);
+  // 保持地图路由，由启动流程重新创建唯一受控实例与动画拥有者。
+  location.assign(url.href);
+});
 shell.on("resetButton", async () => {
   await sdk.reset();
   await npcLab?.whenReady();
@@ -548,9 +564,12 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
   world = session.world;
   follow.environment = session.queries;
   if(assetId==='dragon'){
-    const spawn=map.spawns.find(value=>value.vehicleId==='dragon');
-    if(!spawn)throw new Error('当前地图没有飞龙准备点');
-    runtime.prepareEpisodeStart({positionWorldMetersXYZ:[spawn.position[0],Math.max(40,spawn.position[1]),spawn.position[2]],facingYawRadians:spawn.yaw-Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,launched:true,cameraMode:0}});
+    const saved=sessionStorage.getItem('dragon-training-person');sessionStorage.removeItem('dragon-training-person');
+    let position=map.playerSpawn,yaw=0;
+    if(saved){try{const p=JSON.parse(saved);if(Array.isArray(p.position)&&p.position.length===3&&p.position.every(Number.isFinite)&&Number.isFinite(p.yaw)){position=p.position;yaw=p.yaw;}}catch{/* 无效的旧临时状态回到地图准备区。 */}}
+    const start={positionWorldMetersXYZ:position,facingYawRadians:yaw-Math.PI,humanoid:{cameraMode:0 as const}};
+    runtime.prepareEpisodeStart(runtime.probeEpisodeStart(start).isValid?start:{...start,positionWorldMetersXYZ:map.playerSpawn});
+    sim.controlledActor.message='按 H 召唤飞龙 · 等待落稳后到鞍侧按 F 上龙';
   }else prepareCourse(sim, map, regionId, assetId);
   pause(false, false);
   syncTeleport();
@@ -689,8 +708,8 @@ const workbench = mountWorkbench(document.body, {
   step: () => {
     if (!ready) return;
     pause(true, false);
-    runtime.setInput(emptyInput());
-    sdk.step({}, 1);
+    clearInput();
+    sdk.step({humanoid:emptyInput()}, 1);
     renderPausedState(FIXED_STEP);
   },
 });
@@ -836,7 +855,7 @@ function restoreMapFromHash() {
   const id = readMapHash(location.hash, mapIds);
   // Canonicalize missing/invalid routes without adding a history entry.
   writeMapHash(window, id, true);
-  // 初次从飞龙网址打开时，地图已经创建，仍需执行骑乘准备。
+  // 初次从飞龙网址打开时，地图已经创建，仍需准备地面人物与召唤流程。
   if (id !== session.map.id || (id === DRAGON_TRAINING.id && !sim.controlledActor.vehicle?.spec.flyingCreature)) selectMap(id);
 }
 shell.on("contributeButton", () => {
@@ -889,6 +908,7 @@ window.addEventListener(
     ready = false;
     pageLifetime.abort();
     disposeThumbnails?.();
+    spacePanel.dispose();
     inspector.dispose();
     stageObserver.disconnect();
     footerObserver.disconnect();
@@ -1047,6 +1067,7 @@ function drawMap() {
   ctx.fill();
   ctx.restore();
 }
+const spacePanel=mountSpacePanel(sdkPresentation.ui.root,command=>{runtime.command(command);sdkPresentation.focus();});
 let lastUIUpdate = -Infinity,
   lastBindings = "";
 function updateUI() {
@@ -1057,7 +1078,8 @@ function updateUI() {
     p = sim.controlledActor.player,
     nearest = sim.controlledActor.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
-  const drive=v?humanoid.vehicleDriveTelemetry(v):null;
+  spacePanel.update(v?humanoid.spaceTelemetry(v):null);
+  const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
   shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.controlledActor.controller,
     traversalPrompt = humanoidTraversalReady(h)
@@ -1101,13 +1123,13 @@ function updateUI() {
     "stateValue",
     v
       ? sim.controlledActor.transition > 0
-        ? "正在入座"
+        ? (sim.controlledActor.transitionKind==='exit'?'正在下龙 / 离座':'正在登乘')
         : v.motion.submersible
           ? v.motion.submersible.depth > .4 ? "水下航行" : "水面漂浮"
           : v.submerged
           ? "载具涉水，请复位"
           : v.motion.flyingCreature
-            ? ({hover:'悬停',brake:'减速',cruise:'振翅巡航',boost:'加速',glide:'滑翔',dive:'俯冲',evade:'闪避',collision:'碰撞缓冲'}[v.motion.flyingCreature.mode]+(v.motion.flyingCreature.flamePhase!=='off'?' · 喷火':''))
+            ? (v.motion.flyingCreature.groundPhase!=='airborne'?({approach:'减速准备着陆',landing:'正在着陆',grounded:'地面待机',takeoff:'正在起飞'} as const)[v.motion.flyingCreature.groundPhase]:({hover:'悬停',brake:'减速',cruise:'振翅巡航',boost:'加速',glide:'滑翔',dive:'俯冲',evade:'闪避',collision:'碰撞缓冲'}[v.motion.flyingCreature.mode]+(v.motion.flyingCreature.flamePhase!=='off'?' · 喷火':'')))
           : v.motion.creature
             ? {
                 graze: "休息",
@@ -1141,7 +1163,7 @@ function updateUI() {
     setHTML(
       "interaction",
       v.motion.flyingCreature
-        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · 顶部地图菜单切换训练场`
+        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?'F 下龙 · Space 起飞':v.motion.flyingCreature.groundPhase==='airborne'?'F 着陆':'起降中 · F 取消着陆'}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
         ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "submarine"
@@ -1155,7 +1177,9 @@ function updateUI() {
   else
     setHTML(
       "interaction",
-      h?.skills.hint(sdk.getKeyBindings()) ??
+      (session.map.id===DRAGON_TRAINING.id
+        ? `${humanoid.bindingLabel('summonDragon',sdk.getKeyBindings())} 召唤飞龙 · ${sim.vehicles.find(v=>v.motion.flyingCreature)?.motion.flyingCreature?.summon?.message??'飞龙会降落在附近，落稳后到鞍侧按 F 上龙'}`
+        : undefined) ?? h?.skills.hint(sdk.getKeyBindings()) ??
         (h?.surface.mode === "climbing"
           ? "Space 尝试翻上 · C 松手"
           : runtime.characterCapabilities().find((c) => c.id === "climb")
@@ -1255,6 +1279,7 @@ function updateCreatureVisual(n: number, dt: number) {
 function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
+    if(state.motion.family==='space')updateSpaceExhaust(vis.engine,state.motion.appliedForceNewtonsXYZ,state.rotation,state.spec.spaceFlight!.thrustNewtonsXYZ[2]);
     updateCreatureVisual(n, dt);
     updateVehicleWheels(vis, sample?.vehicles[n]??state, {
       grounded: state.grounded && !state.submerged,
@@ -1366,6 +1391,9 @@ const observePacing = (now: number) => {
   pacingFrame = requestAnimationFrame(observePacing);
 };
 pacingFrame = requestAnimationFrame(observePacing);
+// 太空深链接只选择太空实例；进入仍使用主项目 F 操作。
+const requestedSpace=new URLSearchParams(location.search).get('space');
+if(requestedSpace&&['space','survey-space'].includes(requestedSpace)&&session.map.regions.some(r=>r.modes.includes('spacecraft')))visit(SPECS.findIndex(s=>s.id===requestedSpace));
 shell.flag("loading", false);
 shell.flush();
 sdkPresentation.focus();
@@ -1401,6 +1429,10 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    spaceFlight:sim.controlledActor.vehicle?humanoid.spaceTelemetry(sim.controlledActor.vehicle):null,
+    inputState:runtime.inspectControls(),
+    dragon: (()=>{const v=sim.vehicles.find(v=>v.motion.flyingCreature);return v?{position:v.position.toArray(),state:structuredClone(v.motion.flyingCreature),boarding:sim.controlledActor.inspectBoarding(v.spec.id)}:null;})(),
+    dragonVariant:dragonVariant.id,
     npc: npcLab?.state(),
     controlledEntityId: sdk.snapshot().controlledEntityId,
     worldErrors: sdk.snapshot().errors,
@@ -1417,6 +1449,8 @@ const labAPI = {
 
     mapId: session.map.id,
     activeVehicle: sim.controlledActor.vehicle?.spec.id ?? null,
+    transitionSeconds: sim.controlledActor.transition,
+    transitionKind: sim.controlledActor.transitionKind,
     mode: sim.controlledActor.vehicle?.spec.mode ?? "character",
     position: (sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position).toArray(),
     speed: sim.controlledActor.vehicle?.speed ?? sim.controlledActor.player.velocity.length(),
@@ -1514,6 +1548,12 @@ if (context?.registerTool) {
     true,
     () => labAPI.getState(),
   );
+  register('summon_dragon','Ask the existing dragon to fly to a safe landing beside the unmounted character. Does not teleport or mount the character; inspect dragon.state.summon for completion.',
+    {type:'object',properties:{},additionalProperties:false},false,()=>{
+      if(!ready||paused)throw new Error('请先恢复训练');
+      if(!runtime.summonDragon('dragon'))throw new Error(sim.controlledActor.message);
+      return labAPI.getState();
+    });
   register(
     "inspect_character",
     "Read the character action, rig, interaction target eligibility and recent traversal events.",
@@ -1631,7 +1671,7 @@ if (context?.registerTool) {
   );
   register(
     "toggle_vehicle",
-    "Board the nearest stationary vehicle, or exit the currently occupied vehicle when speed and landing clearance allow.",
+    "Board or exit a stationary vehicle. For a flying dragon, request/cancel landing first; once grounded, use again to dismount. Completion is reported by activeVehicle and transition state.",
     { type: "object", properties: {}, additionalProperties: false },
     false,
     () => {

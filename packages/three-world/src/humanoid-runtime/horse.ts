@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {createModelLoader,type ModelLoadOptions} from '../model-loader';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 
 export type ResourceResolver = (logicalPath: string) => string;
@@ -69,14 +69,14 @@ export class HorseVisual {
     this.root.add(this.content);
   }
   get loaded(): boolean { return this.model !== undefined && !this.disposed; }
-  load(resolve: ResourceResolver): Promise<void> {
+  load(resolve: ResourceResolver,options:ModelLoadOptions={}): Promise<void> {
     if (this.disposed) return Promise.reject(new Error('HORSE_DISPOSED'));
     if (this.loading) return this.loading;
-    this.loading = this.loadOwned(resolve);
+    this.loading = this.loadOwned(resolve,options);
     return this.loading;
   }
-  private async loadOwned(resolve: ResourceResolver): Promise<void> {
-    const gltf = await new GLTFLoader().loadAsync(resolve('creatures/horse.glb'));
+  private async loadOwned(resolve: ResourceResolver,options:ModelLoadOptions): Promise<void> {
+    const gltf = await createModelLoader(options).loadAsync(resolve('creatures/horse.glb'));
     if (this.disposed) { disposeResources(gltf.scene); throw new Error('HORSE_DISPOSED'); }
     try {
       const body = gltf.scene.getObjectByName('Body');

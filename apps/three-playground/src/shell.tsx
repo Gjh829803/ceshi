@@ -23,6 +23,7 @@ import { Icon } from "./components/icon";
 import type { AssetEntry } from "../../../shared/preset-content/platform/catalog";
 import { MAPS } from "../../../shared/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
+import { DRAGON_VARIANTS } from '../../../shared/preset-content/dragon-variants';
 import { DisplayPanel } from './display-panel';
 import { defaultDisplaySettings, type DisplayObjectRow } from './display-settings';
 
@@ -45,6 +46,7 @@ export function mountShell(host: HTMLElement) {
     texts: {} as Record<string, string>,
     flags: { loading: true, debugActive: true } as Record<Flags, boolean>,
     mapId: "campus",
+    dragonId: 'D01',
     collider: "off",
     display: defaultDisplaySettings(),
     displayAvailable: {anchors:false,climbSurfaces:false,water:false,physics:false,unmappedColliders:0},
@@ -222,6 +224,11 @@ export function mountShell(host: HTMLElement) {
           </div>
         </section>
         <div className="stage-actions">
+          {s.mapId==='flying-creature-training'&&<label className="subtle-button">选择飞龙
+            <ChoiceSelect id="dragonSelect" aria-label="选择飞龙" value={s.dragonId} onValueChange={value=>action('dragonSelect',value)}>
+              {DRAGON_VARIANTS.map(variant=><ChoiceOption key={variant.id} value={variant.id}>{variant.name}</ChoiceOption>)}
+            </ChoiceSelect>
+          </label>}
           {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
           <DisplayPanel settings={s.display} available={s.displayAvailable} error={s.displayError}
             rows={s.displayRows} pinned={s.displayPinned} onPinnedChange={value=>action('displayPin',String(value))}

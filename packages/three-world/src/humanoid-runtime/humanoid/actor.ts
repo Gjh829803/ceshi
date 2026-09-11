@@ -1,3 +1,6 @@
+import {requestDragonLanding} from '../motion-families/flying-creature/ground';
+import {planDragonSummon} from '../motion-families/flying-creature/summon';
+import {planDragonMount,dragonStandingPoint,dragonMountPosition,dragonTransitionClear,type DragonMountTransition} from '../motion-families/flying-creature/mount';
 import { Quaternion,Vector3 } from 'three';
 import { canPlaceCreature,resetCreatureState } from '../creatures/controller';
 import { vehicleBody } from '../environment/queries';
@@ -32,6 +35,7 @@ export function stepHumanoidInput(controller:HumanoidController,input:Input,yaw:
 export class HumanoidActor {
   readonly controller:HumanoidController;
   readonly player:PlayerState={position:new Vector3(),velocity:new Vector3(),yaw:0,grounded:false,swimming:false,coyote:0,jumpBuffer:0,animation:'Idle_Loop',landTimer:0};
+  dragonTransition:DragonMountTransition|undefined;
   vehicleIndex=-1;
   transition=0;
   transitionKind:''|'enter'|'exit'='';
@@ -45,20 +49,32 @@ export class HumanoidActor {
     this.controller=new HumanoidController(world.environment,id);
     try{this.resetAt(position,yaw);}catch(error){this.controller.dispose();throw error;}
   }
-  resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
-  beginStep(dt:number):void{this.transition=Math.max(0,this.transition-dt);this.controller.skills.checkSeatSupport();}
+  resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
+  beginStep(dt:number):void{
+    const transition=this.dragonTransition;
+    if(!transition||dragonTransitionClear(this.mountContext(),transition,1-this.transition/transition.duration,Math.min(1,1-(this.transition-dt)/transition.duration)))this.transition=Math.max(0,this.transition-dt);
+    else this.message='上下龙路径被占用，等待障碍移开';
+    if(this.dragonTransition&&this.transition===0){
+      const t=this.dragonTransition;
+      if(!t.entering){const v=this.vehicle!;this.controller.commitDismount(new Vector3(...t.destination),v.yaw,new Vector3());this.vehicleIndex=-1;syncPlayer(this.controller,this.player);this.message='已安全下龙 · 靠近鞍座侧面按 F 上龙';}
+      else this.message='已骑乘 · Space 起飞';
+      this.dragonTransition=undefined;this.transitionKind='';this.teleportRevision++;
+    }
+    this.controller.skills.checkSeatSupport();
+  }
   step(input:Input,yaw:number):void{
     const v=this.vehicle,p=this.player;
+    if(v&&this.dragonTransition){const t=this.dragonTransition,progress=1-this.transition/t.duration;p.position.copy(dragonMountPosition(t,progress));p.yaw=v.yaw-t.side*Math.PI/2*Math.sin(Math.PI*progress);p.animation=t.entering?'Sitting_Enter':'Sitting_Exit';return;}
     if(v){p.position.copy(v.position);if(v.spec.mode==='mount')p.position.add(new Vector3(...v.spec.seat).applyQuaternion(v.rotation));p.yaw=v.yaw;p.animation=this.transition>0?'Sitting_Enter':v.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';return;}
     if(stepHumanoidInput(this.controller,this.transition>0?emptyInput():input,yaw))this.teleportRevision++;syncPlayer(this.controller,this.player);
   }
-  finishStep():void{const v=this.vehicle;if(v&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.checkSeatSupport();}
+  finishStep():void{const v=this.vehicle;if(v&&!this.dragonTransition&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.checkSeatSupport();}
   dispose():void{this.controller.dispose();}
   private canRelocate(){if(this.vehicleIndex<0&&!this.controller.canBoard){this.message=this.controller.boardingReason;return false;}return true;}
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
   prepareCharacter(position:Vector3,yaw:number){
     const safe=this.environment.safeSpawn(position,HUMANOID_BODY);if(!safe||this.environment.bodyOverlap({position:safe,rotation:new Quaternion(),body:HUMANOID_BODY},{excludedColliderHandles:new Set([this.controller.capsule.handle])},.015)){this.message='人物测试点没有站立净空';return false;}
-    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.controller.resetAt(safe,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;return true;
+    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(safe,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;return true;
   }
   prepare(n:number,spawn:MapSpawn):boolean {
     const v=this.vehicles[n],q=this.environment;if(!v)return false;
@@ -73,14 +89,25 @@ export class HumanoidActor {
     const boarding=this.boardingPoint(candidate);
     if(!boarding){this.message='准备点旁没有安全交互位置';return false;}
     q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.preparedVehicleSpawns.set(v.spec.id,spawn);
-    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.teleportRevision++;
+    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;
     this.player.position.copy(boarding);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!q.waterAt(boarding),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});
     this.controller.setMounted(false,boarding,v.yaw);this.world.syncActorBodies();
     this.message=`${v.spec.name}已就位 · 按 F 驾驶`;return true;
   }
   get vehicle(){return this.vehicles[this.vehicleIndex];}
+  summonDragon(id?:string):boolean {
+    if(this.vehicle||this.transition>0||!this.controller.canBoard||!this.controller.grounded||this.controller.swimming){this.message='请先在干燥地面站稳再召唤飞龙';return false;}
+    const v=this.vehicles.find(v=>v.motion.flyingCreature&&this.world.available(v)&&(!id||v.spec.id===id)&&![...this.world.actors.values()].some(actor=>actor.vehicle===v));
+    if(!v){this.message='当前场景没有可召唤的飞龙';return false;}
+    if(v.motion.flyingCreature!.summon&&['flying','landing'].includes(v.motion.flyingCreature!.summon!.phase)){this.message='飞龙正在执行召唤';return false;}
+    this.world.syncActorBodies();
+    const plan=planDragonSummon(v,this.environment,this.player.position,this.player.yaw);
+    if(typeof plan==='string'){this.message=plan;return false;}
+    v.motion.flyingCreature!.summon=plan;v.motion.flyingCreature!.groundFailure='';this.message=plan.message;return true;
+  }
   nearest():number {let best=-1,d=Infinity;this.vehicles.forEach((v,n)=>{const ds=v.position.distanceTo(this.player.position),body=vehicleBody(v.spec),range=body.kind==='box'?Math.max(5.3,body.halfExtents[0]+2):Math.max(5.3,v.motion.creature?v.spec.radius+1.6:0);if(this.world.available(v)&&ds<range&&ds<d&&v.velocity.length()<3){d=ds;best=n;}});return best;}
   private boardingPoint(v:VehicleState):Vector3|null {
+    if(v.motion.flyingCreature)return dragonStandingPoint(this.mountContext(),v,1)??dragonStandingPoint(this.mountContext(),v,-1);
     const q=this.environment;const body=vehicleBody(v.spec);
     const rx=body.kind==='box'?body.halfExtents[0]+(v.motion.submersible?1.35:.9):v.spec.radius+1.2,rz=body.kind==='box'?body.halfExtents[2]+(v.motion.submersible?1.35:.9):v.spec.radius+1.2;
     const offsets=[[rx,0],[-rx,0],[0,-rz],[0,rz]];
@@ -111,6 +138,7 @@ export class HumanoidActor {
   private boardingDecision(id:string):MountDecision {
     const v=this.vehicles.find(v=>v.spec.id===id);
     if(v&&[...this.world.actors.values()].some(actor=>actor!==this&&actor.vehicle===v))return {ok:false,code:'HUMANOID_TARGET_UNAVAILABLE',message:'该载具已被其他人物占用'};
+    if(v?.motion.flyingCreature){if(this.vehicle)return {ok:false,code:'HUMANOID_ALREADY_MOUNTED',message:'人物已经骑乘'};const plan=planDragonMount(this.mountContext(),v,true);return typeof plan==='string'?{ok:false,code:'VEHICLE_MOUNT_GROUND_REQUIRED',message:plan}:{ok:true,instanceId:id,position:dragonMountPosition(plan,1),yaw:v.yaw,velocity:new Vector3()};}
     if(v?.spec.mode==='mount'||!v||this.vehicle?.spec.mode==='mount')return evaluateMount(this.mountContext(),id);
     const fail=(code:MountFailureCode,message:string):MountDecision=>({ok:false,code,message});
     if(this.transition>0)return fail('HUMANOID_TRANSITION_ACTIVE','骑乘切换尚未完成');
@@ -158,10 +186,22 @@ export class HumanoidActor {
     this.world.syncActorBodies();
     return true;
   }
+  private beginDragonMount(v:VehicleState,entering:boolean):boolean {
+    if(this.dragonTransition){this.message='骑乘切换尚未完成';return false;}
+    if(entering&&this.vehicle){this.message='人物已经骑乘';return false;}
+    if(!this.world.available(v)||[...this.world.actors.values()].some(actor=>actor!==this&&actor.vehicle===v)){this.failureCode='HUMANOID_TARGET_UNAVAILABLE';this.message='飞龙不可用或已被其他人物占用';return false;}
+    const plan=planDragonMount(this.mountContext(),v,entering);
+    if(typeof plan==='string'){this.failureCode='VEHICLE_MOUNT_GROUND_REQUIRED';this.message=plan;return false;}
+    if(entering&&!this.controller.setMounted(true))return false;
+    this.vehicleIndex=this.vehicles.indexOf(v);this.dragonTransition=plan;this.transition=plan.duration;this.transitionKind=entering?'enter':'exit';
+    this.player.position.copy(dragonMountPosition(plan,0));this.player.velocity.set(0,0,0);this.player.yaw=v.yaw;
+    this.message=entering?'正在攀上鞍座':'正在离开鞍座';this.failureCode=undefined;this.teleportRevision++;this.world.syncActorBodies();return true;
+  }
   enter(id: string): boolean {
     this.failureCode = undefined;
     this.world.syncActorBodies();
     const target = this.vehicles.find(v => v.spec.id === id);
+    if(target?.motion.flyingCreature)return this.beginDragonMount(target,true);
     if (target?.spec.mode === 'mount' || !target || this.vehicle?.spec.mode === 'mount')
       return this.commitInteraction(this.boardingDecision(id), true);
     if (this.vehicle) {
@@ -172,6 +212,14 @@ export class HumanoidActor {
   }
   exit(): boolean {
     this.failureCode = undefined;
+    if(this.vehicle?.motion.flyingCreature){
+      if(this.dragonTransition){this.message='骑乘切换尚未完成';return false;}
+      if(this.vehicle.motion.flyingCreature.groundPhase!=='grounded'){
+        const ok=requestDragonLanding(this.vehicle,this.environment);this.message=ok?'着陆指令已接收 · 落稳后按 F 下龙':'当前位置无法着陆：需要足够的平整干燥地面';return ok;
+      }
+      return this.beginDragonMount(this.vehicle,false);
+    }
+
     if (this.vehicle?.spec.mode === 'mount' || !this.vehicle) {
       this.world.syncActorBodies();
       return this.commitInteraction(evaluateDismount(this.mountContext()), false);
@@ -180,7 +228,8 @@ export class HumanoidActor {
   }
   interact(targetId?: string): boolean {
     this.failureCode = undefined;
-    if (this.vehicle?.spec.mode === 'mount') return this.exit();
+    if (this.vehicle?.spec.mode === 'mount'||this.vehicle?.motion.flyingCreature) return this.exit();
+    if(targetId&&this.vehicles.find(v=>v.spec.id===targetId)?.motion.flyingCreature)return this.enter(targetId);
     if (targetId && this.vehicles.find(v => v.spec.id === targetId)?.spec.mode === 'mount')
       return this.enter(targetId);
     if (this.transition > 0) {
@@ -192,7 +241,8 @@ export class HumanoidActor {
       const nearby = this.vehicles.filter(v => this.world.available(v)).sort((a, b) =>
         a.position.distanceToSquared(this.player.position) - b.position.distanceToSquared(this.player.position));
       for (const v of nearby) {
-        if (v.spec.mode === 'mount') {
+        if(v.motion.flyingCreature){const decision=this.boardingDecision(v.spec.id);if(decision.ok)return this.beginDragonMount(v,true);}
+        else if (v.spec.mode === 'mount') {
           const decision = evaluateMount(this.mountContext(), v.spec.id);
           if (decision.ok) return this.commitInteraction(decision, true);
         } else if (this.nearest() === this.vehicles.indexOf(v)) return this.interact(v.spec.id);
@@ -245,7 +295,7 @@ export class HumanoidActor {
     if(v.velocity.length()>=3){this.message='载具仍在移动，请减速或使用场景预设重新准备';return false;}
     const pt=this.boardingPoint(v);if(!pt){this.message='载具附近没有安全交互位置，请重新准备';return false;}
     if(!this.controller.setMounted(false,pt,v.yaw))return false;
-    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.teleportRevision++;this.player.position.copy(pt);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!this.environment.waterAt(pt),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});return true;
+    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.player.position.copy(pt);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!this.environment.waterAt(pt),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});return true;
   }
     recoverVehicle():boolean {
       const v=this.vehicle,q=this.environment;
@@ -284,6 +334,6 @@ export class HumanoidActor {
       v.velocity.set(0,0,0);v.speed=v.steering=v.throttle=0;v.grounded=false;v.submerged=false;
       resetFamilyRigidState(v);
       this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;
-      this.transition=0;this.transitionKind='';this.teleportRevision++;this.world.syncActorBodies();this.message=relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
+      this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
     }
 }

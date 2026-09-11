@@ -127,5 +127,15 @@
       "project.json",
       "episode.json"
     ]
+  },
+  "flying-creature": {
+    "root": "examples/three-creator/flying-creature",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json",
+      "README.md"
+    ]
   }
 }

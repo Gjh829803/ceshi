@@ -1,5 +1,6 @@
 import {AnimationClip,Mesh,type Group,type Object3D,type BufferGeometry,type Material,type Texture,type Skeleton,type SkinnedMesh} from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import type {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {createModelLoader,resolveLoadTextures,type ModelLoadOptions} from '../../model-loader';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {CHARACTER_ASSET_IDS,SWIMMING_ASSET_IDS} from './catalog';
 import {ACTION_CLIP_IDS,SURFACE_CLIP_IDS} from './action-schema';
@@ -12,10 +13,11 @@ export interface SourceCharacterLease {
   readonly factory:()=>Promise<SourceCharacterLease>;
 }
 interface CacheEntry {promise:Promise<Template>;users:number;template?:Template}
-function sourceFactory(urls:ReadonlyMap<string,string>):()=>Promise<SourceCharacterLease>{
-  return ()=>leaseSourceCharacter(logical=>urls.get(logical.slice('humanoid/source/'.length))!);
+function sourceFactory(urls:ReadonlyMap<string,string>,loadTextures:boolean):()=>Promise<SourceCharacterLease>{
+  return ()=>leaseSourceCharacter(logical=>urls.get(logical.slice('humanoid/source/'.length))!,{loadTextures});
 }
 const cache=new Map<string,CacheEntry>();
+const manifests=new Map<string,{promise:Promise<string>;users:number}>();
 const paths=[...CHARACTER_ASSET_IDS.flatMap(id=>[`gasp-research/${id}.experimental.glb`,`gasp-research/${id}.metadata.json`]),
   ...SWIMMING_ASSET_IDS.map(id=>`swimming/${id}.clip.json`),...[...ACTION_CLIP_IDS,...SURFACE_CLIP_IDS].map(id=>`actions/${id}.clip.json`)];
 
@@ -35,12 +37,13 @@ function disposeResources(resources:Iterable<{dispose():void}>){
   if(failures.length)throw new AggregateError(failures,'HUMANOID_RESOURCE_CLEANUP_FAILED');
 }
 
-async function readTemplate(urls:ReadonlyMap<string,string>):Promise<Template>{
-  const loader=new GLTFLoader(),models:Group[]=[];
+async function readTemplate(urls:ReadonlyMap<string,string>,modelPath:string,loadTextures:boolean):Promise<Template>{
+  const loader=createModelLoader({loadTextures}),models:Group[]=[];
   const readJson=async(relative:string,message:string)=>{
     const response=await fetch(urls.get(relative)!);if(!response.ok)throw new Error(message);return response.json();
   };
-  const tasks:Promise<CharacterClipEntry&{model?:Group}>[]=[
+  const visibleModel=loader.loadAsync(urls.get(modelPath)!).then(gltf=>{models.push(gltf.scene);return gltf.scene;});
+  const tasks:Promise<CharacterClipEntry>[]=[
     ...CHARACTER_ASSET_IDS.map(async id=>{
       const pair=await Promise.allSettled([
         loader.loadAsync(urls.get(`gasp-research/${id}.experimental.glb`)!).then(gltf=>{models.push(gltf.scene);return gltf;}),
@@ -49,37 +52,64 @@ async function readTemplate(urls:ReadonlyMap<string,string>):Promise<Template>{
       const failure=pair.find(result=>result.status==='rejected');if(failure?.status==='rejected')throw failure.reason;
       const gltf=(pair[0] as PromiseFulfilledResult<Awaited<ReturnType<GLTFLoader['loadAsync']>>>).value;
       const clip=gltf.animations[0];if(!clip)throw new Error(`GASP 动画加载失败: ${id}`);
-      return {id,clip,model:gltf.scene,metadata:(pair[1] as PromiseFulfilledResult<CharacterClipEntry['metadata']>).value};
+      return {id,clip,metadata:(pair[1] as PromiseFulfilledResult<CharacterClipEntry['metadata']>).value};
     }),
     ...SWIMMING_ASSET_IDS.map(async id=>({id,clip:AnimationClip.parse(await readJson(`swimming/${id}.clip.json`,`游泳动画加载失败: ${id}`))})),
     ...[...ACTION_CLIP_IDS,...SURFACE_CLIP_IDS].map(async id=>({id,clip:AnimationClip.parse(await readJson(`actions/${id}.clip.json`,`动作加载失败: ${id}`))})),
   ];
   // Wait for every load before cleanup: a late GLB must not outlive a failed bundle.
-  const results=await Promise.allSettled(tasks),failure=results.find(result=>result.status==='rejected');
+  const [modelResult,...results]=await Promise.allSettled([visibleModel,...tasks]);
+  const failure=[modelResult,...results].find(result=>result.status==='rejected');
   if(failure?.status==='rejected'){try{disposeSourceGraphs(models);}catch{/* Preserve the load error. */}throw failure.reason;}
-  const entries=results.map(result=>(result as PromiseFulfilledResult<CharacterClipEntry&{model?:Group}>).value);
-  const model=entries.find(entry=>entry.id==='climb-2m5')!.model!;
+  const entries=results.map(result=>(result as PromiseFulfilledResult<CharacterClipEntry>).value);
+  const model=(modelResult as PromiseFulfilledResult<Group>).value;
   try{disposeSourceGraphs(models.filter(value=>value!==model));}
   catch(error){try{disposeSourceGraphs([model]);}catch{/* Preserve the cleanup error. */}throw error;}
   return {model,entries:entries.map(({id,clip,metadata})=>({id,clip,metadata}))};
 }
 
-/** URL closure is the cache identity; resources at those URLs must be immutable.
+/** URL closure and texture loading mode form the cache identity; resources at those URLs must be immutable.
  * Geometry is shared read-only. Bones, mixers, clips, materials and texture objects
  * are instance-owned; changing geometry requires an explicitly cloned geometry. */
-export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:string)=>string)):Promise<SourceCharacterLease>{
-  const urls=new Map(paths.map(relative=>{
+export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:string)=>string),options:ModelLoadOptions={}):Promise<SourceCharacterLease>{
+  const loadTextures=resolveLoadTextures(options);
+  const resolve=(relative:string)=>{
     const uri=typeof assetBaseUrl==='function'?assetBaseUrl(`humanoid/source/${relative}`):`${assetBaseUrl.replace(/\/$/,'')}/${relative}`;
-    return [relative,typeof document==='undefined'?uri:new URL(uri,document.baseURI).href];
-  }));
-  const key=JSON.stringify([...urls]);let entry=cache.get(key);
+    if(typeof uri!=='string'||!uri)throw new Error('HUMANOID_MODEL_RESOURCE_UNDECLARED');
+    return typeof document==='undefined'?uri:new URL(uri,document.baseURI).href;
+  };
+  const manifestUrl=resolve('manifest.json');let manifest=manifests.get(manifestUrl);
+  if(!manifest){
+    const promise=(async()=>{
+      const response=await fetch(manifestUrl);if(!response.ok)throw new Error('人形资源清单加载失败');
+      const value=await response.json();
+      if(typeof value?.model!=='string'||!value.model)throw new Error('HUMANOID_MODEL_RESOURCE_UNDECLARED');
+      return value.model as string;
+    })();
+    manifest={promise,users:0};manifests.set(manifestUrl,manifest);
+    const created=manifest;void promise.catch(()=>{if(manifests.get(manifestUrl)===created)manifests.delete(manifestUrl);});
+  }
+  manifest.users++;const ownedManifest=manifest;let manifestReleased=false;
+  const releaseManifest=()=>{
+    if(manifestReleased)return;manifestReleased=true;ownedManifest.users--;
+    if(ownedManifest.users===0&&manifests.get(manifestUrl)===ownedManifest)manifests.delete(manifestUrl);
+  };
+  try{
+    const modelPath=await ownedManifest.promise;
+    const urls=new Map<string,string>([...new Set(['manifest.json',modelPath,...paths])].map(relative=>[relative,relative==='manifest.json'?manifestUrl:resolve(relative)]));
+    return await leaseResolvedSource(urls,modelPath,loadTextures,releaseManifest);
+  }catch(error){releaseManifest();throw error;}
+}
+
+async function leaseResolvedSource(urls:ReadonlyMap<string,string>,modelPath:string,loadTextures:boolean,releaseManifest:()=>void):Promise<SourceCharacterLease>{
+  const key=JSON.stringify([loadTextures,[...urls]]);let entry=cache.get(key);
   if(!entry){
-    entry={promise:readTemplate(urls),users:0};cache.set(key,entry);
+    entry={promise:readTemplate(urls,modelPath,loadTextures),users:0};cache.set(key,entry);
     const created=entry;void entry.promise.catch(()=>{if(cache.get(key)===created)cache.delete(key);});
   }
   entry.users++;const ownedEntry=entry;let released=false;
   const release=()=>{
-    if(released)return;released=true;ownedEntry.users--;
+    if(released)return;released=true;ownedEntry.users--;releaseManifest();
     if(ownedEntry.users===0){
       if(cache.get(key)===ownedEntry)cache.delete(key);
       if(ownedEntry.template)disposeSourceGraphs([ownedEntry.template.model]);
@@ -103,6 +133,6 @@ export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:str
     model.traverse(object=>{if(object instanceof Mesh)object.material=Array.isArray(object.material)?object.material.map(cloneMaterial):cloneMaterial(object.material);});
     let disposed=false;
     return {model,entries:template.entries,dispose(){if(disposed)return;disposed=true;try{disposeResources(owned);}finally{release();}},
-      factory:sourceFactory(urls)};
+      factory:sourceFactory(urls,loadTextures)};
   }catch(error){try{disposeResources(owned);}catch{/* Preserve construction failure. */}try{release();}catch{/* Preserve construction failure. */}throw error;}
 }

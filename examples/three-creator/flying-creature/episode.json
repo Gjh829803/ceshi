@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 2,
+  "steps": [
+    {
+      "durationSeconds": 0.5
+    },
+    {
+      "keysDown": [
+        "h"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "h"
+      ],
+      "durationSeconds": 25
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 3.8
+    },
+    {
+      "keysUp": [
+        "w"
+      ],
+      "keysDown": [
+        "d"
+      ],
+      "durationSeconds": 3.3
+    },
+    {
+      "keysUp": [
+        "d"
+      ],
+      "durationSeconds": 0.5
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 4
+    },
+    {
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysDown": [
+        "d"
+      ],
+      "durationSeconds": 1
+    },
+    {
+      "keysUp": [
+        "d"
+      ],
+      "durationSeconds": 1.5
+    },
+    {
+      "keysDown": [
+        "e"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "e"
+      ],
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.1
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 3.5
+    }
+  ],
+  "targets": []
+}

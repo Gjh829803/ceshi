@@ -30,7 +30,7 @@ import type { MapSpawn } from './environment/types';
 export const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 export const damp=(a:number,b:number,k:number,dt:number)=>a+(b-a)*(1-Math.exp(-k*dt));
 export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
-export interface HumanoidActionInput {toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
+export interface HumanoidActionInput {summonDragon?:boolean;toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
 export interface Input { primary?:boolean;secondary?:boolean; forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;actions?:HumanoidActionInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
 export interface VehicleState {motion:MotionFamilyState;spec:VehicleSpec & MovementSettings;position:Vector3;velocity:Vector3;rotation:Quaternion;yaw:number;pitch:number;roll:number;steering:number;throttle:number;grounded:boolean;launched:boolean;speed:number;submerged:boolean}
@@ -42,6 +42,21 @@ export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSetti
   const control=resolveMotionFamilyMovement(family,`${family}.${spec.mode}`,authored,defaultMovementSettings(spec.mode,spec));
   const resolved={...structuredClone(spec),...control};
   if(resolved.flyingCreature)resolveConfiguredFlyingCreatureFeel(resolved);
+  if(resolved.flyingCreatureCollision){
+    const probes=resolved.flyingCreatureCollision;
+    if(!resolved.flyingCreature||!Array.isArray(probes)||probes.length<1||probes.length>128||new Set(probes.map(p=>p.id)).size!==probes.length
+      ||probes.some(p=>!p.id||p.center.length!==3||!p.center.every(Number.isFinite)||!Number.isFinite(p.radius)||p.radius<=0))
+      throw new Error('FLYING_CREATURE_COLLISION_INVALID');
+  }
+  if(resolved.flyingCreatureGround){
+    const g=resolved.flyingCreatureGround;
+    const finiteTuple=(v:readonly number[],length:number)=>Array.isArray(v)&&v.length===length&&v.every(Number.isFinite);
+    if(!resolved.flyingCreature||!Number.isFinite(g.rootHeight)||g.rootHeight<0||!finiteTuple(g.seat,3)||!finiteTuple(g.support,4)
+      ||g.support[0]>=g.support[1]||g.support[2]>=g.support[3]||![g.landingSeconds,g.takeoffSeconds].every(n=>Number.isFinite(n)&&n>0)
+      ||!Array.isArray(g.probes)||g.probes.length!==(resolved.flyingCreatureCollision?.length??12)
+      ||new Set(g.probes.map(p=>p.id)).size!==g.probes.length||g.probes.some(p=>!p.id||!finiteTuple(p.center,3)||!Number.isFinite(p.radius)||p.radius<=0))
+      throw new Error('FLYING_CREATURE_GROUND_INVALID');
+  }
   return resolved;
 }
 export function createVehicle(spec:VehicleSpec):VehicleState {
@@ -91,6 +106,7 @@ export class Simulation {
   dispose():void{for(const id of this.actors.keys())this.removeActor(id);for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
   syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft),...part}))));}
+  summonDragon(id?:string,actorId:string=this.controlledActor.id):boolean{return this.actor(actorId).summonDragon(id);}
   reset():void{
     const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
     for(const actor of this.actors.values()){const p=actor.controller.checkpoint;actor.resetAt(new Vector3(p.x,p.y,p.z),p.yaw+Math.PI);}
@@ -99,7 +115,7 @@ export class Simulation {
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
-    this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values())actor.beginStep(dt);this.syncActorBodies();
+    this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values()){if(inputs.get(actor.id)?.input.actions?.summonDragon)actor.summonDragon();actor.beginStep(dt);}this.syncActorBodies();
     const drivers=new Map<VehicleState,HumanoidActor>();for(const actor of this.actors.values())if(actor.vehicle)drivers.set(actor.vehicle,actor);
     for(const v of this.vehicles){const driver=drivers.get(v);this.stepVehicle(v,driver,inputs.get(driver?.id??'')?.input??emptyInput(),dt);}
     for(const [id,actor] of this.actors){const controls=inputs.get(id);actor.step(controls?.input??emptyInput(),controls?.yaw??0);}
@@ -107,6 +123,7 @@ export class Simulation {
   }
   private stepVehicle(v:VehicleState,driver:HumanoidActor|undefined,i:Input,dt:number):void{
     const vehicle=driver?.vehicle;
+    if(v.motion.family==='space')v.motion.body.riderMounted=v===vehicle&&driver?.transition===0;
     const vehicleBefore=vehicle?.position.clone();
     const before=vehicle?{unicycle:copyUnicycleState(vehicle.motion.unicycle),submersible:copySubmersibleState(vehicle.motion.submersible),jetski:copyJetSkiState(vehicle.motion.jetski),atv:copyAtvState(vehicle.motion.atv),rotation:vehicle.rotation.clone(),yaw:vehicle.yaw,pitch:vehicle.pitch,roll:vehicle.roll,creature:vehicle.motion.creature?{...vehicle.motion.creature,leadPosition:vehicle.motion.creature.leadPosition?.clone()}:undefined}:undefined;
 

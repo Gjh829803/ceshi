@@ -156,6 +156,22 @@ describe('SDK humanoid runtime',()=>{
    }
   }finally{world.dispose();}
  });
+ it.each([0,1,2] as const)('looks almost straight up with real pointer input in mode %s without crossing the floor or flipping',async mode=>{
+  const world=await fixture();try{const r=world.humanoid!,c=r.followCamera;
+   world.step({},30);r.setCameraMode(mode);
+   for(let i=0;i<100;i++)r.advance({},1/60,{pitchDeltaRadians:-.04});
+   expect(world.camera.getWorldDirection(new Vector3()).y).toBeGreaterThan(.99);
+   const h=r.simulation.controlledActor.controller!,engine=(world as unknown as {engine:WorldEngine}).engine;
+   for(const alpha of [0,.25,.5,.9,1])engine.withPresentation(()=>{
+    expect(world.camera.getWorldDirection(new Vector3()).y).toBeGreaterThan(.99);
+    expect(world.camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
+    expect(h.world.intersectionWithShape(world.camera.position,new Quaternion(),new RAPIER.Ball(.07),RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,h.capsule)).toBeNull();
+   },alpha);
+   const limit=c.pitch;r.advance({cameraPitchRatio:-1},1/60);expect(c.pitch).toBe(limit);
+   expect(limit).toBeGreaterThan(-Math.PI/2);
+   r.advance({},1/60,{pitchDeltaRadians:.2});expect(c.pitch-limit).toBeCloseTo(.2);
+  }finally{world.dispose();}
+ });
  it('keeps a configured zero vehicle arm finite for meter-based zoom',async()=>{
   const world=await fixture();try{const r=world.humanoid!;r.applyProfile({vehicles:{'car-1':{camera:0}}});r.approach('car-1');r.enter('car-1');r.advance({},1/60);
    r.advance({},1/60,{distanceDeltaMeters:1});expect(r.followCamera.zoom).toBe(1);
@@ -463,7 +479,7 @@ describe('SDK humanoid runtime',()=>{
    const expected=new Vector3(0,0,1).applyQuaternion(new Quaternion().setFromEuler(new Euler(0,-.4,0,'YXZ'))).applyQuaternion(v.rotation);
    expect(actual.distanceTo(expected)).toBeLessThan(1e-6);expect(c.yaw).toBeCloseTo(initialYaw+.3);
    expect(v.steering).toBe(0);expect(v.throttle).toBe(0);
-   c.orbitRadians(-400,-400,s.time,s.controlledActor);c.update(s.controlledActor,0);expect(c.pitch).toBeCloseTo(-1.35);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
+   c.orbitRadians(-400,-400,s.time,s.controlledActor);c.update(s.controlledActor,0);expect(c.pitch).toBeCloseTo(-85*Math.PI/180);expect(Math.abs(c.yaw-v.yaw)).toBeCloseTo(Math.PI*5/6);
   }finally{world.dispose();}
  });
  it.each(['plane','submarine','spacecraft','mount','dragon'] as const)('uses configured %s handling in the physical solver',async(mode)=>{
@@ -559,8 +575,8 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{world.step({},1);const r=world.humanoid!,c=r.followCamera;
    r.advance({},1/60,{yawDeltaRadians:-.4,pitchDeltaRadians:.2});
    expect(c.yaw).toBeCloseTo(-.4);expect(c.pitch).toBeCloseTo(.55);expect(c.lastOrbit).toBeCloseTo(1/60);
-   r.advance({},1/60,{pitchDeltaRadians:-5});expect(c.pitch).toBe(.12);
-   r.advance({cameraPitchRatio:-1},1/60);expect(c.pitch).toBe(.12);
+   r.advance({},1/60,{pitchDeltaRadians:-5});expect(c.pitch).toBeCloseTo(-85*Math.PI/180);
+   r.advance({cameraPitchRatio:-1},1/60);expect(c.pitch).toBeCloseTo(-85*Math.PI/180);
    expect(r.approach('car-1')).toBe(true);expect(r.enter('car-1')).toBe(true);world.step({},1);
    const yaw=c.yaw;r.advance({},1/60,{yawDeltaRadians:-.4,pitchDeltaRadians:.2});
    expect(c.yaw).toBeCloseTo(yaw-.4);expect(c.pitch).toBeCloseTo(.5);
