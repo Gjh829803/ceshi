@@ -25,7 +25,7 @@ const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,100);
 const map={id:'model-textures',name:'Model texture test',description:'Real browser texture decoding',
  bounds:{min:[-20,-5,-20],max:[20,20,20]},boxes:[{id:'floor',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
 const world=await createHumanoidWorld({canvas,camera,map,navigation:false,assetDefinitions:definitions,
- ${firstMode?'characterLoadOptions:{loadTextures:true},':''}});
+ ${firstMode?'':'characterLoadOptions:{loadTextures:false},'}});
 (window as any).__modelTextureTest={world,HumanoidCharacter,resourceUrl};
 await world.start();world.stop();
 `);
@@ -92,7 +92,7 @@ await world.start();world.stop();
         const sourceCharacters=[];
         for(const mode of [!firstMode,firstMode]){
           const character=new HumanoidCharacter();ownedCharacters.push(character);
-          if(mode)await character.load(resourceUrl,{loadTextures:true});else await character.load(resourceUrl);
+          if(mode)await character.load(resourceUrl);else await character.load(resourceUrl,{loadTextures:false});
           const factory=character.createFactory();if(!factory)throw new Error('SOURCE_FACTORY_MISSING');
           const copy=await factory();ownedCharacters.push(copy);
           const original=report(character.root),before=report(copy.root),identity=isolated(character.root,copy.root);

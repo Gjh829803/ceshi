@@ -37,6 +37,12 @@ world interfaces. `humanoid` input and snapshot fields refer to this runtime.
 uses the supplied object and optional animation. Available actions follow those
 actual bindings and scene conditions.
 
+Complete humanoids preserve their original model textures by default in browser
+hosts with image decoding APIs. Node hosts without these APIs skip textures by
+default. Set `characterLoadOptions:{loadTextures:false}` on `createHumanoidWorld`,
+or pass `{loadTextures:false}` to `HumanoidCharacter.load`, to request a whitebox
+appearance explicitly. Factories and NPC clones retain the resolved choice.
+
 Complete humanoid loads share a template keyed by the resolved resource URL
 closure and model texture loading choice. Keep those URLs immutable for their content version. Each instance has
 independent skeletons, inverse-bind matrices, mixer clips, materials and any loaded
@@ -342,7 +348,9 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.assets.load(id)` creates an independent instance for ordinary
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
-Model image textures are disabled by default (`loadTextures:false`). The loader
+Generic assets, horse and flying-creature model textures are disabled by default
+(`loadTextures:false`). Complete humanoid loaders preserve textures by default
+when the host supports image decoding. With textures disabled, the loader
 skips model image decoding while preserving material base factors and vertex colors;
 it does not rewrite the GLB or recolor its source data. A model whose color came
 from textures can therefore appear white. To load model textures in a browser,
@@ -350,9 +358,8 @@ choose the option on the initial load:
 
 ```ts
 await world.assets.load(assetId, {loadTextures:true});
-await createHumanoidWorld({scene, camera, canvas, map,
-  characterLoadOptions:{loadTextures:true}});
-await character.load(resourceUrl, {loadTextures:true}); // HumanoidCharacter
+await createHumanoidWorld({scene, camera, canvas, map}); // Browser humanoid textures default on.
+await character.load(resourceUrl);                     // HumanoidCharacter: same default.
 await horse.load(resourceUrl, {loadTextures:true});     // HorseVisual
 await flyingVisual.load({dragonUrl, flameTextureUrl, animationPrefix:'D01',
   loadTextures:true});

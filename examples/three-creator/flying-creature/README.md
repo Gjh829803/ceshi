@@ -28,10 +28,10 @@ SDK 持有唯一时钟、Rapier 世界、人物控制器、飞龙 mixer、粒子
 Creator 应读取实际状态确认结果，再按请求扩充输入；Episode 使用同一交付的 SDK
 与资产独立执行。切换变体后必须用该变体实际上下龙时长重新验证输入计划。
 
-模型贴图默认不解码，保留材质基础因子和顶点颜色，GLB 原文件不变。
+飞龙模型贴图默认不解码，保留材质基础因子和顶点颜色，GLB 原文件不变。
 如果需要在浏览器加载原生模型贴图，在 `visual.load` 的参数中加入
-`loadTextures:true`；人物需要在 `createHumanoidWorld` 参数中另外设置
-`characterLoadOptions:{loadTextures:true}`。两者是独立选择。
+`loadTextures:true`。完整人物在浏览器中默认保留原贴图，需要纯白人物时设置
+`characterLoadOptions:{loadTextures:false}`；Node 默认跳过人物贴图。两者是独立选择。
 火焰图集是显式效果贴图，仍按 `flameTextureUrl` 加载，不受模型贴图选项控制。
 开启模型贴图而缺少图像解码 API 时返回 `MODEL_TEXTURE_DECODER_UNAVAILABLE`；
 默认关闭模型贴图不代表完整飞龙 visual 与其火焰效果可以在 Node 中运行。

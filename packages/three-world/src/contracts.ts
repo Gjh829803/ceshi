@@ -38,7 +38,8 @@ export interface AssetInstance {
  readonly recommendedBody:CharacterBody | null;
 }
 export interface ModelLoadOptions {
- /** Decode and bind model material images. Defaults to false; enabled requires image decoding APIs. */
+ /** Decode model material images. Complete humanoid loaders default on with image decoding APIs;
+  * generic assets and other visual loaders default off. An explicit value overrides the default. */
  readonly loadTextures?:boolean;
 }
 export interface Assets {

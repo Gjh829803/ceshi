@@ -1,6 +1,6 @@
 import {AnimationClip,Mesh,type Group,type Object3D,type BufferGeometry,type Material,type Texture,type Skeleton,type SkinnedMesh} from 'three';
 import type {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createModelLoader,resolveLoadTextures,type ModelLoadOptions} from '../../model-loader';
+import {createModelLoader,resolveLoadTextures,supportsModelTextureDecoding,type ModelLoadOptions} from '../../model-loader';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {CHARACTER_ASSET_IDS,SWIMMING_ASSET_IDS} from './catalog';
 import {ACTION_CLIP_IDS,SURFACE_CLIP_IDS} from './action-schema';
@@ -72,7 +72,7 @@ async function readTemplate(urls:ReadonlyMap<string,string>,modelPath:string,loa
  * Geometry is shared read-only. Bones, mixers, clips, materials and texture objects
  * are instance-owned; changing geometry requires an explicitly cloned geometry. */
 export async function leaseSourceCharacter(assetBaseUrl:string|((logicalPath:string)=>string),options:ModelLoadOptions={}):Promise<SourceCharacterLease>{
-  const loadTextures=resolveLoadTextures(options);
+  const loadTextures=resolveLoadTextures(options,supportsModelTextureDecoding());
   const resolve=(relative:string)=>{
     const uri=typeof assetBaseUrl==='function'?assetBaseUrl(`humanoid/source/${relative}`):`${assetBaseUrl.replace(/\/$/,'')}/${relative}`;
     if(typeof uri!=='string'||!uri)throw new Error('HUMANOID_MODEL_RESOURCE_UNDECLARED');

@@ -1,4 +1,4 @@
-import {resolveLoadTextures,type ModelLoadOptions} from './model-loader';
+import {resolveLoadTextures,supportsModelTextureDecoding,type ModelLoadOptions} from './model-loader';
 import {claimCharacter} from './humanoid-runtime/character-ownership';
 import { createWorld, type ThreeWorld, type WorldOptions } from './world.js';
 import { Character } from './humanoid-runtime/character.js';
@@ -15,7 +15,7 @@ export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinition
   readonly characterId?:string;
   readonly assetDefinitions?:Readonly<Record<string,HumanoidAssetDefinition>>;
   readonly resourceUrl?:(logicalPath:string)=>string;
-  /** Embedded model textures are opt-in; defaults to false. */
+  /** Preserve model textures by default when the host supports image decoding; false disables them. */
   readonly characterLoadOptions?:ModelLoadOptions;
   readonly vehicles?:readonly VehicleInstance[];
   readonly profile?:HumanoidProfile;
@@ -29,7 +29,7 @@ export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinition
  */
 export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<ThreeWorld>{
   const {map,characterId='player',resourceUrl,characterLoadOptions,vehicles=[],profile,character:provided,assetDefinitions:configured,...worldOptions}=options;
-  const modelLoadOptions={loadTextures:resolveLoadTextures(characterLoadOptions)};
+  const modelLoadOptions={loadTextures:resolveLoadTextures(characterLoadOptions,supportsModelTextureDecoding())};
   validateEnvironment(map);
   if(!characterId.trim()||vehicles.some(vehicle=>vehicle.instanceId===characterId))throw new Error('HUMANOID_INSTANCE_ID_INVALID');
   let definitions=configured;

@@ -23,7 +23,7 @@ H01 参考骑手、火焰图集及四份 JSON。模型和动作来自已有 Cent
 的位置在通过 SDK 起点检查后保留。
 
 真实骑手始终是当前 `humanoid.source-101` 人物，绑定既有 Source101 骨架与动作。
-原始 UEFN 外形资源包含黑色关节贴图；模型贴图默认不解码，因此人物可呈纯白，
+原始 UEFN 外形资源包含黑色关节贴图；浏览器中的完整人物默认保留这些贴图，
 原始 GLB 字节与资源身份保持不变。H01 GLB 用于适配参考，没有替换真实角色，也未
 完成其整套骨骼动作到 Source101 的重定向。
 
@@ -48,11 +48,11 @@ Source101，从 `asset-definitions.json` 读取上述字段，将加载后的
 
 ## 模型贴图
 
-模型加载默认 `loadTextures:false`，跳过模型图像解码，保留材质基础因子和顶点
-颜色。马、原生飞龙、通用资产与完整人物使用同一模型加载规则。浏览器需要贴图
-时在首次加载显式开启：`world.assets.load(id,{loadTextures:true})`、
-`createHumanoidWorld({...,characterLoadOptions:{loadTextures:true}})`、
-`HumanoidCharacter.load(url,{loadTextures:true})`、
+完整人物在具备图像解码 API 的浏览器中默认保留贴图，在普通 Node 主机中默认
+跳过解码。`createHumanoidWorld({...,characterLoadOptions:{loadTextures:false}})` 或
+`HumanoidCharacter.load(url,{loadTextures:false})` 可显式关闭；人物工厂保留该选择。
+马、原生飞龙与通用资产仍默认 `loadTextures:false`，保留材质基础因子和顶点颜色。
+浏览器需要其贴图时，在首次加载显式开启：`world.assets.load(id,{loadTextures:true})`、
 `HorseVisual.load(resolve,{loadTextures:true})` 或
 `FlyingCreatureVisual.load({...resources,loadTextures:true})`。
 
