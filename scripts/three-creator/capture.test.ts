@@ -10,6 +10,7 @@ import {executeThreeCreatorTool,toolContent} from './mcp.js';
 import {captureTargets,captureObjectViews} from '../../apps/three-creator-playground/capture.js';
 import type {WorldObservation} from '@worldkit/three';
 import type {Page} from 'playwright';
+import {openEpisodeBrowser} from '../three-episode/browser.js';
 
 function fixture(){
  const scene=new THREE.Scene(),player=new THREE.Group(),first=new THREE.Group(),second=new THREE.Group();scene.add(player,first,second);
@@ -160,6 +161,49 @@ const world=await createWorld({scene,camera,renderer,navigation:false,assetDefin
 await world.start();world.stop();world.step({},40);
 world.humanoid.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});world.humanoid.setCameraMode(2);
 window.currentPreviewWorld=world;`;
+
+it('records rejected and failed SDK actions, continues later inputs, and still fails on browser errors',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'action-recording-feedback-')),service=new ThreeCreatorTools(root,'three-sdk');
+ const authored=currentSdkSource.replace('navigation:false','navigation:true').replace('await world.start();world.stop();',`const npc=player.clone();npc.position.set(4,0,0);
+world.addCharacter({id:'npc',object:npc,body:{heightMeters:1.7,radiusMeters:.3},movement:{kind:'ground',walkSpeedMetersPerSecond:3,runSpeedMetersPerSecond:4,jumpSpeedMetersPerSecond:4}});
+const immobile=player.clone();immobile.position.set(-4,0,0);
+world.addCharacter({id:'immobile',object:immobile,body:{heightMeters:1.7,radiusMeters:.3},movement:{kind:'ground',walkSpeedMetersPerSecond:0,runSpeedMetersPerSecond:0,jumpSpeedMetersPerSecond:0}});
+await world.start();world.stop();`);
+ try{
+  await writeFile(path.join(root,'index.html'),'<html><script type="module" src="./main.ts"></script></html>');
+  await writeFile(path.join(root,'main.ts'),authored);await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:2,targets:[],steps:[
+   {keysDown:['KeyW'],commands:[{type:'actor.stop',entityId:'player'},{type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[1000,0,1000]},{type:'actor.move-to',entityId:'immobile',targetPositionWorldMetersXYZ:[-8,0,0]}],durationSeconds:4.8},
+   {keysUp:['KeyW'],commands:[{type:'humanoid.set-camera-mode',mode:1}],durationSeconds:.5},
+  ]}));
+  const report=await service.playtest('action-outcomes',undefined,2);
+  expect(report.status,report.failure??'').toBe('passed');expect(report.isCompleteEpisode).toBe(true);expect(report.completedSteps).toBe(2);
+  expect(report.semanticStatus).toBe('unreviewed');expect(report.capturedInput).toBe(true);
+  expect(report.feedback.actions.dispatchCounts).toEqual({rejected:1,accepted:2,applied:1});
+  expect(report.feedback.actions.operationCounts.failed).toBe(2);
+  expect(report.hostActionEvents).toEqual(expect.arrayContaining([expect.objectContaining({type:'world-command',worldCommandReceipt:expect.objectContaining({status:'rejected',error:expect.objectContaining({code:'PLAYER_INPUT_OWNS_ACTOR'})})})]));
+  expect(report.worldOperations).toEqual(expect.arrayContaining([expect.objectContaining({status:'failed',error:expect.objectContaining({code:'NO_PATH'})}),expect.objectContaining({status:'failed',error:expect.objectContaining({message:'WORLD_ACTOR_BLOCKED'})})]));
+  expect(report.lastObservation?.snapshot?.humanoid?.cameraMode).toBe(1);
+  expect(report.videoMetadata?.durationSeconds).toBeGreaterThan(2);
+  const candidate=await service.compiler.prepare();expect(candidate.runtimeHash).toBe(report.runtimeHash);expect(candidate.worldBuildHash).toBe(report.worldBuildHash);
+  const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
+  try{
+   await episode.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+   const receipt=await episode.execute({type:'actor.move-to',entityId:'immobile',targetPositionWorldMetersXYZ:[-8,0,0]});
+   expect(receipt.status).toBe('accepted');if(receipt.status!=='accepted')throw Error('Episode operation not accepted');
+   const failed=await episode.advance({},300);expect(failed.errors).toEqual([]);
+   expect(await episode.operation(receipt.operationId)).toMatchObject({status:'failed',error:{message:'WORLD_ACTOR_BLOCKED'}});
+   const moved=await episode.advance({moveZRatio:-1},30);expect(moved.simulationTick).toBe(failed.simulationTick+30);
+   expect(moved.entities.find(e=>e.id==='player')!.positionWorldMetersXYZ).not.toEqual(failed.entities.find(e=>e.id==='player')!.positionWorldMetersXYZ);
+   const frame=await episode.frame('image/png');expect(frame.captureSurface).toBe('world-renderer-canvas');expect(frame.imageDataUrl).toMatch(/^data:image\/png;base64,/);
+   expect(episode.errors).toEqual([]);
+  }finally{await episode.release();await episode.close();}
+  await writeFile(path.join(root,'main.ts'),authored+`\naddEventListener('keydown',e=>{if(e.code==='KeyQ')throw new Error('RECORDING_RUNTIME_FAILURE');});`);
+  await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:2,targets:[],steps:[{keysDown:['KeyQ'],durationSeconds:1},{keysUp:['KeyQ'],durationSeconds:.5}]}));
+  const crashed=await service.playtest('runtime-error',undefined,2);
+  expect(crashed.status).toBe('failed');expect(crashed.pageErrors.join(' ')).toContain('RECORDING_RUNTIME_FAILURE');
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},60_000);
 
 it('previews the current SDK shoulder through MCP without resetting paused ticks, and keeps opening reset semantics',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'current-preview-sdk-')),service=new ThreeCreatorTools(root,'three-sdk');

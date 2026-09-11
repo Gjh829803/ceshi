@@ -434,7 +434,8 @@ export class WorldEngine {
     if (!next) { if (goal.kind === 'move') {this.clearGoal(id);this.taskResults.set(id,{status:'succeeded'});} return { velocityMetersPerSecondXZ: [0, 0] }; }
     if (current.distanceTo(goal.lastPosition) < 0.001) goal.stagnantSeconds += dt; else goal.stagnantSeconds = 0;
     goal.lastPosition.copy(current);
-    if (goal.stagnantSeconds > 4) { this.recordError('WORLD_ACTOR_BLOCKED', new Error('Actor made no progress along its physical route'), id);this.taskResults.set(id,{status:'failed',error:'WORLD_ACTOR_BLOCKED'}); this.clearGoal(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
+    // No progress is a task outcome; its operation retains the failure reason.
+    if (goal.stagnantSeconds > 4) { this.taskResults.set(id,{status:'failed',error:'WORLD_ACTOR_BLOCKED'}); this.clearGoal(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
     const delta = new THREE.Vector3(next[0] - current.x, 0, next[2] - current.z); const distance = delta.length(); delta.normalize(); if(!this.humanoid?.hasActor(id))this.faceDirection(actor, delta);
     const speed = Math.min(distance / dt, goal.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4);
     return { velocityMetersPerSecondXZ: [delta.x * speed, delta.z * speed] };

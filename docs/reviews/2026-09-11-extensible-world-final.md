@@ -3,7 +3,8 @@
 本次范围由用户在 2026-09-11 明确收敛为 R0–R3、C1 与对应 R6 验证。
 R4 通用持续任务/动作事件和 R5 新姿态/动作包绑定留后续。它们不是当前世界
 创建、角色控制、导航、交互、骑乘或录制的启动依赖。本记录不承诺这些未来能力。
-全部改动累积于 `codex/extensible-world-r0`，没有合并主分支或执行外部生产。
+全部改动累积于 `codex/extensible-world-r0`，已推送该分支，未合并回主分支。
+真实云端 Creator 验收与独立 Episode 消费另行记录；未授权 Seedance 视频生成。
 
 ## 分层与实际扩展路径
 
@@ -77,7 +78,7 @@ Epic 的 [资产管理说明](https://dev.epicgames.com/documentation/en-us/unre
 
 ## 最终证据
 
-SDK 最终运行时为 `4a3ca6d7683a90646c12ee31267e2c8ef3186dc5d35b92c181b46c9468a1b70b`，
+此前完成全量回归的 SDK 运行时为 `4a3ca6d7683a90646c12ee31267e2c8ef3186dc5d35b92c181b46c9468a1b70b`，
 预编译清单位于 `.codex-tmp/r0/r6-final/runtime-verified/runtime-manifest.json`。
 原生依赖 archive SHA256 为
 `575cd152b6fe51d67003e56213d9c3996c4c3aef3855977a77d0d31bb01dde5c`；
@@ -86,7 +87,7 @@ SDK 最终运行时为 `4a3ca6d7683a90646c12ee31267e2c8ef3186dc5d35b92c181b46c94
 
 | 验证 | 结果与本地证据 |
 | --- | --- |
-| SDK 最终测试 | 55文件876项通过；`sdk-timestep.log` |
+| R0–R3 全量测试 | 55文件876项通过；`sdk-timestep.log` |
 | 受最终 timestep 修复影响的消费者 | 60项通过；`consumers-timestep.log` |
 | Creator / Episode 全量消费者 | native575版本450项通过，1项冷启动超时；将该资源重测试的墙钟上限设为15秒后，相关31项通过（`consumers.log`、`preset-display.log`）；模拟时长与断言不变 |
 | Node 消费者 | 140项通过；`.codex-tmp/r0/r6-node-consumers.log`，云传输 mock |
@@ -106,8 +107,8 @@ SDK 最终运行时为 `4a3ca6d7683a90646c12ee31267e2c8ef3186dc5d35b92c181b46c94
 见 `verified/single-comparison.json` 与 `verified/perf-{1,3,10}/report.json`。
 
 独立源码审查记录为 `.codex-tmp/r0/r6-independent-review.md`。修复后未确认剩余
-P1/P2 问题，但不承诺不存在所有 code smell。PR232远端仍是较早的R0提交
-`53f8f059`；其成功 CI 不覆盖本地最终改动。本轮没有推送、合并或外部生产。
+P1/P2 问题，但不承诺不存在所有 code smell。PR232已更新至本分支，历史R0提交
+的成功 CI 不覆盖最终改动；远端检查必须对应当前提交。
 真实输入和媒体证明功能执行，不替代用户对动作观感、镜头手感的人工验收。
 开发环境还观察到布局切换的 ResizeObserver 通知警告与软件渲染器能力警告，
 未在上述 UI case 中形成实际功能失败，不宣称浏览器全局零警告。
@@ -157,5 +158,69 @@ reset 后按当前场地重建 NPC。异步加载使用 generation 和 SDK scope
 事件、全部页面工具撤销及真实 reload 后 WASD 位移。浏览器通过，另有15项
 画面准备/路由测试和 typecheck、lint 通过；日志在
 `.codex-tmp/playground-lifecycle/{red,green,reload}.log`。此修复只修改 Playground
-页面生命周期，不改变上述 SDK runtime hash。PR232远端实时核对仍为R0提交
-`53f8f059`，其成功 CI 仍不代表本地最终分支已通过远端 CI。
+页面生命周期，不改变上述 SDK runtime hash。
+
+## 云端消费修复
+
+真实云端验收发现 capsule staging 仍只接受旧的 Rapier query.1 archive。
+`63fd7fd6` 改为当前 query.2，保留依赖路径、清单与实际 archive SHA 检查。
+同一问题导致 `b8071887` 的远端 CI 失败；修复后原 Node 检查261项通过。
+
+`0c11b170` 同步云端 doctor 的当前输入所有权拒绝码，并为 Episode Codex
+规划提供显式隔离账号根目录。账号 ID 在 provider 中只是优先级，不能单独保证
+不切换到池外账号；Host 现在固定目录、核对配置回显，异常时取消确切任务并
+保留取消未确认状态，后续调用不得自动重提。相关32项测试使用 mock 云传输。
+
+安装后的云端浏览器 doctor 使用上述 SDK 字节，通过真实输入、录制、三视图、
+提交和不完整输入拒绝检查；安装闭包前后校验通过。记录位于
+`.codex-tmp/agent-e2e-b8071887/runtime-doctor.json`。这一技术检查不代表新生成
+世界已满足用户的全部功能要求。
+
+
+## 按任务范围收敛检查
+
+用户确认将技术运行检查、动作结果与生产规格分开。Creator 的命令拒绝和异步动作
+失败现在保留在 `hostActionEvents/worldOperations`，以 `feedback.actions` 提供简短
+计数和原因；后续输入仍执行。接受、运行中、失败、取消、未观测与成功保持不同状态，
+不将预期争用拒绝改写为动作成功。浏览器/运行时异常、失效身份、缺失或不完整录制仍阻断。
+
+SDK 对角色持续无法前进的处理保留 `WORLD_ACTOR_BLOCKED` task failure，并由公共
+operation 返回 `ACTOR_TASK_FAILED` 和角色身份；去掉将同一动作失败重复写成全局
+运行错误的调用。角色资源和 goal 清理不变。真实浏览器回归覆盖拒绝、NO_PATH、
+无法前进、继续输入和相机命令；Episode 独立加载同一 candidate，验证失败 operation
+保留、继续实际移动与纯 renderer frame。额外故意触发的浏览器异常仍使录制失败。
+对应红/绿日志为 `.codex-tmp/agent-e2e-b8071887/{recording-boundary,blocked-action}-{red,green}.log`。
+
+这次收尾运行时为 `d96be0e94e4e9053158a75319962dc122e52add45eca406553c4278873ff66d7`，
+清单位于 `.codex-tmp/agent-e2e-b8071887/final-runtime/runtime-manifest.json`。
+本次受影响的7个测试文件共183项通过，typecheck、定向 lint、test census 与 runtime
+prebuild 通过；对应 `final-{focused,typecheck,lint,census,prebuild}.log` 均位于该目录。
+独立源码审查未确认剩余问题。
+上述同 candidate 的 Creator/Episode 回归覆盖最终源码；以下真实云端生成记录使用
+前一版 `4a3ca6d…`，不冒充最后这一处错误分类修复后的云端录像。
+
+## 真实 Agent 与独立 Episode 记录
+
+- `agent-integration-final-preview-20260911` 由真实 GPT-6 Astra / xhigh 生成，使用
+  已批准的 U11 独立账号目录。工具事件、最终 opening、输入录像与交付闭包校验通过。
+  源码 SHA 为 `4204bfac757d1ec62a30c338a93a0956685fccbf09fa4aebc28181717fbbfec5`，
+  交付 world SHA 为 `ac4647209af96c7cdef9a52f42ab00f8eaeb8d850e0f9affb267e422471f75ff`。
+- 单独的功能评估未通过：实际速度仍为3.1而非4 m/s，NPC 接近包裹返回
+  `NAVIGATION_TARGET_OFF_MESH`。巡逻、控制切换与重复复位检查通过；拾取、搬运、
+  坐下/起身不能因此记为通过。原始交付未改写；评估为
+  `.codex-tmp/agent-e2e-b8071887/semantic/assessment.json`。
+- `agent-integration-repair-20260911` 重复卡在相同交互条件后结束；API 取消及 Ray
+  清理已确认。没有再次自动重提。更早一轮因缺少最终源码对应的 Agent opening
+  预览而失败，同样保留原始结果，未放宽版本身份检查来接受它。
+- Episode 实际云端规划成功，真实调用 `episode_observe/episode_probe/episode_submit_plan`。
+  只录制代表性的 `segment-00`：30秒、720帧、1280×720/24fps，实际移动约97.21米，
+  包含一次起跳/落地，浏览器 errors 为空。其输入 source world 为上述交付；移植后的
+  Episode world SHA 为 `3a6331a2d271d32e9b835b47c656d42a7381078f3bf3025f3a5ec06eab69160b`。
+  证据在 `.codex-tmp/agent-e2e-b8071887/episode/{output,representative-capture}/`。
+  这证明技术消费链路，不证明原场景交互需求全部满足；其余五段、风格图与 Seedance
+  视频生成未运行。完整生产规格仍保留，接入验证不再要求每次执行完整生产规格。
+
+本次临时云端打包还带入了 macOS `._` 元数据，导致源码展开时清单不一致。
+在独立工具副本移除元数据后，源码展开/重新编译和 Episode 真实观察均通过；未修改
+当时正在执行的冻结 Creator capsule。`metadata-doctor.json` 记录前后失败/通过结果，
+该问题属于本次临时传输方式，不是 SDK 动作求解缺陷；归档传输需避免附带这些元数据。

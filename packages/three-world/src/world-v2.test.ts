@@ -155,6 +155,19 @@ function deferred() {
 const emptyInput = { type: 'object', properties: {}, required: [], additionalProperties: false } as const;
 
 describe('public Three SDK v2 authoring and control contracts', () => {
+  it('keeps an immobile actor failure in its operation without poisoning world runtime health',async()=>{
+    const {world}=await fixture(true);const npc=new THREE.Group();npc.position.set(4,0,0);
+    world.addCharacter({id:'immobile',object:npc,body:{heightMeters:1.8,radiusMeters:.3},movement:{kind:'ground',walkSpeedMetersPerSecond:0,runSpeedMetersPerSecond:0,jumpSpeedMetersPerSecond:0}});
+    await sealPaused(world);world.step({},30);
+    const id=operationId(await world.execute({type:'actor.move-to',entityId:'immobile',targetPositionWorldMetersXYZ:[8,0,0]}));
+    world.step({},300);
+    expect(world.operations.get(id)).toMatchObject({status:'failed',error:{code:'ACTOR_TASK_FAILED',message:'WORLD_ACTOR_BLOCKED',category:'content',entityIds:['immobile']}});
+    expect(world.snapshot().errors).toEqual([]);
+    const before=world.snapshot();world.step({moveZRatio:-1},60);
+    expect(world.simulationTick).toBe(before.simulationTick+60);
+    expect(world.snapshot().entities.find(e=>e.id==='hero')!.positionWorldMetersXYZ).not.toEqual(before.entities.find(e=>e.id==='hero')!.positionWorldMetersXYZ);
+    expect(world.operations.get(id).status).toBe('failed');
+  });
   it('reports disabled navigation consistently before accepting an NPC operation',async()=>{
     const {world}=await fixture();world.addCharacter({id:'npc',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
     const descriptor=world.describe({entityIds:['npc']}).entities[0]!.commands.find(c=>c.type==='actor.move-to')!;

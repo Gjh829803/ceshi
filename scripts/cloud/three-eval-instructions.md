@@ -54,7 +54,8 @@ Use these layers as needed:
 2. For humanoid actions, read character-actions capability cards for inputs, eligibility, scene conditions,
    parameters, completion and source entry points. Animation clips are not commands.
 3. Adjust public profile and extension parameters.
-4. Call creator_materialize_runtime, edit sdk/three-world/src or
+4. When an SDK implementation change is needed, call creator_materialize_runtime,
+   edit sdk/three-world/src or
    sdk/camera-collision/src, then world_validate. This builds the workspace runtime
    with locked dependencies; its source and identity ship with delivery. Keep one
    clock, physics world, animation owner and camera writer. Host tools and evidence
@@ -92,11 +93,21 @@ poses instead of substituting a primitive rider. Repair observed functional prob
 When an outcome requires an impact to move an object, verify the identified
 object's actual pose before and after real contact. Proximity, a blocked character,
 or `world_playtest.status:'passed'` does not establish that the object moved.
+For SDK operations, schemaVersion 2 episode steps accept commands alongside
+real input and durationSeconds. Use those steps to exercise requested operations
+and inspect their outcomes. A command accepted in a paused world may still need
+simulation ticks; polling world_get_operation does not advance the world.
+feedback.actions summarizes actual dispatch and last observed operation states.
+Rejected commands and failed operations are retained as outcomes while the input
+plan continues. Judge expected rejections against the task; repair unexpected
+failures. Accepted or pending operations do not establish completion. Browser and
+runtime errors still fail recording.
 After the final source change, inspect world_preview with view opening on that
 exact version, then complete an input episode covering the core actions and their
 outcomes. A preview of an earlier source does not verify the final opening; the
 images automatically captured by world_submit do not replace your own final
-preview. Reuse an opening preview when the source has not changed. Choose its length by functional coverage; omit world_playtest
+preview. Reuse an opening preview when the source has not changed. Choose its
+length by functional coverage; omit world_playtest
 durationSeconds to execute the full plan. Use a shorter durationSeconds for a
 debug run while keeping episode.json unchanged. Read targetResults.nearestSample
 for measured position, time and target-minus-player XYZ offsets when tuning routes.
