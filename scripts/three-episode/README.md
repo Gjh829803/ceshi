@@ -154,6 +154,13 @@ Configure the exact source archive hash, pinned image, S3 paths and cohort in
 `scripts/three-episode/episode-runtime.json`; credentials come from Host Secrets
 and are not supplied to the planner or Chromium.
 
+For an approved-account-only Codex run, set both `codexAccountIds` and
+`codexAccountRoot` to the verified isolated pool. IDs alone are provider
+preferences and do not restrict fallback. The Host pins the root in request
+identity and verifies the effective configuration; a mismatch cancels the exact
+job and retains terminal or unconfirmed-cancellation evidence. This setting
+applies to Codex planning, not the separate image-generation lane.
+
 ```sh
 pnpm three:episode:batch register --cohort production-run --cases-file /absolute/episode-ids.json
 pnpm three:episode:run \

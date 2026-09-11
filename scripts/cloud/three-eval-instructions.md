@@ -92,8 +92,11 @@ poses instead of substituting a primitive rider. Repair observed functional prob
 When an outcome requires an impact to move an object, verify the identified
 object's actual pose before and after real contact. Proximity, a blocked character,
 or `world_playtest.status:'passed'` does not establish that the object moved.
-After the final source change, complete an input episode covering the core actions
-and their outcomes. Choose its length by functional coverage; omit world_playtest
+After the final source change, inspect world_preview with view opening on that
+exact version, then complete an input episode covering the core actions and their
+outcomes. A preview of an earlier source does not verify the final opening; the
+images automatically captured by world_submit do not replace your own final
+preview. Reuse an opening preview when the source has not changed. Choose its length by functional coverage; omit world_playtest
 durationSeconds to execute the full plan. Use a shorter durationSeconds for a
 debug run while keeping episode.json unchanged. Read targetResults.nearestSample
 for measured position, time and target-minus-player XYZ offsets when tuning routes.
