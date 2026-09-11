@@ -35,8 +35,9 @@ describe('committed player resource declarations', () => {
   it('stores portable POSIX source paths for Linux resource staging', async () => {
     for (const asset of catalog.assets) {
       for (const resource of catalogResources(asset)) {
-        expect(resource.sourcePath, asset.id).toMatch(/^assets\/three-creator\//);
+        expect(resource.sourcePath, asset.id).toMatch(/^assets\//);
         expect(resource.sourcePath, asset.id).not.toContain('\\');
+        expect(path.posix.normalize(resource.sourcePath), asset.id).toBe(resource.sourcePath);
       }
     }
     const provenance = JSON.parse(await readFile(new URL('../../assets/three-creator/humanoid/source-101/provenance.json', import.meta.url), 'utf8'));
