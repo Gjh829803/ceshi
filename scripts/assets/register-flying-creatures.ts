@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createFlyingCreatureSpec} from '../../packages/three-world/src/humanoid-runtime/motion-families/flying-creature/controller';
+import {humanoid} from '@worldkit/three';
 import type {DragonVariant} from '../../shared/preset-content/dragon-variants';
 import {readCatalogSources,writeCatalogSources,syncAssetCatalog} from '../three-creator/catalog-sources';
 
@@ -22,7 +22,7 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
   return Promise.all(variants.map(async variant=>{
     const id=`creature.dragon.${variant.id.toLowerCase()}`;
     const model=await resource(`flying-creatures/${variant.id}/model.glb`,`${sourceDirectory}/${variant.file}`);
-    const spec={...createFlyingCreatureSpec(id),name:variant.name,camera:variant.camera,
+    const spec={...humanoid.createFlyingCreatureSpec(id),name:variant.name,camera:variant.camera,
       ...(variant.seat?{seat:structuredClone(variant.seat)}:{}),
       ...(variant.envelope?{envelope:structuredClone(variant.envelope)}:{}),
       ...(variant.collisionProbes?{flyingCreatureCollision:structuredClone(variant.collisionProbes)}:{}),
