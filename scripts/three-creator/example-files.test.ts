@@ -10,26 +10,22 @@ import {executeThreeCreatorTool} from './mcp.js';
 import {EPISODE_SCHEMA} from './contracts.js';
 import {createAssetPolicySnapshot, assetPolicyHash} from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
-describe('modular player example discovery',()=>{
- const root=path.resolve('shared/preset-content');
- it('lists nested dependencies instead of pretending four files are complete',async()=>{
-  const result=await readExampleFiles(root,'preset-assets');expect(result.fileManifest.some(f=>f.path==='environment/maps.ts')).toBe(true);
-  expect(result.fileManifest.some(f=>f.path==='ui/workspace.ts')).toBe(false);
-  expect(Object.keys(result.files)).toEqual(['config.ts','models.ts','assets/resources.ts','creatures/specs.ts','creatures/manifest.ts']);
- });
- it('reads topic modules and rejects arbitrary paths',async()=>{
-  const presentation=await readExampleFiles(root,'extensions',['presentation.json']);
-  expect(JSON.parse(presentation.files['presentation.json']!)).toEqual({shadows:{}});
-  expect((await readExampleFiles(root,'environment-maps')).files['environment/maps.ts']).toContain('campus');
-  await expect(readExampleFiles(root,'extensions',['../../package.json'])).rejects.toThrow('THREE_EXAMPLE_FILE_UNKNOWN');
+describe('example source selection',()=>{
+ const root=path.resolve('examples/three-creator/vehicle-camera');
+ it('lists dependencies and reads selected files without allowing arbitrary paths',async()=>{
+  const result=await readExampleFiles(root,'vehicle-camera');
+  expect(result.fileManifest.some(f=>f.path==='opening-camera.ts')).toBe(true);
+  const selected=await readExampleFiles(root,'vehicle-camera',['opening-camera.ts']);
+  expect(selected.files['opening-camera.ts']).toContain('setCameraFollow');
+  await expect(readExampleFiles(root,'vehicle-camera',['../../package.json'])).rejects.toThrow('THREE_EXAMPLE_FILE_UNKNOWN');
  });
 });
 
-it('serves scene HUD code through the presentation-ui MCP topic',async()=>{
+it('compiles scene HUD in the internal custom vehicle fixture',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'presentation-ui-example-'));
  const service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const result=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'presentation-ui'}) as {files:Record<string,string>};
+  const result=await service.examples('custom-vehicle') as {files:Record<string,string>};
   expect(result.files['main.ts']).toContain('world.createPresentation()');
   expect(result.files['main.ts']).toContain('presentation.ui.mount(hud)');
   expect(JSON.parse(result.files['project.json']!).assetIds).toEqual(['humanoid.source-101']);
@@ -52,13 +48,13 @@ describe('vehicle-camera example discovery', () => {
    assetPolicySnapshotPath: policyFile, assetPolicySha256: assetPolicyHash(snapshot),
   });
   try {
-   const result = await executeThreeCreatorTool(service, 'creator_get_examples', {topic: 'vehicle-camera'}) as {
+   const result = await service.examples('custom-vehicle',undefined,'car') as {
     topic: string; files: Record<string, string>; fileManifest: {path: string; sha256: string; byteLength: number}[];
    };
-   expect(result.topic).toBe('vehicle-camera');
+   expect(result.topic).toBe('custom-vehicle');
    expect(Object.keys(result.files).sort()).toEqual(['episode.json', 'index.html', 'main.ts', 'project.json', 'whitebox-materials.ts']);
    expect(JSON.parse(result.files['project.json']!).assetIds).toEqual(['humanoid.source-101']);
-   const selected = await service.examples('vehicle-camera', ['whitebox-materials.ts', 'README.md']) as {files: Record<string, string>};
+   const selected = await service.examples('custom-vehicle', ['whitebox-materials.ts', 'README.md'],'car') as {files: Record<string, string>};
    expect(selected.files['whitebox-materials.ts']).toBe(result.files['whitebox-materials.ts']);
    expect(result.fileManifest.find(file => file.path === 'whitebox-materials.ts')).toMatchObject({
     byteLength: Buffer.byteLength(result.files['whitebox-materials.ts']!), sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -85,7 +81,7 @@ describe('vehicle-camera example discovery', () => {
    expect(schema.sdkGuide).toContain("topic:'custom-vehicle'");
    expect(schema.sdkGuide).toContain('brakeDeceleration');
    expect(schema.humanoidSourceContracts['humanoid-runtime/config.ts']).toContain('brakeDrift?: boolean');
-   const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'custom-vehicle'}) as {files:Record<string,string>};
+   const example=await service.examples('custom-vehicle') as {files:Record<string,string>};
    expect(example.files['main.ts']).toContain("createRoadVehicleSpec('motorcycle')");
    expect(example.files['main.ts']).toContain('sample.vehicles[0]');
    expect(example.files['main.ts']).not.toContain('brakeDrift:true');
@@ -96,10 +92,10 @@ describe('vehicle-camera example discovery', () => {
  });
 
 
-it.each([['custom-vehicle','custom-bike'],['vehicle-camera','rover']] as const)('records the self-drawn %s through the independent Episode clock and wheel display',async(topic,instanceId)=>{
+it.each([['motorcycle','custom-bike'],['car','rover']] as const)('records the self-drawn %s through the independent Episode clock and wheel display',async(topic,instanceId)=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'road-episode-')),service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const example=await service.examples(topic);
+  const example=await service.examples('custom-vehicle',undefined,topic);
   for(const [file,source] of Object.entries(example.files))await writeFile(path.join(root,file),source);
   const candidate=await service.compiler.prepare();
   const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
@@ -153,26 +149,30 @@ it('discovers, compiles and flies a self-drawn fixed wing using the Episode owne
 },60000);
 
 
-it('discovers and compiles the native flying-creature resource binding',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'flying-creature-example-'));
- const service=new ThreeCreatorTools(root,'three-sdk');
+it('routes a selected flying mount through animal documents and a minimal binding with its own resources',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'flying-mount-binding-')),service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'flying-creature'}) as {files:Record<string,string>;fileManifest:{path:string}[]};
-  expect(Object.keys(example.files).sort()).toEqual(['README.md','episode.json','index.html','main.ts','project.json']);
-  expect(example.fileManifest.map(file=>file.path)).toEqual(expect.arrayContaining(Object.keys(example.files)));
-  const selected=await service.examples('flying-creature',['README.md']) as {files:Record<string,string>};
-  expect(selected.files['README.md']).toContain('creature.dragon.d11');
-  expect(JSON.parse(example.files['project.json']!).assetIds).toEqual(['humanoid.source-101','creature.dragon.d01']);
-  const checkEpisode=new Ajv({strict:false}).compile(EPISODE_SCHEMA);
-  expect(checkEpisode(JSON.parse(example.files['episode.json']!)),JSON.stringify(checkEpisode.errors)).toBe(true);
-  for(const [name,source] of Object.entries(example.files))await writeFile(path.join(root,name),source);
+  const category=await service.readAuthoringDocument('assets/animals/README.md');
+  expect(category.navigation.children.map(child=>child.document)).toContain('assets/animals/flying-mounts.md');
+  const search=await service.searchAssets('飞龙',20);const selectedAsset=search.assets.find(asset=>asset.id==='creature.dragon.d11')!;expect(selectedAsset).toBeDefined();
+  const details=await service.describeAsset(selectedAsset.id);
+  expect(details.documentation.arguments.document).toBe('assets/animals/flying-mounts.md');
+  const page=await executeThreeCreatorTool(service,details.documentation.tool,details.documentation.arguments) as {assetIndex:{id:string}[];navigation:{parent:{document:string}}};
+  expect(page.navigation.parent.document).toBe('assets/animals/README.md');expect(page.assetIndex).toHaveLength(11);expect(page.assetIndex.every(asset=>asset.id.startsWith('creature.dragon.d'))).toBe(true);
+  const binding=details.bindingExample!;
+  const snippet=await executeThreeCreatorTool(service,binding.tool,binding.arguments) as {exampleKind:string;source:string;files:Record<string,string>};
+  expect(snippet.exampleKind).toBe('binding-snippet');expect(Object.keys(snippet.files)).toEqual(['main.ts']);
+  expect(snippet.source).toBe('scripts/three-creator/agent/assets/animals/flying-mounts.ts');
+  expect(snippet.files['main.ts']).toContain('FlyingCreatureVisual');expect(snippet.files['main.ts']).not.toMatch(/BoxGeometry|playerSpawn|\.spawn\s*=|createElement|durationSeconds/);
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.source-101','creature.dragon.d11']}));
+  await writeFile(path.join(root,'index.html'),'<script type="module" src="./main.ts"></script>');
+  await writeFile(path.join(root,'main.ts'),snippet.files['main.ts']!);
   const candidate=await service.compiler.prepare();
   const catalog=JSON.parse(await readFile(path.join(candidate.playableRoot,'asset-definitions.json'),'utf8'));
-  const dragon=catalog.assets.find((asset:{id:string})=>asset.id==='creature.dragon.d01');
-  expect(dragon.integrationMetadata.visual.animationPrefix).toBe('D01');
+  const dragon=catalog.assets.find((asset:{id:string})=>asset.id==='creature.dragon.d11');
+  expect(dragon.integrationMetadata.visual.animationPrefix).toBe('D11');
   for(const logicalPath of [dragon.integrationMetadata.visual.modelResource,dragon.integrationMetadata.visual.flameResource]){
-   const resource=dragon.resources.find((value:{path:string})=>value.path===logicalPath);
-   expect(resource).toBeDefined();
+   const resource=dragon.resources.find((value:{path:string})=>value.path===logicalPath);expect(resource).toBeDefined();
    expect((await readFile(path.join(candidate.playableRoot,resource.uri))).length).toBe(resource.byteLength);
   }
  }finally{await service.close();await rm(root,{recursive:true,force:true});}

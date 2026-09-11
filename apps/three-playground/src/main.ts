@@ -343,6 +343,7 @@ function input() {
         jumpPressed,
         humanCommands,
         sdk.getKeyBindings(),
+        sim.controlledActor.vehicle?.spec.mode,
       );
 }
 function toast(text: string) {

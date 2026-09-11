@@ -1,3 +1,4 @@
+import {AGENT_READING_GUIDE,type AgentDocumentPath} from './agent-docs.js';
 import type {InspectionQuery} from '../../apps/three-creator-playground/bridge.js';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { createServer, type Server } from 'node:http';
@@ -21,7 +22,7 @@ import {subjectAuthoringGuidance} from './subject-guidance.js';
 import {humanAuthoringGuidance} from './character-guidance.js';
 import {cameraAuthoringGuidance} from './camera-guidance.js';
 import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
-import {selectTriviewTargets} from './capture-plan.js';
+import {hasRequiredCaptureViews,selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
 import {measureEpisodeTargets} from './target-feedback.js';
 import {summarizePlaytestActions, summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
@@ -117,27 +118,29 @@ export class ThreeCreatorTools {
     const snapshot=this.compiler.assetPolicy();
     const guidance=await readRuntimeGuidance(this.compiler),runtimeGuidance=guidance.provenance;
     const cameraAuthoring=cameraAuthoringGuidance(this.profile,guidance.isWorkspace);
-    return {runtimeGuidance, kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
+    return {readingGuide:AGENT_READING_GUIDE,runtimeGuidance, kind: 'experimental-three-creator-environment', schemaVersion: 1, version: THREE_CREATOR_VERSION, profile: this.profile,
       assetPolicy:{...snapshot.policy,sha256:this.compiler.assetPolicySha256,assetDetailsTool:'assets_search / assets_describe',scope:'catalog resources and external asset files; ordinary Three geometry remains allowed'},
       engine: 'three@0.185.1', sdk: this.profile === 'three-sdk' ? '@worldkit/three' : null, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', schemaTopics: AUTHORING_TOPICS,
-      authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared Three; createWorld binds an independently controlled subject, while createHumanoidWorld loads the supplied human and full action runtime. Create custom Three meshes freely; bind them through addCharacter/registerMovement or a vehicle object/spec.',
+      authoring: 'Author index.html and local JS/TS. Read programming for project structure, execution ownership and validation.',
       subjectAuthoring:subjectAuthoringGuidance(this.profile),
       humanAuthoring: humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
       ...(cameraAuthoring?{cameraAuthoring}:{}),
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
-      observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,controlledObject,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
-      feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
-      delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a complete nonempty real episode with captured keydown and keyup, valid video and no browser/SDK errors, and real player/target front-right-back captures. Choose the episode length needed to demonstrate the requested behavior. Route success is a measurement, not semantic or visual acceptance.',
+      observation: 'SDK world.start() installs the observer after preparation. Raw authors implement the observation contract; request sections:[observation].',
+      feedback: 'Tools return actual browser observations and real-input evidence. Read programming for selection, timing and failures.',
+      delivery: 'Read quality for completion requirements and programming for current-session recording, views and world_submit.',
       discovery: 'Asset search returns ranked, paginated summaries; assets_describe supplies complete details. Schema defaults to guide; request sections for contracts as needed.',
-      operations: 'Long operations are serialized. Commands and World-operation queries support an optional waitSeconds (max 25) for an inline reply. Follow next when pending; keep the original operationId. worldExecution reports the sampled action result separately from Host status; accepted is not completed. Never resubmit an action to poll or replace an unknown operation. Omit durationSeconds for the full episode, which has a bounded overhead allowance. For targeted diagnosis, a durationSeconds below the plan selects truncated debug.',
+      operations: 'Long operations are serialized. Follow next using the same operationId. Host status and World action outcome are separate; read programming for details.',
       limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate.'],
     };
   }
   schema(topic: AuthoringTopic = 'getting-started') { return this.discovery.schema(topic); }
   authoringSchema(topic?: AuthoringTopic, sections?: readonly SchemaSection[]) { return this.discovery.selectedSchema(topic, sections); }
-  examples(topic: ExampleTopic = 'getting-started', files?: readonly string[]) { return this.discovery.examples(topic, files); }
+  readAuthoringDocument(document:AgentDocumentPath) {return this.discovery.document(document);}
+  bindingExamples(topic?:ExampleTopic,files?:readonly string[],variant?:import('./binding-examples').BindingVariant){return this.discovery.bindingExamples(topic,files,variant);}
+  examples(topic: ExampleTopic = 'getting-started', files?: readonly string[], variant?:'car'|'motorcycle') { return this.discovery.examples(topic, files,variant); }
   assets(query = '', assetId?: string) { return this.discovery.assets(query, assetId); }
   searchAssets(query?: string, limit?: number, offset?: number) { return this.discovery.searchAssets(query, limit, offset); }
   describeAsset(assetId: string) { return this.discovery.describeAsset(assetId); }
@@ -265,10 +268,17 @@ export class ThreeCreatorTools {
     try {
       response = await session.page.evaluate(async ({method,args}) => {
         try { return {ok:true,result:await (window as any).__THREE_CREATOR_HOST__[method](...args)}; }
-        catch (error) { return {ok:false,error:(window as any).__THREE_CREATOR_DIAGNOSTICS__.serialize(error)}; }
+        catch (error) {
+          try {return {ok:false,error:(window as any).__THREE_CREATOR_DIAGNOSTICS__.serialize(error)};}
+          catch {
+            let message='Browser operation failed; detailed diagnostic unavailable';
+            try {const value=typeof error==='string'?error:Object.getOwnPropertyDescriptor(error,'message')?.value;if(typeof value==='string')message=value.slice(0,4000);}catch{}
+            return {ok:false,error:{message},collectionError:{message:'Browser diagnostic serialization unavailable'}};
+          }
+        }
       }, {method,args});
     } catch (error) { throw new HostDiagnosticError(serializeDiagnostic(error),{...host,phase:'browser.transport'}); }
-    if (!response.ok) throw new HostDiagnosticError(response.error,host);
+    if (!response.ok) throw new HostDiagnosticError(response.error,host,undefined,response.collectionError);
     return response.result;
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
@@ -324,6 +334,7 @@ export class ThreeCreatorTools {
     const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `captures-${randomUUID()}`);
     const plan=selectTriviewTargets(await this.bridge(session,'captureTargets'),includeAdditionalTargets); const images = [];
     images.push(await this.capture(session, root, 'opening'));
+    images.push(await this.capture(session, root, 'top-down'));
     for (const target of plan.selectedTargets) images.push(await this.capture(session,root,'entity-triview',[target.id]));
     const report = { kind: 'three-creator-captures', schemaVersion: 1, selectionPolicy:plan.selectionPolicy, conditioningEntityIds:plan.conditioningEntityIds, omittedEntityIds:plan.omittedEntityIds, profile: this.profile, worldBuildHash: candidate.worldBuildHash, sourceHash: candidate.sourceHash, images, pageErrors: [...session.errors] };
     await json(path.join(root, 'captures.json'), report); this.captureEvidence = { root, files: await hashTree(root), report }; return { ...report, image: images[0]!.image };
@@ -444,7 +455,7 @@ export class ThreeCreatorTools {
     const readiness = playtestSubmissionReadiness(played?.report, { worldBuildHash: candidate.worldBuildHash, episodeHash: episode.hash });
     if (!played || !readiness.eligible) throw new Error(`THREE_SUBMIT_PLAYTEST_REQUIRED: ${JSON.stringify(readiness)}. Keep this MCP session; resolve the listed source/episode or recording issue before submitting again.`);
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files);
-    if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash) await this.triviews();
+    if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash || !hasRequiredCaptureViews(this.captureEvidence?.report)) await this.triviews();
     const captures = this.captureEvidence!; await verifyFiles(captures.root, captures.files);
     if (captures.report.pageErrors.length) throw new Error('THREE_SUBMIT_CAPTURE_ERRORS');
     await this.compiler.verifyCandidatePolicy(candidate);

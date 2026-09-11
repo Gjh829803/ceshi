@@ -1,7 +1,13 @@
 import {describe,it,expect} from 'vitest';
-import {selectTriviewTargets} from './capture-plan.js';
+import {hasRequiredCaptureViews,selectTriviewTargets} from './capture-plan.js';
 const targets=['player','10','2','landmark','vehicle','animal','gate'].map(id=>({id,sourceEntityId:id}));
 describe('ordered primary five object sheets',()=>{
+ it('requires opening and overview separately from the complete subject sheet',()=>{
+  const subject={view:'entity-triview',entityIds:['player']};
+  expect(hasRequiredCaptureViews({images:[{view:'opening'},{view:'top-down'},subject]})).toBe(true);
+  for(const images of [[{view:'opening'},subject],[{view:'top-down'},{view:'opening'},subject],[{view:'opening'},{view:'top-down'},{view:'entity-triview',entityIds:['landmark']}]])expect(hasRequiredCaptureViews({images})).toBe(false);
+  expect(hasRequiredCaptureViews(undefined)).toBe(false);
+ });
  it('preserves explicit importance order, counting subject but not the separate opening',()=>{
   const plan=selectTriviewTargets(targets);
   expect(plan.selectedTargets.map(value=>value.id)).toEqual(['player','10','2','landmark','vehicle']);

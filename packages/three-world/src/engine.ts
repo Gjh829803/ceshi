@@ -1,3 +1,4 @@
+import {compileBoundaryBoxes,type BoundaryDefinition,type BoundaryBox} from './boundaries';
 import {ActorResources,actorResources} from './actor-resources';
 import * as THREE from 'three';
 import { playLocomotion } from './assets.js';
@@ -26,6 +27,7 @@ export type CameraFollow = Omit<import('./camera.js').CameraRigFollowOptions,'ta
 export type WorldOptions = {
   scene?: THREE.Scene; camera?: THREE.Camera; canvas?: HTMLCanvasElement; renderer?: THREE.WebGLRenderer;
   physics?: PhysicsOptions; fixedTimeStepSeconds?: number; navigation?: boolean;
+  boundaries?: readonly BoundaryDefinition[];
   humanoid?:HumanoidRuntimeOptions;
 };
 export type CommandResult = { status: 'applied' | 'rejected'; revision: number; error?: { code: string; message: string } };
@@ -49,6 +51,7 @@ export class WorldEngine {
   private readonly navigation: ThreeNavigation | undefined;
   get navigationEnabled(): boolean { return this.navigation !== undefined; }
   private readonly entities = new Map<string, Entity>();
+  private readonly boundaryIds: ReadonlySet<string>;
   private readonly prototypes = new Map<string, () => EntityOptions | CharacterEntityOptions>();
   private readonly goals = new Map<string, ActorGoal>();
   private readonly updates = new Set<(context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void>();
@@ -92,7 +95,8 @@ export class WorldEngine {
   private resetHandler:(()=>void)|undefined;
   private releaseViewport:(()=>void)|undefined;
 
-  private constructor(options: WorldOptions, physics: Pick<ThreePhysics,keyof ThreePhysics>, navigation: ThreeNavigation | undefined) {
+  private constructor(options: WorldOptions, physics: Pick<ThreePhysics,keyof ThreePhysics>, navigation: ThreeNavigation | undefined, private readonly boundaryBoxes: readonly BoundaryBox[]) {
+    this.boundaryIds = new Set(boundaryBoxes.map(boundary => boundary.id));
     this.scene = options.scene ?? new THREE.Scene();
     this.camera = options.camera ?? new THREE.PerspectiveCamera(55, 16 / 9, 0.05, 3000);
     this.renderer = options.renderer ?? (options.canvas ? new THREE.WebGLRenderer({ canvas: options.canvas, antialias: true, preserveDrawingBuffer: true }) : undefined);
@@ -100,19 +104,17 @@ export class WorldEngine {
     this.physics = physics; this.navigation = navigation;
     this.humanoid=physics instanceof HumanoidRuntime?physics:undefined;
     this.resources=this.humanoid?humanoidHost(this.humanoid).resources:new ActorResources();
-    this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius),
-      id => this.entities.has(id) ? tuple(position(this.entity(id).object)) : undefined,
-      id => { const entity = this.entities.get(id); if (!entity?.character) return undefined;
-        const scale = entity.object.getWorldScale(new THREE.Vector3());
-        return { heightMeters: (entity.character.heightMeters ?? 1.8) * Math.abs(scale.y), radiusMeters: (entity.character.radiusMeters ?? .35) * Math.max(Math.abs(scale.x), Math.abs(scale.z)) }; },
-      id=>{const entity=this.entities.get(id);if(!entity)return;entity.object.updateWorldMatrix(true,false);return {matrixWorld:entity.object.matrixWorld,frontYawRadians:entity.options.frontYawRadians??0};});
+    this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius), {
+      sample:id=>{const entity=this.entities.get(id);if(!entity)return;entity.object.updateWorldMatrix(true,false);const scale=entity.object.getWorldScale(new THREE.Vector3());
+        return {id,positionWorldMetersXYZ:tuple(position(entity.object)),...(entity.character?{body:{heightMeters:(entity.character.heightMeters??1.8)*Math.abs(scale.y),radiusMeters:(entity.character.radiusMeters??.35)*Math.max(Math.abs(scale.x),Math.abs(scale.z))}}:{}),transform:{matrixWorld:entity.object.matrixWorld.clone(),frontYawRadians:entity.options.frontYawRadians??0}};}
+    });
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
     this.inputRouter = new WorldInputRouter(this.keyboard, {
       isRunning: () => this.running,
       canZoom: () => this.cameraHumanoid
-        ? this.cameraHumanoid.cameraMode === 'follow' && this.cameraHumanoid.followCamera.mode !== 1
+        ? this.cameraHumanoid.cameraMode !== 'authored' && this.cameraHumanoid.followCamera.mode !== 1
         : this.cameraRig.mode !== 'authored',
       wantsPointerLock: () => this.cameraHumanoid?this.cameraHumanoid.followCamera.mode!==0:this.cameraRig.mode==='follow'&&this.cameraRig.perspective==='first-person',
       onPointer: input => { this.pointerInput = { activate: true,
@@ -124,18 +126,20 @@ export class WorldEngine {
     if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.inputRouter.bind(this.renderer.domElement);if(this.ownsRenderer)this.releaseViewport=ownViewport(this.renderer,this.camera,this.renderer.domElement); }
   }
   static async create(options: WorldOptions = {}): Promise<WorldEngine> {
+    if (options.humanoid && options.boundaries !== undefined) throw new Error('WORLD_HUMANOID_BOUNDARIES_LOCATION: Use humanoid.map.boundaries (createHumanoidWorld: map.boundaries), not top-level boundaries.');
+    const boundaries = compileBoundaryBoxes(options.boundaries === undefined ? [] : options.boundaries);
     if(options.humanoid&&options.fixedTimeStepSeconds!==undefined&&options.fixedTimeStepSeconds!==1/60)throw new Error('HUMANOID_REQUIRES_60HZ');
     if(options.humanoid&&!options.camera)options={...options,camera:new THREE.PerspectiveCamera(55,16/9,.05,3000)};
-    const physics = options.humanoid?await HumanoidRuntime.create(options.humanoid,options.camera!):await ThreePhysics.create(options.physics);
+    const physics = options.humanoid?await HumanoidRuntime.create(options.humanoid,options.camera!):await ThreePhysics.create(options.physics, boundaries);
     let navigation: ThreeNavigation | undefined;
-    try { navigation = options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation); }
+    try { navigation = options.navigation === false ? undefined : await ThreeNavigation.create(); return new WorldEngine(options, physics, navigation, boundaries); }
     catch (error) { navigation?.dispose(); physics.dispose(); throw error; }
   }
   get simulationTick(): number { return this.tick; }
   get isRunning(): boolean { return this.running; }
   get controlledEntityId(): string | undefined { return this.controlled; }
   get controlledHumanoid():HumanoidRuntime|undefined{return this.controlled&&this.humanoid?.hasActor(this.controlled)?this.humanoid:undefined;}
-  private get cameraHumanoid():HumanoidRuntime|undefined{return this.humanoid?.cameraMode==='follow'?this.humanoid:undefined;}
+  private get cameraHumanoid():HumanoidRuntime|undefined{return this.humanoid&&this.humanoid.cameraMode!=='authored'?this.humanoid:undefined;}
   get cameraMode(){return this.cameraHumanoid?.cameraMode??this.cameraRig.mode;}
   cameraSnapshot(){return this.cameraHumanoid?.cameraSnapshot()??this.cameraRig.snapshot();}
   private alive(): void { if (this.disposed) throw new Error('WORLD_DISPOSED'); }
@@ -145,7 +149,7 @@ export class WorldEngine {
   addCharacter(options: CharacterEntityOptions,prevalidatedHumanoid=false): THREE.Object3D { return this.register({ ...options, role: 'actor' }, { ...DEFAULT_CHARACTER_OPTIONS, ...options.character }, options.asset,prevalidatedHumanoid); }
   private register(options: EntityOptions, character?: CharacterOptions, asset?: AssetInstance,prevalidatedHumanoid=false): THREE.Object3D {
     this.alive(); requireId(options.id);
-    if (this.entities.has(options.id)) throw new Error(`WORLD_ENTITY_DUPLICATE: ${options.id}`);
+    if (this.entities.has(options.id) || this.boundaryIds.has(options.id)) throw new Error(`WORLD_ENTITY_DUPLICATE: ${options.id}`);
     if (!(options.object instanceof THREE.Object3D) || [...this.entities.values()].some(e => e.object === options.object)) throw new Error('WORLD_OBJECT_INVALID_OR_REGISTERED');
     if (options.frontYawRadians !== undefined && !Number.isFinite(options.frontYawRadians)) throw new Error('WORLD_FRONT_YAW_INVALID');
     if (options.role === 'terrain' && options.physics?.kind === 'none') throw new Error('WORLD_TERRAIN_REQUIRES_COLLISION');
@@ -174,7 +178,7 @@ export class WorldEngine {
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
   clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
-  private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>!!this.controlledHumanoid?.simulation.controlledActor.vehicle:undefined);}
+  private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>this.controlledHumanoid?.simulation.controlledActor.vehicle?.spec.mode:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
   onReset(callback: () => void): () => void { this.resets.add(callback); return () => { this.resets.delete(callback); }; }
@@ -187,9 +191,7 @@ export class WorldEngine {
     this.alive();const targetEntityId=options.targetEntityId??this.controlled;
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
     if(this.humanoid?.hasActor(targetEntityId)){
-      const unsupported=Object.keys(options).filter(key=>key!=='targetEntityId');
-      if(unsupported.length)throw runtimeError(new Error(`WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED: Full humanoid targets accept only targetEntityId; configure their camera through humanoid.applyProfile and setCameraMode. Unsupported fields: ${unsupported.join(', ')}`),'camera-follow',[targetEntityId]);
-      this.cameraRig.useAuthoredCamera();this.humanoid.setCameraTarget(targetEntityId);this.humanoid.setCameraMode(0);
+      this.humanoid.setCameraFollow({...options,targetEntityId});this.cameraRig.useAuthoredCamera();
     }
     else{this.cameraRig.setFollow({...options,targetEntityId});this.humanoid?.useAuthoredCamera();}
     this.inputRouter.releasePointerLock();
@@ -197,7 +199,7 @@ export class WorldEngine {
   setCameraPerspective(perspective:import('./contracts').CameraPerspective):void {
     this.alive();
     if(!['first-person','third-person'].includes(perspective))throw new Error('WORLD_CAMERA_PERSPECTIVE_INVALID');
-    if(this.cameraHumanoid)humanoidHost(this.cameraHumanoid).command({type:'humanoid.set-camera-mode',mode:perspective==='first-person'?1:0});
+    if(this.cameraHumanoid)this.cameraHumanoid.setCameraPerspective(perspective);
     else this.cameraRig.setPerspective(perspective);
     this.inputRouter.releasePointerLock();
   }
@@ -250,12 +252,12 @@ export class WorldEngine {
   }
   private sealInitialState(): void {
     if (this.baseline) return;
+    this.humanoid?.validateInitialState();
     this.baseline = new Map(this.entities);
     for (const entity of this.entities.values()) { entity.initialParent = entity.object.parent; if(!(entity.options as CharacterEntityOptions).runtimeActor){entity.initialPosition.copy(entity.object.position); entity.initialQuaternion.copy(entity.object.quaternion);} entity.initialScale.copy(entity.object.scale); entity.initialVisible = entity.object.visible; entity.initialMatrix.copy(entity.object.matrix); entity.initialMatrixAutoUpdate = entity.object.matrixAutoUpdate; }
     this.scene.updateMatrixWorld(true); this.camera.updateWorldMatrix(true, false);
     this.cameraInitial = this.camera.clone(); this.cameraInitialParent = this.camera.parent; this.controlledInitial = this.controlled;
-    this.cameraRig.sealInitialState();
-    this.humanoid?.sealInitialState();
+    this.cameraRig.sealInitialState();this.humanoid?.sealInitialState();
   }
   step(input: WorldInput = {}, ticks = 1): WorldSnapshot {
     this.validateStep(input,ticks);
@@ -283,7 +285,7 @@ export class WorldEngine {
   }
   /** Shared input basis for both the fixed-step controller and Host route conversion. */
   controlForwardWorldXYZ(): Vec3 {
-    if(this.cameraHumanoid){const yaw=this.cameraHumanoid.followCamera.yaw;return [Math.sin(yaw),0,Math.cos(yaw)];}
+    if(this.cameraHumanoid)return this.cameraHumanoid.controlForwardWorldXYZ();
     const yaw = this.cameraRig.desiredYawRadians;
     const forward = this.cameraRig.mode === 'authored' ? this.camera.getWorldDirection(new THREE.Vector3()) : new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     forward.y = 0; if (forward.lengthSq() < .001) forward.set(0, 0, -1);
@@ -386,7 +388,10 @@ export class WorldEngine {
     const geometryState = native?[Array.from(native.positions),Array.from(native.indices)]:objects.map(root => { const signature = geometrySignature(root); return [root.uuid, root.matrixWorld.elements, signature]; });
     const signature = JSON.stringify({ settings, geometryState });
     if (this.navigationDirty || signature !== this.navigationSignature) {
-      this.navigation.rebuild(native??objects, settings);
+      const boundaries:THREE.Mesh[]=[];const material=!native&&this.boundaryBoxes.length?new THREE.MeshBasicMaterial():undefined;
+      try{if(!native)for(const box of this.boundaryBoxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),material!);boundaries.push(mesh);mesh.position.fromArray(box.position);mesh.rotation.set(...box.rotation);}
+        this.navigation.rebuild(native??[...objects,...boundaries],settings);
+      }finally{for(const mesh of boundaries)mesh.geometry.dispose();material?.dispose();}
       this.navigationDirty = false; this.navigationSignature = signature;
     }
     return this.navigation;

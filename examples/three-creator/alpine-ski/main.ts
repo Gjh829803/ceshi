@@ -20,7 +20,23 @@ const map:EnvironmentDefinition={id:'alpine-ski',name:'双板滑雪坡',descript
  ...[-1,1].flatMap(side=>[25,5,-15,-35].map((z,i)=>({id:`marker-${side}-${i}`,position:[side*20,Math.max(0,Math.tan(Math.PI/15)*(z+40))+.6,z] as [number,number,number],size:[.3,1.2,.3] as [number,number,number],color:'#df7440'})))],
  water:[],regions:[{id:'snow',name:'滑雪坡',description:'穿板、撑杖、顺坡滑行、压弯和制动',center:[0,0,0],size:[80,180],color:'#e8be73',modes:['character','ski']}],
  spawns:[{id:'ski-start',vehicleId:'ski-instance-1',name:'双板',position:[0,rise+.025,43],yaw:Math.PI,regionId:'snow'}],playerSpawn:[1.8,rise+.025,43]};
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);if(box.rotation)mesh.rotation.set(...box.rotation);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+function marker(x:number,y:number,z:number,height=1.5){
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.15,.2,height,12),new THREE.MeshStandardMaterial({color:'#c9843f',roughness:1}));mesh.position.set(x,y,z);scene.add(mesh);
+}
+surface(200,230,[0,0,-15],'#e4e8e9');
+structure('snow-slope',[50,.5,80/Math.cos(Math.PI/15)],[0,rise/2-.25*Math.cos(Math.PI/15),.25*Math.sin(Math.PI/15)],[-Math.PI/15,0,0]);
+structure('boarding-deck',[50,rise,12],[0,rise/2,46]);
+structure('stop-wall',[50,3,.5],[0,1.5,-90]);
+for(const side of [-1,1])for(const z of [25,5,-15,-35])marker(side*20,Math.max(0,Math.tan(Math.PI/15)*(z+40))+.6,z,1.2);
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'ski-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});

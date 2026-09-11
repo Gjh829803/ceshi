@@ -105,6 +105,8 @@ test('SDK-only admits five unique tasks, caps the sixth and resumes without POST
   await cp('scripts/three-creator/asset-policy.mjs',path.join(isolated,'scripts/three-creator/asset-policy.mjs'));
   await mkdir(path.join(isolated,'assets/three-creator'),{recursive:true});
   await cp('assets/three-creator/asset-catalog.json',path.join(isolated,'assets/three-creator/asset-catalog.json'));
+  await mkdir(path.join(isolated,'scripts/three-creator'),{recursive:true});
+  await cp('scripts/three-creator/agent',path.join(isolated,'scripts/three-creator/agent'),{recursive:true});
   await mkdir(path.join(isolated,'config/three-creator'),{recursive:true});
   await cp('config/three-creator/asset-policy.json',path.join(isolated,'config/three-creator/asset-policy.json'));
   const isolatedAccountPolicy=path.join(isolated,'config/three-creator/account-policy.json');
@@ -194,4 +196,16 @@ test('account policy relocation rejects changed bytes, missing pins and unrelate
   await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {accountPolicyPath: legacyPath}}), {code: 'ENOENT'});
   await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {...previousPlan, accountPolicyPath: path.join(repoRoot, 'external-policy.json')}}), {code: 'ENOENT'});
   await assert.rejects(accountRouting.readCreatorAccountPolicy({repoRoot, previousPlan: {...previousPlan, accountPolicyPath: path.join(repoRoot, 'other-checkout/scripts/cloud/creator-account-policy.json')}}), {code: 'ENOENT'});
+});
+
+
+test('runtime doctor loads a private runnable fixture while Agent binding snippets remain caller-authored',async()=>{
+ const {loadDoctorFixture}=await import('./three-runtime-doctor.mjs');
+ for(const profile of ['three-raw','three-sdk']){
+  const files=await loadDoctorFixture(path.resolve('.'),profile,process.execPath,process.env);
+  assert.deepEqual(Object.keys(files).sort(),['index.html','main.ts','project.json']);
+  assert.match(files['index.html'],/main.ts/);assert.doesNotMatch(files['main.ts'],/declare const/);
+  assert.deepEqual(JSON.parse(files['project.json']).assetIds,profile==='three-sdk'?['humanoid.source-101']:[]);
+  assert.match(files['main.ts'],profile==='three-sdk'?/createHumanoidWorld/:/__WORLDKIT_EVAL__/);
+ }
 });

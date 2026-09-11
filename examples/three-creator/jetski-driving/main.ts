@@ -16,7 +16,21 @@ const map:EnvironmentDefinition={id:'jetski-course',name:'水上摩托试驾水�
  water:[{id:'water',min:[-219,-20,-219],max:[219,0,219],surface:0}],regions:[{id:'water',name:'Water',description:'Jet ski test course',center:[0,0,0],size:[430,430],color:'#67a9bb',modes:['character','boat']}],
  spawns:[{id:'jetski-start',vehicleId:'jetski-instance-1',name:'水上摩托',position:[0,.03,0],yaw:0,regionId:'water'}],playerSpawn:[2,.215,0]};
 const waterMesh=new THREE.Mesh(new THREE.PlaneGeometry(438,438),new THREE.MeshStandardMaterial({color:'#4d97b1',roughness:1}));waterMesh.rotation.x=-Math.PI/2;waterMesh.position.y=0;scene.add(waterMesh);
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);if(box.rotation)mesh.rotation.set(...box.rotation);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+function marker(x:number,y:number,z:number,height=1.5){
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.15,.2,height,12),new THREE.MeshStandardMaterial({color:'#c9843f',roughness:1}));mesh.position.set(x,y,z);scene.add(mesh);
+}
+surface(440,440,[0,-20,0]);
+structure('dock',[2,.8,8],[2.7,-.2,0]);
+for(const side of [-1,1])for(const z of [25,50,75])marker(side*18,.6,z,1.2);
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'jetski-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});

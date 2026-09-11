@@ -221,7 +221,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('maps one configurable camera key edge without toggling on repeat or after clearing',()=>{
-  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>false);keyboard.enabled=true;
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(true);
   keyboard.keyDown('KeyT',true);expect(keyboard.sample().cameraTogglePressed).toBe(false);
   keyboard.keyUp('KeyT');keyboard.keyDown('KeyT');keyboard.clear();expect(keyboard.sample().cameraTogglePressed).toBe(false);
@@ -232,7 +232,7 @@ describe('SDK humanoid runtime',()=>{
   const world=await fixture();try{const r=world.humanoid!;
    r.applyProfile({view:{keyboardToggleEnabled:true}});
    if(mounted){r.approach('car-1');expect(r.enter('car-1')).toBe(true);world.step({},31);}
-   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted);keyboard.enabled=true;
+   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted?'wheeled':undefined);keyboard.enabled=true;
    for(const expected of [1,2,0,1]){
     keyboard.keyDown('KeyT');world.step(keyboard.sample(),3);expect(r.snapshot().cameraMode).toBe(expected);
     keyboard.keyDown('KeyT',true);world.step(keyboard.sample());expect(r.snapshot().cameraMode).toBe(expected);
@@ -250,7 +250,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('uses a fresh sprint+crouch edge for slide and remaps movement, HUD and action admission together',()=>{
-  const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setHumanoidMode(()=>false);keyboard.enabled=true;
+  const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setHumanoidMode(()=>undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyC');keyboard.keyDown('ShiftLeft');expect(keyboard.sample().humanoid?.actions).toEqual({toggleCrouch:true});
   expect(keyboard.sample().humanoid?.actions).toEqual({});keyboard.keyUp('KeyC');keyboard.keyDown('KeyC');expect(keyboard.sample().humanoid?.actions).toEqual({slide:true});
   keyboard.keyDown('KeyC',true);expect(keyboard.sample().humanoid?.actions).toEqual({});keyboard.clear();
@@ -704,8 +704,19 @@ describe('SDK humanoid runtime',()=>{
    await world.reset();expect(runtime.simulation.controlledActor.controller!.movementTuning.speedScale).toBe(2);expect(runtime.camera.fov).toBe(65);expect(runtime.followCamera.tuning.baseFovDegrees).toBe(65);expect(runtime.followCamera.baseDistance).toBe(9);expect(runtime.simulation.vehicles[0]!.spec.speed).toBe(12);
   }finally{world.dispose();}
  });
+ it.each(['wheeled','motorcycle','mount','dragon','plane','glider','boat','submarine','tank','spacecraft'] as const)('routes mounted arrow keys only to their consuming controller: %s',mode=>{
+  let current:typeof mode|undefined=mode;
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>current);keyboard.enabled=true;
+  keyboard.setKeyBindings({cameraLeft:['KeyJ'],cameraRight:['KeyL'],cameraUp:['KeyI'],cameraDown:['KeyK']});
+  keyboard.keyDown('KeyJ');keyboard.keyDown('KeyI');
+  const sample=keyboard.sample(),pitch=mode==='tank'||mode==='spacecraft',strafe=mode==='spacecraft';
+  expect(sample).toMatchObject({cameraYawRatio:strafe?0:1,cameraPitchRatio:pitch?0:-1,humanoid:{pitch:pitch?-1:0,strafe:strafe?-1:0,forward:0,steer:0}});
+  current=undefined;expect(keyboard.sample()).toMatchObject({cameraYawRatio:1,cameraPitchRatio:-1,humanoid:{pitch:0,strafe:0}});
+  current=mode;expect(keyboard.sample()).toEqual(sample);
+  keyboard.clear();expect(keyboard.sample()).toMatchObject({cameraYawRatio:0,cameraPitchRatio:0,humanoid:{pitch:0,strafe:0}});
+ });
  it('routes all player keys through SDK input and consumes action edges once',()=>{
-  let mounted=false;const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted);keyboard.enabled=true;
+  let mounted=false;const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted?'wheeled':undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyW');keyboard.keyDown('KeyE');keyboard.keyDown('KeyF');keyboard.keyDown('Space');
   const first=keyboard.sample();expect(first.humanoid?.forward).toBe(1);expect(first.humanoid?.actions?.interact).toBe(true);expect(first.interactPressed).toBe(true);expect(first.humanoid?.jump).toBe(true);
   const next=keyboard.sample();expect(next.humanoid?.forward).toBe(1);expect(next.humanoid?.actions?.interact).toBeUndefined();expect(next.interactPressed).toBe(false);

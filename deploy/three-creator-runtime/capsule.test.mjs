@@ -74,10 +74,13 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     assert.equal(sha256(nativeArchive), `sha256:${nativeBuild.sha256}`, 'Cloud install must include the current SDK native archive');
     assert.equal(JSON.parse(readFileSync(path.join(sourceRoot, 'packages/three-world/package.json'), 'utf8')).dependencies['@dimforge/rapier3d-compat'], `file:../../vendor/rapier-query-refresh/${nativeBuild.archive}`);
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
-      for (const example of ['vehicle-sandbox','character-actions','horse-riding','custom-vehicle','vehicle-camera','nonhuman-subject','flying-creature']) {
+      for (const example of ['vehicle-sandbox','character-actions','horse-riding','custom-vehicle','vehicle-camera','nonhuman-subject']) {
         const relative = `examples/three-creator/${example}/${name}`;
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }
+    }
+    for (const relative of ['scripts/three-creator/agent/README.md','scripts/three-creator/agent/assets/README.md','scripts/three-creator/agent/assets/animals/README.md','scripts/three-creator/agent/assets/animals/flying-mounts.md','scripts/three-creator/agent/assets/animals/flying-mounts.ts']) {
+      assert.deepEqual(readFileSync(path.join(sourceRoot,relative)),readFileSync(path.join(repositoryRoot,relative)));
     }
     for (const name of ['config.ts', 'project.json', 'environment/maps.ts', 'models.ts']) {
       const relative = `shared/preset-content/${name}`;

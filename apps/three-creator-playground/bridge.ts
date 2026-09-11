@@ -40,7 +40,7 @@ function currentCameraObservation(world: WorldObservation) {
       const configuration = world.capabilities?.({entityIds: []})?.humanoid?.configuration;
       const camera = configuration?.effective?.camera;
       cameraOverrides = configuration?.profile?.camera ?? null;
-      cameraSettings = camera?.settings ?? null;
+      cameraSettings = camera?.settingsApplied === false ? null : camera?.settings ?? null;
       framing = camera && 'framing' in camera ? camera.framing ?? null : null;
     } catch { /* Advisory diagnostics must not prevent a real image capture. */ }
   }

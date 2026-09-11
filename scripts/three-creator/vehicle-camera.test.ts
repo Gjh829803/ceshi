@@ -8,6 +8,77 @@ import {applyWhiteboxMaterials} from '../../examples/three-creator/vehicle-camer
 import {readExampleFiles} from './example-files.js';
 import {ThreeCreatorTools} from './tools.js';
 
+it('publishes a mounted opening and follows real driving without replacing the authored lens',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'creator-mounted-opening-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.source-101']}));
+  await writeFile(path.join(root,'index.html'),'<!doctype html><html><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>');
+  await writeFile(path.join(root,'main.ts'),`
+import * as THREE from 'three';
+import {createHumanoidWorld,humanoid} from '@worldkit/three';
+const scene=new THREE.Scene();scene.background=new THREE.Color('#fff');scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,2));
+const canvas=document.createElement('canvas');document.body.append(canvas);
+const map={id:'initial-ride',name:'Ride',description:'Initialization regression',bounds:{min:[-40,-5,-40],max:[40,20,40]},
+ boxes:[{id:'floor',position:[0,-.5,0],size:[80,1,80]}],water:[],playerSpawn:[0,.025,0],
+ regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[80,80],color:'#fff',modes:['motorcycle']}],
+ spawns:[{id:'bike-start',name:'Bike',regionId:'road',vehicleId:'bike',position:[0,.025,0],yaw:Math.PI}]};
+const world=await createHumanoidWorld({scene,canvas,map,initialMountId:'bike',characterLoadOptions:{loadTextures:false},
+ vehicles:[{instanceId:'bike',assetId:'custom.motorcycle',object:new THREE.Group(),spec:humanoid.createRoadVehicleSpec('motorcycle')}],
+ profile:{camera:{recenterDelaySeconds:.1,recenterResponsePerSecond:1.8}}});
+world.setCameraFollow({opening:{positionWorldMetersXYZ:[4,3,7],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:46},headingFollow:'vehicle'});
+world.setCaptureTargets(['player']);const presentation=world.createPresentation();
+(window as any).mountedOpening={world,presentation};await world.start();presentation.focus();
+`);
+  const first=await service.preview('opening');
+  const page=(service as unknown as {session:{page:Page}}).session.page;
+  const read=()=>page.evaluate(()=>{const {world}=(window as any).mountedOpening;return {snapshot:world.snapshot(),fov:world.camera.fov};});
+  const opening=await read();expect(opening.snapshot).toMatchObject({simulationTick:0,humanoid:{mountedInstanceId:'bike',transition:{remainingSeconds:0}},camera:{mode:'follow-pending',subjectEntityId:'bike',headingFollow:'vehicle'}});
+  expect(opening.snapshot.camera.positionWorldMetersXYZ).toEqual([4,3,7]);expect(opening.fov).toBe(46);
+  await page.evaluate(async()=>{const {world,presentation}=(window as any).mountedOpening;await world.start();presentation.focus();});
+  await page.keyboard.down('w');
+  await expect.poll(async()=>{const state=await read();return state.snapshot.camera.headingTargetYawRadians;},{timeout:15000}).not.toBeNull();
+  await page.keyboard.down('d');
+  const facing=new THREE.Quaternion(...opening.snapshot.camera.orientationWorldQuaternionXYZW);
+  await expect.poll(async()=>new THREE.Quaternion(...(await read()).snapshot.camera.orientationWorldQuaternionXYZW).angleTo(facing),{timeout:15000}).toBeGreaterThan(.05);
+  await page.keyboard.up('d');await page.keyboard.up('w');
+  const driven=await read();expect(driven.snapshot.camera.mode).toBe('follow');expect(driven.snapshot.humanoid.mountedInstanceId).toBe('bike');expect(driven.fov).toBe(46);
+  expect(new THREE.Vector3(...driven.snapshot.camera.positionWorldMetersXYZ).distanceTo(new THREE.Vector3(4,3,7))).toBeGreaterThan(.1);
+  const reset=await service.preview('opening'),restored=await read();expect(restored.snapshot.humanoid.mountedInstanceId).toBe('bike');
+  expect(restored.snapshot.camera).toEqual(opening.snapshot.camera);expect(reset.image.sha256).toBe(first.image.sha256);
+  for(const framing of ['preserve-opening','target'] as const){
+    await page.evaluate(async framing=>{const {world,presentation}=(window as any).mountedOpening;
+      if(framing==='target')world.setCameraFollow({framingMode:'target',distanceMeters:8,pitchRadians:.35,activateOnInput:false,headingFollow:'vehicle',transitionSeconds:0});
+      await world.start();presentation.focus();
+    },framing);
+    const beforeOrbit=(await read()).snapshot.camera;
+    await page.keyboard.down('ArrowLeft');await page.keyboard.down('ArrowDown');
+    await expect.poll(async()=>{const c=(await read()).snapshot.camera;return c.desiredYawRadians-beforeOrbit.desiredYawRadians;}).toBeGreaterThan(.1);
+    await page.keyboard.up('ArrowLeft');await page.keyboard.up('ArrowDown');
+    const keyed=(await read()).snapshot.camera;
+    expect(keyed.desiredPitchRadians).toBeGreaterThan(beforeOrbit.desiredPitchRadians);
+    const canvas=await page.locator('canvas').first().boundingBox();expect(canvas).not.toBeNull();
+    const x=canvas!.x+canvas!.width*.5,y=canvas!.y+canvas!.height*.5;
+    await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+35,y+20,{steps:5});
+    await expect.poll(async()=>(await read()).snapshot.camera.desiredYawRadians).toBeCloseTo(keyed.desiredYawRadians-.14,5);
+    await page.mouse.up();const dragged=(await read()).snapshot.camera;
+    expect(dragged.desiredPitchRadians).toBeGreaterThan(keyed.desiredPitchRadians);
+    for(const mounted of [false,true]){
+      await page.keyboard.press('f');
+      await expect.poll(async()=>{const h=(await read()).snapshot.humanoid;return h.mountedInstanceId===(mounted?'bike':null)&&h.transition.remainingSeconds===0;},{timeout:10000}).toBe(true);
+      const switched=(await read()).snapshot.camera;
+      if(framing==='target'){expect(switched.desiredYawRadians).toBeCloseTo(dragged.desiredYawRadians,5);expect(switched.desiredPitchRadians).toBeCloseTo(dragged.desiredPitchRadians,5);expect(switched.desiredArmDistanceMeters).toBe(dragged.desiredArmDistanceMeters);}
+      expect((await read()).fov).toBe(46);
+    }
+    const mounted=(await read()).snapshot.camera;
+    await page.keyboard.down('ArrowRight');
+    await expect.poll(async()=>(await read()).snapshot.camera.desiredYawRadians).toBeLessThan(mounted.desiredYawRadians-.1);
+    await page.keyboard.up('ArrowRight');
+    await service.preview('opening');expect((await read()).snapshot.camera).toEqual(opening.snapshot.camera);
+  }
+  const sheets=await service.triviews();expect(sheets.pageErrors).toEqual([]);expect((await read()).fov).toBe(46);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},70000);
+
 describe('example-local whitebox materials', () => {
   it('recolors shared opaque and glass clones without mutating their sources', () => {
     const texture = new THREE.Texture();
@@ -213,6 +284,7 @@ world.humanoid!.applyProfile({view:{defaultPerspective:'first-person'}});
 world.useAuthoredCamera();camera.position.set(14,18,22);camera.lookAt(0,0,0);camera.fov=43;camera.updateProjectionMatrix();
 world.setKeyBindings({forward:['KeyI']});
 const releaseHandoff=installOpeningCameraHandoff(world,presentation.inputSurface);
+world.setCameraFollow({activateOnInput:true,followHalfLifeSeconds:0,transitionSeconds:0});
 (window as any).__openingTest={world,presentation,releaseHandoff};
 await world.start(); presentation.focus();`);
     for (const [name, content] of Object.entries(example.files)) await writeFile(path.join(root, name), content);
@@ -221,25 +293,34 @@ await world.start(); presentation.focus();`);
     const read = () => page.evaluate(() => {
       const {world,presentation}=(window as any).__openingTest;
       return {mode:world.cameraMode,view:world.humanoid.snapshot().cameraMode,
-        pose:world.camera.position.toArray(),fov:world.camera.fov,tick:world.simulationTick,
+        pose:world.camera.position.toArray(),orientation:world.camera.quaternion.toArray(),fov:world.camera.fov,tick:world.simulationTick,
+        subjectPosition:world.getEntityState('person').positionWorldMetersXYZ,
         focused:document.activeElement===presentation.inputSurface,
         isolated:presentation.inputSurface!==world.renderer.domElement&&!presentation.inputSurface.contains(presentation.ui.root)};
     });
-    const initial=await read();expect(initial).toMatchObject({mode:'authored',fov:43,focused:true,isolated:true});
-    // Unbound keys, repeats and UI input must not begin gameplay.
-    await page.keyboard.press('w');expect((await read()).mode).toBe('authored');
-    await page.evaluate(()=>{const {presentation}=(window as any).__openingTest;presentation.inputSurface.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyI',repeat:true,bubbles:true}));});
-    expect((await read()).mode).toBe('authored');
-    await page.getByRole('button',{name:'Reset'}).focus();await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    const initial=await read();expect(initial).toMatchObject({mode:'follow-pending',fov:43,focused:true,isolated:true});
+    // Unbound keys, UI focus and a paused clock must leave follow pending.
+    await page.keyboard.press('w');expect((await read()).mode).toBe('follow-pending');
+    await page.getByRole('button',{name:'Reset'}).focus();await page.keyboard.press('i');expect((await read()).mode).toBe('follow-pending');
     await page.evaluate(()=>{const {world,presentation}=(window as any).__openingTest;world.stop();presentation.focus();});
-    await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    await page.keyboard.press('i');expect((await read()).mode).toBe('follow-pending');
     await page.evaluate(async()=>{const {world,presentation}=(window as any).__openingTest;await world.start();presentation.focus();});
+    const beforeInput=await read();
     await page.keyboard.down('i');
     await page.waitForFunction(()=>(window as any).__openingTest.world.cameraMode==='follow');
     await page.waitForFunction(()=>(window as any).__openingTest.world.humanoid.inspectControls().lastApplied?.input.forward===1);
-    await page.keyboard.up('i');expect((await read()).view).toBe(1);
+    await page.keyboard.up('i');
+    await page.evaluate(()=>{const {world}=(window as any).__openingTest;world.stop();world.render();});
+    const playing=await read();expect(playing.view).toBe(0);expect(playing.fov).toBe(initial.fov);
+    for(const [index,value] of initial.orientation.entries())expect(playing.orientation[index]).toBeCloseTo(value,9);
+    // Compare framing against measured subject displacement; ground settling is real movement.
+    for(let axis=0;axis<3;axis++)expect(playing.pose[axis]-beforeInput.pose[axis]).toBeCloseTo(playing.subjectPosition[axis]-beforeInput.subjectPosition[axis],5);
+    await page.evaluate(async()=>{const {world,presentation}=(window as any).__openingTest;await world.start();presentation.focus();});
+    // A configured first-person default must not replace the authored first input.
+    // Explicit T switching remains available through the SDK input owner.
+    await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).__openingTest.world.humanoid.snapshot().cameraMode===1);
     await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).__openingTest.world.humanoid.snapshot().cameraMode===2);
-    await service.preview('opening');const reset=await read();expect(reset).toMatchObject({mode:'authored',pose:initial.pose,fov:43,tick:0});
+    await service.preview('opening');const reset=await read();expect(reset).toMatchObject({mode:'follow-pending',pose:initial.pose,orientation:initial.orientation,fov:43,tick:0});
     // Creator semantic command uses the same public camera owner while paused.
     const receipt=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.execute!({type:'humanoid.set-camera-mode',mode:0}));
     expect(receipt.status).toBe('applied');expect((await read()).mode).toBe('follow');
@@ -247,9 +328,17 @@ await world.start(); presentation.focus();`);
     await page.evaluate(async()=>{await window.__WORLDKIT_EVAL__!.episode!.prepareSegment({positionWorldMetersXYZ:[1.9,0,0],facingYawRadians:0,humanoid:{cameraMode:2}},{widthPixels:640,heightPixels:360});(window as any).__openingTest.presentation.focus();});
     const before=await read();await page.keyboard.press('i');expect(await read()).toEqual(before);
     await page.evaluate(async()=>{window.__WORLDKIT_EVAL__!.episode!.release();await (window as any).__openingTest.world.reset();});
-    expect((await read()).mode).toBe('authored');
+    expect((await read()).mode).toBe('follow-pending');
     await page.evaluate(async()=>{const {world,presentation,releaseHandoff}=(window as any).__openingTest;releaseHandoff();await world.start();presentation.focus();});
-    await page.keyboard.press('i');expect((await read()).mode).toBe('authored');
+    // The wrapper owns no listener; cleanup must not undo the world's follow policy.
+    await page.keyboard.down('i');await page.waitForFunction(()=>(window as any).__openingTest.world.cameraMode==='follow');await page.keyboard.up('i');
+    expect((await read()).fov).toBe(43);
+    await service.preview('opening');
+    await page.evaluate(async()=>{const {world,presentation}=(window as any).__openingTest;await world.start();presentation.focus();});
+    const bounds=await page.evaluate(()=>{const r=(window as any).__openingTest.presentation.inputSurface.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};});
+    await page.mouse.move(bounds.x,bounds.y);await page.mouse.wheel(0,80);
+    await page.waitForFunction(()=>(window as any).__openingTest.world.cameraMode==='follow');
+    expect((await read()).fov).toBe(43);
     expect((await service.inspect()).pageErrors).toEqual([]);
   } finally { await service.close(); await rm(root, {recursive:true,force:true}); }
 }, 30000);

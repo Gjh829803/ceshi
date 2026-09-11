@@ -145,6 +145,12 @@ export class HumanoidController {
     if(!this.canBoard){this.lastResult=this.boardingReason;return false;}
     this.surface.reset();this.resetMovement(position.x,position.z,position.y,yaw-Math.PI);return true;
   }
+  /** The Simulation has already checked standing and carried-body clearance. */
+  recoverTo(position:Vector3,yaw=0){
+    this.skills.interruptForRecovery();this.surface.reset();
+    this.resetMovement(position.x,position.z,position.y,yaw-Math.PI);
+    this.skills.syncCarried();this.grounded=true;this.lastResult='已返回安全检查点';
+  }
   get standingQueryBody(): QueryBody {
     return {
       kind: "capsule",
@@ -342,6 +348,8 @@ export class HumanoidController {
     }
     if(!hit)return null;
     const obstacle=hit.collider;
+    if(this.queries.isBoundaryCollider(obstacle))return {kind:'blocked',height:0,heightKnown:false,depth:0,
+      reason:'场地空气边界不可翻越或攀爬',front,top:front.clone(),normal,end:this.position.clone(),collider:obstacle,distance};
     const sample=front.clone().addScaledVector(normal,-.15); sample.y=this.position.y+2.95;
     const down=this.ray(sample,new Vector3(0,-1,0),2.95,c=>c.handle===obstacle.handle);
     const heightKnown=!!down&&down.normal.y>.7&&down.timeOfImpact>.0001;
@@ -380,6 +388,7 @@ export class HumanoidController {
     return {kind,height,heightKnown,depth,reason,front,top,normal,end,collider:obstacle,distance};
   }
   begin(probe:Probe,airborne=false){
+    if(this.queries.isBoundaryCollider(probe.collider)){this.lastResult='场地空气边界不可翻越或攀爬';return false;}
     if(probe.kind==='blocked')return false;
     if(this.queries.isActorCollider(probe.collider)){this.lastResult='载具碰撞包围体不可攀爬，请按 F 进入载具';return false;}
     const sourceId=probe.kind==='vault'?'hurdle-1m':probe.kind==='mantle'?'mantle-1m':'climb-2m5';
@@ -570,6 +579,7 @@ export class HumanoidController {
     this.skills.syncCarried();
   }
   private checkBounds(){
+    if(this.queries.map.recovery)return; // Configured recovery belongs to Simulation's fixed-step owner.
     const bounds=this.level?.bounds??{minX:-28,maxX:28,minZ:-29,maxZ:29,killY:-5};
     if(this.position.y<bounds.killY || this.position.x<bounds.minX || this.position.x>bounds.maxX || this.position.z<bounds.minZ || this.position.z>bounds.maxZ){this.reset();this.lastResult='已返回当前测试点';}
   }

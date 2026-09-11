@@ -101,12 +101,23 @@ export interface CameraFollowViewOptions {
  /** Defaults to false; programmatic switching is independent of this shortcut permission. */
  readonly keyboardToggleEnabled?:boolean;
 }
-/** Full humanoid targets accept only targetEntityId; use humanoid.applyProfile/setCameraMode for their camera configuration. */
+/** World-space opening, applied once when configuring follow. Up controls roll. */
+export interface CameraOpening {
+ readonly positionWorldMetersXYZ:Vec3;
+ readonly lookAtWorldMetersXYZ:Vec3;
+ readonly upWorldXYZ?:Vec3;
+ readonly fovDegrees:number;
+}
+/** Shared follow for ordinary and full humanoid targets. */
 export interface CameraFollowOptions {
+ /** Optional initial composition; requires preserve-opening framing, without orbit distance/pitch overrides. */
+ readonly opening?:CameraOpening;
+ /** Default fixed. Vehicle recentering uses the actual mount's heading/tuning; on foot it stays fixed. */
+ readonly headingFollow?:'fixed'|'vehicle';
  /** Optional first-person eye in the target object's local coordinates. */
  readonly view?:CameraFollowViewOptions;
  readonly targetEntityId?:string;
- /** Ordinary targets: with no orbit override, continue the authored pose and framing. */
+ /** Without orbit overrides, continue the authored pose and framing. */
  readonly framingMode?:'preserve-opening'|'target';
  /** Translation damping for inherited opening framing; zero follows immediately. */
  readonly followHalfLifeSeconds?:number;
@@ -301,6 +312,9 @@ export interface WorldDescription {
  readonly actions:readonly {readonly id:string;readonly description:string;readonly inputSchema:ObjectSchema;readonly writes:readonly WriteClaim[];readonly isAvailable:boolean;readonly unavailableReason?:RuntimeError}[];
 }
 export interface CameraState {
+ readonly headingFollow?:'fixed'|'vehicle';
+ readonly headingTargetYawRadians?:number|null;
+ readonly subjectEntityId?:string;
  readonly perspective?:CameraPerspective;
  readonly view?:Required<CameraFollowViewOptions>;
  readonly mode:'authored'|'follow-pending'|'follow';
@@ -425,6 +439,7 @@ export interface World {
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
+ /** Configure the common follow policy; omitted orbit settings inherit the current Agent-authored view. */
  setCameraFollow(options?:CameraFollowOptions):void;
  /** Switch an existing follow camera; does not change its configured reset default. */
  setCameraPerspective(perspective:CameraPerspective):void;

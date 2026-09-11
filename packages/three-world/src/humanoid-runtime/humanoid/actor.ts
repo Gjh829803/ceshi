@@ -1,9 +1,10 @@
+import type {Vec3} from '../../contracts';
 import {requestDragonLanding} from '../motion-families/flying-creature/ground';
 import {planDragonSummon} from '../motion-families/flying-creature/summon';
 import {planDragonMount,dragonStandingPoint,dragonMountPosition,dragonTransitionClear,type DragonMountTransition} from '../motion-families/flying-creature/mount';
 import { Quaternion,Vector3 } from 'three';
-import { canPlaceCreature,resetCreatureState } from '../creatures/controller';
-import { vehicleBody } from '../environment/queries';
+import { canPlaceCreature,resetCreatureState,creatureBodies } from '../creatures/controller';
+import { vehicleBody,type QueryBody } from '../environment/queries';
 import type { MapSpawn } from '../environment/types';
 import { resetFamilyRigidState } from '../motion-families/registry';
 import { paddleRiderBody } from '../motion-families/surface-vessel/paddling';
@@ -42,6 +43,8 @@ export class HumanoidActor {
   message='';
   failureCode:MountFailureCode|undefined;
   teleportRevision=0;
+  recovery:null|{sequence:number;status:'recovered'|'blocked';trigger:'fall'|'outside-map';reason:string;simulationSeconds:number;vehicleId:string|null;from:Vec3;to:Vec3|null}=null;
+  private recoveryIncident=false;
   get environment(){return this.world.environment;}
   get vehicles(){return this.world.vehicles;}
   get time(){return this.world.time;}
@@ -70,6 +73,73 @@ export class HumanoidActor {
   }
   finishStep():void{const v=this.vehicle;if(v&&!this.dragonTransition&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.checkSeatSupport();}
   dispose():void{this.controller.dispose();}
+  recoveryTrigger(){
+    const rule=this.environment.map.recovery;if(!rule)return null;
+    const position=this.vehicle?.position??this.controller.position,bounds=this.environment.map.bounds;
+    const trigger=position.y<rule.fallBelowY?'fall':position.x<bounds.min[0]||position.x>bounds.max[0]||position.z<bounds.min[2]||position.z>bounds.max[2]?'outside-map':null;
+    return trigger?{trigger,position:position.clone()} as {trigger:'fall'|'outside-map';position:Vector3}:null;
+  }
+  /** Validate a nearby floor across the footprint, not merely a center ray or empty air. */
+  private recoveryFloor(position:Vector3,body:QueryBody,rotation:Quaternion):Vector3|null{
+    const width=body.kind==='box'?body.halfExtents[0]:body.radius,length=body.kind==='box'?body.halfExtents[2]:body.radius;
+    const bottom=body.offset[1]-(body.kind==='box'?body.halfExtents[1]:body.height/2),heights:number[]=[];
+    for(const x of [-width,0,width])for(const z of [-length,0,length]){
+      const point=new Vector3(x,bottom+.45,z).applyQuaternion(rotation).add(position);
+      const floor=this.environment.standingSupport(point,.8,Math.PI/4);
+      if(!floor||(this.environment.waterAt(point)?.surface??-Infinity)>floor.height+.1)return null;
+      heights.push(floor.height);
+    }
+    if(Math.max(...heights)-Math.min(...heights)>.2)return null;
+    const result=position.clone();result.y=Math.max(...heights)-bottom+.025;
+    return Math.abs(result.y-position.y)<=.45?result:null;
+  }
+  recoverBoundary(incident:ReturnType<HumanoidActor['recoveryTrigger']>):boolean{
+    if(!incident){this.recoveryIncident=false;return false;}
+    if(this.recoveryIncident)return false;
+    this.recoveryIncident=true;
+    const q=this.environment,rule=q.map.recovery!,v=this.vehicle,h=this.controller;
+    const sequence=(this.recovery?.sequence??0)+1;
+    const record=(status:'recovered'|'blocked',reason:string,to:Vector3|null)=>{
+      this.recovery={sequence,status,trigger:incident.trigger,reason,simulationSeconds:this.time,vehicleId:v?.spec.id??null,from:incident.position.toArray(),to:to?.toArray()??null};
+      this.message=status==='recovered'?'已返回安全检查点；请检查越界或跌落原因':`检查点恢复失败：${reason}`;
+      return status==='recovered';
+    };
+    if(v&&!['wheeled','bike','bus','tank','slide','sled','ski','mount','carriage'].includes(v.spec.mode))return record('blocked','UNSUPPORTED_RECOVERY_MODE',null);
+    const spawn=v?this.world.preparedVehicleSpawns.get(v.spec.id):undefined;
+    const checkpoint=rule.checkpoint??(v?spawn?{position:spawn.position,yaw:spawn.yaw}:null:{position:[h.checkpoint.x,h.checkpoint.y,h.checkpoint.z] as Vec3,yaw:h.checkpoint.yaw+Math.PI});
+    if(!checkpoint)return record('blocked','NO_CHECKPOINT',null);
+    const position=new Vector3(...checkpoint.position),rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),checkpoint.yaw);
+    const filter={excludedColliderHandles:new Set([h.capsule.handle]),...(v?{excludedActorIds:new Set([v.spec.id])}:{})};
+    if(v){
+      const candidate=createVehicle(v.spec);candidate.position.copy(position);candidate.yaw=checkpoint.yaw;candidate.rotation.copy(rotation);resetCreatureState(candidate);
+      const floor=this.recoveryFloor(position,vehicleBody(candidate.spec),rotation);
+      if(!floor)return record('blocked','NO_STABLE_SUPPORT',null);
+      candidate.position.copy(floor);resetCreatureState(candidate);
+      const parts=creatureBodies(candidate);
+      if(candidate.position.y<=rule.fallBelowY)return record('blocked','CHECKPOINT_BELOW_FALL_THRESHOLD',null);
+      if(candidate.spec.mode==='carriage'&&!parts.slice(1).every(part=>{const support=this.recoveryFloor(part.position,part.body,part.rotation);return support!==null&&support.distanceTo(part.position)<=.1;}))return record('blocked','MOUNT_SUPPORT_MISSING',null);
+      const rider=new Vector3(...candidate.spec.seat).applyQuaternion(rotation).add(candidate.position);
+      if(!canPlaceCreature(candidate,q)||parts.some(part=>q.bodyOverlap(part,filter))||q.bodyOverlap({position:rider,rotation,body:HUMANOID_BODY},filter))return record('blocked','BODY_CLEARANCE_BLOCKED',null);
+      // Commit only after support and every occupied body are valid; keep the same instance/driver.
+      q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);v.grounded=true;v.submerged=false;
+      this.player.position.copy(v.spec.mode==='mount'?rider:v.position);this.player.velocity.set(0,0,0);this.player.yaw=v.yaw;
+      this.player.grounded=true;this.player.swimming=false;this.player.animation=v.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';
+    }else{
+      const safe=this.recoveryFloor(position,HUMANOID_BODY,rotation);
+      if(!safe)return record('blocked','NO_STABLE_SUPPORT',null);
+      if(safe.y<=rule.fallBelowY)return record('blocked','CHECKPOINT_BELOW_FALL_THRESHOLD',null);
+      if(q.bodyOverlap({position:safe,rotation,body:HUMANOID_BODY},filter))return record('blocked','BODY_CLEARANCE_BLOCKED',null);
+      if(h.skills.carrying){
+        const carried=h.skills.carriedTarget!,size=carried.definition.size??[.13,.13,.13];
+        const carriedPosition=safe.clone().add(new Vector3(0,1.057,.123).applyQuaternion(rotation));
+        const body:QueryBody={kind:'box',halfExtents:[size[0]/2,size[1]/2,size[2]/2],offset:[0,0,0]};
+        if(q.bodyOverlap({position:carriedPosition,rotation,body},filter))return record('blocked','CARRIED_BODY_CLEARANCE_BLOCKED',null);
+      }
+      h.recoverTo(safe,checkpoint.yaw);syncPlayer(this.controller,this.player);
+    }
+    this.transition=0;this.transitionKind='';this.teleportRevision++;this.world.syncActorBodies();
+    return record('recovered','SAFE_CHECKPOINT',this.vehicle?.position??h.position);
+  }
   private canRelocate(){if(this.vehicleIndex<0&&!this.controller.canBoard){this.message=this.controller.boardingReason;return false;}return true;}
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
   prepareCharacter(position:Vector3,yaw:number){
@@ -95,6 +165,33 @@ export class HumanoidActor {
     this.message=`${v.spec.name}已就位 · 按 F 驾驶`;return true;
   }
   get vehicle(){return this.vehicles[this.vehicleIndex];}
+  /** Final mounted placement shared by world initialization and validated Episode starts. No input or camera writes. */
+  commitMountedStart(index:number):void {
+    const vehicle=this.vehicles[index];
+    if(!vehicle||[...this.world.actors.values()].some(actor=>actor!==this&&actor.vehicle===vehicle))throw new Error('HUMANOID_START_MOUNT_OCCUPIED');
+    if(!this.controller.setMounted(true))throw new Error('HUMANOID_START_MOUNT_BLOCKED');
+    this.vehicleIndex=index;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;
+    this.player.position.copy(vehicle.position).add(new Vector3(...vehicle.spec.seat).applyQuaternion(vehicle.rotation));
+    this.player.yaw=vehicle.yaw;this.player.velocity.copy(vehicle.velocity);this.player.grounded=vehicle.grounded;
+    this.world.syncActorBodies();
+  }
+  /** Establish a grounded initial relationship. Interaction approach points are irrelevant to an already seated start. */
+  validateInitialMount(id:string):number {
+    const index=this.vehicles.findIndex(v=>v.spec.id===id),vehicle=this.vehicles[index],q=this.environment;
+    if(!vehicle||!this.world.available(vehicle))throw new Error('HUMANOID_INITIAL_MOUNT_UNAVAILABLE');
+    if([...this.world.actors.values()].some(actor=>actor!==this&&actor.vehicle===vehicle))throw new Error('HUMANOID_START_MOUNT_OCCUPIED');
+    const support=q.standingSupport(vehicle.position.clone().add(new Vector3(0,.35,0)),.7,Math.PI/4),water=q.waterAt(vehicle.position);
+    if(!support||Math.abs(vehicle.position.y-support.height)>.35||water&&water.surface>vehicle.position.y+.01||vehicle.velocity.length()>.01)throw new Error('HUMANOID_INITIAL_MOUNT_SUPPORT_REQUIRED');
+    const filter={excludedColliderHandles:new Set([this.controller.capsule.handle]),excludedActorIds:new Set([vehicle.spec.id])};
+    const rider=new Vector3(...vehicle.spec.seat).applyQuaternion(vehicle.rotation).add(vehicle.position);
+    const riderBody:QueryBody={...HUMANOID_BODY,offset:[0,0,0]};
+    if(!canPlaceCreature(vehicle,q)||creatureBodies(vehicle).some(part=>q.bodyOverlap(part,filter,.015))||q.bodyOverlap({position:rider,rotation:vehicle.rotation,body:riderBody},filter,.015))throw new Error('HUMANOID_INITIAL_MOUNT_CLEARANCE_BLOCKED');
+    return index;
+  }
+  initializeMounted(id:string):void {
+    const index=this.validateInitialMount(id);this.vehicles[index]!.grounded=true;
+    this.commitMountedStart(index);this.teleportRevision++;
+  }
   summonDragon(id?:string):boolean {
     if(this.vehicle||this.transition>0||!this.controller.canBoard||!this.controller.grounded||this.controller.swimming){this.message='请先在干燥地面站稳再召唤飞龙';return false;}
     const v=this.vehicles.find(v=>v.motion.flyingCreature&&this.world.available(v)&&(!id||v.spec.id===id)&&![...this.world.actors.values()].some(actor=>actor.vehicle===v));

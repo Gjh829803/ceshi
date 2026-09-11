@@ -152,6 +152,7 @@ def main():
     assert any(k.startswith('playtest/') and k.endswith(('.webm', '.mp4')) for k in actual)
     assert 'playable/index.html' in actual and 'source/index.html' in actual
     assert captures['images'] and any(i.get('view') == 'opening' for i in captures['images'])
+    assert any(i.get('view') == 'top-down' for i in captures['images']), 'THREE_DELIVERY_TOP_DOWN_REQUIRED'
     assert any(i.get('view') == 'entity-triview' and 'player' in i.get('entityIds', []) for i in captures['images'])
     report = {'kind': 'three-creator-host-artifact-verification', 'schemaVersion': 1, 'status': 'passed',
               'profile': manifest['profile'], 'engine': manifest['engine'], 'sourceHash': manifest['sourceHash'],

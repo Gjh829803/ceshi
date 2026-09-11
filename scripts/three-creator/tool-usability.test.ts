@@ -10,6 +10,7 @@ import { RuntimeGuidance } from './runtime-guidance';
 import { executeThreeCreatorTool } from './mcp';
 import { createAssetPolicySnapshot, assetPolicyHash } from './asset-policy.mjs';
 import catalog from '../../assets/three-creator/asset-catalog.json';
+import { CREATOR_QUALITY_SUMMARY } from './quality-guidance.js';
 
 // Narrow the dynamic MCP dispatch result to the wire contract exercised by each test.
 const search = (tools: ThreeCreatorTools, args: Record<string, unknown>) =>
@@ -147,6 +148,51 @@ it('returns a readable schema guide first and actual source contracts only when 
   expect(complete.humanoidSourceContracts).toEqual(declarations.humanoidSourceContracts);
 });
 
+it('discovers concise Host quality goals and expands checks without replacing workspace contracts',async()=>{
+  const tools=await service();
+  const starter=await schema(tools,{});
+  expect(starter.qualityAuthoring).toMatchObject({authority:'creator-host',summary:CREATOR_QUALITY_SUMMARY,
+    details:{tool:'creator_get_authoring_schema',arguments:{topic:'quality'}}});
+  expect(starter.qualityAuthoring).not.toHaveProperty('guide');
+  expect(Buffer.byteLength(JSON.stringify(starter.qualityAuthoring))).toBeLessThan(1000);
+  const detail=await schema(tools,{topic:'quality'});
+  expect(detail.qualityAuthoring!.guide).toMatch(/at least 5 minutes.*normal play/);
+  for(const dimension of ['Playability','Control feel','Play space','Traversability','Motion','Camera'])expect(detail.qualityAuthoring!.guide).toContain(dimension);
+  expect(detail.qualityAuthoring!.guide).toContain('estimates');
+  expect(detail.qualityAuthoring!.guide).toContain('not impose a five-minute recording');
+  expect(detail.qualityAuthoring!.guide).toContain('top-down');
+  expect(detail.qualityAuthoring!.guide).toContain('independent review approval');
+  expect(detail).not.toHaveProperty('sdkContracts');
+  expect(Buffer.byteLength(JSON.stringify(detail))).toBeLessThan(12000);
+  const declarations=await schema(tools,{topic:'quality',sections:['contracts']});
+  expect(declarations.sdkContracts).toContain('getEntityState');
+  expect(declarations).not.toHaveProperty('qualityAuthoring');
+  await tools.materializeRuntime();
+  const workspace=await schema(tools,{topic:'quality'});
+  expect(workspace.qualityAuthoring).toEqual(detail.qualityAuthoring);
+  expect(workspace.runtimeGuidance).not.toEqual(detail.runtimeGuidance);
+},20000);
+
+it('discovers boundary configuration from current SDK source without expanding the default guide',async()=>{
+  const tools=await service();
+  const starter=await schema(tools,{});
+  expect(starter).not.toHaveProperty('boundaryContracts');
+  const guide=await schema(tools,{topic:'boundaries'});
+  expect(guide.sdkGuide).toContain('map.boundaries');
+  expect(guide.sdkGuide).toContain('blocksCamera:false');
+  expect(guide).not.toHaveProperty('boundaryContracts');
+  const declarations=await schema(tools,{topic:'boundaries',sections:['contracts']});
+  expect(declarations.boundaryContracts?.['boundaries.ts']).toContain('export declare function compileBoundaryBoxes');
+  expect(declarations.boundaryContracts?.['boundaries.ts']).toContain('BoundaryDefinition');
+  expect(declarations.boundaryContracts?.['humanoid-runtime/environment/types.ts']).toContain('boundaries?');
+  await tools.materializeRuntime();
+  const filename=path.join(tools.workspace,'sdk/three-world/src/boundaries.ts');
+  await writeFile(filename,(await readFile(filename,'utf8')).replace('blocksCamera?: boolean','blocksCamera?: true'));
+  const workspace=await schema(tools,{topic:'boundaries',sections:['contracts']});
+  expect(workspace.boundaryContracts?.['boundaries.ts']).toContain('blocksCamera?: true');
+  expect(workspace.runtimeGuidance).not.toEqual(declarations.runtimeGuidance);
+},20000);
+
 it('keeps failed operation identity and adds actionable diagnostics to its persisted result', async () => {
   const tools = await service();
   const started = tools.start('world.submit', async () => { throw new Error('THREE_SUBMIT_PLAYTEST_REQUIRED: WORLD_SOURCE_CHANGED_AFTER_PLAYTEST'); });
@@ -194,6 +240,7 @@ it('exposes structured MCP errors while keeping raw discovery on its supported a
   });
   try {
     await client.connect(transport);
+    expect(client.getInstructions()).toContain(CREATOR_QUALITY_SUMMARY);
     const invalid = await client.callTool({ name: 'assets_search', arguments: { limit: 0 } });
     expect(invalid.isError).toBe(true);
     const content = invalid.content as { type: string; text: string }[];
@@ -208,6 +255,12 @@ it('exposes structured MCP errors while keeping raw discovery on its supported a
     expect(schema.project).toBeDefined();
     expect(schema).not.toHaveProperty('sdkContracts');
     expect(schema.availableSections).not.toContain('humanoid');
+    const quality=await client.callTool({name:'creator_get_authoring_schema',arguments:{topic:'quality'}});
+    expect(quality.isError).not.toBe(true);
+    const qualityGuide=JSON.parse((quality.content as {text:string}[])[0]!.text);
+    expect(qualityGuide.qualityAuthoring.authority).toBe('creator-host');
+    expect(qualityGuide.qualityAuthoring.guide).toContain('normal play');
+    expect(qualityGuide).not.toHaveProperty('sdkContracts');
     const assets = await client.callTool({ name: 'assets_search', arguments: { query: 'horse' } });
     const found = JSON.parse((assets.content as { text: string }[])[0]!.text);
     expect(found.assets.length).toBeGreaterThan(0);
@@ -457,6 +510,9 @@ it('preserves browser RPC throws and rejections once, with paused state unchange
   const after=await tools.inspect();
   expect(after.observation.snapshot).toEqual(before.observation.snapshot);
   expect(after.observation.sample.simulationTick).toBe(before.observation.sample.simulationTick);
+  await session.page.evaluate(()=>{(window as any).__THREE_CREATOR_DIAGNOSTICS__.serialize=()=>{throw new Error('diagnostic helper failed');};});
+  const fallback=tools.start('test.rpc-fallback',()=> (tools as any).bridge(session,'testSync'));
+  expect((await tools.getOperation(fallback.operationId,1)).errorDetails).toMatchObject({message:'sync',collectionError:{message:'Browser diagnostic serialization unavailable'},host:{phase:'browser.bridge'}});
   await session.page.close();
   const started=tools.start('test.transport',()=> (tools as any).bridge(session,'testSync'));
   expect((await tools.getOperation(started.operationId,1)).errorDetails).toMatchObject({host:{phase:'browser.transport',method:'testSync'}});
@@ -659,4 +715,108 @@ it('materializes declarations only for requested sections without hiding availab
     expect(declarations.humanoidSourceContracts).toEqual(full.humanoidSourceContracts);
     expect(guide.availableSections).toEqual(full.availableSections);
   } finally { source.mockRestore(); definitions.mockRestore(); }
+});
+
+it('injects diagnostic serialization from keepNames builds without a missing compiler helper',async()=>{
+ const {transform}=await import('esbuild'),{runInNewContext}=await import('node:vm');
+ const source=await readFile(new URL('./diagnostic-serialization.ts',import.meta.url),'utf8');
+ const built=await transform(source,{loader:'ts',format:'cjs',keepNames:true,target:'es2022'});
+ const module={exports:{} as any};runInNewContext(built.code,{module,exports:module.exports});
+ const browser:any={addEventListener(){}};runInNewContext(module.exports.browserDiagnosticsScript,{window:browser});
+ expect(browser.__THREE_CREATOR_DIAGNOSTICS__.serialize({message:'actual error',code:'PATH_BLOCKED',actual:[1,'text',false]})).toMatchObject({message:'actual error',code:'PATH_BLOCKED',actual:[1,'text',false]});
+});
+
+it('routes all four entry documents through the same MCP schema sources and exposes minimal subject binding categories',async()=>{
+ const tools=await service();
+ const environment=await tools.environment();
+ expect(environment.readingGuide.map(item=>item.topic)).toEqual(['quality','programming','getting-started','assets']);
+ for(const entry of environment.readingGuide){
+  const result:any=await executeThreeCreatorTool(tools,entry.tool,entry.arguments);
+  const document=await readFile(path.resolve(entry.source),'utf8');
+  expect(result.qualityAuthoring?.guide??result.sdkGuide).toBe(document);
+  expect(result).not.toHaveProperty('sdkContracts');
+ }
+ const {THREE_CREATOR_TOOLS}=await import('./mcp');
+ const examples=THREE_CREATOR_TOOLS.find(tool=>tool.name==='creator_get_examples')!;
+ const topics=(examples.inputSchema.properties as any).topic.enum;
+ expect(topics).toEqual(['getting-started','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject']);
+ for(const topic of topics){
+  const result:any=await executeThreeCreatorTool(tools,'creator_get_examples',{topic});
+  expect(result.files['main.ts']).toBeTruthy();
+  expect(result.exampleKind).toBe('binding-snippet');
+  expect(result.requiresAuthoredScene).toBe(true);
+  expect(result.files['main.ts']).toContain('declare const');
+  if(topic==='getting-started')expect(result.files['main.ts']).toContain('characterLoadOptions:{loadTextures:false}');
+  expect(result.files['main.ts']).not.toMatch(/export\s+(async\s+)?function/);
+  if(topic!=='getting-started')expect(result.files['main.ts']).not.toMatch(/await create(?:Humanoid)?World\(/);
+  expect(result.files['main.ts']).not.toMatch(/PlaneGeometry|BoxGeometry|bounds\s*:|playerSpawn\s*:/);
+  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(['main.ts']);
+ }
+ const index:any=await schema(tools,{topic:'assets'});
+ expect(index.assetIndex.map((item:any)=>item.id).sort()).toEqual([...environment.assetPolicy.allowedAssetIds].sort());
+ const fullGuide=await schema(tools,{topic:'all'});
+ expect(fullGuide.sdkGuide).toMatch(/const world = await createHumanoidWorld\(\{scene, camera, canvas, map,\s*characterLoadOptions:\{loadTextures:false\}\}\);/);
+ const colorSchema=await schema(tools,{topic:'humanoid',sections:['contracts']});
+ expect(colorSchema.sdkFactoryContracts).toContain('characterColor?:string');
+ expect(colorSchema.objectColorContracts?.['object-color.ts']).toContain('export declare function setObjectColor');
+ expect(colorSchema.objectColorContracts?.['humanoid-runtime/character.ts']).toContain('setColor(color: string | null): void;');
+ await expect(executeThreeCreatorTool(tools,'creator_get_examples',{topic:'getting-started',variant:'car'})).rejects.toThrow('THREE_EXAMPLE_VARIANT_UNSUPPORTED');
+});
+
+it('navigates from SDK to asset category and action facts without expanding unrelated branches',async()=>{
+ const tools=await service();
+ const call=(args:Record<string,unknown>)=>executeThreeCreatorTool(tools,'creator_get_authoring_schema',args) as Promise<any>;
+ const sdk=await call({topic:'getting-started'});
+ expect(sdk.navigation.children.map((entry:any)=>entry.document)).toEqual(['sdk/basics.md','assets/README.md']);
+ const assets=await call(sdk.navigation.children[1].arguments);
+ expect(assets.navigation.children.map((entry:any)=>entry.document)).toEqual(['assets/humans/README.md','assets/animals/README.md','assets/vehicles/README.md','assets/scene/README.md']);
+ const humans=await call(assets.navigation.children[0].arguments);
+ expect(humans.assetIndex.map((asset:any)=>asset.id)).toEqual(['humanoid.source-101']);
+ expect(humans).not.toHaveProperty('capabilities');
+ const detail:any=await executeThreeCreatorTool(tools,humans.assetIndex[0].details.tool,humans.assetIndex[0].details.arguments);
+ expect(detail.documentation.arguments).toEqual({document:'assets/humans/README.md'});
+ const actions=await call(humans.navigation.children.find((entry:any)=>entry.document.endsWith('/actions.md')).arguments);
+ const slide=actions.capabilities.find((card:any)=>card.id==='slide');
+ expect(slide.requires).toContain('speed>=2.5m/s');
+ expect(slide.scene.join(' ')).toContain('standing clearance');
+ expect(slide.completion).toContain('Operation succeeded');
+ expect(actions.capabilities.some((card:any)=>card.id==='pickup')).toBe(false);
+ expect(actions.navigation.parent.document).toBe('assets/humans/README.md');
+ const vehicles=await call({document:'assets/vehicles/README.md'});
+ expect(vehicles.assetIndex).toEqual([]);expect(vehicles.guide).toContain('handling configurations');
+ await expect(call({document:'../../package.json'})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+ await expect(call({document:'sdk.md',topic:'control'})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+ await tools.materializeRuntime();
+ const current=await call({document:'assets/humans/actions.md'});
+ expect(current.runtimeGuidance.kind).toBe('workspace-sdk-source');
+ expect(current).not.toHaveProperty('capabilities');
+ expect(current.currentDetails.arguments).toEqual({topic:'character-actions',sections:['commands','humanoid']});
+ const declarations:any=await executeThreeCreatorTool(tools,current.currentDetails.tool,current.currentDetails.arguments);
+ expect(declarations.runtimeGuidance.runtimeSourceHash).toBe(current.runtimeGuidance.runtimeSourceHash);
+});
+
+
+it('keeps every documented example entry callable and scene-independent through the public MCP',async()=>{
+ const tools=await service(),environment=await tools.environment();
+ const full=await tools.authoringSchema('all',['guide']) as SelectedSchema;
+ const {AGENT_DOCUMENT_PATHS}=await import('./agent-docs');
+ const guides=[full.sdkGuide??''];
+ for(const document of AGENT_DOCUMENT_PATHS)guides.push((await tools.readAuthoringDocument(document)).guide);
+ const requests=new Map<string,{topic:string;variant?:string}>();
+ for(const guide of guides)for(const match of guide.matchAll(/creator_get_examples\(\{topic:'([^']+)'(?:,variant:'([^']+)')?/g)){
+  const request={topic:match[1]!,...(match[2]?{variant:match[2]}:{})};requests.set(JSON.stringify(request),request);
+ }
+ const aircraft=environment.subjectAuthoring.vehicleAuthoring!.aircraftExample;
+ requests.set(JSON.stringify(aircraft.arguments),aircraft.arguments);
+ expect([...requests.values()]).toContainEqual({topic:'custom-vehicle',variant:'plane'});
+ for(const request of requests.values()){
+  const result:any=await executeThreeCreatorTool(tools,'creator_get_examples',request);
+  expect(result.exampleKind).toBe('binding-snippet');expect(result.requiresAuthoredScene).toBe(true);
+  expect(Object.keys(result.files)).toEqual(['main.ts']);
+  expect(result.files['main.ts']).not.toMatch(/BoxGeometry|PlaneGeometry|playerSpawn\s*:|bounds\s*:|createElement|setCameraMode\(0\)/);
+ }
+ const plane:any=await executeThreeCreatorTool(tools,aircraft.tool,aircraft.arguments);
+ expect(plane.files['main.ts']).toContain('humanoid.createAircraftSpec');
+ const aircraftFixture=await readFile(path.resolve('examples/three-creator/custom-aircraft/main.ts'),'utf8');
+ expect(aircraftFixture).not.toMatch(/(?:map|airframe)\.boxes/);
 });

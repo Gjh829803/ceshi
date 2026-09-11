@@ -3,7 +3,7 @@ export interface CaptureTargetDescriptor {
  sourceEntityId:string;
  representative?:{kind:'object'|'instance';objectUuid:string;instanceIndex?:number};
 }
-/** One sheet contains front/right/back; opening is not an object sheet. */
+/** One sheet contains front/right/back; opening and overview are not object sheets. */
 export function selectTriviewTargets(targets:readonly CaptureTargetDescriptor[],includeAdditionalTargets=false) {
  if(typeof includeAdditionalTargets!=='boolean'||!Array.isArray(targets)||targets[0]?.id!=='player'||
   targets.some(value=>!value||typeof value.id!=='string'||!value.id||typeof value.sourceEntityId!=='string'||!value.sourceEntityId)||
@@ -13,4 +13,11 @@ export function selectTriviewTargets(targets:readonly CaptureTargetDescriptor[],
   selectedTargets:targets.slice(0,includeAdditionalTargets?targets.length:5),
   conditioningEntityIds:targets.slice(0,5).map(value=>value.id),
   omittedEntityIds:includeAdditionalTargets?[]:targets.slice(5).map(value=>value.id)};
+}
+
+/** Shape check for same-version capture reuse; file hashes are verified separately. */
+export function hasRequiredCaptureViews(report:{images?:readonly {view?:string;entityIds?:readonly string[]}[]}|undefined):boolean{
+ const images=report?.images;
+ return Array.isArray(images)&&images[0]?.view==='opening'&&images[1]?.view==='top-down'&&
+  images.slice(2).some(image=>image.view==='entity-triview'&&image.entityIds?.includes('player'));
 }

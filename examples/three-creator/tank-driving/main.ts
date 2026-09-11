@@ -15,7 +15,21 @@ const map:EnvironmentDefinition={id:'tank-course',name:'坦克试车场',descrip
   boxes:[{id:'ground',position:[0,-.5,0],size:[240,1,240],color:'#cccccc'},{id:'wall',position:[0,2.5,90],size:[45,5,1],color:'#eeeeee'},...[-1,1].flatMap(side=>[0,25,50,75].map(z=>({id:`marker-${side}-${z}`,position:[side*18,.75,z] as [number,number,number],size:[.4,1.5,.4] as [number,number,number],color:'#c9843f'})))],
   water:[],regions:[{id:'road',name:'Course',description:'A reusable map module',center:[0,0,0],size:[200,200],color:'#e8be73',modes:['character','tank']}],
   spawns:[{id:'tank-start',vehicleId:'tank-instance-1',name:'履带坦克',position:[0,.025,0],yaw:0,regionId:'road'}],playerSpawn:[3.5,.025,0]};
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+function marker(x:number,y:number,z:number,height=1.5){
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.15,.2,height,12),new THREE.MeshStandardMaterial({color:'#c9843f',roughness:1}));mesh.position.set(x,y,z);scene.add(mesh);
+}
+surface(240,240,[0,0,0]);
+structure('wall',[45,5,1],[0,2.5,90]);
+for(const side of [-1,1])for(const z of [0,25,50,75])marker(side*18,.75,z);
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'tank-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});

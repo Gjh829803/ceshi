@@ -19,7 +19,9 @@ it('discovers horse integration and only its required example assets',async()=>{
   const found:any=await executeThreeCreatorTool(service,'assets_search',{query:'骑马'});
   expect(found.assets.map((asset:any)=>asset.id)).toContain('creature.horse');
   expect(found.mountUsage[0].integrationReady).toBe(true);
-  const example:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'mounted-interaction'});
+  const snippet:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'mounted-interaction'});
+  expect(snippet.exampleKind).toBe('binding-snippet');expect(Object.keys(snippet.files)).toEqual(['main.ts']);
+  const example=await service.examples('mounted-interaction');
   const ids=JSON.parse(example.files['project.json']).assetIds;
   expect(ids).toEqual(['humanoid.source-101','creature.horse']);
   expect(found.mountUsage[0].requiredAssetIds).toEqual(ids);

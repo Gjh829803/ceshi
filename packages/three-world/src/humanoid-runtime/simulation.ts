@@ -115,11 +115,12 @@ export class Simulation {
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
+    const incidents=new Map([...this.actors].map(([id,actor])=>[id,actor.recoveryTrigger()]));
     this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values()){if(inputs.get(actor.id)?.input.actions?.summonDragon)actor.summonDragon();actor.beginStep(dt);}this.syncActorBodies();
     const drivers=new Map<VehicleState,HumanoidActor>();for(const actor of this.actors.values())if(actor.vehicle)drivers.set(actor.vehicle,actor);
     for(const v of this.vehicles){const driver=drivers.get(v);this.stepVehicle(v,driver,inputs.get(driver?.id??'')?.input??emptyInput(),dt);}
     for(const [id,actor] of this.actors){const controls=inputs.get(id);actor.step(controls?.input??emptyInput(),controls?.yaw??0);}
-    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();for(const actor of this.actors.values())actor.finishStep();
+    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();for(const actor of this.actors.values()){actor.finishStep();actor.recoverBoundary(incidents.get(actor.id)??actor.recoveryTrigger());}
   }
   private stepVehicle(v:VehicleState,driver:HumanoidActor|undefined,i:Input,dt:number):void{
     const vehicle=driver?.vehicle;

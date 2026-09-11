@@ -17,6 +17,34 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('keeps a rolled zero-arm declarative opening under a transformed camera parent',()=>{
+    const parent=new THREE.Group();parent.position.set(3,2,5);parent.rotation.y=.4;
+    const camera=new THREE.PerspectiveCamera();parent.add(camera);parent.updateMatrixWorld(true);
+    const rig=new ThreeCameraRig(camera,unobstructed,()=>[0,0,0]);
+    const opening={positionWorldMetersXYZ:[0,1.3,0],lookAtWorldMetersXYZ:[3,1.3,0],upWorldXYZ:[0,.8,.6],fovDegrees:41} as const;
+    rig.setFollow({targetEntityId:'hero',opening,targetHeightMeters:1.3});
+    const reference=new THREE.PerspectiveCamera();reference.position.fromArray(opening.positionWorldMetersXYZ);reference.up.fromArray(opening.upWorldXYZ);reference.lookAt(...opening.lookAtWorldMetersXYZ);
+    rig.sealInitialState();rig.updateDesired({activate:true},1/60);rig.update(1/60);
+    expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(reference.position)).toBeLessThan(1e-8);
+    expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(reference.quaternion)).toBeLessThan(1e-7);
+    expect(camera.up.toArray()).toEqual(opening.upWorldXYZ);expect(camera.fov).toBe(41);
+    rig.reset();expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(reference.quaternion)).toBeLessThan(1e-7);
+  });
+  it('applies declarative framing once, preserves first input and smoothly recenters after manual orbit',()=>{
+    const camera=new THREE.PerspectiveCamera(),position=new THREE.Vector3(),heading={backYawRadians:Math.PI/2,speedMetersPerSecond:4,recenterDelaySeconds:.1,recenterResponsePerSecond:2};
+    const rig=new ThreeCameraRig(camera,unobstructed,{sample:()=>({id:'ride',positionWorldMetersXYZ:position.toArray(),heading})});
+    const opening={positionWorldMetersXYZ:[0,3,8],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:43} as const;
+    rig.setFollow({targetEntityId:'person',opening,headingFollow:'vehicle',followHalfLifeSeconds:0});rig.sealInitialState();
+    const pose=camera.clone();rig.updateDesired({activate:true},1/60);rig.update(1/60);
+    expect(camera.position.distanceTo(pose.position)).toBeLessThan(1e-8);expect(camera.quaternion.angleTo(pose.quaternion)).toBeLessThan(1e-7);expect(camera.fov).toBe(43);
+    for(let i=0;i<90;i++){rig.updateDesired({},1/60);rig.update(1/60);}
+    expect(rig.desiredYawRadians).toBeGreaterThan(1);expect(rig.desiredYawRadians).toBeLessThan(Math.PI/2);
+    rig.updateDesired({yawDeltaRadians:-.5},1/60);const manual=rig.desiredYawRadians;rig.update(1/60);expect(rig.desiredYawRadians).toBeCloseTo(manual);
+    for(let i=0;i<90;i++){rig.updateDesired({},1/60);rig.update(1/60);}expect(rig.desiredYawRadians).toBeGreaterThan(manual);
+    const before=camera.clone();expect(()=>rig.setFollow({targetEntityId:'person',opening:{...opening,fovDegrees:0}})).toThrow('WORLD_CAMERA_OPENING_INVALID');
+    expect(camera.position.equals(before.position)).toBe(true);expect(camera.fov).toBe(43);
+    rig.reset();expect(camera.position.distanceTo(pose.position)).toBeLessThan(1e-8);expect(camera.quaternion.angleTo(pose.quaternion)).toBeLessThan(1e-7);expect(rig.mode).toBe('follow-pending');
+  });
   it('marks follow-only diagnostics not applicable after returning to authored camera',()=>{
     const {camera,rig}=fixture();rig.setFollow({targetEntityId:'hero',distanceMeters:6,activateOnInput:false});rig.update(1/60);rig.useAuthoredCamera();
     const pose=camera.position.clone(),rotation=camera.quaternion.clone();

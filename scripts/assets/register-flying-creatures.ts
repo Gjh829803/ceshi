@@ -39,7 +39,7 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
         'Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles.',
         'Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.',
       ],
-      integrationMetadata:{classification:'flying-mount',exampleTopic:'flying-creature',requiredAssetIds:['humanoid.source-101',id],
+      integrationMetadata:{classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.source-101',id],
         visual:{animationPrefix:variant.id,modelResource:model.path,flameResource:flame.path},
         useWhen:`使用 ${variant.id} 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。`,
         binding:'Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.',

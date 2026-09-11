@@ -7,7 +7,7 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 2));
 const ground = new THREE.Mesh(new THREE.BoxGeometry(60, 0.2, 60), new THREE.MeshStandardMaterial({color:0xcccccc})); ground.position.y=-0.1; scene.add(ground);
 const player = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xffffff})); body.position.y=0.7; player.add(body); scene.add(player);
 // This tiny raw example only demonstrates input/observation. It has no physics engine,
-// obstacles, exploration or reference reconstruction; build those for the actual task.
+// reference reconstruction; author the reference scene and only prompt-requested behavior.
 const keys = new Set(); let running=false, previous=0, frameId=0;
 addEventListener('keydown', event=>{keys.add(event.code); if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code))event.preventDefault();});
 addEventListener('keyup', event=>keys.delete(event.code)); addEventListener('blur',()=>keys.clear());
@@ -28,22 +28,17 @@ const map:EnvironmentDefinition={id:'world',name:'World',description:'Exploratio
  bounds:{min:[-30,-5,-30],max:[30,30,30]},
  boxes:[{id:'ground',position:[0,-.1,0],size:[60,.2,60],color:'#cccccc'}],
  water:[],regions:[],spawns:[],playerSpawn:[0,0,0]};
-for(const box of map.boxes){
- const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color}));
- mesh.position.set(...box.position);scene.add(mesh);
-}
+// Author the visible ground independently; map.boxes supplies physical support.
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshStandardMaterial({color:'#cccccc'}));
+ground.rotation.x=-Math.PI/2;scene.add(ground);
 // Select humanoid.source-101 in project.json; the helper loads all supplied actions.
-// Reuse the visible supplied model. Use accent colors only for key landmarks.
+// Reuse the visible supplied model. Use restrained identifying colors for the subject, key counterparts and landmarks.
 // Optional first-person opening and T switching: add profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}.
-const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player'});
+const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player',characterLoadOptions:{loadTextures:false}});
 world.setCaptureTargets(['player']);
 // Keep loading UI visible until initial materials and the opening frame are ready.
 await world.start();
-// Add scene conditions for contextual actions: see character-actions capability cards.
-// Choose dynamic objects for your scene; character-actions shows rigidGroup and physical pose display.
-// Custom nonhuman subjects may use createWorld + addCharacter({object,body,movement}).
-// For a custom vehicle, keep this preset person and read the custom-vehicle example.
-// For a self-drawn car using a model-free configuration and SDK T switching, read vehicle-camera.
+// Extend this binding to the reference scene. See the SDK/asset index for required capabilities.
 `;
 
 export function sdkExample(_assetId: string): string { return SDK_EXAMPLE; }

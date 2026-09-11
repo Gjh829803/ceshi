@@ -205,6 +205,46 @@ await world.start();world.stop();`);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },60_000);
 
+it('captures the runtime playable footprint despite a giant sky and tall world bounds, without advancing or changing the primary view',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'top-down-sdk-')),service=new ThreeCreatorTools(root,'three-sdk');
+ const extra=String.raw`
+ const ground=new THREE.Mesh(new THREE.BoxGeometry(40,1,40),new THREE.MeshBasicMaterial({color:0xffffff}));ground.position.y=-.5;scene.add(ground);
+ const landmark=new THREE.Mesh(new THREE.BoxGeometry(6,3,6),new THREE.MeshBasicMaterial({color:0xff0000}));landmark.position.set(12,1.5,12);scene.add(landmark);
+ const sky=new THREE.Mesh(new THREE.SphereGeometry(100000,12,8),new THREE.MeshBasicMaterial({color:0x29435d,side:THREE.BackSide}));scene.add(sky);
+ const distant=new THREE.Mesh(new THREE.BoxGeometry(500,500,500),new THREE.MeshBasicMaterial({color:0x0000ff}));distant.position.set(10000,0,10000);scene.add(distant);
+ scene.fog=new THREE.Fog(0x29435d,20,100);
+ window.overviewFixture={world,ground,landmark,sky,distant};
+ `;
+ try{
+  await writeFile(path.join(root,'index.html'),'<html><script type="module" src="./main.ts"></script></html>');
+  await writeFile(path.join(root,'main.ts'),currentSdkSource.replace('max:[20,20,20]','max:[20,5000,20]')+extra);
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+  await service.inspect({sections:['snapshot']});const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(()=>{
+   const f=(window as any).overviewFixture,world=f.world,host=(window as any).__THREE_CREATOR_HOST__,renderer=world.renderer;
+   const state=()=>{world.camera.updateMatrixWorld(true);return{snapshot:world.snapshot(),camera:world.camera.matrixWorld.toArray(),projection:world.camera.projectionMatrix.toArray(),
+    viewport:renderer.getViewport({copy(v:any){return[v.x,v.y,v.z,v.w];}}),scissor:renderer.getScissor({copy(v:any){return[v.x,v.y,v.z,v.w];}}),
+    ratio:renderer.getPixelRatio(),size:[renderer.domElement.width,renderer.domElement.height],scissorTest:renderer.getScissorTest(),
+    autoClear:renderer.autoClear,xr:renderer.xr.enabled,shadows:renderer.shadowMap.enabled,fog:world.scene.fog,
+    objects:world.scene.children.map((o:any)=>[o.uuid,o.visible,o.layers.mask])};};
+   const before=state(),capture=host.capture('top-down'),after=state();
+   const render=renderer.render;let error;
+   renderer.render=function(scene:any,camera:any){if(camera.isOrthographicCamera)throw Error('OVERVIEW_RENDER_FAILURE');return render.call(this,scene,camera);};
+   try{host.capture('top-down');}catch(e:any){error=e.message;}finally{renderer.render=render;}
+   return{capture,before,after,afterFailure:state(),error};
+  });
+  expect(result.capture).toMatchObject({view:'top-down',boundsSource:'episode-world-bounds',bounds:{minimumMetersXYZ:[-20,-5,-20],maximumMetersXYZ:[20,5000,20]},entityIds:[],panelOrder:['top-down']});
+  expect(result.after).toEqual(result.before);expect(result.error).toBe('OVERVIEW_RENDER_FAILURE');
+  expect(result.afterFailure.snapshot.errors).toEqual([expect.objectContaining({code:'OVERVIEW_RENDER_FAILURE'})]);
+  expect({...result.afterFailure,snapshot:{...result.afterFailure.snapshot,errors:[]}}).toEqual(result.before);
+  expect(result.before.snapshot.simulationTick).toBe(40);expect(result.before.snapshot.isRunning).toBe(false);
+  const decoded=await sharp(Buffer.from(result.capture.image.split(',')[1],'base64')).removeAlpha().raw().toBuffer({resolveWithObject:true});
+  expect([decoded.info.width,decoded.info.height]).toEqual([960,720]);
+  let white=0,red=0;for(let i=0;i<decoded.data.length;i+=3){const r=decoded.data[i]!,g=decoded.data[i+1]!,b=decoded.data[i+2]!;if(r>230&&g>230&&b>230)white++;if(r>200&&g<50&&b<50)red++;}
+  expect(white).toBeGreaterThan(200000);expect(red).toBeGreaterThan(3000);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},120000);
+
 it('previews the current SDK shoulder through MCP without resetting paused ticks, and keeps opening reset semantics',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'current-preview-sdk-')),service=new ThreeCreatorTools(root,'three-sdk');
  try{
@@ -254,6 +294,16 @@ it('previews the current SDK shoulder through MCP without resetting paused ticks
   expect(optional.degraded).toMatchObject({humanoidCameraMode:2,simulationTick:40,owner:'follow',framing:null,cameraOverrides:null,cameraSettings:null});expect(optional.image).toMatch(/^data:image\/png;base64,/);
   expect(optional.unavailable).toMatchObject({humanoidCameraMode:2,simulationTick:40,framing:null,cameraOverrides:null,cameraSettings:null});
   expect(optional.noSnapshot).toMatchObject({simulationTick:null,camera:null,humanoidCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+  const inherited=await page.evaluate(()=>{
+   const world=(window as any).currentPreviewWorld;
+   world.useAuthoredCamera();world.camera.fov=43;world.camera.updateProjectionMatrix();world.setCameraFollow({activateOnInput:true});
+   const before=world.snapshot(),capture=window.__THREE_CREATOR_HOST__!.capture('current') as any;
+   return {observation:capture.cameraObservation,settingsApplied:world.humanoid.inspectConfiguration().effective.camera.settingsApplied,
+    fov:world.camera.fov,before,after:world.snapshot()};
+  });
+  expect(inherited.settingsApplied).toBe(false);expect(inherited.fov).toBe(43);
+  expect(inherited.observation).toMatchObject({owner:'follow-pending',cameraSettings:null,framing:{reason:'shared-camera-framing'}});
+  expect(inherited.after).toEqual(inherited.before);
   await service.preview('opening');const reset=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!());
   expect(reset.humanoid!.cameraMode).toBe(0);expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}

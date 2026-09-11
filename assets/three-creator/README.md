@@ -40,6 +40,7 @@ in this repository and are never copied back from that historical source. Use
 D01–D11 飞龙使用独立 ID `creature.dragon.d01` 至 `creature.dragon.d11`。
 其 `integrationMetadata.visual` 声明模型、火焰资源和动画前缀，`vehicle.spec`
 保留与 Playground 一致的尺寸、鞍位、核心碰撞和地面校准。
-使用 `flying-creature` 示例与专用 `FlyingCreatureVisual` 接线；目录 `actions` 为空，
+从 [动物 → 飞行坐骑](../../scripts/three-creator/agent/assets/animals/flying-mounts.md)
+进入 `mounted-interaction` 的 `flying-creature` 绑定变体；使用专用 `FlyingCreatureVisual`，目录 `actions` 为空，
 避免普通资产 mixer 与专用控制器争用动画。来源、限制与重新注册命令见
 [飞龙资源说明](../dragon-training/README.md#creator--agent-接入)。

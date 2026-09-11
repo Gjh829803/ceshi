@@ -42,9 +42,9 @@
     },
     {
       "path": "flying-creatures/README.md",
-      "uri": "./assets/resources/fc0414c5edad14adae48dd44ad020e8f3018653cfa3a2a820829bf40418d9020.md",
-      "sha256": "fc0414c5edad14adae48dd44ad020e8f3018653cfa3a2a820829bf40418d9020",
-      "byteLength": 8993,
+      "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
+      "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
+      "byteLength": 9139,
       "sourcePath": "assets/dragon-training/README.md"
     },
     {
@@ -398,7 +398,9 @@
   ],
   "integrationMetadata": {
     "classification": "flying-mount",
-    "exampleTopic": "flying-creature",
+    "exampleTopic": "mounted-interaction",
+    "exampleVariant": "flying-creature",
+    "documentation": "assets/animals/flying-mounts.md",
     "requiredAssetIds": [
       "humanoid.source-101",
       "creature.dragon.d08"

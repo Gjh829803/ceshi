@@ -70,6 +70,19 @@ it.each(['getting-started','nonhuman-subject','extensions'] as const)('exposes e
  }
 });
 
+it('keeps quality inspection contracts tied to current source declarations',()=>{
+ const original=declarations(contracts),selected=declarations(publicContractTopic(contracts,'quality'));
+ const members=({file,byName}:ReturnType<typeof declarations>)=>{
+  const world=byName.get('World');
+  if(!world||!ts.isInterfaceDeclaration(world))throw new Error('World interface is missing');
+  return new Map(world.members.map(member=>[member.name?.getText(file),member.getText(file)]));
+ };
+ const actual=members(original),published=members(selected);
+ for(const name of ['getEntityState','describe','snapshot','setCaptureTargets'])expect(published.get(name)).toBe(actual.get(name));
+ expect(published.get('getKeyBindings')).toBe(actual.get('getKeyBindings')?.replace("import('./humanoid-runtime/input')", "import('@worldkit/three').humanoid"));
+ expect(published.has('registerMovement')).toBe(false);
+});
+
 it('publishes createWorld with the actual optional options and full SDK return type',()=>{
  const factories=['getting-started','nonhuman-subject'].map(topic=>{
   const file=ts.createSourceFile('contract.ts',publicContractTopic(contracts,topic as 'getting-started'|'nonhuman-subject'),ts.ScriptTarget.Latest,true);
@@ -103,14 +116,30 @@ createWorld({camera:'front'});
 },20_000);
 
 describe('Agent presentation contract',()=>{
- it('exposes shared shadow settings, light application and the JSON usage path',()=>{
+ it('typechecks source-derived object color declarations against the exported SDK',()=>{
+  const source=runtimeContractSource(readFileSync(new URL('../../packages/three-world/src/object-color.ts',import.meta.url),'utf8'));
+  const filename=fileURLToPath(new URL('./.color-consumer.ts',import.meta.url));
+  const body=`${source}\nimport {setObjectColor as actual} from '@worldkit/three';
+declare const object:Object3D;declare const color:string;
+const implementation:typeof setObjectColor=actual;
+const published:typeof actual=setObjectColor;
+const binding=setObjectColor(object,color);binding.setColor(color);binding.dispose();
+// @ts-expect-error Colors are explicit sRGB hex strings, not roles or numeric enums.
+setObjectColor(object,123);`;
+  const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
+  const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
+  host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,body,version,true):readSource(name,version,onError,fresh);
+  const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename)!;
+  expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
+ },20000);
+ it('exposes shadow configuration contracts and their source reference',()=>{
   const source=publicContractTopic(contracts,'presentation');
   expect(source).toContain('interface ShadowSettings');
   expect(source).toContain('readonly shadowSettings');
   expect(source).toContain('configureShadowLight');
   const selected=guideTopic(guide,'presentation');
-  expect(selected).toContain('resolveShadowSettings(config.shadows)');
-  expect(selected).toContain('world.configureShadowLight(sun)');
+  expect(selected).toContain('resolveShadowSettings');
+  expect(selected).toContain('world.configureShadowLight');
  });
  it('publishes the real presentation port with all source identity and binding dependencies',()=>{
   expect(AUTHORING_TOPICS).toContain('presentation');
@@ -178,7 +207,7 @@ world.setCaptureTargets([1]);
 it('exposes the actual humanoid factory options and signature without runtime implementation',()=>{
  const source=readFileSync(new URL('../../packages/three-world/src/humanoid.ts',import.meta.url),'utf8');
  const contract=humanoidFactoryContractSource(source);
- for(const field of ['map:','characterId?:','resourceUrl?:','characterLoadOptions?:','vehicles?:','profile?:','character?:','assetDefinitions?:'])expect(contract).toContain(field);
+ for(const field of ['map:','characterId?:','characterFacingYawRadians?:','characterLoadOptions?:','resourceUrl?:','vehicles?:','profile?:','character?:','assetDefinitions?:'])expect(contract).toContain(field);
  expect(contract).toMatch(/export declare function createHumanoidWorld\(options:\s*HumanoidWorldOptions\):\s*Promise<ThreeWorld>/);
  expect(contract).not.toContain('await character.load');
  const filename=fileURLToPath(new URL('./.humanoid-contract-typecheck.ts',import.meta.url));

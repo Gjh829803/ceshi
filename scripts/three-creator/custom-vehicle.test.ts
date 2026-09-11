@@ -94,7 +94,7 @@ it('runs a custom vehicle with only the preset human asset and exposes hidden-ri
  const root=await mkdtemp(path.join(os.tmpdir(),'custom-vehicle-'));
  const service=new ThreeCreatorTools(root,'three-sdk');
  try{
-  const example:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'custom-vehicle'});
+  const example=await service.examples('custom-vehicle');
   expect(JSON.parse(example.files['project.json']).assetIds).toEqual(['humanoid.source-101']);
   for(const [file,content]of Object.entries(example.files))await writeFile(path.join(root,file),String(content));
   const initial=await service.inspect();
@@ -151,7 +151,7 @@ it('allows procedural vehicle geometry when the frozen policy forbids custom ext
   for(const [name,content]of Object.entries(example.files))await writeFile(path.join(service.workspace,name),content);
   const candidate=await service.compiler.prepare();
   expect(candidate.profile).toBe('three-sdk');
-  const schema=await service.schema();expect(schema.humanAuthoring?.exampleTopic).toBe('custom-vehicle');
+  const schema=await service.schema();expect(schema.humanAuthoring?.exampleTopic).toBe('getting-started');
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },30000);
 

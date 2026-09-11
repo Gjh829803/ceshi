@@ -33,7 +33,8 @@ skin, D01–D11 native flying creatures and space training. Original PR head:
   Capsule staging includes these exact hash-checked dependencies and excludes
   the separate H01 rider model. Supplied riders continue to use Source101.
 - Agent entry: `assets_search` / `assets_describe`, then
-  `creator_get_examples({topic:'flying-creature'})`. The example loads only its
+  `creator_get_authoring_schema({document:'assets/animals/flying-mounts.md'})` and
+  `creator_get_examples({topic:'mounted-interaction',variant:'flying-creature'})`. The example loads only its
   selected asset's resources and hands `FlyingCreatureVisual` to the existing
   SDK owner. Initialization failures clean both pre-transfer and World-owned
   resources. A model/clip alone does not install a second animation controller.

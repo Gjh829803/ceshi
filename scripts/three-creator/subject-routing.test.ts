@@ -94,7 +94,7 @@ it('uses current workspace contracts for the nonhuman route and retains raw guid
 });
 
 it('runs a nonhuman subject with no humanoid assets, collides, resets and captures through Episode',async()=>{
- const service=await fixture(),example=await call(service,'creator_get_examples',{topic:'nonhuman-subject'});
+ const service=await fixture(),example=await service.examples('nonhuman-subject');
  expect(JSON.parse(example.files['project.json']).assetIds).toEqual([]);
  for(const [name,value]of Object.entries(example.files))await writeFile(path.join(service.workspace,name),String(value));
  const candidate=await service.compiler.prepare();

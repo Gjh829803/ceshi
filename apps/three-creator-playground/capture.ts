@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type {CaptureTargetRepresentative, WorldObservation} from '@worldkit/three';
 
-type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'controlledObject'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'|'withPresentation'>;
+type CaptureWorld=Pick<WorldObservation,'scene'|'camera'|'renderer'|'controlledObject'|'targets'|'captureTargetIds'|'targetRepresentativesById'|'targetFrontYawRadiansById'|'withPresentation'|'episode'>;
 export type CaptureTargetDescriptor={id:string;sourceEntityId:string;representative?:{kind:'object'|'instance';objectUuid:string;instanceIndex?:number}};
 type Selection={descriptor:CaptureTargetDescriptor;object:THREE.Object3D;representative?:CaptureTargetRepresentative};
 function fail(code:string):never{throw new Error(`THREE_CAPTURE_${code}`);}
@@ -80,6 +80,16 @@ function visibleObjectBounds(root:THREE.Object3D){
   visit(root,true);return bounds;
 }
 
+/** Reuse the existing runtime's spatial envelope; never infer playable area from a sky mesh. */
+function runtimeOverviewBounds(world:CaptureWorld):THREE.Box3|null{
+  if(!world.episode)return null;
+  const value=world.episode.capabilities().worldBounds;
+  const low=value?.minimumWorldMetersXYZ,high=value?.maximumWorldMetersXYZ;
+  if(!low||!high||low.length!==3||high.length!==3||![...low,...high].every(Number.isFinite)||
+    low.some((v,index)=>v>high[index]!)||low[0]===high[0]||low[2]===high[2])fail('OVERVIEW_BOUNDS_INVALID');
+  return new THREE.Box3(new THREE.Vector3(...low),new THREE.Vector3(...high));
+}
+
 function releaseProxy(proxy:THREE.InstancedMesh){
   const errors:unknown[]=[],morph=proxy.morphTexture;
   for(const release of [()=>proxy.removeFromParent(),()=>proxy.dispose(),()=>{if(morph&&proxy.morphTexture===morph){try{morph.dispose();}finally{proxy.morphTexture=null;}}}])try{release();}catch(error){errors.push(error);}
@@ -143,7 +153,10 @@ function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-
   const proxies:Array<NonNullable<ReturnType<typeof instanceProxy>>>=[];let hasPrimaryFailure=false;
   try{
     const targets=chosen.map(selection=>{const item=instanceProxy(selection,scene);if(item)proxies.push(item);return item?.proxy??selection.object;});
-    const bounds=new THREE.Box3();for(const object of targets.length?targets:[scene])bounds.union(proxies.find(item=>item.proxy===object)?.bounds??(view==='entity-triview'?visibleObjectBounds(object):new THREE.Box3().setFromObject(object,true)));
+    const runtimeBounds=view==='top-down'&&!targets.length?runtimeOverviewBounds(world):null;
+    const bounds=runtimeBounds??new THREE.Box3();
+    if(!runtimeBounds)for(const object of targets.length?targets:[scene])bounds.union(proxies.find(item=>item.proxy===object)?.bounds??visibleObjectBounds(object));
+    const boundsSource=runtimeBounds?'episode-world-bounds':targets.length?'selected-targets':'visible-scene';
     if(bounds.isEmpty()||![...bounds.min.toArray(),...bounds.max.toArray()].every(Number.isFinite))throw new Error('THREE_TARGET_BOUNDS_EMPTY');
     const selection=chosen[0],orientationTargetId=selection?.descriptor.sourceEntityId??'player';
     const yaw=frontYawRadians??ownValue(world.targetFrontYawRadiansById,orientationTargetId)??ownValue(world.targetFrontYawRadiansById,ids[0]??'player')??0;
@@ -161,18 +174,21 @@ function capturePresentedObjectViews(world:CaptureWorld,view:'top-down'|'entity-
       // Preserve source illumination; unrelated cached shadow maps are not part of an isolated object.
       renderer.shadowMap.enabled=false;
     }
+    if(view==='top-down')scene.fog=null;
     renderer.xr.enabled=false;renderer.setRenderTarget(null);
     const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3()),extent=Math.max(size.x,size.y,size.z,.1)*.65;
     const panels=view==='entity-triview'?3:1,panelWidth=view==='entity-triview'?512:960,height=view==='entity-triview'?640:720;
     renderer.setPixelRatio(1);renderer.setSize(panelWidth*panels,height,false);renderer.autoClear=false;renderer.setScissorTest(false);renderer.clear(true,true,true);renderer.setScissorTest(true);
     for(let index=0;index<panels;index++){
-      const halfY=extent*Math.max(1,height/panelWidth),halfX=halfY*panelWidth/height;
-      const camera=new THREE.OrthographicCamera(-halfX,halfX,halfY,-halfY,.01,extent*30+100);
-      if(view==='top-down'){camera.position.copy(center).add(new THREE.Vector3(0,extent*4+5,0));camera.up.set(0,0,-1);}
+      // Top-down framing follows X/Z footprint, not sky height or tall map bounds.
+      const halfY=view==='top-down'?Math.max(size.z,size.x*height/panelWidth,.1)*.55:extent*Math.max(1,height/panelWidth),halfX=halfY*panelWidth/height;
+      const lift=Math.max(size.x,size.z,1)+5;
+      const camera=new THREE.OrthographicCamera(-halfX,halfX,halfY,-halfY,.01,view==='top-down'?size.y+lift+10:extent*30+100);
+      if(view==='top-down'){camera.position.set(center.x,bounds.max.y+lift,center.z);camera.up.set(0,0,-1);}
       else{camera.position.copy(center).addScaledVector([basis.front,basis.right,basis.back][index]!,extent*4);camera.up.copy(basis.up);}
       camera.lookAt(center);camera.updateMatrixWorld(true);renderer.setViewport(index*panelWidth,0,panelWidth,height);renderer.setScissor(index*panelWidth,0,panelWidth,height);renderer.render(scene,camera);
     }
-    return{view,entityIds:ids.length?ids:['player'],orientationTargetId,frontYawRadians:yaw,frontDirectionWorldXYZ:basis.front.toArray(),rightDirectionWorldXYZ:basis.right.toArray(),upDirectionWorldXYZ:basis.up.toArray(),image:renderer.domElement.toDataURL('image/png'),bounds:{minimumMetersXYZ:bounds.min.toArray(),maximumMetersXYZ:bounds.max.toArray()},panelOrder:view==='entity-triview'?['front','right','back']:['top-down'],...(selection?{captureTarget:selection.descriptor}:{})};
+    return{view,entityIds:ids.length?ids:view==='top-down'?[]:['player'],orientationTargetId,frontYawRadians:yaw,frontDirectionWorldXYZ:basis.front.toArray(),rightDirectionWorldXYZ:basis.right.toArray(),upDirectionWorldXYZ:basis.up.toArray(),image:renderer.domElement.toDataURL('image/png'),bounds:{minimumMetersXYZ:bounds.min.toArray(),maximumMetersXYZ:bounds.max.toArray()},...(view==='top-down'?{boundsSource}:{}),panelOrder:view==='entity-triview'?['front','right','back']:['top-down'],...(selection?{captureTarget:selection.descriptor}:{})};
   }catch(error){hasPrimaryFailure=true;throw error;}
   finally{
     const cleanupErrors:unknown[]=[];const restore=(work:()=>void)=>{try{work();}catch(error){cleanupErrors.push(error);}};

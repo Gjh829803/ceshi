@@ -7,6 +7,7 @@ import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterContro
 import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
 import { extractCollisionGeometry, finiteVector, geometryError, geometrySignature, isWorldVisible, worldPose, type GeometrySnapshot, type WorldPose } from './geometry.js';
 import type { EpisodeStartProbe } from './episode-contracts.js';
+import type {BoundaryBox} from './boundaries.js';
 
 export const MAXIMUM_EPISODE_START_ALIGNMENT_METERS = .35;
 
@@ -24,6 +25,7 @@ type Entity = {
   interaction?:InteractionBodyControl;interactionSize?:Vec3;interactionCenter?:Vec3;
   fixedQueryPose?: WorldPose;
   sourceObjects?: readonly THREE.Object3D[];
+  boundary?: BoundaryBox;
   initial: { local: LocalPose; pose: WorldPose; geometry?: GeometrySnapshot };
 };
 type CharacterProposal = { entry: Entity; driveMode: DriveMode; desired: THREE.Vector3; correction: THREE.Vector3; movement: THREE.Vector3; supportNeedsRefresh: boolean; verticalVelocity: number; grounded: boolean; collisions: Set<string> };
@@ -36,7 +38,7 @@ function queryContact(a:QueryShape,b:QueryShape,at=a.position,bt=b.position):RAP
   return a.shape.contactShape(at,a.rotation,b.shape,bt,b.rotation,0);
 }
 type KinematicQueryState = { entry: Entity; type: RAPIER.RigidBodyType; linearVelocity: THREE.Vector3; angularVelocity: THREE.Vector3; nextPosition: THREE.Vector3; nextRotation: THREE.Quaternion; sleeping: boolean; enabled: boolean };
-type Plan = { pose: WorldPose; descriptors: ColliderDesc[]; sourceObjects?: THREE.Object3D[]; triangleCount: number; geometry?: GeometrySnapshot; settings?: Required<CharacterOptions>; scale?: THREE.Vector3 };
+type Plan = { pose: WorldPose; descriptors: ColliderDesc[]; sourceObjects?: THREE.Object3D[]; triangleCount: number; geometry?: GeometrySnapshot; settings?: Required<CharacterOptions>; scale?: THREE.Vector3; boundary?: BoundaryBox };
 const vec = (value: THREE.Vector3 | Readonly<{ x: number; y: number; z: number }>): Vec3 => Object.freeze([value.x, value.y, value.z]);
 const localPose = (object: THREE.Object3D): LocalPose => ({ position: object.position.clone(), quaternion: object.quaternion.clone(), scale: object.scale.clone(), visible: object.visible, matrix: object.matrix.clone(), matrixAutoUpdate: object.matrixAutoUpdate });
 const copyPose = (pose: WorldPose): WorldPose => ({ position: pose.position.clone(), rotation: pose.rotation.clone(), scale: pose.scale.clone() });
@@ -65,10 +67,15 @@ export class ThreePhysics implements PhysicsPort {
   static borrow(binding:BorrowedPhysicsWorld,options:PhysicsOptions={}):ThreePhysics {return new ThreePhysics(options,binding);}
 
 
-  static async create(options: PhysicsOptions = {}): Promise<ThreePhysics> {
+  static async create(options: PhysicsOptions = {}, boundaries: readonly BoundaryBox[] = []): Promise<ThreePhysics> {
     initialization ??= RAPIER.init();
     await initialization;
-    return new ThreePhysics(options);
+    const physics = new ThreePhysics(options);
+    try {
+      if (!Array.isArray(boundaries)) geometryError('PHYSICS_BOUNDARIES_INVALID', 'Compiled boundaries must be an array.');
+      for (const boundary of boundaries) physics.addBoundary(boundary);
+      return physics;
+    } catch (error) { physics.dispose(); throw error; }
   }
   private constructor(options: PhysicsOptions,private readonly borrowed?:BorrowedPhysicsWorld) {
     this.gravity = Object.freeze([...(options.gravityMetersPerSecondSquared ?? [0, -9.81, 0])]) as Vec3;
@@ -126,6 +133,32 @@ export class ThreePhysics implements PhysicsPort {
     }
     const pose = worldPose(object), reconstructed = new THREE.Matrix4().compose(pose.position, pose.rotation, pose.scale);
     if (object.matrixWorld.elements.some((value, index) => Math.abs(value - reconstructed.elements[index]!) > 1e-6)) geometryError('PHYSICS_DYNAMIC_SHEAR_UNSUPPORTED', 'A dynamic visual root must have a decomposable TRS transform.');
+  }
+  private boxDescriptors(id: string, size: THREE.Vector3, center: THREE.Vector3, dynamic: boolean, plannedCount = 0): ColliderDesc[] {
+    if (Math.min(size.x, size.y, size.z) <= 1e-6) geometryError('PHYSICS_BOX_DEGENERATE', 'An explicit box collider requires positive volume.');
+    // Partition the same cuboid volume to keep native KCC contact normals stable.
+    const cells = dynamic ? new THREE.Vector3(1, 1, 1) : size.clone().divideScalar(4).ceil();
+    const count = cells.x * cells.y * cells.z + plannedCount;
+    if (count > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', `Exact box subdivision exceeds the collider budget: requiredColliderCount=${count} (lower bound), maximumColliderCount=${this.maximumColliders}. Current mesh in the rigid-body frame: sizeMetersXYZ=${JSON.stringify(size.toArray())}, cellsXYZ=${JSON.stringify(cells.toArray())}. Counts exclude remaining meshes and other world entities.`, [id]);
+    const cellSize = size.clone().divide(cells), descriptors: ColliderDesc[] = [];
+    for (let x = 0; x < cells.x; x++) for (let y = 0; y < cells.y; y++) for (let z = 0; z < cells.z; z++) descriptors.push(RAPIER.ColliderDesc.cuboid(cellSize.x / 2, cellSize.y / 2, cellSize.z / 2)
+      .setTranslation(center.x + (x + .5 - cells.x / 2) * cellSize.x, center.y + (y + .5 - cells.y / 2) * cellSize.y, center.z + (z + .5 - cells.z / 2) * cellSize.z));
+    return descriptors;
+  }
+  private boundaryPlan(boundary: BoundaryBox, pose: WorldPose): Plan {
+    return {pose, boundary, triangleCount: 0,
+      descriptors: this.boxDescriptors(boundary.id, new THREE.Vector3(...boundary.size), new THREE.Vector3(), false)
+        .map(descriptor => descriptor.setFriction(.7).setRestitution(0))};
+  }
+  private addBoundary(input: BoundaryBox): void {
+    if (!input || input.boundary !== true || input.collision !== true || typeof input.blocksCamera !== 'boolean') geometryError('PHYSICS_BOUNDARIES_INVALID', 'A compiled boundary must be solid and specify its camera behavior.');
+    for (const [name, values] of Object.entries({position: input.position, size: input.size, rotation: input.rotation})) validateVec(values, `boundary ${name}`);
+    const boundary: BoundaryBox = {...input, position: [...input.position], size: [...input.size], rotation: [...input.rotation]};
+    const object = new THREE.Object3D(); object.visible = false;
+    object.position.fromArray(boundary.position); object.rotation.set(...boundary.rotation);
+    this.newIdentity(boundary.id, object);
+    const plan = this.boundaryPlan(boundary, worldPose(object)); this.budget([{id: boundary.id, plan}]);
+    this.publish(this.construct(boundary.id, object, 'fixed', plan, {kind: 'fixed'}, {local: localPose(object), pose: copyPose(plan.pose)}));
   }
   private rigidPlan(id: string, object: THREE.Object3D, options: RigidPhysics, retained?: GeometrySnapshot, allowEmpty = false): Plan {
     if (!options || !['fixed', 'kinematic', 'dynamic'].includes(options.kind) || (options.shape !== undefined && !['trimesh', 'convex-hull', 'box'].includes(options.shape))) geometryError('PHYSICS_OPTION_INVALID', 'Choose a fixed, kinematic or dynamic body with a supported shape.');
@@ -196,7 +229,7 @@ export class ThreePhysics implements PhysicsPort {
       body = this.world.createRigidBody(bodyDescriptor);
       const colliders = plan.descriptors.map(descriptor => this.world.createCollider(descriptor, body));
       const entry: Entity = { id, object, enabled: previous?.enabled ?? true, kind, body, colliders, initial,...(previous?.interaction?{interaction:previous.interaction}:{}),
-        ...(plan.geometry ? { geometry: plan.geometry } : {}), ...(plan.sourceObjects ? { sourceObjects: plan.sourceObjects } : {}), ...(options ? { options } : {}), ...(kind === 'fixed' ? { fixedQueryPose: copyPose(plan.pose) } : {}) };
+        ...(plan.boundary?{boundary:plan.boundary}:{}), ...(plan.geometry ? { geometry: plan.geometry } : {}), ...(plan.sourceObjects ? { sourceObjects: plan.sourceObjects } : {}), ...(options ? { options } : {}), ...(kind === 'fixed' ? { fixedQueryPose: copyPose(plan.pose) } : {}) };
       if (plan.settings && plan.scale) {
         controller = this.world.createCharacterController(plan.settings.collisionOffsetMeters);
         controller.enableAutostep(plan.settings.maximumStepHeightMeters, plan.settings.minimumStepWidthMeters, false);
@@ -301,7 +334,9 @@ export class ThreePhysics implements PhysicsPort {
     this.live(); if (!Array.isArray(ids) || new Set(ids).size !== ids.length) geometryError('PHYSICS_REFRESH_BATCH_INVALID', 'A refresh batch contains each physics id once.');
     const updates = ids.map(id => {
       const previous = this.entry(id);
-      const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings) : this.rigidPlan(previous.id, previous.object, previous.options!, undefined, true);
+      const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings)
+        : previous.boundary ? this.boundaryPlan(previous.boundary, worldPose(previous.object))
+        : this.rigidPlan(previous.id, previous.object, previous.options!, undefined, true);
       return { previous, plan };
     });
     this.budget(updates);
@@ -433,7 +468,9 @@ export class ThreePhysics implements PhysicsPort {
     const includeSolid = (collider: Collider): boolean => {
       const entry = this.entries.get(this.colliderOwners.get(collider.handle) ?? '');
       const source = this.colliderSources.get(collider.handle);
-      return Boolean(entry && entry.kind !== 'character' && entry.body.isEnabled() && !collider.isSensor() && source && isWorldVisible(entry.object) && isWorldVisible(source));
+      if (!entry || entry.kind === 'character' || !entry.body.isEnabled() || collider.isSensor()) return false;
+      if (entry.boundary) return entry.boundary.blocksCamera;
+      return Boolean(source && isWorldVisible(entry.object) && isWorldVisible(source));
     };
     let overlap: CameraArmHit | undefined;
     const considerOverlap = (collider: Collider): boolean => {
@@ -665,7 +702,7 @@ export class ThreePhysics implements PhysicsPort {
       if (entry.character) {
         const scale = new THREE.Vector3(Math.abs(pose.scale.x), Math.abs(pose.scale.y), Math.abs(pose.scale.z));
         if (scale.distanceToSquared(entry.character.scale) > 1e-14) updates.push({ previous: entry, plan: this.characterPlan(entry.object, entry.character.settings) });
-      } else {
+      } else if (!entry.boundary) {
         if (entry.kind === 'dynamic') this.validateDynamicParent(entry.object);
         if (geometrySignature(entry.object, pose) !== entry.geometry!.signature) updates.push({ previous: entry, plan: this.rigidPlan(entry.id, entry.object, entry.options!, undefined, true) });
       }
@@ -776,7 +813,9 @@ export class ThreePhysics implements PhysicsPort {
     this.live(); const staged: { previous: Entity; entry: Entity }[] = [];
     try {
       for (const previous of this.entries.values()) {
-        const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings, previous.initial.pose) : this.rigidPlan(previous.id, previous.object, previous.options!, previous.initial.geometry);
+        const plan = previous.character ? this.characterPlan(previous.object, previous.character.settings, previous.initial.pose)
+          : previous.boundary ? this.boundaryPlan(previous.boundary, previous.initial.pose)
+          : this.rigidPlan(previous.id, previous.object, previous.options!, previous.initial.geometry);
         const entry = this.construct(previous.id, previous.object, previous.kind, plan, previous.options, previous.initial);
         staged.push({ previous, entry });
       }

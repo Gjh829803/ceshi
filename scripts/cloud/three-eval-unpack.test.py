@@ -78,7 +78,7 @@ class WorkspaceRuntimeTests(unittest.TestCase):
 
 
 class RecordedDeliveryTests(unittest.TestCase):
-    def invoke(self, seconds=0.05, mutate=None, probe_change=None):
+    def invoke(self, seconds=0.05, mutate=None, probe_change=None, top_down=True):
         spec = importlib.util.spec_from_file_location('unpack_recording', Path(__file__).with_name('three-eval-unpack.py'))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -103,7 +103,8 @@ class RecordedDeliveryTests(unittest.TestCase):
                  'episode.json': episode, 'playtest/playtest.json': encode(played),
                  'playtest/trace.json': encode({'timing': timing}), 'playtest/playtest.mp4': b'mocked video bytes',
                  'captures/captures.json': encode({**identity, 'pageErrors': [], 'images': [
-                     {'view': 'opening'}, {'view': 'entity-triview', 'entityIds': ['player']} ]})}
+                     {'view': 'opening'}, *([{'view': 'top-down'}] if top_down else []),
+                     {'view': 'entity-triview', 'entityIds': ['player']} ]})}
         manifest = {**identity, 'engine': 'three@0.185.1', 'creatorRuntimeLockHash': 'd' * 64,
                     **{key: played[key] for key in ['actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds',
                                                    'captureTiming', 'videoMetadata', 'targetResults']},
@@ -134,6 +135,10 @@ class RecordedDeliveryTests(unittest.TestCase):
                 result = self.invoke(seconds)
                 self.assertEqual(result['status'], 'passed')
                 self.assertEqual(result['actualVideoMetadata']['durationSeconds'], seconds)
+
+    def test_delivery_requires_top_down_overview(self):
+        with self.assertRaisesRegex(AssertionError, 'THREE_DELIVERY_TOP_DOWN_REQUIRED'):
+            self.invoke(top_down=False)
 
     def test_invalid_times_and_existing_safety_ceiling_are_rejected(self):
         for key in ['actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds']:

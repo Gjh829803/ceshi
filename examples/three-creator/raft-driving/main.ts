@@ -17,7 +17,19 @@ const map:EnvironmentDefinition={id:'raft-course',name:'橡皮艇岸坡试验',d
  water:[{id:'water',min:[-119,-10,0],max:[119,0,299],surface:0}],regions:[{id:'water',name:'Shore',description:'Sloping bank and water',center:[0,0,90],size:[230,390],color:'#67a9bb',modes:['character','paddled_boat']}],
  spawns:[{id:'raft-start',vehicleId:'raft-instance-1',name:'橡皮艇',position:[0,3.95,-15],yaw:0,regionId:'water'}],playerSpawn:[1.9,3.015,-15]};
 const waterMesh=new THREE.Mesh(new THREE.PlaneGeometry(238,299),new THREE.MeshStandardMaterial({color:'#4d97b1',roughness:1}));waterMesh.rotation.x=-Math.PI/2;waterMesh.position.set(0,0,149.5);scene.add(waterMesh);
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);if(box.rotation)mesh.rotation.set(...box.rotation);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+surface(240,400,[0,-10,100]);
+structure('shore-slope',[16,.4,40/Math.cos(a)],[0,-.2*Math.cos(a),0],[a,0,0]);
+structure('boarding-step',[1.5,.2,3],[2.1,2.9,-15]);
+structure('pier',[14,4,.6],[0,1,65]);
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'raft-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});

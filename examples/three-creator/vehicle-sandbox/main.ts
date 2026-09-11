@@ -15,7 +15,17 @@ const map:EnvironmentDefinition={id:'independent-course',name:'Independent asset
   boxes:[{id:'ground',position:[0,-.5,0],size:[240,1,240],color:'#cccccc'},{id:'wall',position:[20,2,20],size:[20,4,1],color:'#eeeeee'}],
   water:[],regions:[{id:'road',name:'Course',description:'A reusable map module',center:[0,0,0],size:[200,200],color:'#e8be73',modes:['character','wheeled']}],
   spawns:[{id:'rover-start',vehicleId:'rover-instance-1',name:'Rover',position:[7,0,0],yaw:0,regionId:'road'}],playerSpawn:[0,0,0]};
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color??'#eeeeee'}));mesh.position.set(...box.position);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+surface(240,240,[0,0,0]);
+structure('wall',[20,4,1],[20,2,20]);
 const vehicleObject=new THREE.Group();
 const spec=structuredClone(selected.vehicle.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'rover-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});

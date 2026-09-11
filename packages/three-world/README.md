@@ -4,8 +4,8 @@ Author ordinary Three.js geometry, materials and cameras. The SDK binds physics,
 movement, animation, input, camera follow and observable commands to that content.
 When humans appear, keep the supplied humanoid's visible model, skeleton and motions.
 Choose the controlled subject from the request; animal protagonists need no extra human.
-Reuse other supplied subjects when suitable; otherwise create and bind simple
-Mesh/Group subjects.
+Reuse other supplied subjects when suitable; otherwise create and bind
+Mesh/Group subjects matching the reference.
 
 | Layer | Read or change |
 | --- | --- |
@@ -16,10 +16,10 @@ Mesh/Group subjects.
 
 One world owns one fixed clock, physics backend, controller per actor, animation
 owner and active camera writer. Creator compiles and validates; Episode records.
-Ordinary and Humanoid cameras keep their framing and visibility policies while
-sharing the [collision solver](../camera-collision/README.md). Each controller owns
-independent recovery state. Display interpolation and repeated captures do not
-advance that state; fallback positions come from fixed snapshots.
+Ordinary and Humanoid authored follow use the same camera rig and subject-data
+contract. Subject-specific perspectives retain their visibility policy and use the
+shared [collision solver](../camera-collision/README.md). Display interpolation and
+repeated captures do not advance collision recovery; fallback positions come from fixed snapshots.
 
 Positions and dimensions use metres, with **+Y** up. Ordinary actor/capture semantic
 front defaults to local **-Z**; Humanoid map headings, vehicles and interaction yaw use **+Z**.
@@ -27,6 +27,10 @@ Keep the supplied skeleton orientation unchanged when connecting these conventio
 
 <!-- topic:getting-started -->
 ## Choose the controlled subject
+
+Separate playable terrain, inaccessible scenery and intentional gameplay drops.
+Use the `boundaries` topic for invisible collision fences and fall recovery;
+world/map bounds alone do not provide a physical wall around usable terrain.
 
 `world.humanoid` is the optional humanoid and riding runtime installed
 by `createHumanoidWorld` or `createWorld({humanoid: ...})`. It owns the selected
@@ -41,7 +45,9 @@ Complete humanoids preserve their original model textures by default in browser
 hosts with image decoding APIs. Node hosts without these APIs skip textures by
 default. Set `characterLoadOptions:{loadTextures:false}` on `createHumanoidWorld`,
 or pass `{loadTextures:false}` to `HumanoidCharacter.load`, to request a whitebox
-appearance explicitly. Factories and NPC clones retain the resolved choice.
+appearance explicitly. Factories and NPC clones retain the resolved choice. Creator whitebox bindings
+explicitly select `characterLoadOptions:{loadTextures:false}`; these SDK defaults
+do not override the Creator task requirements.
 
 Complete humanoid loads share a template keyed by the resolved resource URL
 closure and model texture loading choice. Keep those URLs immutable for their content version. Each instance has
@@ -137,7 +143,7 @@ entity interfaces. IDs must be distinct from the supplied person, vehicles and
 map colliders, including when replacing the map. A conflicting replacement is
 rejected before the active world changes. Dynamic bodies retain ordinary
 9.81 m/s² gravity; vehicle simulation retains its 120 Hz substeps inside SDK ticks.
-See the [shared physics example](../../examples/three-creator/shared-physics/main.ts).
+Read the control declarations for shared entity physics and interaction slots.
 
 Registering, moving or enabling a body updates native scene queries without
 advancing simulation. Contact solving and collision events occur on the next
@@ -150,7 +156,7 @@ guide this choice; they are not mutually exclusive SDK entity classes.
 
 | Subject | Schema / example | Entry |
 | --- | --- | --- |
-| Human | `character-actions` | `createHumanoidWorld` |
+| Human | `getting-started`; `character-actions` for requested actions | `createHumanoidWorld` |
 | Human riding | `mounted-interaction` / `custom-vehicle` | Human helper + separate vehicle |
 | Animal or other nonhuman protagonist | `nonhuman-subject` | `createWorld` + `addCharacter` |
 
@@ -162,9 +168,14 @@ For persistent first/third-person defaults and an optional switching key, use
 
 ### Human setup
 
-Build white/light-gray primitive environment forms with uniform basic lighting.
-Use identifying color for a few landmarks or interaction targets. Preserve broad
-composition, scale, spatial relationships and actual collision/action conditions.
+Terrain, composition, landmarks, subjects and counterpart objects must follow the reference image. Author their visible silhouettes and spatial relationships independently from collision proxies. Invisible boundaries contain physics only. Implement gameplay only when explicitly requested in the user prompt; otherwise provide free movement/exploration without added missions, observation checkpoints, quizzes, collections or obstacle courses. Capture targets and self-check waypoints are internal evidence, not player objectives.
+
+Reproduce the reference image's visual style and main forms while simplifying fine
+detail. Keep environment forms predominantly white with uniform basic lighting. Use
+distinct restrained colors for the subject, key counterpart objects and landmarks
+selected for three-views; distinguish ground, water and other terrain with subtle
+grayscale or tint differences. Keep object colors consistent across play and captures.
+Preserve broad composition, scale, spatial relationships and actual collision/action conditions.
 Keep the supplied humanoid visible; omit extra clothing, accessories, decoration,
 atmospheric effects, reflections and elaborate shadows.
 
@@ -174,7 +185,8 @@ collision geometry and action anchors.
 
 ```ts
 import {createHumanoidWorld} from '@worldkit/three';
-const world = await createHumanoidWorld({scene, camera, canvas, map});
+const world = await createHumanoidWorld({scene, camera, canvas, map,
+  characterLoadOptions:{loadTextures:false}});
 world.setCaptureTargets(['player']);
 await world.start();
 ```
@@ -187,16 +199,27 @@ character's lifecycle. `map` follows `EnvironmentDefinition`; inspect the actual
 example before authoring it. Contextual actions need the geometry described in
 `character-actions`.
 
+The humanoid initially faces away from the opening camera on the horizontal plane.
+The final camera position is sampled once before the first start/step/reset; later
+camera movement does not turn the character. Set `characterFacingYawRadians` in
+`createHumanoidWorld` to override it: radians about +Y, `0` faces world −Z,
+`Math.PI / 2` faces −X, and `Math.PI` faces +Z (the Episode facing convention).
+For `createWorld({humanoid:...})`, the same value is `humanoid.character.facingYawRadians`.
+The Agent can author front, side or back views independently of the camera pose/FOV.
+Reset and Creator opening captures restore the sealed heading. Episode segment
+starts retain their explicitly requested heading. With a directly overhead camera,
+the default uses its horizontal viewing direction, falling back to −Z if undefined.
+Do not rotate the managed visual root or call `prepareCharacter` in `onReset`;
+use the creation option for persistent facing and `map.playerSpawn` for position.
+
 For a self-drawn subject, bind its visual root directly:
 
 ```ts
 import {createWorld} from '@worldkit/three';
 const world = await createWorld({scene, camera, canvas});
 world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
-world.addCharacter({id:'fox', object:foxMesh,
-  body:{heightMeters:1, radiusMeters:.3},
-  movement:{kind:'ground', walkSpeedMetersPerSecond:2, runSpeedMetersPerSecond:5}});
-world.setControlledEntity('fox');
+world.addCharacter({id:subjectId, object:subjectMesh, body:subjectBody, movement:subjectMovement});
+world.setControlledEntity(subjectId);
 world.setCameraFollow();
 await world.start();
 ```
@@ -256,11 +279,10 @@ bind the model through `addCharacter({object,body,movement})`, then select it wi
 `setControlledEntity` and `setCameraFollow`. `setCaptureTargets` identifies complete
 subjects for Creator and Episode.
 
-The [fox example](../../examples/three-creator/nonhuman-subject/main.ts), available
-through `creator_get_examples({topic:'nonhuman-subject'})`, includes ground movement,
-a collision obstacle, camera follow, visual leg motion and reset. Its project
-selects no catalog assets; use permitted models when they fit the requested subject.
-Ordinary Three geometry remains allowed even if custom external asset files are disabled.
+The [independent subject binding](../../scripts/three-creator/agent/examples/nonhuman.ts),
+returned by creator_get_examples({topic:'nonhuman-subject'}), accepts your visual
+root, body/movement, scene setup and follow configuration. Use permitted models
+when suitable; ordinary authored geometry remains available.
 
 Place the visual root at the subject's feet and author the body above local Y=0.
 The capsule extends upward from that root; `heightMeters` is its total height,
@@ -277,18 +299,9 @@ For first/third-person switching, supply an eye in the subject root's **local**
 coordinates. It follows the root's scale and rotation; initial looking direction
 uses the actor's semantic front (`frontYawRadians`, default local -Z).
 
-```ts
-world.setCameraFollow({targetEntityId: 'fox', view: {
-  eyeOffsetLocalMetersXYZ: [0, .82, -.5],
-  defaultPerspective: 'third-person', keyboardToggleEnabled: true,
-}});
-world.setKeyBindings({cameraToggle: ['KeyV']}); // Optional; default is T.
-world.setCameraPerspective('first-person'); // Does not change the reset default.
-```
-
 Configure before `start()` to establish the reset baseline. Without `view`, the
 existing third-person behavior is unchanged. With `view`, defaults are third
-person and shortcut disabled; selecting first person applies the eye immediately.
+person and shortcut disabled (`view.keyboardToggleEnabled:false`); selecting first person applies the eye immediately.
 Keyboard switching respects UI focus and pause and keeps one edge per press.
 Programmatic switching remains available with the shortcut disabled. First-person
 zoom is ignored and the existing third-person distance is retained. Mouse look
@@ -308,25 +321,10 @@ controller; unavailable telemetry remains distinct from this result.
 
 ### Recording custom movement
 
-A movement can provide a small optional Episode input adapter alongside `update`:
+A movement can provide an optional Episode input adapter alongside `update`;
+configure it on the same movement definition described in the extensions topic.
 
-```ts
-world.registerMovement({
-  id: 'flight', version: 1, description: 'Vertical flight', initialState: null,
-  update: ({input, state}) => ({state,
-    velocityWorldMetersPerSecondXYZ: [0, (input.moveYRatio ?? 0) * 3, 0],
-    applyGravity: false}),
-  episode: {
-    startSupport: 'free',
-    input: ({body, targetPositionWorldMetersXYZ}) => ({
-      moveYRatio: Math.max(-1, Math.min(1,
-        targetPositionWorldMetersXYZ[1] - body.positionWorldMetersXYZ[1])),
-    }),
-  },
-});
-```
-
-Bind it with `movement:{kind:'custom',movementId:'flight'}`. The adapter returns
+Bind it with `movement:{kind:'custom',movementId}`. The adapter returns
 ordinary WorldInput, never a position or its own simulation loop. It is synchronous
 and pure; it also receives gait, control-forward direction, simulation tick and
 `mode:'travel'|'stop'`. For a stop/view hold, return inputs that maintain or settle
@@ -386,7 +384,7 @@ Mesh/Group geometry; do not load supplied or external vehicle models. The catalo
 geometry; custom subjects and compatible external assets follow the task's
 effective asset policy.
 
-For a custom vehicle, see the [preset rider + custom motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
+For a custom vehicle, see the [preset rider + custom motorcycle example](../../scripts/three-creator/agent/examples/vehicle.ts)
 (`creator_get_examples({topic:'custom-vehicle'})`). Supply only vehicle geometry
 as `VehicleInstance.object`, with a matching `spec` controller family,
 collision envelope and local pelvis seat position. `createHumanoidWorld` keeps
@@ -481,16 +479,11 @@ must retain its orientation (the supplied pickup prop uses this constraint).
 Rotation is free by default; binding an interaction never silently locks it.
 
 ```ts
-world.addEntity({id:'bench',object:bench,role:'obstacle',physics:{kind:'fixed'},interactions:[
-  {slotId:'left',label:'Left seat',kind:'seat',capacity:1,
-   positionLocalMetersXYZ:[-.6,.46,-.49],
-   approachLocalMetersXYZ:[-.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
-  {slotId:'right',label:'Right seat',kind:'seat',capacity:1,
-   positionLocalMetersXYZ:[.6,.46,-.49],
-   approachLocalMetersXYZ:[.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
-]});
-await world.execute({type:'humanoid.perform-action',actorId:'person',
-  request:{requestId:'sit-right',action:'sit',targetId:'bench',slotId:'right'}});
+// Supply the authored physical object and its measured interaction slots.
+world.addEntity({id:targetId,object:targetObject,role:'obstacle',physics,
+  interactions:interactionSlots});
+await world.execute({type:'humanoid.perform-action',actorId,
+  request:{requestId,action:'sit',targetId,slotId}});
 ```
 
 The example assumes the authored bench root is at floor level and its actual seat
@@ -565,25 +558,26 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 
 ## Multiple complete humanoids
 
+Supply the actor IDs, spawn position, movement and autonomy from the authored task.
+
 ```ts
-const guide = await world.humanoid!.createCharacter();
-guide.root.position.set(4, 0.04, 0);
-world.addCharacter({id:'guide', humanoid:guide,
-  movement:{kind:'ground', walkSpeedMetersPerSecond:2.4}});
-world.setAutonomy('guide', {kind:'patrol',
-  waypointPositionsWorldMetersXYZ:[[4,0,7],[4,0,-3]], pauseSeconds:0.5});
-world.setCameraFollow({targetEntityId:'guide'});
-// Input selection is independent of the camera target.
-world.setControlledEntity('person');
+const character = await world.humanoid!.createCharacter();
+character.root.position.fromArray(spawnPosition);
+world.addCharacter({id:actorId,humanoid:character,movement});
+world.setAutonomy(actorId,autonomy);
+// Input selection and camera targeting are independent choices.
+world.setControlledEntity(inputActorId);
+world.setCameraFollow({targetEntityId:cameraActorId,activateOnInput:true});
 ```
 
-For a complete Humanoid target, `setCameraFollow` accepts only `targetEntityId`
-(or no options to follow the controlled actor) and selects camera mode 0. Other
-fields, including `view` and follow/framing parameters, are rejected with
-`WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED` before changing the target or camera owner.
-Use `world.humanoid.applyProfile({cameraDistanceMeters, camera, view})` for Humanoid
-camera settings and `world.humanoid.setCameraMode(0|1|2)` for its mode. Ordinary
-targets retain the `CameraFollowOptions` configuration described above.
+`setCameraFollow` accepts `targetEntityId` and the shared framing/follow parameters
+for ordinary and complete Humanoid actors. Author the opening pose/projection,
+then use `activateOnInput:true` to inherit it on first input. Selecting another
+camera target does not select its controls. Explicit `view` configures the selected
+subject's eye and perspective; otherwise use `world.humanoid.setCameraMode(0|1|2)`
+and `applyProfile({cameraDistanceMeters,camera,view})` for tuned Humanoid views.
+Inspection reports `settingsApplied:false` and `settings:null` when tuned profile
+values are not driving the authored/shared camera.
 
 Each actor has its own controller, skeleton, mixer and action state. All actors
 share the physics world, interaction targets and fixed clock. Ground navigation
@@ -613,7 +607,7 @@ release only their own override. Full humanoid bindings accept ground walk/run/j
 speed settings; custom movement adapters and arbitrary body dimensions are not
 accepted for this controller. Vehicle commands also accept `actorId`; omitting it
 selects the current input actor. A rider retains its vehicle across input switches,
-and another actor cannot board or prepare that occupied vehicle. Use [multiple-actors](../../examples/three-creator/multiple-actors/main.ts)
+and another actor cannot board or prepare that occupied vehicle. Use the [human integration guide](../../scripts/three-creator/agent/assets/humans/integration.md)
 for complete rigs and autonomous navigation.
 
 Every actor, including the initial character, uses the same controller, binding and
@@ -630,20 +624,7 @@ For an arcade car or motorcycle without `wheelPhysics`, set `brakeDrift: true` o
 (`mode: 'wheeled'` or `'motorcycle'`). The SDK integrates real lateral velocity; do not
 rotate the visual root or install a second movement loop to fake a skid.
 
-```ts
-import type { humanoid } from "@worldkit/three";
-
-const driftTuning = {
-  brakeDrift: true,
-  grip: 10, steer: 0.65,
-  steeringResponse: 7, steeringReturn: 12,
-  brakeDeceleration: 6, brakeDamping: 0.5, coastDeceleration: 1.8,
-} satisfies Partial<humanoid.VehicleSpec>;
-// Include ...driftTuning in the spec passed to createHumanoidWorld({ vehicles }).
-```
-
-These are starting values, not universal tuning: test speed, turning radius and
-recovery for the authored vehicle. Brake while steering above 2.5 m/s; strength
+Brake while steering above 2.5 m/s; strength
 ramps to its maximum at 6 m/s. Default S is forward braking (reverse below
 1 m/s), while Space gives a stronger handbrake slide. Reverse and parking-speed
 turns do not activate this model. `grip`, steering and braking control the slide
@@ -655,13 +636,14 @@ Creator's self-drawn road examples use `wheelPhysics` instead of this arcade pat
 Do not combine `brakeDrift` with their per-wheel handling configuration.
 [Design, parameter units and tuning checks](../../docs/three-vehicle-drift.md).
 
-
 ## Bind scene, controls and parameters
 
 `createHumanoidWorld` uses the Humanoid backend through `createWorld({humanoid})`.
 It is the world's single solver, driven by the SDK 60 Hz clock and shared by
 Presentation and Episode. Author a `EnvironmentDefinition` with collision `boxes`, optional
 `interactions`, `climbSurfaces`, water bounds, player spawn and scene bounds.
+Optional `map.boundaries` adds invisible collision fences; see the `boundaries`
+topic before placing playable edges or inaccessible scenery.
 Box `position` is its world-space centre; `size` is the full XYZ extent. Box rotations
 are XYZ Euler radians; map yaw zero faces +Z. Render the same geometry in Three;
 a visual surface is not a collider.
@@ -676,7 +658,8 @@ children after the SDK places actors, without writing roots, mixer or camera.
 | Default input | Meaning |
 | --- | --- |
 | WASD | Movement; climbing directions |
-| Mouse drag / arrows | Camera; vehicle-specific attitude axes |
+| Mouse drag | Camera orbit, including while mounted |
+| Arrow keys | Camera orbit; spacecraft reserves all arrows for pitch/strafe, tank reserves up/down for gun elevation |
 | Shift held | Sprint / acceleration |
 | Space | Jump / traverse / stand; climbing top attempt |
 | C or Ctrl | Crouch / stand; release climbing |
@@ -688,6 +671,10 @@ children after the SDK places actors, without writing roots, mixer or camera.
 | F | Enter / exit vehicle or mount |
 
 Transition clips need no key. Swimming style is a secondary menu/input choice.
+Keyboard routing uses the controlled actor's current vehicle mode, independently
+of the camera target. Unreserved axes remain camera inputs and do not also drive
+the vehicle. Rebound camera keys follow the same rule. For initial framing and
+mount handoffs, follow the [camera setup guide](../../scripts/three-creator/agent/programming.md#initial-state-and-camera).
 HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
 roll:['KeyR']})` rebinds semantic actions and rejects duplicate/invalid codes.
@@ -728,9 +715,7 @@ declaration response. Host readers can use `world_inspect` description fields
 `humanoid.boarding`, `controlState` and `inputGuide` without reading solver internals.
 
 ```ts
-await world.execute({type:'humanoid.apply-profile',profile:{character:{
-  maxSpeed:6, jumpSpeed:5.5, coastDeceleration:8,
-}}});
+await world.execute({type:'humanoid.apply-profile',profile:authoredProfile});
 const savedProfile = world.humanoid!.exportProfile();
 const current = world.humanoid!.inspectConfiguration();
 ```
@@ -756,15 +741,7 @@ following actions must execute through actual input.
 
 ### Default view and keyboard switching
 
-Set the view in the existing profile when creating a humanoid world:
-
-```ts
-const world = await createHumanoidWorld({scene, camera, canvas, map,
-  profile: {view: {defaultPerspective: 'first-person', keyboardToggleEnabled: true}},
-});
-// Optional remapping; omit to use T.
-world.setKeyBindings({cameraToggle: ['KeyV']});
-```
+Configure view behavior through the existing profile only when the task requires it.
 
 Defaults are `third-person` and `keyboardToggleEnabled: false`. Each press cycles
 third person → first person → shoulder → third person, matching the Playground
@@ -791,6 +768,60 @@ a profile field. Scene code does not add another camera sway loop.
 These profile settings apply to Humanoid. Independent subjects configure the eye
 through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
+### Authored opening and subject integration
+
+The [initial state and camera guide](../../scripts/three-creator/agent/programming.md#initial-state-and-camera)
+defines the authoring sequence. `HumanoidWorldOptions.initialMountId` selects a
+grounded initial ride using the existing map spawn and seat; invalid placement fails.
+`CameraFollowOptions.opening` configures world position, look-at/up and FOV once.
+`headingFollow` defaults to `fixed`; `vehicle` enables the followed mount's recenter
+tuning while retaining the opening's distance, pitch, roll and FOV. Snapshot reports
+the chosen policy, actual subject ID and current heading target.
+
+With no orbit override, `framingMode:'preserve-opening'` is the default. The first
+movement/look input activates follow from the current authored position, orientation
+and FOV. Starting the clock or sending empty input does not recenter, zoom or blend
+toward a preset view. Translation follows the subject; optional heading recentering
+starts gradually after activation and the manual-orbit hold interval;
+`followHalfLifeSeconds:0` follows translation immediately. SDK input handles both
+keyboard and programmatic movement/look; scene code must not install a first-key
+`setCameraMode` listener. Explicit view switching, orbit/zoom and collision avoidance
+can change the view. Once an obstruction clears, collision recovery restores the
+intended framing. Changing carrier during preserved follow rebases from the current
+camera instead of substituting a vehicle's default distance.
+
+`distanceMeters` or `pitchRadians` explicitly selects target framing unless a
+mode is specified. Do not combine either with `framingMode:'preserve-opening'`.
+`setCameraPerspective` or Humanoid `setCameraMode(0 | 1 | 2)` requests a view change;
+it is not needed to begin moving. A supplied `view` configures a subject-local eye.
+Select first person only when the request calls for that change.
+
+The first lifecycle transition seals the reset opening. Reset restores that pose
+and pending follow policy. Agent edits to the opening source take effect after
+recompilation and establish the new world's baseline. Runtime `useAuthoredCamera()`
+followed by `setCameraFollow()` can rebase current follow; it does not rewrite an
+already sealed reset opening. Do not add an `onReset` camera writer.
+
+SDK integrations provide a read-only
+[`CameraSubjectAdapter`](src/camera-subject.ts): `sample` supplies actual subject ID,
+world position, optional body dimensions and world transform/semantic front;
+`collisionRequest` supplies subject-specific collision exclusions when needed.
+Eye offsets belong to `CameraFollowOptions.view`; Humanoid's dedicated perspectives
+derive posture and rider eye from their existing runtime. A custom `view` eye is
+local to the actual followed subject, including the vehicle while mounted; omit
+`view` to use Humanoid's calibrated first-person/shoulder modes. These are data/policy
+adapters, not new camera or input owners. Read queries never step simulation; a new
+subject must use the common rig for authored follow and explicitly reject unsupported
+configuration instead of silently dropping it.
+
+Every new controller must join the `fixtures` in the
+[public-entry contract tests](src/camera-public-conformance.test.ts): authored pose
+and FOV, first input, translation, supported target/carrier changes, collision
+recovery and reset, with Creator/Episode lifecycle coverage. This is SDK integration
+CI. Creator checks opening/first-input continuity within its existing playtest and
+uses actual pixels alongside camera state. Asset submission and Agent registration
+are described in the [asset integration guide](../../docs/asset-production-integration.md#新主体的镜头与输入接入).
+
 ### Humanoid camera perspectives
 
 Start with the tuned defaults: omit `profile.camera` and `cameraDistanceMeters`
@@ -803,18 +834,13 @@ eye-based anchor. The vertical offset is not eye height or absolute world height
 `targetHeightOffset:1.1` adds another 1.1 m. Both offsets are shared by mode 0 and
 mode 2; mode 1 ignores them. They remain valid adjustments, including negative
 values. `cameraDistanceMeters` affects only mode 0; mode 2 owns its independent
-shoulder distance. A distant opening composition is not a reason to override the
-gameplay follow distance or eye offset.
+shoulder distance. These tuned-mode parameters do not replace an authored opening
+in `preserve-opening` follow.
 
-For an authored opening, finish the camera pose and projection and call
-`world.useAuthoredCamera()` before the first `start`, `step` or `reset`; that first
-lifecycle transition seals the opening. Then return control with
-`humanoid.set-camera-mode` when play begins. Reset restores the sealed authored
-opening after follow-camera use. The Humanoid follow mode still resets to the
-profile's `defaultPerspective`; temporary authored or shoulder views do not replace
-that default. Do not add a separate `onReset` camera writer. Inspect the views needed by the task or an
-observed camera problem. For a focused Creator check, select the view and capture
-its actual world pixels:
+Humanoid follows the [same opening contract](#authored-opening-and-subject-integration).
+`profile.view.defaultPerspective` configures tuned views; it does not force a preset
+view when an authored opening begins playing. To deliberately inspect a different
+perspective, select it and capture its actual world pixels:
 
 ```js
 world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})
@@ -822,34 +848,17 @@ world_preview({view:'current'})
 world_inspect({sections:['description']})
 ```
 
-`start()` starts the clock, not the user's first action. The public handoff is
-`world.humanoid.setCameraMode(0 | 1 | 2)`; there is no `humanoid.camera` method.
-Call it from the scene's chosen play input or start button. The optional
-[keyboard handoff example](../../examples/three-creator/vehicle-camera/opening-camera.ts)
-uses current movement/jump/boarding bindings on the focused gameplay surface:
-
-```ts
-// After configuring the authored pose, before the first start:
-world.useAuthoredCamera();
-installOpeningCameraHandoff(world, presentation.inputSurface);
-await world.start();
-presentation.focus();
-```
-
-Read the example via `creator_get_examples({topic:'vehicle-camera',files:['opening-camera.ts']})`
-and import its function into the scene. It leaves idle openings, paused worlds,
-UI input and ordinary camera switching alone; reset needs no extra listener.
-This particular example starts on movement, jump or boarding keys, not arbitrary
-pointer or semantic input. Choose the trigger required by the scene. Creator
-keyboard steps exercise the same DOM listener. For a semantic-input plan, select
-the camera with a `humanoid.set-camera-mode` command in the first play step (and
-after a reset when play resumes). Episode independently selects its segment
-camera and pauses the live clock; scene input handlers must not take it over.
+`creator_get_examples({topic:'getting-started',files:['main.ts']})` returns a
+direct SDK calls that preserve the supplied opening with authored follow.
+Episode independently selects its segment camera and pauses the live clock;
+scene input handlers must not take it over.
 
 `world_preview({view:'current'})` preserves the current view without resetting or
 advancing simulation. Its `cameraObservation` includes `cameraOverrides` (explicit
-`profile.camera`), `cameraSettings` (resolved settings) and `framing`, alongside
-the real pixels. `world_preview({view:'opening'})` stops and resets the world;
+`profile.camera`), `cameraSettings` (tuned modes only; otherwise null) and `framing`,
+alongside the real pixels. `configuration.effective.camera.settingsApplied:false`
+means profile tuning does not control the displayed authored/shared follow; inspect
+`world.snapshot().camera` and pixels instead. `world_preview({view:'opening'})` stops and resets the world;
 use opening only to check the reset opening. Top-down and object triviews do not
 establish gameplay framing.
 
@@ -905,29 +914,17 @@ for these geometry queries.
 
 Whitebox recoloring must preserve glass transparency, opacity, side and material
 array slots. Clone source materials and modify their palette instead of replacing
-every surface with an opaque material. The [rover camera example](../../examples/three-creator/vehicle-camera/README.md)
-(`creator_get_examples({topic:'vehicle-camera'})`) includes a native Three material
-helper and SDK-owned T/reset controls. Inspect first-person pixels as well as the
-mode number. For an authored opening, perform the camera handoff in the user's
-reset/start action; do not unconditionally claim the camera in `onReset`, which
-also runs while Episode owns the recording clock.
+every surface with an opaque material. Inspect first-person pixels as well as
+the mode number. Use public pending follow for authored openings; reset needs no
+scene camera handoff, including while Episode owns the recording clock.
 
 <!-- topic:control -->
 ## One state for gameplay and text commands
 
-```ts
-const open = world.defineParameter({
- id:'gate.open',description:'Open the gate',schema:{type:'boolean'},initialValue:false,
- writes:[{kind:'entity',entityId:'gate',channels:['rotation']}],
- plan:value=>[{type:'entity.set-rotation',entityId:'gate',
-   rotationLocalRadiansXYZ:[0,value?Math.PI/2:0,0],durationSeconds:.35}]
-});
-world.onInteract('gate',()=>({type:'parameter.set',parameterId:open.id,value:!open.value}));
-```
-
-The gate is your hinge Group registered as kinematic. Parameter.value is the
-committed desired state, status reports transition/interruption, and actual
-transforms are queryable. A property plan only returns persistent property
+`world.defineParameter` registers typed desired state and its declared writes.
+`world.onInteract` can route interaction to the same parameter command.
+Parameter.value is the committed desired state; status reports transitions or
+interruption, and actual transforms are queryable. A property plan only returns persistent property
 commands. A registerAction plan composes built-in commands/parameters and declares
 its writes. Neither plan may mutate scene objects, perform IO or return a Promise.
 Use `world.state.define(id, initialValue)` for resettable private game data.
@@ -1022,92 +1019,81 @@ Modify the existing owner, retain its callers/lifecycle, and verify both browser
 play and Episode capture. The resulting runtime source and bytes travel with the
 delivery. Scene code does not install a second physics, animation or camera loop.
 
-
-Movement returns intent; the SDK still performs the actual KCC collision step:
+Movement returns intent; the SDK performs the actual KCC collision step.
+Register the task's definition and synchronous callbacks:
 
 ```ts
-world.registerMovement({id:'hover',version:1,description:'Player-controlled hover',
- initialState:{elapsedSeconds:0},
- update:({input,desiredDirectionWorldXYZ,deltaSeconds,state})=>({
-  state:{elapsedSeconds:state.elapsedSeconds+deltaSeconds},
-  velocityWorldMetersPerSecondXYZ:[desiredDirectionWorldXYZ[0]*4,
-    input.jump?2:-.5,desiredDirectionWorldXYZ[2]*4],applyGravity:false
- })
+world.registerMovement({
+  id: movementId, version: movementVersion, description: movementDescription,
+  initialState, update: updateIntent, episode: episodeAdapter,
 });
-await world.execute({type:'actor.set-movement',entityId:'hero',movementId:'hover'});
 ```
 
-This is controlled motion, not flight navigation. Do not promise NPC aerial
+`updateIntent` implements `MovementDefinition.update`: calculate velocity/state
+from its input, body, time and probe context. `episodeAdapter`, when needed,
+implements `MovementEpisodeAdapter.input` and returns actual WorldInput.
+
+A movement callback does not provide flight navigation. Do not promise NPC aerial
 pathfinding from a movement callback. Query registered movements and entity
 commands; switching back uses the registered ground movement ID from describe.
 The callback is synchronous and pure, uses SDK input/time/body/probes, and returns
 velocity/state. It must not move Three roots, create physical bodies or own a timer.
 
-A visual/state parameter may use an effect instead of a property plan:
-
-```ts
-world.defineParameter({id:'sky.mode',description:'Choose the sky',
- schema:{type:'string',enum:['day','aurora']},initialValue:'day',
- writes:[{kind:'visual',channelId:'scene.sky'}],
- effect:value=>{scene.background=new THREE.Color(value==='aurora'?'#102d53':'#acd0d9');}
-});
-```
-
-Effects may synchronously change declared visual/state channels. They cannot
+A visual/state parameter may use a synchronous effect instead of a property plan.
+Effects may change only their declared visual/state channels. They cannot
 mutate managed entity roots, colliders or camera, do IO, or return a Promise.
-Keep physical gameplay in commands; changing a sky color does not change gravity.
+Keep physical changes in SDK commands.
 
-```ts
-await world.registerGeometry({id:'bridge.long',description:'Longer bridge deck',
- geometry:new THREE.BoxGeometry(3,.3,8)});
-await world.execute({type:'entity.set-geometry',entityId:'bridge',geometryId:'bridge.long'});
-```
-
-Named geometry applies to a registered non-skinned Mesh. The SDK prepares and
+`world.registerGeometry` registers named geometry; `entity.set-geometry` applies
+it to a registered non-skinned Mesh. The SDK prepares and
 validates replacement collision/navigation before commit; keep the original
 geometry registered under another ID to restore it. Do not mutate a published
 geometry template. Geometry IDs are discoverable; an effect cannot secretly edit
 physics geometry. Async procedural geometry uses scope.replaceGeometry.
 
 The React editor in `apps/three-playground` uses the scene and vehicle modules in
-`shared/preset-content`. Runnable integration examples live in `examples/three-creator`.
+`shared/preset-content`. Authoring bindings are indexed by the [Agent asset guide](../../scripts/three-creator/agent/assets/README.md).
 
 <!-- topic:presentation -->
+## Per-object whitebox color
+
+Colors are authored per instance, with no SDK role palette. Choose distinguishable
+colors for the subject, requested enemies and different important counterparts;
+same-kind repetitions may share a color. Keep the world predominantly white and
+terrain differences subtle. The choice remains the same in play and captures.
+
+Humans use `createHumanoidWorld({...,characterColor})` or
+`character.setColor(chosenColor)` on a loaded or not-yet-loaded `HumanoidCharacter`.
+The character owns cleanup; `setColor(null)` restores its original materials.
+Factories capture the color when created; set each new important person's color
+explicitly. Input selection, riding and camera changes do not recolor anyone.
+
+For other models, `setObjectColor(visualRoot, chosenColor)` returns an
+`ObjectColorBinding` with `color`, `setColor` and `dispose`. Colors are sRGB
+`#RRGGBB` strings chosen by the author. Call after loading, on disjoint visual roots,
+before attaching independently colored riders or carried objects. It colors current
+mesh descendants only; later children keep their own appearance. For world-lifetime
+objects register `world.onDispose(() => coloring.dispose())`; dispose the binding
+before releasing a model that is removed earlier. It restores original materials
+and releases only its own replacement materials, never source textures or geometry.
+Repeated calls on the same root update its binding. For authored meshes, normal
+independent Three materials remain sufficient.
+
+The helper uses matte materials under scene lighting, replaces RGB instead of multiplying
+source colors, and preserves loaded texture/vertex alpha and material cutouts.
+It retains geometry, skeletons and animation. If a model needs a texture for its
+silhouette, load that texture first. Custom shaders require author-owned coloring.
+The current interfaces come from `object-color.ts` and the human color methods in
+`humanoid-runtime/character.ts`, exposed in Creator's `contracts` section.
+
 ## Shared shadow settings
 
-Both world factories accept partial `shadows` overrides. Omit them to use
-`DEFAULT_SHADOW_SETTINGS` from the SDK's [presentation config](src/config/presentation.ts).
-For imported JSON, use the shared parser:
-
-```ts
-import {createWorld, resolveShadowSettings} from '@worldkit/three';
-import config from './presentation.json'; // e.g. {"shadows":{"enabled":true,"coverageMeters":60}}
-const world = await createWorld({scene, camera, canvas,
-  shadows: resolveShadowSettings(config.shadows)});
-const sun = new THREE.DirectionalLight(0xffffff, 2);
-sun.position.set(-20, 40, -30);
-scene.add(sun, sun.target);
-world.configureShadowLight(sun);
-```
-
-The switch and algorithm apply to the renderer at creation, including a supplied
-renderer. Configure each selected directional light once and repeat for replacement
-lights; its position, target and lifetime remain authored. The SDK does not create
-lights, follow actors with them, or change mesh `castShadow`/`receiveShadow` flags.
-Other light types remain ordinary Three authoring. Disposing the world restores a
-supplied renderer's previous shadow switch/algorithm.
-
-Settings are JSON values: `enabled`, `type` (`basic`, `pcf`, `vsm`),
-`mapSizePixels`, `coverageMeters`, `nearMeters`, `farMeters`, `bias`,
-`normalBiasMeters`, `radius` and `intensity`. Coverage is the width/height in the
-directional light's view; sampling scale is `coverageMeters / mapSizePixels`.
-`bias` is normalized depth, `radius` is the filter radius (ignored by `basic`),
-and intensity ranges from 0 to 1. Larger coverage reduces detail; excessive bias
-can separate contact shadows. GPU texture limits may reduce actual map resolution.
-`world.shadowSettings` is the immutable resolved configuration, not a GPU measurement.
-Project files are imported by scene code and compiled into delivery; neither
-Creator nor Episode replaces them during capture. Playground's
-`presentation.json` uses this same path; edit, rebuild and refresh to apply changes.
+Both world factories accept optional `shadows` overrides; omit them to use the
+SDK's [presentation defaults](src/config/presentation.ts). `resolveShadowSettings`
+parses configuration and `world.configureShadowLight` applies it to an existing
+directional light. The SDK does not create lights or change mesh shadow flags.
+`world.shadowSettings` reports resolved configuration, not a GPU measurement.
+Use the current [ShadowSettings contract](src/contracts.ts) for parameter details.
 
 ## Independent UI, world pixels and model output
 
@@ -1117,26 +1103,10 @@ the Three scene and renderer. Use ordinary HTML/CSS mounted through one
 belong to the physical world may remain scene geometry. The SDK manages layer
 placement and input routing; you choose the UI layout, styling and behavior.
 
-```ts
-const presentation = world.createPresentation();
-const score = world.state.define('score', 0);
-const hud = document.createElement('output');
-hud.style.cssText = 'position:absolute;left:16px;top:16px;color:white';
-presentation.ui.bind({id:'score', element:hud, clock:'presented',
-  read:()=>score.value,
-  render:value=>{hud.textContent = `Score: ${value}`;}
-});
-const resetButton = document.createElement('button');
-resetButton.style.cssText = 'position:absolute;right:16px;top:16px';
-presentation.ui.bind({id:'reset', element:resetButton, clock:'live',
-  read:()=>score.value,
-  render:value=>{resetButton.textContent = value ? 'Restart game' : 'Reset';}
-});
-resetButton.onclick = async()=>{await world.reset(); presentation.focus();};
-```
-
-Bindings sample authoritative SDK state; they do not own another game state or
-clock. Update the score through its state handle in gameplay. UI event handlers
+`presentation.ui.bind` samples authoritative SDK state. Choose `clock:'presented'`
+for values aligned with displayed source frames or `clock:'live'` for current state.
+Bindings do not own another game state or clock. Update data through its SDK state
+handle. UI event handlers
 read current state and call existing `world.execute(...)` commands, state handles
 or lifecycle methods. Never use a delayed HUD value as authority for a command.
 Binding values must be JSON data. Each binding mounts its element automatically;
@@ -1250,9 +1220,9 @@ For `humanoid.source-101`, these Playground fits provide starting references:
 These clearances depend on the current rig, pose and cushion geometry; they are
 not universal defaults or automatic seat fitting. A wider/deeper cushion can
 intersect the thighs even when the pelvis clears it. Changed rigs, poses or
-sloped seats need their own fit. The [custom motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
-shares its declared cushion centre/size with the pelvis calculation and uses the
-`ride` pose; it does not add another rider or provide automatic hand/foot IK.
+sloped seats need their own fit. The [vehicle binding](../../scripts/three-creator/agent/examples/vehicle.ts)
+passes the selected handling configuration to your visual builder. Match the
+seat geometry to its pelvis anchor and verify rider contact.
 
 In the existing mounted self-check, inspect the pelvis and upper thighs against
 the cushion from the side, and check the seat back, hands, feet and head clearance.
@@ -1314,7 +1284,6 @@ mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
 
 <!-- /asset-info -->
-
 
 <!-- topic:extensions -->
 ## Developer tuning
@@ -1416,12 +1385,11 @@ read the vehicle's `spaceFlight.docking.status` to observe actual completion.
 | Environment | Declare real ground/obstacles, a region allowing `spec.mode`, and a spawn matching the instance. Movable props additionally need `rigidGroup`. |
 | Display | Pass `sample.vehicles[index]` from `onVisualUpdate((dt,sample)=>...)` to `humanoid.updateVehicleWheels`. This carries suspension, spin and steering at the chassis display time. |
 
-Read the full [motorcycle example](../../examples/three-creator/custom-vehicle/main.ts)
-with `creator_get_examples({topic:'custom-vehicle'})`, or the
-[self-drawn car](../../examples/three-creator/vehicle-camera/main.ts) with
-`topic:'vehicle-camera'`. Both use only the preset humanoid asset. The car example
-includes transparent windows and SDK camera switching. HUDs and buttons are
-Presentation DOM code; `vehicle.recover` is the SDK recovery command.
+Read the [vehicle binding](../../scripts/three-creator/agent/examples/vehicle.ts)
+with creator_get_examples({topic:'custom-vehicle',variant:'car'}) or
+variant:'motorcycle'. Prepare the vehicle object/spec for your world's vehicles
+option; keep the supplied person separate. Mechanical visuals use the display binding
+above; HUDs use Presentation DOM and vehicle.recover is the SDK recovery command.
 
 For the Host baseline, request
 `creator_get_authoring_schema({topic:'humanoid',sections:['humanoid']})` to read
@@ -1584,17 +1552,14 @@ fixed because of its support or gameplay relationship. Resting on the ground alo
 does not make an unattached object fixed. If it should rest in place, provide
 physical support; without support it falls. Keep separate physical objects in
 separate groups and the total group mass identical on every part.
-`creator_get_examples({topic:'character-actions'})` supplies a complete example
-in `map.ts` and `main.ts`, including seated and pickup interactions. Its visual
-callback reads the current `world.humanoid.simulation.environment` after every
-reset/map replacement and applies `propBoxPose` to scene-root meshes. For meshes
-under transformed parents, convert these world poses into parent-local space.
+`creator_get_examples({topic:'character-actions'})` shows action requests on
+the existing world. When synchronizing movable visuals, read the current
+world.humanoid.simulation.environment after resets and apply propBoxPose to the
+corresponding meshes; convert world poses to parent-local space when needed.
 Use `world.reset()` for a complete scene reset, including characters and items;
 observation callbacks only copy poses and never step or reset physics.
 
-The playground groups chairs and tables, and makes loose boards and freestanding
-markers movable. Its building and traversal-course structures remain fixed;
-these are choices in that example, not rules for other scenes. Seat anchors follow the group's pose; moving, tilted or displaced occupied seats cancel
+Seat anchors follow the group's pose; moving, tilted or displaced occupied seats cancel
 seating. Pickup objects use independent dynamic bodies while unheld, so removing
 their table support lets them fall. Their existing rotation lock is retained for
 the authored carrying animation. This supports moving and tipping whole props;
@@ -1604,7 +1569,9 @@ it does not implement fracture or a full Chaos vehicle solver.
 
 `humanoid.createAircraftSpec('plane')` returns a fresh model-free light fixed-wing
 spec. Read it through the humanoid schema's `aircraftConfigurations.plane`, or use
-`creator_get_examples({topic:'custom-aircraft'})` for the complete example.
+`creator_get_examples({topic:'custom-vehicle',variant:'plane'})` for its minimal
+binding. Author the airframe silhouette and scene from the reference independently
+of collision proxies.
 Bind its Three root and spec through the same `createHumanoidWorld({vehicles})`
 path as a car. Keep the supplied person separate and use `spec.seat` as the pelvis
 anchor. Map regions must permit `plane`.
@@ -1672,3 +1639,72 @@ Motion-controlled craft report `kind: 'motion'` with control effort and speed,
 without fabricating an engine or human-powered cadence. Unoccupied vehicles
 continue to exchange collision momentum; carriage parts share the same compound
 body, with articulated lead geometry rather than a separate trailer solver.
+
+
+<!-- topic:boundaries -->
+## Playable edges and inaccessible areas
+
+Author visible terrain, composition, landmarks, subjects and counterpart objects from the reference.
+Keep collision proxies separate from visible meshes; invisible boundaries create no visible walls.
+Author supported, connected playable terrain first. Put invisible fences along
+inaccessible scenery and accidental drop-offs, while retaining intended jumps,
+gaps, water access and route entrances. `map.bounds` and Episode `worldBounds`
+are not a substitute for these colliders or for a real supporting floor.
+
+```ts
+import {createWorld, createHumanoidWorld, type BoundaryDefinition} from '@worldkit/three';
+const boundaries = [{
+  id: 'outer-edge', shape: 'rectangle',
+  minimumXZ: playableMinimumXZ, maximumXZ: playableMaximumXZ,
+  bottomMeters: fenceBottomMeters, topMeters: fenceTopMeters,
+}, {
+  id: 'scenery-edge', shape: 'polyline',
+  pointsXZ: sceneryBoundaryPointsXZ, closed: false,
+  bottomMeters: fenceBottomMeters, topMeters: fenceTopMeters,
+}] satisfies BoundaryDefinition[];
+// Ordinary SDK: createWorld({scene, camera, boundaries}).
+// Humanoid SDK: createHumanoidWorld({scene, camera, map: {...map, boundaries}}).
+```
+
+Coordinates and dimensions are in metres; XZ points define wall centre lines.
+Rectangle fences close all four sides; polylines remain open unless `closed:true`.
+For a closed polyline, omit the repeated first point at the end.
+Thickness defaults to 0.5 m, with overlapping segment ends. Set bottom/top for
+the actual ground, jump height or flight/water activity; this is a vertical fence,
+not a roof, floor or inferred playable polygon. Each boundary has a unique ID.
+
+Both backends use their existing physical world for the fixed collision boxes.
+Boundaries have no visual mesh and do not become capture targets. They block
+physical movement but default to `blocksCamera:false`; set it true only when
+the camera also needs containment. Humanoid traversal must not climb or vault
+an invisible boundary. Place NPC routes within reachable regions.
+
+Use `compileBoundaryBoxes(boundaries)` to inspect the exact generated box poses
+or draw temporary debug outlines. Remove debug geometry before final captures;
+do not register a second set of physical boxes. For Humanoid worlds pass fences
+in `map.boundaries`, not in top-level `createWorld` options.
+
+Humanoid worlds can opt into controlled-subject recovery with
+`map.recovery = {fallBelowY, checkpoint: {position: safePosition, yaw: safeYaw}}`.
+Choose an actual stable, clear ground checkpoint and a threshold above
+`map.bounds.min[1]`, below all intended playable terrain. Checkpoint yaw uses
+the map's +Z convention. Omit `checkpoint` to use the person's current checkpoint
+or the current vehicle's prepared spawn. The recovery checks nearby floor support
+and full body/rider/carried-object clearance before moving the same actor.
+It clears motion, retains the mounted relationship and leaves world interactions
+and task state intact. It does not search the map for a replacement checkpoint.
+
+This recovery supports walking and ground vehicles/mounts; water and air modes
+report `UNSUPPORTED_RECOVERY_MODE`. Ordinary `createWorld` has the same physical
+fences but no automatic checkpoint recovery. Configure intentional falls and
+failure rules for those games through their own supported controller logic.
+Read `snapshot().humanoid.recovery` for the latest attempt, status, reason and
+sequence number. A continuously invalid state is attempted once, with no hidden
+per-frame reset loop. Fix an unsafe checkpoint or edge when recovery is blocked
+or repeats; the normal full-world reset remains a separate operation.
+
+Within Creator, test representative edges, joints and entrances with the case's
+actual movement modes and speeds. Check jump/sprint or mounted contact, camera
+clearance and NPC routing where relevant. A readable overview or a successful
+reset does not prove the edge is safe. Keep these checks inside normal authoring
+and reuse the original case inputs.

@@ -33,14 +33,14 @@ Creator 可通过 `assets_search` 查找 D01–D11，再用 `assets_describe` �
 `flameResource`。资源按逻辑 `path` 在该资产的 `resources` 中解析为实际 URI。
 `requiredAssetIds` 明确该变体与 `humanoid.source-101` 的依赖。
 
-`creator_get_examples({topic:'flying-creature'})` 返回
-[完整示例](../examples/three-creator/flying-creature/README.md)。它默认声明 D01 与
-Source101，从 `asset-definitions.json` 读取上述字段，将加载后的
-`FlyingCreatureVisual.root`、`flyingVisual` 和复制的 spec 一起交给
-`createHumanoidWorld`。切换变体时同时改选中的 asset ID 与 `project.json`；
-不手写资源 URL，也不复用另一变体的碰撞标定。示例飞龙从空中开始，人物通过真实
-召唤、接近和登乘输入进入骑乘流程；附带输入计划只对应默认 D01 场地，执行结果
-仍从当前状态确认。
+Agent 从 [动物与生物](../scripts/three-creator/agent/assets/animals/README.md)
+进入 [飞行坐骑](../scripts/three-creator/agent/assets/animals/flying-mounts.md)。
+`assets_describe` 返回这份下层说明的 `documentation` 和可直接调用的 `bindingExample`。
+绑定入口为 `creator_get_examples({topic:'mounted-interaction',variant:'flying-creature'})`，
+返回同目录的 [最小绑定片段](../scripts/three-creator/agent/assets/animals/flying-mounts.ts)。
+Agent 提供所选资产、实例、参考图中的位置与资源解析器，将视觉实例交给唯一的
+`createHumanoidWorld`。场地、开场镜头和输入路线由当前需求决定；召唤、登乘、
+起降的条件和结果通过当前接口及状态查询确认。
 
 目录中的 [`creature.dragon`](../assets/three-creator/catalog/creature.dragon.json)
 是另一份 WYVERN 资源，路径为 `presets/creatures/dragon.glb`。它与这些原生变体是

@@ -17,6 +17,8 @@ export interface HumanoidLevel {
 }
 export function humanoidLevel(map:EnvironmentDefinition):HumanoidLevel {
   return {
+    // map.boundaries exist only in the shared physics world. They never enter
+    // the authored obstacle metadata used to plan vaults, mantles or climbs.
     boxes:map.boxes.filter(b=>b.collision!==false).map(b=>({id:b.id,x:b.position[0],y:b.position[1]-b.size[1]/2,z:b.position[2],w:b.size[0],h:b.size[1],d:b.size[2],rotation:b.rotation?[...b.rotation]:undefined})),
     waters:map.water.map(w=>({id:w.id,x:(w.min[0]+w.max[0])/2,z:(w.min[2]+w.max[2])/2,w:w.max[0]-w.min[0],d:w.max[2]-w.min[2],surfaceY:w.surface,bottomY:w.min[1]})),
     interactions:structuredClone([...(map.interactions??[])]),climbSurfaces:structuredClone([...(map.climbSurfaces??[])]),

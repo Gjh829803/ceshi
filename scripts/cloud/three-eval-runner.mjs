@@ -89,7 +89,7 @@ if(previousPlan&&previousPlan.runtimeHash!==lock.runtimeHash)throw Error("CREATO
 if (typeof lock.launcherPath !== "string" || !/^\/fsx\/pipeline\/worldkit-three-creator-experiments\/.+\/three-eval-launcher\.mjs$/.test(lock.launcherPath)) throw new Error("runtime-lock.launcherPath must identify the isolated cloud launcher.");
 const s3Root = (options["--output-s3-root"] ?? previousPlan?.outputS3Root ?? `s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/${suite === "sdk-only" ? "sdk-eval" : "paired-eval"}`).replace(/\/$/, "");
 if (!s3Root.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/")) throw new Error("Evaluation S3 prefix must stay within the project's Three artifact root.");
-const commonInstructions = await readFile(path.join(repo, "scripts/cloud/three-eval-instructions.md"), "utf8");
+const commonInstructions = await readFile(path.join(repo, "scripts/three-creator/agent/README.md"), "utf8");
 if (sourceManifest.genericInstructionsSha256 && sourceManifest.genericInstructionsSha256 !== sha256(commonInstructions)) throw new Error("Frozen generic instructions hash mismatch.");
 const evaluationPolicyPath = sourceManifest.evaluationPolicyPath ? path.resolve(repo, sourceManifest.evaluationPolicyPath) : null;
 if (evaluationPolicyPath && !evaluationPolicyPath.startsWith(`${repo}${path.sep}`)) throw new Error("Host evaluation policy must stay in this checkout.");

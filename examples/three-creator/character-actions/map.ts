@@ -15,7 +15,7 @@ const boxes:EnvironmentDefinition['boxes'][number][]=[
   ];
 const chairColliders=['seat','seat-back'];
 
-/** Three visuals and collision boxes share these dimensions, in metres. */
+/** Physical support and interaction clearance, in metres. Visible objects are authored in main.ts. */
 export const map:EnvironmentDefinition={
   id:'character-actions',name:'人物动作场',description:'移动、滑铲、匍匐、攀爬、搬运与游泳',
   bounds:{min:[-25,-5,-20],max:[40,30,20]},

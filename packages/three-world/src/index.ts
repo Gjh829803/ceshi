@@ -1,4 +1,5 @@
 export * from './contracts.js';
+export {setObjectColor,type ObjectColorBinding} from './object-color.js';
 export {INTERACTION_SLOT_SCHEMA} from './interaction-contracts.js';
 export type * from './episode-contracts.js';
 export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
@@ -16,3 +17,6 @@ export { INPUT_BINDINGS, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindin
 export { CHARACTER_CAPABILITIES, type CharacterCapability, type CharacterCapabilityState } from './humanoid-runtime/character-capabilities.js';
 export { HorseVisual } from './humanoid-runtime/horse.js';
 export type { HorseAnimationFrame, SeatAnchor, ResourceResolver } from './humanoid-runtime/horse.js';
+
+export type {CameraSubjectAdapter,CameraSubjectBody,CameraSubjectSample} from './camera-subject';
+export {compileBoundaryBoxes,type BoundaryDefinition,type BoundaryBox} from './boundaries';

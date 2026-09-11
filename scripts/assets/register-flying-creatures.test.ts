@@ -12,7 +12,7 @@ it('registers all eleven measured flying creatures with packaged visual resource
   for(const asset of generated){
     expect(sources.find(source=>source.id===asset.id)).toEqual(asset);
     expect(policy.allowedAssetIds).toContain(asset.id);
-    expect(asset.integrationMetadata).toMatchObject({classification:'flying-mount',exampleTopic:'flying-creature',requiredAssetIds:['humanoid.source-101',asset.id]});
+    expect(asset.integrationMetadata).toMatchObject({classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.source-101',asset.id]});
     const visual=asset.integrationMetadata.visual;
     expect(visual.modelResource).toBe(`flying-creatures/${visual.animationPrefix}/model.glb`);
     expect(asset.resources.some(resource=>resource.path===visual.flameResource)).toBe(true);

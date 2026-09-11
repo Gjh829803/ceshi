@@ -3,7 +3,69 @@ import os from 'node:os';
 import path from 'node:path';
 import type {Page} from 'playwright';
 import {expect,it} from 'vitest';
+import sharp from 'sharp';
 import {ThreeCreatorTools} from './tools';
+
+it('renders independent author colors in the opening and object sheets while preserving texture alpha',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'model-colors-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.source-101']}));
+  await writeFile(path.join(root,'index.html'),'<!doctype html><html><body style="margin:0"><script type="module" src="./main.ts"></script></body></html>');
+  await writeFile(path.join(root,'main.ts'),`
+import * as THREE from 'three';
+import {createHumanoidWorld,setObjectColor,humanoid} from '@worldkit/three';
+const scene=new THREE.Scene();scene.background=new THREE.Color('#ffffff');scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,2));
+const canvas=document.createElement('canvas');document.body.append(canvas);
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.1,100);camera.position.set(0,2,8);camera.lookAt(0,1,0);
+const map={id:'colors',name:'Colors',description:'Color integration regression',bounds:{min:[-10,-5,-10],max:[10,10,10]},
+ boxes:[{id:'floor',position:[0,-.5,0],size:[20,1,20]}],water:[],
+ regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[20,20],color:'#ffffff',modes:['wheeled']}],
+ spawns:[{id:'car-spawn',name:'Car',vehicleId:'car',regionId:'road',position:[5,.04,0],yaw:0}],playerSpawn:[-1,.04,0]};
+const spec=humanoid.createRoadVehicleSpec('car');
+const world=await createHumanoidWorld({scene,canvas,camera,map,navigation:false,characterColor:'#287eca',characterLoadOptions:{loadTextures:true},
+ vehicles:[{instanceId:'car',assetId:'custom.car',object:new THREE.Group(),spec}]});
+const other=await world.humanoid.createCharacter();other.setColor('#cb583e');other.root.position.set(1,.04,0);
+world.addCharacter({id:'other',humanoid:other});world.setCaptureTargets(['player','other']);world.useAuthoredCamera();world.setCameraFollow({activateOnInput:true});
+(window as any).__colorTest={world,other,THREE,setObjectColor};await world.start();world.stop();
+`);
+  const opening=await service.preview('opening');
+  const page=(service as unknown as {session:{page:Page}}).session.page;
+  const result=await page.evaluate(async()=>{
+   const {world,other,THREE,setObjectColor}=(window as any).__colorTest;
+   const colors=()=>{const result:Record<string,string[]>={};for(const [id,object] of [['player',world.humanoid.options.character.object],['other',other.root]]){
+    const values=new Set<string>();object.traverse((node:any)=>{if(node.isMesh)for(const m of Array.isArray(node.material)?node.material:[node.material])values.add(m.color.getHexString());});result[id]=[...values];}return result;};
+   const before=colors();world.setControlledEntity('other');world.humanoid.setCameraMode(1);world.humanoid.setCameraMode(0);world.step({},2);
+   world.step({},60);world.humanoid.approach('car');const boarding=world.humanoid.inspectBoarding('car'),entered=world.humanoid.enter('car');world.step({},45);
+   const mounted=world.humanoid.snapshot().mountedInstanceId,whileMounted=colors();
+   const exited=world.humanoid.exit();world.step({},45);const afterExit=colors();await world.reset();
+   const after=colors();
+   // A red texture must contribute alpha only, even when the author chooses blue.
+   const texture=new THREE.DataTexture(new Uint8Array([255,0,0,255,255,0,0,0]),2,1);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;
+   const source=new THREE.MeshStandardMaterial({map:texture,alphaTest:.5}),geometry=new THREE.PlaneGeometry(2,1),mesh=new THREE.Mesh(geometry,source);
+   const color=setObjectColor(mesh,'#287eca'),scene=new THREE.Scene();scene.add(mesh,new THREE.AmbientLight(0xffffff,2));
+   const camera=new THREE.OrthographicCamera(-1,1,.5,-.5,.1,10);camera.position.z=1;
+   const renderer=world.renderer,target=new THREE.WebGLRenderTarget(64,64),previous=renderer.getRenderTarget();
+   const clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha();
+   let opaque:number[]=[],cutout:number[]=[];
+   try{renderer.setRenderTarget(target);renderer.setClearColor(0,0);renderer.clear();renderer.render(scene,camera);
+    const pixels=new Uint8Array(64*64*4);renderer.readRenderTargetPixels(target,0,0,64,64,pixels);
+    opaque=[...pixels.slice((32*64+16)*4,(32*64+16)*4+4)];cutout=[...pixels.slice((32*64+48)*4,(32*64+48)*4+4)];
+   }finally{renderer.setRenderTarget(previous);renderer.setClearColor(clear,alpha);color.dispose();source.dispose();geometry.dispose();texture.dispose();target.dispose();}
+   return {before,after,opaque,cutout,entered,boarding,mounted,whileMounted,exited,afterExit};
+  });
+  expect(result.before).toEqual({player:['287eca'],other:['cb583e']});expect(result.after).toEqual(result.before);
+  expect(result.entered,JSON.stringify(result.boarding)).toBe(true);expect(result.mounted).toBe('car');expect(result.exited).toBe(true);
+  expect(result.whileMounted).toEqual(result.before);expect(result.afterExit).toEqual(result.before);
+  expect(result.opaque[3]).toBe(255);expect(result.opaque[2]).toBeGreaterThan(result.opaque[0]!+30);expect(result.cutout[3]).toBe(0);
+  const sheets=await service.triviews();expect(sheets.pageErrors).toEqual([]);
+  const count=async(file:string)=>{const {data,info}=await sharp(file).removeAlpha().raw().toBuffer({resolveWithObject:true});let blue=0,red=0;
+   for(let i=0;i<data.length;i+=info.channels){const r=data[i]!,g=data[i+1]!,b=data[i+2]!;if(b>r*1.3&&b>g*1.1)blue++;if(r>b*1.3&&r>g*1.1)red++;}return {blue,red};};
+  const openingColors=await count(opening.image.path);expect(openingColors.blue).toBeGreaterThan(100);expect(openingColors.red).toBeGreaterThan(100);
+  const objects=sheets.images.filter(image=>image.view==='entity-triview');expect(objects).toHaveLength(2);
+  const first=await count(objects[0]!.image.path),second=await count(objects[1]!.image.path);
+  expect(first.blue).toBeGreaterThan(100);expect(first.red).toBe(0);expect(second.red).toBeGreaterThan(100);expect(second.blue).toBe(0);
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+},40000);
 
 // These cases deliberately use the browser's actual embedded-image decoder.
 // No GLTFLoader hooks, placeholder textures, fetch replacements or asset rewrites.

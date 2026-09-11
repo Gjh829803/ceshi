@@ -32,6 +32,22 @@ function resources(options:{fail?:()=>boolean;gate?:Promise<void>;manifestModel?
 }
 function mesh(actor:SourceCharacter){let found:THREE.SkinnedMesh|undefined;actor.root.traverse(node=>{if(!found&&(node as THREE.SkinnedMesh).isSkinnedMesh)found=node as THREE.SkinnedMesh;});return found!;}
 
+it('keeps author colors independent across real humanoid factories, views and source disposal',async()=>{
+ const {resolve}=resources(),actor=new Character();characters.push(actor);actor.setColor('#3a8fc4');await actor.load(resolve);
+ const model=(person:Character)=>{let result:THREE.SkinnedMesh|undefined;person.root.traverse(node=>{if(!result&&(node as THREE.SkinnedMesh).isSkinnedMesh)result=node as THREE.SkinnedMesh;});return result!;};
+ const material=(person:Character)=>{const m=model(person).material;return (Array.isArray(m)?m[0]:m) as THREE.MeshStandardMaterial;};
+ const a=model(actor),geometry=a.geometry,bones=a.skeleton.bones,originalMaterial=material(actor),factory=actor.createFactory()!;
+ const second=await factory();characters.push(second);expect(second.color).toBe('#3a8fc4');second.setColor('#c65743');
+ expect(material(actor).color.getHexString()).toBe('3a8fc4');expect(material(second).color.getHexString()).toBe('c65743');
+ expect(model(second).geometry).toBe(geometry);expect(model(second).skeleton.bones).not.toBe(bones);
+ actor.setFirstPerson(true);actor.setFirstPerson(false);expect(a.geometry).toBe(geometry);expect(material(actor)).toBe(originalMaterial);
+ const release=vi.spyOn(originalMaterial,'dispose');actor.dispose();expect(release).toHaveBeenCalledOnce();
+ const third=await factory();characters.push(third);expect(third.color).toBe('#3a8fc4');expect(material(third)).not.toBe(material(second));
+ third.setColor(null);expect(third.color).toBeNull();expect(material(third).color.getHexString()).toBe('ffffff');
+ expect(material(second).color.getHexString()).toBe('c65743');expect(()=>second.setColor('#oops')).toThrow('OBJECT_COLOR_INVALID');
+ expect(second.color).toBe('#c65743');
+});
+
 it('shares immutable model sources while isolating three skeletons, mixers, clips and mutable materials',async()=>{
   const {resolve,counts}=resources();
   const actors=await Promise.all([SourceCharacter.load(resolve),SourceCharacter.load(resolve),SourceCharacter.load(logical=>resolve(logical))]);sources.push(...actors);

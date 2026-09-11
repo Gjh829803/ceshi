@@ -2,7 +2,7 @@
 
 A native Three scene using only `humanoid.source-101`. It selects
 `humanoid.createRoadVehicleSpec('car')` before drawing its own car geometry. Creator's
-`creator_get_examples({topic:'vehicle-camera'})` returns the entry files and the
+`creator_get_examples({topic:'custom-vehicle',variant:'car'})` returns the entry files and the
 local [material helper](whitebox-materials.ts); request `README.md` separately.
 Keep the full returned source graph and [asset selection](project.json).
 
@@ -16,6 +16,15 @@ configured powertrain. Wheel geometry and seat placement follow the model-free
 configuration; wheel presentation reads the same SDK display sample. The nearby solid wall uses matching visual and collision
 boxes, so camera obstruction can be compared with the car's open cabin/glass.
 The SDK owns physics, animation, time and the active camera.
+
+For a custom opening, finish the camera pose and FOV, call
+`world.useAuthoredCamera()` and `world.setCameraFollow({activateOnInput:true})`
+before starting. First movement/look input retains that composition while enabling
+follow; it must not switch to a default mode or distance. The optional
+[opening-camera.ts](opening-camera.ts) wrapper calls this same API and installs no
+listeners. Reset restores the sealed opening and pending follow. T and explicit
+camera commands request perspective changes. Check the opening and first input
+within Creator's existing self-check; no scene key or reset camera writer is needed.
 
 `applyWhiteboxMaterials(root)` clones each distinct mesh material once, maps each
 array slot to its clone and gives opaque surfaces a neutral matte finish. Glass

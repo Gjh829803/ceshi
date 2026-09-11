@@ -13,7 +13,7 @@ delivery contains technical evidence for independent visual and playable review.
   creates one `three-sdk` task per case. Its default experiment revision is
   `three-sdk-v2`; use an explicit revision to identify a particular evaluation.
   Every task receives the reference image, creative request and shared
-  `three-eval-instructions.md`. Acceptance policy stays in the Host plan.
+  [task requirements](../three-creator/agent/README.md). Acceptance policy stays in the Host plan.
 - SDK-only executes the entire manifest by default. `--case-id <source-case-id>`
   or `--case-limit N` selects a subset. `--suite paired` creates raw/SDK tasks
   and defaults to the forest pair. `--profile` narrows the selected suite.

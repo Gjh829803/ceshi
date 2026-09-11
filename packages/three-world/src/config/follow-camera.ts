@@ -5,3 +5,8 @@ export const FOLLOW_CAMERA_DEFAULTS=Object.freeze({
   openingRecoveryHalfLifeSeconds:.18,targetRecoveryHalfLifeSeconds:.24,
   maximumRecoveryMetersPerSecond:3,targetHalfLifeSeconds:.1,
 });
+
+/** Shortest-arc recenter shared by tuned vehicle views and authored follow. */
+export function recenterCameraYaw(current:number,target:number,responsePerSecond:number,deltaSeconds:number):number {
+ return current+Math.atan2(Math.sin(target-current),Math.cos(target-current))*(1-Math.exp(-responsePerSecond*deltaSeconds));
+}

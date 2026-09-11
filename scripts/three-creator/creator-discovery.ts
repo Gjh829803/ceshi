@@ -1,3 +1,5 @@
+import {bindingExample,type BindingVariant} from './binding-examples.js';
+import {agentDocument,AGENT_READING_GUIDE,readAgentDocument,AGENT_DOCUMENT_PATHS,documentNavigation,topicDocument,type AgentDocumentPath} from './agent-docs.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ThreeCompiler, REPOSITORY_ROOT, publicAsset } from './compiler.js';
@@ -6,20 +8,21 @@ import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, 
 import { humanoid } from '@worldkit/three';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, sdkExample } from './examples.js';
-import { EXAMPLE_REGISTRY, readExampleFiles, type ExampleTopic } from './example-files.js';
+import { EXAMPLE_REGISTRY, EXAMPLE_TOPICS, readExampleFiles, type ExampleTopic } from './example-files.js';
 import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
 import { characterUsage, humanAuthoringGuidance } from './character-guidance.js';
 import {cameraAuthoringGuidance} from './camera-guidance.js';
+import {qualityAuthoringGuidance} from './quality-guidance.js';
 
 export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'observation', 'commands', 'humanoid', 'all'] as const;
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
-  guide: ['entryPoint', 'sdkGuide', 'cameraAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
-  contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions'], project: ['project'], episode: ['episode', 'episodeNote'],
+  guide: ['navigation','assetIndex','readingGuide','entryPoint', 'sdkGuide', 'cameraAuthoring', 'qualityAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
+  contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions', 'boundaryContracts', 'objectColorContracts'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
-  humanoid: ['aircraftConfigurations', 'roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
+  humanoid: ['aircraftConfigurations', 'roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions','objectColorContracts'],
 } as const;
 
 /** Read-only guidance over the compiler's frozen catalog; no browser/evidence ownership. */
@@ -38,7 +41,7 @@ export class CreatorDiscovery {
     const includesHumanoid = isSdk && ['humanoid', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const includesCommands = isSdk && ['control', 'extensions', 'humanoid', 'character-actions', 'mounted-interaction', 'all'].includes(topic);
     const suggestedExample = topic === 'mounted-interaction' ? 'mounted-interaction' :
-      topic === 'character-actions' ? 'character-actions' : 'custom-vehicle';
+      topic === 'character-actions' ? 'character-actions' : 'getting-started';
     const humanoidExampleTopic = includesHumanoid && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
     const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
@@ -50,18 +53,22 @@ export class CreatorDiscovery {
     const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
       ...(wants('sdkContracts') ? {sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace})} : {}),
       ...(!nonhuman&&wants('sdkFactoryContracts')?{sdkFactoryContracts: humanoidFactoryContractSource(await guidance.source('humanoid.ts'))}:{}),
-      ...(wants('sdkGuide') ? {sdkGuide: guidance.isWorkspace
+      ...(topic!=='quality'&&wants('sdkGuide') ? {sdkGuide: ['getting-started','programming','assets'].includes(topic)?agentDocument(topic as 'getting-started'|'programming'|'assets'):guidance.isWorkspace
         ? 'This project uses workspace SDK source. Request contracts/humanoid sections for current declarations and runtimeDefinitions. Capability conditions and bindings must come from this source or world_inspect, not Host baseline examples. Host command transport and admission rules stay fixed.'
         : guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic)
         .replace(/<!-- asset-info:([a-zA-Z0-9._,+-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,
           (_match, ids: string, body: string) => ids.split(',').every(id => policy.allowedAssetIds.includes(id)) ? body : '')} : {}),
-    } : {};
+    } : (['getting-started','programming','assets'].includes(topic)&&wants('sdkGuide')?{sdkGuide:agentDocument(topic as 'getting-started'|'programming'|'assets')} : {});
     const result = {
       topic, availableTopics: AUTHORING_TOPICS, runtimeGuidance:guidance.provenance,
+      ...(topicDocument(topic)?{navigation:documentNavigation(topicDocument(topic)!)}:{}),
+      ...(['getting-started','all'].includes(topic)?{readingGuide:AGENT_READING_GUIDE}:{}),
       ...(cameraAuthoring?{cameraAuthoring}:{}),
       ...(!nonhuman?{humanAuthoring:humanAuthoringGuidance(policy,this.profile)}:{}),
       ...(['getting-started','all'].includes(topic)?{subjectAuthoring:subjectAuthoringGuidance(this.profile)}:{}),
+      ...(['getting-started','quality','all'].includes(topic)?{qualityAuthoring:qualityAuthoringGuidance(topic!=='getting-started')}:{}),
       ...(nonhuman&&isSdk?{exampleTopic:'nonhuman-subject'}:{}),
+      ...(topic==='assets'?{assetIndex:this.compiler.allowedAssets().map(asset=>({id:asset.id,name:asset.displayName,details:{tool:'assets_describe',arguments:{assetId:asset.id}}}))}:{}),
       project: PROJECT_SCHEMA, episode: EPISODE_SCHEMA, observation: COMMON_OBSERVATION,
       ...(isSdk ? {
         entryPoint: humanoidTopic
@@ -72,12 +79,19 @@ export class CreatorDiscovery {
       } : {}),
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.',
       ...sdk,
+      ...(isSdk&&['boundaries','all'].includes(topic)?{boundaryContracts:Object.fromEntries(await Promise.all(
+        ['boundaries.ts','humanoid-runtime/environment/types.ts'].map(async name=>[name,runtimeContractSource(await guidance.source(name))]),
+      ))}:{}),
       ...(includesCommands ? { worldCommandSchema: WORLD_COMMAND_SCHEMA } : {}),
       ...(guidance.isWorkspace&&wants('runtimeDefinitions')?{runtimeDefinitions:await guidance.definitions(includesHumanoid||includesCommands)}:{}),
       ...(humanoidSourceContracts ? { humanoidSourceContracts } : {}),
+      ...(isSdk&&wants('objectColorContracts')&&guidance.shouldDescribeSource('object-color.ts')?{objectColorContracts:{
+        'object-color.ts':runtimeContractSource(await guidance.source('object-color.ts')),
+        'humanoid-runtime/character.ts':runtimeContractSource(await guidance.source('humanoid-runtime/character.ts')),
+      }}:{}),
       ...(isSdk&&!guidance.isWorkspace&&['humanoid','mounted-interaction','all'].includes(topic)?{aircraftConfigurations:{plane:humanoid.createAircraftSpec('plane')},roadVehicleConfigurations:{car:humanoid.createRoadVehicleSpec('car'),motorcycle:humanoid.createRoadVehicleSpec('motorcycle')}}:{}),
       ...(humanoidExampleTopic ? { humanoidExampleTopic } : {}),
-      episodeNote: 'Keys persist until keysUp; repeated keysDown generate trusted browser repeat. v2 episode can execute commands and explicit start/pause/reset. Command receipts and state are recorded separately from actual keyboard inputs. Active-play time excludes paused/reset time. A complete nonempty episode can be submitted regardless of its length. Fixed XYZ targets measure proximity, never steer or teleport.',
+      episodeNote: "Real-time steps; keys persist until keysUp. v2 adds commands/lifecycle. Targets measure proximity. Read sections:['episode'].",
     };
     // Advertise available declarations even when this request did not materialize them.
     const availableFields = new Set(Object.entries(result).filter(([, value]) => value !== undefined).map(([key]) => key));
@@ -90,32 +104,44 @@ export class CreatorDiscovery {
     return {...result, availableSections};
   }
 
-  private exampleRoot(topic: ExampleTopic) {
-    return path.join(REPOSITORY_ROOT, EXAMPLE_REGISTRY[topic].root);
+  private exampleRoot(topic: ExampleTopic, variant?:'car'|'motorcycle') {
+    return path.join(REPOSITORY_ROOT, EXAMPLE_REGISTRY[topic==='custom-vehicle'&&variant==='car'?'vehicle-camera':topic].root);
   }
 
-  private async missingExampleAssets(topic: ExampleTopic) {
-    const project = JSON.parse(await readFile(path.join(this.exampleRoot(topic), 'project.json'), 'utf8')) as { assetIds: string[] };
+  private async missingExampleAssets(topic: ExampleTopic, variant?:'car'|'motorcycle') {
+    const project = JSON.parse(await readFile(path.join(this.exampleRoot(topic,variant), 'project.json'), 'utf8')) as { assetIds: string[] };
     const allowed = this.compiler.assetPolicy().policy.allowedAssetIds;
     return project.assetIds.filter(id => !allowed.includes(id));
   }
 
   private async exampleAvailable(topic: ExampleTopic) {
+    if(topic==='getting-started')return this.compiler.assetPolicy().policy.allowedAssetIds.includes(this.compiler.assetPolicy().policy.defaultHumanoidAssetId);
     return (await this.missingExampleAssets(topic)).length === 0;
   }
 
-  async examples(topic: ExampleTopic = 'getting-started', selectedFiles?: readonly string[]) {
+  async bindingExamples(topic:ExampleTopic='getting-started',files?:readonly string[],variant?:BindingVariant) {
+    if(variant==='flying-creature'){const allowed=this.compiler.allowedAssets();if(!allowed.some(asset=>asset.id==='humanoid.source-101')||!allowed.some(asset=>asset.integrationMetadata?.classification==='flying-mount'))throw new Error('THREE_EXAMPLE_ASSETS_UNAVAILABLE');}
+    else if(topic!=='getting-started'&&(await this.missingExampleAssets(topic,variant==='plane'?undefined:variant)).length)throw new Error('THREE_EXAMPLE_ASSETS_UNAVAILABLE');
+    const runtime=await readRuntimeGuidance(this.compiler);
+    const cameraAuthoring=cameraAuthoringGuidance(this.profile,runtime.isWorkspace,topic==='nonhuman-subject'?'nonhuman':'humanoid');
+    return {...await bindingExample(this.profile,topic,files,variant),exampleAuthority:'host-baseline',
+      runtimeGuidance:runtime.provenance,...(cameraAuthoring?{cameraAuthoring}:{})};
+  }
+
+  async examples(topic: ExampleTopic = 'getting-started', selectedFiles?: readonly string[], variant?:'car'|'motorcycle') {
+    if(!EXAMPLE_TOPICS.includes(topic))throw new Error('THREE_EXAMPLE_TOPIC_UNKNOWN');
+    if(variant!==undefined&&topic!=='custom-vehicle')throw new Error('THREE_EXAMPLE_VARIANT_UNSUPPORTED');
     const guidance=await readRuntimeGuidance(this.compiler);
     const cameraAuthoring=cameraAuthoringGuidance(this.profile,guidance.isWorkspace,topic==='nonhuman-subject'?'nonhuman':'humanoid');
     const authority={exampleAuthority:'host-baseline',runtimeGuidance:guidance.provenance,...(cameraAuthoring?{cameraAuthoring}:{})};
     if (topic !== 'getting-started') {
       if (this.profile !== 'three-sdk') throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
-      const missing = await this.missingExampleAssets(topic);
+      const missing = await this.missingExampleAssets(topic,variant);
       if (missing.length) throw new Error(`THREE_EXAMPLE_ASSETS_UNAVAILABLE: ${topic}: ${missing.join(', ')}`);
       return {
-        ...authority, profile: this.profile, topic,
-        ...await readExampleFiles(this.exampleRoot(topic), topic, selectedFiles),
-        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='flying-creature'?'A supplied humanoid and a native dragon selected from asset-definitions.json. Read vehicle.spec and integrationMetadata.visual from the selected asset, and keep model, animation prefix, core collision and ground calibration together. Inspect real boarding, takeoff and landing states.':topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox humanoid runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
+        ...authority, profile: this.profile, topic,...(topic==='custom-vehicle'?{variant:variant??'motorcycle'}:{}),
+        ...await readExampleFiles(this.exampleRoot(topic,variant), topic==='custom-vehicle'&&variant==='car'?'vehicle-camera':topic, selectedFiles),
+        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Supplied humanoid and task-specific binding example.')+' Compilation is not behavioral acceptance.',
       };
     }
     const isSdk = this.profile === 'three-sdk';
@@ -174,6 +200,32 @@ export class CreatorDiscovery {
     };
   }
 
+  async document(document:AgentDocumentPath) {
+    const guide=readAgentDocument(document),runtime=await readRuntimeGuidance(this.compiler);
+    const all=this.compiler.allowedAssets().map(asset=>({id:asset.id,name:asset.displayName,
+      category:asset.id.startsWith('humanoid.')?'humans':/^(creature|quadruped)\./.test(asset.id)?'animals':asset.id.startsWith('vehicle.')?'vehicles':'scene',
+      details:{tool:'assets_describe',arguments:{assetId:asset.id}}}));
+    const category=document.split('/')[1],flying=document==='assets/animals/flying-mounts.md';
+    const flyingIds=new Set(this.compiler.allowedAssets().filter(asset=>asset.integrationMetadata?.classification==='flying-mount').map(asset=>asset.id));
+    const groups:Record<string,readonly string[]>={
+      'assets/humans/movement.md':['move','jump','crouch','prone','swim','swimStyle'],
+      'assets/humans/actions.md':['slide','roll','jump','climb','releaseClimb'],
+      'assets/humans/interactions.md':['pickup','putDown','sit','standUp'],
+    };
+    const ids=groups[document];
+    const permittedHuman=this.compiler.assetPolicy().policy.allowedAssetIds.includes('humanoid.source-101');
+    const cards=ids&&permittedHuman&&this.profile==='three-sdk'&&!runtime.isWorkspace;
+    return {document,source:`scripts/three-creator/agent/${document}`,guide,
+      runtimeGuidance:runtime.provenance,navigation:documentNavigation(document),
+      ...(document.startsWith('assets/')?{assetIndex:all.filter(asset=>document==='assets/README.md'||asset.category===category&&category!=='vehicles'&&(!flying||flyingIds.has(asset.id)))}:{}),
+      ...(cards?{capabilities:humanoid.CHARACTER_CAPABILITIES.filter(card=>ids.includes(card.id)),
+        controlBindings:humanoid.HUMANOID_BINDINGS}:{}),
+      ...(ids?{currentDetails:{tool:'creator_get_authoring_schema',arguments:{topic:'character-actions',sections:['commands','humanoid']},
+        note:runtime.isWorkspace?'Read current workspace source and observed eligibility.':'Cards describe baseline capability; inspect current eligibility before execution.'}}:{}),
+      readHint:'Choose a child document or selected asset, then its required capability. Read deeper topic/sections only for missing interfaces.',
+    };
+  }
+
   async selectedSchema(topic: AuthoringTopic = 'getting-started', sections: readonly SchemaSection[] = ['guide']) {
     const requestedFields = sections.includes('all') ? undefined : new Set<string>(
       sections.flatMap(section => section === 'all' ? [] : sectionFields[section]));
@@ -185,7 +237,7 @@ export class CreatorDiscovery {
         .filter(field => source[field] !== undefined).map(field => [field, source[field]]),
     );
     return { topic, availableTopics: AUTHORING_TOPICS, availableSections, runtimeGuidance:full.runtimeGuidance, ...selected,
-      readHint: 'General conventions: topic getting-started. Request only needed sections; sections:["all"] returns the complete topic. Read creator_get_examples for runnable source.',
+      readHint: 'General conventions: topic getting-started. Request only needed sections; sections:["all"] returns the complete topic. Read creator_get_examples for minimal binding snippets.',
     };
   }
 
@@ -193,7 +245,13 @@ export class CreatorDiscovery {
     const guidance=await readRuntimeGuidance(this.compiler);
     const result = this.assetResults('', assetId,guidance);
     if (!result.assets.length) throw new Error(`THREE_ASSET_UNAVAILABLE: ${assetId}`);
-    return {...result,...(guidance.isWorkspace?{runtimeDefinitions:await guidance.definitions()}:{}),runtimeGuidance:guidance.provenance};
+    const category=assetId.startsWith('humanoid.')?'humans':/^(creature|quadruped)\./.test(assetId)?'animals':assetId.startsWith('vehicle.')?'vehicles':'scene';
+    const metadata=this.compiler.allowedAssets().find(asset=>asset.id===assetId)?.integrationMetadata;
+    const flying=metadata?.classification==='flying-mount',document=metadata?.documentation;
+    const registeredDocument=typeof document==='string'&&AGENT_DOCUMENT_PATHS.includes(document as AgentDocumentPath)?document:undefined;
+    return {...result,documentation:{tool:'creator_get_authoring_schema',arguments:{document:registeredDocument??`assets/${category}/README.md`}},
+      ...(flying&&this.profile==='three-sdk'?{bindingExample:{tool:'creator_get_examples',arguments:{topic:'mounted-interaction',variant:'flying-creature'}}}:{}),
+      ...(guidance.isWorkspace?{runtimeDefinitions:await guidance.definitions()}:{}),runtimeGuidance:guidance.provenance};
   }
 
   async searchAssets(query = '', limit = 5, offset = 0) {

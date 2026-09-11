@@ -32,7 +32,51 @@ AI 可以编辑所属资源、binding、配置和必要代码，不要求内容�
 
 行动实现和程序化 Mesh/场景构造代码按职责放入 SDK 或示例目录，通过同一个 PR 提交；它们不会因为放在资源目录里就自动执行。原始 FBX、Blender/Unity 工程和制作过程文件保留在制作侧，在 README 提供链接；运行包只收录实际需要的资源。
 
-资产以白模为主，仅少量关键标志物加颜色；主体尽量复用提供的资源，人形优先使用提供的模型与动作，不额外做装饰。
+世界整体以白色为主，主体、关键客体和需做三视图的标识物用不同的克制识别色区分；地面、水面等用轻微灰度或色调差区分。同一对象在游玩与各视图中保持颜色一致。主体尽量复用提供的资源，人形使用提供的模型与动作，不额外做装饰。
+
+颜色由 Agent 根据参考图和场景关系自行决定，不绑定固定身份色表。不同关键客体分别配色，
+同类重复对象可以共色；有敌人需求时使其易于区分，不因配色类别而额外生成敌人或玩法。
+资产提交保留原始资源，不为每种身份复制 GLB。人形通过 `characterColor` 或实例
+`setColor` 着色；其他模型通过 `setObjectColor` 创建独立材质，原贴图 RGB 不参与叠色。
+资产侧说明透明裁切、材质槽及自定义着色器需求；接入侧检查多个实例、工厂生成、骑乘、
+重置和各视图的配色一致性，并按模型生命周期释放着色绑定。详细接口见
+[人形接入](../scripts/three-creator/agent/assets/humans/integration.md)及
+[对象配色](../packages/three-world/README.md#per-object-whitebox-color)。
+
+## Agent 文件结构与阅读路径
+
+```text
+scripts/three-creator/agent/
+  README.md                 通用要求、交付标准、何时读哪份说明
+  programming.md            编程规范、检查工具、录制与交付
+  sdk.md → sdk/basics.md     SDK 能力索引及公共能力
+  examples/                 raw、humanoid、actions、mount、vehicle、nonhuman 最小片段
+  assets/README.md          资产分类入口
+    humans/README.md        人形入口
+      movement.md           运动
+      actions.md            场景动作
+      interactions.md       交互
+      integration.md        人形、镜头与骑乘接入
+    animals/README.md       动物/生物 → 独立主体或骑乘
+      flying-mounts.md      飞行坐骑的资产选择、条件与接入
+      flying-mounts.ts      同类资产共用的最小绑定片段
+    vehicles/README.md      载具配置、绘制与驾驶接入
+    scene/README.md         地形、道具、标识物与交互
+```
+
+自然阅读从 `creator_describe_environment.readingGuide` 进入四个通用入口，
+再通过分类页返回的 `navigation.children` 逐层读取；按名字搜索时，
+`assets_search → assets_describe.documentation` 直接进入所选资产所属的下层说明。
+飞行坐骑的 `assets_describe.bindingExample` 给出 `mounted-interaction` 下的
+`flying-creature` 变体。说明讲何时使用和如何判断结果，片段只写绑定与生命周期；
+参考图构图、场地规模、出生点、HUD 和游玩路线由当前任务决定。
+
+同类新资产复用此路径，只增加各自资源、标定和能力数据。新增分类子页须在
+[agent-docs.ts](../scripts/three-creator/agent-docs.ts) 注册路径与父子导航；资产条目的
+`integrationMetadata.documentation` 指向该已注册页面，`assets_describe` 实际读取它。
+绑定有差异时在 [binding-examples.ts](../scripts/three-creator/binding-examples.ts)
+和 MCP 参数中接通所属 topic 的变体，并从真实工具走通搜索、说明、片段、接口查询。
+较深的 schema/源码只在配置或修改能力时读取。
 
 ## 3. 注册到 Agent 能读取的入口
 
@@ -40,8 +84,10 @@ AI 可以编辑所属资源、binding、配置和必要代码，不要求内容�
 | --- | --- | --- |
 | 资产及能力信息 | [catalog/](../assets/three-creator/catalog/) 下各自 `<assetId>.json`：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制；`pnpm content:sync` 派生 Host 的 asset-catalog.json | `assets_search` 查找，`assets_describe` 读取详情 |
 | 可用权限 | [asset-policy.json](../config/three-creator/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
-| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [creator-discovery.ts](../scripts/three-creator/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、player 等接口 |
-| 可复用示例 | `examples/three-creator/`；在 [example-registry.json](../scripts/three-creator/example-registry.json) 登记 topic、root 和默认文件一次，工具与运行包共用它 | `creator_get_examples` 取得可用代码和文件清单 |
+| 分类阅读入口 | [Agent 资产索引](../scripts/three-creator/agent/assets/README.md) 及人、动物、载具、场景对象子目录；新增子页时接入 [agent-docs.ts](../scripts/three-creator/agent-docs.ts) 的路径和父子导航 | `creator_get_authoring_schema({document:...})` 按层读取，页面再链接具体资产与能力 topic |
+| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [creator-discovery.ts](../scripts/three-creator/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、humanoid 等接口 |
+| Agent 接入片段 | [agent/examples/](../scripts/three-creator/agent/examples/) 与 [binding-examples.ts](../scripts/three-creator/binding-examples.ts)；复用对应主体的现有入口，片段只演示绑定和调用 | `creator_get_examples` 返回最小代码及文件清单，场景和参数由 Agent 提供 |
+| 内部运行示例 | `examples/three-creator/`；在 [example-registry.json](../scripts/three-creator/example-registry.json) 登记 topic、root 和默认文件，供维护者回归和运行包引用 | 维护者通过示例预览/测试使用；新增登记不会自动扩充 Agent 的片段入口 |
 
 包内文件不会自动全部加载，依赖的其他资产 ID 也不会自动被选中：文件依赖登记到条目的 `resources`，需要组合的资产 ID 在项目中一并选择。
 
@@ -67,10 +113,36 @@ policy、资源验证状态；动作、视觉和发布仍需要各自的实际�
 | 什么条件下可用 | 主体状态、目标、距离/速度等阈值，以及碰撞、净空、水体等必要场景条件；特殊动作不能省略这些条件 |
 | 如何判断结果 | 完成状态、可查询的 snapshot/operation，以及拒绝原因或失败反馈；请求被接受不等于动作完成 |
 | 如何调整与扩展 | 可调参数、单位和范围；需要改底层时给出真实源码入口，继续使用 SDK 的统一控制与时钟 |
+| 镜头如何接入 | 主体坐标系、身体范围、实际眼位/座位、支持视角及其配置入口；首帧由 Agent 决定，资产不能带入自动重置首帧的脚本 |
 
 Agent 的使用顺序应明确为：**搜索资产 → 查看能力说明 → 读取所需 schema/示例 → 选择资源并绑定 → 检查条件后操作 → 查询实际结果。** 一般任务直接复用，需要变化时再调参数或修改对应源码。
 
 只填写模式名称或上传动画不会自动获得能力。新增行动模式需接通 SDK 实现及 Creator、Episode 消费端；由不同同事完成时，在 PR 中标明负责人、待接入项，并将未完成能力标成未支持。
+
+### 新主体的镜头与输入接入
+
+初始关系与镜头的接入顺序统一遵循 [编程规范](../scripts/three-creator/agent/programming.md#initial-state-and-camera)。资产侧提供下表事实；不在资产包中另写初始化按键或镜头接管脚本。
+
+资产生产侧提供以下事实，并由接入同事绑定到实际接口。仅命名一个 `camera.driver` 节点不会自动启用驾驶视角。
+
+| 资产侧提供 | 接入位置与约定 |
+| --- | --- |
+| 根节点、尺寸、正前方与单位 | 米制、+Y 向上；普通主体语义前方默认局部 -Z，Humanoid/载具航向使用 +Z。记录实际转换，不旋转预设骨架来迁就镜头 |
+| 身体范围与独立主体眼位 | `addCharacter({body})` 与 `setCameraFollow({view:{eyeOffsetLocalMetersXYZ}})`；眼位是主体根节点的局部坐标，随缩放/旋转变换，不能照抄人形眼高 |
+| 骑乘座位与眼位来源 | `VehicleInstance.spec.seat` 是局部骨盆锚点；人形眼位来自真实头部姿态。先校验座位和骑手贴合，不靠抬高镜头掩盖错位 |
+| 支持的视角、触发与限制 | 在能力说明中指出使用普通主体 `view` 或 Humanoid `profile.view`，是否有第一人称/肩后视角；保留统一输入语义，按需配置 `cameraToggle` |
+
+镜头信息的简短用途与限制写进工具可见的资产条目（如 `limitations`、适用时的 `vehicle.spec.hint`）；数值和绑定代码放入对应 topic/示例。新加目录字段前先接通实际读取方，不能把未消费的元数据当作已支持能力。
+
+SDK 的主体适配器只返回姿态、身体和眼位等查询数据。通用首帧继承与碰撞由公共镜头模块执行；主体专属视角也通过既有 owner 提交，不得直接写主相机、监听首次按键切镜头、另建输入系统或模拟循环。首次输入及上下车不能自动换成预设构图。Agent 可以修改首帧和公开跟随参数；需要改底层时修改对应 SDK 源码，仍遵守相同契约。用法见 [SDK 首帧与接入契约](../packages/three-world/README.md#authored-opening-and-subject-integration)。
+
+人物出生位置用 `map.playerSpawn`；默认背朝最终首帧镜头。Agent 用
+`createHumanoidWorld({characterFacingYawRadians})` 覆盖朝向，单位弧度，0 朝 −Z、
+PI/2 朝 −X、PI 朝 +Z，与 Episode 朝向约定一致。资产正面轴转换留在适配层；
+不得通过旋转镜头或每帧改人物根节点补偿。初始朝向在首次启动前封存，重置和
+Creator 首帧捕获一致恢复，Episode 可显式指定片段朝向。
+
+新增控制器的 PR 要通过公共 `world.setCameraFollow` 入口的共同契约测试：任意首帧位置/朝向/FOV、首次输入、移动、可用的主体切换、碰撞恢复及重置；检查键盘和程序化输入共享行为，Creator/Episode 捕获不接管镜头。将新主体 fixture 加入 [camera-public-conformance.test.ts](../packages/three-world/src/camera-public-conformance.test.ts) 的 `fixtures`，复用整组断言；适配器的局部计算另在 [camera-subject.test.ts](../packages/three-world/src/camera-subject.test.ts) 验证，不能只测试内部相机类。Creator 则在现有真实操作自检中对照首帧和首次操作，不另加一轮生成流程。
 
 ## 5. 提 PR 时写清楚这些
 
@@ -93,3 +165,10 @@ Agent 获取入口：资产 ID、topic、示例
 由接入同事审查资源、登记和能力绑定；共享目录发生冲突时，保留双方资产条目，按最终文件更新哈希。合入目标分支后，由发布侧重新打包，供新任务使用。**文件合入 Git 不等于线上运行包已经更新。**
 
 具体接口按需查阅 [SDK 指南](../packages/three-world/README.md) 和[运行包指南](../deploy/three-creator-runtime/README.md)。
+
+### 可见外形与碰撞
+
+资产外形及其在世界中的地形、构图、标识物、主体和客体关系以参考图与用户要求为准。
+可见 Mesh 独立绘制，碰撞体用于支撑、阻挡与动作净空。简化碰撞应匹配外形的有效表面，
+不得作为可见外形的替代物；空气墙仅提供不可见的物理边界。资产能力说明只描述可用能力
+及触发条件；玩法由用户 Prompt 决定，未要求的能力不自动生成玩家任务。

@@ -1,5 +1,7 @@
 import type { WorldInput } from './engine-contracts.js';
 import type { CameraRigInput } from './camera.js';
+import type { Mode } from './humanoid-runtime/config.js';
+import { vehicleKeyboardAxes } from './humanoid-runtime/input.js';
 import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './humanoid-runtime/input.js';
 
 const UI_CONTROL_SELECTOR = 'input,textarea,select,button,a[href],[role="textbox"],[role="button"]';
@@ -18,13 +20,13 @@ function includesRoot(event: Event, root: HTMLElement | undefined): boolean {
 
 export const MOVEMENT_KEYS = new Set(Object.values(DEFAULT_KEY_BINDINGS).flat());
 export class WorldKeyboard {
-  private humanoidMounted:(()=>boolean)|undefined;
+  private humanoidMounted:(()=>Mode|undefined)|undefined;
   private readonly humanoidPressed:KeyAction[]=[];
   private bindings:KeyBindings=DEFAULT_KEY_BINDINGS;
   getKeyBindings():KeyBindings{return createKeyBindings({},this.bindings);}
   setKeyBindings(overrides:Partial<KeyBindings>):void{const next=createKeyBindings(overrides,this.bindings);this.clear();this.bindings=next;}
   private bound(action:ControlAction,code:string):boolean{return this.bindings[action].includes(code);}
-  setHumanoidMode(mounted:(()=>boolean)|undefined):void{this.humanoidMounted=mounted;}
+  setHumanoidMode(mounted:(()=>Mode|undefined)|undefined):void{this.humanoidMounted=mounted;}
   private admittedKey(code:string):boolean{return Object.values(this.bindings).some(codes=>codes.includes(code));}
   readonly held = new Set<string>();
   private jumpQueued = false;
@@ -55,7 +57,7 @@ export class WorldKeyboard {
     this.record('keydown', code, repeat);
     if (repeat && !this.held.has(code)) return;
     if (!this.held.has(code)) {
-      if(this.humanoidMounted){const action=actionForKey(code,this.humanoidMounted(),this.held,this.bindings);if(action)this.humanoidPressed.push(action);}
+      if(this.humanoidMounted){const action=actionForKey(code,!!this.humanoidMounted(),this.held,this.bindings);if(action)this.humanoidPressed.push(action);}
       if(!this.humanoidMounted&&this.bound('cameraToggle',code))this.cameraToggleQueued=true;
       if (this.bound('jump',code)) this.jumpQueued = true;
       if (this.bound('interact',code)) this.interactQueued = true;
@@ -68,10 +70,10 @@ export class WorldKeyboard {
   }
   sample(): WorldInput {
     if(this.humanoidMounted){
-      const mounted=this.humanoidMounted(),humanoid:import('./humanoid-runtime/simulation').HumanoidActionInput={};let interact=false,cameraTogglePressed=false;
+      const mode=this.humanoidMounted(),mounted=!!mode,axes=vehicleKeyboardAxes(mode),humanoid:import('./humanoid-runtime/simulation').HumanoidActionInput={};let interact=false,cameraTogglePressed=false;
       for(const action of this.humanoidPressed){if(action.kind==='vehicle')interact=true;else if(action.kind==='camera-toggle')cameraTogglePressed=true;else if(!mounted)Object.assign(humanoid,action.input);}
-      const player=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings);
-      const result:WorldInput={humanoid:player,interactPressed:interact,cameraTogglePressed,cameraYawRatio:mounted?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:mounted?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
+      const player=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings,mode);
+      const result:WorldInput={humanoid:player,interactPressed:interact,cameraTogglePressed,cameraYawRatio:axes.strafe?0:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:axes.pitch?0:Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code)))};
       this.humanoidPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
     }
     const has = (action:ControlAction) => this.bindings[action].some(code => this.held.has(code));

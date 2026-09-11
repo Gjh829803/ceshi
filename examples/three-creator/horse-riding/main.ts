@@ -14,7 +14,17 @@ const map:EnvironmentDefinition={id:'horse-course',name:'Two horses',description
  boxes:[{id:'ground',position:[0,-.5,0],size:[800,1,800],color:'#dddddd'},{id:'obstacle',position:[-8,.7,12],size:[4,1.4,2],color:'#e0b64b'}],water:[],
  regions:[{id:'course',name:'Open course',description:'Flat supported riding course',center:[0,0,0],size:[780,780],color:'#dddddd',modes:['character','mount']}],
  spawns:[{id:'first',vehicleId:'horse-1',name:'First horse',position:[0,0,0],yaw:0,regionId:'course'},{id:'second',vehicleId:'horse-2',name:'Second horse',position:[9,0,0],yaw:Math.PI/2,regionId:'course'}],playerSpawn:[2,0,-4]};
-for(const box of map.boxes){const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color,roughness:1}));mesh.position.set(...box.position);scene.add(mesh);}
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+surface(800,800,[0,0,0]);
+structure('jump-barrier',[4,1.4,2],[-8,.7,12],[0,0,0],'#e0b64b');
 const patch=new THREE.Mesh(new THREE.PlaneGeometry(4,5),new THREE.MeshStandardMaterial({color:'#e0b64b',roughness:1}));patch.rotation.x=-Math.PI/2;patch.position.set(2.5,.005,0);scene.add(patch);
 const vehicles=horses.map((horse,index)=>({instanceId:`horse-${index+1}`,assetId:'creature.horse',spec:structuredClone(definitions['creature.horse'].vehicle.spec) as VehicleSpec,object:horse.root,visual:horse,seatAnchor:{nodeName:'Body',maximumOffsetMeters:.145579,maximumRotationRadians:.122951}}));
 const world=await createHumanoidWorld({scene,camera,canvas,assetDefinitions:definitions,map,vehicles,characterId:'person',character});

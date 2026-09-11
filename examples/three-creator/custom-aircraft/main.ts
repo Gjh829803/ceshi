@@ -21,9 +21,15 @@ function box(root:THREE.Object3D,size:readonly [number,number,number],position:r
  const geometry=new THREE.BoxGeometry(...size);geometries.push(geometry);
  const mesh=new THREE.Mesh(geometry,mat);mesh.position.set(...position);root.add(mesh);return mesh;
 }
-for(const entry of map.boxes)box(scene,entry.size,entry.position);
+const groundGeometry=new THREE.PlaneGeometry(2400,2400);geometries.push(groundGeometry);
+const ground=new THREE.Mesh(groundGeometry,material);ground.rotation.x=-Math.PI/2;scene.add(ground);
 const plane=new THREE.Group();
-for(const part of spec.airframe.boxes)box(plane,part.halfExtents.map(v=>v*2) as [number,number,number],part.offset);
+// Visual outlines are authored independently from the collision volumes.
+const bodyGeometry=new THREE.CapsuleGeometry(.46,4.65,8,16);geometries.push(bodyGeometry);
+const fuselage=new THREE.Mesh(bodyGeometry,material);fuselage.rotation.x=Math.PI/2;fuselage.position.y=1.03;plane.add(fuselage);
+const wingOutline=new THREE.Shape();wingOutline.moveTo(-4,-.48);wingOutline.lineTo(-3.6,.75);wingOutline.lineTo(3.6,.75);wingOutline.lineTo(4,-.48);wingOutline.closePath();
+const wingGeometry=new THREE.ExtrudeGeometry(wingOutline,{depth:.1,bevelEnabled:false});geometries.push(wingGeometry);
+const wing=new THREE.Mesh(wingGeometry,material);wing.rotation.x=Math.PI/2;wing.position.set(0,2.25,.05);plane.add(wing);
 box(plane,[1.5,.1,.6],[0,1.35,-2.4],accent);
 box(plane,[.1,.8,.65],[0,1.65,-2.4],accent);
 // Pelvis anchor is distinct from the cushion top; keep the supplied rider separate.

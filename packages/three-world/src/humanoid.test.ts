@@ -8,10 +8,58 @@ import {createHumanoidWorld,type HumanoidAssetDefinition} from './humanoid';
 import {createWorld,type ThreeWorld} from './world';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 import {Character} from './humanoid-runtime/character';
+import {createRoadVehicleSpec} from './humanoid-runtime/road-vehicle';
+import {emptyInput} from './humanoid-runtime/simulation';
+import type {VehicleSpec} from './humanoid-runtime/config';
 
 const worlds:ThreeWorld[]=[];
 const map:EnvironmentDefinition={id:'room',name:'Room',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();vi.restoreAllMocks();});
+
+it.each(['car','motorcycle','horse'] as const)('starts %s mounted before tick zero and restores the relationship with its camera',async kind=>{
+ const spec=kind==='horse'?structuredClone(catalog.assets.find(asset=>asset.id==='creature.horse')!.vehicle!.spec) as unknown as VehicleSpec:createRoadVehicleSpec(kind),startMap:EnvironmentDefinition={...map,playerSpawn:[0,.025,0],
+  regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[60,60],color:'#fff',modes:[spec.mode]}],
+  spawns:[{id:'ride-start',name:'Ride',vehicleId:'ride',regionId:'road',position:[0,.025,0],yaw:1.2}]};
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:startMap,
+  character:{instanceId:'person',object:new THREE.Group(),initialMountId:'ride'},
+  vehicles:[{instanceId:'ride',assetId:'custom.vehicle',object:new THREE.Group(),spec}]}});worlds.push(world);
+ expect(world.snapshot()).toMatchObject({simulationTick:0,humanoid:{mountedInstanceId:'ride',transition:{remainingSeconds:0}}});
+ world.setCameraFollow({opening:{positionWorldMetersXYZ:[7,5,9],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:49},headingFollow:'vehicle'});
+ const camera=world.camera.clone(),person=world.humanoid!.simulation.controlledActor;
+ world.step({},0);expect(person.player.yaw).toBeCloseTo(1.2);expect(world.camera.quaternion.angleTo(camera.quaternion)).toBeLessThan(1e-7);
+ world.step({humanoid:{...emptyInput(),forward:1}},90);expect(person.vehicle!.position.distanceTo(new THREE.Vector3(0,.025,0))).toBeGreaterThan(.5);
+ world.step({humanoid:{...emptyInput(),brake:true}},150);expect(world.humanoid!.exit()).toBe(true);world.step({},60);
+ await world.reset();expect(world.snapshot()).toMatchObject({simulationTick:0,humanoid:{mountedInstanceId:'ride',transition:{remainingSeconds:0}},camera:{mode:'follow-pending'}});
+ expect(world.camera.position.distanceTo(camera.position)).toBeLessThan(1e-7);expect(world.camera.quaternion.angleTo(camera.quaternion)).toBeLessThan(1e-7);
+ expect(world.humanoid!.simulation.controlledActor.player.yaw).toBeCloseTo(1.2);
+});
+
+it('validates late scene geometry before sealing a mounted baseline and permits correction',async()=>{
+ const spec=createRoadVehicleSpec('motorcycle');
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,
+  regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[60,60],color:'#fff',modes:[spec.mode]}],
+  spawns:[{id:'ride-start',name:'Ride',vehicleId:'ride',regionId:'road',position:[0,.025,0],yaw:0}]},
+  character:{instanceId:'person',object:new THREE.Group(),initialMountId:'ride'},
+  vehicles:[{instanceId:'ride',assetId:'custom.vehicle',object:new THREE.Group(),spec}]}});worlds.push(world);
+ const ceiling=new THREE.Mesh(new THREE.BoxGeometry(4,.2,4));ceiling.position.y=2;
+ world.addEntity({id:'ceiling',object:ceiling,role:'obstacle'});
+ expect(()=>world.step({},0)).toThrow('HUMANOID_INITIAL_MOUNT_CLEARANCE_BLOCKED');expect(world.snapshot().simulationTick).toBe(0);
+ await world.execute({type:'entity.set-position',entityId:'ceiling',positionWorldMetersXYZ:[15,2,0]});
+ world.addEntity({id:'after-repair',object:new THREE.Group(),role:'decoration'});
+ world.step({},0);expect(world.snapshot().humanoid!.mountedInstanceId).toBe('ride');
+ await world.reset();expect(world.snapshot().entities.some(entity=>entity.id==='after-repair')).toBe(true);
+ ceiling.geometry.dispose();(ceiling.material as THREE.Material).dispose();
+});
+
+it('rejects a blocked initial rider without publishing an unmounted fallback',async()=>{
+ const spec=createRoadVehicleSpec('motorcycle');
+ await expect(createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,
+  boxes:[...map.boxes,{id:'ceiling',position:[0,2,0],size:[4,.2,4]}],
+  regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[60,60],color:'#fff',modes:[spec.mode]}],
+  spawns:[{id:'ride-start',name:'Ride',vehicleId:'ride',regionId:'road',position:[0,.025,0],yaw:0}]},
+  character:{instanceId:'person',object:new THREE.Group(),initialMountId:'ride'},
+  vehicles:[{instanceId:'ride',assetId:'custom.vehicle',object:new THREE.Group(),spec}]}})).rejects.toThrow('HUMANOID_INITIAL_MOUNT_CLEARANCE_BLOCKED');
+});
 
 it.each([
   {center:[0,24],actual:[0,24]},
@@ -60,7 +108,7 @@ it('loads the complete humanoid and performs a physical action through the publi
     return new Response(await readFile(file));
   }));
   const camera=new THREE.PerspectiveCamera(55,1,.05,200);camera.position.set(3,3,6);camera.lookAt(0,1,0);
-  const world=await createHumanoidWorld({scene:new THREE.Scene(),camera,map,characterId:'person',assetDefinitions:{[definition.id]:definition as unknown as HumanoidAssetDefinition},resourceUrl:path=>`https://humanoid.test/${path}`});worlds.push(world);
+  const world=await createHumanoidWorld({scene:new THREE.Scene(),camera,map,characterId:'person',characterFacingYawRadians:Math.PI/2,assetDefinitions:{[definition.id]:definition as unknown as HumanoidAssetDefinition},resourceUrl:path=>`https://humanoid.test/${path}`});worlds.push(world);
   expect(world).toHaveProperty('humanoid');
   const animation=world.humanoid!.options.character.animation!;
   expect(animation.availableHumanoidClips.size).toBe(48);
@@ -74,6 +122,7 @@ it('loads the complete humanoid and performs a physical action through the publi
   expect(world.snapshot().controlledEntityId).toBe('person');
   const bounds=new THREE.Box3().setFromObject(animation.root,true);expect(bounds.getSize(new THREE.Vector3()).y).toBeGreaterThan(1.5);
   world.step({},30);
+  expect(world.humanoid!.simulation.controlledActor.controller.facing.x).toBeCloseTo(-1,8);
   const start=world.getEntityState('person').positionWorldMetersXYZ;
   const receipt=await world.execute({type:'humanoid.perform-action',request:{requestId:'roll-once',action:'roll'}});
   expect(receipt.status).toBe('accepted');world.step({},120);
@@ -103,4 +152,10 @@ it('binds an authored non-human mesh to a custom movement intent with real colli
   const state=world.getEntityState('orb');expect(state.positionWorldMetersXYZ[0]).toBeGreaterThan(1);expect(state.positionWorldMetersXYZ[0]).toBeLessThan(1.8);expect(state.positionWorldMetersXYZ[1]).toBeCloseTo(1,2);
   expect(state.motion?.collisionEntityIds).toContain('wall');
   subject.geometry.dispose();(subject.material as THREE.Material).dispose();wall.geometry.dispose();(wall.material as THREE.Material).dispose();
+});
+
+it.each([NaN,Infinity,-Infinity])('rejects invalid initial facing before loading assets (%s)',async characterFacingYawRadians=>{
+  const character=new Character(),load=vi.spyOn(character,'load');
+  await expect(createHumanoidWorld({map,character,characterFacingYawRadians})).rejects.toThrow('HUMANOID_INITIAL_FACING_INVALID');
+  expect(load).not.toHaveBeenCalled();
 });

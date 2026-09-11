@@ -20,10 +20,12 @@ const map:EnvironmentDefinition={id:'custom-bike-course',name:'自建摩托',des
  regions:[{id:'course',name:'骑行场地',description:'平地驾驶',center:[0,0,0],size:[110,110],color:'#dddddd',modes:['character','motorcycle']}],
  spawns:[{id:'bike-start',vehicleId:'custom-bike',name:'摩托起点',position:[0,0,0],yaw:0,regionId:'course'}],
  playerSpawn:[1.7,0,-.2]};
-for(const box of map.boxes){
- const mesh=new THREE.Mesh(new THREE.BoxGeometry(...box.size),new THREE.MeshStandardMaterial({color:box.color}));
- mesh.position.set(...box.position);scene.add(mesh);
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
 }
+surface(120,120,[0,0,0]);
 
 // Author the vehicle around the selected dimensions; no supplied vehicle model is loaded.
 // Only the vehicle is authored here: do not add a torso, head, limbs or a second rider.

@@ -8,16 +8,12 @@ export interface SerializedDiagnostic {
   cause?: SerializedDiagnostic;
   causes?: SerializedDiagnostic[];
 }
+// Keep this function self-contained: its source is injected into the browser, including from keepNames builds.
+// Nested named functions/arrows can capture compiler helpers that do not exist in that realm.
 export function serializeDiagnostic(value: unknown, depth = 0, seen: unknown[] = []): SerializedDiagnostic {
   const result: SerializedDiagnostic = { message: typeof value === 'string' ? value.slice(0,4000) : 'Unknown thrown value' };
   if (!value || (typeof value !== 'object' && typeof value !== 'function') || seen.includes(value)) return result;
   seen = [...seen, value];
-  const scalar = (field: unknown): string | number | boolean | null | undefined => {
-    if (typeof field === 'string') return field.slice(0,4000);
-    if (field === null || typeof field === 'boolean') return field;
-    if (typeof field === 'number' && Number.isFinite(field)) return field;
-    return undefined;
-  };
   for (const key of ['message','code','category','phase','suggestedAction','stack','path','actual','expected','entityIds','cause','errors','causes']) {
     try {
       const descriptor = Object.getOwnPropertyDescriptor(value,key);
@@ -34,13 +30,14 @@ export function serializeDiagnostic(value: unknown, depth = 0, seen: unknown[] =
           for (let i=0;i<Math.min(length,8);i++) {
             let item: PropertyDescriptor | undefined;
             try { item=Object.getOwnPropertyDescriptor(field,String(i)); } catch { /* Keep an unavailable array slot. */ }
-            const value=item && 'value' in item ? scalar(item.value) : undefined;
+            const itemValue=item && 'value' in item ? item.value : undefined;
+            const value=typeof itemValue==='string'?itemValue.slice(0,4000):itemValue===null||typeof itemValue==='boolean'||typeof itemValue==='number'&&Number.isFinite(itemValue)?itemValue:undefined;
             values.push(value === undefined ? '<unavailable>' : value);
           }
           if (length > 8) values.push('<truncated>');
           result.actual=values;
         } else {
-          const actual=scalar(field);
+          const actual=typeof field==='string'?field.slice(0,4000):field===null||typeof field==='boolean'||typeof field==='number'&&Number.isFinite(field)?field:undefined;
           if (actual !== undefined) result.actual=actual;
         }
       } else if (key === 'entityIds' && Array.isArray(field)) {

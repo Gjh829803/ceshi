@@ -1,3 +1,5 @@
+import type {BoundaryDefinition} from '../../boundaries';
+
 /** Metres, seconds, +Y up, +Z forward. Boxes use XYZ Euler radians. */
 export type Vec3 = readonly [number, number, number];
 export interface EnvironmentBox {
@@ -75,6 +77,10 @@ export interface EnvironmentDefinition {
   description: string;
   bounds: { min: Vec3; max: Vec3 };
   boxes: readonly EnvironmentBox[];
+  /** Invisible physical barriers. Independent of map.bounds and ordinary scene geometry. */
+  boundaries?: readonly BoundaryDefinition[];
+  /** Optional fall recovery; checkpoint yaw is in radians, zero facing +Z. */
+  recovery?: {readonly fallBelowY:number;readonly checkpoint?:{readonly position:Vec3;readonly yaw:number}};
   water: readonly WaterVolume[];
   regions: readonly MapRegion[];
   spawns: readonly MapSpawn[];

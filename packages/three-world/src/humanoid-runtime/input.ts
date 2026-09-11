@@ -1,4 +1,5 @@
 import type { HumanoidActionInput, Input } from './simulation';
+import type { Mode } from './config';
 
 import {INPUT_BINDINGS,DEFAULT_KEY_BINDINGS,SUPPORTED_KEY_CODES,type ControlAction,type KeyBindings} from '../config/input';
 export {INPUT_BINDINGS,DEFAULT_KEY_BINDINGS,SUPPORTED_KEY_CODES,type ControlAction,type KeyBindings} from '../config/input';
@@ -43,17 +44,22 @@ export function actionForKey(code:string,mounted:boolean,held:ReadonlySet<string
   if(bound('crouch'))return {kind:'humanoid',input:bindings.sprint.some(code=>held.has(code))?{slide:true}:{toggleCrouch:true}};
   for(const [action,field] of [['roll','roll'],['interact','interact'],['putDown','putDown'],['prone','prone'],['swimStyle','toggleSwimStyle']] as const)if(bound(action))return {kind:'humanoid',input:{[field]:true}};
 }
-export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boolean,commands:HumanoidActionInput,bindings:KeyBindings=DEFAULT_KEY_BINDINGS):Input {
+/** Only axes consumed by the mounted controller reserve camera keys. */
+export function vehicleKeyboardAxes(mode:Mode|undefined):{pitch:boolean;strafe:boolean}{
+  return {pitch:mode==='spacecraft'||mode==='tank',strafe:mode==='spacecraft'};
+}
+export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boolean,commands:HumanoidActionInput,bindings:KeyBindings=DEFAULT_KEY_BINDINGS,mode?:Mode):Input {
   const key=(action:ControlAction)=>Number(bindings[action].some(code=>held.has(code)));
   const i:Input={forward:key('forward')-key('backward'),steer:key('right')-key('left'),roll:0,lift:0,pitch:0,strafe:0,
     boost:!!key('sprint'),brake:false,slow:!!key('slow'),jump:false};
   if(mounted){i.primary=!!key('interact');i.secondary=!!key('roll');i.slow=!!key('crouch');i.roll=key('interact')-key('roll');i.lift=key('jump')-key('crouch');i.pitch=key('cameraDown')-key('cameraUp');i.strafe=key('cameraRight')-key('cameraLeft');i.brake=!!key('jump');}
   else {i.jump=jump;i.actions={...commands};}
+  if(mode){const axes=vehicleKeyboardAxes(mode);if(!axes.pitch)i.pitch=0;if(!axes.strafe)i.strafe=0;}
   return i;
 }
 export function cameraOrbitInput(held:ReadonlySet<string>,mode:string,dt:number):[number,number]{
-  if(mode==='spacecraft'||mode==='tank')return [0,0];
+  const axes=vehicleKeyboardAxes(mode as Mode);
   const key=(code:string)=>held.has(code)?1:0;
-  return [(key('ArrowRight')-key('ArrowLeft'))*dt*260,(key('ArrowDown')-key('ArrowUp'))*dt*220];
+  return [axes.strafe?0:(key('ArrowRight')-key('ArrowLeft'))*dt*260,axes.pitch?0:(key('ArrowDown')-key('ArrowUp'))*dt*220];
 }
 export const HUMANOID_CONTROL_HINTS:[string,string][]=controlHints();

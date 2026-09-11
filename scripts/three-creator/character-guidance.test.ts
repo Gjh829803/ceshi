@@ -31,7 +31,7 @@ it('discovers the full kit by Chinese skill names and exposes actual skill condi
   expect(usage.clipCount).toBe(48);expect(usage.skillRequests).toHaveLength(6);
   expect(usage.skillRequests.find((skill:any)=>skill.id==='slide').requires).toContain('speed>=2.5m/s');
   expect(usage.controlBindings.roll.code).toBe('KeyQ');
-  expect(usage.schemaTopic).toBe('character-actions');expect(usage.exampleTopic).toBe('character-actions');
+  expect(usage.schemaTopic).toBe('character-actions');expect(usage.exampleTopic).toBe('getting-started');
  }finally{await service.close();}
 });
 
@@ -44,7 +44,7 @@ it('provides a character-only example and the actual interaction/input contracts
   expect(schema.humanoidSourceContracts['humanoid-runtime/environment/types.ts']).toContain('rigidGroup?');
   expect(schema.sdkGuide).toContain('EnvironmentBox.rigidGroup');
   expect(schema.sdkGuide).toContain('propBoxPose(id)');
-  const example:any=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'character-actions'});
+  const example:any=await service.examples('character-actions');
   expect(JSON.parse(example.files['project.json']).assetIds).toEqual(['humanoid.source-101']);
   const checkEpisode=new Ajv({strict:false}).compile(EPISODE_SCHEMA);
   expect(checkEpisode(JSON.parse(example.files['episode.json'])),JSON.stringify(checkEpisode.errors)).toBe(true);

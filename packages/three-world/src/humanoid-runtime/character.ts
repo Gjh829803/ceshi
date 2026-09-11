@@ -1,4 +1,5 @@
 import type {ModelLoadOptions} from '../model-loader';
+import {setObjectColor,validateObjectColor,type ObjectColorBinding} from '../object-color';
 import {fitUnicycleFeet} from './unicycle-rider';
 import {poseKayakHands} from './kayak-visual';
 import {fitAtvHands} from './atv-rider';
@@ -128,6 +129,18 @@ export class Character {
   private source?: SourceCharacter;
   private disposed=false;
   private loading?:Promise<void>;
+  private colorBinding?:ObjectColorBinding;
+  private authoredColor:string|null=null;
+  /** Author-selected sRGB color, independent of controls, camera and gameplay roles. */
+  get color():string|null{return this.authoredColor;}
+  /** May be configured before load. Null restores the supplied materials. */
+  setColor(color:string|null):void{
+    if(this.disposed)throw new Error('CHARACTER_DISPOSED');
+    const next=color===null?null:validateObjectColor(color);
+    if(next===null){this.colorBinding?.dispose();delete this.colorBinding;}
+    else if(this.source)this.colorBinding=setObjectColor(this.source.root,next);
+    this.authoredColor=next;
+  }
   private attachments?: CharacterAttachments;
   private firstPersonBody?: FirstPersonBody;
   private readonly eyeOffset = new T.Vector3();
@@ -188,17 +201,19 @@ export class Character {
     return true;
   }
   private adopt(source: SourceCharacter) {
-    let attachments:CharacterAttachments|undefined,overlay:MountedRiderPose|undefined,firstPersonBody:FirstPersonBody|undefined;
+    let attachments:CharacterAttachments|undefined,overlay:MountedRiderPose|undefined,firstPersonBody:FirstPersonBody|undefined,colorBinding:ObjectColorBinding|undefined;
     try{
       attachments=new CharacterAttachments(source.root);
       overlay=new MountedRiderPose(source.root);
       firstPersonBody=new FirstPersonBody(source.root);
+      if(this.authoredColor!==null)colorBinding=setObjectColor(source.root,this.authoredColor);
       const nodes=new Set<T.Object3D>([this.actor]);source.root.traverse(node=>nodes.add(node));
       this.actor.add(source.root);
       this.source=source;this.attachments=attachments;this.overlay=overlay;this.firstPersonBody=firstPersonBody;
       this.presentationNodes=nodes;this.previousPose=[];this.currentPose=[];this.snapPose=true;this.loaded=true;
+      if(colorBinding)this.colorBinding=colorBinding;
     }catch(error){
-      try{cleanupCharacter([()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source.dispose()]);}catch{/* Preserve binding failure. */}
+      try{cleanupCharacter([()=>colorBinding?.dispose(),()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source.dispose()]);}catch{/* Preserve binding failure. */}
       throw error;
     }
   }
@@ -216,7 +231,8 @@ export class Character {
   /** Captures source identity without retaining this actor's model or mixer. */
   createFactory():(()=>Promise<Character>)|undefined{
     if(this.disposed||!this.loaded||!this.source)throw new Error('CHARACTER_NOT_LOADED');
-    const factory=this.source.createFactory();return factory?async()=>new Character(await factory()):undefined;
+    const factory=this.source.createFactory(),color=this.authoredColor;
+    return factory?async()=>{const character=new Character(await factory());try{character.setColor(color);return character;}catch(error){character.dispose();throw error;}}:undefined;
   }
   async createInstance():Promise<Character>{
     const factory=this.createFactory();if(!factory)throw new Error('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');return factory();
@@ -226,7 +242,8 @@ export class Character {
     const firstPersonBody=this.firstPersonBody,overlay=this.overlay,attachments=this.attachments,source=this.source;
     delete this.firstPersonBody;delete this.overlay;delete this.attachments;delete this.source;
     this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];
-    cleanupCharacter([()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source?.dispose(),()=>this.root.removeFromParent()]);
+    cleanupCharacter([()=>this.colorBinding?.dispose(),()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source?.dispose(),()=>this.root.removeFromParent()]);
+    delete this.colorBinding;
   }
 
   /** Internal presentation correction. Physics and the managed root stay untouched. */

@@ -1,4 +1,5 @@
 import {applyVehicleCameraRoll} from './camera-roll';
+import {recenterCameraYaw} from '../config/follow-camera';
 import {VehicleCameraQueries} from './vehicle-camera-queries';
 import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -10,6 +11,9 @@ export type CameraSubject=Pick<HumanoidActor,'controller'|'player'|'vehicle'|'ti
 import type { MotionPose } from './presentation';
 import { DEFAULT_CAMERA_TUNING, HUMANOID_CAMERA_DEFAULTS, CHARACTER_CAMERA_DISTANCE_METERS, parseCameraTuning, type CameraTuning } from '../config/camera';
 import type { EnvironmentQueries } from './environment/queries';
+import { ThreeCameraRig, type CameraRigFollowOptions } from '../camera';
+import type { CameraSubjectAdapter, CameraSubjectSample } from '../camera-subject';
+import type { CameraPerspective } from '../contracts';
 // 负俯仰表示抬头；三种视角均允许看向天空，并在垂直极点前保留 5° 防止翻转。
 const MIN_LOOK_PITCH_RADIANS=-85*Math.PI/180;
 interface CameraPresentationPose {
@@ -134,13 +138,27 @@ export class FollowCamera {
     this.cameraFilter=this.environment.cameraFilter(excluded);
   }
   private collisionTick=0;
-  private readonly collision=new CameraCollisionSolver((from,to,radius)=>{
+  private readonly collision=new CameraCollisionSolver((from,to,radius)=>this.probeSubjectArm(from,to,radius));
+  /** Shared query policy for tuned views and authored-opening follow. */
+  prepareSubjectQueries(sim:CameraSubject,targetId?:string):void {
+    this.collisionHumanoid=sim.vehicle?undefined:sim.controller;
+    this.mountedId=targetId??sim.vehicle?.spec.id;this.syncVehicleQueries();
+  }
+  probeSubjectArm(from:readonly [number,number,number],to:readonly [number,number,number],radius:number){
     if(!this.tuning.collisionEnabled)return {distanceMeters:Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2])};
     const h=this.collisionHumanoid;
     const environment=h?probeHumanoidCamera(h.world,from,to,radius,h.capsule,this.cameraFilter):this.environment.cameraProbe(from,to,radius,this.cameraFilter);
     const vehicle=this.vehicleQueries.probe(from,to,radius,this.mountedId);
     return vehicle.startedOverlapping||vehicle.distanceMeters<environment.distanceMeters?vehicle:environment;
-  });
+  }
+  adaptSubjectCollision(request:CameraCollisionRequest,sample:CameraSubjectSample,sim:CameraSubject):CameraCollisionRequest {
+    const h=sim.vehicle?.spec.id===sample.id?undefined:sim.controller;
+    if(!h)return request;
+    const position=new T.Vector3(...sample.positionWorldMetersXYZ);
+    return {...request,pivotOrigin:position.clone().add(new T.Vector3(0,h.swimming?1.4:h.capsuleHeight*.655,0)).toArray(),
+      preserveArmDirection:true,armClearance:.04,
+      canIgnoreArmObstruction:eye=>this.capsuleVisible(new T.Vector3(...eye),position,h.capsuleHeight,h.capsule,h.world)};
+  }
   get collisionState(){return this.collision.captureTransactionState();}
   private readonly lastCharacterPosition=new T.Vector3();
   private anchor=new T.Vector3();private lastAnchor=new T.Vector3();private delta=new T.Vector3();private aim=new T.Vector3();private desired=new T.Vector3();private candidate=new T.Vector3();private direction=new T.Vector3();private origin=new T.Vector3();private offset=new T.Vector3();private targetUp=new T.Vector3();private localLook=new T.Vector3();private localRotation=new T.Euler(0,0,0,'YXZ');private revision=-1;
@@ -216,7 +234,7 @@ export class FollowCamera {
     if(this.sourceCharacter){this.sourceCharacter=false;this.zoom=1;}
     if(this.camera.near!==this.originalNear){this.camera.near=this.originalNear;this.camera.updateProjectionMatrix();}
     const airborne=v&&['spacecraft','plane','glider','submarine','dragon'].includes(v.spec.mode);
-    if(v&&this.mode!==1&&sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8){this.yaw+=angleDelta(this.yaw,yaw)*(1-Math.exp(-this.tuning.recenterResponsePerSecond*(airborne?1.3/1.9:1)*dt));this.pitch=damp(this.pitch,airborne?.2:.28,1.2*this.tuning.recenterResponsePerSecond/1.9,dt);}
+    if(v&&this.mode!==1&&sim.time-this.lastOrbit>this.tuning.recenterDelaySeconds&&speed>.8){this.yaw=recenterCameraYaw(this.yaw,yaw,this.tuning.recenterResponsePerSecond*(airborne?1.3/1.9:1),dt);this.pitch=damp(this.pitch,airborne?.2:.28,1.2*this.tuning.recenterResponsePerSecond/1.9,dt);}
     this.anchor.copy(position);this.anchor.y+=(v?(v.spec.mode==='tank'?2.3:v.motion.creature?v.spec.seat[1]+.6:1):1.25)+this.tuning.targetHeightOffset;
     this.anchor.x+=Math.cos(this.yaw)*this.tuning.horizontalOffset;this.anchor.z-=Math.sin(this.yaw)*this.tuning.horizontalOffset;this.aim.copy(this.anchor);
     this.targetUp.set(0,1,0);if(v?.spec.mode==='spacecraft'&&rotation)this.targetUp.applyQuaternion(rotation);
@@ -397,4 +415,90 @@ export class FollowCamera {
   get underwater(){
     const p=this.camera.position;return this.environment.map.water.some(w=>p.x>=w.min[0]&&p.x<=w.max[0]&&p.z>=w.min[2]&&p.z<=w.max[2]&&p.y>=w.min[1]&&p.y<w.surface-.15);
   }
+}
+
+
+interface SharedCameraPose {
+  camera:T.PerspectiveCamera;
+  subject:CameraSubjectSample;
+  target:T.Vector3;
+}
+/** Humanoid sampling/query adapter. All framing and follow state belongs to ThreeCameraRig. */
+export class HumanoidCameraFollow {
+  readonly rig:ThreeCameraRig;
+  private options:CameraRigFollowOptions|undefined;
+  private initialOptions:CameraRigFollowOptions|undefined;
+  private previous:SharedCameraPose|undefined;
+  private current:SharedCameraPose|undefined;
+  private revision=-1;
+  constructor(private readonly camera:T.PerspectiveCamera,private readonly queries:FollowCamera,
+    private readonly subject:()=>CameraSubject,private readonly sample:(id:string,display?:boolean)=>CameraSubjectSample|undefined) {
+    const adapter:CameraSubjectAdapter={sample:id=>sample(id),collisionRequest:(request,subject)=>queries.adaptSubjectCollision(request,subject,this.subject())};
+    this.rig=new ThreeCameraRig(camera,(from,to,radius)=>queries.probeSubjectArm(from,to,radius),adapter);
+  }
+  private prepareQueries(id=this.rig.targetEntityId):void {
+    this.queries.prepareSubjectQueries(this.subject(),id?this.sample(id)?.id:undefined);
+  }
+  setFollow(options:CameraRigFollowOptions):void {
+    this.prepareQueries(options.targetEntityId);
+    this.rig.setFollow(options);const {opening:_,...follow}=options;this.options=structuredClone(follow);this.capture(true);
+  }
+  setPerspective(perspective:CameraPerspective):void {this.prepareQueries();this.rig.setPerspective(perspective);this.capture(true);}
+  useAuthoredCamera():void {this.rig.useAuthoredCamera();this.previous=undefined;this.current=undefined;}
+  beforeFixedUpdate():void {
+    // A pending follow must observe the Agent's final edits, including projection changes.
+    if(this.rig.mode==='follow-pending')this.capture(true);
+    if(this.current&&this.rig.mode==='follow'){
+      const aspect=this.camera.aspect;this.camera.copy(this.current.camera,false);
+      this.camera.aspect=aspect;this.camera.updateProjectionMatrix();
+    }
+    this.previous=this.current;
+  }
+  update(dt:number,snap=false):void {
+    this.prepareQueries();
+    const id=this.rig.targetEntityId,subject=id?this.sample(id):undefined,last=this.current?.subject;
+    if(subject&&last&&this.rig.mode!=='authored'){
+      if(subject.id!==last.id){
+        this.rig.retarget(id!);
+        snap=true;
+      }else if(this.revision!==this.subject().teleportRevision&&this.rig.mode==='follow'){
+        this.rig.relocateEpisodeStart(last.positionWorldMetersXYZ,subject.positionWorldMetersXYZ,0,
+          this.camera.getWorldPosition(new T.Vector3()),this.camera.getWorldQuaternion(new T.Quaternion()));
+        snap=true;
+      }
+    }
+    this.rig.update(dt);this.capture(snap);
+  }
+  private capture(snap=false):void {
+    const id=this.rig.targetEntityId,subject=id?this.sample(id):undefined;
+    this.revision=this.subject().teleportRevision;
+    if(!subject){this.current=undefined;this.previous=undefined;return;}
+    const state=this.rig.snapshot();
+    this.current={camera:this.camera.clone(),subject,target:new T.Vector3(...(state.targetPositionWorldMetersXYZ??subject.positionWorldMetersXYZ))};
+    if(snap||!this.previous)this.previous=this.current;
+  }
+  present(alpha:number):void {
+    if(this.rig.mode!=='follow')return;
+    const a=this.previous,b=this.current,id=this.rig.targetEntityId;
+    if(!a||!b||!id)return;
+    const subject=this.sample(id,true);if(!subject)return;
+    this.prepareQueries();
+    const offset=new T.Vector3(...subject.positionWorldMetersXYZ).sub(new T.Vector3(...a.subject.positionWorldMetersXYZ).lerp(new T.Vector3(...b.subject.positionWorldMetersXYZ),alpha));
+    const worldPosition=(camera:T.Camera)=>camera.position.clone().applyMatrix4(this.camera.parent?.matrixWorld??new T.Matrix4());
+    const eye=worldPosition(a.camera).lerp(worldPosition(b.camera),alpha).add(offset);
+    const target=a.target.clone().lerp(b.target,alpha).add(offset);
+    let resolved=eye;
+    if(alpha!==1&&this.rig.perspective!=='first-person'){
+      const projected=this.rig.projectCollision({target:target.toArray(),eye:eye.toArray(),current:worldPosition(b.camera).toArray(),sweepFrom:worldPosition(a.camera).toArray(),radius:this.options?.collisionRadiusMeters??.2},subject);
+      resolved=new T.Vector3(...projected.position);
+    }
+    this.camera.position.copy(this.camera.parent?this.camera.parent.worldToLocal(resolved.clone()):resolved);
+    this.camera.quaternion.slerpQuaternions(a.camera.quaternion,b.camera.quaternion,alpha);
+    this.camera.up.copy(a.camera.up).lerp(b.camera.up,alpha).normalize();
+    this.camera.fov=a.camera.fov+(b.camera.fov-a.camera.fov)*alpha;
+    this.camera.near=b.camera.near;this.camera.far=b.camera.far;this.camera.updateProjectionMatrix();
+    this.camera.updateMatrix();this.camera.updateWorldMatrix(true,false);
+  }
+  sealInitialState():void {this.rig.sealInitialState();this.initialOptions=this.options?structuredClone(this.options):undefined;}
+  reset():void {this.options=this.initialOptions?structuredClone(this.initialOptions):undefined;this.rig.reset();this.capture(true);}
 }

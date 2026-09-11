@@ -5,6 +5,8 @@ import {readFile,writeFile,mkdir,mkdtemp,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import {readRuntimeLock,executionEnvironment,prepareSessionDirectories,THREE_PROFILES,THREE_TOOLS,THREE_TOOL_VERSION,sha256,fileSha256,writeJson} from './three-eval-runtime.mjs';
 // Pinned to the existing Creator Host context in scripts/three-creator/tools.ts.
 const HOST_VIEWPORT_PIXELS={width:960,height:540};
@@ -35,6 +37,19 @@ export function createDoctorCommands(entityId) {
   forbidden:{type:'actor.move-to',entityId,targetPositionWorldMetersXYZ:[99,0,99]},
  };
 }
+/** Host-only runnable fixture; Agent snippets contain caller-supplied bindings. */
+export async function loadDoctorFixture(toolkitRoot,profile,nodeBinary,env) {
+ if(!THREE_PROFILES.includes(profile))throw new Error('Invalid profile');
+ const program=`import {RAW_EXAMPLE,SDK_EXAMPLE} from './scripts/three-creator/examples.ts';
+ const profile=${JSON.stringify(profile)};
+ process.stdout.write(JSON.stringify({
+  'index.html':'<!doctype html><script type="module" src="./main.ts"></script>',
+  'main.ts':profile==='three-raw'?RAW_EXAMPLE:SDK_EXAMPLE,
+  'project.json':JSON.stringify({schemaVersion:1,assetIds:profile==='three-sdk'?['humanoid.source-101']:[]})
+ }));`;
+ const {stdout}=await promisify(execFile)(nodeBinary,['--import',path.join(toolkitRoot,'node_modules/tsx/dist/loader.mjs'),'--input-type=module','-e',program],{cwd:toolkitRoot,env,timeout:30000,maxBuffer:1024*1024});
+ return JSON.parse(stdout);
+}
 async function main() {
 const options={},argv=process.argv.slice(2);
 for(let i=0;i<argv.length;i+=2){if(!['--runtime-lock','--output-root','--profile','--duration-seconds'].includes(argv[i])||!argv[i+1]||options[argv[i]])throw new Error('Invalid doctor argument');options[argv[i]]=argv[i+1];}
@@ -63,8 +78,10 @@ try{
    const call=async(name,args={})=>{const response=await client.callTool({name,arguments:args},undefined,{timeout:90000});entry.toolResponses.push({name,response});if(response.isError)throw new Error(JSON.stringify(response));const text=response.content.find(block=>block.type==='text')?.text;assert(text);return {value:JSON.parse(text),response};};
    const operation=async(name,args={},expectedFailure)=>{let response=await call(name,args);assert(response.value.operationId);const id=response.value.operationId;const deadline=Date.now()+(durationSeconds+180)*1000;do{response=await call('operations_get',{operationId:id,waitSeconds:25});if(response.value.status==='succeeded'){assert.equal(expectedFailure,undefined,'Doctor expected the truncated episode submission to be rejected');return response;}if(response.value.status==='failed'&&expectedFailure){assert.match(response.value.error,new RegExp(expectedFailure));return response;}if(['failed','cancelled'].includes(response.value.status))throw new Error(JSON.stringify(response.value));}while(Date.now()<deadline);throw new Error('THREE_DOCTOR_OPERATION_TIMEOUT');};
    const environment=(await call('creator_describe_environment')).value;assert.equal(environment.profile,profile);assert.equal(environment.engine,'three@0.185.1');assert.equal(environment.version,THREE_TOOL_VERSION);assert.equal(environment.sdkVersion,profile==='three-sdk'?THREE_TOOL_VERSION:null);assert.equal(environment.browserObservationContract,profile==='three-sdk'?'WorldObservation-v2':'WorldObservation-v1');entry.environment=environment;
-   await call('creator_get_authoring_schema');const examples=(await call('creator_get_examples')).value;
-   for(const name of ['index.html','main.ts','project.json']){assert.equal(typeof examples.files[name],'string');await writeFile(path.join(workspace,name),examples.files[name]);}
+   await call('creator_get_authoring_schema');const binding=(await call('creator_get_examples')).value;
+   assert.equal(binding.exampleKind,'binding-snippet');assert.equal(binding.requiresAuthoredScene,true);assert.equal(typeof binding.files['main.ts'],'string');
+   const fixture=await loadDoctorFixture(lock.toolkitRoot,profile,lock.nodeBinary,env);
+   for(const name of ['index.html','main.ts','project.json']){assert.equal(typeof fixture[name],'string');await writeFile(path.join(workspace,name),fixture[name]);}
    await writeJson(path.join(workspace,'episode.json'),browserPlan.episode);
    // Model LWDP's task-root scratch using synthetic files only. This must be
    // excluded before traversal; no real platform account directory is inspected.
@@ -96,13 +113,13 @@ try{
    assert.equal(sourceAfterHostMutation.sourceHash,validation.sourceHash);assert.equal(sourceAfterHostMutation.worldBuildHash,validation.worldBuildHash);assert.equal(sourceAfterHostMutation.candidateCacheHit,true);
    entry.platformScratchIsolation={syntheticFixture:true,rootSymlinkNotTraversed:true,hostJsonMutationKeepsSourceHash:true,hostJsonMutationKeepsWorldBuildHash:true};
    await operation('world_preview',browserPlan.preview);
-   entry.captures=(await operation('world_capture_triviews',browserPlan.triviews)).value.result;assert.deepEqual(entry.captures.pageErrors,[]);assert(entry.captures.images.length>=2);assert.equal(entry.captures.worldBuildHash,validation.worldBuildHash);
+   entry.captures=(await operation('world_capture_triviews',browserPlan.triviews)).value.result;assert.deepEqual(entry.captures.pageErrors,[]);assert(entry.captures.images.length>=3);assert(entry.captures.images.some(image=>image.view==='top-down'));assert.equal(entry.captures.worldBuildHash,validation.worldBuildHash);
    const rejected=(await operation('world_submit',browserPlan.submit,'THREE_SUBMIT_PLAYTEST_REQUIRED')).value;
    entry.playtest=(await operation('world_playtest',browserPlan.playtest)).value.result;
    assert.equal(entry.playtest.status,'passed');assert.equal(entry.playtest.executionMode,'full-episode');assert.equal(entry.playtest.isCompleteEpisode,true);assert.equal(entry.playtest.capturedInput,true);
    assert.deepEqual(entry.playtest.pageErrors,[]);assert.deepEqual(entry.playtest.runtimeErrors,[]);assert.deepEqual(entry.playtest.blockedNetworkRequests,[]);
    assert(entry.playtest.travelledMeters>0.1);assert(entry.playtest.inputWallSeconds>=durationSeconds-.05);assert(entry.playtest.activePlaySeconds>=durationSeconds-.05);assert(entry.playtest.videoMetadata.frameCount>0);
-   entry.captures=(await operation('world_capture_triviews',browserPlan.triviews)).value.result;assert.deepEqual(entry.captures.pageErrors,[]);assert(entry.captures.images.length>=2);assert.equal(entry.captures.worldBuildHash,validation.worldBuildHash);
+   entry.captures=(await operation('world_capture_triviews',browserPlan.triviews)).value.result;assert.deepEqual(entry.captures.pageErrors,[]);assert(entry.captures.images.length>=3);assert(entry.captures.images.some(image=>image.view==='top-down'));assert.equal(entry.captures.worldBuildHash,validation.worldBuildHash);
    const complete=(await operation('world_submit',browserPlan.submit)).value;
    assert.equal(await fileSha256(complete.result.archivePath),complete.result.archiveSha256);
    entry.deliveryGate=createDoctorDeliveryGate({truncated:rejected,complete,playtest:entry.playtest,validation});

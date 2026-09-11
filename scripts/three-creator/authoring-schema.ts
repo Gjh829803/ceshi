@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'humanoid', 'character-actions', 'mounted-interaction', 'nonhuman-subject', 'presentation', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'programming', 'quality', 'boundaries', 'assets', 'control', 'extensions', 'humanoid', 'character-actions', 'mounted-interaction', 'nonhuman-subject', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -17,6 +17,9 @@ export interface WorldObservation {
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
  'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraPerspective','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','start','stop','reset','dispose'],
+ programming: ['getKeyBindings','createPresentation','onUpdate','onReset','onDispose','start','stop','reset','dispose'],
+ quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets'],
+ boundaries: ['getEntityState','describe','snapshot'],
  'nonhuman-subject': ['scene','camera','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraPerspective','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
@@ -115,13 +118,19 @@ export function runtimeContractSource(source:string):string {
  const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
- for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&['createRoadVehicleSpec','createAircraftSpec'].includes(node.name?.text??'')){
+ for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&['createRoadVehicleSpec','createAircraftSpec','compileBoundaryBoxes','setObjectColor'].includes(node.name?.text??'')){
+  if(node.name?.text==='setObjectColor')declarations.unshift(...file.statements.filter(ts.isImportDeclaration).map(statement=>statement.getText(file)));
   declarations.push(declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.updateFunctionDeclaration(node,
    [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
    node.asteriskToken,node.name,node.typeParameters,node.parameters,node.type,undefined),file));
  }
  const runtime=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HumanoidRuntime');
- if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
+ const character=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='Character');
+ if(character){const methods=publicMethods(character.members,new Set(['setColor'])).map(method=>methodDeclarationOrUnavailable(method,file,checker,'Character'));
+  const color=character.members.find((member):member is ts.GetAccessorDeclaration=>ts.isGetAccessorDeclaration(member)&&member.name.getText(file)==='color');
+  if(color&&methods.length)declarations.push(`/** Color methods of Character (exported as HumanoidCharacter). */\nexport declare class Character { readonly color: ${color.type?.getText(file)}; ${methods.join('\n')} }`);
+ }
+ if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setCameraFollow','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
   declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');

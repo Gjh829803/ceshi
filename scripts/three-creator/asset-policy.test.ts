@@ -59,7 +59,7 @@ it('renders the starter from the allowed default and freezes it across file edit
  try{
   const environment=await service.environment();expect(environment.assetPolicy.allowedAssetIds).toEqual(['humanoid.source-101']);
   const guide=await service.schema('assets');
-  const referenced=catalog.assets.filter(asset=>guide.sdkGuide?.includes(asset.id)).map(asset=>asset.id);
+  const referenced=guide.assetIndex!.map(asset=>asset.id);
   expect(referenced).toEqual(['humanoid.source-101']);
   const example=await service.examples();
   for(const [name,source]of Object.entries(example.files))await writeFile(path.join(root,name),source);
@@ -76,7 +76,7 @@ it('renders the starter from the allowed default and freezes it across file edit
 it('does not disclose example bundles requiring unavailable assets',async()=>{
  const {options}=await pin({allowedAssetIds:['humanoid.source-101']});
  const service=new ThreeCreatorTools(await workspace(),'three-sdk',options);
- try{await expect(service.examples('independent-world')).rejects.toThrow('THREE_EXAMPLE_ASSETS_UNAVAILABLE');}
+ try{await expect(service.examples('mounted-interaction')).rejects.toThrow('THREE_EXAMPLE_ASSETS_UNAVAILABLE');}
  finally{await service.close();}
 });
 
@@ -139,7 +139,10 @@ it('carries the same policy through the real submit serializer and archive using
   // Controlled unit fixtures only: this does not claim any actual recording.
   const report={status:'passed',isCompleteEpisode:true,capturedInput:true,actualWallSeconds:.5,inputWallSeconds:.3,activePlaySeconds:.3,
    videoMetadata:{durationSeconds:.4},worldBuildHash:candidate.worldBuildHash,episodeHash:sha256(episode)};
-  const captures={worldBuildHash:candidate.worldBuildHash,pageErrors:[]};
+  // This serializer fixture supplies complete capture metadata, without opening its non-world HTML.
+  const captures={worldBuildHash:candidate.worldBuildHash,pageErrors:[],images:[
+    {view:'opening'},{view:'top-down'},{view:'entity-triview',entityIds:['player']},
+  ]};
   await writeFile(path.join(playRoot,'mock.json'),JSON.stringify(report));await writeFile(path.join(captureRoot,'mock.json'),JSON.stringify(captures));
   Object.assign(service,{playtestEvidence:{root:playRoot,files:await hashTree(playRoot),report},captureEvidence:{root:captureRoot,files:await hashTree(captureRoot),report:captures}});
   const receipt=await service.submit();

@@ -54,7 +54,9 @@ D09 原始身体是双足长身造型：只有左右前肢骨链，没有后腿�
 与旧资源 `creature.dragon` 保持独立。源定义位于
 [`assets/three-creator/catalog`](../three-creator/catalog/)，默认资产策略允许这些 ID。
 `assets_search` / `assets_describe` 返回每条龙的 `vehicle.spec` 和
-`integrationMetadata.visual`；`creator_get_examples` 的 `flying-creature` 示例消费同一契约。
+`integrationMetadata.visual`。从 [动物 → 飞行坐骑](../../scripts/three-creator/agent/assets/animals/flying-mounts.md)
+读取条件与接入，用 `creator_get_examples({topic:"mounted-interaction",variant:"flying-creature"})`
+取得同目录的最小绑定片段。
 
 模型和火焰逻辑路径分别为 `flying-creatures/D01/model.glb`（按编号替换）与
 `flying-creatures/flame.png`。用 `FlyingCreatureVisual.load` 加载，并将它作为

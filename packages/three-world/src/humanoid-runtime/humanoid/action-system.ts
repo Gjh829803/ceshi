@@ -20,6 +20,7 @@ export class ActionSystem {
   pose:SkillPose|null=null;
   private heldTarget:TargetRuntime|null=null;
   private seatedTarget:TargetRuntime|null=null;
+  get carriedTarget():TargetRuntime|null{return this.heldTarget;}
   get carrying():string|null{return this.heldTarget?.entityId??null;}
   get seated():string|null{return this.seatedTarget?.entityId??null;}
   private sequence=0;
@@ -42,6 +43,13 @@ export class ActionSystem {
     this.interactions.actorResources.release(this);
     this.active=null;this.pose=null;this.heldTarget=null;this.seatedTarget=null;this.cooldown=0;
     this.sim.actionCapsuleHalf=null;
+  }
+  /** A validated actor recovery interrupts motion without resetting world targets. */
+  interruptForRecovery(){
+    if(this.active)this.finish('cancelled','CHECKPOINT_RECOVERY','已返回安全检查点，当前动作中断');
+    if(this.seatedTarget){this.interactions.release(this.seatedTarget,this);this.seatedTarget=null;}
+    this.retainRelationshipResources();
+    this.pose=null;this.sim.actionCapsuleHalf=null;
   }
   /** Called once when the physics controller enters deep-water swimming. */
   releaseIntoWater(){

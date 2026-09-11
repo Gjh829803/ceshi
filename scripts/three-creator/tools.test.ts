@@ -125,9 +125,24 @@ describe('Three semantic target views', () => {
       expect(target.nearestSample.deltaToTargetMetersXYZ).toEqual([0,20,-.5-sample.positionMetersXYZ[2]]);
       expect(target.distanceOutsideToleranceMeters).toBeCloseTo(target.nearestDistanceMeters-1,10);
       expect(target.nearestDistanceMeters).toBeCloseTo(Math.hypot(...target.nearestSample.deltaToTargetMetersXYZ),10);
+      // A same-build historical capture without an overview must be completed
+      // automatically, without rerunning or extending the real input episode.
+      await service.triviews();
+      const priorCaptures=(service as any).captureEvidence;
+      priorCaptures.report.images=priorCaptures.report.images.filter((image:any)=>image.view!=='top-down');
       const delivery=await service.submit();
+      expect((service as any).captureEvidence.root).not.toBe(priorCaptures.root);
       expect(delivery.targetResults).toEqual(report.targetResults);
       expect(delivery.episodeHash).toBe(report.episodeHash);expect(delivery.worldBuildHash).toBe(report.worldBuildHash);
+      const execFile=promisify(execFileCallback);
+      const captured=JSON.parse((await execFile('tar',['-xOf',delivery.archivePath,'payload/captures/captures.json'])).stdout);
+      expect(captured.images.map((image:any)=>image.view)).toEqual(['opening','top-down','entity-triview']);
+      expect(captured.images[1]).toMatchObject({boundsSource:'visible-scene',panelOrder:['top-down'],worldBuildHash:delivery.worldBuildHash});
+      expect(captured.conditioningEntityIds).not.toContain('top-down');
+      for(const image of captured.images){
+        const bytes=(await execFile('tar',['-xOf',delivery.archivePath,'payload/captures/'+path.basename(image.image.path)],{encoding:'buffer',maxBuffer:16*1024*1024})).stdout;
+        expect(sha256(bytes)).toBe(image.image.sha256);
+      }
       const saved=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'playtest.json'),'utf8'));
       expect(saved.recordingReadiness).toEqual(report.recordingReadiness);
       // Historical eligibility does not approve an edited input plan.
@@ -285,13 +300,13 @@ describe('Three tool operations and truthful submission', () => {
   it('shows raw authors only the common observation contract, without SDK construction APIs', async () => {
     const root = await fixture(), service = new ThreeCreatorTools(root, 'three-raw'), schema = await service.schema();
     expect(schema.observation).toContain('interface WorldObservation'); expect(schema.observation).toContain('targetFrontYawRadiansById'); expect(schema.observation).toContain('startLive()');
-    expect(schema.observation).not.toMatch(/PhysicsPort|WorldCommand|WorldSnapshot|addCharacter|createWorld/); expect(schema).not.toHaveProperty('sdkGuide'); expect(schema).not.toHaveProperty('sdkContracts');
+    expect(schema.observation).not.toMatch(/PhysicsPort|WorldCommand|WorldSnapshot|addCharacter|createWorld/); expect(schema.sdkGuide).toContain('In three-raw'); expect(schema).not.toHaveProperty('sdkContracts');
     await service.close();
   });
   it('adds the actual SDK public guide and contracts only to the SDK profile', async () => {
     const root = await fixture(), raw = new ThreeCreatorTools(root, 'three-raw'), sdk = new ThreeCreatorTools(root, 'three-sdk');
     const rawSchema = await raw.schema(), sdkSchema = await sdk.schema();
-    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain('createHumanoidWorld'); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
+    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('programming.md'); expect(sdkSchema.sdkGuide).toContain('createHumanoidWorld'); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
     const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });
@@ -351,19 +366,19 @@ describe('v2 command and discovery boundary', () => {
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(initial.cameraAuthoring);
       expect(initial.cameraAuthoring).toMatchObject({scope:'humanoid-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
       expect(initial.cameraAuthoring.startWithDefaults).toMatch(/whitebox/i);
-      expect(initial.cameraAuthoring.opening).toContain('useAuthoredCamera');
-      expect(initial.cameraAuthoring.opening).toContain('world.humanoid.setCameraMode');
-      expect(initial.cameraAuthoring.opening).not.toContain('play: humanoid.camera');
+      expect(initial.cameraAuthoring.opening).toMatchObject({tool:'creator_get_authoring_schema',arguments:{topic:'programming'}});
+      const startup=await discoveryCall(service,initial.cameraAuthoring.opening.tool,initial.cameraAuthoring.opening.arguments);
+      expect(startup.sdkGuide).toContain('initialMountId');expect(startup.sdkGuide).toContain("headingFollow:'vehicle'");
       const openingExample=await discoveryCall(service,initial.cameraAuthoring.openingExample.tool,initial.cameraAuthoring.openingExample.arguments);
-      expect(openingExample.files['opening-camera.ts']).toContain('world.getKeyBindings()');
+      expect(openingExample.files['main.ts']).toContain("world.setCameraFollow({opening, activateOnInput:true, headingFollow:'vehicle'})");
       expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
-      expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}});
-      expect(initial.cameraAuthoring.followTarget).toContain('only targetEntityId');
-      expect(initial.cameraAuthoring.followTarget).toContain('WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED');
+      expect(initial.cameraAuthoring.verify.viewChanges).toContain('only when');
+      expect(initial.cameraAuthoring.followTarget).toContain('shared framing/follow parameters');
+      expect(initial.cameraAuthoring.followTarget).toContain('Input selection is independent');
       expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
       for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
       expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.humanoid.configuration.effective.camera.framing'});
-      for(const request of [initial.cameraAuthoring.openingExample,initial.cameraAuthoring.verify.selectView,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
+      for(const request of [initial.cameraAuthoring.openingExample,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
         const tool=THREE_CREATOR_TOOLS.find(tool=>tool.name===request.tool);
         expect(tool,request.tool).toBeDefined();
         expect(new Ajv({strict:false}).compile(tool!.inputSchema)(request.arguments),request.tool).toBe(true);
@@ -376,7 +391,7 @@ describe('v2 command and discovery boundary', () => {
           for(const method of ['inspectBoarding','inspectControls','inputGuide'])expect(declarations).toContain(`${method}(`);
         }
       }
-      for(const args of [{},{topic:'vehicle-camera',files:[]}]){
+      for(const args of [{},{topic:'custom-vehicle',variant:'car',files:[]}]){
         const example=await discoveryCall(service,'creator_get_examples',args);
         expect(example.cameraAuthoring).toEqual(initial.cameraAuthoring);
       }
@@ -399,6 +414,7 @@ describe('v2 command and discovery boundary', () => {
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(selected.cameraAuthoring);
       expect(selected.cameraAuthoring.source).toContain('sdk/three-world/src/config/camera.ts');
       expect(selected.runtimeDefinitions['config/camera.ts']).toContain('targetHeightOffset:numeric(.4,');
+      expect(selected.runtimeDefinitions['camera-subject.ts']).toBe(await readFile(path.join(service.workspace,'sdk/three-world/src/camera-subject.ts'),'utf8'));
       const example=await discoveryCall(service,'creator_get_examples');
       expect(example.cameraAuthoring).toEqual(selected.cameraAuthoring);
       expect(example.exampleAuthority).toBe('host-baseline');

@@ -14,7 +14,7 @@ const canvas = document.createElement('canvas');
 canvas.style.cssText = 'display:block;width:100vw;height:100vh';
 document.body.append(canvas);
 
-// Box centres and full sizes are in metres. Visuals and collision use the same boxes.
+// Collision centres/full sizes are metres; author the visible floor and wall separately.
 const map: EnvironmentDefinition = {
   id: 'vehicle-camera', name: 'Self-drawn car camera and glass',
   description: 'Walk beside the open cabin, drive, orbit through glass and compare the solid wall.',
@@ -29,12 +29,18 @@ const map: EnvironmentDefinition = {
   spawns: [{id: 'rover-start', vehicleId: 'rover', name: 'Rover', position: [0, 0, 0], yaw: 0, regionId: 'course'}],
   playerSpawn: [1.9, 0, 0],
 };
-const environmentMeshes = map.boxes.map(box => {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...box.size),
-    new THREE.MeshStandardMaterial({color: box.color ?? '#eeeeee', roughness: 1, metalness: 0}));
-  mesh.name = box.id; mesh.position.set(...box.position); scene.add(mesh);
-  return mesh;
-});
+// Author visible surfaces from the scene design; map contains physical support only.
+function surface(width:number,depth:number,position:[number,number,number],color='#dddddd'){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.rotation.x=-Math.PI/2;mesh.position.set(...position);scene.add(mesh);return mesh;
+}
+function structure(name:string,size:[number,number,number],position:[number,number,number],rotation:[number,number,number]=[0,0,0],color='#eeeeee'){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardMaterial({color,roughness:1}));
+ mesh.name=name;mesh.position.set(...position);mesh.rotation.set(...rotation);scene.add(mesh);return mesh;
+}
+const ground=surface(60,60,[0,0,0]);ground.name='ground';
+const wall=structure('wall',[.4,3,8],[-4,1.5,0]);
+const environmentMeshes=[ground,wall];
 
 // Self-drawn open car: dimensions, wheel layout and seat come from the selected configuration.
 const rover = new THREE.Group();
