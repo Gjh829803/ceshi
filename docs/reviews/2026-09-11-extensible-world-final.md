@@ -139,3 +139,23 @@ reset 后按当前场地重建 NPC。异步加载使用 generation 和 SDK scope
 32项内容源一致、test census 和零工作区边界债务检查通过。
 
 新增入口之后，既有 Playground 浏览器回归也通过：实际驾驶2.293米、暂停后倒车、表单输入隔离、弹窗恢复及小屏布局；errors=[]。证据为 `.codex-tmp/npc-playground/existing-playground.log`。
+
+
+## 合并主干后的收尾
+
+`02537cfe` 已合入 `origin/main` 的 `cb216317`，保留显示诊断按需刷新与本分支
+多 Actor/实际碰撞体归属；26项相关测试、typecheck、lint、census、Playground
+构建及完整显示/NPC浏览器 case 通过。对应证据在 `.codex-tmp/main-merge/`。
+
+随后对已观察到的页面热更新退出错误做了定向复现：`pagehide` 释放 SDK 后，
+失焦、可见性和键盘监听器仍可能访问它，浏览器测试记录了三次
+`HUMANOID_DISPOSED`。页面现在用同一个 AbortController 管理应用事件、画面
+准备与工具注册，退出时先标记不可用并撤销监听，再释放实例与渲染资源。
+没有给 SDK 添加忽略 disposed 错误的分支。
+
+新增 `lifecycle-smoke.ts` 先复现失败，再验证退出后的焦点/可见性/尺寸/键盘/路由
+事件、全部页面工具撤销及真实 reload 后 WASD 位移。浏览器通过，另有15项
+画面准备/路由测试和 typecheck、lint 通过；日志在
+`.codex-tmp/playground-lifecycle/{red,green,reload}.log`。此修复只修改 Playground
+页面生命周期，不改变上述 SDK runtime hash。PR232远端实时核对仍为R0提交
+`53f8f059`，其成功 CI 仍不代表本地最终分支已通过远端 CI。

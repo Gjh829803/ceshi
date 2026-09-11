@@ -230,7 +230,8 @@ function syncCameraProfile(force = false) {
   }
 }
 syncCameraProfile();
-const renderPreparation = new AbortController();
+const pageLifetime = new AbortController();
+const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();
 let jumpPressed = false,
   paused = false,
@@ -476,12 +477,12 @@ window.addEventListener("keydown", (e) => {
       if (entry) selectAsset(entry.id);
     }
   }
-});
-window.addEventListener("blur", clearInput);
+}, pageEventOptions);
+window.addEventListener("blur", clearInput, pageEventOptions);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && ready) pause(true);
-});
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+}, pageEventOptions);
+canvas.addEventListener("contextmenu", (e) => e.preventDefault(), pageEventOptions);
 shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
 shell.on("resetButton", async () => {
@@ -880,13 +881,13 @@ const releaseUIInput = (event: Event) => {
       : null;
   if (target && !target.hasAttribute("data-key")) clearInput();
 };
-document.addEventListener("pointerdown", releaseUIInput);
-document.addEventListener("focusin", releaseUIInput);
+document.addEventListener("pointerdown", releaseUIInput, pageEventOptions);
+document.addEventListener("focusin", releaseUIInput, pageEventOptions);
 window.addEventListener(
   "pagehide",
   () => {
-    renderPreparation.abort();
-    window.removeEventListener("hashchange", restoreMapFromHash);
+    ready = false;
+    pageLifetime.abort();
     disposeThumbnails?.();
     inspector.dispose();
     stageObserver.disconnect();
@@ -936,7 +937,7 @@ const footerObserver = new ResizeObserver(() => {
   );
 });
 footerObserver.observe(el("shortcutFooter"));
-window.addEventListener("resize", resizeStage);
+window.addEventListener("resize", resizeStage, pageEventOptions);
 const mapCanvas = document.querySelector<HTMLCanvasElement>("#map")!,
   ctx = mapCanvas.getContext("2d")!;
 function drawMap() {
@@ -1337,7 +1338,7 @@ try {
       },
       compile: () => renderer.compileAsync(scene, camera),
       render: () => sdk.render(),
-      signal: renderPreparation.signal,
+      signal: pageLifetime.signal,
     });
   } while (readMapHash(location.hash, mapIds) !== preparedMap);
   clearInput();
@@ -1345,13 +1346,13 @@ try {
   if (!paused && !panelOpen) await sdk.start();
   ready = true;
 } catch (error) {
-  if (!renderPreparation.signal.aborted) {
+  if (!pageLifetime.signal.aborted) {
     shell.text("loadText", "画面准备失败：" + String(error));
     shell.flush();
   }
   throw error;
 }
-window.addEventListener("hashchange", restoreMapFromHash);
+window.addEventListener("hashchange", restoreMapFromHash, pageEventOptions);
 // Read-only browser callback cadence; no simulation, animation or camera writes.
 const observePacing = (now: number) => {
   if (!paused && !panelOpen) {
@@ -1475,7 +1476,6 @@ type ModelContext = {
 const context = (document as Document & { modelContext?: ModelContext })
   .modelContext;
 if (context?.registerTool) {
-  const lifecycle = new AbortController();
   const register = (
     name: string,
     description: string,
@@ -1493,7 +1493,7 @@ if (context?.registerTool) {
             annotations: { readOnlyHint },
             execute,
           },
-          { signal: lifecycle.signal },
+          { signal: pageLifetime.signal },
         ),
       ).catch((error) => console.warn("Playground tool unavailable", error));
     } catch (error) {
@@ -1643,5 +1643,4 @@ if (context?.registerTool) {
       return labAPI.getState();
     },
   );
-  window.addEventListener("pagehide", () => lifecycle.abort(), { once: true });
 }

@@ -116,3 +116,15 @@ pnpm exec tsx apps/three-playground/scripts/npc-smoke.ts http://127.0.0.1:5178
 
 This browser case verifies patrol displacement, real keyboard control transfer,
 shared pickup, carrying/placing, seats, cancellation, reset and map cleanup.
+
+
+## Page lifetime
+
+Page event listeners, render warmup and browser tool registrations use the same
+abort signal. `pagehide` retires them before disposing the SDK, so late focus,
+visibility, keyboard, resize and route events cannot access the released runtime.
+Verify teardown, tool revocation and real input after reload with:
+
+```sh
+pnpm exec tsx apps/three-playground/scripts/lifecycle-smoke.ts http://127.0.0.1:5178
+```
