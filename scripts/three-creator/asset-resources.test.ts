@@ -32,6 +32,16 @@ describe('catalog dependency closure', () => {
 });
 
 describe('committed player resource declarations', () => {
+  it('stores portable POSIX source paths for Linux resource staging', async () => {
+    for (const asset of catalog.assets) {
+      for (const resource of catalogResources(asset)) {
+        expect(resource.sourcePath, asset.id).toMatch(/^assets\/three-creator\//);
+        expect(resource.sourcePath, asset.id).not.toContain('\\');
+      }
+    }
+    const provenance = JSON.parse(await readFile(new URL('../../assets/three-creator/humanoid/source-101/provenance.json', import.meta.url), 'utf8'));
+    for (const source of provenance.sources) expect(source.path).not.toContain('\\');
+  });
   it.each([
     ['creature.horse', ['creatures/horse.glb']],
     ['vehicle.carriage', ['creatures/horse.glb']],

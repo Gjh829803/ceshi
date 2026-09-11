@@ -3,27 +3,27 @@
   "sourceAssetId": "humanoid.source-101",
   "sources": [
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\uefn-mannequin-lod1.glb",
+      "path": "assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb",
       "sha256": "364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3"
     },
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\gasp-research\\idle-loop.experimental.glb",
+      "path": "assets/three-creator/presets/humanoid/source/gasp-research/idle-loop.experimental.glb",
       "sha256": "0e1a189955a2647ad0edf1161bb8a10152b91d9146bbb53b0b1996c7c5b0ea7f"
     },
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\gasp-research\\walk-loop.experimental.glb",
+      "path": "assets/three-creator/presets/humanoid/source/gasp-research/walk-loop.experimental.glb",
       "sha256": "c3afe8bc96d59048ae58068c9d9081f61488b6e62b982f1dad7bba2fdf2a48c7"
     },
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\gasp-research\\run-loop.experimental.glb",
+      "path": "assets/three-creator/presets/humanoid/source/gasp-research/run-loop.experimental.glb",
       "sha256": "eeb6e4e509fcbb3e4d7fbbcd440e07e9b14b416b56df569ff1dce4f43619e514"
     },
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\gasp-research\\jump-stand.experimental.glb",
+      "path": "assets/three-creator/presets/humanoid/source/gasp-research/jump-stand.experimental.glb",
       "sha256": "fb817380cfa070628a3b2fa5f6c0163012af31fc69361a30db5da20e24cfed1f"
     },
     {
-      "path": "assets\\three-creator\\presets\\humanoid\\source\\gasp-research\\fall-loop.experimental.glb",
+      "path": "assets/three-creator/presets/humanoid/source/gasp-research/fall-loop.experimental.glb",
       "sha256": "f868c4cfbaf61bf2bbb4da483d7941b2d34cec7d3f6a66f23eac2dd2ca756bc4"
     }
   ],

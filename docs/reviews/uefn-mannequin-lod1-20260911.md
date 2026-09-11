@@ -53,3 +53,10 @@ Playground 现在监听资产目录及项目资产选择文件变化，重启 Vi
 `transparent=false`、`depthWrite=true`，颜色及法线贴图均存在，颜色图尺寸 2048×2048。
 页面错误为空，截图检查关节遮挡正常；类型检查、相关 ESLint 和差异检查通过。
 证据保存在 `D:/CodexData/Artifacts/character-joint-cache-fix-20260911/`。
+
+## 资源路径跨平台修复
+
+PR #233 的 Linux 检查发现生成脚本将 Windows 反斜杠写入 `sourcePath`，导致资源打包白名单拒绝及模型 ENOENT。
+`build-humanoid.py` 改用 `Path.as_posix()` 输出资源路径和 provenance 来源路径，并重新生成两份 JSON；模型 SHA-256 仍为上述 `260467e4…`，资产二进制未改变。
+新增目录与 provenance 的 POSIX 路径回归，修复前在 Windows 同样失败，修复后资源测试 25 项通过；生成脚本 `--check`、类型检查、相关 lint 与测试目录校验通过。
+Node 资源打包和启动器原路径失败项本地通过；完整两文件运行另有锁文件文本及 Windows 符号链接失败，因此不将本机结果写为全量通过，Linux CI 结果以 PR 当前提交为准。

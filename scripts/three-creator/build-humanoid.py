@@ -117,7 +117,7 @@ def build():
               + struct.pack('<II', len(encoded), 0x4E4F534A) + encoded
               + struct.pack('<II', len(binary), 0x004E4942) + binary)
     provenance = {'schemaVersion': 1, 'sourceAssetId': 'humanoid.source-101',
-                  'sources': [{'path': str(p.relative_to(ROOT)), 'sha256': digest(p.read_bytes())} for p in source_files],
+                  'sources': [{'path': p.relative_to(ROOT).as_posix(), 'sha256': digest(p.read_bytes())} for p in source_files],
                   'actions': CLIPS, 'normalization': 'zero stage/root translation; remove root translation tracks and root yaw; jump starts at source frame 10; catalog rotates +Z to -Z',
                   'outputSha256': digest(result), 'outputByteLength': len(result)}
     return bytes(result), (json.dumps(provenance, indent=2) + '\n').encode()
@@ -133,7 +133,7 @@ def main():
     source = next(a for a in catalog['assets'] if a['id'] == 'humanoid.source-101')
     entry = {**source,
              'uri': f'./assets/subjects/{digest(model)}.glb', 'sha256': digest(model), 'byteLength': len(model),
-             'sourcePath': str((DEST / 'model.glb').relative_to(ROOT)),
+             'sourcePath': (DEST / 'model.glb').relative_to(ROOT).as_posix(),
              'recommendedBody': {'heightMeters': 1.8, 'radiusMeters': .35},
              'locomotionBindingIds': ['ground.standard', 'locomotion.humanoid'],
              'rootTransform': {'positionMetersXYZ': [0, 0, 0], 'rotationEulerRadiansXYZ': [0, math.pi, 0], 'scaleXYZ': [1, 1, 1]},

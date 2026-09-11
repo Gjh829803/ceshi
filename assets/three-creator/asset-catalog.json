@@ -53,7 +53,7 @@
       "uri": "./assets/subjects/260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461.glb",
       "sha256": "260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461",
       "byteLength": 7029028,
-      "sourcePath": "assets\\three-creator\\humanoid\\source-101\\model.glb",
+      "sourcePath": "assets/three-creator/humanoid/source-101/model.glb",
       "usage": "reusable",
       "rootTransform": {
         "positionMetersXYZ": [
