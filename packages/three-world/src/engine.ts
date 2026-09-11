@@ -186,7 +186,11 @@ export class WorldEngine {
   setCameraFollow(options: CameraFollow = {}): void {
     this.alive();const targetEntityId=options.targetEntityId??this.controlled;
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
-    if(this.humanoid?.hasActor(targetEntityId)){this.cameraRig.useAuthoredCamera();this.humanoid.setCameraTarget(targetEntityId);this.humanoid.setCameraMode(0);}
+    if(this.humanoid?.hasActor(targetEntityId)){
+      const unsupported=Object.keys(options).filter(key=>key!=='targetEntityId');
+      if(unsupported.length)throw runtimeError(new Error(`WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED: Full humanoid targets accept only targetEntityId; configure their camera through humanoid.applyProfile and setCameraMode. Unsupported fields: ${unsupported.join(', ')}`),'camera-follow',[targetEntityId]);
+      this.cameraRig.useAuthoredCamera();this.humanoid.setCameraTarget(targetEntityId);this.humanoid.setCameraMode(0);
+    }
     else{this.cameraRig.setFollow({...options,targetEntityId});this.humanoid?.useAuthoredCamera();}
     this.inputRouter.releasePointerLock();
   }

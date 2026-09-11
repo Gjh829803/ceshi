@@ -14,6 +14,7 @@ export function cameraAuthoringGuidance(profile:CreatorProfile,workspaceRuntime=
   };
   return {
     scope:'humanoid-only',runtimeAuthority,
+    followTarget:'For complete Humanoid targets, setCameraFollow accepts only targetEntityId and selects mode 0. Other fields fail with WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED before changing the camera. Configure camera/view through humanoid.applyProfile and the mode through humanoid.setCameraMode.',
     source:[`${root}/config/camera.ts`],
     startWithDefaults:'Omit camera/cameraDistanceMeters to reuse tuned defaults. Whitebox scale is not eye height. Override only observed defects.',
     ...(workspaceRuntime?{

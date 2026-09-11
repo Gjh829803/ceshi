@@ -522,6 +522,14 @@ world.setCameraFollow({targetEntityId:'guide'});
 world.setControlledEntity('person');
 ```
 
+For a complete Humanoid target, `setCameraFollow` accepts only `targetEntityId`
+(or no options to follow the controlled actor) and selects camera mode 0. Other
+fields, including `view` and follow/framing parameters, are rejected with
+`WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED` before changing the target or camera owner.
+Use `world.humanoid.applyProfile({cameraDistanceMeters, camera, view})` for Humanoid
+camera settings and `world.humanoid.setCameraMode(0|1|2)` for its mode. Ordinary
+targets retain the `CameraFollowOptions` configuration described above.
+
 Each actor has its own controller, skeleton, mixer and action state. All actors
 share the physics world, interaction targets and fixed clock. Ground navigation
 uses committed fixed/kinematic collider geometry, including map surfaces without

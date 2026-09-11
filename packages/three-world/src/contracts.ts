@@ -96,11 +96,12 @@ export interface CameraFollowViewOptions {
  /** Defaults to false; programmatic switching is independent of this shortcut permission. */
  readonly keyboardToggleEnabled?:boolean;
 }
+/** Full humanoid targets accept only targetEntityId; use humanoid.applyProfile/setCameraMode for their camera configuration. */
 export interface CameraFollowOptions {
  /** Optional first-person eye in the target object's local coordinates. */
  readonly view?:CameraFollowViewOptions;
  readonly targetEntityId?:string;
- /** With no orbit override, continue the authored pose and framing. */
+ /** Ordinary targets: with no orbit override, continue the authored pose and framing. */
  readonly framingMode?:'preserve-opening'|'target';
  /** Translation damping for inherited opening framing; zero follows immediately. */
  readonly followHalfLifeSeconds?:number;

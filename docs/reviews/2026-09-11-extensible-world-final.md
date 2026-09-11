@@ -224,3 +224,18 @@ prebuild 通过；对应 `final-{focused,typecheck,lint,census,prebuild}.log` �
 在独立工具副本移除元数据后，源码展开/重新编译和 Episode 真实观察均通过；未修改
 当时正在执行的冻结 Creator capsule。`metadata-doctor.json` 记录前后失败/通过结果，
 该问题属于本次临时传输方式，不是 SDK 动作求解缺陷；归档传输需避免附带这些元数据。
+
+
+## 完整 Humanoid 的 follow 选项边界
+
+修复后续审查发现的 P2：完整 Humanoid 目标曾静默忽略 `CameraFollowOptions` 中
+除目标 ID 外的字段。现在只接受 `targetEntityId`；其他显式字段在 camera owner、
+target、mode 或 pointer lock 改变前返回 `WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED`。
+普通目标继续使用原 follow 配置；Humanoid 镜头参数使用既有 `applyProfile/setCameraMode`。
+没有新增参数映射或旧版兼容分支，公开类型注释、Humanoid topic 与 Creator 默认指导同步。
+
+新增回归遍历全部公开 follow 字段及非法数值/视点、显式 undefined，检查普通和
+Humanoid 相机 owner 下的拒绝原子性；目标切换及 profile 配置仍实际生效。
+110项相关测试与1项 Creator schema 消费测试通过，typecheck、定向 lint、census、
+runtime prebuild 通过，独立复查无新增问题。证据位于 `.codex-tmp/camera-follow-review/`。
+此修复后的 runtime hash 为 `01bd0de8a89991987f3cde0e635d53937dfca34b54e9d9cc4d7cf8872630389b`。

@@ -11,6 +11,7 @@ import {createRoadVehicleSpec} from './humanoid-runtime/road-vehicle';
 import {Character} from './humanoid-runtime/character';
 import type {AssetDefinition} from './engine-contracts';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
+import type {CameraFollowOptions} from './contracts';
 
 const worlds:ThreeWorld[]=[];
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
@@ -422,6 +423,33 @@ it('hands input between ordinary and full actors without redirecting NPC command
  world.setControlledEntity('player');expect(world.snapshot().humanoid?.character.instanceId).toBe('player');
  world.setCameraFollow({targetEntityId:'player'});world.step({},1);
  await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');expect(world.snapshot().humanoid).toBeUndefined();world.step({},1);
+});
+
+it('rejects full humanoid follow options before changing camera ownership or target',async()=>{
+ const world=await setup(),runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(3,.04,0);world.addCharacter({id:'guide',humanoid:npc});
+ const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
+ const options:Record<keyof Omit<CameraFollowOptions,'targetEntityId'>,unknown>={
+  view:{eyeOffsetLocalMetersXYZ:[0,1,0]},framingMode:'target',followHalfLifeSeconds:.2,distanceMeters:6,targetHeightMeters:1.2,pitchRadians:.2,
+  activateOnInput:false,transitionSeconds:.5,rotationSpeedRadiansPerSecond:1,collisionRadiusMeters:.2,recoveryHalfLifeSeconds:.2,
+  maximumRecoveryMetersPerSecond:2,targetHalfLifeSeconds:.2,
+ };
+ const state=()=>({camera:world.snapshot().camera,target:runtime.cameraTargetId,mode:runtime.cameraMode,profile:runtime.exportProfile(),position:world.camera.position.toArray(),quaternion:world.camera.quaternion.toArray(),revision:world.snapshot().worldRevision});
+ for(const owner of ['ordinary','player']){
+  world.setCameraFollow({targetEntityId:owner,...(owner==='ordinary'?{view:{eyeOffsetLocalMetersXYZ:[0,1,0] as const}}:{})});world.setCameraPerspective('first-person');
+  const before=state();
+  for(const extra of [...Object.entries(options).map(([key,value])=>({[key]:value})),{distanceMeters:NaN},{view:{eyeOffsetLocalMetersXYZ:[0,NaN,0]}},{distanceMeters:undefined}]){
+   let error:unknown;try{world.setCameraFollow({targetEntityId:'guide',...extra} as CameraFollowOptions);}catch(caught){error=caught;}
+   expect(error).toMatchObject({code:'WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED',category:'unsupported-capability',entityIds:['guide']});
+   expect(state()).toEqual(before);
+  }
+ }
+ world.setCameraFollow({targetEntityId:'guide'});world.step({},1);
+ expect(runtime.cameraTargetId).toBe('guide');expect(runtime.snapshot('guide').cameraMode).toBe(0);expect(world.snapshot().camera.mode).toBe('follow');
+ expect(runtime.followCamera.target.x).toBeCloseTo(world.getEntityState('guide').positionWorldMetersXYZ[0],2);
+ runtime.applyProfile({cameraDistanceMeters:8});world.step({},1);
+ expect(runtime.exportProfile().cameraDistanceMeters).toBe(8);
+ expect(runtime.followCamera.baseDistance).toBe(8);
+ expect(world.describe().humanoid!.configuration).toMatchObject({profile:{cameraDistanceMeters:8},effective:{camera:{owner:'follow',mode:0}}});
 });
 
 it('keeps one camera writer when following ordinary or full actors and when authoring the camera',async()=>{
